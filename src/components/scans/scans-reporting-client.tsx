@@ -5,6 +5,7 @@ import { firestore } from '@/lib/firebase'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Loader } from '@/components/ui/loader'
+import { PercentageLoader } from '@/components/ui/percentage-loader'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapPin, TrendingDown, TrendingUp, UserPlus, UserMinus, Activity, RefreshCw, Info } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -338,10 +339,11 @@ export function ScansReportingClient({
 
   if (loading || !metrics) {
     return (
-      <div className="flex flex-col justify-center items-center h-96 gap-4">
-        <Loader />
-        <p className="text-muted-foreground text-sm">Aggregating Scan Reports...</p>
-      </div>
+      <PercentageLoader 
+        label="Aggregating Scan Reports" 
+        sublabel="Analyzing and aggregating package scan events..." 
+        minHeight="min-h-[220px]" 
+      />
     )
   }
 

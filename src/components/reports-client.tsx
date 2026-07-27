@@ -8,6 +8,7 @@ import { usePerformance } from '@/hooks/use-performance';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
+import { PercentageLoader } from '@/components/ui/percentage-loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, LineChart, Line, AreaChart, Area, ResponsiveContainer, XAxis, YAxis, CartesianGrid, LabelList } from 'recharts';
 import { getStatusColor } from '@/lib/status-colors';
 import { 
@@ -346,7 +347,17 @@ const safeFormat = (dateStr: string | undefined, formatStr: string = 'PP') => {
 
 
 
-export default function ReportsClientPage() {
+export interface ReportsClientPageProps {
+  externalDateRange?: DateRange;
+  hideHeaderAndFilters?: boolean;
+  visibleSections?: string[];
+}
+
+export default function ReportsClientPage({
+  externalDateRange,
+  hideHeaderAndFilters = false,
+  visibleSections,
+}: ReportsClientPageProps = {}) {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
   const [allActivities, setAllActivities] = useState<Array<Activity & { leadId: string }>>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -354,6 +365,7 @@ export default function ReportsClientPage() {
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [allDialers, setAllDialers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchProgress, setFetchProgress] = useState(10);
   const { setLoadTime, setPageName, setIsCustom } = usePerformance();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -431,6 +443,23 @@ export default function ReportsClientPage() {
     isFieldSourced: 'all' as 'all' | 'yes' | 'no',
   });
 
+  useEffect(() => {
+    if (externalDateRange !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        dialerAssignmentDate: externalDateRange,
+        activityDate: undefined,
+        leadCreatedDate: undefined,
+      }));
+      setAppliedFilters(prev => ({
+        ...prev,
+        dialerAssignmentDate: externalDateRange,
+        activityDate: undefined,
+        leadCreatedDate: undefined,
+      }));
+    }
+  }, [externalDateRange]);
+
   const hasUnappliedFilters = useMemo(() => {
     return JSON.stringify(filters.status) !== JSON.stringify(appliedFilters.status) ||
            JSON.stringify(filters.dialerAssigned) !== JSON.stringify(appliedFilters.dialerAssigned) ||
@@ -455,6 +484,7 @@ export default function ReportsClientPage() {
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
     setLoading(true);
+    setFetchProgress(15);
     setError(null);
     console.time("Outbound Reporting - Load Time");
     const startTimePerf = performance.now();
@@ -499,6 +529,7 @@ export default function ReportsClientPage() {
         }
 
         const results = await Promise.all(fetches);
+        setFetchProgress(40);
         const activitiesSnap = results[0];
         const apptsSnap = results[1];
 
@@ -621,6 +652,7 @@ export default function ReportsClientPage() {
                 leadsDocs = lSnap.docs;
                 companiesDocs = cSnap.docs;
             }
+            setFetchProgress(75);
 
             const processRecords = (docs: any[], isFromCompanies = false) => {
                 return docs.map((doc: any) => {
@@ -2016,7 +2048,16 @@ export default function ReportsClientPage() {
     return Array.from(franchisees).map(f => ({ value: f as string, label: f as string }));
   }, [allLeads]);
 
-  if (loading || authLoading || !userProfile) return <div className="flex h-full items-center justify-center"><Loader /></div>;
+  if (loading || authLoading || !userProfile) {
+    return (
+      <PercentageLoader 
+        value={fetchProgress}
+        label="Loading Outbound Performance Data" 
+        sublabel="Fetching dialer lead activity & team metrics..." 
+        minHeight="min-h-[220px]" 
+      />
+    );
+  }
 
   const filteredSourcedAppts = filteredAppointments.filter(appt => 
     selectedOutcomeFilter === 'all' || (appt.appointmentStatus || 'Pending') === selectedOutcomeFilter
@@ -2024,12 +2065,14 @@ export default function ReportsClientPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header><h1 className="text-3xl font-bold tracking-tight">Outbound Reporting</h1><p className="text-muted-foreground">Performance dashboard for outbound engagement.</p></header>
-      
-      <StatusOutcomeBanner />
+      {!hideHeaderAndFilters && (
+        <>
+          <header><h1 className="text-3xl font-bold tracking-tight">Outbound Reporting</h1><p className="text-muted-foreground">Performance dashboard for outbound engagement.</p></header>
+          
+          <StatusOutcomeBanner />
 
-      <Collapsible defaultOpen={false}>
-          <Card id="step-outbound-filters">
+          <Collapsible defaultOpen={false}>
+              <Card id="step-outbound-filters">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 sm:px-6">
                 <div className="flex items-center gap-2"><Filter className="h-5 w-5 text-muted-foreground" /><CardTitle className="text-lg font-bold leading-none">Filters</CardTitle></div>
                 <div className="flex items-center gap-2">
@@ -2232,11 +2275,14 @@ export default function ReportsClientPage() {
             </CollapsibleContent>
           </Card>
       </Collapsible>
+        </>
+      )}
 
       {!error && (
           <div className="space-y-6">
 
             {/* Daily Actioned Leads by Dialers (users with role user) */}
+            {(!visibleSections || visibleSections.includes('daily-dialer')) && (
             <Card className="mt-6 border shadow-sm">
                 <CardHeader className="pb-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2488,8 +2534,10 @@ export default function ReportsClientPage() {
                     )}
                 </CardContent>
             </Card>
+            )}
 
             {/* Outbound Dialer Performance Detailed Report */}
+            {(!visibleSections || visibleSections.includes('team-performance')) && (
             <Card className="mt-6">
                 <CardHeader>
                     <div className="flex items-center justify-between">
@@ -2660,7 +2708,10 @@ export default function ReportsClientPage() {
                     </Table>
                 </CardContent>
             </Card>
+            )}
 
+            {!visibleSections && (
+              <>
             {/* Outbound Lead Bucket Progression Report */}
             <Card id="step-report-bucket-progression" className="mt-6 border shadow-sm">
                 <CardHeader>
@@ -3360,6 +3411,8 @@ export default function ReportsClientPage() {
                         </ScrollArea>
                     </CardContent>
                 </Card>
+              </>
+            )}
 
           </div>
       )}

@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 import { Loader } from '@/components/ui/loader';
+import { PercentageLoader } from '@/components/ui/percentage-loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, ResponsiveContainer, LabelList } from 'recharts';
 import { 
   Phone, 
@@ -296,7 +297,17 @@ const calculateBusinessHoursSydney = (start: Date, end: Date): number => {
     return totalMs / (1000 * 60 * 60);
 };
 
-export default function InboundReportsClientPage() {
+export interface InboundReportsClientPageProps {
+  externalDateRange?: DateRange;
+  hideHeaderAndFilters?: boolean;
+  visibleSections?: string[];
+}
+
+export default function InboundReportsClientPage({
+  externalDateRange,
+  hideHeaderAndFilters = false,
+  visibleSections,
+}: InboundReportsClientPageProps = {}) {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allActivities, setAllActivities] = useState<Array<Activity & { leadId: string }>>([]);
   const [loading, setLoading] = useState(true);
@@ -332,6 +343,19 @@ export default function InboundReportsClientPage() {
     source: [] as string[],
     franchisee: [] as string[],
   });
+
+  useEffect(() => {
+    if (externalDateRange !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        dateEntered: externalDateRange,
+      }));
+      setAppliedFilters(prev => ({
+        ...prev,
+        dateEntered: externalDateRange,
+      }));
+    }
+  }, [externalDateRange]);
   const [datePreset, setDatePreset] = useState<string>("this_month");
 
   const hasUnappliedFilters = useMemo(() => {
@@ -359,6 +383,7 @@ export default function InboundReportsClientPage() {
   const [amDailyViewMode, setAmDailyViewMode] = useState<'chart' | 'table'>('chart');
   const [allUsers, setAllUsers] = useState<string[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
+  const [fetchProgress, setFetchProgress] = useState(15);
 
   useEffect(() => {
     if (!drillDownData) {
@@ -371,6 +396,7 @@ export default function InboundReportsClientPage() {
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
     setLoading(true);
+    setFetchProgress(20);
     setError(null);
     console.time("Inbound Reporting - Load Time");
     const startTimePerf = performance.now();
@@ -487,6 +513,7 @@ export default function InboundReportsClientPage() {
               getDocs(apptQuery),
               getDocs(usersQuery)
             ]);
+            setFetchProgress(70);
 
             const rawLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
             const rawCompanies = compSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
@@ -1838,7 +1865,16 @@ export default function InboundReportsClientPage() {
     return Array.from(franchisees).map(f => ({ value: f as string, label: f as string }));
   }, [allLeads]);
 
-  if (loading || authLoading || loadingPermissions || !userProfile) return <div className="flex h-full items-center justify-center"><Loader /></div>;
+  if (loading || authLoading || loadingPermissions || !userProfile) {
+    return (
+      <PercentageLoader 
+        value={fetchProgress}
+        label="Loading Inbound Leads Performance" 
+        sublabel="Fetching lead volume over time & Account Manager activity..." 
+        minHeight="min-h-[220px]" 
+      />
+    );
+  }
 
   if (!hasAccess) {
     return (
@@ -1851,154 +1887,159 @@ export default function InboundReportsClientPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-          <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                  <Inbox className="h-6 w-6 text-primary" />
-                  <h1 className="text-3xl font-bold tracking-tight">Inbound Reporting</h1>
+      {!hideHeaderAndFilters && (
+        <>
+          <header>
+              <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                      <Inbox className="h-6 w-6 text-primary" />
+                      <h1 className="text-3xl font-bold tracking-tight">Inbound Reporting</h1>
+                  </div>
+                  <StatusOutcomeGuideButton />
               </div>
-              <StatusOutcomeGuideButton />
-          </div>
-          <p className="text-muted-foreground">Lead performance and status tracking for NetSuite Inbound leads.</p>
-      </header>
+              <p className="text-muted-foreground">Lead performance and status tracking for NetSuite Inbound leads.</p>
+          </header>
 
-      <StatusOutcomeBanner />
-      
-      <Collapsible defaultOpen={false}>
-        <Card id="step-inbound-filters">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 sm:px-6">
-              <div className="flex items-center gap-2"><Filter className="h-5 w-5 text-muted-foreground" /><CardTitle className="text-lg font-bold leading-none">Filters</CardTitle></div>
-              <div className="flex items-center gap-2">
-                  <Button onClick={fetchData} variant="outline" size="sm" disabled={isRefreshing || loading}>
-                      <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
-                      {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-                  </Button>
-                  <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4 mr-2" /> Adjust</Button>
-                  </CollapsibleTrigger>
-              </div>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
-                <div className="space-y-2">
-                    <Label>Date Preset</Label>
-                    <Select value={datePreset} onValueChange={applyPreset}>
-                        <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select preset" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="today">Today</SelectItem>
-                            <SelectItem value="yesterday">Yesterday</SelectItem>
-                            <SelectItem value="this_week">This Week</SelectItem>
-                            <SelectItem value="this_month">This Month</SelectItem>
-                            <SelectItem value="last_month">Last Month</SelectItem>
-                            <SelectItem value="all_time">All Time</SelectItem>
-                            <SelectItem value="custom" disabled>Custom</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label>Date Entered</Label>
-                    <div className="relative w-full">
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className="w-full h-10 pl-3 pr-8 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
-                                    <CalendarIconLucide className="mr-2 h-4 w-4 shrink-0" />
-                                    <span className="truncate">
-                                        {filters.dateEntered?.from ? (
-                                            filters.dateEntered.to ? (
-                                                <>{format(filters.dateEntered.from, "LLL dd, y")} - {format(filters.dateEntered.to, "LLL dd, y")}</>
-                                            ) : format(filters.dateEntered.from, "LLL dd, y")
-                                        ) : (
-                                            "Pick a date range"
-                                        )}
-                                    </span>
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0 flex" align="start">
-                                <Calendar mode="range" selected={filters.dateEntered} onSelect={(date) => handleFilterChange('dateEntered', date)} initialFocus />
-                            </PopoverContent>
-                        </Popover>
-                        {filters.dateEntered && (
-                            <button 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleFilterChange('dateEntered', undefined);
-                                }}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
-                                title="Clear date filter"
-                            >
-                                <X className="h-3 w-3" />
-                            </button>
-                        )}
+          <StatusOutcomeBanner />
+          
+          <Collapsible defaultOpen={false}>
+            <Card id="step-inbound-filters">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 sm:px-6">
+                  <div className="flex items-center gap-2"><Filter className="h-5 w-5 text-muted-foreground" /><CardTitle className="text-lg font-bold leading-none">Filters</CardTitle></div>
+                  <div className="flex items-center gap-2">
+                      <Button onClick={fetchData} variant="outline" size="sm" disabled={isRefreshing || loading}>
+                          <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
+                          {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+                      </Button>
+                      <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4 mr-2" /> Adjust</Button>
+                      </CollapsibleTrigger>
+                  </div>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
+                    <div className="space-y-2">
+                        <Label>Date Preset</Label>
+                        <Select value={datePreset} onValueChange={applyPreset}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select preset" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="today">Today</SelectItem>
+                                <SelectItem value="yesterday">Yesterday</SelectItem>
+                                <SelectItem value="this_week">This Week</SelectItem>
+                                <SelectItem value="this_month">This Month</SelectItem>
+                                <SelectItem value="last_month">Last Month</SelectItem>
+                                <SelectItem value="all_time">All Time</SelectItem>
+                                <SelectItem value="custom" disabled>Custom</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Date Entered</Label>
+                        <div className="relative w-full">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full h-10 pl-3 pr-8 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                        <CalendarIconLucide className="mr-2 h-4 w-4 shrink-0" />
+                                        <span className="truncate">
+                                            {filters.dateEntered?.from ? (
+                                                filters.dateEntered.to ? (
+                                                    <>{format(filters.dateEntered.from, "LLL dd, y")} - {format(filters.dateEntered.to, "LLL dd, y")}</>
+                                                ) : format(filters.dateEntered.from, "LLL dd, y")
+                                            ) : (
+                                                "Pick a date range"
+                                            )}
+                                        </span>
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start">
+                                    <Calendar mode="range" selected={filters.dateEntered} onSelect={(date) => handleFilterChange('dateEntered', date)} initialFocus />
+                                </PopoverContent>
+                            </Popover>
+                            {filters.dateEntered && (
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFilterChange('dateEntered', undefined);
+                                    }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
+                                    title="Clear date filter"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Account Manager Assigned</Label>
+                        <MultiSelectCombobox 
+                            options={amOptions} 
+                            selected={filters.accountManagerAssigned} 
+                            onSelectedChange={(val) => handleFilterChange('accountManagerAssigned', val)} 
+                            placeholder="Select AMs..." 
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Status</Label>
+                        <MultiSelectCombobox 
+                            options={customerStatusOptions} 
+                            selected={filters.customerStatus} 
+                            onSelectedChange={(val) => handleFilterChange('customerStatus', val)} 
+                            placeholder="Select statuses..." 
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Lead Source</Label>
+                        <MultiSelectCombobox 
+                            options={sourceOptions} 
+                            selected={filters.source} 
+                            onSelectedChange={(val) => handleFilterChange('source', val)} 
+                            placeholder="Select sources..." 
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Franchisee</Label>
+                        <MultiSelectCombobox 
+                            options={franchiseeOptions} 
+                            selected={filters.franchisee} 
+                            onSelectedChange={(val) => handleFilterChange('franchisee', val)} 
+                            placeholder="Select franchisees..." 
+                        />
                     </div>
                 </div>
-                <div className="space-y-2">
-                    <Label>Account Manager Assigned</Label>
-                    <MultiSelectCombobox 
-                        options={amOptions} 
-                        selected={filters.accountManagerAssigned} 
-                        onSelectedChange={(val) => handleFilterChange('accountManagerAssigned', val)} 
-                        placeholder="Select AMs..." 
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label>Status</Label>
-                    <MultiSelectCombobox 
-                        options={customerStatusOptions} 
-                        selected={filters.customerStatus} 
-                        onSelectedChange={(val) => handleFilterChange('customerStatus', val)} 
-                        placeholder="Select statuses..." 
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label>Lead Source</Label>
-                    <MultiSelectCombobox 
-                        options={sourceOptions} 
-                        selected={filters.source} 
-                        onSelectedChange={(val) => handleFilterChange('source', val)} 
-                        placeholder="Select sources..." 
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label>Franchisee</Label>
-                    <MultiSelectCombobox 
-                        options={franchiseeOptions} 
-                        selected={filters.franchisee} 
-                        onSelectedChange={(val) => handleFilterChange('franchisee', val)} 
-                        placeholder="Select franchisees..." 
-                    />
-                </div>
-            </div>
-            <div className="flex justify-between items-center pt-2">
-                <Button variant="ghost" onClick={clearFilters} className="h-9 text-xs"><X className="mr-2 h-4 w-4"/> Clear Filters</Button>
-                <div className="flex items-center gap-3">
-                    {hasUnappliedFilters && (
-                        <span className="text-xs text-amber-600 font-medium animate-pulse">
-                            Pending changes...
-                        </span>
-                    )}
-                    <Button 
-                        onClick={applyFilters} 
-                        className={cn(
-                            "h-9 text-xs font-semibold px-4 transition-all duration-200",
-                            hasUnappliedFilters 
-                                ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md scale-105" 
-                                : "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white"
+                <div className="flex justify-between items-center pt-2">
+                    <Button variant="ghost" onClick={clearFilters} className="h-9 text-xs"><X className="mr-2 h-4 w-4"/> Clear Filters</Button>
+                    <div className="flex items-center gap-3">
+                        {hasUnappliedFilters && (
+                            <span className="text-xs text-amber-600 font-medium animate-pulse">
+                                Pending changes...
+                            </span>
                         )}
-                    >
-                        <Filter className="mr-2 h-3 w-3"/> Apply Filters
-                    </Button>
+                        <Button 
+                            onClick={applyFilters} 
+                            className={cn(
+                                "h-9 text-xs font-semibold px-4 transition-all duration-200",
+                                hasUnappliedFilters 
+                                    ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md scale-105" 
+                                    : "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white"
+                            )}
+                        >
+                            <Filter className="mr-2 h-3 w-3"/> Apply Filters
+                        </Button>
+                    </div>
                 </div>
-            </div>
-        </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+            </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        </>
+      )}
 
       {!error && (
           <div className="space-y-6">
+            {!visibleSections && (
             <div id="step-inbound-metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <StatCard 
                     title="Total Inbound" 
@@ -2122,9 +2163,12 @@ export default function InboundReportsClientPage() {
                     helpContent="Total inbound leads that started a ShipMate trial in this period."
                 />
             </div>
+            )}
 
             {/* Leads Volume Over Time & Geographic Distribution */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            {(!visibleSections || visibleSections.includes('leads-volume') || visibleSections.includes('geo-dist')) && (
+            <div className={visibleSections ? "flex flex-col gap-6 mt-6" : "grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6"}>
+                {(!visibleSections || visibleSections.includes('leads-volume')) && (
                 <Card className="w-full">
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -2176,7 +2220,9 @@ export default function InboundReportsClientPage() {
                         )}
                     </CardContent>
                 </Card>
+                )}
 
+                {(!visibleSections || visibleSections.includes('geo-dist')) && (
                 <Card className="w-full">
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -2210,9 +2256,12 @@ export default function InboundReportsClientPage() {
                         )}
                     </CardContent>
                 </Card>
+                )}
             </div>
+            )}
 
             {/* Daily Account Manager Activity */}
+            {(!visibleSections || visibleSections.includes('am-activity')) && (
             <Card id="step-report-am-daily-activity" className="mt-6 shadow-md border-primary/10">
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2462,8 +2511,10 @@ export default function InboundReportsClientPage() {
                     )}
                 </CardContent>
             </Card>
+            )}
 
             {/* Inbound Team Performance Details */}
+            {(!visibleSections || visibleSections.includes('team-performance')) && (
             <Card id="step-report-am-efficiency" className="mt-6">
                 <CardHeader>
                     <div className="flex items-center justify-between">
@@ -2528,7 +2579,7 @@ export default function InboundReportsClientPage() {
                                         onClick={() => {
                                             const actionedSet = stats.amActionedLeadIdsMap?.get(dialer.name) || new Set();
                                             setDrillDownData({ 
-                                                title: `${dialer.name} - Still In Pipeline (Yet to be Processed)`, 
+                                                title: `${dialer.name} - Still In Pipeline Leads (Un-actioned)`, 
                                                 leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && !actionedSet.has(l.id)) 
                                             });
                                         }}
@@ -2537,10 +2588,10 @@ export default function InboundReportsClientPage() {
                                     </TableCell>
                                     <TableCell className="text-right">{dialer['Avg Attempts'].toFixed(1)}</TableCell>
                                     <TableCell className="text-right">{dialer['Connect Rate'].toFixed(1)}%</TableCell>
-                                    <TableCell className="text-right font-bold text-blue-600">{dialer.Appointments}</TableCell>
-                                    <TableCell className="text-right text-orange-600">{dialer['Quotes Sent']}</TableCell>
+                                    <TableCell className="text-right font-semibold text-blue-600">{dialer.Appointments}</TableCell>
+                                    <TableCell className="text-right font-semibold text-orange-600">{dialer['Quotes Sent']}</TableCell>
                                     <TableCell 
-                                        className="text-right cursor-pointer hover:underline text-indigo-600 font-medium"
+                                        className="text-right font-semibold text-indigo-600 cursor-pointer hover:underline"
                                         onClick={() => setDrillDownData({ 
                                             title: `${dialer.name} - LocalMile Opportunity Leads`, 
                                             leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && l.customerStatus === 'LocalMile Opportunity') 
@@ -2549,7 +2600,7 @@ export default function InboundReportsClientPage() {
                                         {dialer['LM Opportunity']} <span className="text-xs text-muted-foreground font-normal">({dialer['LM Opportunity Rate'].toFixed(1)}%)</span>
                                     </TableCell>
                                     <TableCell 
-                                        className="text-right cursor-pointer hover:underline text-amber-600 font-medium"
+                                        className="text-right font-semibold text-amber-600 cursor-pointer hover:underline"
                                         onClick={() => setDrillDownData({ 
                                             title: `${dialer.name} - LocalMile Pending Leads`, 
                                             leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && l.customerStatus === 'LocalMile Pending') 
@@ -2558,24 +2609,31 @@ export default function InboundReportsClientPage() {
                                         {dialer['LM Pending']} <span className="text-xs text-muted-foreground font-normal">({dialer['LM Pending Rate'].toFixed(1)}%)</span>
                                     </TableCell>
                                     <TableCell 
-                                        className="text-right cursor-pointer hover:underline text-emerald-600 font-bold"
-                                        onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - Trialing LocalMile Leads`, 
-                                            leads: stats.localmileJourney.leads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name) 
-                                        })}
+                                        className="text-right font-semibold text-emerald-600 cursor-pointer hover:underline"
+                                        onClick={() => {
+                                            const dialerLmSet = stats.repLocalmileLeadsMap.get(dialer.name) || new Set();
+                                            setDrillDownData({ 
+                                                title: `${dialer.name} - Trialing LocalMile Leads`, 
+                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && dialerLmSet.has(l.id)) 
+                                            });
+                                        }}
                                     >
                                         {dialer['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({dialer['Trialing LocalMile Rate'].toFixed(1)}%)</span>
                                     </TableCell>
                                     <TableCell 
-                                        className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
-                                        onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - ShipMate / LocalMile Trials`, 
-                                            leads: stats.combinedJourney.leads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name) 
-                                        })}
+                                        className="text-right font-semibold text-purple-600 cursor-pointer hover:underline"
+                                        onClick={() => {
+                                            const dialerSmSet = stats.repShipmateLeadsMap.get(dialer.name) || new Set();
+                                            const dialerLmSet = stats.repLocalmileLeadsMap.get(dialer.name) || new Set();
+                                            setDrillDownData({ 
+                                                title: `${dialer.name} - ShipMate / LocalMile Trials`, 
+                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && (dialerSmSet.has(l.id) || dialerLmSet.has(l.id))) 
+                                            });
+                                        }}
                                     >
                                         {dialer['ShipMate / LocalMile Trials']}
                                     </TableCell>
-                                    <TableCell className="text-right font-bold text-green-600">{dialer['Signed Customers']}</TableCell>
+                                    <TableCell className="text-right font-semibold text-green-600">{dialer['Signed Customers']}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
@@ -2585,14 +2643,10 @@ export default function InboundReportsClientPage() {
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Total Engagement']}</TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
-                                    onClick={() => {
-                                        const allActionedLeadIds = new Set<string>();
-                                        stats.amActionedLeadIdsMap?.forEach(s => s.forEach(id => allActionedLeadIds.add(id)));
-                                        setDrillDownData({ 
-                                            title: "All Leads Processed (Actioned in Pipeline)", 
-                                            leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && allActionedLeadIds.has(l.id)) 
-                                        });
-                                    }}
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All Leads Processed (Actioned in Pipeline)", 
+                                        leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && stats.allActionedLeadIdsSet.has(l.id)) 
+                                    })}
                                 >
                                     {stats.teamPerformanceTotals['Leads Processed']}
                                 </TableCell>
@@ -2607,14 +2661,10 @@ export default function InboundReportsClientPage() {
                                 </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-blue-500 cursor-pointer hover:underline"
-                                    onClick={() => {
-                                        const allActionedLeadIds = new Set<string>();
-                                        stats.amActionedLeadIdsMap?.forEach(s => s.forEach(id => allActionedLeadIds.add(id)));
-                                        setDrillDownData({ 
-                                            title: "All Still In Pipeline Leads (Yet to be Processed)", 
-                                            leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && !allActionedLeadIds.has(l.id)) 
-                                        });
-                                    }}
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All Still In Pipeline Leads (Un-actioned)", 
+                                        leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && !stats.allActionedLeadIdsSet.has(l.id)) 
+                                    })}
                                 >
                                     {stats.teamPerformanceTotals['Still In Pipeline']}
                                 </TableCell>
@@ -2664,7 +2714,10 @@ export default function InboundReportsClientPage() {
                     </Table>
                 </CardContent>
             </Card>
+            )}
 
+            {!visibleSections && (
+              <>
             <Card id="step-report-free-trial-journeys" className="w-full shadow-md border-primary/10">
                 <CardHeader>
                     <div className="flex items-center justify-between">
@@ -3348,6 +3401,8 @@ export default function InboundReportsClientPage() {
                     </CardContent>
                 </Card>
             </div>
+              </>
+            )}
           </div>
       )}
 
