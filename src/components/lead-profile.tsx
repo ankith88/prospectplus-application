@@ -6512,6 +6512,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
        onOpenChange={setIsScheduleAppointmentOpen} 
        accountManagers={accountManagers}
        onAssignAccountManager={handleAccountManagerChange}
+       onContactAdded={(newContact) => {
+         setLead(prev => {
+           const updatedContacts = prev.contacts ? prev.contacts.map(c => newContact.isPrimary ? { ...c, isPrimary: false } : c) : [];
+           return { ...prev, contacts: [...updatedContacts, newContact] };
+         });
+         refreshLead(true);
+       }}
     />
     <Dialog open={isAddingContact} onOpenChange={setIsAddingContact}>
         <DialogContent>

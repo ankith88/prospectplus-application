@@ -29,6 +29,7 @@ interface ScheduleAppointmentDialogProps {
   onAssignAccountManager?: (amName: string, contactId: string) => Promise<string | null>;
   onAppointmentScheduled?: () => void;
   onCreateContact?: () => void;
+  onContactAdded?: (contact: Contact) => void;
 }
 
 export function ScheduleAppointmentDialog({
@@ -38,7 +39,8 @@ export function ScheduleAppointmentDialog({
   accountManagers,
   onAssignAccountManager,
   onAppointmentScheduled,
-  onCreateContact
+  onCreateContact,
+  onContactAdded
 }: ScheduleAppointmentDialogProps) {
   const { toast } = useToast();
   const [selectedAm, setSelectedAm] = useState<string | null>(lead.accountManagerAssigned || null);
@@ -46,15 +48,39 @@ export function ScheduleAppointmentDialog({
   const [linkType, setLinkType] = useState<'contact' | 'lead'>('contact');
   const [isAssigning, setIsAssigning] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
+  const [localContacts, setLocalContacts] = useState<Contact[]>(lead.contacts || []);
+  const [isAddingContact, setIsAddingContact] = useState(false);
 
   const amList = accountManagers || ['Lee Russell', 'Kerina Helliwell', 'Luke Forbes', 'Ankith Ravindran'];
 
-  // Sync selected AM with lead assignment on open
+  // Sync selected AM and contacts with lead assignment on open or when lead.contacts change
   useEffect(() => {
     if (isOpen) {
       setSelectedAm(lead.accountManagerAssigned || null);
+      setLocalContacts(lead.contacts || []);
     }
-  }, [isOpen, lead.accountManagerAssigned]);
+  }, [isOpen, lead.accountManagerAssigned, lead.contacts]);
+
+  const handleCreateContact = () => {
+    if (onCreateContact) {
+      onCreateContact();
+    }
+    setIsAddingContact(true);
+  };
+
+  const handleInlineContactAdded = (newContact: Contact) => {
+    setLocalContacts((prev) => {
+      const updated = prev ? prev.map((c) => (newContact.isPrimary ? { ...c, isPrimary: false } : c)) : [];
+      return [...updated, newContact];
+    });
+    setSelectedContact(newContact.id);
+    setIsAddingContact(false);
+    onContactAdded?.(newContact);
+    toast({
+      title: 'Contact Added',
+      description: `${newContact.name} has been added and selected.`,
+    });
+  };
 
   const handleAmSelection = async () => {
     if (!selectedAm) return;
@@ -119,149 +145,165 @@ export function ScheduleAppointmentDialog({
         setGeneratedUrl(null);
         setSelectedAm(lead.accountManagerAssigned || null);
         setSelectedContact(null);
+        setIsAddingContact(false);
       }, 300);
     }
     onOpenChange(open);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{generatedUrl ? 'Booking Link Ready' : 'Schedule Appointment'}</DialogTitle>
-          <DialogDescription>
-            {generatedUrl 
-              ? 'Share this link with your contact so they can pick a time.' 
-              : 'Assign an Account Manager to schedule an appointment with.'}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{generatedUrl ? 'Booking Link Ready' : 'Schedule Appointment'}</DialogTitle>
+            <DialogDescription>
+              {generatedUrl 
+                ? 'Share this link with your contact so they can pick a time.' 
+                : 'Assign an Account Manager to schedule an appointment with.'}
+            </DialogDescription>
+          </DialogHeader>
 
-        {!generatedUrl ? (
-          <>
-            <ScrollArea className="max-h-[400px] pr-4">
-              <div className="flex rounded-md bg-slate-100 p-1 mb-4">
-                <button
-                  type="button"
-                  onClick={() => setLinkType('contact')}
-                  className={`flex-1 text-xs py-1.5 font-medium rounded-md transition-colors ${linkType === 'contact' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-                >
-                  Contact-Specific Link
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLinkType('lead')}
-                  className={`flex-1 text-xs py-1.5 font-medium rounded-md transition-colors ${linkType === 'lead' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-                >
-                  Lead-Level Link
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                {linkType === 'contact' && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-medium text-slate-900">1. Select Contact</h3>
-                      <Button variant="ghost" size="sm" onClick={onCreateContact} className="h-8 text-blue-600 hover:text-blue-700">
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        New Contact
-                      </Button>
-                    </div>
-                    
-                    {(!lead.contacts || lead.contacts.length === 0) ? (
-                      <div className="text-center p-4 border border-dashed rounded-lg bg-slate-50">
-                        <p className="text-sm text-slate-500 mb-2">No contacts found for this lead.</p>
-                        <Button variant="outline" size="sm" onClick={onCreateContact}>Add Contact First</Button>
-                      </div>
-                    ) : (
-                      <RadioGroup
-                        value={selectedContact || ''}
-                        onValueChange={setSelectedContact}
-                        className="space-y-2 p-1"
-                      >
-                        {lead.contacts.map((contact) => (
-                          <Label
-                            key={contact.id}
-                            htmlFor={`contact-${contact.id}`}
-                            className="flex items-start gap-3 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground cursor-pointer"
-                          >
-                            <RadioGroupItem value={contact.id} id={`contact-${contact.id}`} className="mt-1" />
-                            <div>
-                              <p className="font-semibold text-sm">{contact.name}</p>
-                              <p className="text-xs text-slate-500">{contact.email || 'No email'} • {contact.phone || 'No phone'}</p>
-                            </div>
-                          </Label>
-                        ))}
-                      </RadioGroup>
-                    )}
-                  </div>
-                )}
-
-                <div>
-                  <h3 className="text-sm font-medium text-slate-900 mb-3">
-                    {linkType === 'contact' ? '2. Select Account Manager' : 'Select Account Manager'}
-                  </h3>
-                  <RadioGroup
-                    value={selectedAm || ''}
-                    onValueChange={setSelectedAm}
-                    className="space-y-2 p-1"
+          {!generatedUrl ? (
+            <>
+              <ScrollArea className="max-h-[400px] pr-4">
+                <div className="flex rounded-md bg-slate-100 p-1 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setLinkType('contact')}
+                    className={`flex-1 text-xs py-1.5 font-medium rounded-md transition-colors ${linkType === 'contact' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
                   >
-                    {amList.map((am) => (
-                      <Label
-                        key={am}
-                        htmlFor={`am-${am}`}
-                        className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground cursor-pointer"
-                      >
-                        <RadioGroupItem value={am} id={`am-${am}`} />
-                        <div>
-                          <p className="font-semibold text-sm">{am}</p>
+                    Contact-Specific Link
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLinkType('lead')}
+                    className={`flex-1 text-xs py-1.5 font-medium rounded-md transition-colors ${linkType === 'lead' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                  >
+                    Lead-Level Link
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {linkType === 'contact' && (
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-medium text-slate-900">1. Select Contact</h3>
+                        <Button variant="ghost" size="sm" onClick={handleCreateContact} className="h-8 text-blue-600 hover:text-blue-700">
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          New Contact
+                        </Button>
+                      </div>
+                      
+                      {(!localContacts || localContacts.length === 0) ? (
+                        <div className="text-center p-4 border border-dashed rounded-lg bg-slate-50">
+                          <p className="text-sm text-slate-500 mb-2">No contacts found for this lead.</p>
+                          <Button variant="outline" size="sm" onClick={handleCreateContact}>Add Contact First</Button>
                         </div>
-                      </Label>
-                    ))}
-                    {amList.length === 0 && (
-                      <p className="text-sm text-slate-500">No Account Managers found.</p>
-                    )}
-                  </RadioGroup>
+                      ) : (
+                        <RadioGroup
+                          value={selectedContact || ''}
+                          onValueChange={setSelectedContact}
+                          className="space-y-2 p-1"
+                        >
+                          {localContacts.map((contact) => (
+                            <Label
+                              key={contact.id}
+                              htmlFor={`contact-${contact.id}`}
+                              className="flex items-start gap-3 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground cursor-pointer"
+                            >
+                              <RadioGroupItem value={contact.id} id={`contact-${contact.id}`} className="mt-1" />
+                              <div>
+                                <p className="font-semibold text-sm">{contact.name}</p>
+                                <p className="text-xs text-slate-500">{contact.email || 'No email'} • {contact.phone || 'No phone'}</p>
+                              </div>
+                            </Label>
+                          ))}
+                        </RadioGroup>
+                      )}
+                    </div>
+                  )}
+
+                  <div>
+                    <h3 className="text-sm font-medium text-slate-900 mb-3">
+                      {linkType === 'contact' ? '2. Select Account Manager' : 'Select Account Manager'}
+                    </h3>
+                    <RadioGroup
+                      value={selectedAm || ''}
+                      onValueChange={setSelectedAm}
+                      className="space-y-2 p-1"
+                    >
+                      {amList.map((am) => (
+                        <Label
+                          key={am}
+                          htmlFor={`am-${am}`}
+                          className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground cursor-pointer"
+                        >
+                          <RadioGroupItem value={am} id={`am-${am}`} />
+                          <div>
+                            <p className="font-semibold text-sm">{am}</p>
+                          </div>
+                        </Label>
+                      ))}
+                      {amList.length === 0 && (
+                        <p className="text-sm text-slate-500">No Account Managers found.</p>
+                      )}
+                    </RadioGroup>
+                  </div>
+                </div>
+              </ScrollArea>
+
+              <DialogFooter className="mt-4">
+                <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isAssigning}>Cancel</Button>
+                <Button onClick={handleAmSelection} disabled={!selectedAm || (linkType === 'contact' && !selectedContact) || isAssigning}>
+                  {isAssigning ? 'Generating Link...' : 'Generate Link'}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center space-y-6 py-6 w-full max-w-full overflow-hidden">
+              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="h-6 w-6 text-green-600" />
+              </div>
+              
+              <div className="w-full space-y-2 overflow-hidden">
+                <Label className="text-xs text-slate-500 uppercase tracking-wider">Booking Link</Label>
+                <div className="flex items-center gap-2 p-3 bg-slate-50 border rounded-md w-full overflow-hidden">
+                  <p className="text-sm font-mono text-slate-700 truncate flex-1 select-all min-w-0 block w-full">{generatedUrl}</p>
                 </div>
               </div>
-            </ScrollArea>
 
-            <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isAssigning}>Cancel</Button>
-              <Button onClick={handleAmSelection} disabled={!selectedAm || (linkType === 'contact' && !selectedContact) || isAssigning}>
-                {isAssigning ? 'Generating Link...' : 'Generate Link'}
-              </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center space-y-6 py-6 w-full max-w-full overflow-hidden">
-            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="h-6 w-6 text-green-600" />
-            </div>
-            
-            <div className="w-full space-y-2 overflow-hidden">
-              <Label className="text-xs text-slate-500 uppercase tracking-wider">Booking Link</Label>
-              <div className="flex items-center gap-2 p-3 bg-slate-50 border rounded-md w-full overflow-hidden">
-                <p className="text-sm font-mono text-slate-700 truncate flex-1 select-all min-w-0 block w-full">{generatedUrl}</p>
+              <div className="flex flex-col w-full gap-3 shrink-0">
+                <Button onClick={handleCopyLink} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Link
+                </Button>
+                <Button variant="outline" onClick={() => window.open(generatedUrl, '_blank')} className="w-full">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open Booking Page
+                </Button>
+                <Button variant="ghost" onClick={() => handleOpenChange(false)} className="w-full mt-2 text-slate-500">
+                  Close
+                </Button>
               </div>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
-            <div className="flex flex-col w-full gap-3 shrink-0">
-              <Button onClick={handleCopyLink} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                <Copy className="h-4 w-4 mr-2" />
-                Copy Link
-              </Button>
-              <Button variant="outline" onClick={() => window.open(generatedUrl, '_blank')} className="w-full">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Open Booking Page
-              </Button>
-              <Button variant="ghost" onClick={() => handleOpenChange(false)} className="w-full mt-2 text-slate-500">
-                Close
-              </Button>
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+      <Dialog open={isAddingContact} onOpenChange={setIsAddingContact}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add New Contact</DialogTitle>
+          </DialogHeader>
+          <AddContactForm
+            leadId={lead.id}
+            onContactAdded={handleInlineContactAdded}
+            collectionName={(lead as any).companyId ? 'companies' : 'leads'}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

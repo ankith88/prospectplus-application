@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Search, Sparkles, X, Check, SlidersHorizontal, CornerDownRight } from 'lucide-react';
 
 export interface LossReasonPickerProps {
-  cancellationThemes: any[];
+  cancellationThemes?: any[];
   selectedThemeId: string;
   selectedWhyId: string;
   selectedReasonId: string;
@@ -26,18 +26,332 @@ interface FlattenedReason {
   reasonName: string;
 }
 
-// Preset Quick Pills for common Lead Non-Engagement reasons
+// Fallback hierarchy data if Firestore collection is loading or incomplete
+const DEFAULT_CANCELLATION_HIERARCHY = [
+  {
+    id: "5",
+    name: "Business Changes",
+    whys: [
+      {
+        id: "3",
+        name: "Closing the business",
+        reasons: [
+          { id: "7", name: "Non-voluntary administration" },
+          { id: "6", name: "Voluntary administration" },
+          { id: "209", name: "Re-evaluation of business" }
+        ]
+      },
+      {
+        id: "4",
+        name: "Relocating the business",
+        reasons: [
+          { id: "9", name: "Moving locations to a non-serviceable area" },
+          { id: "8", name: "Moving locations, service no longer required" }
+        ]
+      },
+      {
+        id: "10",
+        name: "Change of entity",
+        reasons: [
+          { id: "17", name: "New owners signed new SCF" },
+          { id: "16", name: "New owners are not interested in services" }
+        ]
+      },
+      {
+        id: "11",
+        name: "Going electronic/Cashless",
+        reasons: [
+          { id: "18", name: "No longer carrying cash/cheques" }
+        ]
+      },
+      {
+        id: "12",
+        name: "Closure of PO Box",
+        reasons: [
+          { id: "21", name: "Low mail volumes / going paperless" },
+          { id: "19", name: "Moving to a non-serviceable area" },
+          { id: "20", name: "Unpaid PO Box - closed by Aus Post" }
+        ]
+      },
+      {
+        id: "13",
+        name: "Merging of offices",
+        reasons: [
+          { id: "22", name: "Service in one location no longer required" }
+        ]
+      },
+      {
+        id: "14",
+        name: "Relocating - Aus Post Redirected",
+        reasons: [
+          { id: "23", name: "Aus Post redirecting PO Box mail to new location" }
+        ]
+      },
+      {
+        id: "15",
+        name: "Relocation - New Franchisee",
+        reasons: [
+          { id: "24", name: "Moving locations, signed new SCF" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "25",
+    name: "Service & Quality Issues",
+    whys: [
+      {
+        id: "31",
+        name: "Shipping Quality Issues",
+        reasons: [
+          { id: "34", name: "Damaged items" },
+          { id: "33", name: "Delayed deliveries" }
+        ]
+      },
+      {
+        id: "32",
+        name: "Issues with Operations",
+        reasons: [
+          { id: "35", name: "Collection times" },
+          { id: "130", name: "Other feedback (i.e. Operator Issue)" },
+          { id: "36", name: "Conflicting views between franchisee and customer" },
+          { id: "37", name: "Sweep issues cannot resolve" }
+        ]
+      },
+      {
+        id: "300",
+        name: "Freight & Product Restrictions",
+        reasons: [
+          { id: "301", name: "Dangerous/prohibited goods" },
+          { id: "302", name: "Ships items over 20kg" },
+          { id: "303", name: "Needs standard shipping" },
+          { id: "304", name: "Ships items internationally only" },
+          { id: "305", name: "Requires pallet freight / heavy cargo" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "26",
+    name: "Cost & Financial",
+    whys: [
+      {
+        id: "38",
+        name: "Taking the service in-house",
+        reasons: [
+          { id: "42", name: "Cutting costs" },
+          { id: "44", name: "Cost cutting and dissatisfied with MailPlus" },
+          { id: "43", name: "Volume of mail decreased" }
+        ]
+      },
+      {
+        id: "39",
+        name: "Payment issues",
+        reasons: [
+          { id: "46", name: "Can no longer afford services" },
+          { id: "45", name: "Debt with MailPlus" }
+        ]
+      },
+      {
+        id: "40",
+        name: "Fuel Surcharge",
+        reasons: [
+          { id: "48", name: "Product - Cannot be waived" },
+          { id: "47", name: "Service - Franchisee chose not to waive" }
+        ]
+      },
+      {
+        id: "41",
+        name: "Collection Fee",
+        reasons: [
+          { id: "49", name: "Volume cannot justify free shipping" }
+        ]
+      },
+      {
+        id: "310",
+        name: "Pricing & Rates",
+        reasons: [
+          { id: "311", name: "Price too high" },
+          { id: "312", name: "Rates not competitive vs current courier" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "27",
+    name: "Competitive & Strategic",
+    whys: [
+      {
+        id: "51",
+        name: "Going to a competitor",
+        reasons: [
+          { id: "58", name: "Cost savings" },
+          { id: "57", name: "Dissatisfied with service" },
+          { id: "56", name: "Value proposition" },
+          { id: "55", name: "Technology advantage" }
+        ]
+      },
+      {
+        id: "50",
+        name: "ShipMate Limitations",
+        reasons: [
+          { id: "54", name: "Customer going to another platform" },
+          { id: "53", name: "Critical feature missing" },
+          { id: "52", name: "Other feedback (i.e. Integration)" }
+        ]
+      },
+      {
+        id: "320",
+        name: "IT & Systems Integration",
+        reasons: [
+          { id: "321", name: "Needs IT integration that is not available" },
+          { id: "322", name: "Incompatible e-commerce / ERP platform" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "28",
+    name: "Volume & Demand",
+    whys: [
+      {
+        id: "59",
+        name: "Shipping Volume Decreased",
+        reasons: [
+          { id: "60", name: "Supply chain issues/disruptions" },
+          { id: "61", name: "Low consumer demand/business turnover" },
+          { id: "62", name: "Prefer standard low cost shipping" }
+        ]
+      },
+      {
+        id: "330",
+        name: "Lead Volume Constraints",
+        reasons: [
+          { id: "331", name: "Volume too low / Under minimum requirement" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "29",
+    name: "HO Administrative",
+    whys: [
+      {
+        id: "65",
+        name: "Head Office Cancelled",
+        reasons: [
+          { id: "67", name: "Customer uncontactable for onboarding" },
+          { id: "210", name: "Duplicate Accounts" },
+          { id: "131", name: "Secure Cash / Neopost / Sendle / Dashback / RSEA" },
+          { id: "66", name: "Data Wash" }
+        ]
+      },
+      {
+        id: "64",
+        name: "Franchisee Reasons",
+        reasons: [
+          { id: "68", name: "Customer behavioral issues" },
+          { id: "69", name: "Customer revenue not worth the travel" },
+          { id: "70", name: "Unable to do the banking" }
+        ]
+      },
+      {
+        id: "63",
+        name: "Merge Accounts",
+        reasons: [
+          { id: "71", name: "There are 2 separate customers for departments" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "30",
+    name: "Poor Engagement / Follow Up",
+    whys: [
+      {
+        id: "76",
+        name: "No Service",
+        reasons: [
+          { id: "77", name: "Service did not start after signing SCF" }
+        ]
+      },
+      {
+        id: "72",
+        name: "Not responsive",
+        reasons: [
+          { id: "73", name: "Customer is not engaging with HO after cancellation received" },
+          { id: "81", name: "No response to multiple phone/email follow-up attempts" },
+          { id: "82", name: "Unable to establish contact / gatekeeper blocking" }
+        ]
+      },
+      {
+        id: "78",
+        name: "Invalid Contact Information",
+        reasons: [
+          { id: "79", name: "Phone number disconnected / invalid line" },
+          { id: "80", name: "Incorrect phone number provided / wrong contact" }
+        ]
+      },
+      {
+        id: "83",
+        name: "Customer Request / Preference",
+        reasons: [
+          { id: "84", name: "Customer requested Do Not Call / Do Not Contact" }
+        ]
+      },
+      {
+        id: "74",
+        name: "Onboarding cancelled",
+        reasons: [
+          { id: "75", name: "Customer went cold after signing SCF and/or cancelled onboarding" }
+        ]
+      }
+    ]
+  }
+];
+
+// Preset Quick Pills with explicit reasonId, matchReason, and fallback keywords
 const QUICK_PILLS = [
-  { label: "Price too high", matchReason: "Price too high" },
-  { label: "Over 20kg items", matchReason: "Ships items over 20kg" },
-  { label: "Needs IT integration", matchReason: "Needs IT integration that is not available" },
-  { label: "Needs standard shipping", matchReason: "Needs standard shipping" },
-  { label: "Dangerous / prohibited goods", matchReason: "Dangerous/prohibited goods" },
-  { label: "No response to follow-ups", matchReason: "No response to multiple phone/email follow-up attempts" }
+  {
+    label: "Price too high",
+    reasonId: "311",
+    matchReason: "Price too high",
+    keywords: ["price too high", "pricing", "price", "rates"]
+  },
+  {
+    label: "Over 20kg items",
+    reasonId: "302",
+    matchReason: "Ships items over 20kg",
+    keywords: ["20kg", "over 20kg", "ships items over 20kg"]
+  },
+  {
+    label: "Needs IT integration",
+    reasonId: "321",
+    matchReason: "Needs IT integration that is not available",
+    keywords: ["it integration", "needs it integration", "integration"]
+  },
+  {
+    label: "Needs standard shipping",
+    reasonId: "303",
+    matchReason: "Needs standard shipping",
+    keywords: ["needs standard shipping", "standard shipping"]
+  },
+  {
+    label: "Dangerous / prohibited goods",
+    reasonId: "301",
+    matchReason: "Dangerous/prohibited goods",
+    keywords: ["dangerous", "prohibited", "prohibited goods", "dangerous/prohibited goods"]
+  },
+  {
+    label: "No response to follow-ups",
+    reasonId: "81",
+    matchReason: "No response to multiple phone/email follow-up attempts",
+    keywords: ["no response", "follow-up attempts", "not responsive"]
+  }
 ];
 
 export function LossReasonPicker({
-  cancellationThemes,
+  cancellationThemes = [],
   selectedThemeId,
   selectedWhyId,
   selectedReasonId,
@@ -48,33 +362,72 @@ export function LossReasonPicker({
   const [showManualDropdowns, setShowManualDropdowns] = useState(false);
 
   // Flatten hierarchy into a searchable single-level list
+  const activeThemes = useMemo(() => {
+    if (Array.isArray(cancellationThemes) && cancellationThemes.length > 0) {
+      return cancellationThemes;
+    }
+    return DEFAULT_CANCELLATION_HIERARCHY;
+  }, [cancellationThemes]);
+
   const allReasons: FlattenedReason[] = useMemo(() => {
     const list: FlattenedReason[] = [];
-    if (!cancellationThemes || !Array.isArray(cancellationThemes)) return list;
+    if (!activeThemes || !Array.isArray(activeThemes)) return list;
 
-    for (const theme of cancellationThemes) {
+    for (const theme of activeThemes) {
       if (!theme.whys || !Array.isArray(theme.whys)) continue;
       for (const why of theme.whys) {
         if (!why.reasons || !Array.isArray(why.reasons)) continue;
         for (const reason of why.reasons) {
           list.push({
-            themeId: theme.id,
+            themeId: String(theme.id),
             themeName: theme.name,
-            whyId: why.id,
+            whyId: String(why.id),
             whyName: why.name,
-            reasonId: reason.id,
+            reasonId: String(reason.id),
             reasonName: reason.name
           });
         }
       }
     }
     return list;
-  }, [cancellationThemes]);
+  }, [activeThemes]);
+
+  // Helper to resolve matching reason object for a quick pill
+  const findPillMatch = (pill: typeof QUICK_PILLS[number], reasonsList: FlattenedReason[]) => {
+    if (!reasonsList || reasonsList.length === 0) return null;
+
+    // 1. Direct ID match
+    let found = reasonsList.find(r => String(r.reasonId) === String(pill.reasonId));
+    if (found) return found;
+
+    // 2. Exact name match (case-insensitive)
+    found = reasonsList.find(r => r.reasonName.toLowerCase().trim() === pill.matchReason.toLowerCase().trim());
+    if (found) return found;
+
+    // 3. Normalized slash/space match
+    const normPill = pill.matchReason.toLowerCase().replace(/\s*\/\s*/g, '/').trim();
+    found = reasonsList.find(r => r.reasonName.toLowerCase().replace(/\s*\/\s*/g, '/').trim() === normPill);
+    if (found) return found;
+
+    // 4. Keyword search
+    if (pill.keywords) {
+      for (const kw of pill.keywords) {
+        found = reasonsList.find(r => r.reasonName.toLowerCase().includes(kw.toLowerCase()));
+        if (found) return found;
+      }
+    }
+
+    // 5. Pill label substring match
+    found = reasonsList.find(r => r.reasonName.toLowerCase().includes(pill.label.toLowerCase()));
+    if (found) return found;
+
+    return null;
+  };
 
   // Active selection object
   const activeSelection = useMemo(() => {
     if (!selectedReasonId) return null;
-    return allReasons.find(r => r.reasonId === selectedReasonId) || null;
+    return allReasons.find(r => String(r.reasonId) === String(selectedReasonId)) || null;
   }, [allReasons, selectedReasonId]);
 
   // Filtered reasons based on search input
@@ -89,8 +442,8 @@ export function LossReasonPicker({
   }, [allReasons, searchQuery]);
 
   // Quick pill selection handler
-  const handleQuickPillClick = (matchReasonName: string) => {
-    const found = allReasons.find(r => r.reasonName.toLowerCase() === matchReasonName.toLowerCase());
+  const handleQuickPillClick = (pill: typeof QUICK_PILLS[number]) => {
+    const found = findPillMatch(pill, allReasons);
     if (found) {
       onSelect(found.themeId, found.whyId, found.reasonId);
       setSearchQuery('');
@@ -126,24 +479,24 @@ export function LossReasonPicker({
         </Button>
       </div>
 
-      {/* Idea 2: Quick Pill Badges */}
+      {/* Frequent Reasons Quick Pills */}
       <div className="space-y-1.5">
         <span className="text-[11px] font-medium text-slate-500 block">Frequent Reasons (1-Click):</span>
         <div className="flex flex-wrap gap-1.5">
           {QUICK_PILLS.map((pill, idx) => {
-            const matchedObj = allReasons.find(r => r.reasonName.toLowerCase() === pill.matchReason.toLowerCase());
-            const isSelected = selectedReasonId && matchedObj && selectedReasonId === matchedObj.reasonId;
+            const matchedObj = findPillMatch(pill, allReasons);
+            const isSelected = !!(selectedReasonId && matchedObj && String(selectedReasonId) === String(matchedObj.reasonId));
 
             return (
               <button
                 key={idx}
                 type="button"
                 disabled={disabled || !matchedObj}
-                onClick={() => handleQuickPillClick(pill.matchReason)}
+                onClick={() => handleQuickPillClick(pill)}
                 className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1 font-semibold ${
                   isSelected
                     ? 'bg-[#095c7b] text-white border-[#095c7b] shadow-md scale-[1.02]'
-                    : 'bg-sky-50 text-sky-950 border-sky-300 hover:border-[#095c7b] hover:bg-[#095c7b] hover:text-white hover:scale-[1.02] shadow-xs'
+                    : 'bg-sky-50 text-sky-950 border-sky-300 hover:border-[#095c7b] hover:bg-[#095c7b] hover:text-white hover:scale-[1.02] shadow-xs cursor-pointer'
                 }`}
               >
                 {isSelected && <Check className="w-3 h-3 text-emerald-300" />}
@@ -154,7 +507,7 @@ export function LossReasonPicker({
         </div>
       </div>
 
-      {/* Idea 1: Search Combobox */}
+      {/* Search Combobox */}
       <div className="relative">
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
@@ -186,7 +539,7 @@ export function LossReasonPicker({
               </div>
             ) : (
               filteredReasons.map((item) => {
-                const isSelected = selectedReasonId === item.reasonId;
+                const isSelected = String(selectedReasonId) === String(item.reasonId);
                 return (
                   <button
                     key={`${item.themeId}-${item.whyId}-${item.reasonId}`}
@@ -256,8 +609,8 @@ export function LossReasonPicker({
                 <SelectValue placeholder="Select Theme" />
               </SelectTrigger>
               <SelectContent>
-                {cancellationThemes.map(t => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                {activeThemes.map(t => (
+                  <SelectItem key={String(t.id)} value={String(t.id)}>{t.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -275,8 +628,8 @@ export function LossReasonPicker({
                   <SelectValue placeholder="Select Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.map((w: any) => (
-                    <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                  {activeThemes.find(t => String(t.id) === String(selectedThemeId))?.whys?.map((w: any) => (
+                    <SelectItem key={String(w.id)} value={String(w.id)}>{w.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -295,11 +648,11 @@ export function LossReasonPicker({
                   <SelectValue placeholder="Select Specific Reason" />
                 </SelectTrigger>
                 <SelectContent>
-                  {cancellationThemes
-                    .find(t => t.id === selectedThemeId)?.whys
-                    ?.find((w: any) => w.id === selectedWhyId)?.reasons
+                  {activeThemes
+                    .find(t => String(t.id) === String(selectedThemeId))?.whys
+                    ?.find((w: any) => String(w.id) === String(selectedWhyId))?.reasons
                     ?.map((r: any) => (
-                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      <SelectItem key={String(r.id)} value={String(r.id)}>{r.name}</SelectItem>
                     ))}
                 </SelectContent>
               </Select>
@@ -310,3 +663,4 @@ export function LossReasonPicker({
     </div>
   );
 }
+

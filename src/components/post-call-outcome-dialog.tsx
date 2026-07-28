@@ -377,13 +377,9 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
         setSelectedWhyId(match.whyId);
         setSelectedReasonId(match.reasonId);
       } else {
-        // Reset if it's not a pre-mapped lost outcome but is still in the lost group
-        const isLost = outcomeGroups["Lost / Disqualified"].includes(outcome);
-        if (!isLost) {
-          setSelectedThemeId('');
-          setSelectedWhyId('');
-          setSelectedReasonId('');
-        }
+        setSelectedThemeId('');
+        setSelectedWhyId('');
+        setSelectedReasonId('');
       }
     }
     triggerAutoMap();
@@ -832,9 +828,10 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
         const extraFirestorePromises: Promise<any>[] = [];
 
         if (isLost && selectedThemeId) {
-            const selectedThemeObj = cancellationThemes.find(t => t.id === selectedThemeId);
-            const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => w.id === selectedWhyId);
-            const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => r.id === selectedReasonId);
+            const activeThemesList = (cancellationThemes && cancellationThemes.length > 0) ? cancellationThemes : [];
+            const selectedThemeObj = activeThemesList.find(t => String(t.id) === String(selectedThemeId));
+            const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => String(w.id) === String(selectedWhyId));
+            const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => String(r.id) === String(selectedReasonId));
 
             extraFirestorePromises.push(
                 updateDoc(doc(db, 'leads', lead.id), {

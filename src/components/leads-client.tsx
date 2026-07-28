@@ -1856,7 +1856,7 @@ export default function LeadsClientPage({
                 const currentPage = myLeadsPagination[status] || 1;
                 const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
                 const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
-                const isAllInGroupSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedLeads.includes(l.id));
+                const isAllInGroupSelected = leads.length > 0 && leads.every(l => selectedLeads.includes(l.id));
 
                 return (
                   <AccordionItem value={status} key={status}>
@@ -1864,7 +1864,7 @@ export default function LeadsClientPage({
                         <div className="flex items-center gap-2">
                            <Checkbox
                                 checked={isAllInGroupSelected}
-                                onCheckedChange={() => handleSelectAllInGroup(paginatedLeads)}
+                                onCheckedChange={() => handleSelectAllInGroup(leads)}
                                 onClick={(e) => e.stopPropagation()}
                                 id={`select-all-myleads-${status}`}
                             />
@@ -2133,14 +2133,14 @@ export default function LeadsClientPage({
                               const currentPage = paginationState[groupKey] || 1;
                               const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
                               const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
-                              const areAllInGroupSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedLeads.includes(l.id));
+                              const areAllInGroupSelected = leads.length > 0 && leads.every(l => selectedLeads.includes(l.id));
  
                               return (
                                 <AccordionItem value={status} key={status}>
                                   <div className="bg-secondary/50 px-4 rounded-md flex items-center">
                                     <Checkbox
                                         checked={areAllInGroupSelected}
-                                        onCheckedChange={() => handleSelectAllInGroup(paginatedLeads)}
+                                        onCheckedChange={() => handleSelectAllInGroup(leads)}
                                         onClick={(e) => e.stopPropagation()}
                                         id={`select-all-${dialer}-${status}`}
                                         className="mr-2"
@@ -2358,7 +2358,7 @@ export default function LeadsClientPage({
                 const currentPage = paginationState[groupKey] || 1;
                 const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
                 const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
-                const isAllInGroupSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedLeads.includes(l.id));
+                const isAllInGroupSelected = leads.length > 0 && leads.every(l => selectedLeads.includes(l.id));
 
                 return (
                   <AccordionItem value={status} key={status}>
@@ -2366,7 +2366,7 @@ export default function LeadsClientPage({
                         <div className="flex items-center gap-2">
                            <Checkbox
                                 checked={isAllInGroupSelected}
-                                onCheckedChange={() => handleSelectAllInGroup(paginatedLeads)}
+                                onCheckedChange={() => handleSelectAllInGroup(leads)}
                                 onClick={(e) => e.stopPropagation()}
                                 id={`select-all-unassigned-${status}`}
                             />

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { 
   MessageSquare, 
   AlertCircle, 
@@ -28,7 +29,11 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
-  PieChart as LucidePieChart
+  PieChart as LucidePieChart,
+  Pencil,
+  UploadCloud,
+  File,
+  X
 } from "lucide-react";
 import { 
   ResponsiveContainer, 
@@ -46,7 +51,8 @@ import {
   CartesianGrid
 } from "recharts";
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { firestore as db } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { firestore as db, storage } from "@/lib/firebase";
 import { getAllUsers } from "@/services/firebase";
 
 interface AppTicket {
@@ -91,6 +97,13 @@ export default function AdminAppTicketsPage() {
   const [emailNotesVal, setEmailNotesVal] = useState("");
   const [ccEmailVal, setCcEmailVal] = useState("ankith.ravindran@mailplus.com.au");
   const [users, setUsers] = useState<any[]>([]);
+
+  // Ticket detail editing states for admin
+  const [editTitleVal, setEditTitleVal] = useState("");
+  const [editTypeVal, setEditTypeVal] = useState<"feature" | "bug" | "issue" | "feedback">("feature");
+  const [editDescriptionVal, setEditDescriptionVal] = useState("");
+  const [editAttachmentsVal, setEditAttachmentsVal] = useState<{ name: string; url: string }[]>([]);
+  const [isUploadingAdminFiles, setIsUploadingAdminFiles] = useState(false);
 
   // Developer fields
   const [githubIssueVal, setGithubIssueVal] = useState("");
@@ -151,10 +164,53 @@ export default function AdminAppTicketsPage() {
     setEmailNotesVal(ticket.adminNotes || "");
     setCcEmailVal("ankith.ravindran@mailplus.com.au");
     setUserSearchQuery("");
+
+    setEditTitleVal(ticket.title || "");
+    setEditTypeVal(ticket.type || "feature");
+    setEditDescriptionVal(ticket.description || "");
+    setEditAttachmentsVal(ticket.attachments ? [...ticket.attachments] : []);
+    setIsUploadingAdminFiles(false);
+  };
+
+  const handleAdminFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedTicket) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploadingAdminFiles(true);
+    const newAttachments = [...editAttachmentsVal];
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const storageRef = ref(storage, `app_tickets/attachments/${selectedTicket.id}/${file.name}`);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        newAttachments.push({ name: file.name, url });
+      }
+      setEditAttachmentsVal(newAttachments);
+      toast.success("Files uploaded successfully.");
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Error uploading files.");
+    } finally {
+      setIsUploadingAdminFiles(false);
+      if (event.target) event.target.value = "";
+    }
+  };
+
+  const removeAdminAttachment = (index: number) => {
+    const newAttachments = [...editAttachmentsVal];
+    newAttachments.splice(index, 1);
+    setEditAttachmentsVal(newAttachments);
   };
 
   const handleSaveChanges = async () => {
     if (!selectedTicket) return;
+    if (!editTitleVal.trim() || !editDescriptionVal.trim()) {
+      toast.error("Title and description are required.");
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -171,6 +227,10 @@ export default function AdminAppTicketsPage() {
       const updatedHistory = selectedTicket.history ? [...selectedTicket.history, newHistoryItem] : [newHistoryItem];
 
       await updateDoc(ticketRef, {
+        title: editTitleVal.trim(),
+        type: editTypeVal,
+        description: editDescriptionVal.trim(),
+        attachments: editAttachmentsVal,
         status: statusVal,
         platform: platformVal,
         adminNotes: adminNotesVal.trim(),
@@ -893,31 +953,65 @@ export default function AdminAppTicketsPage() {
             </DialogHeader>
 
             <div className="space-y-6 py-4">
-              {/* User Description */}
-              <div className="space-y-2">
-                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">User Details / Commentary</h4>
-                <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed border border-gray-100">
-                  {selectedTicket.description}
+              {/* Editable Ticket Title & Category */}
+              <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+                <h4 className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                  <Pencil className="h-3.5 w-3.5" /> Ticket Details Editing
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="text-xs font-semibold text-gray-700">Ticket Title</label>
+                    <Input
+                      value={editTitleVal}
+                      onChange={(e) => setEditTitleVal(e.target.value)}
+                      placeholder="Title"
+                      className="bg-white text-xs border-gray-200 focus-visible:ring-[#095c7b]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-gray-700">Category</label>
+                    <select
+                      value={editTypeVal}
+                      onChange={(e) => setEditTypeVal(e.target.value as any)}
+                      className="w-full text-xs rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+                    >
+                      <option value="feedback">Feedback</option>
+                      <option value="feature">Feature Request</option>
+                      <option value="bug">Bug Report</option>
+                      <option value="issue">General Issue</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-700">Detailed Description</label>
+                  <Textarea
+                    value={editDescriptionVal}
+                    onChange={(e) => setEditDescriptionVal(e.target.value)}
+                    placeholder="User description..."
+                    className="min-h-[100px] text-xs bg-white border-gray-200 focus-visible:ring-[#095c7b]"
+                  />
                 </div>
               </div>
 
-              {/* Attachments */}
-              {selectedTicket.attachments && selectedTicket.attachments.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">User Attachments</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {selectedTicket.attachments.map((file, index) => (
+              {/* Attachments Section */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Attachments & Screenshots</h4>
+                {editAttachmentsVal && editAttachmentsVal.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+                    {editAttachmentsVal.map((file, index) => (
                       <div 
                         key={index} 
-                        className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-white"
+                        className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-white shadow-sm"
                       >
-                        <span className="text-xs font-medium truncate max-w-[180px]">{file.name}</span>
+                        <span className="text-xs font-medium truncate max-w-[150px]">{file.name}</span>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <a 
                             href={file.url} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="p-1.5 bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b]/20 rounded-md transition-colors"
+                            title="View"
                           >
                             <Eye className="h-3.5 w-3.5" />
                           </a>
@@ -925,15 +1019,44 @@ export default function AdminAppTicketsPage() {
                             href={file.url} 
                             download 
                             className="p-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-md transition-colors"
+                            title="Download"
                           >
                             <Download className="h-3.5 w-3.5" />
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => removeAdminAttachment(index)}
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                            title="Delete Attachment"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
+                )}
+
+                <div className="relative border-2 border-dashed border-gray-200 hover:border-[#095c7b] rounded-lg p-3 text-center bg-gray-50/50 hover:bg-[#095c7b]/5 transition-colors cursor-pointer group">
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleAdminFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={isUploadingAdminFiles}
+                  />
+                  <div className="flex items-center justify-center gap-2">
+                    {isUploadingAdminFiles ? (
+                      <Loader2 className="h-4 w-4 text-[#095c7b] animate-spin" />
+                    ) : (
+                      <UploadCloud className="h-4 w-4 text-gray-400 group-hover:text-[#095c7b] transition-colors" />
+                    )}
+                    <span className="text-xs font-semibold text-gray-600 group-hover:text-[#095c7b] transition-colors">
+                      {isUploadingAdminFiles ? "Uploading attachment..." : "Add attachment file"}
+                    </span>
+                  </div>
                 </div>
-              )}
+              </div>
 
               {/* Developer Git Details (View only) */}
               {(selectedTicket.githubIssue || selectedTicket.commitHash || selectedTicket.branchName) && (
