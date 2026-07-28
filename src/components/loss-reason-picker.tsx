@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Search, Sparkles, X, Check, SlidersHorizontal, CornerDownRight } from 'lucide-react';
+import { getMergedCancellationHierarchy } from '@/lib/cancellation-reasons-mapper';
 
 export interface LossReasonPickerProps {
   cancellationThemes?: any[];
@@ -363,10 +364,7 @@ export function LossReasonPicker({
 
   // Flatten hierarchy into a searchable single-level list
   const activeThemes = useMemo(() => {
-    if (Array.isArray(cancellationThemes) && cancellationThemes.length > 0) {
-      return cancellationThemes;
-    }
-    return DEFAULT_CANCELLATION_HIERARCHY;
+    return getMergedCancellationHierarchy(cancellationThemes);
   }, [cancellationThemes]);
 
   const allReasons: FlattenedReason[] = useMemo(() => {

@@ -43,6 +43,7 @@ import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivat
 import { Checkbox } from '@/components/ui/checkbox'
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
 import { LossReasonPicker } from '@/components/loss-reason-picker'
+import { getMergedCancellationHierarchy } from '@/lib/cancellation-reasons-mapper'
 import { CallAttemptBadge } from './call-attempt-badge'
 
 const formSchema = z.object({
@@ -828,7 +829,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
         const extraFirestorePromises: Promise<any>[] = [];
 
         if (isLost && selectedThemeId) {
-            const activeThemesList = (cancellationThemes && cancellationThemes.length > 0) ? cancellationThemes : [];
+            const activeThemesList = getMergedCancellationHierarchy(cancellationThemes);
             const selectedThemeObj = activeThemesList.find(t => String(t.id) === String(selectedThemeId));
             const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => String(w.id) === String(selectedWhyId));
             const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => String(r.id) === String(selectedReasonId));
