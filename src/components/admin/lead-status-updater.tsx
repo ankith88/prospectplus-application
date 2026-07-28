@@ -21,7 +21,7 @@ import { cn, parseDateString } from '@/lib/utils';
 
 const LEAD_STATUSES: LeadStatus[] = [
   'New', 'Hot Lead', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch',
-  'Trialing ShipMate', 'Reschedule', 'Qualified', 'Pre Qualified', 'Won', 'Lost',
+  'Trialing ShipMate', 'Reschedule', 'Qualified', 'Appointment Booked', 'Pre Qualified', 'Won', 'Lost',
   'Lost Customer', 'LPO Review', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity',
   'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity',
   'Priority Field Lead', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted',

@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info } from 'lucide-react';
+import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info, CheckCircle } from 'lucide-react';
 import { MultiSelectCombobox, type Option } from '../ui/multi-select-combobox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -67,7 +67,7 @@ const StatCard = ({ title, value, icon: Icon, description, onClick, helpContent 
   </Card>
 );
 import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfDay, endOfDay, isWeekend } from 'date-fns';
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell, ScatterChart, Scatter, ZAxis, ComposedChart, Line, LineChart } from "recharts";
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell, ScatterChart, Scatter, ZAxis, ComposedChart, Line, LineChart, LabelList } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 interface FlatActivity {
@@ -395,7 +395,11 @@ export default function AMReportsDashboard() {
             const startTimePerf = performance.now();
             try {
                 const leadsRef = collection(firestore, 'leads');
-                const q = query(leadsRef, where('bucket', 'in', ['account_manager', 'inbound', 'customer_success', 'marketing', 'nurture']));
+                const companiesRef = collection(firestore, 'companies');
+                const buckets = ['account_manager', 'inbound', 'customer_success', 'marketing', 'nurture'];
+                
+                const qLeads = query(leadsRef, where('bucket', 'in', buckets));
+                const qCompanies = query(companiesRef);
                 
                 // Build a date-filtered query for the activity collection group
                 let activitiesQuery;
@@ -426,13 +430,31 @@ export default function AMReportsDashboard() {
                 const fromDateStr = appliedActivityDateRange?.from ? startOfDay(appliedActivityDateRange.from).toISOString() : undefined;
                 const toDateStr = appliedActivityDateRange?.to ? endOfDay(appliedActivityDateRange.to).toISOString() : undefined;
 
-                const [snap, activitiesSnap, fetchedAppointments] = await Promise.all([
-                    getDocs(q),
+                const [snapLeads, snapCompanies, activitiesSnap, fetchedAppointments] = await Promise.all([
+                    getDocs(qLeads),
+                    getDocs(qCompanies),
                     getDocs(activitiesQuery),
                     getAllAppointments(fromDateStr, toDateStr)
                 ]);
                 
-                const fetchedLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+                const rawCompanies = snapCompanies.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        ...data,
+                        isCompany: true,
+                        customerStatus: data.customerStatus || data.status || 'Signed',
+                        status: data.status || data.customerStatus || 'Signed'
+                    } as unknown as Lead;
+                });
+
+                const companyIds = new Set(rawCompanies.map(c => c.id));
+
+                const rawLeads = snapLeads.docs
+                    .filter(doc => !companyIds.has(doc.id))
+                    .map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+
+                const fetchedLeads = [...rawLeads, ...rawCompanies];
                 
                 // Extract and map activities
                 const activities = activitiesSnap.docs.map(doc => {
@@ -494,36 +516,104 @@ export default function AMReportsDashboard() {
         fetchPipeline();
     }, [loading, isAm, isAdmin, appliedAm, accountManagers, appliedActivityDateRange]);
 
-    // Value Calculation Logic
-    const calculateMonthlyValue = (lead: Lead) => {
-        const applicableStatuses = ['Quote Sent', 'Won', 'LocalMile Opportunity', 'LocalMile Pending', 'Trialing LocalMile'];
-        const currentStatus = lead.customerStatus || lead.status;
-        
-        if (!applicableStatuses.includes(currentStatus)) {
-            return 0;
+    const isSignedStatus = (status?: string): boolean => {
+        if (!status) return false;
+        const s = status.trim().toLowerCase();
+        return s === 'signed' || s === 'won' || s === 'customer' || s === 'signed customer';
+    };
+
+    const isSignedLead = (lead: Lead): boolean => {
+        if ((lead as any).isCompany) return true;
+        if (lead.signedUpAt || (lead as any).signedDate || (lead as any).signedAt) return true;
+        const status = lead.customerStatus || lead.status;
+        return isSignedStatus(status);
+    };
+
+    const isSignedUpInDateRange = (
+        lead: Lead,
+        dateRange?: DateRange
+    ): boolean => {
+        if (!dateRange?.from) return true;
+
+        const fromDate = startOfDay(dateRange.from);
+        const toDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
+
+        // 1. Check explicit signedUpAt / signedDate / signedAt / scfAcceptedAt / acceptedAt
+        const rawSignedDate = lead.signedUpAt || (lead as any).signedDate || (lead as any).signedAt || (lead as any).scfAcceptedAt || (lead as any).acceptedAt;
+        if (rawSignedDate) {
+            const parsedSigned = parseDateString(rawSignedDate);
+            if (parsedSigned && !isNaN(parsedSigned.getTime())) {
+                return parsedSigned >= fromDate && parsedSigned <= toDate;
+            }
         }
-        
-        if (!lead.services || lead.services.length === 0) {
-            return 0;
+
+        // 2. Check for an explicit sign-up activity (notes matching status change to Won/Signed or SCF Signed) within dateRange
+        if (lead.activity && lead.activity.length > 0) {
+            const signedActivity = lead.activity.find(act => {
+                const notes = act.notes || '';
+                const isSignNote = /Status changed to (Won|Signed)/i.test(notes) ||
+                                   /Signed customer|Converted to Signed|Contract Signed|SCF Signed|SCF Accepted/i.test(notes);
+                if (!isSignNote) return false;
+                const parsedActDate = parseDateString(act.date);
+                return parsedActDate && !isNaN(parsedActDate.getTime()) && parsedActDate >= fromDate && parsedActDate <= toDate;
+            });
+            if (signedActivity) return true;
         }
-        
-        let totalMonthlyValue = 0;
-        for (const service of lead.services) {
-            if (!service.rate) continue;
-            
-            if (service.frequency === 'Adhoc') {
-                 // Baseline 1x / month for Adhoc
-                 totalMonthlyValue += service.rate * 1;
-                 continue;
-            } else if (Array.isArray(service.frequency)) {
-                const weeklyDays = service.frequency.length;
-                if (weeklyDays > 0) {
-                    totalMonthlyValue += service.rate * weeklyDays * 4.33;
+
+        // 3. Fallback check: ONLY if NO explicit signedUpAt timestamp exists on the document AND NO sign-up activity exists on the lead,
+        // check if dateLeadEntered / createdAt falls in range.
+        if (!rawSignedDate) {
+            const rawCreatedDate = lead.dateLeadEntered || (lead as any).createdAt || (lead as any).created;
+            if (rawCreatedDate) {
+                const parsedCreated = parseDateString(rawCreatedDate);
+                if (parsedCreated && !isNaN(parsedCreated.getTime())) {
+                    return parsedCreated >= fromDate && parsedCreated <= toDate;
                 }
             }
         }
+
+        return false;
+    };
+
+    const calculateRawLeadValue = (lead: Lead): number => {
+        let totalMonthlyValue = 0;
+        if (lead.services && lead.services.length > 0) {
+            for (const service of lead.services) {
+                if (!service.rate) continue;
+                if (service.frequency === 'Adhoc') {
+                     totalMonthlyValue += service.rate * 1;
+                } else if (Array.isArray(service.frequency) && service.frequency.length > 0) {
+                    const weeklyDays = service.frequency.length;
+                    totalMonthlyValue += service.rate * weeklyDays * 4.33;
+                } else if (typeof service.frequency === 'number') {
+                    totalMonthlyValue += service.rate * service.frequency;
+                }
+            }
+        }
+        if (totalMonthlyValue > 0) return totalMonthlyValue;
+        return (
+            (lead as any).estimatedMrr ||
+            (lead as any).monthlyValue ||
+            (lead as any).mrr ||
+            (lead as any).value ||
+            (lead as any).quoteAmount ||
+            0
+        );
+    };
+
+    // Value Calculation Logic (Pipeline MRR excludes Signed leads)
+    const calculateMonthlyValue = (lead: Lead) => {
+        if (isSignedLead(lead)) {
+            return 0; // Exclude Signed from active Pipeline MRR
+        }
+        const applicableStatuses = ['Quote Sent', 'LocalMile Opportunity', 'LocalMile Pending', 'Trialing LocalMile', 'Free Trial', 'Trialing ShipMate'];
+        const currentStatus = lead.customerStatus || lead.status;
         
-        return totalMonthlyValue;
+        if (!applicableStatuses.includes(currentStatus || '')) {
+            return 0;
+        }
+        
+        return calculateRawLeadValue(lead);
     };
 
     // Filter activities by date range
@@ -547,7 +637,7 @@ export default function AMReportsDashboard() {
             if (appliedBucket.length > 0 && lead.bucket && !appliedBucket.includes(lead.bucket)) return false;
             if (appliedLeadType.length > 0 && (lead.leadType || 'Unknown') && !appliedLeadType.includes(lead.leadType || 'Unknown')) return false;
             
-            const status = lead.customerStatus || lead.status;
+            const status = isSignedLead(lead) ? 'Signed' : (lead.customerStatus || lead.status);
             if (appliedStatus.length > 0 && status && !appliedStatus.includes(status)) return false;
             
             if (appliedLeadEnteredDateRange?.from) {
@@ -583,7 +673,7 @@ export default function AMReportsDashboard() {
                 if (appliedBucket.length > 0 && lead.bucket && !appliedBucket.includes(lead.bucket)) return false;
                 if (appliedLeadType.length > 0 && (lead.leadType || 'Unknown') && !appliedLeadType.includes(lead.leadType || 'Unknown')) return false;
                 
-                const status = lead.customerStatus || lead.status;
+                const status = isSignedLead(lead) ? 'Signed' : (lead.customerStatus || lead.status);
                 if (appliedStatus.length > 0 && status && !appliedStatus.includes(status)) return false;
                 
                 if (appliedLeadEnteredDateRange?.from) {
@@ -783,8 +873,6 @@ export default function AMReportsDashboard() {
         const dailyCounts: Record<string, { date: string; Calls: number; Emails: number; Meetings: number; Updates: number; Total: number }> = {};
         
         allActivities.forEach(act => {
-            const actDate = parseDateString(act.date);
-            if (actDate && isWeekend(actDate)) return;
             const dateStr = act.date.split('T')[0];
             if (!dailyCounts[dateStr]) {
                 dailyCounts[dateStr] = { date: dateStr, Calls: 0, Emails: 0, Meetings: 0, Updates: 0, Total: 0 };
@@ -833,7 +921,7 @@ export default function AMReportsDashboard() {
             else if (act.type === 'Meeting') totalMeetings++;
             else totalUpdates++;
 
-            if (act.type === 'Call' && act.callId) {
+            if (act.type === 'Call') {
                 const am = act.author || 'Unknown';
                 if (!amCallStats[am]) {
                     amCallStats[am] = { callCount: 0, totalDurationMinutes: 0 };
@@ -843,29 +931,67 @@ export default function AMReportsDashboard() {
             }
         });
 
-        let totalPipelineValue = 0;
+        const isLostLead = (l: Lead) => {
+            const st = l.customerStatus || l.status || '';
+            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+            return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
+        };
+
+        let totalPipelineValue = 0; // Excludes Signed and Lost leads!
+        let activeLeadsWithMrrCount = 0; // Count of active pipeline leads (excl. Signed & Lost) with MRR > 0
+        let totalSignedMrr = 0;
+        let totalSignedLeadsCount = 0;
         let totalDurationMinutes = 0;
-        const valueByStatus: Record<string, number> = {};
-        const valueByLeadType: Record<string, number> = {};
-        const valueByBucket: Record<string, number> = {};
-        const valueByAM: Record<string, number> = {};
+        const valueByStatus: Record<string, { value: number; leadCount: number }> = {};
+        const valueByLeadType: Record<string, { value: number; leadCount: number }> = {};
+        const valueByBucket: Record<string, { value: number; leadCount: number }> = {};
+        const valueByAM: Record<string, { value: number; leadCount: number }> = {};
         const valueByLead: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; durationMinutes: number; lastContacted: string | null }[] = [];
 
+        const dateRangeFilter = appliedActivityDateRange || appliedLeadEnteredDateRange;
+
         displayedLeads.forEach(lead => {
-            const val = calculateMonthlyValue(lead);
+            const isLost = isLostLead(lead);
+            const isSigned = !isLost && isSignedLead(lead);
+            const signedInPeriod = isSigned && isSignedUpInDateRange(lead, dateRangeFilter);
+            const rawVal = calculateRawLeadValue(lead);
             const leadType = lead.leadType || 'Unknown';
-            if (val > 0) {
-                totalPipelineValue += val;
-                const status = lead.customerStatus || lead.status;
-                valueByStatus[status] = (valueByStatus[status] || 0) + val;
-                valueByLeadType[leadType] = (valueByLeadType[leadType] || 0) + val;
+            const status = isLost ? (lead.customerStatus || lead.status || 'Lost') : (isSigned ? 'Signed' : (lead.customerStatus || lead.status || 'New'));
 
-                const bucketRaw = lead.bucket || 'Unassigned';
-                const bucket = String(bucketRaw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                valueByBucket[bucket] = (valueByBucket[bucket] || 0) + val;
+            if (isLost) {
+                // Lost leads are excluded from both pipeline MRR & signed MRR
+            } else if (isSigned) {
+                if (signedInPeriod) {
+                    totalSignedLeadsCount += 1;
+                    if (rawVal > 0) {
+                        totalSignedMrr += rawVal;
+                    }
+                }
+            } else {
+                const val = calculateMonthlyValue(lead);
+                if (val > 0) {
+                    totalPipelineValue += val;
+                    activeLeadsWithMrrCount += 1;
 
-                const am = lead.accountManagerAssigned || 'Unassigned';
-                valueByAM[am] = (valueByAM[am] || 0) + val;
+                    if (!valueByStatus[status]) valueByStatus[status] = { value: 0, leadCount: 0 };
+                    valueByStatus[status].value += val;
+                    valueByStatus[status].leadCount += 1;
+
+                    if (!valueByLeadType[leadType]) valueByLeadType[leadType] = { value: 0, leadCount: 0 };
+                    valueByLeadType[leadType].value += val;
+                    valueByLeadType[leadType].leadCount += 1;
+
+                    const bucketRaw = lead.bucket || 'Unassigned';
+                    const bucket = String(bucketRaw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    if (!valueByBucket[bucket]) valueByBucket[bucket] = { value: 0, leadCount: 0 };
+                    valueByBucket[bucket].value += val;
+                    valueByBucket[bucket].leadCount += 1;
+
+                    const am = lead.accountManagerAssigned || 'Unassigned';
+                    if (!valueByAM[am]) valueByAM[am] = { value: 0, leadCount: 0 };
+                    valueByAM[am].value += val;
+                    valueByAM[am].leadCount += 1;
+                }
             }
             
             // For Activity vs Value Matrix
@@ -873,13 +999,13 @@ export default function AMReportsDashboard() {
             const leadDuration = leadActivities.reduce((sum, act) => sum + act.durationMinutes, 0);
             totalDurationMinutes += leadDuration;
 
-            if (val > 0 || leadActivities.length > 0) {
+            if (!isLost && (rawVal > 0 || leadActivities.length > 0)) {
                  const lastContactedAct = leadActivities.length > 0 ? leadActivities[0].date : null;
                  valueByLead.push({
                      id: lead.id,
                      name: lead.companyName,
-                     value: val,
-                     status: lead.customerStatus || lead.status,
+                     value: rawVal,
+                     status: status,
                      leadType: leadType,
                      activityCount: leadActivities.length,
                      durationMinutes: leadDuration,
@@ -937,6 +1063,9 @@ export default function AMReportsDashboard() {
             totalUpdates,
             totalActivities: allActivities.length,
             totalPipelineValue,
+            activeLeadsWithMrrCount,
+            totalSignedMrr,
+            totalSignedLeadsCount,
             totalDurationMinutes,
             valueByStatus,
             valueByLeadType,
@@ -948,7 +1077,7 @@ export default function AMReportsDashboard() {
             summaryByFranchisee,
             amCallStats
         };
-    }, [allActivities, displayedLeads]);
+    }, [allActivities, displayedLeads, appliedActivityDateRange, appliedLeadEnteredDateRange]);
 
     const formatHours = (hours: number | null): string => {
         if (hours === null) return 'No interaction';
@@ -1064,39 +1193,228 @@ export default function AMReportsDashboard() {
 
     // Chart Data
     const statusChartData = useMemo(() => {
-        return Object.entries(metrics.valueByStatus).map(([status, value]) => ({
+        return Object.entries(metrics.valueByStatus).map(([status, item]) => ({
             status,
-            value,
-            fill: status === 'Won' ? 'hsl(var(--chart-2))' : 
+            value: item.value,
+            leadCount: item.leadCount,
+            fill: status === 'Won' || status === 'Signed' ? 'hsl(var(--chart-2))' : 
                   status === 'Quote Sent' ? 'hsl(var(--chart-1))' : 
                   status.includes('LocalMile') ? 'hsl(var(--chart-3))' : 'hsl(var(--chart-4))'
         })).sort((a,b) => b.value - a.value);
     }, [metrics.valueByStatus]);
 
     const leadTypeChartData = useMemo(() => {
-        return Object.entries(metrics.valueByLeadType).map(([type, value]) => ({
+        return Object.entries(metrics.valueByLeadType).map(([type, item]) => ({
             type,
-            value,
+            value: item.value,
+            leadCount: item.leadCount,
             fill: type === 'B2B' ? 'hsl(var(--chart-1))' : 
                   type === 'B2C' ? 'hsl(var(--chart-2))' : 'hsl(var(--chart-5))'
         })).sort((a,b) => b.value - a.value);
     }, [metrics.valueByLeadType]);
 
     const bucketChartData = useMemo(() => {
-        return Object.entries(metrics.valueByBucket).map(([bucket, value], idx) => ({
+        return Object.entries(metrics.valueByBucket).map(([bucket, item], idx) => ({
             bucket,
-            value,
+            value: item.value,
+            leadCount: item.leadCount,
             fill: `hsl(var(--chart-${(idx % 5) + 1}))`
         })).sort((a,b) => b.value - a.value);
     }, [metrics.valueByBucket]);
 
     const amChartData = useMemo(() => {
-        return Object.entries(metrics.valueByAM).map(([am, value], idx) => ({
+        return Object.entries(metrics.valueByAM).map(([am, item], idx) => ({
             am,
-            value,
+            value: item.value,
+            leadCount: item.leadCount,
             fill: `hsl(var(--chart-${(idx % 5) + 1}))`
         })).sort((a,b) => b.value - a.value);
     }, [metrics.valueByAM]);
+
+    // Signed Revenue & Customers Analysis Calculation
+    const signedLeadsData = useMemo(() => {
+        const isLostLead = (l: Lead) => {
+            const st = l.customerStatus || l.status || '';
+            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+            return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
+        };
+
+        const dateRangeFilter = appliedActivityDateRange || appliedLeadEnteredDateRange;
+
+        const signedList: {
+            id: string;
+            companyName: string;
+            accountManager: string;
+            bucket: string;
+            leadType: string;
+            status: string;
+            signedMrr: number;
+            dateEntered: string;
+            lead: Lead;
+        }[] = [];
+
+        displayedLeads.forEach(l => {
+            if (!isLostLead(l) && isSignedLead(l) && isSignedUpInDateRange(l, dateRangeFilter)) {
+                const signedMrr = calculateRawLeadValue(l);
+                const bucketRaw = l.bucket || 'Unassigned';
+                const bucket = String(bucketRaw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                const leadType = l.leadType || 'Unknown';
+                const am = l.accountManagerAssigned || 'Unassigned';
+                const status = 'Signed';
+
+                signedList.push({
+                    id: l.id,
+                    companyName: l.companyName || 'Unnamed Lead',
+                    accountManager: am,
+                    bucket,
+                    leadType,
+                    status,
+                    signedMrr,
+                    dateEntered: l.dateLeadEntered || '',
+                    lead: l
+                });
+            }
+        });
+
+        let totalSignedMrr = 0;
+        const byBucketMap: Record<string, { bucket: string; count: number; signedMrr: number; leads: Lead[] }> = {};
+        const byLeadTypeMap: Record<string, { type: string; count: number; signedMrr: number; leads: Lead[] }> = {};
+        const byAmMap: Record<string, { am: string; count: number; signedMrr: number; leads: Lead[] }> = {};
+
+        signedList.forEach(item => {
+            totalSignedMrr += item.signedMrr;
+
+            // Bucket
+            if (!byBucketMap[item.bucket]) {
+                byBucketMap[item.bucket] = { bucket: item.bucket, count: 0, signedMrr: 0, leads: [] };
+            }
+            byBucketMap[item.bucket].count += 1;
+            byBucketMap[item.bucket].signedMrr += item.signedMrr;
+            byBucketMap[item.bucket].leads.push(item.lead);
+
+            // Lead Type
+            if (!byLeadTypeMap[item.leadType]) {
+                byLeadTypeMap[item.leadType] = { type: item.leadType, count: 0, signedMrr: 0, leads: [] };
+            }
+            byLeadTypeMap[item.leadType].count += 1;
+            byLeadTypeMap[item.leadType].signedMrr += item.signedMrr;
+            byLeadTypeMap[item.leadType].leads.push(item.lead);
+
+            // AM
+            if (!byAmMap[item.accountManager]) {
+                byAmMap[item.accountManager] = { am: item.accountManager, count: 0, signedMrr: 0, leads: [] };
+            }
+            byAmMap[item.accountManager].count += 1;
+            byAmMap[item.accountManager].signedMrr += item.signedMrr;
+            byAmMap[item.accountManager].leads.push(item.lead);
+        });
+
+        const byBucket = Object.values(byBucketMap).map((b, idx) => ({ ...b, fill: `hsl(var(--chart-${(idx % 5) + 1}))` })).sort((a,b) => b.signedMrr - a.signedMrr);
+        const byLeadType = Object.values(byLeadTypeMap).map((t, idx) => ({ ...t, fill: `hsl(var(--chart-${((idx + 1) % 5) + 1}))` })).sort((a,b) => b.signedMrr - a.signedMrr);
+        const byAm = Object.values(byAmMap).map((a, idx) => ({ ...a, fill: `hsl(var(--chart-${((idx + 2) % 5) + 1}))` })).sort((a,b) => b.signedMrr - a.signedMrr);
+
+        return {
+            signedList: signedList.sort((a, b) => b.signedMrr - a.signedMrr),
+            totalSignedCount: signedList.length,
+            totalSignedMrr,
+            byBucket,
+            byLeadType,
+            byAm
+        };
+    }, [displayedLeads]);
+
+    // Lost Leads & Lost MRR Analysis Calculation
+    const lostLeadsData = useMemo(() => {
+        const isLostLead = (l: Lead) => {
+            const st = l.customerStatus || l.status || '';
+            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+            return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
+        };
+
+        const lostList: {
+            id: string;
+            companyName: string;
+            accountManager: string;
+            bucket: string;
+            leadType: string;
+            status: string;
+            lostMrr: number;
+            dateEntered: string;
+            lead: Lead;
+        }[] = [];
+
+        displayedLeads.forEach(l => {
+            if (isLostLead(l)) {
+                const lostMrr = calculateRawLeadValue(l);
+                // EXPLICIT FILTER: Only include lost leads that have a non-zero MRR value!
+                if (lostMrr > 0) {
+                    const bucketRaw = l.bucket || 'Unassigned';
+                    const bucket = String(bucketRaw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    const leadType = l.leadType || 'Unknown';
+                    const am = l.accountManagerAssigned || 'Unassigned';
+                    const status = l.customerStatus || l.status || 'Lost';
+
+                    lostList.push({
+                        id: l.id,
+                        companyName: l.companyName || 'Unnamed Lead',
+                        accountManager: am,
+                        bucket,
+                        leadType,
+                        status,
+                        lostMrr,
+                        dateEntered: l.dateLeadEntered || '',
+                        lead: l
+                    });
+                }
+            }
+        });
+
+        let totalLostMrr = 0;
+        const byBucketMap: Record<string, { bucket: string; count: number; lostMrr: number; leads: Lead[] }> = {};
+        const byLeadTypeMap: Record<string, { type: string; count: number; lostMrr: number; leads: Lead[] }> = {};
+        const byAmMap: Record<string, { am: string; count: number; lostMrr: number; leads: Lead[] }> = {};
+
+        lostList.forEach(item => {
+            totalLostMrr += item.lostMrr;
+
+            // Bucket
+            if (!byBucketMap[item.bucket]) {
+                byBucketMap[item.bucket] = { bucket: item.bucket, count: 0, lostMrr: 0, leads: [] };
+            }
+            byBucketMap[item.bucket].count += 1;
+            byBucketMap[item.bucket].lostMrr += item.lostMrr;
+            byBucketMap[item.bucket].leads.push(item.lead);
+
+            // Lead Type
+            if (!byLeadTypeMap[item.leadType]) {
+                byLeadTypeMap[item.leadType] = { type: item.leadType, count: 0, lostMrr: 0, leads: [] };
+            }
+            byLeadTypeMap[item.leadType].count += 1;
+            byLeadTypeMap[item.leadType].lostMrr += item.lostMrr;
+            byLeadTypeMap[item.leadType].leads.push(item.lead);
+
+            // AM
+            if (!byAmMap[item.accountManager]) {
+                byAmMap[item.accountManager] = { am: item.accountManager, count: 0, lostMrr: 0, leads: [] };
+            }
+            byAmMap[item.accountManager].count += 1;
+            byAmMap[item.accountManager].lostMrr += item.lostMrr;
+            byAmMap[item.accountManager].leads.push(item.lead);
+        });
+
+        const byBucket = Object.values(byBucketMap).map((b, idx) => ({ ...b, fill: `hsl(var(--chart-${(idx % 5) + 1}))` })).sort((a,b) => b.lostMrr - a.lostMrr);
+        const byLeadType = Object.values(byLeadTypeMap).map((t, idx) => ({ ...t, fill: `hsl(var(--chart-${((idx + 1) % 5) + 1}))` })).sort((a,b) => b.lostMrr - a.lostMrr);
+        const byAm = Object.values(byAmMap).map((a, idx) => ({ ...a, fill: `hsl(var(--chart-${((idx + 2) % 5) + 1}))` })).sort((a,b) => b.lostMrr - a.lostMrr);
+
+        return {
+            lostList: lostList.sort((a, b) => b.lostMrr - a.lostMrr),
+            totalLostCount: lostList.length,
+            totalLostMrr,
+            byBucket,
+            byLeadType,
+            byAm
+        };
+    }, [displayedLeads]);
 
     const summaryChartData = useMemo(() => {
         const data = summaryTab === 'am' ? metrics.summaryByAM : 
@@ -1344,7 +1662,7 @@ export default function AMReportsDashboard() {
 
             
             {/* Top KPI Cards */}
-            <div id="step-am-metrics" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div id="step-am-metrics" className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
                 <StatCard 
                     title="Total Activities" 
                     value={metrics.totalActivities} 
@@ -1361,23 +1679,57 @@ export default function AMReportsDashboard() {
                     title="Pipeline MRR" 
                     value={`$${metrics.totalPipelineValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} 
                     icon={DollarSign} 
-                    description="Potential Monthly Recurring Revenue"
+                    description="Active Pipeline (Excl. Signed/Lost)"
                     onClick={() => {
                         const mrrLeads = displayedLeads.filter(l => calculateMonthlyValue(l) > 0);
-                        setDrillDownData({ title: "Leads with MRR", leads: mrrLeads });
+                        setDrillDownData({ title: "Leads with Active Pipeline MRR", leads: mrrLeads });
                     }}
-                    helpContent="Potential Monthly Recurring Revenue based on quotes sent or opportunities won for the leads currently assigned."
+                    helpContent="Active Monthly Recurring Revenue in pipeline based on quotes sent or active opportunities (excluding Signed and Lost leads)."
                 />
                 <StatCard 
                     title="Leads with MRR" 
-                    value={metrics.valueByLead.filter(l => l.value > 0).length} 
+                    value={metrics.activeLeadsWithMrrCount} 
                     icon={TrendingUp} 
-                    description="Leads quoting or won"
+                    description="Active leads quoting MRR"
                     onClick={() => {
                         const mrrLeads = displayedLeads.filter(l => calculateMonthlyValue(l) > 0);
-                        setDrillDownData({ title: "Leads with MRR", leads: mrrLeads });
+                        setDrillDownData({ title: "Leads with Active Pipeline MRR", leads: mrrLeads });
                     }}
-                    helpContent="Count of assigned leads that have a quoted or won value associated with them."
+                    helpContent="Count of active assigned leads in pipeline (excluding Signed and Lost) that have a quoted MRR value."
+                />
+                <StatCard 
+                    title="Signed MRR" 
+                    value={`$${metrics.totalSignedMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} 
+                    icon={DollarSign} 
+                    description="Won / Closed Customer Revenue"
+                    onClick={() => {
+                        const isLostLead = (l: Lead) => {
+                            const st = l.customerStatus || l.status || '';
+                            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+                            return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
+                        };
+                        const dateRangeFilter = appliedActivityDateRange || appliedLeadEnteredDateRange;
+                        const signedLeads = displayedLeads.filter(l => !isLostLead(l) && isSignedLead(l) && isSignedUpInDateRange(l, dateRangeFilter));
+                        setDrillDownData({ title: "Signed Leads & Companies", leads: signedLeads });
+                    }}
+                    helpContent="Total Monthly Recurring Revenue generated by active Signed customers and won leads (excluding Lost)."
+                />
+                <StatCard 
+                    title="Signed Leads" 
+                    value={metrics.totalSignedLeadsCount} 
+                    icon={CheckCircle} 
+                    description="Converted & Won Customers"
+                    onClick={() => {
+                        const isLostLead = (l: Lead) => {
+                            const st = l.customerStatus || l.status || '';
+                            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+                            return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
+                        };
+                        const dateRangeFilter = appliedActivityDateRange || appliedLeadEnteredDateRange;
+                        const signedLeads = displayedLeads.filter(l => !isLostLead(l) && isSignedLead(l) && isSignedUpInDateRange(l, dateRangeFilter));
+                        setDrillDownData({ title: "Signed Leads & Companies", leads: signedLeads });
+                    }}
+                    helpContent="Total count of active leads and companies that have been marked as Signed / Won (excluding Lost)."
                 />
                 <StatCard 
                     title="Filtered Leads" 
@@ -1903,7 +2255,7 @@ export default function AMReportsDashboard() {
                             <CardContent className="h-[400px]">
                                 {statusChartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={statusChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                        <BarChart data={statusChartData} margin={{ top: 25, right: 30, left: 20, bottom: 60 }}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                             <XAxis dataKey="status" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" />
                                             <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -1911,11 +2263,15 @@ export default function AMReportsDashboard() {
                                                 cursor={{ fill: 'rgba(9, 92, 123, 0.05)' }}
                                                 content={({ active, payload }) => {
                                                     if (active && payload && payload.length) {
+                                                        const item = payload[0].payload;
                                                         return (
                                                             <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg">
-                                                                <p className="font-medium text-slate-700">{payload[0].payload.status}</p>
+                                                                <p className="font-medium text-slate-700">{item.status}</p>
                                                                 <p className="text-emerald-600 font-bold mt-1">
-                                                                    ${(payload[0].value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                    ${(item.value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                </p>
+                                                                <p className="text-xs text-slate-500 mt-1 font-medium">
+                                                                    {item.leadCount} lead{item.leadCount === 1 ? '' : 's'}
                                                                 </p>
                                                             </div>
                                                         );
@@ -1933,6 +2289,7 @@ export default function AMReportsDashboard() {
                                                     }
                                                 }}
                                             >
+                                                <LabelList dataKey="leadCount" position="top" style={{ fontSize: '11px', fontWeight: 600, fill: '#475569' }} formatter={(val: any) => `${val} lead${val === 1 ? '' : 's'}`} />
                                                 {statusChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
@@ -1955,7 +2312,7 @@ export default function AMReportsDashboard() {
                             <CardContent className="h-[400px]">
                                 {leadTypeChartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={leadTypeChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                        <BarChart data={leadTypeChartData} margin={{ top: 25, right: 30, left: 20, bottom: 60 }}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                             <XAxis dataKey="type" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" />
                                             <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -1963,11 +2320,15 @@ export default function AMReportsDashboard() {
                                                 cursor={{ fill: 'rgba(9, 92, 123, 0.05)' }}
                                                 content={({ active, payload }) => {
                                                     if (active && payload && payload.length) {
+                                                        const item = payload[0].payload;
                                                         return (
                                                             <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg">
-                                                                <p className="font-medium text-slate-700">{payload[0].payload.type}</p>
+                                                                <p className="font-medium text-slate-700">{item.type}</p>
                                                                 <p className="text-emerald-600 font-bold mt-1">
-                                                                    ${(payload[0].value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                    ${(item.value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                </p>
+                                                                <p className="text-xs text-slate-500 mt-1 font-medium">
+                                                                    {item.leadCount} lead{item.leadCount === 1 ? '' : 's'}
                                                                 </p>
                                                             </div>
                                                         );
@@ -1986,6 +2347,7 @@ export default function AMReportsDashboard() {
                                                     }
                                                 }}
                                             >
+                                                <LabelList dataKey="leadCount" position="top" style={{ fontSize: '11px', fontWeight: 600, fill: '#475569' }} formatter={(val: any) => `${val} lead${val === 1 ? '' : 's'}`} />
                                                 {leadTypeChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
@@ -2008,7 +2370,7 @@ export default function AMReportsDashboard() {
                             <CardContent className="h-[400px]">
                                 {bucketChartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={bucketChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                        <BarChart data={bucketChartData} margin={{ top: 25, right: 30, left: 20, bottom: 60 }}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                             <XAxis dataKey="bucket" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" />
                                             <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -2016,11 +2378,15 @@ export default function AMReportsDashboard() {
                                                 cursor={{ fill: 'rgba(9, 92, 123, 0.05)' }}
                                                 content={({ active, payload }) => {
                                                     if (active && payload && payload.length) {
+                                                        const item = payload[0].payload;
                                                         return (
                                                             <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg">
-                                                                <p className="font-medium text-slate-700">{payload[0].payload.bucket}</p>
+                                                                <p className="font-medium text-slate-700">{item.bucket}</p>
                                                                 <p className="text-emerald-600 font-bold mt-1">
-                                                                    ${(payload[0].value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                    ${(item.value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                </p>
+                                                                <p className="text-xs text-slate-500 mt-1 font-medium">
+                                                                    {item.leadCount} lead{item.leadCount === 1 ? '' : 's'}
                                                                 </p>
                                                             </div>
                                                         );
@@ -2043,6 +2409,7 @@ export default function AMReportsDashboard() {
                                                     }
                                                 }}
                                             >
+                                                <LabelList dataKey="leadCount" position="top" style={{ fontSize: '11px', fontWeight: 600, fill: '#475569' }} formatter={(val: any) => `${val} lead${val === 1 ? '' : 's'}`} />
                                                 {bucketChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
@@ -2065,7 +2432,7 @@ export default function AMReportsDashboard() {
                             <CardContent className="h-[400px]">
                                 {amChartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={amChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                        <BarChart data={amChartData} margin={{ top: 25, right: 30, left: 20, bottom: 60 }}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                             <XAxis dataKey="am" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" />
                                             <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -2073,11 +2440,15 @@ export default function AMReportsDashboard() {
                                                 cursor={{ fill: 'rgba(9, 92, 123, 0.05)' }}
                                                 content={({ active, payload }) => {
                                                     if (active && payload && payload.length) {
+                                                        const item = payload[0].payload;
                                                         return (
                                                             <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg">
-                                                                <p className="font-medium text-slate-700">{payload[0].payload.am}</p>
+                                                                <p className="font-medium text-slate-700">{item.am}</p>
                                                                 <p className="text-emerald-600 font-bold mt-1">
-                                                                    ${(payload[0].value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                    ${(item.value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                </p>
+                                                                <p className="text-xs text-slate-500 mt-1 font-medium">
+                                                                    {item.leadCount} lead{item.leadCount === 1 ? '' : 's'}
                                                                 </p>
                                                             </div>
                                                         );
@@ -2096,6 +2467,7 @@ export default function AMReportsDashboard() {
                                                     }
                                                 }}
                                             >
+                                                <LabelList dataKey="leadCount" position="top" style={{ fontSize: '11px', fontWeight: 600, fill: '#475569' }} formatter={(val: any) => `${val} lead${val === 1 ? '' : 's'}`} />
                                                 {amChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
@@ -2139,6 +2511,462 @@ export default function AMReportsDashboard() {
                                         ))}
                                         {metrics.valueByLead.filter(l => l.value > 0).length === 0 && (
                                             <div className="text-center py-8 text-muted-foreground">No leads with calculated value.</div>
+                                        )}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Signed Revenue & Customers Analysis Section */}
+                        <Card className="border border-emerald-200/60 shadow-sm lg:col-span-2 bg-gradient-to-b from-white to-emerald-50/20">
+                            <CardHeader className="border-b border-emerald-100 pb-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div>
+                                        <CardTitle className="text-lg text-emerald-950 flex items-center gap-2 font-bold">
+                                            <CheckCircle className="h-5 w-5 text-emerald-600" />
+                                            <span>Signed Revenue &amp; Customers Analysis</span>
+                                        </CardTitle>
+                                        <CardDescription className="text-slate-600 mt-0.5">
+                                            Breakdown of won leads &amp; signed customers and closed MRR, categorized by Bucket, Lead Type, and Account Manager.
+                                        </CardDescription>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <div className="bg-emerald-100/80 px-3 py-1.5 rounded-lg border border-emerald-200 text-right">
+                                            <div className="text-[10px] uppercase font-bold text-emerald-800 tracking-wider">Signed Customers</div>
+                                            <div className="text-base font-extrabold text-emerald-950">{signedLeadsData.totalSignedCount}</div>
+                                        </div>
+                                        <div className="bg-emerald-100/80 px-3 py-1.5 rounded-lg border border-emerald-200 text-right">
+                                            <div className="text-[10px] uppercase font-bold text-emerald-800 tracking-wider">Total Signed MRR</div>
+                                            <div className="text-base font-extrabold text-emerald-700">
+                                                ${signedLeadsData.totalSignedMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-6">
+                                {/* 3 Breakdown Graphs */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {/* By Bucket */}
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                                        <h4 className="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Signed MRR by Bucket</h4>
+                                        <div className="h-[220px]">
+                                            {signedLeadsData.byBucket.length > 0 ? (
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={signedLeadsData.byBucket} margin={{ top: 25, right: 10, left: -10, bottom: 40 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                        <XAxis dataKey="bucket" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" />
+                                                        <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                                        <Tooltip
+                                                            cursor={{ fill: 'rgba(16, 185, 129, 0.05)' }}
+                                                            content={({ active, payload }) => {
+                                                                if (active && payload && payload.length) {
+                                                                    const item = payload[0].payload;
+                                                                    return (
+                                                                        <div className="bg-white border border-slate-200 p-2.5 rounded shadow-md text-xs">
+                                                                            <p className="font-bold text-slate-800">{item.bucket}</p>
+                                                                            <p className="text-emerald-600 font-semibold mt-1">Signed MRR: ${item.signedMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                                                                            <p className="text-slate-500">{item.count} Signed Customer{item.count === 1 ? '' : 's'}</p>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            }}
+                                                        />
+                                                        <Bar 
+                                                            dataKey="signedMrr" 
+                                                            fill="#059669" 
+                                                            radius={[4, 4, 0, 0]} 
+                                                            className="cursor-pointer"
+                                                            onClick={(data) => {
+                                                                if (data && data.bucket) {
+                                                                    const item = signedLeadsData.byBucket.find(b => b.bucket === data.bucket);
+                                                                    if (item) setDrillDownData({ title: `Signed Customers - Bucket: ${data.bucket}`, leads: item.leads });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <LabelList dataKey="count" position="top" style={{ fontSize: '10px', fontWeight: 600, fill: '#64748b' }} formatter={(val: any) => `${val} lead${val === 1 ? '' : 's'}`} />
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">No signed customers data</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* By Lead Type */}
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                                        <h4 className="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Signed MRR by Lead Type</h4>
+                                        <div className="h-[220px]">
+                                            {signedLeadsData.byLeadType.length > 0 ? (
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={signedLeadsData.byLeadType} margin={{ top: 25, right: 10, left: -10, bottom: 40 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                        <XAxis dataKey="type" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" />
+                                                        <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                                        <Tooltip
+                                                            cursor={{ fill: 'rgba(16, 185, 129, 0.05)' }}
+                                                            content={({ active, payload }) => {
+                                                                if (active && payload && payload.length) {
+                                                                    const item = payload[0].payload;
+                                                                    return (
+                                                                        <div className="bg-white border border-slate-200 p-2.5 rounded shadow-md text-xs">
+                                                                            <p className="font-bold text-slate-800">{item.type}</p>
+                                                                            <p className="text-emerald-600 font-semibold mt-1">Signed MRR: ${item.signedMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                                                                            <p className="text-slate-500">{item.count} Signed Customer{item.count === 1 ? '' : 's'}</p>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            }}
+                                                        />
+                                                        <Bar 
+                                                            dataKey="signedMrr" 
+                                                            fill="#10b981" 
+                                                            radius={[4, 4, 0, 0]} 
+                                                            className="cursor-pointer"
+                                                            onClick={(data) => {
+                                                                if (data && data.type) {
+                                                                    const item = signedLeadsData.byLeadType.find(t => t.type === data.type);
+                                                                    if (item) setDrillDownData({ title: `Signed Customers - Type: ${data.type}`, leads: item.leads });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <LabelList dataKey="count" position="top" style={{ fontSize: '10px', fontWeight: 600, fill: '#64748b' }} formatter={(val: any) => `${val} lead${val === 1 ? '' : 's'}`} />
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">No signed customers data</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* By Account Manager */}
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                                        <h4 className="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Signed MRR by Account Manager</h4>
+                                        <div className="h-[220px]">
+                                            {signedLeadsData.byAm.length > 0 ? (
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={signedLeadsData.byAm} margin={{ top: 25, right: 10, left: -10, bottom: 40 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                        <XAxis dataKey="am" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" />
+                                                        <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                                        <Tooltip
+                                                            cursor={{ fill: 'rgba(16, 185, 129, 0.05)' }}
+                                                            content={({ active, payload }) => {
+                                                                if (active && payload && payload.length) {
+                                                                    const item = payload[0].payload;
+                                                                    return (
+                                                                        <div className="bg-white border border-slate-200 p-2.5 rounded shadow-md text-xs">
+                                                                            <p className="font-bold text-slate-800">{item.am}</p>
+                                                                            <p className="text-emerald-600 font-semibold mt-1">Signed MRR: ${item.signedMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                                                                            <p className="text-slate-500">{item.count} Signed Customer{item.count === 1 ? '' : 's'}</p>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            }}
+                                                        />
+                                                        <Bar 
+                                                            dataKey="signedMrr" 
+                                                            fill="#047857" 
+                                                            radius={[4, 4, 0, 0]} 
+                                                            className="cursor-pointer"
+                                                            onClick={(data) => {
+                                                                if (data && data.am) {
+                                                                    const item = signedLeadsData.byAm.find(a => a.am === data.am);
+                                                                    if (item) setDrillDownData({ title: `Signed Customers - AM: ${data.am}`, leads: item.leads });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <LabelList dataKey="count" position="top" style={{ fontSize: '10px', fontWeight: 600, fill: '#64748b' }} formatter={(val: any) => `${val} lead${val === 1 ? '' : 's'}`} />
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">No signed customers data</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Table of Signed Leads */}
+                                <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+                                    <div className="px-4 py-3 bg-emerald-50/40 border-b border-slate-200 flex items-center justify-between">
+                                        <h4 className="text-xs font-bold text-emerald-950 uppercase tracking-wide">List of Signed Leads &amp; Customers</h4>
+                                        <span className="text-xs text-slate-500 font-medium">{signedLeadsData.signedList.length} leads</span>
+                                    </div>
+                                    <div className="max-h-[350px] overflow-y-auto">
+                                        {signedLeadsData.signedList.length === 0 ? (
+                                            <div className="text-center py-8 text-muted-foreground text-xs">No signed leads found in this period.</div>
+                                        ) : (
+                                            <Table>
+                                                <TableHeader className="bg-slate-50 sticky top-0">
+                                                    <TableRow>
+                                                        <TableHead className="text-xs font-bold text-slate-600">Company Name</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600">Account Manager</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600">Bucket</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600">Lead Type</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600">Status</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600 text-right">Signed MRR</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600 text-center">Action</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {signedLeadsData.signedList.map((item) => (
+                                                        <TableRow key={item.id} className="hover:bg-emerald-50/20 text-xs">
+                                                            <TableCell className="font-semibold text-slate-800">{item.companyName}</TableCell>
+                                                            <TableCell className="text-slate-600">{item.accountManager}</TableCell>
+                                                            <TableCell><Badge variant="outline" className="text-[10px] font-normal">{item.bucket}</Badge></TableCell>
+                                                            <TableCell className="text-slate-600">{item.leadType}</TableCell>
+                                                            <TableCell><Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-[10px]">{item.status}</Badge></TableCell>
+                                                            <TableCell className="text-right font-bold text-emerald-600">
+                                                                ${item.signedMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                            </TableCell>
+                                                            <TableCell className="text-center">
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="sm" 
+                                                                    className="h-6 px-2 text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
+                                                                    onClick={() => window.open((item.lead as any).isCompany ? `/companies/${item.id}` : `/leads/${item.id}`, '_blank')}
+                                                                >
+                                                                    View <ExternalLink className="h-3 w-3 ml-1" />
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        )}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Lost Revenue & Churned Leads Analysis Section */}
+                        <Card className="border border-rose-200/60 shadow-sm lg:col-span-2 bg-gradient-to-b from-white to-rose-50/20">
+                            <CardHeader className="border-b border-rose-100 pb-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div>
+                                        <CardTitle className="text-lg text-rose-950 flex items-center gap-2 font-bold">
+                                            <TrendingUp className="h-5 w-5 text-rose-600 rotate-180" />
+                                            <span>Lost Revenue &amp; Churned Leads Analysis</span>
+                                        </CardTitle>
+                                        <CardDescription className="text-slate-600 mt-0.5">
+                                            Breakdown of leads marked Lost and lost MRR, categorized by Bucket, Lead Type, and Account Manager.
+                                        </CardDescription>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <div className="bg-rose-100/80 px-3 py-1.5 rounded-lg border border-rose-200 text-right">
+                                            <div className="text-[10px] uppercase font-bold text-rose-800 tracking-wider">Total Lost Leads</div>
+                                            <div className="text-base font-extrabold text-rose-950">{lostLeadsData.totalLostCount}</div>
+                                        </div>
+                                        <div className="bg-rose-100/80 px-3 py-1.5 rounded-lg border border-rose-200 text-right">
+                                            <div className="text-[10px] uppercase font-bold text-rose-800 tracking-wider">Total Lost MRR</div>
+                                            <div className="text-base font-extrabold text-rose-700">
+                                                ${lostLeadsData.totalLostMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-6">
+                                {/* 3 Breakdown Graphs */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {/* By Bucket */}
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                                        <h4 className="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Lost MRR by Bucket</h4>
+                                        <div className="h-[220px]">
+                                            {lostLeadsData.byBucket.length > 0 ? (
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={lostLeadsData.byBucket} margin={{ top: 25, right: 10, left: -10, bottom: 40 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                        <XAxis dataKey="bucket" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" />
+                                                        <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                                        <Tooltip
+                                                            cursor={{ fill: 'rgba(244, 63, 94, 0.05)' }}
+                                                            content={({ active, payload }) => {
+                                                                if (active && payload && payload.length) {
+                                                                    const item = payload[0].payload;
+                                                                    return (
+                                                                        <div className="bg-white border border-slate-200 p-2.5 rounded shadow-md text-xs">
+                                                                            <p className="font-bold text-slate-800">{item.bucket}</p>
+                                                                            <p className="text-rose-600 font-semibold mt-1">Lost MRR: ${item.lostMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                                                                            <p className="text-slate-500">{item.count} Lost Lead{item.count === 1 ? '' : 's'}</p>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            }}
+                                                        />
+                                                        <Bar 
+                                                            dataKey="lostMrr" 
+                                                            fill="#e11d48" 
+                                                            radius={[4, 4, 0, 0]} 
+                                                            className="cursor-pointer"
+                                                            onClick={(data) => {
+                                                                if (data && data.bucket) {
+                                                                    const item = lostLeadsData.byBucket.find(b => b.bucket === data.bucket);
+                                                                    if (item) setDrillDownData({ title: `Lost Leads - Bucket: ${data.bucket}`, leads: item.leads });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <LabelList dataKey="count" position="top" style={{ fontSize: '10px', fontWeight: 600, fill: '#64748b' }} formatter={(val: any) => `${val} lead${val === 1 ? '' : 's'}`} />
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">No lost leads data</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* By Lead Type */}
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                                        <h4 className="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Lost MRR by Lead Type</h4>
+                                        <div className="h-[220px]">
+                                            {lostLeadsData.byLeadType.length > 0 ? (
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={lostLeadsData.byLeadType} margin={{ top: 25, right: 10, left: -10, bottom: 40 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                        <XAxis dataKey="type" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" />
+                                                        <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                                        <Tooltip
+                                                            cursor={{ fill: 'rgba(244, 63, 94, 0.05)' }}
+                                                            content={({ active, payload }) => {
+                                                                if (active && payload && payload.length) {
+                                                                    const item = payload[0].payload;
+                                                                    return (
+                                                                        <div className="bg-white border border-slate-200 p-2.5 rounded shadow-md text-xs">
+                                                                            <p className="font-bold text-slate-800">{item.type}</p>
+                                                                            <p className="text-rose-600 font-semibold mt-1">Lost MRR: ${item.lostMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                                                                            <p className="text-slate-500">{item.count} Lost Lead{item.count === 1 ? '' : 's'}</p>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            }}
+                                                        />
+                                                        <Bar 
+                                                            dataKey="lostMrr" 
+                                                            fill="#f43f5e" 
+                                                            radius={[4, 4, 0, 0]} 
+                                                            className="cursor-pointer"
+                                                            onClick={(data) => {
+                                                                if (data && data.type) {
+                                                                    const item = lostLeadsData.byLeadType.find(t => t.type === data.type);
+                                                                    if (item) setDrillDownData({ title: `Lost Leads - Type: ${data.type}`, leads: item.leads });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <LabelList dataKey="count" position="top" style={{ fontSize: '10px', fontWeight: 600, fill: '#64748b' }} formatter={(val: any) => `${val} lead${val === 1 ? '' : 's'}`} />
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">No lost leads data</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* By Account Manager */}
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                                        <h4 className="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Lost MRR by Account Manager</h4>
+                                        <div className="h-[220px]">
+                                            {lostLeadsData.byAm.length > 0 ? (
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={lostLeadsData.byAm} margin={{ top: 25, right: 10, left: -10, bottom: 40 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                        <XAxis dataKey="am" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" />
+                                                        <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                                        <Tooltip
+                                                            cursor={{ fill: 'rgba(244, 63, 94, 0.05)' }}
+                                                            content={({ active, payload }) => {
+                                                                if (active && payload && payload.length) {
+                                                                    const item = payload[0].payload;
+                                                                    return (
+                                                                        <div className="bg-white border border-slate-200 p-2.5 rounded shadow-md text-xs">
+                                                                            <p className="font-bold text-slate-800">{item.am}</p>
+                                                                            <p className="text-rose-600 font-semibold mt-1">Lost MRR: ${item.lostMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                                                                            <p className="text-slate-500">{item.count} Lost Lead{item.count === 1 ? '' : 's'}</p>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            }}
+                                                        />
+                                                        <Bar 
+                                                            dataKey="lostMrr" 
+                                                            fill="#be123c" 
+                                                            radius={[4, 4, 0, 0]} 
+                                                            className="cursor-pointer"
+                                                            onClick={(data) => {
+                                                                if (data && data.am) {
+                                                                    const item = lostLeadsData.byAm.find(a => a.am === data.am);
+                                                                    if (item) setDrillDownData({ title: `Lost Leads - AM: ${data.am}`, leads: item.leads });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <LabelList dataKey="count" position="top" style={{ fontSize: '10px', fontWeight: 600, fill: '#64748b' }} formatter={(val: any) => `${val} lead${val === 1 ? '' : 's'}`} />
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">No lost leads data</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Table of Lost Leads */}
+                                <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+                                    <div className="px-4 py-3 bg-rose-50/40 border-b border-slate-200 flex items-center justify-between">
+                                        <h4 className="text-xs font-bold text-rose-950 uppercase tracking-wide">List of Lost Leads &amp; Lost MRR</h4>
+                                        <span className="text-xs text-slate-500 font-medium">{lostLeadsData.lostList.length} leads</span>
+                                    </div>
+                                    <div className="max-h-[350px] overflow-y-auto">
+                                        {lostLeadsData.lostList.length === 0 ? (
+                                            <div className="text-center py-8 text-muted-foreground text-xs">No lost leads found in this period.</div>
+                                        ) : (
+                                            <Table>
+                                                <TableHeader className="bg-slate-50 sticky top-0">
+                                                    <TableRow>
+                                                        <TableHead className="text-xs font-bold text-slate-600">Company Name</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600">Account Manager</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600">Bucket</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600">Lead Type</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600">Status</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600 text-right">Lost MRR</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-600 text-center">Action</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {lostLeadsData.lostList.map((item) => (
+                                                        <TableRow key={item.id} className="hover:bg-rose-50/20 text-xs">
+                                                            <TableCell className="font-semibold text-slate-800">{item.companyName}</TableCell>
+                                                            <TableCell className="text-slate-600">{item.accountManager}</TableCell>
+                                                            <TableCell><Badge variant="outline" className="text-[10px] font-normal">{item.bucket}</Badge></TableCell>
+                                                            <TableCell className="text-slate-600">{item.leadType}</TableCell>
+                                                            <TableCell><Badge variant="secondary" className="bg-rose-100 text-rose-700 text-[10px]">{item.status}</Badge></TableCell>
+                                                            <TableCell className="text-right font-bold text-rose-600">
+                                                                ${item.lostMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                            </TableCell>
+                                                            <TableCell className="text-center">
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="sm" 
+                                                                    className="h-6 px-2 text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
+                                                                    onClick={() => window.open(`/leads/${item.id}`, '_blank')}
+                                                                >
+                                                                    View <ExternalLink className="h-3 w-3 ml-1" />
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
                                         )}
                                     </div>
                                 </div>
@@ -2579,36 +3407,44 @@ export default function AMReportsDashboard() {
                                     <TableHead>Franchisee</TableHead>
                                     <TableHead>Lead Type</TableHead>
                                     <TableHead>Date Entered</TableHead>
+                                    <TableHead className="text-right">MRR</TableHead>
                                     <TableHead className="text-right">Action</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredDrillDownLeads.map((lead) => (
-                                    <TableRow key={lead.id}>
-                                        <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                        <TableCell>
-                                            <LeadStatusBadge status={(lead.customerStatus || lead.status) as LeadStatus} />
-                                        </TableCell>
-                                        <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
-                                        <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
-                                        <TableCell className="text-sm">
-                                            {lead.leadType && lead.leadType !== 'Unknown' ? (
-                                                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 text-[10px]">{lead.leadType}</Badge>
-                                            ) : '-'}
-                                        </TableCell>
-                                        <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" asChild>
-                                                <a href={`/leads/${lead.id}`} target="_blank" rel="noopener noreferrer">
-                                                    View <ExternalLink className="ml-2 h-3 w-3" />
-                                                </a>
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                {filteredDrillDownLeads.map((lead) => {
+                                    const mrrVal = calculateRawLeadValue(lead);
+                                    const isComp = (lead as any).isCompany;
+                                    return (
+                                        <TableRow key={lead.id}>
+                                            <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                            <TableCell>
+                                                <LeadStatusBadge status={(lead.customerStatus || lead.status) as LeadStatus} />
+                                            </TableCell>
+                                            <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
+                                            <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
+                                            <TableCell className="text-sm">
+                                                {lead.leadType && lead.leadType !== 'Unknown' ? (
+                                                    <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 text-[10px]">{lead.leadType}</Badge>
+                                                ) : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
+                                            <TableCell className="text-right font-semibold text-emerald-600 text-sm">
+                                                {mrrVal > 0 ? `$${mrrVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="ghost" size="sm" asChild>
+                                                    <a href={isComp ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank" rel="noopener noreferrer">
+                                                        View <ExternalLink className="ml-2 h-3 w-3" />
+                                                    </a>
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
                                 {filteredDrillDownLeads.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-10 text-muted-foreground italic">
+                                        <TableCell colSpan={8} className="text-center py-10 text-muted-foreground italic">
                                             No leads found matching your filters.
                                         </TableCell>
                                     </TableRow>

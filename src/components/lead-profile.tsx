@@ -64,7 +64,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { encryptLeadId } from '@/lib/localmile-security'
-import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible } from '@/lib/lead-permissions'
+import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser } from '@/lib/lead-permissions'
 import { RequestAssignmentDialog } from '@/components/request-assignment-dialog'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
@@ -72,7 +72,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName } from '@/lib/duplicate-detector'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
@@ -2152,10 +2152,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
         const author = user?.displayName || user?.email || 'System';
         const newBookingUrlId = crypto.randomUUID();
+        const isAmUser = isAccountManagerUser(userProfile);
+        const targetBucket = isAmUser ? oldBucket : 'account_manager';
 
         const updates: any = { 
           accountManagerAssigned: amName, 
-          bucket: 'account_manager', 
+          bucket: targetBucket, 
           bookingUrlId: newBookingUrlId,
           bookingContactId: contactId || ''
         };
@@ -2164,24 +2166,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }
 
         await updateLeadDetails(lead.id, lead, updates);
-        await logBucketChange(lead.id, oldBucket, 'account_manager', author);
+        if (oldBucket !== targetBucket) {
+            await logBucketChange(lead.id, oldBucket, targetBucket, author);
+        }
 
         setLead(prev => {
-            const updatedHistory = [
+            const updatedHistory = oldBucket !== targetBucket ? [
                 {
                     id: `bh-${Date.now()}`,
                     oldBucket,
-                    newBucket: 'account_manager',
+                    newBucket: targetBucket,
                     date: new Date().toISOString(),
                     author
                 },
                 ...(prev.bucketHistory || [])
-            ];
+            ] : (prev.bucketHistory || []);
             return { 
               ...prev, 
               accountManagerAssigned: amName, 
-              bucket: 'account_manager', 
-              fieldSales: false, 
+              bucket: targetBucket, 
+              fieldSales: targetBucket === 'field_sales', 
               bookingUrlId: newBookingUrlId, 
               bookingContactId: contactId || '',
               bucketHistory: updatedHistory,
@@ -2656,12 +2660,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleToggleTask = async (taskId: string, isCompleted: boolean) => {
     try {
         await updateTaskCompletion(lead.id, taskId, isCompleted);
+        const completedAtIso = isCompleted ? new Date().toISOString() : undefined;
         setLead(prev => ({
             ...prev,
-            tasks: prev.tasks?.map(t => t.id === taskId ? { ...t, isCompleted } : t)
+            tasks: prev.tasks?.map(t => t.id === taskId ? { ...t, isCompleted, completedAt: completedAtIso } : t)
         }));
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not update task.' });
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+        await deleteTaskFromLead(lead.id, taskId);
+        setLead(prev => ({
+            ...prev,
+            tasks: prev.tasks?.filter(t => t.id !== taskId)
+        }));
+        toast({ title: 'Task Deleted' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not delete task.' });
     }
   };
 
@@ -3398,7 +3416,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <h1 className="text-3xl font-bold tracking-tight">{lead.companyName}</h1>
                 {/* Row 1: Primary Status, Lead Type, Ownership & Health Score */}
                 <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                    <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot lead') ? 'Hot Lead' : lead.status} />
+                    <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot lead') ? 'Hot Lead' : (lead.customerStatus || lead.status) as LeadStatus} />
 
                     {/* Interactive Lead Type Badge Dropdown */}
                     <Select 
@@ -5209,7 +5227,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
           </Card>
                 <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><ListTodo className="w-5 h-5 text-muted-foreground" />Tasks</CardTitle></CardHeader>
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <ListTodo className="w-5 h-5 text-muted-foreground" />
+                            <span>Tasks & Reminders</span>
+                        </div>
+                        {tasks.length > 0 && (
+                            <Badge variant="secondary" className="font-normal text-xs">
+                                {tasks.filter(t => !t.isCompleted).length} Pending / {tasks.length} Total
+                            </Badge>
+                        )}
+                    </CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-4">
                     <form onSubmit={handleAddTask} className="flex flex-col gap-2">
                         <Input placeholder="New task..." value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} />
@@ -5221,9 +5251,73 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Button type="submit" size="icon"><PlusCircle className="h-4 w-4" /></Button>
                         </div>
                     </form>
-                    <div className="space-y-2">
-                        {tasks.map(t => <div key={t.id} className="flex items-center gap-2 text-sm"><Checkbox checked={t.isCompleted} onCheckedChange={(c) => handleToggleTask(t.id, !!c)} /><span className={cn(t.isCompleted && "line-through text-muted-foreground")}>{t.title}</span></div>)}
-                    </div>
+
+                    {tasks.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-2">No tasks or follow-up reminders.</p>
+                    ) : (
+                        <div className="space-y-3">
+                            {tasks.map(t => {
+                                const isOverdue = !!t.dueDate && !t.isCompleted && new Date(t.dueDate).getTime() < Date.now();
+
+                                return (
+                                    <div key={t.id} className="p-3 bg-muted/50 rounded-lg border border-border/60 relative flex flex-col gap-2 transition-all hover:border-border">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2.5">
+                                                <Checkbox checked={t.isCompleted} onCheckedChange={(c) => handleToggleTask(t.id, !!c)} />
+                                                <span className={cn("font-semibold text-sm text-foreground", t.isCompleted && "line-through text-muted-foreground")}>
+                                                    {t.title}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                {t.isCompleted ? (
+                                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px]">Completed</Badge>
+                                                ) : isOverdue ? (
+                                                    <Badge variant="destructive" className="text-[11px]">Overdue</Badge>
+                                                ) : (
+                                                    <Badge variant="secondary" className="text-[11px]">Pending</Badge>
+                                                )}
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6 w-6 text-muted-foreground hover:text-destructive" 
+                                                    onClick={() => handleDeleteTask(t.id)}
+                                                    title="Delete task"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    <span className="sr-only">Delete task</span>
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <div className="pl-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground border-t border-border/30 pt-2 mt-0.5">
+                                            {t.dueDate && (
+                                                <div className="flex items-center gap-1.5">
+                                                    <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                                                    <span className="font-medium text-foreground">Scheduled Due:</span>
+                                                    <span>{formatInTimezone(t.dueDate, 'Australia/Sydney', 'PPpp')}</span>
+                                                </div>
+                                            )}
+                                            {t.createdAt && (
+                                                <div className="flex items-center gap-1.5">
+                                                    <CalendarIcon className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                                    <span className="font-medium text-foreground">Created:</span>
+                                                    <span>{formatInTimezone(t.createdAt, 'Australia/Sydney', 'PPpp')}</span>
+                                                    {t.author && <span>by <span className="font-medium text-foreground">{t.author}</span></span>}
+                                                </div>
+                                            )}
+                                            {t.isCompleted && t.completedAt && (
+                                                <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                    <span className="font-medium">Completed:</span>
+                                                    <span>{formatInTimezone(t.completedAt, 'Australia/Sydney', 'PPpp')}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
                 {linkedVisitNote && (

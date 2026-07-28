@@ -13,6 +13,7 @@ import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
 import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
 import { deactivateLocalMileAccessForLead } from './localmile-deactivation';
+import { REVERSE_OUTCOME_TO_STATUS_MAP } from '@/lib/status-outcome-mapping';
 
 /**
  * Sanitizes data retrieved from Firestore to ensure it can be passed from 
@@ -156,7 +157,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'LPO Opportunity', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Out of Territory', 'Future Follow-up', 'No Answer', 'Address Check', 'Address Confirmed'];
+    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Appointment Booked', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'LPO Opportunity', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Out of Territory', 'Future Follow-up', 'No Answer', 'Address Check', 'Address Confirmed'];
     if (typeof status === 'string') {
         const trimmedStatus = status.trim();
         if (trimmedStatus === 'SUSPECT-Unqualified' || trimmedStatus === 'SUSPECT - Unqualified') return 'New';
@@ -798,7 +799,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
 
 async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
     try {
-        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'LPO Opportunity', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Future Follow-up'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'LPO Opportunity', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Future Follow-up', 'Appointment Booked'];
         
         let q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         if (franchisee) q = query(q, where('franchisee', '==', franchisee));
@@ -1220,15 +1221,22 @@ async function getAllTranscripts(): Promise<Transcript[]> {
 
 async function getAllAppointments(startDate?: string, endDate?: string): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData }>> {
     try {
-        let apptQuery = query(collectionGroup(firestore, 'appointments'));
-        if (startDate) {
-            apptQuery = query(apptQuery, where('duedate', '>=', startDate));
-        }
-        if (endDate) {
-            apptQuery = query(apptQuery, where('duedate', '<=', endDate));
-        }
+        const apptQuery = query(collectionGroup(firestore, 'appointments'));
         const appointmentsSnapshot = await getDocs(apptQuery);
-        const filteredDocs = appointmentsSnapshot.docs;
+        let filteredDocs = appointmentsSnapshot.docs;
+
+        if (startDate || endDate) {
+            const start = startDate ? new Date(startDate).getTime() : -Infinity;
+            const end = endDate ? new Date(endDate).getTime() : Infinity;
+            filteredDocs = filteredDocs.filter(doc => {
+                const data = doc.data();
+                const dateStr = data.date || data.duedate || data.appointmentDate || data.createdAt;
+                if (!dateStr) return true;
+                const time = new Date(dateStr).getTime();
+                if (isNaN(time)) return true;
+                return time >= start && time <= end;
+            });
+        }
 
         const leadIds = [...new Set(filteredDocs.map(doc => doc.ref.parent.parent!.id))];
         if (leadIds.length === 0) return [];
@@ -1241,6 +1249,16 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
             leadsSnapshot.forEach(doc => { leadsData[doc.id] = sanitizeData(doc.data()) as Lead; });
         }
 
+        const missingIds = leadIds.filter(id => !leadsData[id]);
+        if (missingIds.length > 0) {
+            for (let i = 0; i < missingIds.length; i += 30) {
+                const chunk = missingIds.slice(i, i + 30);
+                const compQuery = query(collection(firestore, 'companies'), where(documentId(), 'in', chunk));
+                const compSnapshot = await getDocs(compQuery);
+                compSnapshot.forEach(doc => { leadsData[doc.id] = sanitizeData(doc.data()) as Lead; });
+            }
+        }
+
         return filteredDocs.map(doc => {
             const data = sanitizeData(doc.data()) as Appointment;
             const leadId = doc.ref.parent.parent!.id;
@@ -1251,7 +1269,7 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
                 leadId,
                 leadName: lead?.companyName || 'Unknown Lead',
                 dialerAssigned: lead?.dialerAssigned,
-                leadStatus: lead?.status,
+                leadStatus: (lead?.customerStatus || lead?.status) as LeadStatus,
                 discoveryData: lead?.discoveryData,
             };
         }).filter(a => !!a.leadId).sort((a, b) => new Date(a.duedate).getTime() - new Date(b.duedate).getTime());
@@ -1399,37 +1417,7 @@ async function updateLeadFieldSales(leadId: string, isFieldSales: boolean): Prom
 }
 
 async function logCallActivity(leadId: string, callData: { outcome: string; notes: string; author: string; salesRecordInternalId?: string; }): Promise<LeadStatus | undefined> {
-    const outcomeStatusMap: Record<string, { status: LeadStatus; reason?: string }> = {
-        'Appointment Booked': { status: 'Qualified' },
-        'Busy': { status: 'In Progress' },
-        'Call Back/Follow-up': { status: 'High Touch' },
-        'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
-        'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
-        'Email Interested': { status: 'Pre Qualified' },
-        'Email Brush-Off': { status: 'Email Brush Off' },
-        'Email Brush Off': { status: 'Email Brush Off' },
-        'Empty / Closed': { status: 'Lost', reason: 'Closed Business' },
-        'Gatekeeper': { status: 'Connected' },
-        'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
-        'LOST - No Response': { status: 'Lost', reason: 'No Response' },
-        'Lost - Out of Territory': { status: 'Lost', reason: 'Out of Territory' },
-        'LOST - Duplicate': { status: 'Lost', reason: 'Duplicate' },
-        'LOST - Existing Customer': { status: 'Lost', reason: 'Existing Customer' },
-        'No Answer': { status: 'In Progress' },
-        'Not a Fit': { status: 'Lost', reason: 'Not a Fit' },
-        'Not Interested': { status: 'Lost', reason: 'Not Interested' },
-        'Prospect - No Access/No Contact': { status: 'New' },
-        'Qualified - Call Back/Send Info': { status: 'In Qualification' },
-        'Reschedule': { status: 'Reschedule' },
-        'Unqualified Opportunity': { status: 'Priority Field Lead' },
-        'Upsell': { status: 'Won' },
-        'Voicemail': { status: 'In Progress' },
-        'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
-        'Future Follow-up': { status: 'Future Follow-up' },
-        'Register Now': { status: 'LocalMile Opportunity' },
-    };
-
-    const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};
+    const { status, reason: outcomeReason } = REVERSE_OUTCOME_TO_STATUS_MAP[callData.outcome] || {};
     const notesToLog = `Outcome: ${callData.outcome}${outcomeReason ? ` (${outcomeReason})` : ''}. Notes: ${callData.notes || 'N/A'}`;
 
     // Special logic for "Prospect - No Access/No Contact" processing
@@ -1569,10 +1557,11 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
 
 async function logCsCallActivity(
     leadId: string, 
-    callData: { outcome: string; notes: string; author: string; salesRecordInternalId?: string; }
+    callData: { outcome: string; notes: string; author: string; salesRecordInternalId?: string; },
+    collectionName: 'leads' | 'companies' = 'leads'
 ): Promise<void> {
     const nowStr = new Date().toISOString();
-    const leadRef = doc(firestore, 'leads', leadId);
+    const leadRef = doc(firestore, collectionName, leadId);
     
     const csCallEntry = {
         outcome: callData.outcome,
@@ -1585,11 +1574,11 @@ async function logCsCallActivity(
 
     const notesToLog = `[CS Outcome] ${callData.outcome}. Notes: ${callData.notes || 'N/A'}`;
 
-    const csCallsRef = collection(firestore, 'leads', leadId, 'cs_calls');
+    const csCallsRef = collection(firestore, collectionName, leadId, 'cs_calls');
 
     await Promise.all([
         addDoc(csCallsRef, prepareForFirestore(csCallEntry)).catch(err => console.warn('Could not add to cs_calls subcollection:', err)),
-        logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author }),
+        logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author }, collectionName),
         updateDoc(leadRef, {
             csCalled: true,
             lastCsContactedDate: nowStr,
@@ -1795,7 +1784,7 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string
     await batch.commit();
 }
 
-async function addLeadsToMarketingList(leadIds: string[], listName: string, author: string, noteText: string): Promise<void> {
+async function addLeadsToMarketingList(leadIds: string[], listName: string, author: string, noteText: string, keepBucket: boolean = false): Promise<void> {
     const batch = writeBatch(firestore);
     const oldBuckets: Record<string, string> = {};
     try {
@@ -1811,11 +1800,18 @@ async function addLeadsToMarketingList(leadIds: string[], listName: string, auth
     }
 
     leadIds.forEach(id => {
-        batch.update(doc(firestore, 'leads', id), { 
-            marketingLists: arrayUnion(listName),
-            bucket: 'marketing'
-        });
-        addBucketChangeToBatch(batch, id, oldBuckets[id] || 'unknown', 'marketing', author);
+        const leadRef = doc(firestore, 'leads', id);
+        if (keepBucket) {
+            batch.update(leadRef, { 
+                marketingLists: arrayUnion(listName)
+            });
+        } else {
+            batch.update(leadRef, { 
+                marketingLists: arrayUnion(listName),
+                bucket: 'marketing'
+            });
+            addBucketChangeToBatch(batch, id, oldBuckets[id] || 'unknown', 'marketing', author);
+        }
 
         // Add note to lead's notes subcollection
         const noteRef = doc(collection(firestore, 'leads', id, 'notes'));

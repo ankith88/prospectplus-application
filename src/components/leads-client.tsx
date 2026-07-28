@@ -75,7 +75,7 @@ import { MoveToNurtureDialog } from './marketing/move-to-nurture-dialog';
 import { AllocateBucketDialog } from './marketing/allocate-bucket-dialog';
 import { MoveLeadDialog } from './move-lead-dialog';
 import { canAssignToAm } from '@/lib/leave-utils';
-import { canReassignLead, canChangeBucket } from '@/lib/lead-permissions';
+import { canReassignLead, canChangeBucket, isAccountManagerUser } from '@/lib/lead-permissions';
 
 
 
@@ -288,7 +288,7 @@ export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsA
     const [noteText, setNoteText] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
-    const { user } = useAuth();
+    const { user, userProfile } = useAuth();
 
     const handleSave = async () => {
         if (leads.length === 0 || !listName.trim()) {
@@ -302,7 +302,8 @@ export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsA
         setIsSaving(true);
         try {
             const author = user?.displayName || user?.email || 'System';
-            await addLeadsToMarketingList(leads.map(l => l.id), listName.trim(), author, noteText.trim());
+            const isAccountManager = isAccountManagerUser(userProfile);
+            await addLeadsToMarketingList(leads.map(l => l.id), listName.trim(), author, noteText.trim(), isAccountManager);
             toast({ title: 'Success', description: `${leads.length} lead(s) have been added to the marketing list: ${listName.trim()}` });
             onLeadsAdded();
             onOpenChange(false);
@@ -827,7 +828,7 @@ export default function LeadsClientPage({
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
       const isArchived = filters.bucket === 'inbound'
         ? ['Lost', 'Won', 'LPO Review', 'LPO Opportunity'].includes(lead.status)
-        : ['Lost', 'Qualified', 'LPO Review', 'LPO Opportunity', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted'].includes(lead.status);
+        : ['Lost', 'Qualified', 'Appointment Booked', 'LPO Review', 'LPO Opportunity', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted'].includes(lead.status);
           // New bucket filtering logic
        let bucketMatch = true;
        if (filters.bucket !== 'all') {
@@ -1371,8 +1372,8 @@ export default function LeadsClientPage({
     };
     
     const openMoveLeadsDialog = (targetBucket: 'field' | 'outbound') => {
-        if (!canReassignLead(userProfile, isSuperAdmin) && !canChangeBucket(userProfile, isSuperAdmin)) {
-            toast({ variant: 'destructive', title: 'Action Denied', description: 'You do not have permission to reassign leads or change lead buckets.' });
+        if (!canChangeBucket(userProfile, isSuperAdmin)) {
+            toast({ variant: 'destructive', title: 'Action Denied', description: 'You do not have permission to change lead buckets.' });
             return;
         }
         const leads = allLeads.filter(l => selectedLeads.includes(l.id));
@@ -1399,8 +1400,8 @@ export default function LeadsClientPage({
     };
 
     const openAllocateBucketDialog = () => {
-        if (userProfile?.activeRole?.toLowerCase() === 'user') {
-            toast({ variant: 'destructive', title: 'Action Denied', description: 'Users with role user are not permitted to change lead buckets.' });
+        if (!canChangeBucket(userProfile, isSuperAdmin)) {
+            toast({ variant: 'destructive', title: 'Action Denied', description: 'You do not have permission to change lead buckets.' });
             return;
         }
         const leads = allLeads.filter(l => selectedLeads.includes(l.id));

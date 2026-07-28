@@ -9,7 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Star, TrendingDown, TrendingUp, Minus, Download, FileText, ExternalLink, RefreshCw } from 'lucide-react'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Star, TrendingDown, TrendingUp, Minus, Download, FileText, ExternalLink, RefreshCw, Phone, PhoneCall, Mail } from 'lucide-react'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getQuickDateRange } from '@/lib/utils'
@@ -17,6 +20,8 @@ import Link from 'next/link'
 import { LogNoteDialog } from '@/components/log-note-dialog'
 import type { Note } from '@/lib/types'
 import { usePerformance } from '@/hooks/use-performance'
+import { useAuth } from '@/hooks/use-auth'
+import { logCsCallActivity } from '@/services/firebase'
 
 interface PackageRecord {
   code: string;
@@ -33,10 +38,17 @@ interface PackageRecord {
 
 interface CustomerStats {
   id: string;
+  prospectPlusId?: string;
   companyId?: string;
   type?: 'companies' | 'leads';
   name: string;
   franchisee: string;
+  contactName?: string;
+  phone?: string;
+  email?: string;
+  csCalled?: boolean;
+  csCallCount?: number;
+  lastContactedDate?: string | null;
   allTimeBarcodes: number;
   currentWeekScans: number;
   currentMonthScans: number;
@@ -44,6 +56,12 @@ interface CustomerStats {
   monthlyAverage: number;
   deliverySpeeds: Record<string, number>;
   lastScanDate: string | Date | null;
+  lastContact?: {
+    date: string | null;
+    type: string | null;
+    author: string | null;
+    notes: string | null;
+  } | null;
 }
 
 const parseDateString = (dateStr: string) => {
@@ -111,6 +129,9 @@ const UsageBadge = ({ current, average }: { current: number, average: number }) 
 }
 
 export function TopUsersClient() {
+  const { userProfile } = useAuth();
+  const loggedInCsName = userProfile?.displayName || userProfile?.name || userProfile?.email || 'CS Agent';
+
   const [loading, setLoading] = useState(true)
   const [topUsers, setTopUsers] = useState<CustomerStats[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -122,6 +143,12 @@ export function TopUsersClient() {
   const [sortBy, setSortBy] = useState('rank')
   const [timeframeMode, setTimeframeMode] = useState<'weekly' | 'monthly'>('weekly')
   const [selectedCustomerForNote, setSelectedCustomerForNote] = useState<{ id: string; companyName: string; type: 'companies' | 'leads' } | null>(null)
+
+  // Call dialog state
+  const [selectedCustomerForCall, setSelectedCustomerForCall] = useState<{ stat: CustomerStats } | null>(null)
+  const [callOutcome, setCallOutcome] = useState('Call Back/Follow-up')
+  const [callNotes, setCallNotes] = useState('')
+  const [submittingCall, setSubmittingCall] = useState(false)
 
   const { setLoadTime, setPageName, setIsCustom } = usePerformance()
 
@@ -189,6 +216,53 @@ export function TopUsersClient() {
     fetchData()
   }, [filterDateRange, customStartDate, customEndDate])
 
+  const handleSaveCallOutcome = async () => {
+    if (!selectedCustomerForCall || !selectedCustomerForCall.stat.companyId) return;
+    setSubmittingCall(true);
+    const stat = selectedCustomerForCall.stat;
+    const companyId = stat.companyId;
+    if (!companyId) return;
+    try {
+      await logCsCallActivity(
+        companyId,
+        {
+          outcome: callOutcome,
+          notes: callNotes,
+          author: loggedInCsName || 'CS Agent',
+          salesRecordInternalId: stat.id
+        },
+        stat.type || 'companies'
+      );
+
+      const nowStr = new Date().toISOString();
+      setTopUsers(prev => prev.map(u => {
+        if (u.id === stat.id) {
+          return {
+            ...u,
+            csCalled: true,
+            csCallCount: (u.csCallCount || 0) + 1,
+            lastContactedDate: nowStr,
+            lastContact: {
+              date: nowStr,
+              type: 'Update',
+              author: loggedInCsName || 'CS Agent',
+              notes: `[CS Outcome] ${callOutcome}. Notes: ${callNotes || 'N/A'}`
+            }
+          };
+        }
+        return u;
+      }));
+
+      setSelectedCustomerForCall(null);
+      setCallNotes('');
+      setCallOutcome('Call Back/Follow-up');
+    } catch (err) {
+      console.error("Failed to save CS call activity:", err);
+    } finally {
+      setSubmittingCall(false);
+    }
+  };
+
   const uniqueFranchisees = useMemo(() => {
     const franchisees = Array.from(new Set(topUsers.map(c => c.franchisee).filter(Boolean)))
     return franchisees.map(f => ({ label: f as string, value: f as string })).sort((a, b) => a.label.localeCompare(b.label))
@@ -199,7 +273,11 @@ export function TopUsersClient() {
       // Search term
       if (searchTerm && !stat.name.toLowerCase().includes(searchTerm.toLowerCase()) && 
           !stat.franchisee.toLowerCase().includes(searchTerm.toLowerCase()) &&
-          !stat.id.toLowerCase().includes(searchTerm.toLowerCase())) {
+          !stat.id.toLowerCase().includes(searchTerm.toLowerCase()) &&
+          !(stat.prospectPlusId && stat.prospectPlusId.toLowerCase().includes(searchTerm.toLowerCase())) &&
+          !(stat.contactName && stat.contactName.toLowerCase().includes(searchTerm.toLowerCase())) &&
+          !(stat.phone && stat.phone.toLowerCase().includes(searchTerm.toLowerCase())) &&
+          !(stat.email && stat.email.toLowerCase().includes(searchTerm.toLowerCase()))) {
         return false
       }
 
@@ -219,114 +297,99 @@ export function TopUsersClient() {
       return true
     })
 
+    // Sort
     if (sortBy === 'color_red') {
-      const order = { 'below': 0, 'similar': 1, 'above': 2 }
       result.sort((a, b) => {
-        const aStatus = timeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage)
-        const bStatus = timeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage)
-        if (order[aStatus] !== order[bStatus]) return order[aStatus] - order[bStatus]
-        return b.allTimeBarcodes - a.allTimeBarcodes
+        const statusA = timeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage)
+        const statusB = timeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage)
+        const valMap = { below: 1, similar: 2, above: 3 }
+        return valMap[statusA as keyof typeof valMap] - valMap[statusB as keyof typeof valMap]
       })
     } else if (sortBy === 'color_green') {
-      const order = { 'above': 0, 'similar': 1, 'below': 2 }
       result.sort((a, b) => {
-        const aStatus = timeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage)
-        const bStatus = timeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage)
-        if (order[aStatus] !== order[bStatus]) return order[aStatus] - order[bStatus]
-        return b.allTimeBarcodes - a.allTimeBarcodes
+        const statusA = timeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage)
+        const statusB = timeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage)
+        const valMap = { above: 1, similar: 2, below: 3 }
+        return valMap[statusA as keyof typeof valMap] - valMap[statusB as keyof typeof valMap]
       })
     }
 
     return result
   }, [topUsers, searchTerm, selectedFranchise, filterColorCode, sortBy, timeframeMode])
 
-  const { last7DaysLabel, last30DaysLabel } = useMemo(() => {
-    const formatStr = (d: Date) => {
-      const dd = String(d.getDate()).padStart(2, '0')
-      const mm = String(d.getMonth() + 1).padStart(2, '0')
-      return `${dd}/${mm}`
-    }
-    
-    let endDate = new Date()
-    if (filterDateRange === 'today') {
-      endDate = new Date()
-    } else if (filterDateRange === 'yesterday') {
-      endDate = new Date()
-      endDate.setDate(endDate.getDate() - 1)
-      endDate.setHours(23, 59, 59, 999)
-    } else if (filterDateRange === 'last_7') {
-      endDate = new Date()
-    } else if (filterDateRange === 'last_30') {
-      endDate = new Date()
-    } else if (filterDateRange === 'this_week') {
-      endDate = new Date()
-    } else if (filterDateRange === 'this_month') {
-      endDate = new Date()
-    } else if (filterDateRange === 'last_month') {
-      endDate = new Date(endDate.getFullYear(), endDate.getMonth(), 0, 23, 59, 59, 999)
-    } else if (filterDateRange === 'custom' && customEndDate) {
-      endDate = new Date(customEndDate)
-      endDate.setHours(23, 59, 59, 999)
-    }
-
-    const wStart = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const mStart = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000)
-
-    return {
-      last7DaysLabel: `${formatStr(wStart)} - ${formatStr(endDate)}`,
-      last30DaysLabel: `${formatStr(mStart)} - ${formatStr(endDate)}`
-    }
-  }, [filterDateRange, customEndDate])
-
   const handleExportCSV = () => {
     const headers = [
-      'Rank', 'Customer Name', 'Customer NS ID', 'Franchise', 'Total Barcodes', 'Last Scan Date',
-      'Delivery Speeds Breakdown',
-      'Weekly Average', 'Last 7 Days', 'Monthly Average', 'Last 30 Days'
+      'Rank',
+      'Customer Name',
+      'Prospect+ ID',
+      'Customer NS ID',
+      'Franchise',
+      'Contact Person',
+      'Phone',
+      'Email',
+      'CS Called',
+      'CS Call Count',
+      'Last Contacted Date',
+      'Total Barcodes (Period)',
+      'Last Scan Date',
+      'Weekly Avg',
+      'Last 7 Days',
+      'Weekly Drop-off Status',
+      'Monthly Avg',
+      'Last 30 Days',
+      'Monthly Drop-off Status'
     ]
 
     const rows = filteredStats.map((stat, idx) => {
-      const speedsStr = Object.entries(stat.deliverySpeeds)
-        .map(([speed, count]) => `${speed}: ${count}`)
-        .join(' | ')
-
+      const wStatus = getUsageStatus(stat.currentWeekScans, stat.weeklyAverage)
+      const mStatus = getUsageStatus(stat.currentMonthScans, stat.monthlyAverage)
+      
       return [
         idx + 1,
         `"${stat.name.replace(/"/g, '""')}"`,
-        `"${stat.id}"`,
+        `"${(stat.prospectPlusId || stat.companyId || stat.id).replace(/"/g, '""')}"`,
+        `"${stat.id.replace(/"/g, '""')}"`,
         `"${stat.franchisee.replace(/"/g, '""')}"`,
+        `"${(stat.contactName || '').replace(/"/g, '""')}"`,
+        `"${(stat.phone || '').replace(/"/g, '""')}"`,
+        `"${(stat.email || '').replace(/"/g, '""')}"`,
+        stat.csCalled ? 'Yes' : 'No',
+        stat.csCallCount || 0,
+        stat.lastContactedDate ? getFormattedDateDDMMYYYY(new Date(stat.lastContactedDate)) : 'N/A',
         stat.allTimeBarcodes,
-        `"${getFormattedDateDDMMYYYY(stat.lastScanDate ? new Date(stat.lastScanDate) : null)}"`,
-        `"${speedsStr}"`,
+        getFormattedDateDDMMYYYY(stat.lastScanDate ? new Date(stat.lastScanDate) : null),
         Math.round(stat.weeklyAverage),
         stat.currentWeekScans,
+        wStatus,
         Math.round(stat.monthlyAverage),
-        stat.currentMonthScans
-      ].join(',')
+        stat.currentMonthScans,
+        mStatus
+      ]
     })
 
-    const csvContent = [headers.join(','), ...rows].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n')
+    const encodedUri = encodeURI(csvContent)
     const link = document.createElement('a')
-    link.setAttribute('href', url)
+    link.setAttribute('href', encodedUri)
     link.setAttribute('download', `top_users_report_${new Date().toISOString().split('T')[0]}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
   }
 
-  if (loading && topUsers.length === 0) {
-    return (
-      <div className="flex flex-col justify-center items-center h-96 gap-4">
-        <Loader />
-        <p className="text-muted-foreground text-sm">Aggregating Top User Reports...</p>
-      </div>
-    )
-  }
+  // Calculate specific date labels for table headers
+  const today = new Date()
+
+  const last7Start = new Date(today)
+  last7Start.setDate(today.getDate() - 7)
+  const last7DaysLabel = `${last7Start.getDate()}/${last7Start.getMonth()+1} - ${today.getDate()}/${today.getMonth()+1}`
+
+  const last30Start = new Date(today)
+  last30Start.setDate(today.getDate() - 30)
+  const last30DaysLabel = `${last30Start.getDate()}/${last30Start.getMonth()+1} - ${today.getDate()}/${today.getMonth()+1}`
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
@@ -468,10 +531,12 @@ export function TopUsersClient() {
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
-                  <TableHead className="w-16 text-center">Rank</TableHead>
+                  <TableHead className="w-12 text-center">Rank</TableHead>
                   <TableHead>Customer</TableHead>
-                  <TableHead>Customer NS ID</TableHead>
+                  <TableHead>Prospect+ ID</TableHead>
                   <TableHead>Franchise</TableHead>
+                  <TableHead>Contact Details</TableHead>
+                  <TableHead>Call Tracker</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Total Barcodes<br/><span className="text-xs text-muted-foreground font-normal">(In Period)</span></TableHead>
                   <TableHead>Last Scan Date</TableHead>
                   <TableHead>Delivery Speeds</TableHead>
@@ -487,6 +552,7 @@ export function TopUsersClient() {
                     <span className="text-xs text-muted-foreground font-normal">({last30DaysLabel})</span>
                   </TableHead>
                   <TableHead>Monthly Drop-off</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -499,43 +565,75 @@ export function TopUsersClient() {
                   if (status === 'below') rowClass = "bg-red-50/40 hover:bg-red-50";
                   else if (status === 'above') rowClass = "bg-green-50/40 hover:bg-green-50";
                   else rowClass = "bg-orange-50/40 hover:bg-orange-50";
- 
+
                   return (
                     <TableRow key={stat.id} className={rowClass}>
                       <TableCell className="text-center font-medium text-slate-500">#{idx + 1}</TableCell>
                       <TableCell className="font-semibold">
                         <div className="flex items-center gap-1.5">
                           {stat.companyId ? (
-                            <>
-                              <Link 
-                                href={`/${stat.type}/${stat.companyId}`} 
-                                target="_blank" 
-                                className="text-indigo-600 hover:underline flex items-center gap-1 group"
-                              >
-                                {stat.name}
-                                <ExternalLink className="h-3 w-3 opacity-50 group-hover:opacity-100 transition-opacity" />
-                              </Link>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-slate-100"
-                                onClick={() => setSelectedCustomerForNote({ id: stat.companyId!, companyName: stat.name, type: stat.type! })}
-                                title="Add note for customer"
-                              >
-                                <FileText className="h-3.5 w-3.5" />
-                              </Button>
-                            </>
+                            <Link 
+                              href={`/${stat.type}/${stat.companyId}`} 
+                              target="_blank" 
+                              className="text-indigo-600 hover:underline flex items-center gap-1 group"
+                            >
+                              {stat.name}
+                              <ExternalLink className="h-3 w-3 opacity-50 group-hover:opacity-100 transition-opacity" />
+                            </Link>
                           ) : (
                             <span className="text-slate-700">{stat.name}</span>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-slate-500">{stat.id}</TableCell>
+                      <TableCell className="text-slate-500 font-mono text-xs">{stat.prospectPlusId || stat.companyId || stat.id}</TableCell>
                       <TableCell className="text-slate-500">{stat.franchisee}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col text-xs gap-1 text-slate-600">
+                          <span className="font-semibold text-slate-800">{stat.contactName || 'No Contact'}</span>
+                          {stat.phone && (
+                            <a 
+                              href={`tel:${stat.phone}`}
+                              className="flex items-center gap-1.5 hover:text-[#095c7b] cursor-pointer group w-fit"
+                              title="Call Phone Number"
+                            >
+                              <Phone className="h-3 w-3 text-slate-400 group-hover:text-[#095c7b] shrink-0" />
+                              <span>{stat.phone}</span>
+                            </a>
+                          )}
+                          {stat.email && (
+                            <a 
+                              href={`mailto:${stat.email}`}
+                              className="flex items-center gap-1.5 hover:text-[#095c7b] cursor-pointer group w-fit max-w-[180px]"
+                              title="Send Email"
+                            >
+                              <Mail className="h-3 w-3 text-slate-400 group-hover:text-[#095c7b] shrink-0" />
+                              <span className="truncate">{stat.email}</span>
+                            </a>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {stat.csCalled ? (
+                            <Badge className="bg-emerald-500 text-white text-[10px] font-semibold flex items-center gap-1 w-max">
+                              ✓ Called {stat.csCallCount ? `(${stat.csCallCount}x)` : ''}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200 text-[10px] font-semibold w-max">
+                              Pending Call
+                            </Badge>
+                          )}
+                          {stat.lastContactedDate && (
+                            <span className="text-[10px] text-slate-400 block">
+                              {getFormattedDateDDMMYYYY(new Date(stat.lastContactedDate))}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-right font-bold">{stat.allTimeBarcodes.toLocaleString()}</TableCell>
                       
                       <TableCell className="text-slate-500 whitespace-nowrap text-[13px]">{getFormattedDateDDMMYYYY(stat.lastScanDate ? new Date(stat.lastScanDate) : null)}</TableCell>
- 
+
                       <TableCell>
                         <div className="flex flex-col gap-0.5 text-[11px] text-slate-500 w-32">
                           {Object.entries(stat.deliverySpeeds).map(([speed, count]) => (
@@ -546,7 +644,7 @@ export function TopUsersClient() {
                           ))}
                         </div>
                       </TableCell>
- 
+
                       <TableCell className="text-right">{Math.round(stat.weeklyAverage)}</TableCell>
                       <TableCell className="text-right font-medium">{stat.currentWeekScans}</TableCell>
                       <TableCell>
@@ -558,12 +656,38 @@ export function TopUsersClient() {
                       <TableCell>
                         <UsageBadge current={stat.currentMonthScans} average={stat.monthlyAverage} />
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {stat.companyId && (
+                            <>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
+                                onClick={() => setSelectedCustomerForCall({ stat })}
+                                title="Mark Called"
+                              >
+                                <PhoneCall className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
+                                onClick={() => setSelectedCustomerForNote({ id: stat.companyId!, companyName: stat.name, type: stat.type! })}
+                                title="View Notes & Activities"
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   )
                 })}
                 {filteredStats.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={13} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={16} className="h-24 text-center text-muted-foreground">
                       No top users found matching search.
                     </TableCell>
                   </TableRow>
@@ -586,6 +710,60 @@ export function TopUsersClient() {
             fetchData()
           }}
         />
+      )}
+
+      {selectedCustomerForCall && (
+        <Dialog open={!!selectedCustomerForCall} onOpenChange={(open) => !open && setSelectedCustomerForCall(null)}>
+          <DialogContent className="sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-[#095c7b]">
+                <PhoneCall className="h-5 w-5 text-[#095c7b]" />
+                Log CS Call & Outcome
+              </DialogTitle>
+              <DialogDescription>
+                Record a call outcome for <strong>{selectedCustomerForCall?.stat.name}</strong>. This logs activity without changing company status.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700">Call Outcome</Label>
+                <Select value={callOutcome} onValueChange={setCallOutcome}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select outcome" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Spoken to Customer">Spoken to Customer</SelectItem>
+                    <SelectItem value="Call Back/Follow-up">Call Back/Follow-up</SelectItem>
+                    <SelectItem value="Left Voicemail">Left Voicemail</SelectItem>
+                    <SelectItem value="Meeting Scheduled">Meeting Scheduled</SelectItem>
+                    <SelectItem value="Account Review Requested">Account Review Requested</SelectItem>
+                    <SelectItem value="No Answer">No Answer</SelectItem>
+                    <SelectItem value="Issue Escalated">Issue Escalated</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700">Call Notes & Details</Label>
+                <Textarea
+                  placeholder="Enter notes from the call..."
+                  value={callNotes}
+                  onChange={(e) => setCallNotes(e.target.value)}
+                  className="min-h-[100px] text-sm"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSelectedCustomerForCall(null)} disabled={submittingCall}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveCallOutcome} disabled={submittingCall} className="bg-[#095c7b] hover:bg-[#074760] text-white">
+                {submittingCall ? 'Saving...' : 'Save Call Activity'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )

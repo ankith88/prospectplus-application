@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Table,
   TableBody,
@@ -118,10 +119,12 @@ function safeFormatDate(val: any, outputFormat = 'dd/MM/yyyy'): string {
 export function MasterAllLeadsClient() {
   const { userProfile, isSuperAdmin, loading: authLoading } = useAuth()
   const { toast } = useToast()
+  const router = useRouter()
 
   const isAllowed = useMemo(() => {
-    if (isSuperAdmin) return true
     const role = userProfile?.activeRole || userProfile?.role || ''
+    if (role === 'user' || role.toLowerCase() === 'user') return false
+    if (isSuperAdmin) return true
     return ['admin', 'super user', 'Sales Manager', 'Marketing Admin', 'Marketing Manager', 'Outbound Admin'].includes(role)
   }, [isSuperAdmin, userProfile])
 
@@ -178,10 +181,12 @@ export function MasterAllLeadsClient() {
   }
 
   useEffect(() => {
-    if (isAllowed) {
+    if (!authLoading && !isAllowed) {
+      router.replace('/leads')
+    } else if (isAllowed) {
       fetchData()
     }
-  }, [isAllowed])
+  }, [authLoading, isAllowed, router])
 
   // Unique list options for filters
   const uniqueSources = useMemo(() => {

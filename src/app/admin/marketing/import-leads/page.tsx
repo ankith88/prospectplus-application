@@ -13,7 +13,8 @@ export default function ImportLeadsPage() {
   const { canView, loadingPermissions } = usePermissions();
   const router = useRouter();
 
-  const isAllowed = isSuperAdmin || canView('importLeads') || (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Outbound Admin'].includes(userProfile.activeRole));
+  const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
+  const isAllowed = !isUserRole && (isSuperAdmin || canView('importLeads') || (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Outbound Admin'].includes(userProfile.activeRole)));
 
   useEffect(() => {
     if (!loading && !loadingPermissions && !isAllowed) {

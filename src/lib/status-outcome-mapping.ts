@@ -27,9 +27,10 @@ export const STATUS_TO_OUTCOMES_MAP: Record<string, OutcomeInfo[]> = {
   'In Qualification': [
     { outcome: 'Qualified - Call Back/Send Info', notes: 'Prospect qualified and requesting further info' },
   ],
-  'Qualified': [
+  'Appointment Booked': [
     { outcome: 'Appointment Booked', notes: 'Appointment successfully scheduled with prospect' },
   ],
+  'Qualified': [],
   'Reschedule': [
     { outcome: 'Reschedule', notes: 'Appointment or call needed rescheduling' },
   ],
@@ -65,7 +66,7 @@ export const STATUS_TO_OUTCOMES_MAP: Record<string, OutcomeInfo[]> = {
 };
 
 export const REVERSE_OUTCOME_TO_STATUS_MAP: Record<string, { status: LeadStatus; reason?: string }> = {
-  'Appointment Booked': { status: 'Qualified' },
+  'Appointment Booked': { status: 'Appointment Booked' },
   'Busy': { status: 'In Progress' },
   'Call Back/Follow-up': { status: 'High Touch' },
   'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },

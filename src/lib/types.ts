@@ -33,6 +33,7 @@ export type LeadStatus =
   | 'Trialing ShipMate'
   | 'Reschedule'
   | 'Qualified'
+  | 'Appointment Booked'
   | 'Pre Qualified'
   | 'Won'
   | 'Lost'

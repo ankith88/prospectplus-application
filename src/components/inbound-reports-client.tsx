@@ -79,6 +79,18 @@ const isLostLead = (l: Lead) => {
     );
 };
 
+const isSignedLead = (l: Lead) => {
+    const status = (l.status as string) || '';
+    const customerStatus = l.customerStatus || '';
+    return customerStatus === 'Won' || customerStatus === 'Signed' || status === 'Won' || status === 'Signed';
+};
+
+const isActivePipelineLead = (l: Lead, actionedSet?: Set<string>, requireActioned: boolean = true) => {
+    if (isLostLead(l) || isSignedLead(l)) return false;
+    if (!actionedSet) return true;
+    return requireActioned ? actionedSet.has(l.id) : !actionedSet.has(l.id);
+};
+
 const isActiveLocalMileLead = (l: Lead) => {
     if (isLostLead(l)) return false;
     const activeStatuses = ['LocalMile Opportunity', 'LocalMile Pending', 'Trialing LocalMile'];
@@ -1473,25 +1485,29 @@ export default function InboundReportsClientPage({
       const dialerAppointments = filteredAppointments.filter(a => dialerInboundLeadIds.has(a.leadId) || a.dialerAssigned === dialer || a.amName === dialer || a.assignedTo === dialer).length;
       const dialerQuotes = dialerInboundLeads.filter(l => l.customerStatus === 'Prospect Opportunity' || l.customerStatus === 'Quote Sent').length;
       const dialerTrials = anyTrialLeads.filter(l => getLeadAM(l) === dialer).length;
-      const dialerWon = dialerInboundLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed').length;
+      const dialerWon = dialerInboundLeads.filter(isSignedLead).length;
 
       const dialerActionedSet = amActionedLeadIdsMap.get(dialer) || new Set<string>();
 
-      const dialerOutsidePipelineLeads = dialerInboundLeads.filter(l => !activePipelineStatuses.includes(l.customerStatus || ''));
-      const dialerOutsidePipeline = dialerOutsidePipelineLeads.length;
+      const dialerLostPipelineLeads = dialerInboundLeads.filter(isLostLead);
+      const dialerLostPipeline = dialerLostPipelineLeads.length;
 
-      const dialerProcessedLeads = dialerInboundLeads.filter(l => activePipelineStatuses.includes(l.customerStatus || '') && dialerActionedSet.has(l.id));
-      const dialerLeadsProcessed = dialerProcessedLeads.length;
+      const dialerActivePipelineLeads = dialerInboundLeads.filter(l => isActivePipelineLead(l, dialerActionedSet, true));
+      const dialerActivePipeline = dialerActivePipelineLeads.length;
 
-      const dialerStillInPipelineLeads = dialerInboundLeads.filter(l => activePipelineStatuses.includes(l.customerStatus || '') && !dialerActionedSet.has(l.id));
-      const dialerStillInPipeline = dialerStillInPipelineLeads.length;
+      const dialerUnactionedPipelineLeads = dialerInboundLeads.filter(l => isActivePipelineLead(l, dialerActionedSet, false));
+      const dialerUnactionedPipeline = dialerUnactionedPipelineLeads.length;
 
       return { 
         name: dialer, 
         'Total Engagement': dialerCalls, 
-        'Leads Processed': dialerLeadsProcessed,
-        'Outside Pipeline': dialerOutsidePipeline,
-        'Still In Pipeline': dialerStillInPipeline,
+        'Total Assigned Leads': dialerInboundLeads.length,
+        'Un-actioned Pipeline': dialerUnactionedPipeline,
+        'Active Pipeline': dialerActivePipeline,
+        'Lost Pipeline': dialerLostPipeline,
+        'Outside Pipeline': dialerLostPipeline,
+        'Leads Processed': dialerActivePipeline,
+        'Still In Pipeline': dialerUnactionedPipeline,
         'Avg Attempts': avgAttempts,
         'Connect Rate': connectRate,
         'Appointments': dialerAppointments,
@@ -1508,8 +1524,14 @@ export default function InboundReportsClientPage({
     });
 
     const totalTeamCalls = teamPerformanceData.reduce((acc, d) => acc + d['Total Engagement'], 0);
-    const totalLeadsProcessed = teamPerformanceData.reduce((acc, d) => acc + d['Leads Processed'], 0);
-    const totalAvgAttempts = totalLeadsProcessed > 0 ? totalTeamCalls / totalLeadsProcessed : 0;
+    const totalAssignedLeads = teamPerformanceData.reduce((acc, d) => acc + d['Total Assigned Leads'], 0);
+    const totalUnactionedPipeline = teamPerformanceData.reduce((acc, d) => acc + d['Un-actioned Pipeline'], 0);
+    const totalActivePipeline = teamPerformanceData.reduce((acc, d) => acc + d['Active Pipeline'], 0);
+    const totalLostPipeline = teamPerformanceData.reduce((acc, d) => acc + d['Lost Pipeline'], 0);
+    const totalWon = teamPerformanceData.reduce((acc, d) => acc + d['Signed Customers'], 0);
+
+    const totalLeadsProcessed = totalActivePipeline;
+    const totalAvgAttempts = totalActivePipeline > 0 ? totalTeamCalls / totalActivePipeline : 0;
     const totalConnectedCalls = allAMs.reduce((acc, dialer) => {
       const dialerCallsList = filteredCalls.filter(c => c.author === dialer);
       return acc + dialerCallsList.filter(c => connectedOutcomes.includes((c as any).outcome)).length;
@@ -1524,16 +1546,17 @@ export default function InboundReportsClientPage({
     const totalTrialingLM = teamPerformanceData.reduce((acc, d) => acc + d['Trialing LocalMile'], 0);
     const totalTrialingLMRate = totalTeamCalls > 0 ? (totalTrialingLM / totalTeamCalls) * 100 : 0;
     const totalTrials = teamPerformanceData.reduce((acc, d) => acc + d['ShipMate / LocalMile Trials'], 0);
-    const totalOutsidePipeline = teamPerformanceData.reduce((acc, d) => acc + d['Outside Pipeline'], 0);
-    const totalInPipeline = teamPerformanceData.reduce((acc, d) => acc + d['Still In Pipeline'], 0);
-    const totalWon = teamPerformanceData.reduce((acc, d) => acc + d['Signed Customers'], 0);
 
     const teamPerformanceTotals = {
       name: 'Total',
       'Total Engagement': totalTeamCalls,
-      'Leads Processed': totalLeadsProcessed,
-      'Outside Pipeline': totalOutsidePipeline,
-      'Still In Pipeline': totalInPipeline,
+      'Total Assigned Leads': totalAssignedLeads,
+      'Un-actioned Pipeline': totalUnactionedPipeline,
+      'Active Pipeline': totalActivePipeline,
+      'Lost Pipeline': totalLostPipeline,
+      'Outside Pipeline': totalLostPipeline,
+      'Leads Processed': totalActivePipeline,
+      'Still In Pipeline': totalUnactionedPipeline,
       'Avg Attempts': totalAvgAttempts,
       'Connect Rate': totalConnectRate,
       Appointments: totalAppts,
@@ -2577,7 +2600,7 @@ export default function InboundReportsClientPage({
                     <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-1.5">
                             <span>Inbound Team Performance Details</span>
-                            <SectionHelp content="Detailed inbound performance report. 'Leads Processed' (actioned in active pipeline across calls, emails, meetings, updates), 'Outside Pipeline' (finished/archived leads), and 'Still In Pipeline' (un-actioned leads in active pipeline) sum to 100% of Total Inbound Leads." />
+                            <SectionHelp content="Detailed inbound performance report. 'Un-actioned Pipeline' (leads yet to be actioned), 'Active Pipeline' (in-process actioned leads), 'Lost Pipeline' (marked as lost), and 'Signed Customers' (converted to signed) sum to 100% of Total Inbound Leads." />
                         </CardTitle>
                         <Button variant="outline" size="sm" onClick={() => handleExportData([...stats.teamPerformanceData, stats.teamPerformanceTotals], 'inbound_team_performance_details')}>
                             <Download className="h-4 w-4 mr-2" /> Export Table
@@ -2591,9 +2614,51 @@ export default function InboundReportsClientPage({
                             <TableRow>
                                 <TableHead>Agent / Account Manager</TableHead>
                                 <TableHead className="text-right">Calls Made</TableHead>
-                                <TableHead className="text-right">Leads Processed</TableHead>
-                                <TableHead className="text-right">Outside Pipeline</TableHead>
-                                <TableHead className="text-right">Still In Pipeline</TableHead>
+                                <TableHead className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <span>Total Assigned Leads</span>
+                                        <SectionHelp content={
+                                            <div className="space-y-1.5 text-left">
+                                                <p className="font-semibold text-foreground">Total Assigned Leads</p>
+                                                <p>Total number of inbound leads assigned to the Account Manager in the selected date range. Sum of Un-actioned Pipeline, Active Pipeline, Lost Pipeline, and Signed Customers.</p>
+                                            </div>
+                                        } />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <span>Un-actioned Pipeline</span>
+                                        <SectionHelp content={
+                                            <div className="space-y-1.5 text-left">
+                                                <p className="font-semibold text-foreground">Un-actioned Pipeline</p>
+                                                <p>Leads remaining in active pipeline statuses that have had no logged activities (calls, emails, meetings, updates) in the selected date range.</p>
+                                            </div>
+                                        } />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <span>Active Pipeline</span>
+                                        <SectionHelp content={
+                                            <div className="space-y-1.5 text-left">
+                                                <p className="font-semibold text-foreground">Active Pipeline</p>
+                                                <p>Active in-process leads that have been actioned (logged calls, emails, meetings, or updates) in the selected date range and are not Lost or Signed.</p>
+                                            </div>
+                                        } />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <span>Lost Pipeline</span>
+                                        <SectionHelp content={
+                                            <div className="space-y-1.5 text-left">
+                                                <p className="font-semibold text-foreground">Lost Pipeline</p>
+                                                <p>Leads that have been processed and moved to the Archived bucket as Lost, Unqualified, Out of Territory, or Email Brush Off.</p>
+                                            </div>
+                                        } />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right">Signed Customers</TableHead>
                                 <TableHead className="text-right">Avg Attempts / Lead</TableHead>
                                 <TableHead className="text-right">Connect Rate %</TableHead>
                                 <TableHead className="text-right">Appointments Set</TableHead>
@@ -2602,7 +2667,6 @@ export default function InboundReportsClientPage({
                                 <TableHead className="text-right">LM Pending (T&C&apos;s Accepted)</TableHead>
                                 <TableHead className="text-right">Trialing LocalMile</TableHead>
                                 <TableHead className="text-right">ShipMate / LocalMile Trials</TableHead>
-                                <TableHead className="text-right">Signed Customers</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2611,37 +2675,55 @@ export default function InboundReportsClientPage({
                                     <TableCell className="font-medium">{dialer.name}</TableCell>
                                     <TableCell className="text-right">{dialer['Total Engagement']}</TableCell>
                                     <TableCell 
-                                        className="text-right font-semibold text-emerald-600 cursor-pointer hover:underline"
-                                        onClick={() => {
-                                            const actionedSet = stats.amActionedLeadIdsMap?.get(dialer.name) || new Set();
-                                            setDrillDownData({ 
-                                                title: `${dialer.name} - Leads Processed (Actioned in Pipeline)`, 
-                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && actionedSet.has(l.id)) 
-                                            });
-                                        }}
-                                    >
-                                        {dialer['Leads Processed']}
-                                    </TableCell>
-                                    <TableCell 
-                                        className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
+                                        className="text-right font-semibold text-foreground cursor-pointer hover:underline"
                                         onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - Outside Pipeline Leads (Finished Processing)`, 
-                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
+                                            title: `${dialer.name} - Total Assigned Leads`, 
+                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name) 
                                         })}
                                     >
-                                        {dialer['Outside Pipeline']}
+                                        {dialer['Total Assigned Leads']}
                                     </TableCell>
                                     <TableCell 
                                         className="text-right font-semibold text-blue-500 cursor-pointer hover:underline"
                                         onClick={() => {
                                             const actionedSet = stats.amActionedLeadIdsMap?.get(dialer.name) || new Set();
                                             setDrillDownData({ 
-                                                title: `${dialer.name} - Still In Pipeline Leads (Un-actioned)`, 
-                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && !actionedSet.has(l.id)) 
+                                                title: `${dialer.name} - Un-actioned Pipeline Leads (Yet to be Actioned)`, 
+                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && isActivePipelineLead(l, actionedSet, false)) 
                                             });
                                         }}
                                     >
-                                        {dialer['Still In Pipeline']}
+                                        {dialer['Un-actioned Pipeline']}
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-emerald-600 cursor-pointer hover:underline"
+                                        onClick={() => {
+                                            const actionedSet = stats.amActionedLeadIdsMap?.get(dialer.name) || new Set();
+                                            setDrillDownData({ 
+                                                title: `${dialer.name} - Active Pipeline Leads (In Process & Actioned)`, 
+                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && isActivePipelineLead(l, actionedSet, true)) 
+                                            });
+                                        }}
+                                    >
+                                        {dialer['Active Pipeline']}
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
+                                        onClick={() => setDrillDownData({ 
+                                            title: `${dialer.name} - Lost Pipeline Leads (Archived Lost)`, 
+                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && isLostLead(l)) 
+                                        })}
+                                    >
+                                        {dialer['Lost Pipeline']}
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-green-600 cursor-pointer hover:underline"
+                                        onClick={() => setDrillDownData({ 
+                                            title: `${dialer.name} - Signed Customers`, 
+                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && isSignedLead(l)) 
+                                        })}
+                                    >
+                                        {dialer['Signed Customers']}
                                     </TableCell>
                                     <TableCell className="text-right">{dialer['Avg Attempts'].toFixed(1)}</TableCell>
                                     <TableCell className="text-right">{dialer['Connect Rate'].toFixed(1)}%</TableCell>
@@ -2690,7 +2772,6 @@ export default function InboundReportsClientPage({
                                     >
                                         {dialer['ShipMate / LocalMile Trials']}
                                     </TableCell>
-                                    <TableCell className="text-right font-semibold text-green-600">{dialer['Signed Customers']}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
@@ -2699,31 +2780,49 @@ export default function InboundReportsClientPage({
                                 <TableCell className="font-bold">Total</TableCell>
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Total Engagement']}</TableCell>
                                 <TableCell 
-                                    className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
+                                    className="text-right font-bold text-foreground cursor-pointer hover:underline"
                                     onClick={() => setDrillDownData({ 
-                                        title: "All Leads Processed (Actioned in Pipeline)", 
-                                        leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && stats.allActionedLeadIdsSet.has(l.id)) 
+                                        title: "All Total Assigned Leads", 
+                                        leads: filteredLeads 
                                     })}
                                 >
-                                    {stats.teamPerformanceTotals['Leads Processed']}
-                                </TableCell>
-                                <TableCell 
-                                    className="text-right font-bold text-slate-500 cursor-pointer hover:underline"
-                                    onClick={() => setDrillDownData({ 
-                                        title: "All Outside Pipeline Leads (Finished Processing)", 
-                                        leads: filteredLeads.filter(l => !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
-                                    })}
-                                >
-                                    {stats.teamPerformanceTotals['Outside Pipeline']}
+                                    {stats.teamPerformanceTotals['Total Assigned Leads']}
                                 </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-blue-500 cursor-pointer hover:underline"
                                     onClick={() => setDrillDownData({ 
-                                        title: "All Still In Pipeline Leads (Un-actioned)", 
-                                        leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && !stats.allActionedLeadIdsSet.has(l.id)) 
+                                        title: "All Un-actioned Pipeline Leads (Yet to be Actioned)", 
+                                        leads: filteredLeads.filter(l => isActivePipelineLead(l, stats.allActionedLeadIdsSet, false)) 
                                     })}
                                 >
-                                    {stats.teamPerformanceTotals['Still In Pipeline']}
+                                    {stats.teamPerformanceTotals['Un-actioned Pipeline']}
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All Active Pipeline Leads (In Process & Actioned)", 
+                                        leads: filteredLeads.filter(l => isActivePipelineLead(l, stats.allActionedLeadIdsSet, true)) 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Active Pipeline']}
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-slate-500 cursor-pointer hover:underline"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All Lost Pipeline Leads (Archived Lost)", 
+                                        leads: filteredLeads.filter(isLostLead) 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Lost Pipeline']}
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-green-600 cursor-pointer hover:underline"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All Signed Customers", 
+                                        leads: filteredLeads.filter(isSignedLead) 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Signed Customers']}
                                 </TableCell>
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Avg Attempts'].toFixed(1)}</TableCell>
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Connect Rate'].toFixed(1)}%</TableCell>

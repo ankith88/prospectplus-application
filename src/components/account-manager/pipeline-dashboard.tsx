@@ -31,6 +31,20 @@ import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
 import { LeadEmailDialog } from './lead-email-dialog';
 import { LeadNotesDialog } from './lead-notes-dialog';
 
+export const parseApptDate = (app: any): Date | null => {
+    const raw = app?.date || app?.appointmentDate || app?.duedate;
+    if (!raw) return null;
+    if (raw instanceof Date) return raw;
+    if (typeof raw === 'object' && typeof raw.toDate === 'function') return raw.toDate();
+    if (typeof raw === 'object' && 'seconds' in raw) return new Date(raw.seconds * 1000 + (raw.nanoseconds || 0) / 1000000);
+    try {
+        const parsed = new Date(raw);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    } catch {
+        return null;
+    }
+};
+
 export default function PipelineDashboard() {
     const { userProfile, loading, isSuperAdmin } = useAuth();
     
@@ -338,18 +352,39 @@ export default function PipelineDashboard() {
     }, [leads, filters, searchQuery, accountManagers, isAdmin, selectedAm]);
 
     // Segmentation Logic
+
+    const pastPendingAppointmentsLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.appointments?.some(app => {
+                const apptDate = parseApptDate(app);
+                if (!apptDate) return false;
+                const apptStatus = app.appointmentStatus || 'Pending';
+                return startOfDay(apptDate).getTime() < today && apptStatus === 'Pending';
+            });
+        });
+    }, [filteredLeads]);
+
     const todayAppointmentsLeads = useMemo(() => {
         const today = startOfDay(new Date()).getTime();
         return filteredLeads.filter(lead => {
             return lead.appointments?.some(app => {
-                const d = app.date || app.appointmentDate;
-                if (!d) return false;
+                const apptDate = parseApptDate(app);
+                if (!apptDate) return false;
                 const apptStatus = app.appointmentStatus || 'Pending';
-                try {
-                    return startOfDay(new Date(d)).getTime() === today && apptStatus === 'Pending';
-                } catch(e) {
-                    return false;
-                }
+                return startOfDay(apptDate).getTime() === today && apptStatus === 'Pending';
+            });
+        });
+    }, [filteredLeads]);
+
+    const futureAppointmentsLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.appointments?.some(app => {
+                const apptDate = parseApptDate(app);
+                if (!apptDate) return false;
+                const apptStatus = app.appointmentStatus || 'Pending';
+                return startOfDay(apptDate).getTime() > today && apptStatus === 'Pending';
             });
         });
     }, [filteredLeads]);
@@ -730,11 +765,11 @@ export default function PipelineDashboard() {
                     </div>
                 </div>
             ) : (
-                <Tabs defaultValue="today-appointments" className="flex-1 flex flex-col h-full overflow-hidden">
+                <Tabs defaultValue="appointments" className="flex-1 flex flex-col h-full overflow-hidden">
                     <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
                         <TabsList id="step-retention-segments" className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
-                            <TabsTrigger value="today-appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Today's Appointments <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{todayAppointmentsLeads.length}</Badge>
+                            <TabsTrigger value="appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Appointments <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{pastPendingAppointmentsLeads.length + todayAppointmentsLeads.length + futureAppointmentsLeads.length}</Badge>
                             </TabsTrigger>
                             <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                                 Priority <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{priorityLeads.length}</Badge>
@@ -841,8 +876,41 @@ export default function PipelineDashboard() {
                     </div>
 
                     <div className="flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 overflow-y-auto">
-                        <TabsContent value="today-appointments" className="m-0 h-full">
-                            <LeadGrid leads={todayAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} />
+                        <TabsContent value="appointments" className="m-0 h-full space-y-6">
+                            {pastPendingAppointmentsLeads.length > 0 && (
+                                <div className="space-y-3 pb-4 border-b border-rose-200/80">
+                                    <div className="flex items-center gap-2 px-1">
+                                        <AlertCircle className="h-4 w-4 text-rose-600" />
+                                        <h3 className="text-sm font-bold text-rose-700 uppercase tracking-wider">Past Pending Appointments (Action Required)</h3>
+                                        <Badge variant="secondary" className="bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs">
+                                            {pastPendingAppointmentsLeads.length}
+                                        </Badge>
+                                    </div>
+                                    <LeadGrid leads={pastPendingAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} emptyMessage="No past pending appointments." />
+                                </div>
+                            )}
+
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 px-1">
+                                    <Calendar className="h-4 w-4 text-[#095c7b]" />
+                                    <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider">Today's Appointments</h3>
+                                    <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none font-bold text-xs">
+                                        {todayAppointmentsLeads.length}
+                                    </Badge>
+                                </div>
+                                <LeadGrid leads={todayAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} emptyMessage="No appointments scheduled for today." />
+                            </div>
+
+                            <div className="space-y-3 pt-4 border-t border-slate-200/80">
+                                <div className="flex items-center gap-2 px-1">
+                                    <Calendar className="h-4 w-4 text-[#095c7b]" />
+                                    <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider">Future Appointments</h3>
+                                    <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none font-bold text-xs">
+                                        {futureAppointmentsLeads.length}
+                                    </Badge>
+                                </div>
+                                <LeadGrid leads={futureAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} emptyMessage="No future appointments scheduled." />
+                            </div>
                         </TabsContent>
                         <TabsContent value="priority" className="m-0 h-full">
                             <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} />
@@ -916,7 +984,10 @@ function LeadGrid({
     onAmReassign,
     accountManagers,
     canReassign,
-    canUnassign
+    canUnassign,
+    appointmentColumnHeader,
+    isPastSection = false,
+    emptyMessage = "No leads in this bucket."
 }: { 
     leads: Lead[], 
     viewMode: 'table' | 'accordion' | 'grid' | 'queue', 
@@ -928,10 +999,13 @@ function LeadGrid({
     onAmReassign?: (leadId: string, amName: string) => void,
     accountManagers?: UserProfile[],
     canReassign?: boolean,
-    canUnassign?: boolean
+    canUnassign?: boolean,
+    appointmentColumnHeader?: string,
+    isPastSection?: boolean,
+    emptyMessage?: string
 }) {
     if (leads.length === 0) {
-        return <div className="text-center p-12 text-muted-foreground">No leads in this bucket.</div>;
+        return <div className="text-center p-8 text-muted-foreground bg-white/40 rounded-lg border border-dashed border-slate-200">{emptyMessage}</div>;
     }
 
     // 1. Sort leads
@@ -1028,7 +1102,7 @@ function LeadGrid({
                         <TableHead className="font-bold text-[#095c7b]">Weekly Parcels</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Service Option</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Contact Details</TableHead>
-                        <TableHead className="font-bold text-[#095c7b]">Upcoming Appointment</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">{appointmentColumnHeader || "Upcoming Appointment"}</TableHead>
                         <TableHead className="font-bold text-[#095c7b] text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -1055,23 +1129,41 @@ function LeadGrid({
                         const address = [lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ');
                         
                         const now = new Date();
-                        now.setHours(0, 0, 0, 0);
 
                         const allAppointmentsMap = new Map();
                         lead.appointments?.forEach(a => allAppointmentsMap.set(a.id, a));
                         const allAppointments = Array.from(allAppointmentsMap.values());
 
-                        const upcomingAppointment = allAppointments
-                            .filter(a => {
-                                const d = a.date || a.appointmentDate;
-                                const status = a.appointmentStatus || 'Pending';
-                                return d && new Date(d) >= now && status === 'Pending';
-                            })
-                            .sort((a, b) => {
-                                const dA = a.date || a.appointmentDate;
-                                const dB = b.date || b.appointmentDate;
-                                return new Date(dA!).getTime() - new Date(dB!).getTime();
-                            })[0];
+                        let upcomingAppointment: any = null;
+                        if (isPastSection) {
+                            upcomingAppointment = allAppointments
+                                .filter(a => {
+                                    const parsed = parseApptDate(a);
+                                    const status = a.appointmentStatus || 'Pending';
+                                    return parsed && startOfDay(parsed).getTime() < startOfDay(now).getTime() && status === 'Pending';
+                                })
+                                .sort((a, b) => {
+                                    const dA = parseApptDate(a)?.getTime() || 0;
+                                    const dB = parseApptDate(b)?.getTime() || 0;
+                                    return dB - dA;
+                                })[0];
+                        } else {
+                            upcomingAppointment = allAppointments
+                                .filter(a => {
+                                    const parsed = parseApptDate(a);
+                                    const status = a.appointmentStatus || 'Pending';
+                                    return parsed && startOfDay(parsed).getTime() >= startOfDay(now).getTime() && status === 'Pending';
+                                })
+                                .sort((a, b) => {
+                                    const dA = parseApptDate(a)?.getTime() || 0;
+                                    const dB = parseApptDate(b)?.getTime() || 0;
+                                    return dA - dB;
+                                })[0];
+                        }
+
+                        if (!upcomingAppointment && allAppointments.length > 0) {
+                            upcomingAppointment = allAppointments[0];
+                        }
                             
                         const currentStatus = lead.customerStatus || lead.status;
                         let rowBgClass = "hover:bg-slate-50/80 transition-colors";
@@ -1212,7 +1304,10 @@ function LeadGrid({
                                         <div className="flex items-center gap-1.5 text-xs text-[#095c7b] font-semibold">
                                             <Calendar className="h-3.5 w-3.5 shrink-0" />
                                             <span>
-                                                {format(new Date(upcomingAppointment.date || upcomingAppointment.appointmentDate!), 'MMM d, h:mm a')}
+                                                {(() => {
+                                                    const parsed = parseApptDate(upcomingAppointment);
+                                                    return parsed ? format(parsed, 'MMM d, yyyy h:mm a') : (upcomingAppointment.date || upcomingAppointment.appointmentDate || '-');
+                                                })()}
                                             </span>
                                         </div>
                                     ) : (
@@ -1326,15 +1421,15 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
 
     const upcomingAppointment = allAppointments
         .filter(a => {
-            const d = a.date || a.appointmentDate;
+            const parsed = parseApptDate(a);
             const status = a.appointmentStatus || 'Pending';
-            return d && new Date(d) >= now && status === 'Pending';
+            return parsed && status === 'Pending';
         })
         .sort((a, b) => {
-            const dA = a.date || a.appointmentDate;
-            const dB = b.date || b.appointmentDate;
-            return new Date(dA!).getTime() - new Date(dB!).getTime();
-        })[0];
+            const dA = parseApptDate(a)?.getTime() || 0;
+            const dB = parseApptDate(b)?.getTime() || 0;
+            return dA - dB;
+        })[0] || allAppointments[0];
         
     return (
         <Card className="hover:shadow-md transition-shadow cursor-pointer border-[#095c7b]/10 group flex flex-col justify-between" onClick={onClick}>
@@ -1510,7 +1605,10 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                         <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#095c7b]/10">
                             <Calendar className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
                             <span className="text-xs font-semibold text-[#095c7b]">
-                                Appt: {format(new Date(upcomingAppointment.date || upcomingAppointment.appointmentDate!), 'MMM d, h:mm a')}
+                                Appt: {(() => {
+                                    const parsed = parseApptDate(upcomingAppointment);
+                                    return parsed ? format(parsed, 'MMM d, yyyy h:mm a') : (upcomingAppointment.date || upcomingAppointment.appointmentDate || '-');
+                                })()}
                             </span>
                         </div>
                     )}

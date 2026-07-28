@@ -144,7 +144,9 @@ const isLpoExemptOutcome = (selectedOutcome: string) => {
     normalized === 'no answer' ||
     normalized === 'wrong number' ||
     normalized === 'disconnected' ||
-    normalized === 'lost - no contact'
+    normalized === 'lost - no contact' ||
+    normalized === 'lost - no response' ||
+    normalized === 'dnc - stop list'
   );
 };
 

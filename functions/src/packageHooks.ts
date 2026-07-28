@@ -405,8 +405,16 @@ export async function cacheTopUsersReport(db: admin.firestore.Firestore) {
       const leadPromises = [];
       for (let i = 0; i < top100NsIds.length; i += 30) {
         const chunk = top100NsIds.slice(i, i + 30);
-        companyPromises.push(db.collection('companies').where('internalid', 'in', chunk).get());
-        leadPromises.push(db.collection('leads').where('internalid', 'in', chunk).get());
+        const chunkNum = chunk.map(id => Number(id)).filter(id => !isNaN(id));
+
+        companyPromises.push(db.collection('companies').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get());
+        if (chunkNum.length > 0) {
+          companyPromises.push(db.collection('companies').where('internalid', 'in', chunkNum).get());
+        }
+        leadPromises.push(db.collection('leads').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get());
+        if (chunkNum.length > 0) {
+          leadPromises.push(db.collection('leads').where('internalid', 'in', chunkNum).get());
+        }
       }
 
       const [cSnaps, lSnaps] = await Promise.all([
@@ -418,14 +426,29 @@ export async function cacheTopUsersReport(db: admin.firestore.Firestore) {
         snaps.forEach(snap => {
           snap.docs.forEach((doc: any) => {
             const data = doc.data();
-            if (data.internalid) {
-              companyMap[String(data.internalid)] = {
-                id: doc.id,
-                name: data.companyName || 'Unknown Company',
-                franchisee: data.franchisee || 'Unassigned',
-                type
-              };
-            }
+            const internalId = String(data.internalid || doc.id);
+            const prospectPlusId = data.prospectPlusId || doc.id;
+            const primaryContact = data.contacts && data.contacts.length > 0 ? data.contacts[0] : null;
+            const contactName = primaryContact?.name || data.discoveryData?.personSpokenWithName || data.contactPerson || data.contactName || '';
+            const phone = data.customerPhone || primaryContact?.phone || data.phone || '';
+            const email = data.customerServiceEmail || primaryContact?.email || data.email || '';
+
+            const entry = {
+              id: doc.id,
+              prospectPlusId,
+              name: data.companyName || 'Unknown Company',
+              franchisee: data.franchisee || 'Unassigned',
+              type,
+              contactName,
+              phone,
+              email,
+              csCalled: data.csCalled || false,
+              csCallCount: data.csCallCount || 0,
+              lastContactedDate: data.lastContactedDate || null
+            };
+
+            companyMap[internalId] = entry;
+            companyMap[doc.id] = entry;
           });
         });
       };
@@ -437,9 +460,16 @@ export async function cacheTopUsersReport(db: admin.firestore.Firestore) {
         const company = companyMap[stat.id];
         if (company) {
           stat.companyId = company.id;
+          stat.prospectPlusId = company.prospectPlusId;
           stat.type = company.type;
           stat.name = company.name;
           stat.franchisee = company.franchisee;
+          stat.contactName = company.contactName;
+          stat.phone = company.phone;
+          stat.email = company.email;
+          stat.csCalled = company.csCalled;
+          stat.csCallCount = company.csCallCount;
+          stat.lastContactedDate = company.lastContactedDate;
         }
       });
     }
@@ -453,12 +483,13 @@ export async function cacheTopUsersReport(db: admin.firestore.Firestore) {
         const activitySnap = await db.collection(stat.type)
           .doc(stat.companyId)
           .collection('activity')
-          .orderBy('date', 'desc')
-          .limit(1)
+          .limit(10)
           .get();
 
         if (!activitySnap.empty) {
-          const act = activitySnap.docs[0].data();
+          const activities = activitySnap.docs.map(d => d.data());
+          activities.sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+          const act = activities[0];
           stat.lastContact = {
             date: act.date || null,
             type: act.type || null,

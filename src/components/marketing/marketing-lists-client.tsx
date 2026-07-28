@@ -22,6 +22,7 @@ import { writeBatch, doc } from 'firebase/firestore'
 import { MoveToNurtureDialog } from './move-to-nurture-dialog'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { canAssignToAm } from '@/lib/leave-utils'
+import { isAccountManagerUser } from '@/lib/lead-permissions'
 
 
 export default function MarketingListsClient() {
@@ -762,10 +763,15 @@ export default function MarketingListsClient() {
                 const { leadId, listName } = leadToAddWithNote;
                 try {
                   const author = userProfile?.displayName || userProfile?.email || 'System';
-                  await addLeadsToMarketingList([leadId], listName, author, addLeadNoteText.trim());
+                  const isAccountManager = isAccountManagerUser(userProfile);
+                  await addLeadsToMarketingList([leadId], listName, author, addLeadNoteText.trim(), isAccountManager);
                   setAllLeads(prev => prev.map(lead => {
                     if (lead.id === leadId) {
-                      return { ...lead, marketingLists: [...(lead.marketingLists || []), listName], bucket: 'marketing' }
+                      return { 
+                        ...lead, 
+                        marketingLists: [...(lead.marketingLists || []), listName], 
+                        bucket: isAccountManager ? lead.bucket : 'marketing' 
+                      }
                     }
                     return lead
                   }));

@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { bulkMoveLeadsToNurtureCampaign } from '@/services/firebase';
+import { isAccountManagerUser } from '@/lib/lead-permissions';
 import { Loader2, Sparkles } from 'lucide-react';
 import type { Lead } from '@/lib/types';
 
@@ -61,15 +62,7 @@ export function MoveToNurtureDialog({ leads, isOpen, onOpenChange, onLeadsMoved 
     setIsMoving(true);
     try {
       const author = user?.displayName || user?.email || 'System';
-      const isAccountManager = userProfile?.activeRole === 'Account Manager' || 
-                               userProfile?.activeRole === 'Account Managers' || 
-                               userProfile?.activeRole === 'account managers' ||
-                               userProfile?.role === 'Account Manager' ||
-                               userProfile?.role === 'Account Managers' ||
-                               userProfile?.role === 'account managers' ||
-                               userProfile?.assignedRoles?.includes('Account Manager') ||
-                               userProfile?.assignedRoles?.includes('Account Managers') ||
-                               userProfile?.assignedRoles?.includes('account managers');
+      const isAccountManager = isAccountManagerUser(userProfile);
 
       await bulkMoveLeadsToNurtureCampaign(leads.map(l => l.id), selectedCampaignId, author, noteText.trim(), isAccountManager);
       const selectedCamp = campaigns.find(c => c.id === selectedCampaignId);

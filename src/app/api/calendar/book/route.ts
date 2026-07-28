@@ -246,7 +246,8 @@ export async function POST(req: NextRequest) {
     const updates: any = {
       appointments: FieldValue.arrayUnion(appointmentData),
       outcome: rescheduleAppointmentId ? 'Appointment Rescheduled' : 'Appointment Booked',
-      status: 'Qualified',
+      status: 'Appointment Booked',
+      customerStatus: 'Appointment Booked',
       lastOutcomeAt: new Date().toISOString(),
       timeline: FieldValue.arrayUnion(timelineEntry)
     };

@@ -70,6 +70,14 @@ export function isLeadActionableForUser(
   return isAssignedToUser((lead as any).assignedTo);
 }
 
+export function isAccountManagerUser(userProfile?: UserProfile | null): boolean {
+  if (!userProfile) return false;
+  const role = userProfile.activeRole || userProfile.role || '';
+  const assignedRoles = userProfile.assignedRoles || [];
+  const amRoles = ['Account Manager', 'Account Managers', 'account managers'];
+  return amRoles.includes(role) || assignedRoles.some(r => amRoles.includes(r));
+}
+
 export function canReassignLead(
   userProfile: UserProfile | null | undefined,
   isSuperAdmin: boolean = false
@@ -78,7 +86,18 @@ export function canReassignLead(
   if (isSuperAdmin) return true;
 
   const role = userProfile.activeRole || userProfile.role || '';
-  return ['admin', 'Sales Manager', 'Outbound Admin', 'Lead Gen Admin', 'Marketing Admin'].includes(role);
+  const assignedRoles = userProfile.assignedRoles || [];
+  const allowedRoles = [
+    'admin', 
+    'Sales Manager', 
+    'Outbound Admin', 
+    'Lead Gen Admin', 
+    'Marketing Admin',
+    'Account Manager',
+    'Account Managers',
+    'account managers'
+  ];
+  return allowedRoles.includes(role) || assignedRoles.some(r => allowedRoles.includes(r));
 }
 
 export function canChangeBucket(

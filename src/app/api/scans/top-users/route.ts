@@ -22,17 +22,31 @@ interface PackageRecord {
 
 interface CompanyMapEntry {
   id: string;
+  prospectPlusId?: string;
   name: string;
   franchisee: string;
   type: 'companies' | 'leads';
+  contactName?: string;
+  phone?: string;
+  email?: string;
+  csCalled?: boolean;
+  csCallCount?: number;
+  lastContactedDate?: string | null;
 }
 
 interface CustomerStats {
   id: string;
+  prospectPlusId?: string;
   companyId?: string;
   type?: 'companies' | 'leads';
   name: string;
   franchisee: string;
+  contactName?: string;
+  phone?: string;
+  email?: string;
+  csCalled?: boolean;
+  csCallCount?: number;
+  lastContactedDate?: string | null;
   allTimeBarcodes: number;
   currentWeekScans: number;
   currentMonthScans: number;
@@ -112,14 +126,27 @@ export async function GET(request: Request) {
 
     // Refresh cache if expired, empty, or explicit refresh requested
     if (!cache || (now - cache.timestamp > CACHE_DURATION_MS) || refreshParam) {
-      // For live queries/fallback, limit search window to 30 days to avoid full table scans and timeouts
-      const todayForLimit = new Date();
-      todayForLimit.setHours(23, 59, 59, 999);
-      const limitDate = new Date(todayForLimit.getTime() - 30 * 24 * 60 * 60 * 1000);
+      // Determine search window dynamically to avoid fetching unnecessary historic documents
+      let limitDays = 35;
+      if (startDateParam) {
+        const start = new Date(startDateParam);
+        if (!isNaN(start.getTime())) {
+          const diffDays = Math.ceil((now - start.getTime()) / (1000 * 60 * 60 * 24));
+          limitDays = Math.max(diffDays + 5, 7);
+        }
+      } else if (rangeParam) {
+        if (rangeParam === 'today' || rangeParam === 'yesterday') limitDays = 3;
+        else if (rangeParam === 'this_week' || rangeParam === 'last_7') limitDays = 10;
+        else if (rangeParam === 'prev_and_this_month' || rangeParam === 'last_month') limitDays = 65;
+        else limitDays = 35;
+      }
+
+      const limitDate = new Date(now - limitDays * 24 * 60 * 60 * 1000);
       const limitDateStr = limitDate.toISOString();
 
       const packagesSnap = await db.collection('packages')
         .where('latest_scan_at', '>=', limitDateStr)
+        .select('scans', 'sync_date', 'latest_scan_at')
         .get();
 
       const packages = packagesSnap.docs.map(doc => doc.data() as PackageRecord);
@@ -177,7 +204,7 @@ export async function GET(request: Request) {
 
       if (!statsMap[customerNsId]) {
         statsMap[customerNsId] = {
-          id: customerNsId,
+          id: String(customerNsId),
           name: 'Unlinked Customer',
           franchisee: 'Unassigned',
           allTimeBarcodes: 0,
@@ -245,10 +272,20 @@ export async function GET(request: Request) {
     if (top100NsIds.length > 0) {
       const companyPromises = [];
       const leadPromises = [];
+      const { FieldPath } = require('firebase-admin/firestore');
+
       for (let i = 0; i < top100NsIds.length; i += 30) {
         const chunk = top100NsIds.slice(i, i + 30);
-        companyPromises.push(db.collection('companies').where('internalid', 'in', chunk).get());
-        leadPromises.push(db.collection('leads').where('internalid', 'in', chunk).get());
+        const chunkNum = chunk.map(id => Number(id)).filter(id => !isNaN(id));
+
+        companyPromises.push(db.collection('companies').where(FieldPath.documentId(), 'in', chunk).get());
+        if (chunkNum.length > 0) {
+          companyPromises.push(db.collection('companies').where('internalid', 'in', chunkNum).get());
+        }
+        leadPromises.push(db.collection('leads').where(FieldPath.documentId(), 'in', chunk).get());
+        if (chunkNum.length > 0) {
+          leadPromises.push(db.collection('leads').where('internalid', 'in', chunkNum).get());
+        }
       }
 
       const [cSnaps, lSnaps] = await Promise.all([
@@ -260,14 +297,29 @@ export async function GET(request: Request) {
         snaps.forEach(snap => {
           snap.docs.forEach((doc: any) => {
             const data = doc.data();
-            if (data.internalid) {
-              companyMap[String(data.internalid)] = {
-                id: doc.id,
-                name: data.companyName || 'Unknown Company',
-                franchisee: data.franchisee || 'Unassigned',
-                type
-              };
-            }
+            const internalId = String(data.internalid || doc.id);
+            const prospectPlusId = data.prospectPlusId || doc.id;
+            const primaryContact = data.contacts && data.contacts.length > 0 ? data.contacts[0] : null;
+            const contactName = primaryContact?.name || data.discoveryData?.personSpokenWithName || data.contactPerson || data.contactName || '';
+            const phone = data.customerPhone || primaryContact?.phone || data.phone || '';
+            const email = data.customerServiceEmail || primaryContact?.email || data.email || '';
+
+            const entry: CompanyMapEntry = {
+              id: doc.id,
+              prospectPlusId,
+              name: data.companyName || 'Unknown Company',
+              franchisee: data.franchisee || 'Unassigned',
+              type,
+              contactName,
+              phone,
+              email,
+              csCalled: data.csCalled || false,
+              csCallCount: data.csCallCount || 0,
+              lastContactedDate: data.lastContactedDate || null
+            };
+
+            companyMap[internalId] = entry;
+            companyMap[doc.id] = entry;
           });
         });
       };
@@ -280,14 +332,21 @@ export async function GET(request: Request) {
         const company = companyMap[stat.id];
         if (company) {
           stat.companyId = company.id;
+          stat.prospectPlusId = company.prospectPlusId;
           stat.type = company.type;
           stat.name = company.name;
           stat.franchisee = company.franchisee;
+          stat.contactName = company.contactName;
+          stat.phone = company.phone;
+          stat.email = company.email;
+          stat.csCalled = company.csCalled;
+          stat.csCallCount = company.csCallCount;
+          stat.lastContactedDate = company.lastContactedDate;
         }
       });
     }
 
-    // Fetch last activity for top 100 customers in parallel
+    // Fetch last activity for top 100 customers in parallel (in-memory sort to avoid index errors)
     await Promise.all(top100.map(async (stat) => {
       if (!stat.companyId || !stat.type) {
         stat.lastContact = null;
@@ -297,12 +356,13 @@ export async function GET(request: Request) {
         const activitySnap = await db.collection(stat.type)
           .doc(stat.companyId)
           .collection('activity')
-          .orderBy('date', 'desc')
-          .limit(1)
+          .limit(10)
           .get();
 
         if (!activitySnap.empty) {
-          const act = activitySnap.docs[0].data();
+          const activities = activitySnap.docs.map(d => d.data());
+          activities.sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+          const act = activities[0];
           stat.lastContact = {
             date: act.date || null,
             type: act.type || null,
