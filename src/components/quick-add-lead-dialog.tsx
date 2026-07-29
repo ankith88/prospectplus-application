@@ -483,7 +483,7 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                         </div>
                     )}
                     <div className="space-y-2 pt-2">
-                        <Label htmlFor="bucket-select">Bucket<span className="text-red-500 font-bold ml-1">*</span></Label>
+                        <Label htmlFor="bucket-select">Bucket{!(userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee') && <span className="text-red-500 font-bold ml-1">*</span>}</Label>
                         <Select value={bucket} onValueChange={setBucket}>
                             <SelectTrigger id="bucket-select">
                                 <SelectValue placeholder="Select a bucket" />

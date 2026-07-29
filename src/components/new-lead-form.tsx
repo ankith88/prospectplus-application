@@ -113,7 +113,7 @@ const formSchema = z.object({
   }),
   franchisee: z.string().optional(),
   leadSource: z.string().optional(),
-  bucket: z.enum(['outbound', 'field_sales', 'inbound', 'account_manager', 'customer_success']).optional(),
+  bucket: z.enum(['outbound', 'field_sales', 'inbound', 'account_manager', 'customer_success']).or(z.literal('')).optional(),
   droppedOffBrochures: z.boolean().optional(),
   hadConversationWithContact: z.boolean().optional(),
 }).superRefine((data, ctx) => {
@@ -1644,7 +1644,7 @@ export function NewLeadForm() {
                    name="bucket"
                    render={({ field }) => (
                      <FormItem>
-                       <FormLabel>Bucket<span className="text-red-500 font-bold ml-1">*</span></FormLabel>
+                       <FormLabel>Bucket{!isFranchiseeRole && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value || ''} disabled={isFranchiseeRole}>
                           <FormControl>
                             <SelectTrigger className={isFranchiseeRole ? "bg-slate-100 font-medium cursor-not-allowed opacity-90" : ""}>
