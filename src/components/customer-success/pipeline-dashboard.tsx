@@ -784,7 +784,6 @@ export default function CustomerSuccessDashboard() {
                                     <SelectValue placeholder="Select outcome..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Appointment Booked">Appointment Booked</SelectItem>
                                     <SelectItem value="Busy">Busy</SelectItem>
                                     <SelectItem value="Call Back/Follow-up">Call Back/Follow-up</SelectItem>
                                     <SelectItem value="Disconnected">Disconnected</SelectItem>

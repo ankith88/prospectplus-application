@@ -42,8 +42,6 @@ const formSchema = z.object({
     .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." }),
   phone: z.string().optional(),
   title: z.string().min(1, "Title is required"),
-  accessToLocalMile: z.boolean().default(false),
-  accessToShipMate: z.boolean().default(false),
   isPrimary: z.boolean().default(false),
   isAccountsPayable: z.boolean().default(false),
 })
@@ -64,8 +62,6 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
       email: "",
       phone: "",
       title: "",
-      accessToLocalMile: false,
-      accessToShipMate: false,
       isPrimary: false,
       isAccountsPayable: false,
     },
@@ -78,8 +74,8 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
         title: values.title,
         email: values.email,
         phone: values.phone || '',
-        accessToLocalMile: values.accessToLocalMile ? 'yes' : 'no',
-        accessToShipMate: values.accessToShipMate ? 'yes' : 'no',
+        accessToLocalMile: 'no',
+        accessToShipMate: 'no',
         isPrimary: values.isPrimary,
         isAccountsPayable: values.isAccountsPayable,
       }
@@ -195,40 +191,6 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
                 </FormControl>
                 <div className="space-y-1 leading-none">
                   <FormLabel className="cursor-pointer font-semibold">Accounts Payable</FormLabel>
-                </div>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="accessToLocalMile"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
-                <FormControl>
-                  <Checkbox
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-                <div className="space-y-1 leading-none">
-                  <FormLabel className="cursor-pointer">LocalMile Access</FormLabel>
-                </div>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="accessToShipMate"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
-                <FormControl>
-                  <Checkbox
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-                <div className="space-y-1 leading-none">
-                  <FormLabel className="cursor-pointer">ShipMate Access</FormLabel>
                 </div>
               </FormItem>
             )}

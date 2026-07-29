@@ -108,7 +108,6 @@ type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
 const outcomeGroups = {
   "Positive / Progressing": [
     'Register Now',
-    'Appointment Booked',
     'Email Interested',
     'Qualified - Call Back/Send Info'
   ],
@@ -163,7 +162,6 @@ const outcomeStructure = [
         name: "Progressing",
         items: [
           'Register Now',
-          'Appointment Booked',
           'Email Interested',
           'Qualified - Call Back/Send Info'
         ]

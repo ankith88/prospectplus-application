@@ -3423,7 +3423,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <h1 className="text-3xl font-bold tracking-tight">{lead.companyName}</h1>
                 {/* Row 1: Primary Status, Lead Type, Ownership & Health Score */}
                 <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                    <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot lead') ? 'Hot Lead' : (lead.customerStatus || lead.status) as LeadStatus} />
+                    <LeadStatusBadge status={
+                        (lead.customerStatus?.trim() === 'SUSPECT-Unqualified' || lead.customerStatus?.trim() === 'SUSPECT - Unqualified' || lead.customerStatus?.trim().toUpperCase() === 'SUSPECT-UNQUALIFIED')
+                            ? 'New'
+                            : (lead.customerStatus?.toLowerCase().includes('hot lead') ? 'Hot Lead' : (lead.customerStatus || lead.status) as LeadStatus)
+                    } />
 
                     {/* Interactive Lead Type Badge Dropdown */}
                     <Select 

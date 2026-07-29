@@ -139,7 +139,7 @@ export function StatusOutcomeBanner({ className = '' }: { className?: string }) 
               </Badge>
             </h4>
             <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight mt-0.5">
-              Lead statuses transition automatically when dialers log specific call outcomes (e.g. Appointment Booked → Appointment Booked).
+              Lead statuses transition automatically when dialers log specific call outcomes (e.g. Call Back/Follow-up → High Touch).
             </p>
           </div>
         </div>
