@@ -30,7 +30,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -634,6 +634,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <SidebarMenuSub>
                     {isMarketingAdmin && (
                       <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/lead-campaigns")}>
+                          <Link href="/admin/marketing/lead-campaigns">
+                            <Tag className="h-4 w-4" />
+                            <span>Lead Campaigns</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {isMarketingAdmin && (
+                      <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/campaigns")}>
                           <Link href="/admin/marketing/campaigns">
                             <Mail className="h-4 w-4" />
@@ -663,7 +673,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </SidebarMenuSubItem>
                     )}
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing") && !isActive("/admin/marketing/lists") && !isActive("/admin/marketing/campaigns") && !isActive("/admin/marketing/nurture-journeys") && !isActive("/admin/marketing/nurture-report")}>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing") && !isActive("/admin/marketing/lists") && !isActive("/admin/marketing/campaigns") && !isActive("/admin/marketing/nurture-journeys") && !isActive("/admin/marketing/nurture-report") && !isActive("/admin/marketing/lead-campaigns")}>
                         <Link href="/admin/marketing">
                           <FileText className="h-4 w-4" />
                           <span>Templates & Library</span>

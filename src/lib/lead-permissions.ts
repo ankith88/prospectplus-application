@@ -108,7 +108,8 @@ export function canChangeBucket(
   if (isSuperAdmin) return true;
 
   const role = userProfile.activeRole || userProfile.role || '';
-  return ['admin', 'Sales Manager', 'Outbound Admin', 'Lead Gen Admin', 'Marketing Admin', 'Marketing Manager'].includes(role);
+  if (role === 'Outbound Admin') return false;
+  return ['admin', 'Sales Manager', 'Lead Gen Admin', 'Marketing Admin', 'Marketing Manager'].includes(role);
 }
 
 export function isSaleDealsVisible(

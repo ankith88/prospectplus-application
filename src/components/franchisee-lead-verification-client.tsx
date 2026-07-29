@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -8,10 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader } from '@/components/ui/loader';
-import { getLeadsFromFirebase, updateLeadInFirebase, logActivity, getAllFranchisees } from '@/services/firebase';
-import type { Lead, Franchisee } from '@/lib/types';
+import { getLeadsFromFirebase, getLeadContacts, logActivity, getAllFranchisees, getAllUsers } from '@/services/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
+import type { Lead, Franchisee, UserProfile } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Phone, Mail, CheckCircle, ShieldAlert, UserCheck } from 'lucide-react';
+import { Phone, Mail, CheckCircle, ShieldAlert, UserCheck, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import {
   Dialog,
@@ -22,6 +24,18 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const isAssignedToUserOrAm = (lead: Lead): boolean => {
+  const am = lead.accountManagerAssigned?.trim();
+  const dialer = lead.dialerAssigned?.trim();
+
+  const isAmAssigned = Boolean(am && am !== 'Unassigned' && am !== 'unassigned');
+  const isDialerAssigned = Boolean(dialer && dialer !== 'Unassigned' && dialer !== 'unassigned' && dialer !== 'Aleyna Harnett');
+
+  return isAmAssigned || isDialerAssigned;
+};
 
 export default function FranchiseeLeadVerificationClient() {
   const { userProfile, isSuperAdmin } = useAuth();
@@ -30,6 +44,7 @@ export default function FranchiseeLeadVerificationClient() {
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [franchisees, setFranchisees] = useState<Franchisee[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingLeadId, setProcessingLeadId] = useState<string | null>(null);
 
@@ -39,28 +54,53 @@ export default function FranchiseeLeadVerificationClient() {
   const [emailNotes, setEmailNotes] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
+  // Assign Lead Modal state
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [selectedLeadForAssign, setSelectedLeadForAssign] = useState<Lead | null>(null);
+  const [targetBucket, setTargetBucket] = useState<'outbound' | 'account_manager'>('outbound');
+  const [selectedAssignee, setSelectedAssignee] = useState<string>('');
+  const [isAssigning, setIsAssigning] = useState(false);
+
   const isAdminOrSuperAdmin = 
     isSuperAdmin || 
     userProfile?.activeRole === 'admin' || 
-    userProfile?.activeRole === 'superadmin' || 
+    (userProfile?.activeRole as string) === 'superadmin' || 
     canView('franchiseeVerification');
 
   const fetchVerificationLeads = useCallback(async () => {
     setLoading(true);
     try {
-      const [allLeads, frs] = await Promise.all([
-        getLeadsFromFirebase(),
-        getAllFranchisees()
+      const [allLeads, frs, allSystemUsers] = await Promise.all([
+        getLeadsFromFirebase({ summary: true }),
+        getAllFranchisees(),
+        getAllUsers()
       ]);
       setFranchisees(frs);
+      setUsers(allSystemUsers.filter(u => !u.disabled));
 
-      // Filter leads assigned to Aleyna for check or flagged as franchiseeReviewPending
-      const pendingLeads = allLeads.filter(l => 
-        l.dialerAssigned === 'Aleyna Harnett' || 
-        l.franchiseeReviewPending === true ||
-        (l.customerSource === 'Franchisee Generated' && l.bucket === 'outbound')
+      // Filter leads: candidate for verification AND NOT YET ASSIGNED to a user or account manager
+      const pendingLeads = allLeads.filter(l => {
+        const isCandidate = 
+          l.dialerAssigned === 'Aleyna Harnett' || 
+          l.franchiseeReviewPending === true ||
+          (l.customerSource === 'Franchisee Generated' && l.bucket === 'outbound');
+
+        return isCandidate && !isAssignedToUserOrAm(l);
+      });
+
+      // Fetch contacts only for the filtered pending leads
+      const pendingLeadsWithContacts = await Promise.all(
+        pendingLeads.map(async (l) => {
+          try {
+            const contacts = await getLeadContacts(l.id);
+            return { ...l, contacts, contactCount: contacts.length };
+          } catch {
+            return l;
+          }
+        })
       );
-      setLeads(pendingLeads);
+
+      setLeads(pendingLeadsWithContacts);
     } catch (error) {
       console.error('Failed to fetch verification leads:', error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not load franchisee leads for verification.' });
@@ -76,6 +116,23 @@ export default function FranchiseeLeadVerificationClient() {
       setLoading(false);
     }
   }, [isAdminOrSuperAdmin, fetchVerificationLeads]);
+
+  const filteredAssignees = useMemo(() => {
+    const sortedUsers = [...users].sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+    if (targetBucket === 'account_manager') {
+      const ams = sortedUsers.filter(u => 
+        u.assignedRoles?.some(r => ['Account Manager', 'Account Managers', 'account managers'].includes(r)) ||
+        u.activeRole === 'Account Manager' || u.activeRole === 'admin' || u.activeRole === 'superadmin'
+      );
+      return ams.length > 0 ? ams : sortedUsers;
+    } else {
+      const reps = sortedUsers.filter(u => 
+        u.assignedRoles?.some(r => ['user', 'Dialer', 'dialers', 'Outbound Rep'].includes(r)) ||
+        u.activeRole === 'user' || u.activeRole === 'admin' || u.activeRole === 'superadmin'
+      );
+      return reps.length > 0 ? reps : sortedUsers;
+    }
+  }, [users, targetBucket]);
 
   if (!isAdminOrSuperAdmin) {
     return (
@@ -93,8 +150,22 @@ export default function FranchiseeLeadVerificationClient() {
     );
   }
 
-  const handleMoveBucket = async (lead: Lead, targetBucket: 'outbound' | 'account_manager') => {
-    setProcessingLeadId(lead.id);
+  const handleOpenAssignModal = (lead: Lead, bucket: 'outbound' | 'account_manager') => {
+    setSelectedLeadForAssign(lead);
+    setTargetBucket(bucket);
+    setSelectedAssignee('');
+    setAssignModalOpen(true);
+  };
+
+  const handleConfirmAssignment = async () => {
+    if (!selectedLeadForAssign) return;
+    if (!selectedAssignee) {
+      toast({ variant: 'destructive', title: 'Assignee Required', description: 'Please select a user or account manager to assign.' });
+      return;
+    }
+
+    setProcessingLeadId(selectedLeadForAssign.id);
+    setIsAssigning(true);
     try {
       const updateData: Partial<Lead> = {
         bucket: targetBucket,
@@ -102,30 +173,37 @@ export default function FranchiseeLeadVerificationClient() {
       };
 
       if (targetBucket === 'account_manager') {
+        updateData.accountManagerAssigned = selectedAssignee;
+        updateData.salesRepAssigned = selectedAssignee;
         updateData.isPriority = true;
+      } else {
+        updateData.dialerAssigned = selectedAssignee;
+        updateData.salesRepAssigned = selectedAssignee;
       }
 
-      await updateLeadInFirebase(lead.id, updateData);
-      await logActivity(lead.id, {
+      await updateDoc(doc(firestore, 'leads', selectedLeadForAssign.id), updateData as any);
+      await logActivity(selectedLeadForAssign.id, {
         type: 'Update',
-        notes: `Franchisee lead verified by ${userProfile?.displayName || 'Admin'} and moved to ${targetBucket === 'account_manager' ? 'Account Manager' : 'Outbound'} bucket.`,
+        notes: `Franchisee lead verified by ${userProfile?.displayName || 'Admin'} and assigned to ${selectedAssignee} in ${targetBucket === 'account_manager' ? 'Account Manager' : 'Outbound'} bucket.`,
         author: userProfile?.displayName || 'Admin'
       });
 
       toast({
-        title: 'Lead Bucket Updated',
-        description: `Lead "${lead.companyName}" successfully moved to ${targetBucket === 'account_manager' ? 'Account Manager' : 'Outbound'} bucket.`,
+        title: 'Lead Verified & Assigned',
+        description: `Lead "${selectedLeadForAssign.companyName}" successfully moved to ${targetBucket === 'account_manager' ? 'Account Manager' : 'Outbound'} bucket and assigned to ${selectedAssignee}.`,
       });
 
-      setLeads(prev => prev.filter(l => l.id !== lead.id));
+      setLeads(prev => prev.filter(l => l.id !== selectedLeadForAssign.id));
+      setAssignModalOpen(false);
     } catch (err) {
-      console.error('Failed to update lead bucket:', err);
+      console.error('Failed to update lead assignment:', err);
       toast({
         variant: 'destructive',
-        title: 'Update Failed',
-        description: 'Could not move lead bucket.',
+        title: 'Assignment Failed',
+        description: 'Could not assign lead to selected user.',
       });
     } finally {
+      setIsAssigning(false);
       setProcessingLeadId(null);
     }
   };
@@ -186,7 +264,7 @@ export default function FranchiseeLeadVerificationClient() {
             <UserCheck className="w-7 h-7" /> Franchisee Lead Verification
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Review franchisee-entered leads assigned for check, verify interaction details, and assign to appropriate pipeline buckets.
+            Review unassigned franchisee-entered leads, verify interaction details, and assign them to the appropriate user or Account Manager.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchVerificationLeads} disabled={loading}>
@@ -202,18 +280,18 @@ export default function FranchiseeLeadVerificationClient() {
         <Card className="border-dashed">
           <CardContent className="p-12 text-center space-y-3">
             <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto" />
-            <h3 className="text-lg font-semibold">No Pending Franchisee Leads</h3>
+            <h3 className="text-lg font-semibold">No Unassigned Franchisee Leads</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              All franchisee-entered leads have been checked and processed.
+              All franchisee-entered leads have been checked, verified, and assigned to users or account managers.
             </p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Leads Pending Verification ({leads.length})</CardTitle>
+            <CardTitle>Unassigned Leads Pending Verification ({leads.length})</CardTitle>
             <CardDescription>
-              Review leads entered by franchisees. Move priority/verified leads to Account Manager or Outbound buckets.
+              Review leads entered by franchisees that have not yet been assigned to a user or account manager. Select a bucket and assign a user to complete verification.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -246,8 +324,8 @@ export default function FranchiseeLeadVerificationClient() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs">
-                        <p className="font-medium text-slate-900">{lead.contact?.firstName} {lead.contact?.lastName}</p>
-                        <p className="text-muted-foreground">{lead.customerPhone || lead.contact?.phone || 'No phone'}</p>
+                        <p className="font-medium text-slate-900">{(lead as any).contact?.firstName || lead.contacts?.[0]?.firstName} {(lead as any).contact?.lastName || lead.contacts?.[0]?.lastName}</p>
+                        <p className="text-muted-foreground">{lead.customerPhone || (lead as any).contact?.phone || lead.contacts?.[0]?.phone || 'No phone'}</p>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1 text-xs">
@@ -271,7 +349,7 @@ export default function FranchiseeLeadVerificationClient() {
                           variant="outline"
                           className="border-emerald-500 text-emerald-700 hover:bg-emerald-50"
                           disabled={processingLeadId === lead.id}
-                          onClick={() => handleMoveBucket(lead, 'account_manager')}
+                          onClick={() => handleOpenAssignModal(lead, 'account_manager')}
                         >
                           AM Bucket
                         </Button>
@@ -279,7 +357,7 @@ export default function FranchiseeLeadVerificationClient() {
                           size="sm"
                           variant="outline"
                           disabled={processingLeadId === lead.id}
-                          onClick={() => handleMoveBucket(lead, 'outbound')}
+                          onClick={() => handleOpenAssignModal(lead, 'outbound')}
                         >
                           Outbound Bucket
                         </Button>
@@ -300,6 +378,66 @@ export default function FranchiseeLeadVerificationClient() {
           </CardContent>
         </Card>
       )}
+
+      {/* Process & Assign Lead Modal */}
+      <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
+              <UserPlus className="w-5 h-5 text-primary" /> Process & Assign Lead
+            </DialogTitle>
+            <DialogDescription>
+              Assign <strong>{selectedLeadForAssign?.companyName}</strong> to a bucket and select the responsible user or Account Manager.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Target Bucket</Label>
+              <Select 
+                value={targetBucket} 
+                onValueChange={(val: 'outbound' | 'account_manager') => {
+                  setTargetBucket(val);
+                  setSelectedAssignee('');
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Bucket" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="account_manager">Account Manager Bucket</SelectItem>
+                  <SelectItem value="outbound">Outbound Sales Bucket</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>
+                {targetBucket === 'account_manager' ? 'Assign Account Manager' : 'Assign Outbound Sales Rep / User'}
+              </Label>
+              <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
+                <SelectTrigger>
+                  <SelectValue placeholder={targetBucket === 'account_manager' ? "Select Account Manager..." : "Select Outbound User..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredAssignees.map(u => (
+                    <SelectItem key={u.uid} value={u.displayName || u.email}>
+                      {u.displayName || u.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleConfirmAssignment} disabled={isAssigning || !selectedAssignee}>
+              {isAssigning ? <Loader /> : 'Confirm & Assign'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Email Franchisee Modal */}
       <Dialog open={emailModalOpen} onOpenChange={setEmailModalOpen}>

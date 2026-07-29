@@ -33,6 +33,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { LeadStatusBadge } from '../lead-status-badge';
 import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
+import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (
   <Popover>
@@ -267,6 +268,12 @@ export default function AMReportsDashboard() {
     const [selectedBucket, setSelectedBucket] = useState<string[]>([]);
     const [selectedLeadType, setSelectedLeadType] = useState<string[]>([]);
     const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
+    const [selectedCampaign, setSelectedCampaign] = useState<string>('all');
+    const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
+
+    useEffect(() => {
+        getLeadCampaigns().then(camps => setAvailableCampaigns(camps.filter(c => c.isActive))).catch(console.error);
+    }, []);
 
     const [activityDateRange, setActivityDateRange] = useState<DateRange | undefined>({
         from: startOfMonth(new Date()),
@@ -280,6 +287,7 @@ export default function AMReportsDashboard() {
     const [appliedBucket, setAppliedBucket] = useState<string[]>([]);
     const [appliedLeadType, setAppliedLeadType] = useState<string[]>([]);
     const [appliedStatus, setAppliedStatus] = useState<string[]>([]);
+    const [appliedCampaign, setAppliedCampaign] = useState<string>('all');
     const [appliedActivityDateRange, setAppliedActivityDateRange] = useState<DateRange | undefined>({
         from: startOfMonth(new Date()),
         to: endOfMonth(new Date())
@@ -292,6 +300,7 @@ export default function AMReportsDashboard() {
             JSON.stringify(selectedBucket) !== JSON.stringify(appliedBucket) ||
             JSON.stringify(selectedLeadType) !== JSON.stringify(appliedLeadType) ||
             JSON.stringify(selectedStatus) !== JSON.stringify(appliedStatus) ||
+            selectedCampaign !== appliedCampaign ||
             activityDateRange?.from?.getTime() !== appliedActivityDateRange?.from?.getTime() ||
             activityDateRange?.to?.getTime() !== appliedActivityDateRange?.to?.getTime() ||
             leadEnteredDateRange?.from?.getTime() !== appliedLeadEnteredDateRange?.from?.getTime() ||
@@ -302,6 +311,7 @@ export default function AMReportsDashboard() {
         selectedBucket, appliedBucket,
         selectedLeadType, appliedLeadType,
         selectedStatus, appliedStatus,
+        selectedCampaign, appliedCampaign,
         activityDateRange, appliedActivityDateRange,
         leadEnteredDateRange, appliedLeadEnteredDateRange
     ]);
@@ -312,6 +322,7 @@ export default function AMReportsDashboard() {
         setAppliedBucket(selectedBucket);
         setAppliedLeadType(selectedLeadType);
         setAppliedStatus(selectedStatus);
+        setAppliedCampaign(selectedCampaign);
         setAppliedActivityDateRange(activityDateRange);
         setAppliedLeadEnteredDateRange(leadEnteredDateRange);
     };
@@ -636,6 +647,8 @@ export default function AMReportsDashboard() {
             if (appliedFranchisee.length > 0 && lead.franchisee && !appliedFranchisee.includes(lead.franchisee)) return false;
             if (appliedBucket.length > 0 && lead.bucket && !appliedBucket.includes(lead.bucket)) return false;
             if (appliedLeadType.length > 0 && (lead.leadType || 'Unknown') && !appliedLeadType.includes(lead.leadType || 'Unknown')) return false;
+            
+            if (appliedCampaign !== 'all' && (lead.campaign || (lead as any).customerCampaign) !== appliedCampaign) return false;
             
             const status = isSignedLead(lead) ? 'Signed' : (lead.customerStatus || lead.status);
             if (appliedStatus.length > 0 && status && !appliedStatus.includes(status)) return false;
@@ -1482,6 +1495,7 @@ export default function AMReportsDashboard() {
         setSelectedBucket([]);
         setSelectedLeadType([]);
         setSelectedStatus([]);
+        setSelectedCampaign('all');
         setActivityDateRange(undefined);
         setLeadEnteredDateRange(undefined);
         setSelectedAm('all');
@@ -1490,6 +1504,7 @@ export default function AMReportsDashboard() {
         setAppliedBucket([]);
         setAppliedLeadType([]);
         setAppliedStatus([]);
+        setAppliedCampaign('all');
         setAppliedActivityDateRange(undefined);
         setAppliedLeadEnteredDateRange(undefined);
         setAppliedAm('all');
@@ -1634,6 +1649,22 @@ export default function AMReportsDashboard() {
                                 onSelectedChange={setSelectedStatus} 
                                 placeholder="All Statuses..." 
                             />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500">Campaign</Label>
+                            <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
+                                <SelectTrigger className="h-9 bg-white text-xs">
+                                    <SelectValue placeholder="All Campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {availableCampaigns.map((c) => (
+                                        <SelectItem key={c.id} value={c.name}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
                     <div className="flex justify-between items-center pt-2">

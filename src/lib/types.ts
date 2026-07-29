@@ -87,6 +87,7 @@ export interface EmailRecord {
 
 export interface Activity {
   id: string
+  leadId?: string
   type: 'Call' | 'Email' | 'Meeting' | 'Update'
   date: string
   duration?: string // e.g., "5m 32s"
@@ -164,6 +165,7 @@ export interface Contact {
   id: string
   name: string
   firstName?: string
+  lastName?: string
   title: string
   email: string
   phone: string

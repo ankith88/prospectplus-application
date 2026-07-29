@@ -362,7 +362,8 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                 phone: customerPhone
             },
             dialerAssigned: (userProfile.activeRole === 'Outbound Admin' || userProfile.activeRole === 'admin') ? '' : userProfile.displayName,
-            campaign: userProfile.activeRole?.includes('Field Sales') ? 'Door-to-Door' : 'Outbound',
+            campaign: userProfile.activeRole?.includes('Field Sales') ? 'Door-to-Door' : (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee' ? 'Franchisee Generated' : 'Outbound'),
+            leadSource: (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee') ? '-4' : undefined,
             bucket: userProfile.activeRole === 'Outbound Admin' ? 'outbound' : bucket,
             franchiseeInternalId,
             franchiseeName

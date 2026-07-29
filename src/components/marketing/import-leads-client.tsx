@@ -24,9 +24,11 @@ import { firestore } from '@/lib/firebase';
 import { collection, getDocs, doc, writeBatch, serverTimestamp, query, where, limit, addDoc } from 'firebase/firestore';
 import { canAssignToAm } from '@/lib/leave-utils';
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName, cleanAbn } from '@/lib/duplicate-detector';
+import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 
 const standardFields = [
   { key: 'companyName', label: 'Company Name', required: true, desc: 'Name of the business' },
+  { key: 'campaign', label: 'Campaign / Source', required: false, desc: 'Lead campaign tag' },
   { key: 'websiteUrl', label: 'Website URL', required: false, desc: 'e.g. https://example.com' },
   { key: 'customerPhone', label: 'Company Phone', required: true, desc: 'Main business phone' },
   { key: 'customerServiceEmail', label: 'Company Email', required: true, desc: 'Main business email' },
@@ -84,6 +86,7 @@ export function ImportLeadsClient() {
   const [franchisees, setFranchisees] = useState<Franchisee[]>([]);
   const [journeys, setJourneys] = useState<{ id: string; name: string }[]>([]);
   const [existingLists, setExistingLists] = useState<string[]>([]);
+  const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
   
   // Step 2 configurations
   const [selectedBucket, setSelectedBucket] = useState<LeadBucket>('outbound');
@@ -133,9 +136,10 @@ export function ImportLeadsClient() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [users, frs] = await Promise.all([getAllUsers(), getAllFranchisees()]);
+        const [users, frs, camps] = await Promise.all([getAllUsers(), getAllFranchisees(), getLeadCampaigns()]);
         setAllUsers(users);
         setFranchisees(frs);
+        setAvailableCampaigns(camps.filter(c => c.isActive));
         
         // Fetch journeys
         const journeysSnap = await getDocs(collection(firestore, 'Journeys'));
@@ -725,31 +729,33 @@ export function ImportLeadsClient() {
           })
         };
 
+        const effectiveCampaign = getVal('campaign') || campaignName;
+
         // Bucket specific fields
         if (selectedBucket === 'outbound') {
-          leadData.campaign = campaignName || 'Bulk Import';
+          leadData.campaign = effectiveCampaign || 'Bulk Import';
           if (dialerAssigned) leadData.dialerAssigned = dialerAssigned;
           if (salesRepAssigned) leadData.salesRepAssigned = salesRepAssigned;
         } else if (selectedBucket === 'field_sales') {
-          leadData.campaign = campaignName || 'Door-to-Door';
+          leadData.campaign = effectiveCampaign || 'Door-to-Door';
           if (fieldRepAssigned) leadData.fieldRepAssigned = fieldRepAssigned;
           if (salesRepAssigned) leadData.salesRepAssigned = salesRepAssigned;
         } else if (selectedBucket === 'inbound') {
-          leadData.campaign = campaignName || 'Inbound';
+          leadData.campaign = effectiveCampaign || 'Inbound';
           if (salesRepAssigned) leadData.salesRepAssigned = salesRepAssigned;
         } else if (selectedBucket === 'account_manager') {
-          leadData.campaign = campaignName || 'Account Manager Generated';
+          leadData.campaign = effectiveCampaign || 'Account Manager Generated';
           if (accountManagerAssigned) leadData.accountManagerAssigned = accountManagerAssigned;
         } else if (selectedBucket === 'customer_success') {
-          leadData.campaign = campaignName || 'Customer Success Generated';
+          leadData.campaign = effectiveCampaign || 'Customer Success Generated';
           if (customerSuccessAssigned) leadData.customerSuccessAssigned = customerSuccessAssigned;
         } else if (selectedBucket === 'nurture') {
-          leadData.campaign = campaignName || 'Nurture Campaign';
+          leadData.campaign = effectiveCampaign || 'Nurture Campaign';
           if (targetJourneyId) {
             leadData.activeJourneys = [targetJourneyId];
           }
         } else if (selectedBucket === 'marketing') {
-          leadData.campaign = campaignName || 'Marketing Campaign';
+          leadData.campaign = effectiveCampaign || 'Marketing Campaign';
           if (marketingListName) {
             leadData.marketingLists = [marketingListName];
           }
@@ -1065,13 +1071,37 @@ export function ImportLeadsClient() {
               {/* Campaign Name */}
               <div className="space-y-2">
                 <Label htmlFor="campaign-input" className="font-semibold text-slate-700">Campaign / Source Name</Label>
-                <Input 
-                  id="campaign-input" 
-                  value={campaignName} 
-                  onChange={(e) => setCampaignName(e.target.value)} 
-                  placeholder="e.g. June Cold Campaign" 
-                  className="bg-white"
-                />
+                {availableCampaigns.length > 0 ? (
+                  <div className="space-y-2">
+                    <Select value={campaignName} onValueChange={(val) => setCampaignName(val)}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Select or type campaign name" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCampaigns.map((c) => (
+                          <SelectItem key={c.id} value={c.name}>
+                            {c.name} {c.isBuiltIn ? '(Built-In)' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input 
+                      id="campaign-input" 
+                      value={campaignName} 
+                      onChange={(e) => setCampaignName(e.target.value)} 
+                      placeholder="Or enter custom campaign name" 
+                      className="bg-white text-xs"
+                    />
+                  </div>
+                ) : (
+                  <Input 
+                    id="campaign-input" 
+                    value={campaignName} 
+                    onChange={(e) => setCampaignName(e.target.value)} 
+                    placeholder="e.g. June Cold Campaign" 
+                    className="bg-white"
+                  />
+                )}
               </div>
 
               {/* Lead Source */}

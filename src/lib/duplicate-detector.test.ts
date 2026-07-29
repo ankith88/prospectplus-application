@@ -54,11 +54,11 @@ assert.ok(tripleMatch.matchedCriteria.includes('Email Domain'));
 const variationMatch = evaluateDuplicateScore(
   {
     companyName: 'MailPlus',
-    address: { street: '10 George St', city: 'Waterloo', state: 'NSW', zip: '2017' }
+    address: { street: '10 George St', city: 'Waterloo', state: 'NSW', zip: '2017', country: 'Australia' }
   },
   {
     companyName: 'MailPlus Pty. Ltd. - Waterloo',
-    address: { street: '10 George St', city: 'Waterloo', state: 'NSW', zip: '2017' }
+    address: { street: '10 George St', city: 'Waterloo', state: 'NSW', zip: '2017', country: 'Australia' }
   }
 );
 assert.strictEqual(variationMatch.isMatch, true);

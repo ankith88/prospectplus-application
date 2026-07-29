@@ -383,6 +383,36 @@ export default function LeadsClientPage({
 
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
+
+  const activeUserRoleUserNames = useMemo(() => {
+    const set = new Set<string>();
+    allDialers.forEach(u => {
+      if (u.disabled) return;
+      if (userProfile?.activeRole === 'Outbound Admin' && u.uid === 'mrSuI8158RN5vMumjIBq7Za8uTg2') return;
+      const role = u.role || u.activeRole || '';
+      const assignedRoles = u.assignedRoles || [];
+      const isUserRole = role === 'user' || role.toLowerCase() === 'user' || assignedRoles.some(r => r === 'user' || r.toLowerCase() === 'user');
+      if (isUserRole) {
+        if (u.displayName) set.add(u.displayName);
+        const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ');
+        if (fullName) set.add(fullName);
+        if (u.email) set.add(u.email);
+      }
+    });
+    return set;
+  }, [allDialers, userProfile]);
+
+  const reassignUserList = useMemo(() => {
+    if (userProfile?.activeRole === 'Outbound Admin') {
+      return allDialers.filter(u => {
+        if (u.disabled || u.uid === 'mrSuI8158RN5vMumjIBq7Za8uTg2') return false;
+        const role = u.role || u.activeRole || '';
+        const assignedRoles = u.assignedRoles || [];
+        return role === 'user' || role.toLowerCase() === 'user' || assignedRoles.some(r => r === 'user' || r.toLowerCase() === 'user');
+      });
+    }
+    return allDialers;
+  }, [allDialers, userProfile]);
   const [loading, setLoading] = useState(true);
   const { setLoadTime, setPageName, setIsCustom } = usePerformance();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -821,6 +851,13 @@ export default function LeadsClientPage({
       if (isAccountManager && lead.accountManagerAssigned !== loggedInAmName) {
           return false;
       }
+
+      if (userProfile?.activeRole === 'Outbound Admin') {
+        const assignedRep = lead.dialerAssigned || lead.salesRepAssigned;
+        if (!assignedRep || assignedRep === 'mrSuI8158RN5vMumjIBq7Za8uTg2' || !activeUserRoleUserNames.has(assignedRep)) {
+          return false;
+        }
+      }
         
       const companyNameMatch = filters.companyName ? (lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) || (lead.prospectPlusId && lead.prospectPlusId.toLowerCase().includes(filters.companyName.toLowerCase()))) : true;
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
@@ -1192,6 +1229,10 @@ export default function LeadsClientPage({
 
 
   const handleBulkUnassign = async (idsToUnassign: string[]) => {
+    if (userProfile?.activeRole === 'Outbound Admin') {
+      toast({ variant: 'destructive', title: 'Action Denied', description: 'Outbound Admins cannot unassign leads.' });
+      return;
+    }
     if (idsToUnassign.length === 0) return;
     try {
       const isInbound = filters.bucket === 'inbound';
@@ -1286,6 +1327,10 @@ export default function LeadsClientPage({
   };
 
   const handleUnassign = async (leadId: string) => {
+    if (userProfile?.activeRole === 'Outbound Admin') {
+      toast({ variant: 'destructive', title: 'Action Denied', description: 'Outbound Admins cannot unassign leads.' });
+      return;
+    }
     try {
       const isInbound = filters.bucket === 'inbound';
       await updateLeadDialerRep(leadId, null, isInbound);
@@ -1429,8 +1474,8 @@ export default function LeadsClientPage({
     };
 
     const openMoveToNurtureDialog = () => {
-        if (userProfile?.activeRole === 'user') {
-            toast({ variant: 'destructive', title: 'Action Denied', description: 'Dialers are not permitted to manually enroll leads in nurture campaigns.' });
+        if (userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Outbound Admin') {
+            toast({ variant: 'destructive', title: 'Action Denied', description: 'You are not permitted to manually move leads to nurture.' });
             return;
         }
         const leads = allLeads.filter(l => selectedLeads.includes(l.id));
@@ -1447,7 +1492,7 @@ export default function LeadsClientPage({
     };
 
     const openAllocateBucketDialog = () => {
-        if (!canChangeBucket(userProfile, isSuperAdmin)) {
+        if (userProfile?.activeRole === 'Outbound Admin' || !canChangeBucket(userProfile, isSuperAdmin)) {
             toast({ variant: 'destructive', title: 'Action Denied', description: 'You do not have permission to change lead buckets.' });
             return;
         }
@@ -1500,7 +1545,7 @@ export default function LeadsClientPage({
     return Array.from(uniqueNames).map(name => ({ value: name!, label: name! })).sort((a,b) => a.label.localeCompare(b.label));
   }, [allDialers]);
   
-  const isAdminView = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin' || userProfile?.activeRole === 'Sales Manager';
+  const isAdminView = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin' || userProfile?.activeRole === 'Sales Manager' || userProfile?.activeRole === 'Outbound Admin';
 
   if (loading || authLoading) {
     return (
@@ -2114,20 +2159,24 @@ export default function LeadsClientPage({
                            <Trash2 className="mr-2 h-4 w-4" />
                            Delete ({selectedLeads.length})
                        </Button>
-                        <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
-                            <Users className="h-4 w-4 mr-2 text-primary" />
-                            Allocate Bucket ({selectedLeads.length})
-                        </Button>
-                        {userProfile?.activeRole !== 'user' && (
+                        {userProfile?.activeRole !== 'Outbound Admin' && (
+                          <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
+                              <Users className="h-4 w-4 mr-2 text-primary" />
+                              Allocate Bucket ({selectedLeads.length})
+                          </Button>
+                        )}
+                        {userProfile?.activeRole !== 'user' && userProfile?.activeRole !== 'Outbound Admin' && (
                           <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
                               <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
                               Move to Nurture ({selectedLeads.length})
                           </Button>
                         )}
-                        <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedLeads)}>
-                            <UserX className="mr-2 h-4 w-4" />
-                            Unassign ({selectedLeads.length})
-                        </Button>
+                        {userProfile?.activeRole !== 'Outbound Admin' && (
+                          <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedLeads)}>
+                              <UserX className="mr-2 h-4 w-4" />
+                              Unassign ({selectedLeads.length})
+                          </Button>
+                        )}
                         {userProfile?.activeRole !== 'user' && (
                           <Button onClick={openMarketingListDialog} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
                               <ListFilter className="h-4 w-4 mr-2" />
@@ -2237,26 +2286,30 @@ export default function LeadsClientPage({
                                                         ) : 'N/A'}
                                                     </TableCell>
                                                     <TableCell className="text-right px-2 md:px-4">
-                                                        <div className="hidden md:inline-flex">
-                                                            <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>{expandedDetails[lead.id] ? 'Hide' : 'History'}</Button>
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                                                                <DropdownMenuContent>
-                                                                    <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
-                                                                    <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => confirmDelete([lead.id])}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
-                                                        </div>
+                                                         <div className="hidden md:inline-flex">
+                                                             <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>{expandedDetails[lead.id] ? 'Hide' : 'History'}</Button>
+                                                             <DropdownMenu>
+                                                                 <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                                                                 <DropdownMenuContent>
+                                                                     {userProfile?.activeRole !== 'Outbound Admin' && (
+                                                                       <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
+                                                                     )}
+                                                                     <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => confirmDelete([lead.id])}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                                                                 </DropdownMenuContent>
+                                                             </DropdownMenu>
+                                                         </div>
                                                          <div className="inline-flex md:hidden">
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
-                                                                <DropdownMenuContent>
-                                                                    <DropdownMenuItem onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>View History</DropdownMenuItem>
-                                                                    <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
-                                                                    <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => confirmDelete([lead.id])}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
-                                                        </div>
+                                                             <DropdownMenu>
+                                                                 <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
+                                                                 <DropdownMenuContent>
+                                                                     <DropdownMenuItem onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>View History</DropdownMenuItem>
+                                                                     {userProfile?.activeRole !== 'Outbound Admin' && (
+                                                                       <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
+                                                                     )}
+                                                                     <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => confirmDelete([lead.id])}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                                                                 </DropdownMenuContent>
+                                                             </DropdownMenu>
+                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
                                                 {expandedDetails[lead.id] && (
@@ -2334,7 +2387,7 @@ export default function LeadsClientPage({
       </Card>
       )}
 
-      {isAdminView && (
+      {isAdminView && userProfile?.activeRole !== 'Outbound Admin' && (
        <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
@@ -2544,7 +2597,7 @@ export default function LeadsClientPage({
                 <Label>Assign to</Label>
                 <ScrollArea className="h-48 mt-2 border rounded-md p-2">
                     <div className="space-y-2">
-                        {allDialers.map((u) => (
+                        {reassignUserList.map((u) => (
                             <div key={u.uid} className="flex items-center space-x-2">
                                 <Checkbox
                                     id={`reassign-${u.uid}`}

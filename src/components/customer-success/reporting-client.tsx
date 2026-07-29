@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
+import { LeadCampaign, getLeadCampaigns } from '@/services/lead-campaigns';
 import { firestore } from '@/lib/firebase';
 import { collection, query, getDocs, orderBy, where, collectionGroup } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -65,19 +67,27 @@ const COLORS = ['#095c7b', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 
 export default function CustomerSuccessReportingClient() {
   const { userProfile } = useAuth();
+  const { toast } = useToast();
+
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [rawLeads, setRawLeads] = useState<any[]>([]);
   const [csCalls, setCsCalls] = useState<CsCallRecord[]>([]);
+  const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCsRep, setSelectedCsRep] = useState<string>('all');
+  const [selectedCampaign, setSelectedCampaign] = useState<string>('all');
   const [quickDateRange, setQuickDateRange] = useState<string>('30days');
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subDays(new Date(), 30),
     to: new Date(),
   });
+
+  useEffect(() => {
+    getLeadCampaigns().then((camps: LeadCampaign[]) => setAvailableCampaigns(camps.filter((c: LeadCampaign) => c.isActive))).catch(console.error);
+  }, []);
 
   const fetchData = async () => {
     setRefreshing(true);
@@ -200,6 +210,13 @@ export default function CustomerSuccessReportingClient() {
   // Filtered CS Calls
   const filteredCalls = useMemo(() => {
     return csCalls.filter(call => {
+      // Campaign filter
+      if (selectedCampaign !== 'all') {
+        const lead = rawLeads.find(l => l.id === call.leadId);
+        const camp = lead?.campaign || lead?.customerCampaign;
+        if (camp !== selectedCampaign) return false;
+      }
+
       // Rep filter
       if (selectedCsRep !== 'all') {
         const matchesAuthor = call.author.toLowerCase() === selectedCsRep.toLowerCase();
@@ -232,11 +249,17 @@ export default function CustomerSuccessReportingClient() {
 
       return true;
     });
-  }, [csCalls, selectedCsRep, dateRange, searchQuery]);
+  }, [csCalls, rawLeads, selectedCampaign, selectedCsRep, dateRange, searchQuery]);
 
   // Filtered CS Leads cohort
   const filteredLeads = useMemo(() => {
     return rawLeads.filter(lead => {
+      // Campaign filter
+      if (selectedCampaign !== 'all') {
+        const camp = lead.campaign || lead.customerCampaign;
+        if (camp !== selectedCampaign) return false;
+      }
+
       // Only include leads with CS activity or assigned CS
       const hasCsActivity = (lead.csCallCount && lead.csCallCount > 0) || lead.csCalled || (lead.csOutcomeHistory && lead.csOutcomeHistory.length > 0);
       const isCsAssigned = !!lead.customerSuccessAssigned;
@@ -249,7 +272,7 @@ export default function CustomerSuccessReportingClient() {
       }
       return true;
     });
-  }, [rawLeads, selectedCsRep]);
+  }, [rawLeads, selectedCampaign, selectedCsRep]);
 
   // Key KPI Metrics
   const totalAttempts = filteredCalls.length;
@@ -463,6 +486,19 @@ export default function CustomerSuccessReportingClient() {
                 <SelectItem value="all">All CS Representatives</SelectItem>
                 {csRepsList.map(rep => (
                   <SelectItem key={rep} value={rep}>{rep}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Campaign Filter */}
+            <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
+              <SelectTrigger className="w-[180px] text-xs">
+                <SelectValue placeholder="Filter by Campaign" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Campaigns</SelectItem>
+                {availableCampaigns.map(c => (
+                  <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

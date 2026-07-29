@@ -1,7 +1,7 @@
 'use client';
 import type { DiscoveryData } from './types';
 
-export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score: number, routingTag: string, scoringReason: string } & Partial<DiscoveryData> {
+export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score: number, routingTag: string, scoringReason: string, dashbackOpportunity?: string } & Partial<DiscoveryData> {
       const reasonParts: string[] = [];
       
       // --- Discovery Score ---

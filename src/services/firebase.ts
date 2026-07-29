@@ -595,10 +595,24 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
       });
 
       if (!summary) {
-          return Promise.all(leads.map(async (lead) => {
-              const contacts = await getSubCollection<Contact>('leads', lead.id, 'contacts', documentId());
-              return { ...lead, contacts, contactCount: contacts.length };
-          }));
+          const BATCH_SIZE = 15;
+          const leadsWithContacts: Lead[] = [];
+          for (let i = 0; i < leads.length; i += BATCH_SIZE) {
+              const batch = leads.slice(i, i + BATCH_SIZE);
+              const batchResults = await Promise.all(
+                  batch.map(async (lead) => {
+                      try {
+                          const contacts = await getSubCollection<Contact>('leads', lead.id, 'contacts', documentId());
+                          return { ...lead, contacts, contactCount: contacts.length };
+                      } catch (err) {
+                          console.warn(`Failed to fetch contacts for lead ${lead.id}:`, err);
+                          return lead;
+                      }
+                  })
+              );
+              leadsWithContacts.push(...batchResults);
+          }
+          return leadsWithContacts;
       }
 
       return leads;
@@ -805,61 +819,51 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
         if (franchisee) q = query(q, where('franchisee', '==', franchisee));
         
         const snapshot = await getDocs(q);
-        const leads: Lead[] = [];
-        const batchSize = 50;
-        for (let i = 0; i < snapshot.docs.length; i += batchSize) {
-            const batch = snapshot.docs.slice(i, i + batchSize);
-            const batchResults = await Promise.all(
-                batch.map(async (doc) => {
-                    const data = sanitizeData(doc.data() || {});
-                    const transformedLead: Lead = {
-                        id: doc.id,
-                        entityId: data['customerEntityId'] || data['entityId'] || '',
-                        salesRecordInternalId: data.salesRecordInternalId,
-                        companyName: data.companyName || 'Unknown Company',
-                        status: safeGetStatus(data.customerStatus),
-                        customerStatus: data.customerStatus,
-                        statusReason: data.statusReason,
-                        profile: `A lead for ${data.companyName}.`,
-                        address: data.address,
-                        postalAddress: data.postalAddress,
-                        sofLink: data.sofLink,
-                        sofDetails: data.sofDetails,
-                        franchisee: data.franchisee,
-                        dialerAssigned: data.dialerAssigned,
-                        salesRepAssigned: data.salesRepAssigned,
-                        accountManagerAssigned: data.accountManagerAssigned,
-                        customerSuccessAssigned: data.customerSuccessAssigned,
-                        fieldRepAssigned: data.fieldRepAssigned,
-                        industryCategory: data.industryCategory,
-                        abn: data.abn,
-                        discoveryData: data.discoveryData,
-                        fieldSales: data.fieldSales,
-                        services: data.services || [],
-                        lastProspected: data.lastProspected,
-                        dateLeadEntered: data.dateLeadEntered,
-                        customerSource: data.customerSource || data.source,
-                        visitNoteID: data.visitNoteID,
-                        bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
-                        inboundDetails: data.inboundDetails,
-                        isDuplicate: data.isDuplicate,
-                        similarLeads: data.similarLeads,
-                        hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
-                        parcelVolumeGreaterThan20: data.parcelVolumeGreaterThan20,
-                        currentCarrier: data.currentCarrier,
-                        marketingLists: data.marketingLists,
-                        activeJourneys: data.activeJourneys || [],
-                    };
-                    const lastActivity = await getLastActivity(doc.id);
-                    transformedLead.activity = lastActivity ? [lastActivity] : [];
-                    return transformedLead;
-                })
-            );
-            leads.push(...batchResults);
-        }
+        const leads: Lead[] = snapshot.docs.map((doc) => {
+            const data = sanitizeData(doc.data() || {});
+            return {
+                id: doc.id,
+                entityId: data['customerEntityId'] || data['entityId'] || '',
+                salesRecordInternalId: data.salesRecordInternalId,
+                companyName: data.companyName || 'Unknown Company',
+                status: safeGetStatus(data.customerStatus),
+                customerStatus: data.customerStatus,
+                statusReason: data.statusReason,
+                profile: `A lead for ${data.companyName}.`,
+                address: data.address,
+                postalAddress: data.postalAddress,
+                sofLink: data.sofLink,
+                sofDetails: data.sofDetails,
+                franchisee: data.franchisee,
+                dialerAssigned: data.dialerAssigned,
+                salesRepAssigned: data.salesRepAssigned,
+                accountManagerAssigned: data.accountManagerAssigned,
+                customerSuccessAssigned: data.customerSuccessAssigned,
+                fieldRepAssigned: data.fieldRepAssigned,
+                industryCategory: data.industryCategory,
+                abn: data.abn,
+                discoveryData: data.discoveryData,
+                fieldSales: data.fieldSales,
+                services: data.services || [],
+                lastProspected: data.lastProspected,
+                dateLeadEntered: data.dateLeadEntered,
+                customerSource: data.customerSource || data.source,
+                visitNoteID: data.visitNoteID,
+                bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+                inboundDetails: data.inboundDetails,
+                isDuplicate: data.isDuplicate,
+                similarLeads: data.similarLeads,
+                hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
+                parcelVolumeGreaterThan20: data.parcelVolumeGreaterThan20,
+                currentCarrier: data.currentCarrier,
+                marketingLists: data.marketingLists,
+                activeJourneys: data.activeJourneys || [],
+            };
+        });
+
         return leads.sort((a, b) => {
-            const dateA = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
-            const dateB = b.activity?.[0]?.date ? new Date(b.activity[0].date).getTime() : 0;
+            const dateA = a.lastProspected ? new Date(a.lastProspected).getTime() : 0;
+            const dateB = b.lastProspected ? new Date(b.lastProspected).getTime() : 0;
             return dateB - dateA;
         });
     } catch (error) {

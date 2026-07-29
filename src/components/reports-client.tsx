@@ -38,7 +38,13 @@ import {
   ArrowRight,
   ChevronRight,
   Info,
-  Workflow
+  Workflow,
+  Zap,
+  Trophy,
+  AlertTriangle,
+  CheckCircle2,
+  FileText,
+  PlusCircle
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -70,6 +76,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { cn, getQuickDateRange } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 
 const isLostLead = (l: Lead) => {
     const status = l.status || '';
@@ -421,6 +428,7 @@ export default function ReportsClientPage({
   const [trialDrilldown, setTrialDrilldown] = useState<{ title: string; leads: Lead[] } | null>(null);
   const [dailyViewMode, setDailyViewMode] = useState<'chart' | 'table'>('chart');
   const [dailyMetricMode, setDailyMetricMode] = useState<'unique' | 'actions'>('unique');
+  const [burnRateTimeframe, setBurnRateTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [staticData, setStaticData] = useState<{ leads: Lead[], dialers: string[], notes: VisitNote[] } | null>(null);
   const staticDataRef = useRef(staticData);
   useEffect(() => {
@@ -432,7 +440,7 @@ export default function ReportsClientPage({
   const { userProfile, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const isUserOnlyRole = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Outbound Admin';
+  const isUserOnlyRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user';
 
   const currentUserIdentifiers = useMemo(() => {
     const ids = new Set<string>();
@@ -453,6 +461,12 @@ export default function ReportsClientPage({
     return currentUserIdentifiers.some(id => id.trim().toLowerCase() === val);
   }, [currentUserIdentifiers]);
   
+  const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
+
+  useEffect(() => {
+    getLeadCampaigns().then(camps => setAvailableCampaigns(camps.filter(c => c.isActive))).catch(console.error);
+  }, []);
+
   const [filters, setFilters] = useState({
     status: [] as string[],
     activityDate: undefined as DateRange | undefined,
@@ -464,6 +478,7 @@ export default function ReportsClientPage({
     franchisee: [] as string[],
     appointmentAssignedTo: [] as string[],
     isFieldSourced: 'all' as 'all' | 'yes' | 'no',
+    campaign: 'all',
   });
   const [appliedFilters, setAppliedFilters] = useState({
     status: [] as string[],
@@ -476,6 +491,7 @@ export default function ReportsClientPage({
     franchisee: [] as string[],
     appointmentAssignedTo: [] as string[],
     isFieldSourced: 'all' as 'all' | 'yes' | 'no',
+    campaign: 'all',
   });
 
   useEffect(() => {
@@ -1002,7 +1018,9 @@ export default function ReportsClientPage({
             }
         }
 
-        return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && activityDateMatch && durationMatch() && appointmentAssignedToMatch && assignmentDateMatch && leadCreatedDateMatch;
+        const campaignMatch = appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
+
+        return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && activityDateMatch && durationMatch() && appointmentAssignedToMatch && assignmentDateMatch && leadCreatedDateMatch && campaignMatch;
     });
   }, [allCalls, allLeads, appliedFilters, allAppointments, userProfile, isUserOnlyRole, currentUserIdentifiers]);
   
@@ -1011,6 +1029,9 @@ export default function ReportsClientPage({
         if (appointment.leadName === 'Unknown Lead') return false;
         const lead = allLeads.find(l => l.id === appointment.leadId);
         if (!lead) return false;
+
+        const campaignMatch = appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
+        if (!campaignMatch) return false;
 
         if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
             if (lead.franchisee !== userProfile.franchisee) return false;
@@ -1039,7 +1060,7 @@ export default function ReportsClientPage({
 
         let creationDateMatch = true;
         if (appliedFilters.activityDate?.from) {
-            const appointmentCreatedDate = parseDateString(appointment.appointmentDate);
+            const appointmentCreatedDate = parseDateString(appointment.appointmentDate || appointment.duedate || appointment.starttime || appointment.date || (appointment as any).createdAt);
             if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(appliedFilters.activityDate.from);
             const toDate = appliedFilters.activityDate.to ? endOfDay(appliedFilters.activityDate.to) : endOfDay(appliedFilters.activityDate.from);
@@ -1151,7 +1172,9 @@ export default function ReportsClientPage({
             }
         }
 
-        return franchiseeMatch && dialerMatch && sourceMatch && interactionMatch && assignmentDateMatch && leadCreatedDateMatch;
+        const campaignMatch = appliedFilters.campaign === 'all' || (l.campaign || (l as any).customerCampaign) === appliedFilters.campaign;
+
+        return franchiseeMatch && dialerMatch && sourceMatch && interactionMatch && assignmentDateMatch && leadCreatedDateMatch && campaignMatch;
     });
 
     const wonLeadsList = leadsWithAppts.filter(l => l.status === 'Won');
@@ -1509,6 +1532,105 @@ export default function ReportsClientPage({
             Pending: amAppts.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending').length
         };
     }).sort((a, b) => b.Total - a.Total);
+
+    // Working Days in Range calculation
+    let workingDaysInRange = 21.67;
+    if (appliedFilters.activityDate?.from) {
+        const start = startOfDay(appliedFilters.activityDate.from);
+        const end = appliedFilters.activityDate.to ? endOfDay(appliedFilters.activityDate.to) : endOfDay(appliedFilters.activityDate.from);
+        let count = 0;
+        let cur = new Date(start);
+        while (cur <= end) {
+            const day = cur.getDay();
+            if (day !== 0 && day !== 6) count++;
+            cur.setDate(cur.getDate() + 1);
+        }
+        workingDaysInRange = Math.max(1, count);
+    }
+
+    const allLeadsMap = new Map(allLeads.map(l => [l.id, l]));
+
+    // Lead Burn Rate & Capacity Leaderboard Data
+    const burnRateLeaderboard = allDialers.map(dialer => {
+        const dialerCallsList = filteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+        const dialerCallsListLeadIds = new Set(dialerCallsList.map(c => c.leadId));
+        const dialerLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
+        
+        // Strictly count leads that have had at least one call / call initiated by this dialer in the date range
+        const processedLeadsList = dialerLeads.filter(l => dialerCallsListLeadIds.has(l.id));
+        const processedInPeriod = processedLeadsList.length;
+
+        // Un-actioned pool: assigned leads that have NOT been called yet by the dialer (excluding Lost/Signed)
+        const unactionedLeadsList = dialerLeads.filter(l => !dialerCallsListLeadIds.has(l.id) && !isLostLead(l) && !isSignedLead(l));
+        const unactionedPool = unactionedLeadsList.length;
+
+        const dailyBurnRate = workingDaysInRange > 0 ? (processedInPeriod / workingDaysInRange) : 0;
+        const weeklyBurnRate = dailyBurnRate * 5;
+        const monthlyBurnRate = dailyBurnRate * 21.67;
+
+        const burnRate = burnRateTimeframe === 'weekly' ? weeklyBurnRate : burnRateTimeframe === 'monthly' ? monthlyBurnRate : dailyBurnRate;
+        const runwayDays = dailyBurnRate > 0 ? Math.round((unactionedPool / dailyBurnRate) * 10) / 10 : (unactionedPool > 0 ? 999 : 0);
+
+        let runwayStatus: 'critical' | 'warning' | 'healthy' = 'healthy';
+        if (runwayDays < 2) runwayStatus = 'critical';
+        else if (runwayDays <= 5) runwayStatus = 'warning';
+
+        const targetBufferDays = 10;
+        const recommendedTopUp = Math.max(0, Math.ceil((targetBufferDays * dailyBurnRate) - unactionedPool));
+
+        return {
+            name: dialer,
+            totalAssigned: dialerLeads.length,
+            processedInPeriod,
+            processedLeadsList,
+            unactionedPool,
+            unactionedLeadsList,
+            dailyBurnRate,
+            weeklyBurnRate,
+            monthlyBurnRate,
+            burnRate,
+            runwayDays,
+            runwayStatus,
+            recommendedTopUp
+        };
+    }).filter(d => d.totalAssigned > 0 || d.processedInPeriod > 0).sort((a, b) => a.runwayDays - b.runwayDays);
+
+    const avgTeamBurnRate = burnRateLeaderboard.length > 0 ? (burnRateLeaderboard.reduce((acc, d) => acc + d.burnRate, 0) / burnRateLeaderboard.length) : 0;
+    const criticalRepsCount = burnRateLeaderboard.filter(d => d.runwayStatus === 'critical').length;
+    const avgTeamRunwayDays = burnRateLeaderboard.length > 0 ? (burnRateLeaderboard.reduce((acc, d) => acc + (d.runwayDays > 180 ? 180 : d.runwayDays), 0) / burnRateLeaderboard.length) : 0;
+    const totalRecommendedTopUp = burnRateLeaderboard.reduce((acc, d) => acc + d.recommendedTopUp, 0);
+
+    // Appointments & Downstream Conversions Leaderboard Data
+    const appointmentIncentiveLeaderboard = allDialers.map(dialer => {
+        const dialerAppts = filteredAppointments.filter(a => a.dialerAssigned === dialer || a.assignedTo === dialer);
+        const booked = dialerAppts.length;
+
+        const dialerLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
+        const dialerTrialLeads = anyTrialLeads.filter(l => l.dialerAssigned === dialer);
+
+        const signed = dialerLeads.filter(isSignedLead).length;
+        const trial = dialerTrialLeads.length;
+        const quote = dialerLeads.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent' || l.customerStatus === 'Quote Sent').length;
+
+        const totalConverted = signed + trial + quote;
+        const conversionRate = booked > 0 ? (totalConverted / booked) * 100 : (dialerLeads.length > 0 ? (totalConverted / dialerLeads.length) * 100 : 0);
+
+        return {
+            name: dialer,
+            booked,
+            signed,
+            trial,
+            quote,
+            totalConverted,
+            conversionRate
+        };
+    }).filter(d => d.booked > 0 || d.totalConverted > 0 || d.signed > 0 || d.trial > 0 || d.quote > 0).sort((a, b) => b.totalConverted - a.totalConverted || b.conversionRate - a.conversionRate);
+
+    const totalApptsSigned = appointmentIncentiveLeaderboard.reduce((acc, d) => acc + d.signed, 0);
+    const totalApptsTrial = appointmentIncentiveLeaderboard.reduce((acc, d) => acc + d.trial, 0);
+    const totalApptsQuote = appointmentIncentiveLeaderboard.reduce((acc, d) => acc + d.quote, 0);
+    const totalConvertedAppts = totalApptsSigned + totalApptsTrial + totalApptsQuote;
+    const overallApptConversionRate = totalAppointments > 0 ? (totalConvertedAppts / totalAppointments) * 100 : 0;
 
 
 
@@ -2019,6 +2141,18 @@ export default function ReportsClientPage({
       callOutcomesData,
       appointmentOutcomeData,
       amPerformanceData,
+
+      burnRateLeaderboard,
+      avgTeamBurnRate,
+      criticalRepsCount,
+      avgTeamRunwayDays,
+      totalRecommendedTopUp,
+      appointmentIncentiveLeaderboard,
+      totalApptsSigned,
+      totalApptsTrial,
+      totalApptsQuote,
+      totalConvertedAppts,
+      overallApptConversionRate,
       
       leadTypeData,
       customerStatusData,
@@ -2045,7 +2179,7 @@ export default function ReportsClientPage({
           lost: leadsAppointedCount > 0 ? (lostCount / leadsAppointedCount) * 100 : 0,
       }
     };
-  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile, allVisitNotes, allActivities]);
+  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile, allVisitNotes, allActivities, burnRateTimeframe]);
 
   const handleExportChartData = (data: any[], filename: string) => {
     if (data.length === 0) {
@@ -2160,6 +2294,22 @@ export default function ReportsClientPage({
                                 <SelectItem value="all">All Sources</SelectItem>
                                 <SelectItem value="yes">Transitioned from Field</SelectItem>
                                 <SelectItem value="no">Outbound Original Only</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Campaign</Label>
+                        <Select value={filters.campaign} onValueChange={(val) => handleFilterChange('campaign', val)}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="All Campaigns" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Campaigns</SelectItem>
+                                {availableCampaigns.map((c) => (
+                                    <SelectItem key={c.id} value={c.name}>
+                                        {c.name}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>
@@ -2592,6 +2742,287 @@ export default function ReportsClientPage({
                             </Table>
                         </div>
                     )}
+                </CardContent>
+            </Card>
+            )}
+
+            {/* Lead Burn Rate & Management Pipeline Capacity */}
+            {(!visibleSections || visibleSections.includes('burn-rate')) && (
+            <Card className="mt-6 border shadow-sm">
+                <CardHeader className="pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                                <Flame className="h-5 w-5 text-orange-500" />
+                                <span>Lead Burn Rate & Management Pipeline Capacity</span>
+                                <SectionHelp content={
+                                    <div className="space-y-2 text-left">
+                                        <p className="font-semibold text-foreground">Lead Burn Rate & Runway</p>
+                                        <p><strong>Burn Rate:</strong> The rate at which unique leads are being called (calls made or initiated) by each user over a daily, weekly, or monthly period.</p>
+                                        <p><strong>Pipeline Runway:</strong> Calculated as <code className="bg-muted px-1 py-0.5 rounded">Un-called Lead Pool ÷ Daily Burn Rate</code>. Alerts management when a dialer is running out of leads to call.</p>
+                                        <p><strong>Top-Up Recommendation:</strong> Suggested count of new leads to inject to maintain a healthy 10-day dialing queue.</p>
+                                    </div>
+                                } />
+                            </CardTitle>
+                            <CardDescription>Calculates lead dialing velocity per user (strictly based on calls made / initiated) and predicts pipeline exhaustion to guide management lead injection.</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2 self-start sm:self-auto">
+                            <div className="flex items-center bg-muted p-1 rounded-lg border text-xs">
+                                <Button
+                                    variant={burnRateTimeframe === 'daily' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className="h-7 text-xs px-3 font-medium"
+                                    onClick={() => setBurnRateTimeframe('daily')}
+                                >
+                                    Daily
+                                </Button>
+                                <Button
+                                    variant={burnRateTimeframe === 'weekly' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className="h-7 text-xs px-3 font-medium"
+                                    onClick={() => setBurnRateTimeframe('weekly')}
+                                >
+                                    Weekly
+                                </Button>
+                                <Button
+                                    variant={burnRateTimeframe === 'monthly' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className="h-7 text-xs px-3 font-medium"
+                                    onClick={() => setBurnRateTimeframe('monthly')}
+                                >
+                                    Monthly
+                                </Button>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.burnRateLeaderboard, 'lead_burn_rate_capacity')}>
+                                <Download className="h-4 w-4 mr-2" /> Export Table
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                            <div className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                                <Flame className="h-4 w-4 text-orange-500" /> Avg Team Burn Rate
+                            </div>
+                            <div className="text-2xl font-bold mt-1.5">
+                                {stats.avgTeamBurnRate.toFixed(1)} <span className="text-xs font-normal text-muted-foreground">leads/{burnRateTimeframe === 'daily' ? 'day' : burnRateTimeframe === 'weekly' ? 'wk' : 'mo'}</span>
+                            </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-red-50/70 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 shadow-xs">
+                            <div className="text-xs font-semibold text-red-700 dark:text-red-400 flex items-center gap-1.5">
+                                <AlertTriangle className="h-4 w-4 text-red-600" /> Reps Depleted (&lt; 2 Days Left)
+                            </div>
+                            <div className="text-2xl font-bold mt-1.5 text-red-700 dark:text-red-300">
+                                {stats.criticalRepsCount} <span className="text-xs font-normal text-muted-foreground">reps need leads</span>
+                            </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 shadow-xs">
+                            <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                                <Clock className="h-4 w-4 text-amber-600" /> Avg Team Runway
+                            </div>
+                            <div className="text-2xl font-bold mt-1.5 text-amber-700 dark:text-amber-300">
+                                {stats.avgTeamRunwayDays.toFixed(1)} <span className="text-xs font-normal text-muted-foreground">days of supply</span>
+                            </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 shadow-xs">
+                            <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                                <PlusCircle className="h-4 w-4 text-emerald-600" /> Recommended Lead Top-Up
+                            </div>
+                            <div className="text-2xl font-bold mt-1.5 text-emerald-700 dark:text-emerald-300">
+                                +{stats.totalRecommendedTopUp} <span className="text-xs font-normal text-muted-foreground">leads across team</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-lg border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Agent / Dialer</TableHead>
+                                    <TableHead className="text-right">Total Assigned Leads</TableHead>
+                                    <TableHead className="text-right">Processed in Range</TableHead>
+                                    <TableHead className="text-right">Un-actioned Available Pool</TableHead>
+                                    <TableHead className="text-right">
+                                        Burn Rate ({burnRateTimeframe === 'daily' ? 'Daily' : burnRateTimeframe === 'weekly' ? 'Weekly' : 'Monthly'})
+                                    </TableHead>
+                                    <TableHead className="text-center">Pipeline Runway</TableHead>
+                                    <TableHead className="text-right">Recommended Top-Up</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.burnRateLeaderboard.length > 0 ? stats.burnRateLeaderboard.map(item => (
+                                    <TableRow key={item.name}>
+                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                        <TableCell className="text-right font-semibold">{item.totalAssigned}</TableCell>
+                                        <TableCell 
+                                            className="text-right font-semibold text-blue-600 cursor-pointer hover:underline"
+                                            onClick={() => setTrialDrilldown({
+                                                title: `${item.name} - Leads Processed in Range`,
+                                                leads: item.processedLeadsList
+                                            })}
+                                        >
+                                            {item.processedInPeriod}
+                                        </TableCell>
+                                        <TableCell 
+                                            className="text-right font-semibold text-indigo-600 cursor-pointer hover:underline"
+                                            onClick={() => setTrialDrilldown({
+                                                title: `${item.name} - Remaining Un-actioned Leads (Available Pool)`,
+                                                leads: item.unactionedLeadsList
+                                            })}
+                                        >
+                                            {item.unactionedPool}
+                                        </TableCell>
+                                        <TableCell className="text-right font-bold text-orange-600">
+                                            {item.burnRate.toFixed(1)} <span className="text-[10px] text-muted-foreground font-normal">/ {burnRateTimeframe === 'daily' ? 'day' : burnRateTimeframe === 'weekly' ? 'wk' : 'mo'}</span>
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            {item.runwayStatus === 'critical' ? (
+                                                <Badge className="bg-red-600 hover:bg-red-700 text-white font-medium gap-1">
+                                                    <AlertTriangle className="h-3 w-3" /> {item.runwayDays} days (Critical)
+                                                </Badge>
+                                            ) : item.runwayStatus === 'warning' ? (
+                                                <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-medium gap-1">
+                                                    <Clock className="h-3 w-3" /> {item.runwayDays} days (Low)
+                                                </Badge>
+                                            ) : (
+                                                <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-1">
+                                                    <CheckCircle2 className="h-3 w-3" /> {item.runwayDays > 90 ? '90+ days' : `${item.runwayDays} days (Healthy)`}
+                                                </Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {item.recommendedTopUp > 0 ? (
+                                                <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300 font-bold bg-emerald-50 dark:bg-emerald-950/40">
+                                                    +{item.recommendedTopUp} leads
+                                                </Badge>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">Sufficient</span>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                )) : (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center py-6 text-muted-foreground italic">No dialer burn rate data available for current filters.</TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
+            )}
+
+            {/* Appointments Booked & Downstream Conversions Leaderboard */}
+            {(!visibleSections || visibleSections.includes('appointment-incentives')) && (
+            <Card className="mt-6 border shadow-sm">
+                <CardHeader className="pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                                <Trophy className="h-5 w-5 text-amber-500" />
+                                <span>Appointments & Downstream Conversion Incentive Tracker</span>
+                                <SectionHelp content={
+                                    <div className="space-y-2 text-left">
+                                        <p className="font-semibold text-foreground">Appointment Conversion Incentive</p>
+                                        <p>Tracks appointments set by dialers and measures downstream conversion progress (Signed Deals, Trials Started, and Quotes Sent).</p>
+                                        <p>Incentivises cold callers for high-converting appointment quality, not just raw volume.</p>
+                                    </div>
+                                } />
+                            </CardTitle>
+                            <CardDescription>Measures appointment outcome quality and downstream deal conversions per dialer to incentivize high-value booking.</CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.appointmentIncentiveLeaderboard, 'appointment_conversions_leaderboard')}>
+                            <Download className="h-4 w-4 mr-2" /> Export Table
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border">
+                            <div className="text-xs font-medium text-muted-foreground">Total Appts Booked</div>
+                            <div className="text-2xl font-bold mt-1">{stats.totalAppointments}</div>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
+                            <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
+                                <Trophy className="h-3.5 w-3.5 text-emerald-600" /> Converted to Signed
+                            </div>
+                            <div className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-300">
+                                {stats.totalApptsSigned}
+                            </div>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50">
+                            <div className="text-xs font-semibold text-blue-800 dark:text-blue-400 flex items-center gap-1">
+                                <Zap className="h-3.5 w-3.5 text-blue-600" /> Converted to Trial
+                            </div>
+                            <div className="text-2xl font-bold mt-1 text-blue-700 dark:text-blue-300">
+                                {stats.totalApptsTrial}
+                            </div>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/50">
+                            <div className="text-xs font-semibold text-purple-800 dark:text-purple-400 flex items-center gap-1">
+                                <FileText className="h-3.5 w-3.5 text-purple-600" /> Quotes Sent
+                            </div>
+                            <div className="text-2xl font-bold mt-1 text-purple-700 dark:text-purple-300">
+                                {stats.totalApptsQuote}
+                            </div>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
+                            <div className="text-xs font-semibold text-amber-800 dark:text-amber-400">Total Conversion %</div>
+                            <div className="text-2xl font-bold mt-1 text-amber-700 dark:text-amber-300">
+                                {stats.overallApptConversionRate.toFixed(1)}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-lg border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-12 text-center">Rank</TableHead>
+                                    <TableHead>Dialer / Agent</TableHead>
+                                    <TableHead className="text-right">Appts Booked</TableHead>
+                                    <TableHead className="text-right">🏆 Signed Deals</TableHead>
+                                    <TableHead className="text-right">⚡ Trials Started</TableHead>
+                                    <TableHead className="text-right">📄 Quotes Sent</TableHead>
+                                    <TableHead className="text-right">Total Converted</TableHead>
+                                    <TableHead className="text-right">Conversion Success %</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.appointmentIncentiveLeaderboard.length > 0 ? stats.appointmentIncentiveLeaderboard.map((item, idx) => (
+                                    <TableRow key={item.name}>
+                                        <TableCell className="text-center font-bold text-base">
+                                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                                        </TableCell>
+                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                        <TableCell 
+                                            className="text-right font-semibold cursor-pointer hover:underline text-blue-600"
+                                            onClick={() => setIsApptListOpen(true)}
+                                        >
+                                            {item.booked}
+                                        </TableCell>
+                                        <TableCell className="text-right font-bold text-emerald-600">{item.signed}</TableCell>
+                                        <TableCell className="text-right font-bold text-blue-600">{item.trial}</TableCell>
+                                        <TableCell className="text-right font-bold text-purple-600">{item.quote}</TableCell>
+                                        <TableCell className="text-right font-extrabold text-foreground">{item.totalConverted}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Badge variant="outline" className="font-bold border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300">
+                                                {item.conversionRate.toFixed(1)}%
+                                            </Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                )) : (
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="text-center py-6 text-muted-foreground italic">No appointment conversion data available for current filters.</TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
             )}
@@ -3613,27 +4044,48 @@ export default function ReportsClientPage({
                                 <TableHead>Account Manager</TableHead>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Appt Status</TableHead>
+                                <TableHead>Downstream Outcome</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredAppointments.length > 0 ? filteredAppointments.map((appt) => (
-                                <TableRow key={appt.id}>
-                                    <TableCell className="font-medium">{appt.leadName}</TableCell>
-                                    <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
-                                    <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
-                                    <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
-                                    <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline">{appt.appointmentStatus || 'Pending'}</Badge>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/leads/${appt.leadId}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            )) : <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground italic">No appointments found.</TableCell></TableRow>}
+                            {filteredAppointments.length > 0 ? filteredAppointments.map((appt) => {
+                                const leadStatus = appt.leadStatus || '';
+                                return (
+                                    <TableRow key={appt.id}>
+                                        <TableCell className="font-medium">{appt.leadName}</TableCell>
+                                        <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
+                                        <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                        <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
+                                        <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline">{appt.appointmentStatus || 'Pending'}</Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            {leadStatus === 'Won' || (leadStatus as string) === 'Signed' ? (
+                                                <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1">
+                                                    <Trophy className="h-3 w-3" /> Signed Customer
+                                                </Badge>
+                                            ) : (leadStatus === 'Trialing ShipMate' || leadStatus === 'Trialing LocalMile' || leadStatus === 'Free Trial') ? (
+                                                <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-1">
+                                                    <Zap className="h-3 w-3" /> Trial Started
+                                                </Badge>
+                                            ) : (leadStatus === 'Quote Sent' || leadStatus === 'Quote Accepted' || leadStatus === 'Prospect Opportunity') ? (
+                                                <Badge className="bg-purple-600 hover:bg-purple-700 text-white font-semibold gap-1">
+                                                    <FileText className="h-3 w-3" /> Quote Sent
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-muted-foreground font-normal">Pending</Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="sm" asChild>
+                                                <Link href={`/leads/${appt.leadId}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            }) : <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground italic">No appointments found.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>

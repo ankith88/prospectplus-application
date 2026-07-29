@@ -333,6 +333,8 @@ const calculateBusinessHoursSydney = (start: Date, end: Date): number => {
     return totalMs / (1000 * 60 * 60);
 };
 
+import { LeadCampaign, getLeadCampaigns } from '@/services/lead-campaigns';
+
 export interface InboundReportsClientPageProps {
   externalDateRange?: DateRange;
   hideHeaderAndFilters?: boolean;
@@ -343,27 +345,32 @@ export default function InboundReportsClientPage({
   externalDateRange,
   hideHeaderAndFilters = false,
   visibleSections,
-}: InboundReportsClientPageProps = {}) {
-  const [allLeads, setAllLeads] = useState<Lead[]>([]);
-  const [allActivities, setAllActivities] = useState<Array<Activity & { leadId: string }>>([]);
-  const [loading, setLoading] = useState(true);
+}: InboundReportsClientPageProps) {
+  const { userProfile, loading: authLoading } = useAuth();
+  const { toast } = useToast();
+  const { canView, loadingPermissions } = usePermissions();
+  const isSuperAdmin = userProfile?.email?.endsWith('@mailplus.com.au') || (userProfile?.activeRole as string) === 'superadmin';
+  const hasAccess = canView('inboundReporting') || isSuperAdmin;
   const { setLoadTime, setPageName, setIsCustom } = usePerformance();
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [allLeads, setAllLeads] = useState<Lead[]>([]);
+  const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cacheRef = useRef<{ leads: Lead[], companies: Lead[] } | null>(null);
   const lastFetchedStartISORef = useRef<string | null>(null);
 
+  const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
+
+  useEffect(() => {
+    getLeadCampaigns().then((camps: LeadCampaign[]) => setAvailableCampaigns(camps.filter((c: LeadCampaign) => c.isActive))).catch(console.error);
+  }, []);
+
   useEffect(() => {
     setIsCustom(true);
     setPageName("Inbound Reporting");
   }, [setIsCustom, setPageName]);
-  
-  const { userProfile, loading: authLoading } = useAuth();
-  const { toast } = useToast();
-  const router = useRouter();
-  
-  const { canView, loadingPermissions } = usePermissions();
-  const hasAccess = canView('inboundReporting');
   
   const [filters, setFilters] = useState({
     customerStatus: [] as string[],
@@ -371,6 +378,7 @@ export default function InboundReportsClientPage({
     accountManagerAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
+    campaign: 'all',
   });
   const [appliedFilters, setAppliedFilters] = useState({
     customerStatus: [] as string[],
@@ -378,6 +386,7 @@ export default function InboundReportsClientPage({
     accountManagerAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
+    campaign: 'all',
   });
 
   useEffect(() => {
@@ -672,6 +681,7 @@ export default function InboundReportsClientPage({
       accountManagerAssigned: [],
       source: [],
       franchisee: [],
+      campaign: 'all',
     };
     setFilters(defaultFilters);
     setAppliedFilters(defaultFilters);
@@ -695,7 +705,9 @@ export default function InboundReportsClientPage({
             dateMatch = enteredDate >= fromDate && enteredDate <= toDate;
         }
 
-        return statusMatch && amMatch && sourceMatch && franchiseeMatch && dateMatch;
+        const campaignMatch = !appliedFilters.campaign || appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
+
+        return statusMatch && amMatch && sourceMatch && franchiseeMatch && dateMatch && campaignMatch;
     });
   }, [allLeads, appliedFilters]);
 
@@ -1370,7 +1382,7 @@ export default function InboundReportsClientPage({
     const seenTeamCallIds = new Set<string>();
     const filteredCalls = allActivities.filter(act => {
         if (act.type !== 'Call') return false;
-        if (!filteredLeadIds.has(act.leadId)) return false;
+        if (!act.leadId || !filteredLeadIds.has(act.leadId)) return false;
         if (!isManualActivity(act)) return false;
         if (!isDateInRange(act.date)) return false;
         if (!act.callId || typeof act.callId !== 'string' || !act.callId.trim()) return false;
@@ -1395,9 +1407,9 @@ export default function InboundReportsClientPage({
         return 'Unassigned';
     };
 
-    const allAMs = Array.from(new Set(
+    const allAMs = Array.from(new Set<string>(
       filteredLeads.map(getLeadAM)
-    )).sort((a, b) => {
+    )).sort((a: string, b: string) => {
       if (a === 'Unassigned') return 1;
       if (b === 'Unassigned') return -1;
       return a.localeCompare(b);
@@ -1408,7 +1420,7 @@ export default function InboundReportsClientPage({
 
     const seenCallIdsForPerf = new Set<string>();
     allActivities.forEach(act => {
-        if (!filteredLeadIds.has(act.leadId)) return;
+        if (!act.leadId || !filteredLeadIds.has(act.leadId)) return;
         if (!isDateInRange(act.date)) return;
         if (!isManualActivity(act)) return;
 
@@ -1462,7 +1474,7 @@ export default function InboundReportsClientPage({
       const dialerInboundLeads = filteredLeads.filter(l => getLeadAM(l) === dialer);
       const dialerInboundLeadIds = new Set(dialerInboundLeads.map(l => l.id));
 
-      const dialerCallsList = filteredCalls.filter(c => dialerInboundLeadIds.has(c.leadId) || c.author === dialer);
+      const dialerCallsList = filteredCalls.filter(c => (c.leadId && dialerInboundLeadIds.has(c.leadId)) || c.author === dialer);
       const dialerCalls = dialerCallsList.length;
       const dialerLeadsCalled = new Set(dialerCallsList.map(c => c.leadId)).size;
       const avgAttempts = dialerLeadsCalled > 0 ? dialerCalls / dialerLeadsCalled : 0;
@@ -1673,7 +1685,7 @@ export default function InboundReportsClientPage({
     const seenCallIds = new Set<string>();
 
     allActivities.forEach(act => {
-        if (!filteredLeadIds.has(act.leadId)) return;
+        if (!act.leadId || !filteredLeadIds.has(act.leadId)) return;
         if (!isDateInRange(act.date)) return;
         if (!isManualActivity(act)) return;
 
@@ -2060,6 +2072,22 @@ export default function InboundReportsClientPage({
                             onSelectedChange={(val) => handleFilterChange('accountManagerAssigned', val)} 
                             placeholder="Select AMs..." 
                         />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Campaign</Label>
+                        <Select value={filters.campaign} onValueChange={(val) => handleFilterChange('campaign', val)}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="All Campaigns" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Campaigns</SelectItem>
+                                {availableCampaigns.map((c) => (
+                                    <SelectItem key={c.id} value={c.name}>
+                                        {c.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div className="space-y-2">
                         <Label>Status</Label>

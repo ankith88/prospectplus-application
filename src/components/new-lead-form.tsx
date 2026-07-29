@@ -38,6 +38,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { industryCategories, salesReps } from '@/lib/constants';
 import { extractContactsFromDiscoveryData } from '@/lib/contact-utils';
+import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 import { addContactToLead, createNewLead, checkForDuplicateLead, updateVisitNote, logActivity, getAllUsers, getAllFranchisees } from '@/services/firebase';
 import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
@@ -144,6 +145,8 @@ export function NewLeadForm() {
     userFranchiseeName?: string;
   } | null>(null);
 
+  const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
+
   const sortedAllFranchisees = useMemo(() => {
     return [...franchisees].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [franchisees]);
@@ -152,11 +155,12 @@ export function NewLeadForm() {
   useEffect(() => {
     async function fetchUsersAndFranchisees() {
       try {
-        const [users, frs] = await Promise.all([getAllUsers(), getAllFranchisees()]);
+        const [users, frs, camps] = await Promise.all([getAllUsers(), getAllFranchisees(), getLeadCampaigns()]);
         setAllUsers(users);
         setFranchisees(frs);
+        setAvailableCampaigns(camps.filter(c => c.isActive));
       } catch (err) {
-        console.error('Failed to load users or franchisees:', err);
+        console.error('Failed to load users, franchisees, or campaigns:', err);
       }
     }
     fetchUsersAndFranchisees();
@@ -223,6 +227,9 @@ export function NewLeadForm() {
       form.setValue('bucket', 'outbound');
     } else if (userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee') {
       form.setValue('campaign', 'Franchisee Generated');
+      if (!form.getValues('leadSource')) {
+        form.setValue('leadSource', '-4');
+      }
     }
   }, [userProfile, form]);
 
@@ -706,6 +713,9 @@ export function NewLeadForm() {
         if (!finalValues.campaign) {
             finalValues.campaign = 'Franchisee Generated';
         }
+        if (!finalValues.leadSource) {
+            finalValues.leadSource = '-4';
+        }
         if (isPriority) {
             finalValues.bucket = 'account_manager';
             (finalValues as any).isPriority = true;
@@ -780,7 +790,7 @@ export function NewLeadForm() {
             assignmentUpdates.franchisee_id = fId;
         }
         if (finalValues.leadSource) {
-            assignmentUpdates.leadSource = finalValues.leadSource;
+            assignmentUpdates.leadSource = finalValues.leadSource === '-4' ? 'Franchisee Generated' : finalValues.leadSource;
         }
         if (finalValues.bucket) {
             assignmentUpdates.bucket = finalValues.bucket;
@@ -1328,11 +1338,21 @@ export function NewLeadForm() {
                             </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                            <SelectItem value="Outbound">Outbound</SelectItem>
-                            <SelectItem value="Door-to-Door">Door-to-Door</SelectItem>
-                            <SelectItem value="MultiSite">MultiSite</SelectItem>
-                            <SelectItem value="Account Manager Generated">Account Manager Generated</SelectItem>
-                            </SelectContent>
+                              {availableCampaigns.length > 0 ? (
+                                availableCampaigns.map((c) => (
+                                  <SelectItem key={c.id} value={c.name}>
+                                    {c.name}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <>
+                                  <SelectItem value="Outbound">Outbound</SelectItem>
+                                  <SelectItem value="Door-to-Door">Door-to-Door</SelectItem>
+                                  <SelectItem value="MultiSite">MultiSite</SelectItem>
+                                  <SelectItem value="Account Manager Generated">Account Manager Generated</SelectItem>
+                                </>
+                              )}
+                             </SelectContent>
                         </Select>
                         <FormMessage />
                         </FormItem>

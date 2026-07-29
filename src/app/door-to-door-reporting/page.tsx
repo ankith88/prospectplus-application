@@ -21,21 +21,29 @@ import { useToast } from '@/hooks/use-toast';
 import { getAllLeadsForReport, getAllUsers, getAllActivities, getAllUserRoutes } from '@/services/firebase';
 import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 
 export default function DoorToDoorReportingPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allActivities, setAllActivities] = useState<(Activity & { leadId: string })[]>([]);
   const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
+  const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
+  useEffect(() => {
+    getLeadCampaigns().then(camps => setAvailableCampaigns(camps.filter(c => c.isActive))).catch(console.error);
+  }, []);
+
   const [filters, setFilters] = useState({
     date: undefined as DateRange | undefined,
     user: [] as string[],
+    campaign: 'all',
   });
 
   const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
@@ -81,6 +89,7 @@ export default function DoorToDoorReportingPage() {
     setFilters({
       date: undefined,
       user: [],
+      campaign: 'all',
     });
   };
   
@@ -127,7 +136,9 @@ export default function DoorToDoorReportingPage() {
         if (filters.date?.from) {
             dateMatch = filteredActivities.some(a => a.leadId === lead.id);
         }
-        return userMatch && dateMatch;
+
+        const campaignMatch = filters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === filters.campaign;
+        return userMatch && dateMatch && campaignMatch;
     });
   }, [allLeads, filters, filteredActivities, userProfile]);
 
@@ -268,6 +279,22 @@ export default function DoorToDoorReportingPage() {
                     onSelectedChange={(selected) => handleFilterChange('user', selected)}
                     placeholder="Select users..."
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Campaign</Label>
+                <Select value={filters.campaign} onValueChange={(val) => handleFilterChange('campaign', val)}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="All Campaigns" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Campaigns</SelectItem>
+                        {availableCampaigns.map((c) => (
+                            <SelectItem key={c.id} value={c.name}>
+                                {c.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="date">Date Range</Label>

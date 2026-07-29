@@ -39,7 +39,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   fieldActivityReport: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Sales Manager'],
   inboundReporting: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'Franchisee', 'Marketing Manager'],
   amReporting: ['Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
-  archivedLeads: ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'user'],
+  archivedLeads: ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'user', 'Outbound Admin'],
   deploymentHistory: ['Sales Manager', 'Field Sales Admin'],
   signedCustomers: ['Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Franchisee', 'Account Managers', 'Account Manager', 'account managers', 'Customer Success', 'Sales Manager', 'Customer Service'],
   scans: ['superadmin', 'Customer Success', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager', 'Marketing Manager', 'Customer Service'],
@@ -86,6 +86,12 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
                 const currentImportLeads: string[] = currentFeatures.importLeads || DEFAULT_ROLE_ACCESS.importLeads;
                 if (!currentImportLeads.includes('Outbound Admin')) {
                     currentFeatures.importLeads = Array.from(new Set([...currentImportLeads, 'Outbound Admin']));
+                    needsUpdate = true;
+                }
+
+                const currentArchivedLeads: string[] = currentFeatures.archivedLeads || DEFAULT_ROLE_ACCESS.archivedLeads;
+                if (!currentArchivedLeads.includes('Outbound Admin') || !currentArchivedLeads.includes('user')) {
+                    currentFeatures.archivedLeads = Array.from(new Set([...currentArchivedLeads, 'Outbound Admin', 'user']));
                     needsUpdate = true;
                 }
 

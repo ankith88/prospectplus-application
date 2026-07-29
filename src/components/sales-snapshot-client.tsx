@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { usePerformance } from '@/hooks/use-performance';
 import type { Lead, Activity, LeadStatus, Appointment, VisitNote, LeadBucket } from '@/lib/types';
+import { LeadCampaign, getLeadCampaigns } from '@/services/lead-campaigns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { 
@@ -260,6 +261,12 @@ export default function SalesSnapshotClient() {
   const { userProfile } = useAuth();
   const { toast } = useToast();
 
+  const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
+
+  useEffect(() => {
+    getLeadCampaigns().then((camps: LeadCampaign[]) => setAvailableCampaigns(camps.filter((c: LeadCampaign) => c.isActive))).catch(console.error);
+  }, []);
+
   const [filters, setFilters] = useState({
     dateFilterType: 'activityDate' as 'activityDate' | 'dateLeadEntered' | 'quoteSentAt' | 'signedUpAt' | 'scfAcceptedAt' | 'trialStartedAt',
     dateRange: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
@@ -268,6 +275,7 @@ export default function SalesSnapshotClient() {
     bucket: [] as string[],
     accountManager: [] as string[],
     dialer: [] as string[],
+    campaign: 'all',
   });
 
   const [appliedFilters, setAppliedFilters] = useState({
@@ -278,12 +286,14 @@ export default function SalesSnapshotClient() {
     bucket: [] as string[],
     accountManager: [] as string[],
     dialer: [] as string[],
+    campaign: 'all',
   });
 
   const hasUnappliedFilters = useMemo(() => {
     return filters.dateFilterType !== appliedFilters.dateFilterType ||
            filters.dateRange?.from?.getTime() !== appliedFilters.dateRange?.from?.getTime() ||
            filters.dateRange?.to?.getTime() !== appliedFilters.dateRange?.to?.getTime() ||
+           filters.campaign !== appliedFilters.campaign ||
            JSON.stringify(filters.franchisee) !== JSON.stringify(appliedFilters.franchisee) ||
            JSON.stringify(filters.status) !== JSON.stringify(appliedFilters.status) ||
            JSON.stringify(filters.bucket) !== JSON.stringify(appliedFilters.bucket) ||
@@ -304,6 +314,7 @@ export default function SalesSnapshotClient() {
       bucket: [],
       accountManager: [],
       dialer: [],
+      campaign: 'all',
     };
     setFilters(defaultFilters);
     setAppliedFilters(defaultFilters);
@@ -543,7 +554,9 @@ export default function SalesSnapshotClient() {
             }
         }
 
-        return statusMatch && franchiseeMatch && bucketMatch && amMatch && dialerMatch && dateMatch;
+        const campaignMatch = !appliedFilters.campaign || appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
+
+        return statusMatch && franchiseeMatch && bucketMatch && amMatch && dialerMatch && dateMatch && campaignMatch;
     });
   }, [allLeads, appliedFilters, userProfile]);
 
@@ -1042,6 +1055,23 @@ export default function SalesSnapshotClient() {
                       <SelectItem value="signedUpAt">Date Signed Up</SelectItem>
                       <SelectItem value="scfAcceptedAt">Date SCF Accepted</SelectItem>
                       <SelectItem value="trialStartedAt">Date Trial Started</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Campaign</Label>
+                  <Select value={filters.campaign} onValueChange={(val) => setFilters(prev => ({ ...prev, campaign: val }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Campaigns" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Campaigns</SelectItem>
+                      {availableCampaigns.map((c) => (
+                        <SelectItem key={c.id} value={c.name}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
