@@ -42,13 +42,18 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
   const [savingContacts, setSavingContacts] = useState(false);
 
   const handleSaveDetails = async () => {
+    if (hasAccepted) {
+      alert('This Service Commencement Form has been signed or accepted and cannot be edited.');
+      setIsEditingDetails(false);
+      return;
+    }
     const cleanedAbn = formData.abn.replace(/\s+/g, '').replace(/-/g, '');
     if (!validateABN(cleanedAbn)) {
       alert('Please enter a valid 11-digit Australian Business Number (ABN).');
       return;
     }
     setSavingDetails(true);
-    const res = await updateScfDetailsAction(lead.id, contact?.id, { abn: cleanedAbn });
+    const res = await updateScfDetailsAction(lead.id, contact?.id, { abn: cleanedAbn }, scf.id);
     setSavingDetails(false);
     if (res.success) {
       setIsEditingDetails(false);
@@ -60,6 +65,11 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
   };
 
   const handleSaveContacts = async () => {
+    if (hasAccepted) {
+      alert('This Service Commencement Form has been signed or accepted and cannot be edited.');
+      setIsEditingContacts(false);
+      return;
+    }
     setSavingContacts(true);
     const res = await updateScfDetailsAction(lead.id, contact?.id, {
       contactName: formData.contactName,
@@ -67,7 +77,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
       contactPhone: formData.contactPhone,
       customerServiceEmail: formData.customerServiceEmail,
       customerPhone: formData.customerPhone,
-    });
+    }, scf.id);
     setSavingContacts(false);
     if (res.success) {
       setIsEditingContacts(false);
@@ -174,7 +184,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
     }
   }, []);
 
-  const hasAccepted = success || scf.status === 'Accepted';
+  const hasAccepted = success || scf.status === 'Accepted' || scf.status === 'Signed' || scf.status === 'Quote Accepted' || !!scf.acceptedAt || !!scf.signedAt;
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-32 font-sans text-slate-800">

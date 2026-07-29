@@ -2778,6 +2778,12 @@ async function createScfRecord(leadId: string, data: any): Promise<string> {
     return docRef.id;
 }
 
+export function isScfSignedOrAccepted(scfData: any): boolean {
+    if (!scfData) return false;
+    const status = scfData.status || '';
+    return status === 'Accepted' || status === 'Signed' || status === 'Quote Accepted' || !!scfData.acceptedAt || !!scfData.signedAt;
+}
+
 async function getScfRecord(leadId: string, scfId: string): Promise<any> {
     const docSnap = await getDoc(doc(firestore, 'leads', leadId, 'scfs', scfId));
     if (!docSnap.exists()) return null;
@@ -2790,6 +2796,10 @@ async function getScfRecords(leadId: string): Promise<any[]> {
 }
 
 async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' | 'Accepted' | 'Cancelled'): Promise<void> {
+    const existing = await getScfRecord(leadId, scfId);
+    if (existing && isScfSignedOrAccepted(existing) && status !== existing.status) {
+        throw new Error('Signed or accepted Service Commencement Forms cannot be modified or cancelled.');
+    }
     await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), { 
         status,
         updatedAt: new Date().toISOString() 
@@ -2797,6 +2807,10 @@ async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' 
 }
 
 async function updateScfRecord(leadId: string, scfId: string, data: any): Promise<void> {
+    const existing = await getScfRecord(leadId, scfId);
+    if (existing && isScfSignedOrAccepted(existing)) {
+        throw new Error('Signed or accepted Service Commencement Forms are locked and cannot be edited.');
+    }
     await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), prepareForFirestore({
         ...data,
         updatedAt: new Date().toISOString()

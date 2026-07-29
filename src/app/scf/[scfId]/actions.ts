@@ -13,6 +13,16 @@ export async function acceptScfAction(leadId: string, scfId: string) {
     if (!leadSnap.exists) {
       return { success: false, message: 'Lead not found.' };
     }
+
+    const scfDocRef = adminDb.collection('leads').doc(leadId).collection('scfs').doc(scfId);
+    const scfDocSnap = await scfDocRef.get();
+    if (scfDocSnap.exists) {
+      const scfData = scfDocSnap.data();
+      const status = scfData?.status || '';
+      if (status === 'Accepted' || status === 'Signed' || !!scfData?.acceptedAt || !!scfData?.signedAt) {
+        return { success: true, message: 'SCF has already been accepted.' };
+      }
+    }
     
     const leadData = leadSnap.data();
     const abn = leadData?.abn || '';
@@ -339,9 +349,30 @@ export async function updateScfDetailsAction(
     contactPhone?: string;
     customerServiceEmail?: string;
     customerPhone?: string;
-  }
+  },
+  scfId?: string
 ) {
   try {
+    if (scfId) {
+      const scfSnap = await adminDb.collection('leads').doc(leadId).collection('scfs').doc(scfId).get();
+      if (scfSnap.exists) {
+        const scfData = scfSnap.data();
+        const status = scfData?.status || '';
+        if (status === 'Accepted' || status === 'Signed' || status === 'Quote Accepted' || !!scfData?.acceptedAt || !!scfData?.signedAt) {
+          return { success: false, message: 'This Service Commencement Form has been signed or accepted and cannot be edited.' };
+        }
+      }
+    } else {
+      const scfsSnap = await adminDb.collection('leads').doc(leadId).collection('scfs').get();
+      const hasAcceptedScf = scfsSnap.docs.some(doc => {
+        const d = doc.data();
+        return d.status === 'Accepted' || d.status === 'Signed' || d.status === 'Quote Accepted' || !!d.acceptedAt || !!d.signedAt;
+      });
+      if (hasAcceptedScf) {
+        return { success: false, message: 'This Service Commencement Form has been signed or accepted and cannot be edited.' };
+      }
+    }
+
     const leadUpdate: any = {};
     if (data.abn !== undefined) leadUpdate.abn = data.abn;
     if (data.customerServiceEmail !== undefined) leadUpdate.customerServiceEmail = data.customerServiceEmail;
