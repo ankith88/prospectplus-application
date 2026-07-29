@@ -1432,6 +1432,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const { toast } = useToast();
   const { user, userProfile, isSuperAdmin } = useAuth();
   const isActionable = isLeadActionableForUser(lead, userProfile, isSuperAdmin);
+  const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
   const { isSessionActive, sessionLeadIds: sessionLeads, sessionReturnUrl, endSession, trackLeadVisit, removeLeadFromSession } = useDialingSession();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -2398,6 +2399,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleInitiateSms = (phoneNumber: string, recipientName: string = '') => {
+    if (isUserRole) {
+      toast({ variant: 'destructive', title: 'Permission Denied', description: 'Users with the "user" role are not allowed to send SMS.' });
+      return;
+    }
     setSmsTargetPhone(phoneNumber);
     setSmsTargetName(recipientName);
     setSmsDialogOpen(true);
@@ -2738,9 +2743,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <Button id="step-aircall-link" variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(leadId, value)}>
                             <PhoneCall className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateSms(value, lead.companyName || 'Lead')}>
-                            <MessageSquare className="h-3 w-3" />
-                        </Button>
+                        {!isUserRole && (
+                          <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateSms(value, lead.companyName || 'Lead')}>
+                              <MessageSquare className="h-3 w-3" />
+                          </Button>
+                        )}
                     </>
                 )}
 
@@ -4806,7 +4813,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             <span className="text-muted-foreground">-</span>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="h-3 w-3" /></Button><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateSms(contact.phone, contact.name)}><MessageSquare className="h-3 w-3" /></Button></div>
+                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="h-3 w-3" /></Button>{!isUserRole && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateSms(contact.phone, contact.name)}><MessageSquare className="h-3 w-3" /></Button>}</div>
                                     
                                     {contact.localMilePlusAuthLink && contact.securityCode && (
                                         <div className="mt-3 pt-2 border-t border-muted-foreground/20 space-y-1 text-xs">

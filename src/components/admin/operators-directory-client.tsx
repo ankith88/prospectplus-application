@@ -31,7 +31,8 @@ export default function OperatorsDirectoryClient() {
   
   const [emailDialogTarget, setEmailDialogTarget] = useState<{ email: string, name: string } | null>(null);
   const [smsDialogTarget, setSmsDialogTarget] = useState<{ phone: string, name: string } | null>(null);
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
+  const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
 
   useEffect(() => {
     async function loadData() {
@@ -154,16 +155,20 @@ export default function OperatorsDirectoryClient() {
                   <TableCell>{getFranchiseeName(op.mainFranchiseeId)}</TableCell>
                   <TableCell>
                     {op.contactPhone ? (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSmsDialogTarget({ phone: op.contactPhone!, name: `${op.givenNames} ${op.surname}`.trim() || 'Operator' });
-                        }}
-                        className="text-primary hover:underline text-left bg-transparent border-none p-0 cursor-pointer"
-                        title="Send SMS via App"
-                      >
-                        {op.contactPhone}
-                      </button>
+                      !isUserRole ? (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSmsDialogTarget({ phone: op.contactPhone!, name: `${op.givenNames} ${op.surname}`.trim() || 'Operator' });
+                          }}
+                          className="text-primary hover:underline text-left bg-transparent border-none p-0 cursor-pointer"
+                          title="Send SMS via App"
+                        >
+                          {op.contactPhone}
+                        </button>
+                      ) : (
+                        <span>{op.contactPhone}</span>
+                      )
                     ) : (
                       <span className="text-muted-foreground">N/A</span>
                     )}

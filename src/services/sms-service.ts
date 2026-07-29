@@ -38,7 +38,11 @@ export async function formatAustralianMobile(phone: string): Promise<string | nu
 /**
  * Sends an SMS using the MailPlus Driver API.
  */
-export async function sendSms(phone: string, text: string): Promise<{ success: boolean; message?: string }> {
+export async function sendSms(phone: string, text: string, senderRole?: string): Promise<{ success: boolean; message?: string }> {
+  if (senderRole && (senderRole === 'user' || senderRole.toLowerCase() === 'user')) {
+    return { success: false, message: 'Users with the role "user" are not allowed to send SMS.' };
+  }
+
   const formattedPhone = await formatAustralianMobile(phone);
   
   if (!formattedPhone) {

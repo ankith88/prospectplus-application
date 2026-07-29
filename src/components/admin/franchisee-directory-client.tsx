@@ -59,6 +59,7 @@ export default function FranchiseeDirectoryClient() {
   const [syncing, setSyncing] = useState(false);
 
   const { user, userProfile, isSuperAdmin } = useAuth();
+  const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
   const { toast } = useToast();
 
   useEffect(() => {
@@ -477,16 +478,20 @@ export default function FranchiseeDirectoryClient() {
                   </TableCell>
                   <TableCell>
                     {franchisee.mobile ? (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSmsDialogTarget({ phone: franchisee.mobile!, name: franchisee.mainContact || franchisee.name || 'Franchisee' });
-                        }}
-                        className="text-primary hover:underline text-left bg-transparent border-none p-0 cursor-pointer"
-                        title="Send SMS via App"
-                      >
-                        {franchisee.mobile}
-                      </button>
+                      !isUserRole ? (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSmsDialogTarget({ phone: franchisee.mobile!, name: franchisee.mainContact || franchisee.name || 'Franchisee' });
+                          }}
+                          className="text-primary hover:underline text-left bg-transparent border-none p-0 cursor-pointer"
+                          title="Send SMS via App"
+                        >
+                          {franchisee.mobile}
+                        </button>
+                      ) : (
+                        <span>{franchisee.mobile}</span>
+                      )
                     ) : (
                       <span className="text-muted-foreground">N/A</span>
                     )}
@@ -708,16 +713,20 @@ export default function FranchiseeDirectoryClient() {
                                 <TableCell>{`${op.givenNames} ${op.surname}`.trim() || 'N/A'}</TableCell>
                                 <TableCell>
                                   {op.contactPhone ? (
-                                    <button 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSmsDialogTarget({ phone: op.contactPhone!, name: `${op.givenNames} ${op.surname}`.trim() || 'Operator' });
-                                      }}
-                                      className="text-primary hover:underline text-left bg-transparent border-none p-0 cursor-pointer"
-                                      title="Send SMS via App"
-                                    >
-                                      {op.contactPhone}
-                                    </button>
+                                    !isUserRole ? (
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSmsDialogTarget({ phone: op.contactPhone!, name: `${op.givenNames} ${op.surname}`.trim() || 'Operator' });
+                                        }}
+                                        className="text-primary hover:underline text-left bg-transparent border-none p-0 cursor-pointer"
+                                        title="Send SMS via App"
+                                      >
+                                        {op.contactPhone}
+                                      </button>
+                                    ) : (
+                                      <span>{op.contactPhone}</span>
+                                    )
                                   ) : (
                                     <span className="text-muted-foreground">N/A</span>
                                   )}

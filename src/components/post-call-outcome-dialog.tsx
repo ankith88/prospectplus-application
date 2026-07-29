@@ -788,13 +788,8 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
         }
     }
 
-    if ((values.outcome === 'LOST - No Response' || values.outcome === 'Lost - Out of Territory') && values.sendEmail && uniqueEmails.length > 0 && !values.targetEmail) {
+    if ((values.outcome === 'Email Interested' || values.outcome === 'Email Brush-Off' || values.outcome === 'Email Brush Off') && values.sendEmail && uniqueEmails.length > 0 && !values.targetEmail) {
         form.setError('targetEmail', { type: 'manual', message: 'Please select an email address.' });
-        return;
-    }
-
-    if (values.outcome === 'No Answer' && values.sendSms && uniquePhones.length > 0 && !values.targetPhone) {
-        form.setError('targetPhone', { type: 'manual', message: 'Please select a phone number.' });
         return;
     }
     
@@ -1095,124 +1090,6 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
             }
         }
 
-        // 3a. Special handling for LOST - No Response
-        if (values.outcome === 'LOST - No Response' && values.sendEmail && userProfile?.activeRole !== 'user') {
-            const targetEmail = values.targetEmail;
-            const targetEmailObj = uniqueEmails.find(e => e.email === targetEmail);
-            const contactName = targetEmailObj ? targetEmailObj.name : '';
-
-            if (targetEmail) {
-                try {
-                    const response = await fetch('/api/campaigns/send-direct', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            leadIds: [lead.id],
-                            templateId: 'IxIOJNAExBaWNsnKfHs0',
-                            targetEmail: targetEmail,
-                            cc: values.cc || undefined,
-                            bcc: values.bcc || undefined,
-                            customSubject: values.subject || undefined,
-                            customSenderEmail: (userProfile?.activeRole as string) === 'user' ? 'localmile@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
-                            overrideContactName: contactName
-                        })
-                    });
-                    const result = await response.json();
-                    if (!result.success) {
-                        console.error('Failed to send LOST - No Response email', result.message);
-                        toast({ variant: 'destructive', title: 'Email Error', description: result.message || 'Failed to send No Response email.' });
-                    } else {
-                        toast({ title: 'Email Sent', description: 'Lost - No Response email was automatically sent.' });
-                    }
-                } catch (e) {
-                    console.error('Error sending direct email:', e);
-                }
-            } else {
-                toast({ variant: 'destructive', title: 'No Email Found', description: 'Could not find a valid email address to send the No Response email to.' });
-            }
-        }
-
-        // 3b. Special handling for Lost - Out of Territory
-        if (values.outcome === 'Lost - Out of Territory' && values.sendEmail && (userProfile?.activeRole as string) !== 'user') {
-            const targetEmail = values.targetEmail;
-            const targetEmailObj = uniqueEmails.find(e => e.email === targetEmail);
-            const contactName = targetEmailObj ? targetEmailObj.name : '';
-
-            if (targetEmail) {
-                try {
-                    const templatesRef = collection(db, 'marketing_templates');
-                    const q = query(templatesRef, where('name', '==', 'Sales - Out of Territory'));
-                    const querySnapshot = await getDocs(q);
-                    
-                    if (querySnapshot.empty) {
-                        console.error('Template "Sales - Out of Territory" not found.');
-                        toast({ variant: 'destructive', title: 'Email Error', description: 'Template "Sales - Out of Territory" not found.' });
-                    } else {
-                        const templateId = querySnapshot.docs[0].id;
-                        const response = await fetch('/api/campaigns/send-direct', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                leadIds: [lead.id],
-                                templateId: templateId,
-                                targetEmail: targetEmail,
-                                cc: values.cc || undefined,
-                                bcc: values.bcc || undefined,
-                                customSubject: values.subject || undefined,
-                                customSenderEmail: (userProfile?.activeRole as string) === 'user' ? 'localmile@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
-                                overrideContactName: contactName
-                            })
-                        });
-                        const result = await response.json();
-                        if (!result.success) {
-                            console.error('Failed to send Sales - Out of Territory email', result.message);
-                            toast({ variant: 'destructive', title: 'Email Error', description: result.message || 'Failed to send Out of Territory email.' });
-                        } else {
-                            toast({ title: 'Email Sent', description: 'Sales - Out of Territory email was automatically sent.' });
-                        }
-                    }
-                } catch (e: any) {
-                    console.error('Error sending direct email:', e);
-                    toast({ variant: 'destructive', title: 'Email Error', description: e.message || 'Error querying template or sending email.' });
-                }
-            } else {
-                toast({ variant: 'destructive', title: 'No Email Found', description: 'Could not find a valid email address to send the email to.' });
-            }
-        }
-
-        // 4. Special handling for No Answer (SMS)
-        if (values.outcome === 'No Answer' && values.sendSms) {
-            const targetPhone = values.targetPhone;
-            const targetPhoneObj = uniquePhones.find(p => p.phone === targetPhone);
-            const contactNameFull = targetPhoneObj ? (targetPhoneObj.name === lead.companyName ? 'there' : targetPhoneObj.name) : 'there';
-            const contactFirstName = contactNameFull === 'there' ? 'there' : contactNameFull.split(' ')[0];
-            
-            if (targetPhone) {
-                const displayName = userProfile?.displayName || user.displayName || 'your MailPlus rep';
-                const userPhone = userProfile?.phoneNumber || 'my number';
-                const smsMessage = `Hi ${contactFirstName}, thanks for your interest in MailPlus. I'm ${displayName}. I just tried to call you for a quick chat. Save my number ${userPhone} and call me back, or text me your best day/time for a call. We've got great solutions and prices I think you'll love. Please respond to my number (not this one). Thank you, ${displayName}.`;
-                
-                try {
-                    const smsResult = await sendSms(targetPhone, smsMessage);
-                    if (smsResult.success) {
-                        toast({ title: 'SMS Sent', description: 'Automatic No Answer SMS was sent.' });
-                        await logActivity(lead.id, {
-                            type: 'Update',
-                            notes: `Automatic SMS sent to ${targetPhone} (${contactNameFull}) on 'No Answer'.`,
-                            author: user.displayName || 'System'
-                        });
-                    } else {
-                        toast({ variant: 'destructive', title: 'SMS Failed', description: smsResult.message || 'Failed to send No Answer SMS.' });
-                    }
-                } catch (e: any) {
-                    console.error('Error sending SMS:', e);
-                    toast({ variant: 'destructive', title: 'SMS Error', description: e.message || 'Error sending No Answer SMS.' });
-                }
-            } else if (uniquePhones.length > 0) {
-                 toast({ variant: 'destructive', title: 'No Phone Selected', description: 'Could not send the No Answer SMS.' });
-            }
-        }
-
         setSubmissionState('complete');
         onOutcomeLogged(newStatus, values.outcome); 
 
@@ -1464,10 +1341,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                       </Button>
                     </div>
 
-                    {(userProfile?.activeRole === 'user'
-                      ? (outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off')
-                      : (outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory' || outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off')
-                    ) && uniqueEmails.length > 0 && (
+                    {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && uniqueEmails.length > 0 && (
                       <div className="space-y-4">
                         <FormField
                           control={form.control}
@@ -1482,13 +1356,9 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                               </FormControl>
                               <div className="space-y-1 leading-none">
                                 <FormLabel className="text-xs font-medium cursor-pointer">
-                                  {outcome === 'Lost - Out of Territory'
-                                    ? "Send automatic 'Sales - Out of Territory' email"
-                                    : outcome === 'Email Brush-Off' || outcome === 'Email Brush Off'
+                                  {outcome === 'Email Brush-Off' || outcome === 'Email Brush Off'
                                     ? "Send 'Email Brush-Off' template email"
-                                    : outcome === 'Email Interested'
-                                    ? "Send 'Email Interested' template email"
-                                    : "Send automatic 'No Response' email"}
+                                    : "Send 'Email Interested' template email"}
                                 </FormLabel>
                               </div>
                             </FormItem>
@@ -1608,11 +1478,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                                 <FormItem>
                                   <div className="flex items-center justify-between">
                                     <FormLabel className="text-xs font-semibold">
-                                      {outcome === 'Lost - Out of Territory'
-                                        ? "Send 'Sales - Out of Territory' Email To"
-                                        : (outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off')
-                                        ? "Send Email To"
-                                        : "Send 'No Response' Email To"}
+                                      Send Email To
                                     </FormLabel>
                                      {uniqueEmails.length > 1 && (
                                       <Button
@@ -1854,69 +1720,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                       </div>
                     )}
 
-                    {outcome === 'No Answer' && uniquePhones.length > 0 && (
-                      <div className="space-y-4 border p-4 rounded-lg bg-amber-50/40 border-amber-200">
-                        <FormField
-                          control={form.control}
-                          name="sendSms"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3 bg-white">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                />
-                              </FormControl>
-                              <div className="space-y-1 leading-none">
-                                <FormLabel className="text-xs font-semibold cursor-pointer">
-                                  Send automatic 'Missed Call' SMS to prospect
-                                </FormLabel>
-                              </div>
-                            </FormItem>
-                          )}
-                        />
-                        {form.watch('sendSms') && (
-                          <FormField
-                            control={form.control}
-                            name="targetPhone"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel className="text-xs font-semibold">Select Target Phone Number</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || uniquePhones[0]?.phone}>
-                                  <FormControl>
-                                    <SelectTrigger className="bg-white text-xs">
-                                      <SelectValue placeholder="Select phone number" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {uniquePhones.map(p => (
-                                        <SelectItem key={p.phone} value={p.phone}>
-                                          {p.phone} ({p.label})
-                                        </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                {field.value && (
-                                  <div className="mt-3 text-xs bg-muted/65 border border-border/80 rounded-md p-3 text-muted-foreground space-y-1.5">
-                                    <span className="font-semibold text-foreground flex items-center gap-1.5">
-                                      <Info className="h-3.5 w-3.5 text-blue-500" />
-                                      Automatic SMS will be sent:
-                                    </span>
-                                    <p className="italic bg-background/60 p-2.5 rounded border border-border/50 font-mono text-[11px] leading-relaxed">
-                                      "{getSmsPreview()}"
-                                    </p>
-                                  </div>
-                                )}
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        )}
-                      </div>
-                    )}
-                    {outcome === 'No Answer' && uniquePhones.length === 0 && (
-                       <p className="text-sm text-destructive">No phone numbers found for this lead. The automatic SMS will not be sent.</p>
-                    )}
+
 
                     {(outcome === 'Qualified - Call Back/Send Info' || outcome === 'Call Back/Follow-up') && (
                       <div className="space-y-3 border p-4 rounded-lg bg-blue-50/40 border-blue-200">

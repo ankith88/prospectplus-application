@@ -230,10 +230,12 @@ export default function CustomerSuccessDashboard() {
             setLostDialogOpen(false);
             setLostNotes('');
             
+            const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
+
             if (lostAction === 'email') {
                 setActiveLead(lostLead);
                 setEmailDialogOpen(true);
-            } else if (lostAction === 'sms') {
+            } else if (lostAction === 'sms' && !isUserRole) {
                 const phone = lostLead.customerPhone || (lostLead.contacts && lostLead.contacts.length > 0 ? lostLead.contacts[0].phone : '');
                 const name = lostLead.companyName || '';
                 if (phone) {
@@ -909,7 +911,9 @@ export default function CustomerSuccessDashboard() {
                                 <SelectContent>
                                     <SelectItem value="none">No Action Required</SelectItem>
                                     <SelectItem value="email">Send Email</SelectItem>
-                                    <SelectItem value="sms">Send SMS</SelectItem>
+                                    {userProfile?.activeRole !== 'user' && userProfile?.activeRole?.toLowerCase() !== 'user' && userProfile?.role !== 'user' && (
+                                        <SelectItem value="sms">Send SMS</SelectItem>
+                                    )}
                                 </SelectContent>
                             </Select>
                         </div>
