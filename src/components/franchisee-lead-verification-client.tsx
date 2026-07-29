@@ -83,6 +83,7 @@ export default function FranchiseeLeadVerificationClient() {
         const isCandidate = 
           l.dialerAssigned === 'Aleyna Harnett' || 
           l.franchiseeReviewPending === true ||
+          !l.bucket || l.bucket === '' || l.bucket === 'blank' ||
           (l.customerSource === 'Franchisee Generated' && l.bucket === 'outbound');
 
         return isCandidate && !isAssignedToUserOrAm(l);

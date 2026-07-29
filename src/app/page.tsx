@@ -42,8 +42,11 @@ export default function HomePage() {
           break;
         case 'Field Sales':
         case 'Field Sales Admin':
-        case 'Franchisee':
           router.replace('/capture-visit');
+          break;
+        case 'Franchisee':
+        case 'franchisee':
+          router.replace('/leads/new');
           break;
         case 'Lead Gen Admin':
         case 'Dashback':

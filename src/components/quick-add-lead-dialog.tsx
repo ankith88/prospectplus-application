@@ -364,9 +364,11 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
             dialerAssigned: (userProfile.activeRole === 'Outbound Admin' || userProfile.activeRole === 'admin') ? '' : userProfile.displayName,
             campaign: userProfile.activeRole?.includes('Field Sales') ? 'Door-to-Door' : (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee' ? 'Franchisee Generated' : 'Outbound'),
             leadSource: (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee') ? '-4' : undefined,
-            bucket: userProfile.activeRole === 'Outbound Admin' ? 'outbound' : bucket,
+            bucket: (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee') ? '' : (userProfile.activeRole === 'Outbound Admin' ? 'outbound' : bucket),
             franchiseeInternalId,
-            franchiseeName
+            franchiseeName,
+            isZeeCreated: userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee',
+            franchiseeReviewPending: userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee'
         } as any);
 
         if (result.success && result.leadId) {
@@ -481,7 +483,7 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                         </div>
                     )}
                     <div className="space-y-2 pt-2">
-                        <Label htmlFor="bucket-select">Bucket*</Label>
+                        <Label htmlFor="bucket-select">Bucket<span className="text-red-500 font-bold ml-1">*</span></Label>
                         <Select value={bucket} onValueChange={setBucket}>
                             <SelectTrigger id="bucket-select">
                                 <SelectValue placeholder="Select a bucket" />

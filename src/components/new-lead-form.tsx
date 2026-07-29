@@ -43,6 +43,8 @@ import { addContactToLead, createNewLead, checkForDuplicateLead, updateVisitNote
 import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
+import { analyzeBusinessCard } from '@/ai/flows/analyze-business-card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
@@ -114,6 +116,23 @@ const formSchema = z.object({
   bucket: z.enum(['outbound', 'field_sales', 'inbound', 'account_manager', 'customer_success']).optional(),
   droppedOffBrochures: z.boolean().optional(),
   hadConversationWithContact: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (data.hadConversationWithContact) {
+    if (!data.contact?.email || data.contact.email.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Contact email is required when you spoke to a contact.',
+        path: ['contact', 'email'],
+      });
+    }
+    if (!data.contact?.phone || data.contact.phone.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Contact phone number is required when you spoke to a contact.',
+        path: ['contact', 'phone'],
+      });
+    }
+  }
 });
 
 export function NewLeadForm() {
@@ -146,6 +165,113 @@ export function NewLeadForm() {
   } | null>(null);
 
   const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
+
+  const [showCardScanner, setShowCardScanner] = useState(false);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [frontCardImage, setFrontCardImage] = useState<string | null>(null);
+  const [isCardAnalyzing, setIsCardAnalyzing] = useState(false);
+
+  const cardVideoRef = useRef<HTMLVideoElement | null>(null);
+  const cardCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (!showCardScanner) {
+      if (cardVideoRef.current && cardVideoRef.current.srcObject) {
+        (cardVideoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+      }
+      return;
+    }
+
+    const getCameraPermission = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        setHasCameraPermission(true);
+        if (cardVideoRef.current) {
+          cardVideoRef.current.srcObject = stream;
+        }
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasCameraPermission(false);
+        toast({
+          variant: 'destructive',
+          title: 'Camera Access Denied',
+          description: 'Please enable camera permissions in your browser settings.',
+        });
+      }
+    };
+
+    getCameraPermission();
+
+    return () => {
+      if (cardVideoRef.current && cardVideoRef.current.srcObject) {
+        (cardVideoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [showCardScanner, toast]);
+
+  const handleCaptureCardPhoto = () => {
+    if (!cardVideoRef.current || !cardCanvasRef.current) return null;
+    const canvas = cardCanvasRef.current;
+    canvas.width = cardVideoRef.current.videoWidth;
+    canvas.height = cardVideoRef.current.videoHeight;
+    const context = canvas.getContext('2d');
+    context?.drawImage(cardVideoRef.current, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg');
+  };
+
+  const handleRunCardAnalysis = (frontImg: string | null, backImg: string | null) => {
+    setShowCardScanner(false);
+    setIsCardAnalyzing(true);
+    toast({
+      title: 'Analyzing Business Card...',
+      description: 'AI is extracting business and contact details.',
+    });
+
+    analyzeBusinessCard({ frontImageDataUri: frontImg || undefined, backImageDataUri: backImg || undefined })
+      .then(result => {
+        if (result.companyName) {
+          form.setValue('companyName', result.companyName);
+          if (result.phoneNumber) form.setValue('customerPhone', result.phoneNumber);
+          if (result.email) form.setValue('customerServiceEmail', result.email);
+          if (result.website) form.setValue('websiteUrl', result.website);
+          if (result.personName) {
+            const parts = result.personName.split(' ');
+            form.setValue('contact.firstName', parts[0] || 'Info');
+            form.setValue('contact.lastName', parts.slice(1).join(' ') || result.companyName);
+          }
+          if (result.email) form.setValue('contact.email', result.email);
+          if (result.phoneNumber) form.setValue('contact.phone', result.phoneNumber);
+          if (result.jobTitle) form.setValue('contact.title', result.jobTitle);
+
+          if (result.address) {
+            form.setValue('address.street', result.address);
+          }
+
+          toast({
+            title: 'Business Card Scanned',
+            description: `Populated information for ${result.companyName}.`,
+          });
+        } else {
+          toast({
+            variant: 'destructive',
+            title: 'Analysis Incomplete',
+            description: 'Could not extract business details from the card.',
+          });
+        }
+      })
+      .catch(err => {
+        console.error('Card analysis error:', err);
+        toast({
+          variant: 'destructive',
+          title: 'Analysis Error',
+          description: 'Failed to analyze business card.',
+        });
+      })
+      .finally(() => {
+        setIsCardAnalyzing(false);
+        setFrontCardImage(null);
+      });
+  };
 
   const sortedAllFranchisees = useMemo(() => {
     return [...franchisees].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -212,6 +338,21 @@ export function NewLeadForm() {
 
   const campaign = form.watch('campaign');
   const leadSource = form.watch('leadSource');
+  const droppedOffBrochures = form.watch('droppedOffBrochures');
+  const hadConversationWithContact = form.watch('hadConversationWithContact');
+  const addressState = form.watch('address');
+  const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
+
+  const isAddressSelected = Boolean(
+    (addressState?.street && (addressState?.city || addressState?.zip)) || 
+    searchParams?.get('fromVisitNote')
+  );
+
+  const canShowRemainingSections = isAddressSelected && (
+    !isFranchiseeRole || 
+    franchiseeNotice?.status === 'serviceable' || 
+    isFranchiseeConfirmed
+  );
 
   useEffect(() => {
     if (userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Field Sales Admin') {
@@ -225,13 +366,20 @@ export function NewLeadForm() {
     } else if (userProfile?.activeRole === 'Outbound Admin') {
       form.setValue('campaign', 'Outbound');
       form.setValue('bucket', 'outbound');
-    } else if (userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee') {
-      form.setValue('campaign', 'Franchisee Generated');
-      if (!form.getValues('leadSource')) {
-        form.setValue('leadSource', '-4');
-      }
     }
   }, [userProfile, form]);
+
+  useEffect(() => {
+    if (isFranchiseeRole) {
+      form.setValue('campaign', 'Franchisee Generated');
+      form.setValue('leadSource', '-4');
+      if (droppedOffBrochures || hadConversationWithContact) {
+        form.setValue('bucket', 'account_manager');
+      } else {
+        form.setValue('bucket', '' as any);
+      }
+    }
+  }, [isFranchiseeRole, droppedOffBrochures, hadConversationWithContact, form]);
 
   useEffect(() => {
     if (leadSource === '492239') {
@@ -245,8 +393,6 @@ export function NewLeadForm() {
   const activeDialers = useMemo(() => allUsers.filter(u => (u.assignedRoles?.includes('user') || u.assignedRoles?.includes('Lead Gen') || u.assignedRoles?.includes('Dialer') || u.assignedRoles?.includes('dialers') || u.role === 'user' || u.role === 'Dialer' || u.role === 'dialers') && !u.disabled), [allUsers]);
   const activeFieldReps = useMemo(() => allUsers.filter(u => u.assignedRoles?.includes('Field Sales') && !u.disabled), [allUsers]);
   const activeAccountManagers = useMemo(() => allUsers.filter(u => u.assignedRoles?.includes('Account Managers') && !u.disabled && canAssignToAm(u)), [allUsers]);
-
-  const addressState = form.watch('address');
 
   useEffect(() => {
       setIsFranchiseeConfirmed(false);
@@ -669,7 +815,8 @@ export function NewLeadForm() {
     }
   };
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>, isAddAnother: boolean = false) {
+    const isAnother = typeof isAddAnother === 'boolean' ? isAddAnother : false;
     setIsSubmitting(true);
     let finalValues = { ...values };
 
@@ -719,8 +866,10 @@ export function NewLeadForm() {
         if (isPriority) {
             finalValues.bucket = 'account_manager';
             (finalValues as any).isPriority = true;
+            (finalValues as any).franchiseeReviewPending = false;
         } else {
-            finalValues.bucket = 'outbound';
+            finalValues.bucket = '' as any;
+            (finalValues as any).isPriority = false;
             (finalValues as any).franchiseeReviewPending = true;
         }
     }
@@ -765,7 +914,12 @@ export function NewLeadForm() {
         visitNoteID: visitNoteId || undefined,
         franchiseeInternalId: selectedFranchiseeObj?.internalId || (values.franchisee === 'MailPlus Pty Ltd' ? '435' : undefined),
         franchiseeName: selectedFranchiseeObj?.name || (values.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : undefined),
-        leadSource: values.leadSource
+        leadSource: values.leadSource,
+        droppedOffBrochures,
+        hadConversationWithContact,
+        isPriority,
+        isZeeCreated: isFranchiseeRole,
+        franchiseeReviewPending: isFranchiseeRole && !isPriority
       });
 
       if (result.success && result.leadId) {
@@ -778,22 +932,26 @@ export function NewLeadForm() {
             isPriority,
         };
 
-        if (isFranchiseeRole && !isPriority) {
-            assignmentUpdates.dialerAssigned = 'Aleyna Harnett';
-            assignmentUpdates.franchiseeReviewPending = true;
-        }
-
-        if (finalValues.franchisee) {
-            const fName = selectedFranchiseeObj?.name || (finalValues.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : finalValues.franchisee);
-            const fId = selectedFranchiseeObj?.internalId || (finalValues.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : finalValues.franchisee);
-            assignmentUpdates.franchisee = fName;
-            assignmentUpdates.franchisee_id = fId;
-        }
-        if (finalValues.leadSource) {
-            assignmentUpdates.leadSource = finalValues.leadSource === '-4' ? 'Franchisee Generated' : finalValues.leadSource;
-        }
-        if (finalValues.bucket) {
-            assignmentUpdates.bucket = finalValues.bucket;
+        if (isFranchiseeRole) {
+            assignmentUpdates.customerSource = 'Franchisee Generated';
+            assignmentUpdates.leadSource = 'Franchisee Generated';
+            if (isPriority) {
+                assignmentUpdates.bucket = 'account_manager';
+                assignmentUpdates.isPriority = true;
+                assignmentUpdates.franchiseeReviewPending = false;
+            } else {
+                assignmentUpdates.bucket = '';
+                assignmentUpdates.isPriority = false;
+                assignmentUpdates.dialerAssigned = 'Aleyna Harnett';
+                assignmentUpdates.franchiseeReviewPending = true;
+            }
+        } else {
+            if (finalValues.leadSource) {
+                assignmentUpdates.leadSource = finalValues.leadSource === '-4' ? 'Franchisee Generated' : finalValues.leadSource;
+            }
+            if (finalValues.bucket) {
+                assignmentUpdates.bucket = finalValues.bucket;
+            }
         }
         if (finalValues.campaign === 'Outbound') {
             if (!isFranchiseeRole || isPriority) {
@@ -933,9 +1091,41 @@ export function NewLeadForm() {
 
         toast({
           title: 'Lead Created',
-          description: `${values.companyName} has been created.`,
+          description: `${values.companyName} has been created successfully.`,
         });
-        router.push(`/leads/${result.leadId}`);
+        if (isAnother) {
+          form.reset({
+            companyName: '',
+            websiteUrl: '',
+            customerPhone: '',
+            customerServiceEmail: '',
+            abn: '',
+            industryCategory: '',
+            campaign: isFranchiseeRole ? 'Franchisee Generated' : '',
+            initialNotes: '',
+            address: { street: '', city: '', state: '', zip: '', country: 'Australia' },
+            contact: { firstName: 'Info', lastName: '', title: 'Primary Contact', email: '', phone: '' },
+            salesRepAssigned: '',
+            dialerAssigned: '',
+            fieldRepAssigned: '',
+            accountManagerAssigned: '',
+            leadSource: isFranchiseeRole ? '-4' : '',
+            bucket: isFranchiseeRole ? ('' as any) : 'outbound',
+            droppedOffBrochures: false,
+            hadConversationWithContact: false,
+          });
+          setIsFranchiseeConfirmed(false);
+          setFranchiseeNotice(null);
+          setMatchedFranchisees([]);
+          setSelectedFranchiseeId('');
+          setImageUrls([]);
+          if (companySearchRef.current) {
+            companySearchRef.current.value = '';
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          router.push(`/leads/${result.leadId}`);
+        }
       } else {
         toast({
             variant: 'destructive',
@@ -988,7 +1178,7 @@ export function NewLeadForm() {
         </AlertDialog>
       )}
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={form.handleSubmit((data) => onSubmit(data, false))} className="space-y-6">
         <Card>
           <CardContent className="p-4 sm:p-6 space-y-8">
             <div className="space-y-4" id="step-company-search">
@@ -998,16 +1188,28 @@ export function NewLeadForm() {
                 name="companyName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Search by Company Name or Address*</FormLabel>
+                    <FormLabel>Search by Company Name or Address<span className="text-red-500 font-bold ml-1">*</span></FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        ref={(node) => {
-                          field.ref(node);
-                          companySearchRef.current = node;
-                        }}
-                        placeholder="Start typing to search Google Maps..."
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          {...field}
+                          ref={(node) => {
+                            field.ref(node);
+                            companySearchRef.current = node;
+                          }}
+                          placeholder="Start typing to search Google Maps..."
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          title="Scan Business Card or Brochure"
+                          onClick={() => setShowCardScanner(true)}
+                          className="flex-shrink-0"
+                        >
+                          <Camera className="h-4 w-4 text-primary" />
+                        </Button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1019,7 +1221,7 @@ export function NewLeadForm() {
 
             <div className="space-y-4">
               <div className="space-y-4" id="step-address-autocomplete">
-                <h3 className="text-lg font-medium flex items-center gap-2"><MapPin className="w-5 h-5" />Address*</h3>
+                <h3 className="text-lg font-medium flex items-center gap-2"><MapPin className="w-5 h-5" />Address<span className="text-red-500 font-bold ml-1">*</span></h3>
                 <AddressAutocomplete />
               </div>
 
@@ -1172,20 +1374,22 @@ export function NewLeadForm() {
               </>
             )}
 
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Company Details</h3>
+            {canShowRemainingSections && (
+              <>
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Company Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField control={form.control} name="companyName" render={({ field }) => (
-                    <FormItem><FormLabel>Company Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Name<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={form.control} name="websiteUrl" render={({ field }) => (
                     <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://example.com" /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={form.control} name="customerPhone" render={({ field }) => (
-                    <FormItem><FormLabel>Company Phone*</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Phone<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
                  <FormField control={form.control} name="customerServiceEmail" render={({ field }) => (
-                    <FormItem><FormLabel>Company Email*</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Email<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
                  <FormField control={form.control} name="abn" render={({ field }) => (
                     <FormItem><FormLabel>ABN</FormLabel><FormControl><Input {...field} placeholder="11 digits" /></FormControl><FormMessage /></FormItem>
@@ -1214,15 +1418,89 @@ export function NewLeadForm() {
                     </FormItem>
                   )}
                 />
+              </div>
+
+              {(leadSource === '-4' || campaign === 'Franchisee Generated' || isFranchiseeRole) && (
+                <div className="mt-4 mb-6 p-4 border rounded-lg bg-slate-50/80 space-y-4">
+                  <h4 className="font-semibold text-sm text-primary flex items-center gap-2">
+                    <Tag className="w-4 h-4" /> Franchisee Site Visit Details
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    If either box is checked, this lead will be marked as a <strong>Priority Lead</strong> and routed directly to the Account Manager pipeline.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                    <FormField
+                      control={form.control}
+                      name="droppedOffBrochures"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 bg-background">
+                          <FormControl>
+                            <input
+                              type="checkbox"
+                              checked={field.value || false}
+                              onChange={(e) => field.onChange(e.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            />
+                          </FormControl>
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-sm font-medium cursor-pointer">
+                              Dropped Off Brochures
+                            </FormLabel>
+                            <p className="text-xs text-muted-foreground">Left marketing material at location</p>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="hadConversationWithContact"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 bg-background">
+                          <FormControl>
+                            <input
+                              type="checkbox"
+                              checked={field.value || false}
+                              onChange={(e) => field.onChange(e.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            />
+                          </FormControl>
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-sm font-medium cursor-pointer">
+                              Had Conversation with Contact
+                            </FormLabel>
+                            <p className="text-xs text-muted-foreground">Spoke directly with staff/manager</p>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="pt-2">
+                    {droppedOffBrochures || hadConversationWithContact ? (
+                      <div className="p-3 border border-emerald-300 bg-emerald-50 text-emerald-900 rounded-md text-xs font-semibold flex items-center gap-2">
+                        <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-600 animate-pulse flex-shrink-0" />
+                        <span>⚡ <strong>Priority Lead Mode</strong>: Auto-assigned to Account Manager Bucket (routes directly to Account Management).</span>
+                      </div>
+                    ) : (
+                      <div className="p-3 border border-blue-300 bg-blue-50 text-blue-900 rounded-md text-xs font-semibold flex items-center gap-2">
+                        <span className="flex h-2.5 w-2.5 rounded-full bg-blue-600 flex-shrink-0" />
+                        <span>📋 <strong>Standard Verification Mode</strong>: Defaulted to Unassigned Bucket. Assigned to Aleyna Harnett for review on the Verification Page.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="leadSource"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Lead Source</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isFranchiseeRole}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className={isFranchiseeRole ? "bg-slate-100 font-medium cursor-not-allowed opacity-90" : ""}>
                             <SelectValue placeholder="Select a lead source" />
                           </SelectTrigger>
                         </FormControl>
@@ -1330,7 +1608,7 @@ export function NewLeadForm() {
                     name="campaign"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Campaign*</FormLabel>
+                        <FormLabel>Campaign<span className="text-red-500 font-bold ml-1">*</span></FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                             <SelectTrigger>
@@ -1364,80 +1642,32 @@ export function NewLeadForm() {
                    name="bucket"
                    render={({ field }) => (
                      <FormItem>
-                       <FormLabel>Bucket*</FormLabel>
-                       <Select onValueChange={field.onChange} value={field.value}>
-                         <FormControl>
-                           <SelectTrigger>
-                             <SelectValue placeholder="Select a bucket" />
-                           </SelectTrigger>
-                         </FormControl>
-                         <SelectContent>
-                           <SelectItem value="outbound">Outbound</SelectItem>
-                           <SelectItem value="field_sales">Field Sales</SelectItem>
-                           <SelectItem value="inbound">Inbound</SelectItem>
-                           <SelectItem value="account_manager">Account Manager</SelectItem>
-                           <SelectItem value="customer_success">Customer Success</SelectItem>
-                         </SelectContent>
-                       </Select>
+                       <FormLabel>Bucket<span className="text-red-500 font-bold ml-1">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ''} disabled={isFranchiseeRole}>
+                          <FormControl>
+                            <SelectTrigger className={isFranchiseeRole ? "bg-slate-100 font-medium cursor-not-allowed opacity-90" : ""}>
+                              <SelectValue placeholder="Unassigned" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="outbound">Outbound</SelectItem>
+                            <SelectItem value="field_sales">Field Sales</SelectItem>
+                            <SelectItem value="inbound">Inbound</SelectItem>
+                            <SelectItem value="account_manager">Account Manager</SelectItem>
+                            <SelectItem value="customer_success">Customer Success</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {isFranchiseeRole && (
+                          <p className="text-xs text-muted-foreground mt-1 font-medium">
+                            {field.value === 'account_manager' 
+                              ? "Auto-set to Account Manager Bucket (Priority Lead based on site visit details)." 
+                              : "Defaulted to Unassigned. Will be sent for verification."}
+                          </p>
+                        )}
                        <FormMessage />
                      </FormItem>
                    )}
                  />
-              </div>
-
-              <div className="mt-6 p-4 border rounded-lg bg-slate-50/80 space-y-4">
-                <h4 className="font-semibold text-sm text-primary flex items-center gap-2">
-                  <Tag className="w-4 h-4" /> Franchisee Site Visit Details
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  If either box is checked, this lead will be marked as a <strong>Priority Lead</strong> and routed directly to the Account Manager pipeline.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                  <FormField
-                    control={form.control}
-                    name="droppedOffBrochures"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 bg-background">
-                        <FormControl>
-                          <input
-                            type="checkbox"
-                            checked={field.value || false}
-                            onChange={(e) => field.onChange(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                          />
-                        </FormControl>
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium cursor-pointer">
-                            Dropped Off Brochures
-                          </FormLabel>
-                          <p className="text-xs text-muted-foreground">Left marketing material at location</p>
-                        </div>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="hadConversationWithContact"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 bg-background">
-                        <FormControl>
-                          <input
-                            type="checkbox"
-                            checked={field.value || false}
-                            onChange={(e) => field.onChange(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                          />
-                        </FormControl>
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium cursor-pointer">
-                            Had Conversation with Contact
-                          </FormLabel>
-                          <p className="text-xs text-muted-foreground">Spoke directly with staff/manager</p>
-                        </div>
-                      </FormItem>
-                    )}
-                  />
-                </div>
               </div>
             </div>
 
@@ -1461,10 +1691,10 @@ export function NewLeadForm() {
                         <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.email" render={({ field }) => (
-                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="john.d@example.com" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Email {hadConversationWithContact && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel><FormControl><Input {...field} type="email" placeholder="john.d@example.com" /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.phone" render={({ field }) => (
-                        <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} type="tel" placeholder="0412 345 678" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Phone {hadConversationWithContact && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel><FormControl><Input {...field} type="tel" placeholder="0412 345 678" /></FormControl><FormMessage /></FormItem>
                     )}/>
                 </div>
             </div>
@@ -1528,16 +1758,76 @@ export function NewLeadForm() {
                     )}
                 />
              </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
-        <div className="flex justify-end">
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? <Loader /> : 'Create Lead'}
-          </Button>
-        </div>
+        {canShowRemainingSections && (
+          <div className="flex flex-col sm:flex-row justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmitting || isCardAnalyzing}
+              onClick={form.handleSubmit((data) => onSubmit(data, true))}
+            >
+              {isSubmitting ? <Loader /> : 'Create & Add Another'}
+            </Button>
+            <Button type="submit" disabled={isSubmitting || isCardAnalyzing}>
+              {isSubmitting ? <Loader /> : 'Create Lead'}
+            </Button>
+          </div>
+        )}
       </form>
     </Form>
+
+    <Dialog open={showCardScanner} onOpenChange={(open) => {
+      setShowCardScanner(open);
+      if (!open) setFrontCardImage(null);
+    }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Camera className="w-5 h-5 text-primary" /> Scan Business Card / Brochure
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <canvas ref={cardCanvasRef} className="hidden" />
+          <div className="relative aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center">
+            <video ref={cardVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            {frontCardImage && (
+              <img src={frontCardImage} alt="Front of card" className="absolute top-2 left-2 w-1/4 rounded border-2 border-white shadow" />
+            )}
+          </div>
+          {!frontCardImage ? (
+            <div className="flex gap-2">
+              <Button type="button" className="w-full" disabled={!hasCameraPermission} onClick={() => {
+                const img = handleCaptureCardPhoto();
+                if (img) setFrontCardImage(img);
+              }}>
+                Capture Front
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setShowCardScanner(false)}>Cancel</Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Button type="button" className="w-full" onClick={() => {
+                  const backImg = handleCaptureCardPhoto();
+                  handleRunCardAnalysis(frontCardImage, backImg);
+                }}>
+                  Capture Back & Analyze
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setFrontCardImage(null)}>Retake Front</Button>
+              </div>
+              <Button type="button" variant="secondary" className="w-full" onClick={() => handleRunCardAnalysis(frontCardImage, null)}>
+                Skip Back & Analyze Front Only
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

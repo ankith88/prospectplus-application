@@ -6,6 +6,19 @@ import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
 
+const LEAD_SOURCE_ID_MAP: Record<string, string> = {
+  '-4': 'Franchisee Generated',
+  '491777': 'LocalMile.Plus',
+  '487126': 'WooCommerce',
+  '437098': 'ProspectPlus Lead Generation',
+  '246306': 'Shopify',
+  '207048': 'NeoPost',
+  '97943': 'Head Office Generated',
+  '17': 'Inbound - Call',
+  '11': 'Referral',
+  '492239': 'Account Manager Generated'
+};
+
 const TIMEOUT_DURATION = 60000; // 60 seconds for all requests
 
 class AbortError extends Error {
@@ -803,6 +816,11 @@ interface NewLeadData {
   bucket?: LeadBucket;
   noFranchisees?: boolean;
   selectedServiceOption?: string;
+  droppedOffBrochures?: boolean;
+  hadConversationWithContact?: boolean;
+  isPriority?: boolean;
+  isZeeCreated?: boolean;
+  franchiseeReviewPending?: boolean;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
@@ -872,9 +890,13 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     if (franchiseeName) {
         params.append('franchisee_name', franchiseeName);
     }
+    const leadSourceText = (leadSource && LEAD_SOURCE_ID_MAP[leadSource]) ? LEAD_SOURCE_ID_MAP[leadSource] : (campaign || 'Franchisee Generated');
     if (leadSource) {
         params.append('leadsource', leadSource);
+        params.append('leadsource_text', leadSourceText);
     }
+    params.append('source', leadSourceText);
+    params.append('customer_source', leadSourceText);
     if (bucket) {
         params.append('bucket', bucket);
     }
@@ -886,6 +908,21 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
     if (selectedServiceOption) {
         params.append('custentity_selected_service_option', selectedServiceOption);
+    }
+    if (payload.droppedOffBrochures !== undefined) {
+        params.append('dropped_off_brochures', String(payload.droppedOffBrochures));
+    }
+    if (payload.hadConversationWithContact !== undefined) {
+        params.append('had_conversation_with_contact', String(payload.hadConversationWithContact));
+    }
+    if (payload.isPriority !== undefined) {
+        params.append('is_priority', String(payload.isPriority));
+    }
+    if (payload.isZeeCreated !== undefined) {
+        params.append('is_zee_created', String(payload.isZeeCreated));
+    }
+    if (payload.franchiseeReviewPending !== undefined) {
+        params.append('franchisee_review_pending', String(payload.franchiseeReviewPending));
     }
 
     const url = `${baseUrl}?${params.toString()}`;
