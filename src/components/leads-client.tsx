@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table'
 import { getLeadsFromFirebase, subscribeLeadsFromFirebase } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
+import type { Lead, LeadStatus, Note, Activity, UserProfile, Contact } from '@/lib/types'
 import { encryptLeadId } from '@/lib/localmile-security'
 import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -951,29 +951,71 @@ export default function LeadsClientPage({
     return stringData;
   };
 
+  const getContactFirstAndLastName = (contact?: Partial<Contact>) => {
+    if (!contact) return { firstName: '', lastName: '' };
+    if (contact.firstName) {
+      const lastName = contact.name ? contact.name.replace(contact.firstName, '').trim() : '';
+      return { firstName: contact.firstName, lastName };
+    }
+    if (contact.name) {
+      const parts = contact.name.trim().split(/\s+/);
+      const firstName = parts[0] || '';
+      const lastName = parts.slice(1).join(' ') || '';
+      return { firstName, lastName };
+    }
+    return { firstName: '', lastName: '' };
+  };
+
   const generateLeadsRows = (leads: Lead[]) => {
       const rows: string[][] = [];
       for (const lead of leads) {
-          const baseRow = [
+          const contacts = lead.contacts || [];
+          const c1 = getContactFirstAndLastName(contacts[0]);
+          const c2 = getContactFirstAndLastName(contacts[1]);
+          const c3 = getContactFirstAndLastName(contacts[2]);
+
+          const addrs = lead.additionalAddresses || [];
+          const a2 = addrs[0];
+          const a3 = addrs[1];
+
+          const row = [
+              escapeCsvCell(lead.companyName),
+              escapeCsvCell(lead.websiteUrl),
+              escapeCsvCell(lead.customerPhone),
+              escapeCsvCell(lead.customerServiceEmail),
+              escapeCsvCell(lead.abn),
+              escapeCsvCell(lead.address?.street),
+              escapeCsvCell(lead.address?.city),
+              escapeCsvCell(lead.address?.state),
+              escapeCsvCell(lead.address?.zip),
+              escapeCsvCell(lead.address?.country),
+              // Postal Address
+              escapeCsvCell(lead.postalAddress?.street),
+              escapeCsvCell(lead.postalAddress?.city),
+              escapeCsvCell(lead.postalAddress?.state),
+              escapeCsvCell(lead.postalAddress?.zip),
+              // Address 2 (Tagged)
+              escapeCsvCell(a2?.tag),
+              escapeCsvCell(a2?.street),
+              escapeCsvCell(a2?.city),
+              escapeCsvCell(a2?.state),
+              escapeCsvCell(a2?.zip),
+              // Address 3 (Tagged)
+              escapeCsvCell(a3?.tag),
+              escapeCsvCell(a3?.street),
+              escapeCsvCell(a3?.city),
+              escapeCsvCell(a3?.state),
+              escapeCsvCell(a3?.zip),
               escapeCsvCell(lead.id),
               escapeCsvCell(lead.entityId),
-              escapeCsvCell(lead.companyName),
               escapeCsvCell(lead.status),
               escapeCsvCell(lead.statusReason),
               escapeCsvCell(lead.franchisee),
               escapeCsvCell(lead.dialerAssigned),
               escapeCsvCell(lead.salesRepAssigned),
               escapeCsvCell(filters.bucket === 'inbound' ? lead.salesRepAssigned : lead.dialerAssigned),
-              escapeCsvCell(lead.websiteUrl),
               escapeCsvCell(lead.industryCategory),
               escapeCsvCell(lead.industrySubCategory),
-              escapeCsvCell(lead.customerServiceEmail),
-              escapeCsvCell(lead.customerPhone),
-              escapeCsvCell(lead.address?.street),
-              escapeCsvCell(lead.address?.city),
-              escapeCsvCell(lead.address?.state),
-              escapeCsvCell(lead.address?.zip),
-              escapeCsvCell(lead.address?.country),
               escapeCsvCell(lead.aiScore),
               escapeCsvCell(lead.aiReason),
               escapeCsvCell(lead.discoveryData?.score),
@@ -988,28 +1030,27 @@ export default function LeadsClientPage({
               escapeCsvCell(lead.discoveryData?.sameDayCourier),
               escapeCsvCell(lead.discoveryData?.decisionMakerName),
               escapeCsvCell(lead.discoveryData?.painPoints),
+              // Contact 1
+              escapeCsvCell(c1.firstName),
+              escapeCsvCell(c1.lastName),
+              escapeCsvCell(contacts[0]?.title),
+              escapeCsvCell(contacts[0]?.email),
+              escapeCsvCell(contacts[0]?.phone),
+              // Contact 2
+              escapeCsvCell(c2.firstName),
+              escapeCsvCell(c2.lastName),
+              escapeCsvCell(contacts[1]?.title),
+              escapeCsvCell(contacts[1]?.email),
+              escapeCsvCell(contacts[1]?.phone),
+              // Contact 3
+              escapeCsvCell(c3.firstName),
+              escapeCsvCell(c3.lastName),
+              escapeCsvCell(contacts[2]?.title),
+              escapeCsvCell(contacts[2]?.email),
+              escapeCsvCell(contacts[2]?.phone),
           ];
 
-          const contacts = lead.contacts || [];
-          if (contacts.length === 0) {
-              rows.push([...baseRow, '', '', '', '']);
-          } else {
-              contacts.forEach((contact, index) => {
-                  const contactRow = [
-                      escapeCsvCell(contact.name),
-                      escapeCsvCell(contact.title),
-                      escapeCsvCell(contact.email),
-                      escapeCsvCell(contact.phone),
-                  ];
-                  
-                  if (index === 0) {
-                      rows.push([...baseRow, ...contactRow]);
-                  } else {
-                      const emptyBase = Array(baseRow.length).fill('');
-                      rows.push([...emptyBase, ...contactRow]);
-                  }
-              });
-          }
+          rows.push(row);
       }
       return rows;
   };
@@ -1028,9 +1069,15 @@ export default function LeadsClientPage({
   };
 
   const leadExportHeaders = [
-    'Internal ID', 'Customer ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Allocated To', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Phone', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
+    'Company Name', 'Website URL', 'Company Phone', 'Company Email', 'ABN', 'Street Address', 'Suburb / City', 'State', 'Postcode', 'Country',
+    'Postal Street Address', 'Postal Suburb / City', 'Postal State', 'Postal Postcode',
+    'Address 2 Tag', 'Address 2 Street', 'Address 2 Suburb / City', 'Address 2 State', 'Address 2 Postcode',
+    'Address 3 Tag', 'Address 3 Street', 'Address 3 Suburb / City', 'Address 3 State', 'Address 3 Postcode',
+    'Internal ID', 'Customer ID', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Allocated To', 'Industry', 'Sub-Industry', 'AI Score', 'AI Reason',
     'Discovery Score', 'Discovery Routing Tag', 'Post Office Relationship', 'Logistics Setup', 'Shipping Volume', 'Express vs Standard', 'Package Types', 'Current Providers', 'E-commerce Tech', 'Same Day Courier', 'Decision Maker', 'Pain Points',
-    'Contact Name', 'Contact Title', 'Contact Email', 'Contact Phone'
+    'Contact 1 First Name', 'Contact 1 Last Name', 'Contact 1 Title', 'Contact 1 Email', 'Contact 1 Phone',
+    'Contact 2 First Name', 'Contact 2 Last Name', 'Contact 2 Title', 'Contact 2 Email', 'Contact 2 Phone',
+    'Contact 3 First Name', 'Contact 3 Last Name', 'Contact 3 Title', 'Contact 3 Email', 'Contact 3 Phone'
   ];
 
   const handleExportAll = async () => {

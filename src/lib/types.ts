@@ -515,6 +515,11 @@ export interface Lead {
   customerStatus?: string;
   cancellationRequested?: boolean;
   netsuiteLeadStatus?: string;
+  droppedOffBrochures?: boolean;
+  hadConversationWithContact?: boolean;
+  isPriority?: boolean;
+  outsideTerritoryConfirmed?: boolean;
+  franchiseeReviewPending?: boolean;
   bucket?: LeadBucket;
   attemptCount?: number;
   totalCalls?: number;

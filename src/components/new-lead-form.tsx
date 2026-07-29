@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, FormProvider } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import {
@@ -111,6 +111,8 @@ const formSchema = z.object({
   franchisee: z.string().optional(),
   leadSource: z.string().optional(),
   bucket: z.enum(['outbound', 'field_sales', 'inbound', 'account_manager', 'customer_success']).optional(),
+  droppedOffBrochures: z.boolean().optional(),
+  hadConversationWithContact: z.boolean().optional(),
 });
 
 export function NewLeadForm() {
@@ -279,28 +281,25 @@ export function NewLeadForm() {
                   f.internalId === userProfile?.franchisee || 
                   f.name?.toLowerCase() === userProfile?.franchisee?.toLowerCase() ||
                   (f as any).id === userProfile?.franchisee
-              );
+              ) || { name: userProfile?.franchisee || 'Franchisee', internalId: userProfile?.franchisee || '' } as import('@/lib/types').Franchisee;
 
               const canService = myFranchisee ? matches.some(m => m.internalId === myFranchisee.internalId || m.name?.toLowerCase() === myFranchisee.name?.toLowerCase()) : false;
 
-              if (canService && myFranchisee) {
-                  setMatchedFranchisees([myFranchisee]);
-                  setSelectedFranchiseeId(myFranchisee.internalId);
-                  form.setValue('franchisee', myFranchisee.internalId);
+              setMatchedFranchisees([myFranchisee]);
+              setSelectedFranchiseeId(myFranchisee.internalId);
+              form.setValue('franchisee', myFranchisee.internalId);
+
+              if (canService) {
                   setFranchiseeNotice({
                       status: 'serviceable',
                       message: `This address is within your territory (${myFranchisee.name}). The lead has been defaulted to your franchise.`,
                       userFranchiseeName: myFranchisee.name
                   });
               } else {
-                  const mailPlusObj = franchisees.find(f => f.internalId === '435' || f.name === 'MailPlus Pty Ltd') || { name: 'MailPlus Pty Ltd', internalId: '435' } as import('@/lib/types').Franchisee;
-                  setMatchedFranchisees([mailPlusObj]);
-                  setSelectedFranchiseeId(mailPlusObj.internalId || '435');
-                  form.setValue('franchisee', mailPlusObj.internalId || '435');
                   setFranchiseeNotice({
                       status: 'out_of_territory',
-                      message: `The address entered is not within your territory. The lead has been defaulted to MailPlus Pty Ltd (franchisee collection ID: 435). Please contact Head Office if it needs to be added to your territory.`,
-                      userFranchiseeName: myFranchisee?.name || userProfile?.franchisee
+                      message: `The address entered (${city}, ${zip}) is outside your registered territory. Since you are entering this lead, it will be assigned to your franchise (${myFranchisee.name}). Please confirm below that you can service this lead.`,
+                      userFranchiseeName: myFranchisee.name
                   });
               }
           } else {
@@ -396,7 +395,7 @@ export function NewLeadForm() {
   }, [isLoaded, fillFormWithPlace]);
 
   useEffect(() => {
-    const visitNoteId = searchParams.get('fromVisitNote');
+    const visitNoteId = searchParams?.get('fromVisitNote');
 
     const fetchAndPopulateVisitNote = async (noteId: string) => {
       setIsLoadingFromNote(true);
@@ -605,7 +604,7 @@ export function NewLeadForm() {
   };
 
   const handleLinkToExistingLead = async () => {
-    const visitNoteId = searchParams.get('fromVisitNote');
+    const visitNoteId = searchParams?.get('fromVisitNote');
     if (!duplicateLeadId || !visitNoteId) return;
 
     setIsLinking(true);
@@ -667,7 +666,7 @@ export function NewLeadForm() {
     setIsSubmitting(true);
     let finalValues = { ...values };
 
-    const visitNoteId = searchParams.get('fromVisitNote');
+    const visitNoteId = searchParams?.get('fromVisitNote');
 
     const duplicateId = await checkForDuplicateLead(
         values.companyName, 
@@ -696,9 +695,23 @@ export function NewLeadForm() {
         finalValues.campaign = 'Door-to-Door';
     } else if (userProfile?.activeRole === 'Account Managers') {
         finalValues.campaign = 'Account Manager Generated';
-    } else if (userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee') {
+    }
+
+    const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
+    const droppedOffBrochures = values.droppedOffBrochures || false;
+    const hadConversationWithContact = values.hadConversationWithContact || false;
+    const isPriority = droppedOffBrochures || hadConversationWithContact;
+
+    if (isFranchiseeRole) {
         if (!finalValues.campaign) {
             finalValues.campaign = 'Franchisee Generated';
+        }
+        if (isPriority) {
+            finalValues.bucket = 'account_manager';
+            (finalValues as any).isPriority = true;
+        } else {
+            finalValues.bucket = 'outbound';
+            (finalValues as any).franchiseeReviewPending = true;
         }
     }
 
@@ -715,7 +728,10 @@ export function NewLeadForm() {
     const isUserActiveDialer = activeDialers.some(d => d.displayName === dialerForLead || d.email === dialerForLead);
     const validDefaultDialer = isUserActiveDialer ? dialerForLead : '';
 
-    const finalDialer = finalValues.campaign === 'Outbound' ? (values.dialerAssigned || validDefaultDialer) : validDefaultDialer;
+    let finalDialer = finalValues.campaign === 'Outbound' ? (values.dialerAssigned || validDefaultDialer) : validDefaultDialer;
+    if (isFranchiseeRole && !isPriority) {
+        finalDialer = 'Aleyna Harnett';
+    }
     
     let finalSalesRep = undefined;
     if (finalValues.campaign === 'Outbound' || finalValues.campaign === 'Door-to-Door') {
@@ -746,7 +762,17 @@ export function NewLeadForm() {
         const leadRef = doc(firestore, 'leads', result.leadId);
         
         // Save assignment updates in Firestore
-        const assignmentUpdates: any = {};
+        const assignmentUpdates: any = {
+            droppedOffBrochures,
+            hadConversationWithContact,
+            isPriority,
+        };
+
+        if (isFranchiseeRole && !isPriority) {
+            assignmentUpdates.dialerAssigned = 'Aleyna Harnett';
+            assignmentUpdates.franchiseeReviewPending = true;
+        }
+
         if (finalValues.franchisee) {
             const fName = selectedFranchiseeObj?.name || (finalValues.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : finalValues.franchisee);
             const fId = selectedFranchiseeObj?.internalId || (finalValues.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : finalValues.franchisee);
@@ -760,7 +786,9 @@ export function NewLeadForm() {
             assignmentUpdates.bucket = finalValues.bucket;
         }
         if (finalValues.campaign === 'Outbound') {
-            assignmentUpdates.dialerAssigned = finalDialer || '';
+            if (!isFranchiseeRole || isPriority) {
+                assignmentUpdates.dialerAssigned = finalDialer || '';
+            }
             assignmentUpdates.salesRepAssigned = finalSalesRep || '';
             assignmentUpdates.campaign = 'Outbound';
         } else if (finalValues.campaign === 'Door-to-Door') {
@@ -779,6 +807,50 @@ export function NewLeadForm() {
 
         if (Object.keys(assignmentUpdates).length > 0) {
             await updateDoc(leadRef, assignmentUpdates);
+        }
+
+        // Send Email Notifications
+        if (isFranchiseeRole) {
+            const addressStr = [values.address.street, values.address.city, values.address.state, values.address.zip].filter(Boolean).join(', ');
+            const fName = selectedFranchiseeObj?.name || userProfile?.displayName || userProfile?.franchisee || 'Franchisee';
+
+            if (isPriority) {
+                fetch('/api/notifications/email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'franchisee_priority_lead_notification',
+                        payload: {
+                            leadId: result.leadId,
+                            companyName: values.companyName,
+                            franchiseeName: fName,
+                            amEmail: values.accountManagerAssigned,
+                            droppedOffBrochures,
+                            hadConversationWithContact,
+                            addressString: addressStr
+                        }
+                    })
+                }).catch(e => console.error('Priority email notification error:', e));
+            }
+
+            if (franchiseeNotice?.status === 'out_of_territory') {
+                fetch('/api/notifications/email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'franchisee_outside_territory_lead',
+                        payload: {
+                            leadId: result.leadId,
+                            companyName: values.companyName,
+                            franchiseeName: fName,
+                            addressString: addressStr,
+                            city: values.address.city,
+                            state: values.address.state,
+                            zip: values.address.zip
+                        }
+                    })
+                }).catch(e => console.error('Outside territory email notification error:', e));
+            }
         }
         if (visitNoteId) {
             await updateVisitNote(visitNoteId, { status: 'Converted', leadId: result.leadId });
@@ -809,7 +881,7 @@ export function NewLeadForm() {
                   await updateDoc(leadRef, updateData);
                   await logActivity(result.leadId, {
                     type: 'Update',
-                    notes: `Moved to Outbound (Unassigned). Outcome: ${visitNote.outcome.type}`,
+                    notes: `Moved to Outbound (Unassigned). Outcome: ${visitNote?.outcome?.type || 'N/A'}`,
                     author: userProfile?.displayName || 'System'
                   });
                }
@@ -880,33 +952,33 @@ export function NewLeadForm() {
 
   return (
     <>
-    <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
-        <AlertDialogContent>
+      {duplicateLeadId && (
+        <AlertDialog open={true} onOpenChange={() => setDuplicateLeadId(null)}>
+          <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Duplicate Found</AlertDialogTitle>
-                <AlertDialogDescription>
-                    This business appears to already exist in your system. You can view the existing lead or, if you started from a visit note, you can link the note to this lead.
-                </AlertDialogDescription>
+              <AlertDialogTitle>Duplicate Found</AlertDialogTitle>
+              <AlertDialogDescription>
+                This business appears to already exist in your system. You can view the existing lead or, if you started from a visit note, you can link the note to this lead.
+              </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
-                {searchParams.get('fromVisitNote') && (
-                    <AlertDialogAction onClick={handleLinkToExistingLead} disabled={isLinking}>
-                        {isLinking ? <Loader /> : 'Link Note to this Lead'}
-                    </AlertDialogAction>
-                )}
-                <AlertDialogAction onClick={() => {
-                    if(duplicateLeadId) {
-                        router.push(`/leads/${duplicateLeadId}`);
-                    }
-                }}>
-                    View Existing Lead
+              <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
+              {searchParams?.get('fromVisitNote') && (
+                <AlertDialogAction onClick={handleLinkToExistingLead} disabled={isLinking}>
+                  {isLinking ? <Loader /> : 'Link Note to this Lead'}
                 </AlertDialogAction>
+              )}
+              <AlertDialogAction onClick={() => {
+                if (duplicateLeadId) router.push(`/leads/${duplicateLeadId}`);
+              }}>
+                View Existing Lead
+              </AlertDialogAction>
             </AlertDialogFooter>
-        </AlertDialogContent>
-    </AlertDialog>
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardContent className="p-4 sm:p-6 space-y-8">
             <div className="space-y-4" id="step-company-search">
@@ -1068,8 +1140,6 @@ export function NewLeadForm() {
                 </>
             )}
 
-            {isFranchiseeConfirmed && (
-              <>
             <hr/>
 
             {imageUrls.length > 0 && (
@@ -1294,6 +1364,61 @@ export function NewLeadForm() {
                    )}
                  />
               </div>
+
+              <div className="mt-6 p-4 border rounded-lg bg-slate-50/80 space-y-4">
+                <h4 className="font-semibold text-sm text-primary flex items-center gap-2">
+                  <Tag className="w-4 h-4" /> Franchisee Site Visit Details
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  If either box is checked, this lead will be marked as a <strong>Priority Lead</strong> and routed directly to the Account Manager pipeline.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  <FormField
+                    control={form.control}
+                    name="droppedOffBrochures"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 bg-background">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value || false}
+                            onChange={(e) => field.onChange(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          />
+                        </FormControl>
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-sm font-medium cursor-pointer">
+                            Dropped Off Brochures
+                          </FormLabel>
+                          <p className="text-xs text-muted-foreground">Left marketing material at location</p>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="hadConversationWithContact"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 bg-background">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value || false}
+                            onChange={(e) => field.onChange(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          />
+                        </FormControl>
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-sm font-medium cursor-pointer">
+                            Had Conversation with Contact
+                          </FormLabel>
+                          <p className="text-xs text-muted-foreground">Spoke directly with staff/manager</p>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
             </div>
 
             <hr/>
@@ -1383,18 +1508,14 @@ export function NewLeadForm() {
                     )}
                 />
              </div>
-              </>
-            )}
           </CardContent>
         </Card>
 
-        {isFranchiseeConfirmed && (
         <div className="flex justify-end">
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? <Loader /> : 'Create Lead'}
           </Button>
         </div>
-        )}
       </form>
     </Form>
     </>

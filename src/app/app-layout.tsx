@@ -418,7 +418,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
   const canImportLeads = (isSuperAdmin || canView('importLeads')) && !isUserRole;
   const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
-  const canViewLeadManagementGroup = canCreateLead || isFranchiseeRole || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads;
+  const canViewFranchiseeVerification = (isSuperAdmin || userProfile?.activeRole === 'admin' || canView('franchiseeVerification')) && !isUserRole;
+  const canViewLeadManagementGroup = canCreateLead || isFranchiseeRole || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads || canViewFranchiseeVerification;
   const canViewHistoryAppointments = canView('historyAppointments');
   const canViewHistoryCallsTranscripts = canView('historyCallsTranscripts');
   const canViewFranchisees = canView('franchisees');
@@ -860,6 +861,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           <Link href="/admin/marketing/import-leads">
                             <PlusCircle className="h-4 w-4" />
                             <span>Import Leads</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {canViewFranchiseeVerification && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/franchisee-lead-verification")}>
+                          <Link href="/franchisee-lead-verification">
+                            <UserCheck className="h-4 w-4" />
+                            <span>Franchisee Lead Review</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>

@@ -323,21 +323,24 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                 );
             }
 
-            if (canService && myFranchisee) {
+            let isOutsideTerritory = false;
+            if (myFranchisee) {
                 franchiseeInternalId = myFranchisee.internalId;
                 franchiseeName = myFranchisee.name;
-                toast({
-                    title: 'Territory Match',
-                    description: `This address is within your territory (${myFranchisee.name}). Lead assigned to your franchise.`,
-                });
-            } else {
-                franchiseeInternalId = '435';
-                franchiseeName = 'MailPlus Pty Ltd';
-                toast({
-                    variant: 'destructive',
-                    title: 'Address Not Within Territory',
-                    description: 'The address entered is not within your territory. The lead has been defaulted to MailPlus Pty Ltd (435). Please contact Head Office if it needs to be added to your territory.',
-                });
+
+                if (canService) {
+                    toast({
+                        title: 'Territory Match',
+                        description: `This address is within your territory (${myFranchisee.name}). Lead assigned to your franchise.`,
+                    });
+                } else {
+                    isOutsideTerritory = true;
+                    toast({
+                        variant: 'destructive',
+                        title: 'Address Outside Territory',
+                        description: `The address entered is outside your territory. The lead has been assigned to your franchise (${myFranchisee.name}). Head office notification sent.`,
+                    });
+                }
             }
         } catch (e) {
             console.error("Territory lookup error in quick-add-lead-dialog:", e);

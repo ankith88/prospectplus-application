@@ -331,6 +331,193 @@ export async function POST(request: Request) {
       return NextResponse.json({ ...res });
     }
 
+    if (type === 'franchisee_priority_lead_notification') {
+      const { leadId, companyName, franchiseeName, amEmail, amName, droppedOffBrochures, hadConversationWithContact, addressString } = payload || {};
+      const recipients = amEmail ? `${amEmail},luke.forbes@mailplus.com.au` : 'luke.forbes@mailplus.com.au';
+      const leadDirectUrl = `${baseUrl}/leads?id=${leadId || ''}`;
+      const subject = `🔥 Priority Franchisee Lead: ${companyName || 'Lead'} (Entered by ${franchiseeName || 'Franchisee'})`;
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Priority Lead Notification</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    body, html { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+    @media screen and (max-width: 600px) {
+      .email-container { width: 100% !important; max-width: 100% !important; border-radius: 8px !important; }
+      .content-cell { padding: 30px 20px !important; }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0; width: 100%;">
+    <tr>
+      <td align="center">
+        <table class="email-container" align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(9, 92, 123, 0.06);">
+          <tr>
+            <td class="content-cell" style="padding: 45px 35px; color: #2d3748; font-size: 15px; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              <div class="greeting" style="font-size: 20px; color: #095c7b; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.5px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Hi ${amName || 'Account Manager'},
+              </div>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                Franchisee <strong>${franchiseeName || 'Franchisee'}</strong> has entered a <strong>Priority Lead</strong> into your Account Manager bucket.
+              </p>
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin: 20px 0; padding: 16px;">
+                <tr>
+                  <td style="font-size: 14px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                    <p style="margin: 0 0 8px;"><strong>Company Name:</strong> ${companyName || 'N/A'}</p>
+                    <p style="margin: 0 0 8px;"><strong>Address:</strong> ${addressString || 'N/A'}</p>
+                    <p style="margin: 0 0 8px;"><strong>Entered By (Franchisee):</strong> ${franchiseeName || 'N/A'}</p>
+                    <p style="margin: 0 0 8px;"><strong>Dropped Off Brochures:</strong> ${droppedOffBrochures ? 'Yes ✅' : 'No'}</p>
+                    <p style="margin: 0;"><strong>Had Conversation with Contact:</strong> ${hadConversationWithContact ? 'Yes ✅' : 'No'}</p>
+                  </td>
+                </tr>
+              </table>
+              <table border="0" cellpadding="0" cellspacing="0" style="margin: 28px 0 20px;">
+                <tr>
+                  <td align="center" style="border-radius: 6px; background-color: #095c7b;">
+                    <a href="${leadDirectUrl}" target="_blank" style="font-size: 15px; font-family: 'Inter', sans-serif; color: #ffffff; text-decoration: none; border-radius: 6px; padding: 12px 24px; display: inline-block; font-weight: 600;">
+                      View Lead Profile Page
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 24px 0 6px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                Kind regards,
+              </p>
+              <p style="margin: 0; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                <strong style="font-weight: 700; color: #2d3748;">ProspectPlus System</strong>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+              <img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" width="135" style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;" />
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+              <p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+              </p>
+              <p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Powered by MailPlus Australia
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+                &copy; 2026 MailPlus. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+      const res = await sendPhysicalEmail({ to: recipients, subject, html, leadId });
+      return NextResponse.json({ ...res });
+    }
+
+    if (type === 'franchisee_outside_territory_lead') {
+      const { leadId, companyName, franchiseeName, addressString, city, state, zip } = payload || {};
+      const recipients = 'mailplusit@mailplus.com.au,fiona.harrison@mailplus.com.au';
+      const leadDirectUrl = `${baseUrl}/leads?id=${leadId || ''}`;
+      const subject = `⚠️ Lead Entered Outside Territory: ${companyName || 'Lead'} (${franchiseeName || 'Franchisee'})`;
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Outside Territory Lead</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    body, html { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+    @media screen and (max-width: 600px) {
+      .email-container { width: 100% !important; max-width: 100% !important; border-radius: 8px !important; }
+      .content-cell { padding: 30px 20px !important; }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0; width: 100%;">
+    <tr>
+      <td align="center">
+        <table class="email-container" align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(9, 92, 123, 0.06);">
+          <tr>
+            <td class="content-cell" style="padding: 45px 35px; color: #2d3748; font-size: 15px; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              <div class="greeting" style="font-size: 20px; color: #095c7b; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.5px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Hi MailPlus IT &amp; Fiona,
+              </div>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                Franchisee <strong>${franchiseeName || 'Franchisee'}</strong> has entered a lead located in a suburb/postcode outside their registered territory. The franchisee confirmed they can service this lead.
+              </p>
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #fff5f5; border: 1px solid #fed7d7; border-radius: 8px; margin: 20px 0; padding: 16px;">
+                <tr>
+                  <td style="font-size: 14px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                    <p style="margin: 0 0 8px;"><strong>Company Name:</strong> ${companyName || 'N/A'}</p>
+                    <p style="margin: 0 0 8px;"><strong>Address:</strong> ${addressString || `${city || ''}, ${state || ''} ${zip || ''}`}</p>
+                    <p style="margin: 0 0 8px;"><strong>Suburb / Postcode:</strong> ${city || ''} ${zip || ''}</p>
+                    <p style="margin: 0;"><strong>Assigned Franchisee:</strong> ${franchiseeName || 'N/A'}</p>
+                  </td>
+                </tr>
+              </table>
+              <table border="0" cellpadding="0" cellspacing="0" style="margin: 28px 0 20px;">
+                <tr>
+                  <td align="center" style="border-radius: 6px; background-color: #095c7b;">
+                    <a href="${leadDirectUrl}" target="_blank" style="font-size: 15px; font-family: 'Inter', sans-serif; color: #ffffff; text-decoration: none; border-radius: 6px; padding: 12px 24px; display: inline-block; font-weight: 600;">
+                      View Lead Details
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 24px 0 6px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                Kind regards,
+              </p>
+              <p style="margin: 0; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                <strong style="font-weight: 700; color: #2d3748;">ProspectPlus System</strong>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+              <img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" width="135" style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;" />
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+              <p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+              </p>
+              <p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Powered by MailPlus Australia
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+                &copy; 2026 MailPlus. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+      const res = await sendPhysicalEmail({ to: recipients, subject, html, leadId });
+      return NextResponse.json({ ...res });
+    }
+
     return NextResponse.json({ success: false, message: 'Invalid notification type.' }, { status: 400 });
   } catch (error: any) {
     console.error('Error sending notification email:', error);

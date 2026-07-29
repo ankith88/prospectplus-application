@@ -19,7 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { getAllUsers, getAllFranchisees, logActivity } from '@/services/firebase';
-import type { LeadBucket, UserProfile, Franchisee, Contact, LeadStatus } from '@/lib/types';
+import type { LeadBucket, UserProfile, Franchisee, Contact, LeadStatus, TaggedAddress } from '@/lib/types';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, doc, writeBatch, serverTimestamp, query, where, limit, addDoc } from 'firebase/firestore';
 import { canAssignToAm } from '@/lib/leave-utils';
@@ -35,6 +35,23 @@ const standardFields = [
   { key: 'city', label: 'Suburb / City', required: true, desc: 'e.g. Sydney' },
   { key: 'state', label: 'State', required: true, desc: 'e.g. NSW' },
   { key: 'zip', label: 'Postcode', required: true, desc: 'e.g. 2000' },
+  // Postal Address
+  { key: 'postalStreet', label: 'Postal Street Address', required: false, desc: 'e.g. PO Box 123' },
+  { key: 'postalCity', label: 'Postal Suburb / City', required: false, desc: 'e.g. Sydney' },
+  { key: 'postalState', label: 'Postal State', required: false, desc: 'e.g. NSW' },
+  { key: 'postalZip', label: 'Postal Postcode', required: false, desc: 'e.g. 2000' },
+  // Additional Address 2 (Tagged)
+  { key: 'address2Tag', label: 'Address 2 Tag', required: false, desc: 'e.g. Warehouse, Billing, Shipping' },
+  { key: 'address2Street', label: 'Address 2 Street', required: false, desc: 'Street address' },
+  { key: 'address2City', label: 'Address 2 Suburb / City', required: false, desc: 'Suburb / City' },
+  { key: 'address2State', label: 'Address 2 State', required: false, desc: 'State' },
+  { key: 'address2Zip', label: 'Address 2 Postcode', required: false, desc: 'Postcode' },
+  // Additional Address 3 (Tagged)
+  { key: 'address3Tag', label: 'Address 3 Tag', required: false, desc: 'e.g. Office, Secondary' },
+  { key: 'address3Street', label: 'Address 3 Street', required: false, desc: 'Street address' },
+  { key: 'address3City', label: 'Address 3 Suburb / City', required: false, desc: 'Suburb / City' },
+  { key: 'address3State', label: 'Address 3 State', required: false, desc: 'State' },
+  { key: 'address3Zip', label: 'Address 3 Postcode', required: false, desc: 'Postcode' },
   // Contact 1 (Primary Contact)
   { key: 'contactFirstName', label: 'Contact 1 First Name', required: false, desc: 'First name of primary contact' },
   { key: 'contactLastName', label: 'Contact 1 Last Name', required: false, desc: 'Last name of primary contact' },
@@ -203,21 +220,41 @@ export function ImportLeadsClient() {
       'Sydney',
       'NSW',
       '2000',
+      // Postal Address
+      'PO Box 999',
+      'Sydney',
+      'NSW',
+      '2001',
+      // Address 2 (Warehouse)
+      'Warehouse',
+      '50 Logistics Way',
+      'Botany',
+      'NSW',
+      '2019',
+      // Address 3 (Office)
+      'Office',
+      'Level 12 50 Bridge St',
+      'Sydney',
+      'NSW',
+      '2000',
+      // Contact 1
       'John',
       'Smith',
       'Operations Director',
       'john.smith@exampleenterprise.com.au',
       '0400 123 456',
+      // Contact 2
       'Jane',
       'Doe',
       'Accounts Manager',
       'accounts@exampleenterprise.com.au',
       '0400 654 321',
-      '',
-      '',
-      '',
-      '',
-      ''
+      // Contact 3
+      'Alex',
+      'Taylor',
+      'Procurement Lead',
+      'alex.taylor@exampleenterprise.com.au',
+      '0400 999 888'
     ].map(val => (val.includes(',') ? `"${val}"` : val)).join(',');
 
     const csvContent = `${headers}\n${sampleRow}`;
@@ -616,6 +653,53 @@ export function ImportLeadsClient() {
           assignedFranchisee = defaultFranchiseeId;
         }
 
+        // Postal Address resolution
+        const postalStreet = getVal('postalStreet');
+        const postalCity = getVal('postalCity');
+        const postalState = getVal('postalState');
+        const postalZip = getVal('postalZip');
+        const postalAddress = (postalStreet || postalCity || postalState || postalZip) ? {
+          street: postalStreet || '',
+          city: postalCity || '',
+          state: postalState || '',
+          zip: postalZip || '',
+          country: 'Australia'
+        } : undefined;
+
+        // Additional Tagged Addresses resolution
+        const additionalAddresses: TaggedAddress[] = [];
+        const a2Tag = getVal('address2Tag');
+        const a2Street = getVal('address2Street');
+        const a2City = getVal('address2City');
+        const a2State = getVal('address2State');
+        const a2Zip = getVal('address2Zip');
+        if (a2Street || a2City || a2State || a2Zip) {
+          additionalAddresses.push({
+            tag: a2Tag || 'Secondary Address',
+            street: a2Street || '',
+            city: a2City || '',
+            state: a2State || '',
+            zip: a2Zip || '',
+            country: 'Australia'
+          });
+        }
+
+        const a3Tag = getVal('address3Tag');
+        const a3Street = getVal('address3Street');
+        const a3City = getVal('address3City');
+        const a3State = getVal('address3State');
+        const a3Zip = getVal('address3Zip');
+        if (a3Street || a3City || a3State || a3Zip) {
+          additionalAddresses.push({
+            tag: a3Tag || 'Warehouse Address',
+            street: a3Street || '',
+            city: a3City || '',
+            state: a3State || '',
+            zip: a3Zip || '',
+            country: 'Australia'
+          });
+        }
+
         // Bucket & Assignments config
         const leadData: any = {
           companyName,
@@ -624,6 +708,8 @@ export function ImportLeadsClient() {
           customerServiceEmail: getVal('customerServiceEmail') || '',
           abn: getVal('abn') || '',
           address,
+          ...(postalAddress && { postalAddress }),
+          ...(additionalAddresses.length > 0 && { additionalAddresses }),
           status: 'New' as LeadStatus,
           customerStatus: 'New',
           bucket: selectedBucket,
