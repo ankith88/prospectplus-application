@@ -1225,35 +1225,37 @@ export function NewLeadForm() {
                 <AddressAutocomplete />
               </div>
 
-              {franchiseeNotice && (
-                <div className={`p-4 rounded-md border flex items-start gap-3 ${
-                  franchiseeNotice.status === 'serviceable'
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                    : 'border-amber-300 bg-amber-50 text-amber-900'
+              {isFranchiseeRole && franchiseeNotice && (
+                <div className={`p-4 border rounded-md flex items-start gap-3 mt-4 ${
+                  franchiseeNotice.status === 'serviceable' 
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+                    : 'bg-amber-50 border-amber-200 text-amber-900'
                 }`}>
                   {franchiseeNotice.status === 'serviceable' ? (
                     <CheckCircle className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                   ) : (
                     <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
                   )}
-                  <div>
+                  <div className="space-y-2 flex-1">
                     <h4 className="font-semibold text-sm">
                       {franchiseeNotice.status === 'serviceable' 
                         ? 'Territory Serviceable' 
                         : 'Address Outside Your Territory'}
                     </h4>
-                    <p className="text-sm mt-0.5">{franchiseeNotice.message}</p>
-                    {franchiseeNotice.status === 'out_of_territory' && (
-                      <p className="text-xs text-amber-800 mt-1 font-medium">
-                        You can still enter and submit all lead details below.
-                      </p>
+                    <p className="text-sm">{franchiseeNotice.message}</p>
+                    {franchiseeNotice.status === 'out_of_territory' && !isFranchiseeConfirmed && (
+                      <div className="pt-2">
+                        <Button type="button" onClick={() => setIsFranchiseeConfirmed(true)}>
+                          Confirm I Can Service This Lead & Continue
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>
               )}
             </div>
 
-            {matchedFranchisees.length > 0 && !isFranchiseeConfirmed && (
+            {!isFranchiseeRole && matchedFranchisees.length > 0 && !isFranchiseeConfirmed && (
                 <>
                 <hr/>
                 <div className="space-y-4 p-4 border rounded-md bg-muted/50">
