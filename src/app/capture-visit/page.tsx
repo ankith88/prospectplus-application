@@ -188,7 +188,7 @@ const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { 
     );
 };
 
-const MandatoryFieldsForOutcome = () => {
+const MandatoryFieldsForOutcome = ({ hideSchedule = false }: { hideSchedule?: boolean }) => {
     const { control, watch, setValue } = useFormContext();
     
     const personName = watch("personSpokenWithName");
@@ -237,40 +237,42 @@ const MandatoryFieldsForOutcome = () => {
                 )} />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t pt-4 mt-4">
-                <FormField control={control} name="scheduledDate" render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                        <FormLabel>Scheduled Date*</FormLabel>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <FormControl>
-                                    <Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar 
-                                    mode="single" 
-                                    selected={field.value} 
-                                    onSelect={field.onChange} 
-                                    disabled={(date) => date < startOfToday()} 
-                                    initialFocus 
-                                />
-                            </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                    </FormItem>
-                )} />
-                <FormField control={control} name="scheduledTime" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Scheduled Time*</FormLabel>
-                        <FormControl><Input type="time" {...field} /></FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )} />
-            </div>
+            {!hideSchedule && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t pt-4 mt-4">
+                    <FormField control={control} name="scheduledDate" render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                            <FormLabel>Scheduled Date*</FormLabel>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <FormControl>
+                                        <Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                        </Button>
+                                    </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar 
+                                        mode="single" 
+                                        selected={field.value} 
+                                        onSelect={field.onChange} 
+                                        disabled={(date) => date < startOfToday()} 
+                                        initialFocus 
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+                    <FormField control={control} name="scheduledTime" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Scheduled Time*</FormLabel>
+                            <FormControl><Input type="time" {...field} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+                </div>
+            )}
         </div>
     );
 };
@@ -379,6 +381,8 @@ function CaptureVisitContent() {
     const isNoOpportunity = watch("managementPathway") === 'no_aus_post_usage';
 
     const isAdminOrLeadGen = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin';
+    const isFranchisee = userProfile?.activeRole?.toLowerCase() === 'franchisee';
+    const [selectedFranchiseeOutcome, setSelectedFranchiseeOutcome] = useState<'Qualified - Set Appointment' | 'Qualified - Call Back/Send Info'>('Qualified - Set Appointment');
 
     const currentStepNumber = {
         search: 1,
@@ -1308,72 +1312,174 @@ function CaptureVisitContent() {
                                     </div>
                                 </FormProvider>
                             ) : step === 'outcome' ? (
-                                <div className="space-y-4">
-                                    {!isNoOpportunity && (
-                                        <Accordion type="single" collapsible className="w-full">
-                                            <AccordionItem value="item-1">
-                                                <AccordionTrigger>Qualified - Set Appointment</AccordionTrigger>
-                                                <AccordionContent className="space-y-4 pt-2">
-                                                    <MandatoryFieldsForOutcome />
-                                                    <Button 
-                                                        className="w-full bg-green-600 hover:bg-green-700" 
-                                                        onClick={() => {
-                                                            const details: Record<string, any> = {};
-                                                            if (userProfile?.linkedSalesRep) {
-                                                                details.salesRep = userProfile.linkedSalesRep;
-                                                            }
-                                                            handleNextStep({ type: 'Qualified - Set Appointment', details });
-                                                        }}>
-                                                        Confirm & Next
-                                                    </Button>
-                                                </AccordionContent>
-                                            </AccordionItem>
-                                        </Accordion>
-                                    )}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                                        {!isNoOpportunity && (
-                                            <>
-                                                <Button 
-                                                    className="w-full bg-[#dcfce7] hover:bg-[#bbf7d0] text-[#166534] border-[#86efac]" 
-                                                    variant="outline"
-                                                    onClick={() => handleNextStep({ type: 'Qualified - Call Back/Send Info', details: {} })}
-                                                >
-                                                    <Mail className="mr-2 h-4 w-4" />
-                                                    Qualified - Call Back/Send Info
-                                                </Button>
-                                                
-                                                {userProfile?.activeRole !== 'Dashback' && (
-                                                    <>
-                                                        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => handleNextStep({ type: 'Upsell', details: {} })}>
-                                                            <TrendingUp className="mr-2 h-4 w-4" />
-                                                            Upsell
-                                                        </Button>
-                                                        <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => handleNextStep({ type: 'Unqualified Opportunity', details: {} })}>
-                                                            Unqualified Opportunity
-                                                        </Button>
-                                                    </>
+                                isFranchisee ? (
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div
+                                                onClick={() => setSelectedFranchiseeOutcome('Qualified - Set Appointment')}
+                                                className={cn(
+                                                    "cursor-pointer rounded-xl border-2 p-5 transition-all duration-200 flex flex-col justify-between space-y-3 bg-card hover:shadow-md",
+                                                    selectedFranchiseeOutcome === 'Qualified - Set Appointment'
+                                                        ? "border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-sm ring-1 ring-emerald-600"
+                                                        : "border-border hover:border-emerald-300"
                                                 )}
-                                            </>
+                                            >
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={cn(
+                                                            "p-2.5 rounded-lg",
+                                                            selectedFranchiseeOutcome === 'Qualified - Set Appointment'
+                                                                ? "bg-emerald-600 text-white"
+                                                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                                        )}>
+                                                            <CalendarIcon className="h-5 w-5" />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="font-semibold text-base">Qualified - Set Appointment</h3>
+                                                            <p className="text-xs text-muted-foreground mt-0.5">Schedule a meeting with date & time</p>
+                                                        </div>
+                                                    </div>
+                                                    {selectedFranchiseeOutcome === 'Qualified - Set Appointment' && (
+                                                        <div className="h-5 w-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                                                            <Check className="h-3 w-3 stroke-[3]" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div
+                                                onClick={() => setSelectedFranchiseeOutcome('Qualified - Call Back/Send Info')}
+                                                className={cn(
+                                                    "cursor-pointer rounded-xl border-2 p-5 transition-all duration-200 flex flex-col justify-between space-y-3 bg-card hover:shadow-md",
+                                                    selectedFranchiseeOutcome === 'Qualified - Call Back/Send Info'
+                                                        ? "border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-sm ring-1 ring-emerald-600"
+                                                        : "border-border hover:border-emerald-300"
+                                                )}
+                                            >
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={cn(
+                                                            "p-2.5 rounded-lg",
+                                                            selectedFranchiseeOutcome === 'Qualified - Call Back/Send Info'
+                                                                ? "bg-emerald-600 text-white"
+                                                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                                        )}>
+                                                            <Mail className="h-5 w-5" />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="font-semibold text-base">Qualified - Call Back/Send Info</h3>
+                                                            <p className="text-xs text-muted-foreground mt-0.5">Follow up call or information packet</p>
+                                                        </div>
+                                                    </div>
+                                                    {selectedFranchiseeOutcome === 'Qualified - Call Back/Send Info' && (
+                                                        <div className="h-5 w-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                                                            <Check className="h-3 w-3 stroke-[3]" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {selectedFranchiseeOutcome === 'Qualified - Set Appointment' && (
+                                            <div className="space-y-4 pt-2 border-t">
+                                                <MandatoryFieldsForOutcome hideSchedule={false} />
+                                                <Button 
+                                                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5" 
+                                                    onClick={() => {
+                                                        const details: Record<string, any> = {};
+                                                        if (userProfile?.linkedSalesRep) {
+                                                            details.salesRep = userProfile.linkedSalesRep;
+                                                        }
+                                                        handleNextStep({ type: 'Qualified - Set Appointment', details });
+                                                    }}>
+                                                    Confirm Appointment & Next
+                                                </Button>
+                                            </div>
                                         )}
 
-                                        <Button id="step-no-access-outcome" className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => handleNextStep({ type: 'Prospect - No Access/No Contact', details: {} })}>
-                                            <XCircle className="mr-2 h-4 w-4" />
-                                            Prospect - No Access/No Contact
-                                        </Button>
-                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => handleNextStep({ type: 'Not Interested', details: {} })}>
-                                            Not Interested
-                                        </Button>
-                                        
-                                        {(userProfile?.activeRole !== 'Dashback' || isNoOpportunity) && (
-                                            <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => handleNextStep({ type: 'Empty / Closed', details: {} })}>
-                                                Empty / Closed
-                                            </Button>
+                                        {selectedFranchiseeOutcome === 'Qualified - Call Back/Send Info' && (
+                                            <div className="space-y-4 pt-2 border-t">
+                                                <MandatoryFieldsForOutcome hideSchedule={true} />
+                                                <Button 
+                                                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5" 
+                                                    onClick={() => handleNextStep({ type: 'Qualified - Call Back/Send Info', details: {} })}>
+                                                    Confirm & Next
+                                                </Button>
+                                            </div>
                                         )}
+
+                                        <div className="flex justify-start pt-2">
+                                            <Button type="button" variant="outline" onClick={handlePreviousStep}>Back</Button>
+                                        </div>
                                     </div>
-                                    <div className="flex justify-start pt-4">
-                                        <Button type="button" variant="outline" onClick={handlePreviousStep}>Back</Button>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {!isNoOpportunity && (
+                                            <Accordion type="single" collapsible className="w-full">
+                                                <AccordionItem value="item-1">
+                                                    <AccordionTrigger>Qualified - Set Appointment</AccordionTrigger>
+                                                    <AccordionContent className="space-y-4 pt-2">
+                                                        <MandatoryFieldsForOutcome />
+                                                        <Button 
+                                                            className="w-full bg-green-600 hover:bg-green-700" 
+                                                            onClick={() => {
+                                                                const details: Record<string, any> = {};
+                                                                if (userProfile?.linkedSalesRep) {
+                                                                    details.salesRep = userProfile.linkedSalesRep;
+                                                                }
+                                                                handleNextStep({ type: 'Qualified - Set Appointment', details });
+                                                            }}>
+                                                            Confirm & Next
+                                                        </Button>
+                                                    </AccordionContent>
+                                                </AccordionItem>
+                                            </Accordion>
+                                        )}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                                            {!isNoOpportunity && (
+                                                <>
+                                                    <Button 
+                                                        className="w-full bg-[#dcfce7] hover:bg-[#bbf7d0] text-[#166534] border-[#86efac]" 
+                                                        variant="outline"
+                                                        onClick={() => handleNextStep({ type: 'Qualified - Call Back/Send Info', details: {} })}
+                                                    >
+                                                        <Mail className="mr-2 h-4 w-4" />
+                                                        Qualified - Call Back/Send Info
+                                                    </Button>
+                                                    
+                                                    {userProfile?.activeRole !== 'Dashback' && (
+                                                        <>
+                                                            <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => handleNextStep({ type: 'Upsell', details: {} })}>
+                                                                <TrendingUp className="mr-2 h-4 w-4" />
+                                                                Upsell
+                                                            </Button>
+                                                            <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => handleNextStep({ type: 'Unqualified Opportunity', details: {} })}>
+                                                                Unqualified Opportunity
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            <Button id="step-no-access-outcome" className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => handleNextStep({ type: 'Prospect - No Access/No Contact', details: {} })}>
+                                                <XCircle className="mr-2 h-4 w-4" />
+                                                Prospect - No Access/No Contact
+                                            </Button>
+                                            <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => handleNextStep({ type: 'Not Interested', details: {} })}>
+                                                Not Interested
+                                            </Button>
+                                            
+                                            {(userProfile?.activeRole !== 'Dashback' || isNoOpportunity) && (
+                                                <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => handleNextStep({ type: 'Empty / Closed', details: {} })}>
+                                                    Empty / Closed
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <div className="flex justify-start pt-4">
+                                            <Button type="button" variant="outline" onClick={handlePreviousStep}>Back</Button>
+                                        </div>
                                     </div>
-                                </div>
+                                )
                             ) : step === 'photos' ? (
                                 <div className="space-y-6">
                                     <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/30 gap-4">
