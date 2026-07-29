@@ -411,7 +411,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const canViewMarketingGroup = (canView('marketingGroup') || userProfile?.activeRole === 'Customer Service') && userProfile?.activeRole !== 'user';
   const canViewFieldSalesD2D = canView('fieldSalesD2D');
-  const canViewFieldSalesMap = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'user' && userProfile.activeRole.toLowerCase() !== 'user';
+  const canViewFieldSalesMap = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'user' && userProfile.activeRole.toLowerCase() !== 'user' && userProfile.activeRole !== 'Outbound Admin';
   const canViewFieldSalesGroup = canViewFieldSalesD2D || canViewVisits || canViewFieldSalesMap || canViewD2D;
   const canViewLeadManagementOutbound = canView('outboundLeads');
   const canViewLeadManagementArchive = userProfile?.activeRole && !userProfile.activeRole.includes('Lead Gen') && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Dashback' && userProfile.activeRole !== 'Franchisee';
@@ -1014,7 +1014,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
                 {expandedStates["reporting"] && (
                   <SidebarMenuSub>
-                    {userProfile?.activeRole !== 'user' && userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                    {userProfile?.activeRole !== 'user' && userProfile?.activeRole?.toLowerCase() !== 'user' && userProfile?.activeRole !== 'Outbound Admin' && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/sales-snapshot")}>
                           <Link href="/sales-snapshot">
@@ -1563,6 +1563,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
 const isBlockedForUserRole = (path: string, role?: string) => {
   if (role !== 'user' && role !== 'Outbound Admin') return false;
+  if (path === '/admin/marketing/import-leads') return false;
   return path.startsWith('/admin/marketing') || 
          path.startsWith('/admin/mailbox') || 
          path.startsWith('/admin/financial-dashboard') || 
