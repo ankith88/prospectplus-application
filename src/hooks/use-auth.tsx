@@ -219,7 +219,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [router]);
 
     useEffect(() => {
-        if (!loading && !user && pathname !== '/signup' && pathname !== '/signin' && !pathname.startsWith('/scf/') && !pathname.startsWith('/hotel-leads') && !pathname.startsWith('/book/')) {
+        if (
+            !loading && 
+            !user && 
+            pathname !== '/signup' && 
+            pathname !== '/signin' && 
+            !pathname.startsWith('/scf/') && 
+            !pathname.startsWith('/sof/') && 
+            !pathname.startsWith('/lpo-opportunity/') && 
+            !pathname.startsWith('/hotel-leads') && 
+            !pathname.startsWith('/book/') && 
+            !pathname.startsWith('/localmile-registration/')
+        ) {
             router.push('/signin');
         }
     }, [user, loading, router, pathname]);

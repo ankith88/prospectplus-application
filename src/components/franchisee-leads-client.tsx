@@ -16,6 +16,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { FullScreenLoader } from '@/components/ui/loader';
 import { useToast } from '@/hooks/use-toast';
+import { getStatusOutcomeExplanation } from '@/lib/status-outcome-mapping';
+import { format, parseISO, isValid } from 'date-fns';
 import { 
   Briefcase, 
   Search, 
@@ -99,6 +101,10 @@ export default function FranchiseeLeadsClientPage() {
   const [amEmailSubject, setAmEmailSubject] = useState<string>('');
   const [amEmailBody, setAmEmailBody] = useState<string>('');
   const [sendingEmail, setSendingEmail] = useState<boolean>(false);
+
+  // Outbound Status Info Dialog State
+  const [outboundInfoDialogOpen, setOutboundInfoDialogOpen] = useState<boolean>(false);
+  const [activeLeadForStatusInfo, setActiveLeadForStatusInfo] = useState<Lead | null>(null);
 
   const franchiseeName = userProfile?.franchisee || '';
   const isFranchiseeRole = userProfile?.activeRole === 'Franchisee';
@@ -351,6 +357,180 @@ export default function FranchiseeLeadsClientPage() {
     setAmEmailSubject(`Inquiry regarding Lead: ${lead.companyName} (${lead.id})`);
     setAmEmailBody(`Hi ${leadAmName},\n\nI am contacting you regarding the lead "${lead.companyName}" (ID: ${lead.id}) assigned to ${franchiseeName || 'our franchise'}.\n\nCould you please provide an update on this lead?\n\nThank you!`);
     setContactDialogOpen(true);
+  };
+
+  // Helper to check if a lead is in the Outbound bucket
+  const isOutboundBucketLead = (lead: Lead) => {
+    const bucket = ((lead as any).bucket || (lead as any).salesRepBucket || '').toLowerCase().trim();
+    return !bucket || bucket === 'outbound';
+  };
+
+  // Helper to open Outbound Status Info Dialog
+  const handleOpenOutboundStatusInfo = (lead: Lead) => {
+    setActiveLeadForStatusInfo(lead);
+    setOutboundInfoDialogOpen(true);
+  };
+
+  // Date formatter for dialog
+  const formatDateDisplay = (dateVal?: any) => {
+    if (!dateVal) return null;
+    try {
+      const d = typeof dateVal === 'string' ? parseISO(dateVal) : new Date(dateVal);
+      if (isValid(d)) {
+        return format(d, 'dd MMM yyyy');
+      }
+    } catch (e) {}
+    return String(dateVal);
+  };
+
+  // Meaning explanation helper for lead status
+  const getStatusMeaningExplanation = (status: string): string => {
+    const normalized = (status || '').trim();
+    switch (normalized) {
+      case 'New':
+      case 'Unassigned':
+      case 'Imported':
+      case 'Pending':
+        return 'The lead has been created in the system and is queued in the outbound pipeline waiting for initial outreach.';
+      case 'In Progress':
+        return 'The outbound sales team has initiated contact attempts (calls/emails) and active prospecting is underway.';
+      case 'Contacted':
+        return 'Direct contact has been successfully established with the lead by an outbound team member.';
+      case 'Connected':
+      case 'Gatekeeper':
+        return 'Outbound sales reached a company gatekeeper/receptionist and is working to connect with key decision makers.';
+      case 'In Qualification':
+        return 'The lead is currently undergoing qualification to evaluate freight/parcel volume and service requirements.';
+      case 'Pre Qualified':
+        return 'The prospect passed initial screening and confirmed interest in receiving service proposals.';
+      case 'High Touch':
+        return 'The prospect requested a dedicated follow-up or specific callback, requiring high-priority attention.';
+      case 'Qualified':
+        return 'The lead has been fully qualified as a viable sales opportunity for MailPlus services.';
+      case 'Priority Lead':
+      case 'Hot Lead':
+        return 'The lead is flagged as high-priority for urgent outbound contact and rapid follow-up.';
+      case 'Priority Field Lead':
+        return 'The lead requires priority follow-up by a field sales executive or Business Development Manager.';
+      case 'Reschedule':
+        return 'A previously planned discussion was requested to be rescheduled for a future date/time.';
+      case 'Quote Sent':
+        return 'A formal rate proposal or quote has been prepared and sent to the customer for review.';
+      case 'Quote Accepted':
+        return 'The customer accepted the proposal and is progressing toward account setup.';
+      case 'Free Trial':
+      case 'Trialing LocalMile':
+      case 'Trialing ShipMate':
+        return 'The prospect is actively testing MailPlus pickup/delivery services during a trial period.';
+      case 'LocalMile Opportunity':
+      case 'LocalMile Pending':
+        return 'The lead has been evaluated for specialized LocalMile service integration.';
+      case 'Email Brush Off':
+        return 'The prospect sent an initial email brush-off; sales rep is adjusting follow-up approach.';
+      case 'Future Follow-up':
+        return 'The lead is scheduled for future re-engagement at a designated date.';
+      case 'Won':
+      case 'Customer Opportunity':
+        return 'The lead successfully converted into an active, paying MailPlus customer!';
+      case 'Lost':
+      case 'Lost Customer':
+      case 'Unqualified':
+      case 'Out of Territory':
+        return 'Outreach was closed or archived due to non-qualification, out-of-territory address, or prospect decision.';
+      default:
+        return `The lead is currently categorized under status '${status}' within the outbound sales pipeline.`;
+    }
+  };
+
+  // Pipeline Status Notice card renderer
+  const renderPipelineStatusNotice = (lead: Lead) => {
+    const status = lead.status || 'New';
+    const UNCONTACTED_STATUSES = ['New', 'Unassigned', 'Imported', 'Pending', 'Draft', 'Prospect - No Access/No Contact'];
+    const isUncontacted = UNCONTACTED_STATUSES.includes(status);
+    const isLost = LOST_STATUSES.includes(status as LeadStatus);
+    const isWon = WON_STATUSES.includes(status as LeadStatus);
+
+    if (isUncontacted) {
+      return (
+        <div className="p-4 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50/80 dark:bg-sky-950/40 text-sky-950 dark:text-sky-100 flex items-start gap-3 shadow-sm">
+          <div className="p-2 rounded-full bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-300 shrink-0 mt-0.5">
+            <Clock className="h-4 w-4" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold flex items-center gap-1.5">
+              <span>In Outbound Queue – Pending Outreach</span>
+              <Badge className="bg-sky-200 text-sky-900 dark:bg-sky-900 dark:text-sky-100 text-[10px] font-semibold border-0">
+                In Pipeline
+              </Badge>
+            </h4>
+            <p className="text-xs text-sky-900 dark:text-sky-200 leading-relaxed">
+              This lead is currently in the <strong>Outbound Queue</strong> and is in your pipeline <strong>waiting to be contacted</strong> by the outbound sales team.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (isWon) {
+      return (
+        <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100 flex items-start gap-3 shadow-sm">
+          <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300 shrink-0 mt-0.5">
+            <CheckCircle2 className="h-4 w-4" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold flex items-center gap-1.5">
+              <span>In Outbound Queue – Converted Account</span>
+              <Badge className="bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100 text-[10px] font-semibold border-0">
+                Won Account
+              </Badge>
+            </h4>
+            <p className="text-xs text-emerald-900 dark:text-emerald-200 leading-relaxed">
+              This lead is in the <strong>Outbound Queue</strong> and <strong>has already been worked on</strong> by the outbound sales team and successfully converted into a customer.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (isLost) {
+      return (
+        <div className="p-4 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100 flex items-start gap-3 shadow-sm">
+          <div className="p-2 rounded-full bg-rose-100 dark:bg-rose-900 text-rose-700 dark:text-rose-300 shrink-0 mt-0.5">
+            <X className="h-4 w-4" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold flex items-center gap-1.5">
+              <span>In Outbound Queue – Worked On &amp; Closed</span>
+              <Badge className="bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-100 text-[10px] font-semibold border-0">
+                Closed Lead
+              </Badge>
+            </h4>
+            <p className="text-xs text-rose-900 dark:text-rose-200 leading-relaxed">
+              This lead is in the <strong>Outbound Queue</strong> and <strong>has already been worked on</strong> by the outbound team, but was closed with status <strong>{status}</strong>.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-100 flex items-start gap-3 shadow-sm">
+        <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 shrink-0 mt-0.5">
+          <TrendingUp className="h-4 w-4" />
+        </div>
+        <div className="space-y-1">
+          <h4 className="text-xs font-bold flex items-center gap-1.5">
+            <span>In Outbound Queue – Active Outreach</span>
+            <Badge className="bg-indigo-200 text-indigo-900 dark:bg-indigo-900 dark:text-indigo-100 text-[10px] font-semibold border-0">
+              Worked On
+            </Badge>
+          </h4>
+          <p className="text-xs text-indigo-900 dark:text-indigo-200 leading-relaxed">
+            This lead is currently in the <strong>Outbound Queue</strong> and <strong>has already been worked on</strong> by the outbound sales team in your pipeline.
+          </p>
+        </div>
+      </div>
+    );
   };
 
   // Resolve assigned user object for lead
@@ -786,7 +966,7 @@ export default function FranchiseeLeadsClientPage() {
                 </Badge>
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                Click "Contact AM" to dispatch a direct message to the assigned Account Manager.
+                Click "Status Info" for Outbound bucket leads or "Contact AM" to dispatch a message to the assigned Account Manager.
               </CardDescription>
             </div>
 
@@ -950,17 +1130,31 @@ export default function FranchiseeLeadsClientPage() {
                         {/* Actions */}
                         <TableCell className="py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* Contact AM Button */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleOpenContactAm(lead)}
-                              title={`Contact ${amName}`}
-                              className="h-8 text-xs font-medium border-teal-200 text-teal-700 hover:bg-teal-50 hover:border-teal-300 dark:border-teal-800 dark:text-teal-300 dark:hover:bg-teal-950/50"
-                            >
-                              <Mail className="h-3.5 w-3.5 mr-1 text-teal-600 dark:text-teal-400" />
-                              Contact AM
-                            </Button>
+                            {isOutboundBucketLead(lead) ? (
+                              /* Status Info Button for Outbound Bucket Leads */
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenOutboundStatusInfo(lead)}
+                                title="View Outbound Status Info"
+                                className="h-8 text-xs font-medium border-amber-300 text-amber-800 bg-amber-50/60 hover:bg-amber-100 hover:border-amber-400 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950/30 dark:hover:bg-amber-900/50"
+                              >
+                                <HelpCircle className="h-3.5 w-3.5 mr-1 text-amber-600 dark:text-amber-400 shrink-0" />
+                                Status Info
+                              </Button>
+                            ) : (
+                              /* Contact AM Button for Non-Outbound Bucket Leads */
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenContactAm(lead)}
+                                title={`Contact ${amName}`}
+                                className="h-8 text-xs font-medium border-teal-200 text-teal-700 hover:bg-teal-50 hover:border-teal-300 dark:border-teal-800 dark:text-teal-300 dark:hover:bg-teal-950/50"
+                              >
+                                <Mail className="h-3.5 w-3.5 mr-1 text-teal-600 dark:text-teal-400 shrink-0" />
+                                Contact AM
+                              </Button>
+                            )}
 
                             {/* View Profile */}
                             <Button
@@ -1176,6 +1370,125 @@ export default function FranchiseeLeadsClientPage() {
             >
               <Send className={`h-4 w-4 mr-2 ${sendingEmail ? 'animate-pulse' : ''}`} />
               {sendingEmail ? 'Sending Email...' : 'Send Direct Message'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Outbound Lead Status Info Dialog Modal */}
+      <Dialog open={outboundInfoDialogOpen} onOpenChange={setOutboundInfoDialogOpen}>
+        <DialogContent className="w-[calc(100vw-32px)] sm:max-w-[550px] p-6 max-h-[90vh] overflow-y-auto overflow-x-hidden border-slate-200 dark:border-slate-800 shadow-xl">
+          <DialogHeader className="space-y-1 min-w-0">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+              <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 shrink-0">
+                <HelpCircle className="h-5 w-5" />
+              </div>
+              <span className="truncate">Outbound Lead Status Information</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 truncate">
+              Status details and pipeline progress for <strong className="text-slate-700 dark:text-slate-300">{activeLeadForStatusInfo?.companyName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          {activeLeadForStatusInfo && (
+            <div className="space-y-4 py-2 w-full min-w-0">
+              {/* Lead & Status Badge Summary Box */}
+              <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                    {activeLeadForStatusInfo.companyName}
+                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 text-[10px] font-semibold">
+                      Outbound Bucket
+                    </Badge>
+                    <Badge className={`text-xs font-semibold px-2.5 py-0.5 border ${getStatusBadgeVariant(activeLeadForStatusInfo.status || '')}`}>
+                      {activeLeadForStatusInfo.status || 'New'}
+                    </Badge>
+                  </div>
+                </div>
+                {(activeLeadForStatusInfo.city || activeLeadForStatusInfo.address?.city) && (
+                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                    <span>{activeLeadForStatusInfo.city || activeLeadForStatusInfo.address?.city}{activeLeadForStatusInfo.state ? `, ${activeLeadForStatusInfo.state}` : ''}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 1. Outbound Queue & Pipeline State Notice */}
+              {renderPipelineStatusNotice(activeLeadForStatusInfo)}
+
+              {/* 2. What Current Status Means */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2 shadow-sm">
+                <div className="flex items-center gap-2 font-bold text-xs text-slate-900 dark:text-white">
+                  <Tag className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                  <span>What does status "{activeLeadForStatusInfo.status || 'New'}" mean?</span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed pl-6">
+                  {getStatusMeaningExplanation(activeLeadForStatusInfo.status || 'New')}
+                </p>
+              </div>
+
+              {/* 3. How it Reached this Status */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2 shadow-sm">
+                <div className="flex items-center gap-2 font-bold text-xs text-slate-900 dark:text-white">
+                  <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span>How the lead reached this status</span>
+                </div>
+                <div className="pl-6 space-y-2">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {getStatusOutcomeExplanation(activeLeadForStatusInfo.status || 'New')}
+                  </p>
+                  {activeLeadForStatusInfo.statusReason && (
+                    <div className="mt-2 text-xs p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      <strong className="font-semibold text-slate-900 dark:text-slate-200">Recorded Reason / Notes:</strong> {activeLeadForStatusInfo.statusReason}
+                    </div>
+                  )}
+                  {(activeLeadForStatusInfo as any).lastProspected && (
+                    <div className="text-[11px] text-slate-500 flex items-center gap-1.5 pt-1">
+                      <Clock className="h-3 w-3 text-slate-400" />
+                      <span>Last Activity / Prospected: {formatDateDisplay((activeLeadForStatusInfo as any).lastProspected)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 4. Contact Aleyna Notice & Action */}
+              <div className="p-4 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-950/40 text-teal-950 dark:text-teal-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-full bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300 shrink-0 mt-0.5 sm:mt-0">
+                    <Mail className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-teal-950 dark:text-teal-100">Need More Information?</h4>
+                    <p className="text-xs text-teal-800 dark:text-teal-300 mt-0.5 leading-relaxed">
+                      If you need more details regarding this lead or its status, please contact <strong>Aleyna Harnett</strong>.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  asChild
+                  className="h-8 text-xs font-semibold border-teal-300 text-teal-800 bg-white hover:bg-teal-100 hover:text-teal-900 dark:bg-slate-900 dark:border-teal-700 dark:text-teal-200 dark:hover:bg-teal-950 shrink-0"
+                >
+                  <a href={`mailto:aleyna.harnett@mailplus.com.au?subject=${encodeURIComponent(`Inquiry regarding Outbound Lead: ${activeLeadForStatusInfo.companyName} (${activeLeadForStatusInfo.id})`)}&body=${encodeURIComponent(`Hi Aleyna,\n\nI am contacting you regarding the outbound lead "${activeLeadForStatusInfo.companyName}" (ID: ${activeLeadForStatusInfo.id}) which is currently in status "${activeLeadForStatusInfo.status || 'New'}".\n\nCould you please provide more information or an update on this lead?\n\nThank you!`)}`}>
+                    <Send className="h-3.5 w-3.5 mr-1 text-teal-600" />
+                    Email Aleyna
+                  </a>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOutboundInfoDialogOpen(false)}
+              className="text-xs"
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

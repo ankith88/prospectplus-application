@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
+import { AccessDenied } from '@/components/access-denied';
 import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle, Phone, Calendar as CalendarIcon, RotateCcw, XCircle } from 'lucide-react';
 import { addVisitNote, getAllUsers, updateVisitNote, findExistingCompanyOrLead } from '@/services/firebase';
 import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
@@ -1079,6 +1080,10 @@ function CaptureVisitContent() {
 
     if (isLoadingNote || !isLoaded) {
         return <div className="flex h-full items-center justify-center"><Loader /></div>;
+    }
+
+    if (isFranchisee) {
+        return <AccessDenied />;
     }
 
     return (

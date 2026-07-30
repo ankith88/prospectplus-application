@@ -1034,7 +1034,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {!(userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers') && (
+                    {canViewReporting && !isFranchiseeRole && !(userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
                           <Link href="/reports">
@@ -1044,7 +1044,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {canViewInboundReporting && (
+                    {canViewInboundReporting && !isFranchiseeRole && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/inbound-reporting")}>
                           <Link href="/inbound-reporting">
@@ -1054,7 +1054,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {canView('fieldActivityReport') && (
+                    {canView('fieldActivityReport') && !isFranchiseeRole && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
                           <Link href="/field-activity-report">
@@ -1572,6 +1572,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 const isBlockedForUserRole = (path: string, role?: string) => {
+  const isFranchisee = role === 'Franchisee' || role?.toLowerCase() === 'franchisee';
+  if (isFranchisee) {
+    const blockedFranchiseePaths = [
+      '/reports',
+      '/inbound-reporting',
+      '/field-activity-report',
+      '/field-sales',
+      '/visit-notes',
+      '/capture-visit'
+    ];
+    if (blockedFranchiseePaths.some(p => path === p || path.startsWith(p + '/'))) {
+      return true;
+    }
+  }
+
   if (role !== 'user' && role !== 'Outbound Admin') return false;
   if (path === '/admin/marketing/import-leads') return false;
   return path.startsWith('/admin/marketing') || 

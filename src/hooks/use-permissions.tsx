@@ -24,8 +24,8 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   tickets: ['superadmin', 'Customer Service', 'Marketing Manager'],
   marketingGroup: ['Marketing Admin', 'Marketing Manager', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
   fieldSalesD2D: ['Field Sales', 'Field Sales Admin', 'Dashback'],
-  captureVisit: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'],
-  visitNotes: ['Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback', 'Sales Manager'],
+  captureVisit: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
+  visitNotes: ['Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Dashback', 'Sales Manager'],
   routesCoverage: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
   teamSchedules: ['Field Sales Admin'],
   newLead: ['Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager', 'Customer Service', 'Outbound Admin', 'Franchisee'],
@@ -35,9 +35,9 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   unassignedLeads: ['Lead Gen Admin'],
   accountManagerPipeline: ['Sales Manager', 'Account Managers', 'Account Manager'],
   customerSuccessPipeline: ['Customer Success', 'Marketing Manager'],
-  reporting: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager', 'user', 'Outbound Admin'],
-  fieldActivityReport: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Sales Manager'],
-  inboundReporting: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'Franchisee', 'Marketing Manager'],
+  reporting: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager', 'user', 'Outbound Admin'],
+  fieldActivityReport: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback', 'Sales Manager'],
+  inboundReporting: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'Marketing Manager'],
   amReporting: ['Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
   archivedLeads: ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'user', 'Outbound Admin'],
   deploymentHistory: ['Sales Manager', 'Field Sales Admin'],
@@ -124,6 +124,11 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
   const canView = (feature: string): boolean => {
     if (!userProfile?.activeRole) return false;
     
+    // Explicitly restrict Franchisee role from reporting, field sales, visit notes, and capture visit
+    if (userProfile.activeRole?.toLowerCase() === 'franchisee' && ['reporting', 'inboundReporting', 'fieldActivityReport', 'fieldSalesD2D', 'visitNotes', 'captureVisit'].includes(feature)) {
+      return false;
+    }
+
     // Admin always has access to everything
     if (userProfile.activeRole === 'admin') return true;
 

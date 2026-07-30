@@ -5,6 +5,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
+import { AccessDenied } from '@/components/access-denied';
 import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, Upsell, Activity, LeadStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
@@ -138,7 +140,9 @@ export default function FieldActivityReportPage() {
     dashbackOnly: false,
   });
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
+  const { canView } = usePermissions();
+  const isFranchisee = userProfile?.activeRole?.toLowerCase() === 'franchisee';
+  const hasAccess = !isFranchisee && userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
 
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
@@ -583,6 +587,7 @@ export default function FieldActivityReportPage() {
   };
 
   if (loading || isRefreshing || authLoading) return <div className="flex h-full items-center justify-center"><Loader /></div>;
+  if (!hasAccess) return <AccessDenied />;
 
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 

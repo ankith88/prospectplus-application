@@ -252,10 +252,11 @@ export default function SalesSnapshotClient() {
   const [progressMsg, setProgressMsg] = useState("");
   const [error, setError] = useState<string | null>(null);
   
-  // Drilldown states
+  // Drilldown & Franchisee states
   const [drilldownType, setDrilldownType] = useState<'mrr' | 'appointments' | 'quotes' | 'scfs' | 'trials' | 'signed' | 'signed_mrr' | 'stage' | null>(null);
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [drilldownSearch, setDrilldownSearch] = useState('');
+  const [franchiseeLeadSearch, setFranchiseeLeadSearch] = useState('');
   
   const cacheRef = useRef<{ [key: string]: { leads: Lead[], activities: (Activity & { leadId: string })[], appointments: Appointment[] } }>({});
   const { userProfile } = useAuth();
@@ -418,6 +419,7 @@ export default function SalesSnapshotClient() {
         apptList.forEach(appt => { if (appt.leadId) activeLeadIds.add(appt.leadId); });
 
         let leadsList: Lead[] = [];
+        const leadMap = new Map<string, Lead>();
 
         if (dateFilterType === 'activityDate') {
             const leadIdArray = Array.from(activeLeadIds);
@@ -436,7 +438,6 @@ export default function SalesSnapshotClient() {
                 );
 
                 const querySnaps = await Promise.all([...leadQueries, ...companyQueries]);
-                const leadMap = new Map<string, Lead>();
 
                 querySnaps.forEach((snap, idx) => {
                     const isCompany = idx >= chunks.length;
@@ -448,8 +449,44 @@ export default function SalesSnapshotClient() {
                         } as unknown as Lead);
                     });
                 });
-                leadsList = Array.from(leadMap.values());
             }
+
+            // Also fetch leads created/entered within the selected date range
+            setProgressMsg("Retrieving newly entered leads...");
+            const [leadsCreatedSnap, companiesCreatedSnap] = await Promise.all([
+                getDocs(query(collection(firestore, 'leads'), where('dateLeadEntered', '>=', startISO))),
+                getDocs(query(collection(firestore, 'companies'), where('dateLeadEntered', '>=', startISO)))
+            ]);
+            leadsCreatedSnap.docs.forEach(doc => {
+                if (!leadMap.has(doc.id)) {
+                    leadMap.set(doc.id, { id: doc.id, isFromCompaniesCollection: false, ...doc.data() } as unknown as Lead);
+                }
+            });
+            companiesCreatedSnap.docs.forEach(doc => {
+                if (!leadMap.has(doc.id)) {
+                    leadMap.set(doc.id, { id: doc.id, isFromCompaniesCollection: true, ...doc.data() } as unknown as Lead);
+                }
+            });
+
+            // If logged in user is a Franchisee, also retrieve all leads for their franchisee directly
+            if (userProfile?.franchisee) {
+                const [fLeadsSnap, fCompSnap] = await Promise.all([
+                    getDocs(query(collection(firestore, 'leads'), where('franchisee', '==', userProfile.franchisee))),
+                    getDocs(query(collection(firestore, 'companies'), where('franchisee', '==', userProfile.franchisee)))
+                ]);
+                fLeadsSnap.docs.forEach(doc => {
+                    if (!leadMap.has(doc.id)) {
+                        leadMap.set(doc.id, { id: doc.id, isFromCompaniesCollection: false, ...doc.data() } as unknown as Lead);
+                    }
+                });
+                fCompSnap.docs.forEach(doc => {
+                    if (!leadMap.has(doc.id)) {
+                        leadMap.set(doc.id, { id: doc.id, isFromCompaniesCollection: true, ...doc.data() } as unknown as Lead);
+                    }
+                });
+            }
+
+            leadsList = Array.from(leadMap.values());
         } else {
             setProgressMsg("Retrieving leads by status date...");
             const leadsQuery = query(
@@ -477,7 +514,6 @@ export default function SalesSnapshotClient() {
             const rawLeads = mapDocs(leadsSnap, false);
             const rawCompanies = mapDocs(companiesSnap, true);
 
-            const leadMap = new Map<string, Lead>();
             for (const item of [...rawLeads, ...rawCompanies]) {
                 leadMap.set(item.id, item);
             }
@@ -511,7 +547,7 @@ export default function SalesSnapshotClient() {
         if (lead.isDuplicate) return false;
 
         // Franchisee role override
-        if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
+        if ((userProfile?.activeRole === 'Franchisee' || userProfile?.role?.toLowerCase() === 'franchisee') && userProfile.franchisee) {
             if (lead.franchisee !== userProfile.franchisee) return false;
         }
 
@@ -540,21 +576,24 @@ export default function SalesSnapshotClient() {
         if (appliedFilters.dateRange?.from) {
             const fromDateVal = appliedFilters.dateRange.from;
             const toDateVal = appliedFilters.dateRange.to || appliedFilters.dateRange.from;
+            const fromDate = startOfDay(fromDateVal);
+            const toDate = endOfDay(toDateVal);
+
             if (appliedFilters.dateFilterType === 'activityDate') {
                 const leadActivities = activities.filter(act => act.leadId === lead.id);
-                dateMatch = leadActivities.some(act => {
+                const hasActivityInWindow = leadActivities.some(act => {
                     const date = new Date(act.date);
-                    const fromDate = startOfDay(fromDateVal);
-                    const toDate = endOfDay(toDateVal);
                     return date >= fromDate && date <= toDate;
                 });
+                const parsedEntered = parseDateString(lead.dateLeadEntered);
+                const isEnteredInWindow = parsedEntered ? (parsedEntered >= fromDate && parsedEntered <= toDate) : false;
+
+                dateMatch = hasActivityInWindow || isEnteredInWindow;
             } else {
                 const dateVal = lead[appliedFilters.dateFilterType];
                 const parsedDate = parseDateString(dateVal);
                 if (!parsedDate) return false;
                 
-                const fromDate = startOfDay(fromDateVal);
-                const toDate = endOfDay(toDateVal);
                 dateMatch = parsedDate >= fromDate && parsedDate <= toDate;
             }
         }
@@ -909,6 +948,18 @@ export default function SalesSnapshotClient() {
         franchiseeData
     };
   }, [filteredLeads, filteredActivities, filteredAppointments, appliedFilters.dateFilterType]);
+
+  const franchiseeLeadsList = useMemo(() => {
+    if (!isFranchisee) return [];
+    if (!franchiseeLeadSearch.trim()) return filteredLeads;
+    const q = franchiseeLeadSearch.toLowerCase();
+    return filteredLeads.filter(l => 
+      (l.companyName || '').toLowerCase().includes(q) ||
+      (l.status || '').toLowerCase().includes(q) ||
+      (l.customerStatus || '').toLowerCase().includes(q) ||
+      (getUserInCharge(l) || '').toLowerCase().includes(q)
+    );
+  }, [filteredLeads, isFranchisee, franchiseeLeadSearch]);
 
   // Options lists
   const franchiseeOptions = useMemo(() => {
@@ -1344,6 +1395,109 @@ export default function SalesSnapshotClient() {
                 ))}
               </CardContent>
             </Card>
+
+            {/* Franchisee Leads & Progress Table (Displayed when user is a Franchisee) */}
+            {isFranchisee && (
+              <Card className="shadow-sm card border-[#095c7b]/30 bg-white">
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 gap-3">
+                  <div>
+                    <CardTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
+                      <Briefcase className="h-5 w-5 text-[#095c7b]" />
+                      Franchisee Leads &amp; Progress
+                    </CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                      Overview of leads entered for {userProfile?.franchisee || 'your franchise'} and their current pipeline progress.
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <Input
+                      placeholder="Search company, status, rep..."
+                      value={franchiseeLeadSearch}
+                      onChange={(e) => setFranchiseeLeadSearch(e.target.value)}
+                      className="h-8 text-xs w-full sm:w-64"
+                    />
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 text-xs shrink-0"
+                      onClick={() => handleExportDrilldown(franchiseeLeadsList, `${userProfile?.franchisee || 'Franchisee'}_Leads_Progress`)}
+                    >
+                      <Download className="h-3.5 w-3.5 mr-1" /> Export CSV
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[380px] rounded-md border">
+                    <Table>
+                      <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                        <TableRow>
+                          <TableHead className="font-semibold text-xs">Company / Business</TableHead>
+                          <TableHead className="font-semibold text-xs">Status &amp; Progress</TableHead>
+                          <TableHead className="font-semibold text-xs">Pipeline Stage</TableHead>
+                          <TableHead className="font-semibold text-xs">Date Entered</TableHead>
+                          <TableHead className="font-semibold text-xs">User / Rep in Charge</TableHead>
+                          <TableHead className="text-right font-semibold text-xs">MRR Value</TableHead>
+                          <TableHead className="text-right font-semibold text-xs">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {franchiseeLeadsList.length > 0 ? (
+                          franchiseeLeadsList.map((lead) => {
+                            const currentStatus = (lead.customerStatus || lead.status || 'New') as LeadStatus;
+                            const phase = getPipelinePhase(currentStatus);
+                            const mrr = calculateMonthlyValue(lead);
+                            const parsedDate = parseDateString(lead.dateLeadEntered);
+                            const formattedDate = parsedDate ? format(parsedDate, 'dd MMM yyyy') : '-';
+                            const repInCharge = getUserInCharge(lead);
+
+                            return (
+                              <TableRow key={lead.id} className="hover:bg-muted/50">
+                                <TableCell className="font-medium text-xs py-3">
+                                  <div className="flex flex-col">
+                                    <span className="font-bold text-slate-800">{lead.companyName}</span>
+                                    {(lead.city || lead.address?.city) && <span className="text-[10px] text-muted-foreground">{lead.city || lead.address?.city}{lead.state ? `, ${lead.state}` : ''}</span>}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <LeadStatusBadge status={currentStatus} />
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground py-3">
+                                  <Badge variant="outline" className="text-[10px] font-normal bg-slate-50">
+                                    {phase}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground py-3">
+                                  {formattedDate}
+                                </TableCell>
+                                <TableCell className="text-xs text-slate-700 py-3">
+                                  {repInCharge}
+                                </TableCell>
+                                <TableCell className="text-right text-xs font-semibold text-emerald-700 py-3">
+                                  {mrr > 0 ? `$${mrr.toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo` : '-'}
+                                </TableCell>
+                                <TableCell className="text-right py-3">
+                                  <Link href={`/leads?search=${encodeURIComponent(lead.companyName)}`} passHref>
+                                    <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-[#095c7b] hover:text-[#095c7b] hover:bg-[#095c7b]/10">
+                                      View Lead <ArrowRight className="h-3 w-3 ml-1" />
+                                    </Button>
+                                  </Link>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-xs text-muted-foreground">
+                              {franchiseeLeadSearch ? 'No leads matching search terms.' : 'No leads entered for this franchisee in the selected date range.'}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Visualisations Grid 1 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
