@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import { getLeadsFromFirebase, getAllUsers } from '@/services/firebase';
+import { getLeadsFromFirebase, getCompaniesFromFirebase, getAllUsers } from '@/services/firebase';
 import { Lead, UserProfile, LeadStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -112,21 +112,45 @@ export default function FranchiseeLeadsClientPage() {
   const fetchData = async () => {
     try {
       setRefreshing(true);
-      const [fetchedLeads, fetchedUsers] = await Promise.all([
+      const [fetchedLeads, fetchedCompanies, fetchedUsers] = await Promise.all([
         getLeadsFromFirebase({ 
           franchisee: isFranchiseeRole && franchiseeName ? franchiseeName : undefined 
+        }),
+        getCompaniesFromFirebase({
+          franchisee: isFranchiseeRole && franchiseeName ? franchiseeName : undefined,
+          skipCoordinateCheck: true
         }),
         getAllUsers()
       ]);
 
-      let filtered = fetchedLeads;
+      let filteredLeads = fetchedLeads;
+      let filteredCompanies = fetchedCompanies;
+
       if (isFranchiseeRole && franchiseeName) {
-        filtered = fetchedLeads.filter(l => 
-          (l.franchisee || '').toLowerCase().trim() === franchiseeName.toLowerCase().trim()
+        const normFranchisee = franchiseeName.toLowerCase().trim();
+        filteredLeads = fetchedLeads.filter(l => 
+          (l.franchisee || '').toLowerCase().trim() === normFranchisee
+        );
+        filteredCompanies = fetchedCompanies.filter(c => 
+          (c.franchisee || '').toLowerCase().trim() === normFranchisee
         );
       }
 
-      setLeads(filtered);
+      // Format companies into Lead items with status 'Won' and isCompany flag
+      const formattedCompanies: Lead[] = filteredCompanies.map(c => ({
+        ...c,
+        status: (c.status || c.customerStatus || 'Won') as LeadStatus,
+        isCompany: true,
+      } as any));
+
+      // Combine leads and companies, avoiding duplicates if lead doc exists alongside company doc
+      const existingLeadIds = new Set(filteredLeads.map(l => l.id));
+      const combined: Lead[] = [
+        ...filteredLeads,
+        ...formattedCompanies.filter(c => !existingLeadIds.has(c.id))
+      ];
+
+      setLeads(combined);
       setUsers(fetchedUsers);
     } catch (err) {
       console.error('Error fetching franchisee leads:', err);
@@ -365,6 +389,12 @@ export default function FranchiseeLeadsClientPage() {
     return !bucket || bucket === 'outbound';
   };
 
+  // Helper to check if a lead is in the Account Manager bucket
+  const isAccountManagerBucketLead = (lead: Lead) => {
+    const bucket = ((lead as any).bucket || (lead as any).salesRepBucket || '').toLowerCase().trim();
+    return bucket === 'account_manager' || bucket === 'account manager' || bucket === 'am';
+  };
+
   // Helper to open Outbound Status Info Dialog
   const handleOpenOutboundStatusInfo = (lead: Lead) => {
     setActiveLeadForStatusInfo(lead);
@@ -391,7 +421,7 @@ export default function FranchiseeLeadsClientPage() {
       case 'Unassigned':
       case 'Imported':
       case 'Pending':
-        return 'The lead has been created in the system and is queued in the outbound pipeline waiting for initial outreach.';
+        return 'The lead is a newly added entry in your pipeline awaiting initial contact from either the Outbound Team or an Account Manager, depending on which bucket it belongs to.';
       case 'In Progress':
         return 'The outbound sales team has initiated contact attempts (calls/emails) and active prospecting is underway.';
       case 'Contacted':
@@ -966,7 +996,7 @@ export default function FranchiseeLeadsClientPage() {
                 </Badge>
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                Click "Status Info" for Outbound bucket leads or "Contact AM" to dispatch a message to the assigned Account Manager.
+                Click "Status Info" for Outbound bucket leads or "Contact AM" for Account Manager bucket leads.
               </CardDescription>
             </div>
 
@@ -1067,7 +1097,7 @@ export default function FranchiseeLeadsClientPage() {
                         <TableCell className="font-medium py-3.5">
                           <div className="flex flex-col space-y-0.5">
                             <Link 
-                              href={`/leads/${lead.id}`} 
+                              href={(lead as any).isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`} 
                               className="text-sm font-semibold text-slate-900 dark:text-slate-100 hover:text-teal-600 dark:hover:text-teal-400 flex items-center gap-1.5 group"
                             >
                               <Building2 className="h-4 w-4 text-slate-400 group-hover:text-teal-600 transition-colors shrink-0" />
@@ -1142,8 +1172,8 @@ export default function FranchiseeLeadsClientPage() {
                                 <HelpCircle className="h-3.5 w-3.5 mr-1 text-amber-600 dark:text-amber-400 shrink-0" />
                                 Status Info
                               </Button>
-                            ) : (
-                              /* Contact AM Button for Non-Outbound Bucket Leads */
+                            ) : isAccountManagerBucketLead(lead) ? (
+                              /* Contact AM Button - ONLY for Account Manager Bucket Leads */
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1154,7 +1184,7 @@ export default function FranchiseeLeadsClientPage() {
                                 <Mail className="h-3.5 w-3.5 mr-1 text-teal-600 dark:text-teal-400 shrink-0" />
                                 Contact AM
                               </Button>
-                            )}
+                            ) : null}
 
                             {/* View Profile */}
                             <Button
@@ -1164,7 +1194,7 @@ export default function FranchiseeLeadsClientPage() {
                               className="h-8 w-8 p-0 text-slate-500 hover:text-slate-900 dark:hover:text-white"
                               title="View Lead Profile"
                             >
-                              <Link href={`/leads/${lead.id}`}>
+                              <Link href={(lead as any).isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`}>
                                 <ExternalLink className="h-4 w-4" />
                               </Link>
                             </Button>

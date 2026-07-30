@@ -102,10 +102,12 @@ export function getOutcomesForStatus(status: string): OutcomeInfo[] {
   return STATUS_TO_OUTCOMES_MAP[normalized] || [];
 }
 
-/**
- * Returns a human-readable summary string explaining when/how a lead transitions into this status.
- */
 export function getStatusOutcomeExplanation(status: string): string {
+  const normalized = (status || '').trim();
+  if (normalized === 'New' || normalized === 'Unassigned' || normalized === 'Imported') {
+    return `The 'New' status indicates a newly added lead in your pipeline awaiting initial contact from either the Outbound Team or an Account Manager, depending on which bucket it belongs to.`;
+  }
+
   const outcomes = getOutcomesForStatus(status);
   if (!outcomes || outcomes.length === 0) {
     return `Status '${status}' is managed manually or by system workflows.`;
