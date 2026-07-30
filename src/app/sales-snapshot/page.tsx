@@ -11,7 +11,8 @@ export default function SalesSnapshotPage() {
   const { canView, loadingPermissions } = usePermissions();
 
   const loading = authLoading || loadingPermissions;
-  const hasAccess = canView('reporting') && userProfile?.activeRole !== 'user' && userProfile?.activeRole?.toLowerCase() !== 'user' && userProfile?.activeRole !== 'Outbound Admin';
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
+  const hasAccess = (canView('reporting') || isFranchisee) && userProfile?.activeRole !== 'user' && userProfile?.activeRole?.toLowerCase() !== 'user' && userProfile?.activeRole !== 'Outbound Admin';
 
   if (loading) {
     return (

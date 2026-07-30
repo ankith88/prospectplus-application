@@ -1015,7 +1015,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {/* Reporting */}
-            {canViewReporting && (
+            {(canViewReporting || isFranchiseeRole) && (
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={() => toggleExpand("reporting")}>
                   <BarChart2 />
