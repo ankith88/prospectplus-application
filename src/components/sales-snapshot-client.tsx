@@ -817,6 +817,11 @@ export default function SalesSnapshotClient() {
             mrrLeadsList.push(lead);
           }
 
+          const bucketLabel = getLeadBucketLabel(lead);
+          const leadType = lead.leadType || 'Standard';
+          bucketValueMap[bucketLabel] = (bucketValueMap[bucketLabel] || 0) + mrr;
+          typeValueMap[leadType] = (typeValueMap[leadType] || 0) + mrr;
+
           // Weekly MRR Pipeline Breakdown
           const targetDateVal = isSigned 
             ? (lead.signedUpAt || lead.dateLeadEntered || (lead as any).createdAt) 
