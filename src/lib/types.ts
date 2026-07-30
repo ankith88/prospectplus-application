@@ -522,6 +522,10 @@ export interface Lead {
   isPriority?: boolean;
   outsideTerritoryConfirmed?: boolean;
   franchiseeReviewPending?: boolean;
+  isZeeCreated?: boolean;
+  leadSource?: string;
+  createdByRole?: string;
+  createdByUid?: string;
   bucket?: LeadBucket;
   attemptCount?: number;
   totalCalls?: number;

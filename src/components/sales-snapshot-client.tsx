@@ -9,7 +9,7 @@ import { LeadCampaign, getLeadCampaigns } from '@/services/lead-campaigns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { 
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, AreaChart, Area
+  ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, AreaChart, Area, LabelList
 } from 'recharts';
 import { 
   Phone, Percent, Filter, SlidersHorizontal, X, Star, Calendar as CalendarIcon, Goal, TrendingUp, BarChart3, RefreshCw, 
@@ -219,6 +219,72 @@ const getLeadBucketLabel = (lead: Lead): string => {
   return BUCKET_DISPLAY_NAMES[b] || b.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
 
+const isFranchiseeGeneratedLead = (lead: Lead, userProfile?: any): boolean => {
+  if (lead.isZeeCreated || lead.franchiseeReviewPending) return true;
+  if (lead.customerSource === 'Franchisee Generated' || lead.leadSource === 'Franchisee Generated' || lead.campaign === 'Franchisee Generated' || lead.leadSource === '-4') return true;
+  if (lead.createdByRole && (lead.createdByRole === 'Franchisee' || lead.createdByRole.toLowerCase() === 'franchisee')) return true;
+  if (userProfile && lead.createdByUid && lead.createdByUid === userProfile.uid) return true;
+  return false;
+};
+
+const STAGE_COLOR_STYLES: Record<string, {
+  cardBg: string;
+  cardBorder: string;
+  titleColor: string;
+  countColor: string;
+  barBg: string;
+  badgeBg: string;
+}> = {
+  'New / Prospecting': {
+    cardBg: 'bg-sky-50/70 hover:bg-sky-100/80',
+    cardBorder: 'border-sky-200 hover:border-sky-400',
+    titleColor: 'text-sky-800',
+    countColor: 'text-sky-950',
+    barBg: 'bg-sky-500',
+    badgeBg: 'bg-sky-100/80 border-sky-200'
+  },
+  'Priority & Hot Leads': {
+    cardBg: 'bg-amber-50/70 hover:bg-amber-100/80',
+    cardBorder: 'border-amber-200 hover:border-amber-400',
+    titleColor: 'text-amber-800',
+    countColor: 'text-amber-950',
+    barBg: 'bg-amber-500',
+    badgeBg: 'bg-amber-100/80 border-amber-200'
+  },
+  'Active Engagement': {
+    cardBg: 'bg-indigo-50/70 hover:bg-indigo-100/80',
+    cardBorder: 'border-indigo-200 hover:border-indigo-400',
+    titleColor: 'text-indigo-800',
+    countColor: 'text-indigo-950',
+    barBg: 'bg-indigo-500',
+    badgeBg: 'bg-indigo-100/80 border-indigo-200'
+  },
+  'High-Intent / Opportunity': {
+    cardBg: 'bg-purple-50/70 hover:bg-purple-100/80',
+    cardBorder: 'border-purple-200 hover:border-purple-400',
+    titleColor: 'text-purple-800',
+    countColor: 'text-purple-950',
+    barBg: 'bg-purple-500',
+    badgeBg: 'bg-purple-100/80 border-purple-200'
+  },
+  'Converted': {
+    cardBg: 'bg-emerald-50/80 hover:bg-emerald-100/90',
+    cardBorder: 'border-emerald-300 hover:border-emerald-500',
+    titleColor: 'text-emerald-800',
+    countColor: 'text-emerald-950',
+    barBg: 'bg-emerald-600',
+    badgeBg: 'bg-emerald-100 border-emerald-300'
+  },
+  'Closed / Inactive': {
+    cardBg: 'bg-slate-100/60 hover:bg-slate-200/70',
+    cardBorder: 'border-slate-200 hover:border-slate-400',
+    titleColor: 'text-slate-700',
+    countColor: 'text-slate-900',
+    barBg: 'bg-slate-400',
+    badgeBg: 'bg-slate-200/70 border-slate-300'
+  }
+};
+
 const getUserInCharge = (lead: Lead): string => {
   const b = (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase();
   
@@ -257,6 +323,7 @@ export default function SalesSnapshotClient() {
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [drilldownSearch, setDrilldownSearch] = useState('');
   const [franchiseeLeadSearch, setFranchiseeLeadSearch] = useState('');
+  const [pipelineValueGroupBy, setPipelineValueGroupBy] = useState<'leadType' | 'bucket'>('bucket');
   
   const cacheRef = useRef<{ [key: string]: { leads: Lead[], activities: (Activity & { leadId: string })[], appointments: Appointment[] } }>({});
   const { userProfile } = useAuth();
@@ -664,19 +731,22 @@ export default function SalesSnapshotClient() {
     // 4. Average Days in Status
     const statusDurations: Record<string, { totalDays: number; count: number }> = {};
 
-    // 5. Pipeline Value by Lead Type
+    // 5. Pipeline Value by Lead Type & Bucket
     const typeValueMap: Record<string, number> = {};
+    const bucketValueMap: Record<string, number> = {};
 
     // 6. Pipeline MRR & Signed MRR
     let totalPipelineMRR = 0;
     let totalSignedMRR = 0;
     const mrrStatusMap: Record<string, number> = {};
-
     // 7. Leads with MRR lists
     const mrrLeadsList: Lead[] = [];
     const signedMrrLeadsList: Lead[] = [];
 
-    // 8. Appointments
+    // 8. Weekly MRR Pipeline Map
+    const weeklyMrrMap: Record<string, { weekKey: string; weekLabel: string; sortDate: string; pipelineMRR: number; signedMRR: number }> = {};
+
+    // 9. Appointments
     const leadApptCounts: Record<string, number> = {};
 
     filteredLeads.forEach(lead => {
@@ -706,11 +776,10 @@ export default function SalesSnapshotClient() {
           assignmentMap[b][assignedUser] = (assignmentMap[b][assignedUser] || 0) + 1;
         }
 
-        // Volume over time
-        const dateField = appliedFilters.dateFilterType === 'activityDate' ? 'lastContactedDate' : appliedFilters.dateFilterType;
-        const createdDateVal = lead[dateField];
+        // Volume over time (based on Date Lead Created/Entered)
+        const createdDateVal = lead.dateLeadEntered || (lead as any).createdAt || (lead as any).created_at || (lead as any).dateCreated;
         const parsedCreated = parseDateString(createdDateVal);
-        if (parsedCreated && !isWeekend(parsedCreated)) {
+        if (parsedCreated) {
           const dateStr = format(parsedCreated, 'yyyy-MM-dd');
           volumeMap[dateStr] = (volumeMap[dateStr] || 0) + 1;
         }
@@ -777,17 +846,39 @@ export default function SalesSnapshotClient() {
             mrrStatusMap[status] = (mrrStatusMap[status] || 0) + mrr;
             mrrLeadsList.push(lead);
           }
-        }
 
-        // Pipeline Value by Lead Type
-        const lType = lead.leadType || 'Standard';
-        typeValueMap[lType] = (typeValueMap[lType] || 0) + mrr;
+          // Weekly MRR Pipeline Breakdown
+          const targetDateVal = isSigned 
+            ? (lead.signedUpAt || lead.dateLeadEntered || (lead as any).createdAt) 
+            : (lead.quoteSentAt || lead.scfAcceptedAt || lead.trialStartedAt || lead.dateLeadEntered || (lead as any).createdAt);
+          
+          const parsedDate = parseDateString(targetDateVal);
+          if (parsedDate) {
+            const weekMon = startOfWeek(parsedDate, { weekStartsOn: 1 });
+            const sortDate = format(weekMon, 'yyyy-MM-dd');
+            const weekLabel = `w/c ${format(weekMon, 'dd MMM')}`;
+
+            if (!weeklyMrrMap[sortDate]) {
+              weeklyMrrMap[sortDate] = {
+                weekKey: sortDate,
+                weekLabel,
+                sortDate,
+                pipelineMRR: 0,
+                signedMRR: 0
+              };
+            }
+
+            if (isSigned) {
+              weeklyMrrMap[sortDate].signedMRR += mrr;
+            } else {
+              weeklyMrrMap[sortDate].pipelineMRR += mrr;
+            }
+          }
+        }
     });
 
     const quoteRate = totalLeads > 0 ? (quotesCount / totalLeads) * 100 : 0;
     const winRate = totalLeads > 0 ? (wonCount / totalLeads) * 100 : 0;
-
-    // Format Lead Source Chart data
     const sourceData = Object.entries(sourceMap).map(([name, data]) => ({
       name,
       Leads: data.total,
@@ -798,6 +889,7 @@ export default function SalesSnapshotClient() {
     // Format Volume Over Time Chart data
     const volumeData = Object.entries(volumeMap).map(([date, count]) => ({
       date,
+      formattedDate: isValid(parseISO(date)) ? format(parseISO(date), 'dd MMM') : date,
       count
     })).sort((a, b) => a.date.localeCompare(b.date));
 
@@ -809,6 +901,12 @@ export default function SalesSnapshotClient() {
 
     // Format Pipeline Value by Lead Type data
     const typeValueData = Object.entries(typeValueMap).map(([name, value]) => ({
+      name,
+      value
+    })).sort((a, b) => b.value - a.value);
+
+    // Format Pipeline Value by Bucket data
+    const bucketValueData = Object.entries(bucketValueMap).map(([name, value]) => ({
       name,
       value
     })).sort((a, b) => b.value - a.value);
@@ -921,6 +1019,9 @@ export default function SalesSnapshotClient() {
 
     const franchiseeData = Object.values(franchiseePerf).sort((a, b) => b.total - a.total);
 
+    // Format Weekly MRR Data
+    const weeklyMrrData = Object.values(weeklyMrrMap).sort((a, b) => a.sortDate.localeCompare(b.sortDate));
+
     return {
         totalLeads,
         quotesCount,
@@ -934,6 +1035,8 @@ export default function SalesSnapshotClient() {
         volumeData,
         avgDaysData,
         typeValueData,
+        bucketValueData,
+        weeklyMrrData,
         totalPipelineMRR,
         totalSignedMRR,
         mrrStatusData,
@@ -951,15 +1054,16 @@ export default function SalesSnapshotClient() {
 
   const franchiseeLeadsList = useMemo(() => {
     if (!isFranchisee) return [];
-    if (!franchiseeLeadSearch.trim()) return filteredLeads;
+    const zeeGeneratedLeads = filteredLeads.filter(l => isFranchiseeGeneratedLead(l, userProfile));
+    if (!franchiseeLeadSearch.trim()) return zeeGeneratedLeads;
     const q = franchiseeLeadSearch.toLowerCase();
-    return filteredLeads.filter(l => 
+    return zeeGeneratedLeads.filter(l => 
       (l.companyName || '').toLowerCase().includes(q) ||
       (l.status || '').toLowerCase().includes(q) ||
       (l.customerStatus || '').toLowerCase().includes(q) ||
       (getUserInCharge(l) || '').toLowerCase().includes(q)
     );
-  }, [filteredLeads, isFranchisee, franchiseeLeadSearch]);
+  }, [filteredLeads, isFranchisee, franchiseeLeadSearch, userProfile]);
 
   // Options lists
   const franchiseeOptions = useMemo(() => {
@@ -1223,176 +1327,144 @@ export default function SalesSnapshotClient() {
         ) : (
           <div className="space-y-6">
             
-            {/* Unified KPI Summary Cards Block */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-9 gap-4">
-              <Card className="shadow-sm card hover:shadow-md transition-shadow">
-                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase">Total Sourced</CardDescription>
-                  <SectionHelp content="The overall count of non-duplicate leads created or active within the filtered time period." />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-[#095c7b]">{metrics.totalLeads}</div>
-                </CardContent>
-              </Card>
-
-              {/* Quotes Dispatched */}
-              <Card className="shadow-sm card cursor-pointer hover:border-[#095c7b] transition-all" onClick={() => setDrilldownType('quotes')}>
-                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase">Quotes Sent</CardDescription>
-                  <SectionHelp content="Number of leads with dispatched quotes in the selected period (excluding status as Signed). Click to view list." />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-[#095c7b] flex items-center gap-1">
-                    {metrics.quotesCount}
-                    <ExternalLink className="h-3 w-3 no-print" />
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{metrics.quoteRate.toFixed(1)}% quoting rate</p>
-                </CardContent>
-              </Card>
-
-              {/* SCFs Accepted */}
-              <Card className="shadow-sm card cursor-pointer hover:border-[#095c7b] transition-all" onClick={() => setDrilldownType('scfs')}>
-                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase">Quotes Accepted</CardDescription>
-                  <SectionHelp content="Number of Sign-up Confirmation Forms (agreements) accepted in the period (excluding status as Signed). Click to view list." />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-[#095c7b] flex items-center gap-1">
-                    {metrics.scfsCount}
-                    <ExternalLink className="h-3 w-3 no-print" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Free Trials */}
-              <Card className="shadow-sm card cursor-pointer hover:border-[#095c7b] transition-all" onClick={() => setDrilldownType('trials')}>
-                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase">Free Trials</CardDescription>
-                  <SectionHelp content="Number of active or initiated ShipMate/LocalMile trials started in the period. Click to view list." />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-[#095c7b] flex items-center gap-1">
-                    {metrics.trialsCount}
-                    <ExternalLink className="h-3 w-3 no-print" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Leads with MRR (Drilldown Pop-up trigger) */}
-              <Card className="shadow-sm card cursor-pointer hover:border-[#095c7b] transition-all bg-emerald-50/50" onClick={() => setDrilldownType('mrr')}>
-                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase text-emerald-800">Leads with MRR</CardDescription>
-                  <SectionHelp content="Count of pre-conversion leads with monthly recurring revenue services (excluding status as Signed). Click to view lead list." />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-emerald-700 flex items-center gap-1">
-                    {metrics.mrrLeadsList.length}
-                    <ExternalLink className="h-3 w-3 no-print" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Total Pipeline MRR */}
-              <Card className="shadow-sm card cursor-pointer hover:border-sky-600 transition-all bg-sky-50/30" onClick={() => setDrilldownType('mrr')}>
-                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase text-sky-800">Pipeline MRR</CardDescription>
-                  <SectionHelp content="Total Potential Monthly Recurring Revenue (MRR) calculated across pipeline leads (excluding status as Signed). Click to view list." />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-sky-700 flex items-center gap-1">
-                    ${metrics.totalPipelineMRR.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    <ExternalLink className="h-3 w-3 no-print" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Appointments (Drilldown Pop-up trigger, combined unique and total) */}
-              <Card className="shadow-sm card cursor-pointer hover:border-[#095c7b] transition-all" onClick={() => setDrilldownType('appointments')}>
-                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase">Appointments</CardDescription>
-                  <SectionHelp content="Unique leads with scheduled appointments (and total appointments) in the period. Click to view details." />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-[#095c7b] flex items-center gap-1">
-                    {metrics.uniqueLeadsWithAppointments}
-                    <span className="text-[11px] text-muted-foreground font-normal">({metrics.totalAppointments} total)</span>
-                    <ExternalLink className="h-3 w-3 no-print" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm card bg-green-50/50 cursor-pointer hover:border-green-600 transition-all" onClick={() => setDrilldownType('signed')}>
-                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase text-green-800">Signed (Won)</CardDescription>
-                  <SectionHelp content="Number of successfully converted and signed customers in the period, alongside overall win percentage. Click to view list." />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-green-700 flex items-center gap-1">
-                    {metrics.wonCount} ({metrics.winRate.toFixed(1)}%)
-                    <ExternalLink className="h-3 w-3 no-print" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Signed MRR Card (New section right after Signed (Won)) */}
-              <Card className="shadow-sm card bg-emerald-100/60 border-emerald-300 cursor-pointer hover:border-emerald-600 transition-all" onClick={() => setDrilldownType('signed_mrr')}>
-                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase text-emerald-900">Signed MRR</CardDescription>
-                  <SectionHelp content="Total Monthly Recurring Revenue (MRR) for leads and companies with status as Signed. Click to view lead list." />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-emerald-800 flex items-center gap-1">
-                    ${metrics.totalSignedMRR.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    <ExternalLink className="h-3 w-3 no-print" />
-                  </div>
-                  <p className="text-[10px] text-emerald-700 mt-0.5">{metrics.signedMrrLeadsList.length} signed account(s)</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Pipeline Stages Breakdown (Status Groupings) */}
+            {/* Unified Management & Franchisee Pipeline Stage Breakdown with Embedded Milestones */}
             <Card className="shadow-sm card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="flex items-center gap-1.5">
                   <Layers className="h-5 w-5 text-[#095c7b]" />
-                  <CardTitle className="text-sm font-semibold">Management & Franchisee Pipeline Stage Breakdown</CardTitle>
+                  <CardTitle className="text-sm font-semibold">Management &amp; Franchisee Pipeline Stage Breakdown</CardTitle>
                 </div>
-                <SectionHelp content="High-level stages grouping all lead statuses to give management and franchisee owners an instant overview of the lead pipeline distribution." />
+                <SectionHelp content="High-level stages grouping all lead statuses with embedded milestone counts, quoting rates, and MRR financial values." />
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                {metrics.pipelineStagesData.map((stage, idx) => (
-                  <div 
-                    key={idx} 
-                    className="p-3 border rounded-lg bg-slate-50/50 flex flex-col justify-between min-h-[140px] cursor-pointer hover:border-[#095c7b] hover:bg-slate-100/80 transition-all group shadow-sm"
-                    onClick={() => {
-                      setDrilldownType('stage');
-                      setSelectedStage(stage.name);
-                    }}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase block leading-none">{stage.name}</span>
-                        <ExternalLink className="h-3 w-3 text-slate-400 group-hover:text-[#095c7b] opacity-70 group-hover:opacity-100 transition-opacity shrink-0" />
+                {metrics.pipelineStagesData.map((stage, idx) => {
+                  const style = STAGE_COLOR_STYLES[stage.name] || {
+                    cardBg: 'bg-slate-50/50 hover:bg-slate-100/80',
+                    cardBorder: 'border-slate-200 hover:border-[#095c7b]',
+                    titleColor: 'text-slate-500',
+                    countColor: 'text-slate-800',
+                    barBg: 'bg-[#095c7b]',
+                    badgeBg: 'bg-slate-100'
+                  };
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className={cn("p-3 border rounded-lg flex flex-col justify-between min-h-[220px] cursor-pointer transition-all group shadow-sm hover:shadow-md", style.cardBg, style.cardBorder)}
+                      onClick={() => {
+                        setDrilldownType('stage');
+                        setSelectedStage(stage.name);
+                      }}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={cn("text-[10px] font-bold uppercase block leading-none", style.titleColor)}>{stage.name}</span>
+                          <ExternalLink className={cn("h-3 w-3 opacity-70 group-hover:opacity-100 transition-opacity shrink-0", style.titleColor)} />
+                        </div>
+                        <span className={cn("text-2xl font-extrabold block", style.countColor)}>{stage.count}</span>
+
+                        {/* Stage Specific Embedded Milestones & Financials */}
+                        <div className="mt-2 space-y-1">
+                          {stage.name === 'New / Prospecting' && (
+                            <div className="text-[10px] font-medium text-sky-900 bg-sky-100/70 p-1.5 rounded border border-sky-200/60">
+                              <span className="font-semibold">Total Sourced:</span> {metrics.totalLeads}
+                            </div>
+                          )}
+
+                          {stage.name === 'Priority & Hot Leads' && (
+                            <div className="text-[10px] font-medium text-amber-900 bg-amber-100/70 p-1.5 rounded border border-amber-200/60">
+                              Priority &amp; Field Lead focus
+                            </div>
+                          )}
+
+                          {stage.name === 'Active Engagement' && !isFranchisee && (
+                            <div 
+                              className="text-[10px] font-semibold text-indigo-900 bg-indigo-100/70 p-1.5 rounded border border-indigo-200/60 hover:bg-indigo-200/80 flex items-center justify-between transition-colors cursor-pointer"
+                              onClick={(e) => { e.stopPropagation(); setDrilldownType('appointments'); }}
+                            >
+                              <span>Appointments:</span>
+                              <span className="font-extrabold flex items-center gap-0.5">{metrics.uniqueLeadsWithAppointments} <ExternalLink className="h-2.5 w-2.5" /></span>
+                            </div>
+                          )}
+
+                          {stage.name === 'High-Intent / Opportunity' && (
+                            <div className="space-y-1 text-[10px]">
+                              <div 
+                                className="bg-purple-100/80 text-purple-900 p-1.5 rounded border border-purple-200/70 hover:bg-purple-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                                onClick={(e) => { e.stopPropagation(); setDrilldownType('quotes'); }}
+                              >
+                                <span>Quotes Sent:</span>
+                                <span className="font-extrabold flex items-center gap-0.5">{metrics.quotesCount} ({metrics.quoteRate.toFixed(1)}%) <ExternalLink className="h-2.5 w-2.5" /></span>
+                              </div>
+                              <div 
+                                className="bg-purple-100/80 text-purple-900 p-1.5 rounded border border-purple-200/70 hover:bg-purple-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                                onClick={(e) => { e.stopPropagation(); setDrilldownType('scfs'); }}
+                              >
+                                <span>Quotes Accepted:</span>
+                                <span className="font-extrabold flex items-center gap-0.5">{metrics.scfsCount} <ExternalLink className="h-2.5 w-2.5" /></span>
+                              </div>
+                              <div 
+                                className="bg-purple-100/80 text-purple-900 p-1.5 rounded border border-purple-200/70 hover:bg-purple-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                                onClick={(e) => { e.stopPropagation(); setDrilldownType('trials'); }}
+                              >
+                                <span>Free Trials:</span>
+                                <span className="font-extrabold flex items-center gap-0.5">{metrics.trialsCount} <ExternalLink className="h-2.5 w-2.5" /></span>
+                              </div>
+                              <div 
+                                className="bg-purple-200/90 text-purple-950 p-1.5 rounded border border-purple-300 hover:bg-purple-300 flex items-center justify-between font-bold transition-colors cursor-pointer"
+                                onClick={(e) => { e.stopPropagation(); setDrilldownType('mrr'); }}
+                              >
+                                <span>Pipeline MRR:</span>
+                                <span className="text-purple-900 flex items-center gap-0.5">${metrics.totalPipelineMRR.toLocaleString(undefined, { maximumFractionDigits: 0 })} <ExternalLink className="h-2.5 w-2.5" /></span>
+                              </div>
+                            </div>
+                          )}
+
+                          {stage.name === 'Converted' && (
+                            <div className="space-y-1 text-[10px]">
+                              <div 
+                                className="bg-emerald-100/80 text-emerald-900 p-1.5 rounded border border-emerald-200/80 hover:bg-emerald-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                                onClick={(e) => { e.stopPropagation(); setDrilldownType('signed'); }}
+                              >
+                                <span>Signed Win Rate:</span>
+                                <span className="font-extrabold flex items-center gap-0.5">{metrics.winRate.toFixed(1)}% <ExternalLink className="h-2.5 w-2.5" /></span>
+                              </div>
+                              <div 
+                                className="bg-emerald-200/90 text-emerald-950 p-1.5 rounded border border-emerald-300 hover:bg-emerald-300 flex items-center justify-between font-bold transition-colors cursor-pointer"
+                                onClick={(e) => { e.stopPropagation(); setDrilldownType('signed_mrr'); }}
+                              >
+                                <span>Signed MRR:</span>
+                                <span className="text-emerald-900 flex items-center gap-0.5">${metrics.totalSignedMRR.toLocaleString(undefined, { maximumFractionDigits: 0 })} <ExternalLink className="h-2.5 w-2.5" /></span>
+                              </div>
+                            </div>
+                          )}
+
+                          {stage.name === 'Closed / Inactive' && (
+                            <div className="text-[10px] font-medium text-slate-700 bg-slate-200/60 p-1.5 rounded border border-slate-300/50">
+                              Lost or unserviceable leads
+                            </div>
+                          )}
+                        </div>
+
+                        <span className={cn("text-[9px] text-muted-foreground block leading-tight mt-2 p-1.5 rounded border transition-colors", style.badgeBg)}>
+                          <strong>Includes:</strong> <br/>
+                          {stage.name === 'New / Prospecting' && 'New'}
+                          {stage.name === 'Priority & Hot Leads' && 'Priority Lead, Priority Field Lead, Hot Lead'}
+                          {stage.name === 'Active Engagement' && 'Contacted, Connected, In Progress, Reschedule...'}
+                          {stage.name === 'High-Intent / Opportunity' && 'Qualified, Quote Sent, SCF Accepted, Free Trial...'}
+                          {stage.name === 'Converted' && 'Won, Signed, Customer'}
+                          {stage.name === 'Closed / Inactive' && 'Lost, Lost Customer, Unqualified...'}
+                        </span>
                       </div>
-                      <span className="text-2xl font-bold text-slate-800 block">{stage.count}</span>
-                      <span className="text-[9px] text-muted-foreground block leading-tight mt-1 bg-slate-100 group-hover:bg-white p-1.5 rounded border border-slate-200/50 transition-colors">
-                        <strong>Includes:</strong> <br/>
-                        {stage.name === 'New / Prospecting' && 'New'}
-                        {stage.name === 'Priority & Hot Leads' && 'Priority Lead, Priority Field Lead, Hot Lead'}
-                        {stage.name === 'Active Engagement' && 'Contacted, Connected, In Progress, Reschedule, In Qualification, Pre Qualified'}
-                        {stage.name === 'High-Intent / Opportunity' && 'Qualified, Prospect Opportunity, Customer Opportunity, LocalMile Opportunity, Quote Sent, Trialing ShipMate, Free Trial, LocalMile Pending, LPO Review, High Touch'}
-                        {stage.name === 'Converted' && 'Won, Signed, Customer'}
-                        {stage.name === 'Closed / Inactive' && 'Lost, Lost Customer, Unqualified, Email Brush Off, Out of Territory, Future Follow-up'}
-                      </span>
-                    </div>
-                    <div className="mt-3 pt-2 border-t border-slate-100">
-                      <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                        <div className="bg-[#095c7b] h-full" style={{ width: `${stage.percentage}%` }}></div>
+                      <div className="mt-3 pt-2 border-t border-slate-200/60">
+                        <div className="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
+                          <div className={cn("h-full transition-all", style.barBg)} style={{ width: `${stage.percentage}%` }}></div>
+                        </div>
+                        <span className={cn("text-[10px] font-medium mt-1 block", style.titleColor)}>{stage.percentage}% of pipeline</span>
                       </div>
-                      <span className="text-[10px] text-slate-500 mt-1 block">{stage.percentage}% of pipeline</span>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
 
@@ -1406,7 +1478,7 @@ export default function SalesSnapshotClient() {
                       Franchisee Leads &amp; Progress
                     </CardTitle>
                     <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                      Overview of leads entered for {userProfile?.franchisee || 'your franchise'} and their current pipeline progress.
+                      Overview of leads generated by {userProfile?.franchisee || 'your franchise'} and their current pipeline progress.
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -1521,9 +1593,12 @@ export default function SalesSnapshotClient() {
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="date" tickLine={false} style={{ fontSize: '10px' }} />
+                        <XAxis dataKey="formattedDate" tickLine={false} style={{ fontSize: '10px' }} />
                         <YAxis tickLine={false} style={{ fontSize: '10px' }} />
-                        <Tooltip />
+                        <Tooltip labelFormatter={(label, items) => {
+                          const item = items && items[0] ? items[0].payload : null;
+                          return item ? `${item.formattedDate} (${item.date})` : label;
+                        }} />
                         <Area type="monotone" dataKey="count" stroke="#095c7b" fillOpacity={1} fill="url(#colorCount)" name="Leads Sourced" />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -1588,23 +1663,62 @@ export default function SalesSnapshotClient() {
                 </CardContent>
               </Card>
 
-              {/* Pipeline Value by Lead Type */}
+              {/* Pipeline Value by Bucket & Lead Type */}
               <Card className="shadow-sm card">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-[#095c7b]" /> Pipeline Value by Lead Type
-                  </CardTitle>
-                  <SectionHelp content="Sum of monthly recurring revenue (MRR) pipeline value split across different lead types." />
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-[#095c7b]" />
+                    <CardTitle className="text-sm font-semibold">
+                      Pipeline Value {pipelineValueGroupBy === 'bucket' ? 'by Bucket' : 'by Lead Type'}
+                    </CardTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setPipelineValueGroupBy('bucket')}
+                        className={cn(
+                          "px-2 py-0.5 rounded-md text-[11px] font-medium transition-all",
+                          pipelineValueGroupBy === 'bucket' ? "bg-white text-[#095c7b] shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
+                        )}
+                      >
+                        Bucket
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPipelineValueGroupBy('leadType')}
+                        className={cn(
+                          "px-2 py-0.5 rounded-md text-[11px] font-medium transition-all",
+                          pipelineValueGroupBy === 'leadType' ? "bg-white text-[#095c7b] shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
+                        )}
+                      >
+                        Lead Type
+                      </button>
+                    </div>
+                    <SectionHelp content="Sum of monthly recurring revenue (MRR) pipeline value split across lead buckets or lead types." />
+                  </div>
                 </CardHeader>
                 <CardContent className="h-[260px]">
-                  {metrics.typeValueData.length > 0 ? (
+                  {((pipelineValueGroupBy === 'bucket' ? metrics.bucketValueData : metrics.typeValueData) || []).length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={metrics.typeValueData}>
+                      <BarChart 
+                        data={pipelineValueGroupBy === 'bucket' ? metrics.bucketValueData : metrics.typeValueData}
+                        margin={{ top: 22, right: 10, left: 10, bottom: 0 }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="name" tickLine={false} style={{ fontSize: '10px' }} />
                         <YAxis tickLine={false} style={{ fontSize: '10px' }} />
-                        <Tooltip formatter={(value) => [`$${value.toLocaleString()}`, 'Pipeline Value']} />
-                        <Bar dataKey="value" fill="#38bdf8" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                        <Tooltip formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Pipeline Value']} />
+                        <Bar dataKey="value" fill="#38bdf8" radius={[4, 4, 0, 0]} maxBarSize={45}>
+                          <LabelList 
+                            dataKey="value" 
+                            position="top" 
+                            formatter={(val: any) => val ? `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : ''} 
+                            fill="#095c7b" 
+                            fontSize={10} 
+                            fontWeight={700} 
+                          />
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
@@ -1613,6 +1727,54 @@ export default function SalesSnapshotClient() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Weekly MRR Pipeline: In-Pipeline vs Signed MRR */}
+            <Card className="shadow-sm card">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-[#095c7b]" />
+                  <CardTitle className="text-sm font-semibold">
+                    Weekly MRR Pipeline: In-Pipeline (Quotes &amp; Trials) vs Signed (Won)
+                  </CardTitle>
+                </div>
+                <SectionHelp content="Weekly breakdown comparing potential In-Pipeline MRR (Quotes, Opportunities, Trials) versus Converted Signed (Won) MRR." />
+              </CardHeader>
+              <CardContent className="h-[280px]">
+                {metrics.weeklyMrrData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.weeklyMrrData} margin={{ top: 24, right: 15, left: 15, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="weekLabel" tickLine={false} style={{ fontSize: '10px' }} />
+                      <YAxis tickLine={false} style={{ fontSize: '10px' }} />
+                      <Tooltip formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name === 'pipelineMRR' ? 'In-Pipeline MRR' : 'Signed MRR']} />
+                      <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
+                      <Bar dataKey="pipelineMRR" name="In-Pipeline MRR (Quotes &amp; Trials)" fill="#38bdf8" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                        <LabelList 
+                          dataKey="pipelineMRR" 
+                          position="top" 
+                          formatter={(val: any) => val ? `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : ''} 
+                          fill="#0284c7" 
+                          fontSize={9} 
+                          fontWeight={700} 
+                        />
+                      </Bar>
+                      <Bar dataKey="signedMRR" name="Signed (Won) MRR" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                        <LabelList 
+                          dataKey="signedMRR" 
+                          position="top" 
+                          formatter={(val: any) => val ? `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : ''} 
+                          fill="#047857" 
+                          fontSize={9} 
+                          fontWeight={700} 
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No weekly MRR records available in this range.</div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Visualisations Grid 3 (Hidden for Franchisees) */}
             {!isFranchisee && (
