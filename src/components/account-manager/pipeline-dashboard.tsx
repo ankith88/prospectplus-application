@@ -45,6 +45,19 @@ export const parseApptDate = (app: any): Date | null => {
     }
 };
 
+const isFranchiseeGeneratedLead = (lead: Lead): boolean => {
+    if (!lead) return false;
+    if (lead.isZeeCreated || lead.franchiseeReviewPending) return true;
+    if (
+        lead.customerSource === 'Franchisee Generated' || 
+        lead.leadSource === 'Franchisee Generated' || 
+        lead.campaign === 'Franchisee Generated' || 
+        lead.leadSource === '-4'
+    ) return true;
+    if (lead.createdByRole && (lead.createdByRole === 'Franchisee' || lead.createdByRole.toLowerCase() === 'franchisee')) return true;
+    return false;
+};
+
 export default function PipelineDashboard() {
     const { userProfile, loading, isSuperAdmin } = useAuth();
     
@@ -1206,6 +1219,14 @@ function LeadGrid({
                                                     {lead.bucket === 'field_sales' ? 'Field Sales' : lead.bucket}
                                                 </Badge>
                                             )}
+                                            {isFranchiseeGeneratedLead(lead) && (
+                                                <Badge 
+                                                    variant="outline" 
+                                                    className="text-[10px] uppercase shrink-0 border bg-amber-50 text-amber-700 border-amber-200 font-semibold"
+                                                >
+                                                    Franchisee Lead
+                                                </Badge>
+                                            )}
                                             {lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
                                                 <Badge 
                                                     variant="outline" 
@@ -1454,6 +1475,14 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                                     }`}
                                 >
                                     {lead.bucket === 'field_sales' ? 'Field Sales' : lead.bucket}
+                                </Badge>
+                            )}
+                            {isFranchiseeGeneratedLead(lead) && (
+                                <Badge 
+                                    variant="outline" 
+                                    className="text-[10px] uppercase shrink-0 border bg-amber-50 text-amber-700 border-amber-200 font-semibold"
+                                >
+                                    Franchisee Lead
                                 </Badge>
                             )}
                             {lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
