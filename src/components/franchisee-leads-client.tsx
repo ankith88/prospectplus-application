@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import { getLeadsFromFirebase, getCompaniesFromFirebase, getAllUsers } from '@/services/firebase';
+import { getLeadsFromFirebase, getAllUsers } from '@/services/firebase';
 import { Lead, UserProfile, LeadStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -112,45 +112,33 @@ export default function FranchiseeLeadsClientPage() {
   const fetchData = async () => {
     try {
       setRefreshing(true);
-      const [fetchedLeads, fetchedCompanies, fetchedUsers] = await Promise.all([
+      const [fetchedLeads, fetchedUsers] = await Promise.all([
         getLeadsFromFirebase({ 
           franchisee: isFranchiseeRole && franchiseeName ? franchiseeName : undefined 
-        }),
-        getCompaniesFromFirebase({
-          franchisee: isFranchiseeRole && franchiseeName ? franchiseeName : undefined,
-          skipCoordinateCheck: true
         }),
         getAllUsers()
       ]);
 
       let filteredLeads = fetchedLeads;
-      let filteredCompanies = fetchedCompanies;
 
       if (isFranchiseeRole && franchiseeName) {
         const normFranchisee = franchiseeName.toLowerCase().trim();
         filteredLeads = fetchedLeads.filter(l => 
           (l.franchisee || '').toLowerCase().trim() === normFranchisee
         );
-        filteredCompanies = fetchedCompanies.filter(c => 
-          (c.franchisee || '').toLowerCase().trim() === normFranchisee
-        );
       }
 
-      // Format companies into Lead items with status 'Won' and isCompany flag
-      const formattedCompanies: Lead[] = filteredCompanies.map(c => ({
-        ...c,
-        status: (c.status || c.customerStatus || 'Won') as LeadStatus,
-        isCompany: true,
-      } as any));
+      // Filter out Won / Signed accounts so page shows ONLY Leads
+      const leadsOnly = filteredLeads.filter(l => 
+        !WON_STATUSES.includes(l.status as LeadStatus) &&
+        !(l as any).isCompany &&
+        (l.status as string) !== 'Customer Signed' &&
+        (l.status as string) !== 'Signed Customer' &&
+        (l as any).customerStatus !== 'Won' &&
+        (l as any).customerStatus !== 'Active'
+      );
 
-      // Combine leads and companies, avoiding duplicates if lead doc exists alongside company doc
-      const existingLeadIds = new Set(filteredLeads.map(l => l.id));
-      const combined: Lead[] = [
-        ...filteredLeads,
-        ...formattedCompanies.filter(c => !existingLeadIds.has(c.id))
-      ];
-
-      setLeads(combined);
+      setLeads(leadsOnly);
       setUsers(fetchedUsers);
     } catch (err) {
       console.error('Error fetching franchisee leads:', err);
@@ -182,9 +170,7 @@ export default function FranchiseeLeadsClientPage() {
     const actioned = leads.filter(l => ACTIONED_STATUSES.includes(l.status as LeadStatus)).length;
     const quote = leads.filter(l => QUOTE_STATUSES.includes(l.status as LeadStatus)).length;
     const trial = leads.filter(l => TRIAL_STATUSES.includes(l.status as LeadStatus)).length;
-    const won = leads.filter(l => WON_STATUSES.includes(l.status as LeadStatus)).length;
     const lost = leads.filter(l => LOST_STATUSES.includes(l.status as LeadStatus)).length;
-    const conversionRate = total > 0 ? ((won / total) * 100).toFixed(1) : '0.0';
     
     const inboundCount = leads.filter(l => 
       (l as any).bucket === 'inbound' || 
@@ -195,7 +181,7 @@ export default function FranchiseeLeadsClientPage() {
     ).length;
     const outboundCount = total - inboundCount;
 
-    return { total, actioned, quote, trial, won, lost, conversionRate, inboundCount, outboundCount };
+    return { total, actioned, quote, trial, lost, inboundCount, outboundCount };
   }, [leads]);
 
   // Dynamic unique list of Customer Sources for filtering
@@ -276,8 +262,6 @@ export default function FranchiseeLeadsClientPage() {
         if (!QUOTE_STATUSES.includes(lead.status as LeadStatus)) return false;
       } else if (selectedCategoryTab === 'trial') {
         if (!TRIAL_STATUSES.includes(lead.status as LeadStatus)) return false;
-      } else if (selectedCategoryTab === 'won') {
-        if (!WON_STATUSES.includes(lead.status as LeadStatus)) return false;
       } else if (selectedCategoryTab === 'lost') {
         if (!LOST_STATUSES.includes(lead.status as LeadStatus)) return false;
       }
@@ -703,7 +687,7 @@ export default function FranchiseeLeadsClientPage() {
             )}
           </div>
           <p className="text-slate-300 text-sm md:text-base max-w-3xl">
-            Comprehensive lead reporting hub for your franchise. Track pipeline status, quotes sent, active trials, signed accounts, customer sources, and contact assigned Account Managers directly.
+            Comprehensive lead reporting hub for your franchise. Track pipeline status, quotes sent, active trials, customer sources, and contact assigned Account Managers directly.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -731,7 +715,7 @@ export default function FranchiseeLeadsClientPage() {
       </div>
 
       {/* KPI Performance Reporting Banner */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
         {/* Total Leads */}
         <Card 
           onClick={() => setSelectedCategoryTab('all')}
@@ -807,24 +791,6 @@ export default function FranchiseeLeadsClientPage() {
           </CardContent>
         </Card>
 
-        {/* Won Customers */}
-        <Card 
-          onClick={() => setSelectedCategoryTab('won')}
-          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'won' ? 'border-l-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/30' : 'border-l-emerald-500'}`}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">
-              <span>Won Accounts</span>
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            </div>
-            <div className="text-2xl font-bold text-emerald-950 dark:text-emerald-100 flex items-baseline justify-between">
-              <span>{metrics.won}</span>
-              <span className="text-xs font-medium text-emerald-600">{metrics.conversionRate}% Conv</span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1">Signed customers</p>
-          </CardContent>
-        </Card>
-
         {/* Lost / Closed */}
         <Card 
           onClick={() => setSelectedCategoryTab('lost')}
@@ -883,15 +849,6 @@ export default function FranchiseeLeadsClientPage() {
               >
                 <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                 Free Trial ({metrics.trial})
-              </Button>
-              <Button
-                variant={selectedCategoryTab === 'won' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedCategoryTab('won')}
-                className={selectedCategoryTab === 'won' ? 'bg-emerald-600 text-white' : ''}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                Won ({metrics.won})
               </Button>
             </div>
 
