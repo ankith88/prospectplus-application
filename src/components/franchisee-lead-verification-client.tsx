@@ -78,15 +78,23 @@ export default function FranchiseeLeadVerificationClient() {
       setFranchisees(frs);
       setUsers(allSystemUsers.filter(u => !u.disabled));
 
-      // Filter leads: candidate for verification AND NOT YET ASSIGNED to a user or account manager
+      // Filter leads: candidate for franchisee verification AND assigned to 'outbound' bucket OR no bucket assigned, AND NOT YET ASSIGNED to a specific user/AM
       const pendingLeads = allLeads.filter(l => {
-        const isCandidate = 
+        const isFranchiseeOrPending = 
           l.dialerAssigned === 'Aleyna Harnett' || 
-          l.franchiseeReviewPending === true ||
-          !l.bucket || l.bucket === '' || l.bucket === 'blank' ||
-          (l.customerSource === 'Franchisee Generated' && l.bucket === 'outbound');
+          l.franchiseeReviewPending === true || 
+          l.customerSource === 'Franchisee Generated' || 
+          l.leadSource === 'Franchisee Generated' ||
+          l.campaign === 'Franchisee Generated';
 
-        return isCandidate && !isAssignedToUserOrAm(l);
+        const isBucketValid = 
+          !l.bucket || 
+          l.bucket === '' || 
+          l.bucket === 'blank' || 
+          l.bucket === 'unassigned' || 
+          l.bucket === 'outbound';
+
+        return isFranchiseeOrPending && isBucketValid && !isAssignedToUserOrAm(l);
       });
 
       // Fetch contacts only for the filtered pending leads

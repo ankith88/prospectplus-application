@@ -261,6 +261,11 @@ export default function SalesSnapshotClient() {
   const { userProfile } = useAuth();
   const { toast } = useToast();
 
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || 
+                       userProfile?.role === 'Franchisee' || 
+                       userProfile?.role?.toLowerCase() === 'franchisee' ||
+                       (Array.isArray(userProfile?.assignedRoles) && userProfile.assignedRoles.some((r: string) => r.toLowerCase() === 'franchisee'));
+
   const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
 
   useEffect(() => {
@@ -1455,163 +1460,169 @@ export default function SalesSnapshotClient() {
               </Card>
             </div>
 
-            {/* Visualisations Grid 3 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              {/* Activity Leaderboard */}
+            {/* Visualisations Grid 3 (Hidden for Franchisees) */}
+            {!isFranchisee && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Activity Leaderboard */}
+                <Card className="shadow-sm card">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <Goal className="h-4 w-4 text-[#095c7b]" /> Activity Leaderboard
+                    </CardTitle>
+                    <SectionHelp content="Ranks users/reps by total volume of logged calls, emails, and meetings." />
+                  </CardHeader>
+                  <CardContent className="h-[280px]">
+                    {metrics.activityLeaderboard.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={metrics.activityLeaderboard.slice(0, 10)}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="name" tickLine={false} style={{ fontSize: '10px' }} />
+                          <YAxis tickLine={false} style={{ fontSize: '10px' }} />
+                          <Tooltip />
+                          <Bar dataKey="Calls" stackId="a" fill="#095c7b" />
+                          <Bar dataKey="Emails" stackId="a" fill="#38bdf8" />
+                          <Bar dataKey="Meetings" stackId="a" fill="#fbbf24" />
+                          <Bar dataKey="Updates" stackId="a" fill="#f472b6" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No activities logged in this range.</div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Appointment Conversion Efficiency */}
+                <Card className="shadow-sm card">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <Percent className="h-4 w-4 text-[#095c7b]" /> Appointment Conversion Efficiency
+                    </CardTitle>
+                    <SectionHelp content="Measures rates of leads with scheduled appointments converting to Won status, Quote status, Trial status, or Lost status." />
+                  </CardHeader>
+                  <CardContent className="flex flex-col justify-center h-[280px]">
+                    <Table>
+                      <TableHeader className="bg-slate-50">
+                        <TableRow>
+                          <TableHead className="text-xs font-semibold">Transition Stage</TableHead>
+                          <TableHead className="text-right text-xs font-semibold">Efficiency Rate (%)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell className="text-xs py-3 font-medium">Appointment to Win (Signed)</TableCell>
+                          <TableCell className="text-right text-xs py-3 font-bold text-green-600">{metrics.appointmentEfficiency.won.toFixed(1)}%</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="text-xs py-3 font-medium">Appointment to Free Trial</TableCell>
+                          <TableCell className="text-right text-xs py-3 font-bold text-[#095c7b]">{metrics.appointmentEfficiency.trial.toFixed(1)}%</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="text-xs py-3 font-medium">Appointment to Quote Sent</TableCell>
+                          <TableCell className="text-right text-xs py-3 font-bold text-amber-500">{metrics.appointmentEfficiency.quote.toFixed(1)}%</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="text-xs py-3 font-medium">Appointment to Lost</TableCell>
+                          <TableCell className="text-right text-xs py-3 font-bold text-rose-500">{metrics.appointmentEfficiency.lost.toFixed(1)}%</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Bucket & User Assignment Breakdown Table (Hidden for Franchisees) */}
+            {!isFranchisee && (
               <Card className="shadow-sm card">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <Goal className="h-4 w-4 text-[#095c7b]" /> Activity Leaderboard
+                    <User className="h-4 w-4 text-[#095c7b]" /> Bucket &amp; Rep Assignment Breakdown
                   </CardTitle>
-                  <SectionHelp content="Ranks users/reps by total volume of logged calls, emails, and meetings." />
+                  <SectionHelp content="Shows the total volume of leads assigned to each user/rep segmented by their originating source bucket." />
                 </CardHeader>
-                <CardContent className="h-[280px]">
-                  {metrics.activityLeaderboard.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={metrics.activityLeaderboard.slice(0, 10)}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="name" tickLine={false} style={{ fontSize: '10px' }} />
-                        <YAxis tickLine={false} style={{ fontSize: '10px' }} />
-                        <Tooltip />
-                        <Bar dataKey="Calls" stackId="a" fill="#095c7b" />
-                        <Bar dataKey="Emails" stackId="a" fill="#38bdf8" />
-                        <Bar dataKey="Meetings" stackId="a" fill="#fbbf24" />
-                        <Bar dataKey="Updates" stackId="a" fill="#f472b6" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No activities logged in this range.</div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Appointment Conversion Efficiency */}
-              <Card className="shadow-sm card">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <Percent className="h-4 w-4 text-[#095c7b]" /> Appointment Conversion Efficiency
-                  </CardTitle>
-                  <SectionHelp content="Measures rates of leads with scheduled appointments converting to Won status, Quote status, Trial status, or Lost status." />
-                </CardHeader>
-                <CardContent className="flex flex-col justify-center h-[280px]">
-                  <Table>
-                    <TableHeader className="bg-slate-50">
-                      <TableRow>
-                        <TableHead className="text-xs font-semibold">Transition Stage</TableHead>
-                        <TableHead className="text-right text-xs font-semibold">Efficiency Rate (%)</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell className="text-xs py-3 font-medium">Appointment to Win (Signed)</TableCell>
-                        <TableCell className="text-right text-xs py-3 font-bold text-green-600">{metrics.appointmentEfficiency.won.toFixed(1)}%</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="text-xs py-3 font-medium">Appointment to Free Trial</TableCell>
-                        <TableCell className="text-right text-xs py-3 font-bold text-[#095c7b]">{metrics.appointmentEfficiency.trial.toFixed(1)}%</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="text-xs py-3 font-medium">Appointment to Quote Sent</TableCell>
-                        <TableCell className="text-right text-xs py-3 font-bold text-amber-500">{metrics.appointmentEfficiency.quote.toFixed(1)}%</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="text-xs py-3 font-medium">Appointment to Lost</TableCell>
-                        <TableCell className="text-right text-xs py-3 font-bold text-rose-500">{metrics.appointmentEfficiency.lost.toFixed(1)}%</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Bucket & User Assignment Breakdown Table */}
-            <Card className="shadow-sm card">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <User className="h-4 w-4 text-[#095c7b]" /> Bucket &amp; Rep Assignment Breakdown
-                </CardTitle>
-                <SectionHelp content="Shows the total volume of leads assigned to each user/rep segmented by their originating source bucket." />
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-                  {Object.entries(metrics.assignmentMap).map(([bucket, users]) => {
-                    const displayName = bucket === 'outbound' ? 'Outbound' :
-                                        bucket === 'inbound' ? 'Inbound' :
-                                        bucket === 'field_sales' ? 'Field Sales' :
-                                        bucket === 'account_manager' ? 'Account Manager' :
-                                        bucket === 'customer_success' ? 'Customer Success' :
-                                        bucket === 'nurture' ? 'Nurture' : 'Marketing';
-                    return (
-                      <div key={bucket} className="border rounded-lg p-3 bg-slate-50/50 flex flex-col justify-between min-h-[180px]">
-                        <div>
-                          <h3 className="text-[11px] font-bold text-[#095c7b] border-b pb-1.5 mb-2.5 uppercase tracking-wider">{displayName}</h3>
-                          <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
-                            {Object.entries(users).length > 0 ? (
-                              Object.entries(users).sort((a,b)=>b[1]-a[1]).map(([user, count]) => (
-                                <div key={user} className="flex justify-between items-center text-[11px]">
-                                  <span className="text-muted-foreground truncate max-w-[100px]">{user}</span>
-                                  <Badge variant="secondary" className="font-semibold text-[10px] px-1 py-0">{count}</Badge>
-                                </div>
-                              ))
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground italic block text-center py-4">No leads</span>
-                            )}
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+                    {Object.entries(metrics.assignmentMap).map(([bucket, users]) => {
+                      const displayName = bucket === 'outbound' ? 'Outbound' :
+                                          bucket === 'inbound' ? 'Inbound' :
+                                          bucket === 'field_sales' ? 'Field Sales' :
+                                          bucket === 'account_manager' ? 'Account Manager' :
+                                          bucket === 'customer_success' ? 'Customer Success' :
+                                          bucket === 'nurture' ? 'Nurture' : 'Marketing';
+                      return (
+                        <div key={bucket} className="border rounded-lg p-3 bg-slate-50/50 flex flex-col justify-between min-h-[180px]">
+                          <div>
+                            <h3 className="text-[11px] font-bold text-[#095c7b] border-b pb-1.5 mb-2.5 uppercase tracking-wider">{displayName}</h3>
+                            <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                              {Object.entries(users).length > 0 ? (
+                                Object.entries(users).sort((a,b)=>b[1]-a[1]).map(([user, count]) => (
+                                  <div key={user} className="flex justify-between items-center text-[11px]">
+                                    <span className="text-muted-foreground truncate max-w-[100px]">{user}</span>
+                                    <Badge variant="secondary" className="font-semibold text-[10px] px-1 py-0">{count}</Badge>
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground italic block text-center py-4">No leads</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Franchisee Process Breakdown */}
-            <Card className="shadow-sm card">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-[#095c7b]" /> Franchisee Process Breakdown
-                </CardTitle>
-                <SectionHelp content="Breakdown of individual franchisee performance metrics across lead sourcing, quoting, trials, and signed accounts." />
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[300px] rounded-md border">
-                  <Table>
-                    <TableHeader className="bg-[#f8fafb] sticky top-0 z-10">
-                      <TableRow>
-                        <TableHead className="font-semibold text-xs">Franchisee</TableHead>
-                        <TableHead className="text-right font-semibold text-xs">Total Sourced</TableHead>
-                        <TableHead className="text-right font-semibold text-xs">Quotes Dispatched</TableHead>
-                        <TableHead className="text-right font-semibold text-xs">Trials Initiated</TableHead>
-                        <TableHead className="text-right font-semibold text-xs text-green-700">Signed (Won)</TableHead>
-                        <TableHead className="text-right font-semibold text-xs">Conv. %</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {metrics.franchiseeData.length > 0 ? (
-                        metrics.franchiseeData.map((f) => {
-                          const rate = f.total > 0 ? (f.wins / f.total) * 100 : 0;
-                          return (
-                            <TableRow key={f.name} className="hover:bg-muted/50">
-                              <TableCell className="font-medium text-xs py-2">{f.name}</TableCell>
-                              <TableCell className="text-right text-xs py-2">{f.total}</TableCell>
-                              <TableCell className="text-right text-xs py-2">{f.quotes}</TableCell>
-                              <TableCell className="text-right text-xs py-2">{f.trials}</TableCell>
-                              <TableCell className="text-right text-xs py-2 font-bold text-green-600">{f.wins}</TableCell>
-                              <TableCell className="text-right text-xs py-2 font-semibold">{rate.toFixed(1)}%</TableCell>
-                            </TableRow>
-                          );
-                        })
-                      ) : (
+            {/* Franchisee Process Breakdown (Hidden for Franchisees) */}
+            {!isFranchisee && (
+              <Card className="shadow-sm card">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-[#095c7b]" /> Franchisee Process Breakdown
+                  </CardTitle>
+                  <SectionHelp content="Breakdown of individual franchisee performance metrics across lead sourcing, quoting, trials, and signed accounts." />
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[300px] rounded-md border">
+                    <Table>
+                      <TableHeader className="bg-[#f8fafb] sticky top-0 z-10">
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-xs text-muted-foreground">No franchisee records found matching filter criteria</TableCell>
+                          <TableHead className="font-semibold text-xs">Franchisee</TableHead>
+                          <TableHead className="text-right font-semibold text-xs">Total Sourced</TableHead>
+                          <TableHead className="text-right font-semibold text-xs">Quotes Dispatched</TableHead>
+                          <TableHead className="text-right font-semibold text-xs">Trials Initiated</TableHead>
+                          <TableHead className="text-right font-semibold text-xs text-green-700">Signed (Won)</TableHead>
+                          <TableHead className="text-right font-semibold text-xs">Conv. %</TableHead>
                         </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              </CardContent>
-            </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {metrics.franchiseeData.length > 0 ? (
+                          metrics.franchiseeData.map((f) => {
+                            const rate = f.total > 0 ? (f.wins / f.total) * 100 : 0;
+                            return (
+                              <TableRow key={f.name} className="hover:bg-muted/50">
+                                <TableCell className="font-medium text-xs py-2">{f.name}</TableCell>
+                                <TableCell className="text-right text-xs py-2">{f.total}</TableCell>
+                                <TableCell className="text-right text-xs py-2">{f.quotes}</TableCell>
+                                <TableCell className="text-right text-xs py-2">{f.trials}</TableCell>
+                                <TableCell className="text-right text-xs py-2 font-bold text-green-600">{f.wins}</TableCell>
+                                <TableCell className="text-right text-xs py-2 font-semibold">{rate.toFixed(1)}%</TableCell>
+                              </TableRow>
+                            );
+                          })
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8 text-xs text-muted-foreground">No franchisee records found matching filter criteria</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
       </div>

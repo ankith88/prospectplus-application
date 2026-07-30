@@ -341,16 +341,19 @@ export function NewLeadForm() {
   const droppedOffBrochures = form.watch('droppedOffBrochures');
   const hadConversationWithContact = form.watch('hadConversationWithContact');
   const addressState = form.watch('address');
+  const companyNameState = form.watch('companyName');
   const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
 
   const isAddressSelected = Boolean(
-    (addressState?.street && (addressState?.city || addressState?.zip)) || 
+    companyNameState?.trim() || 
+    addressState?.street?.trim() || 
+    addressState?.city?.trim() || 
     searchParams?.get('fromVisitNote')
   );
 
   const canShowRemainingSections = isAddressSelected && (
     !isFranchiseeRole || 
-    franchiseeNotice?.status === 'serviceable' || 
+    franchiseeNotice?.status !== 'out_of_territory' || 
     isFranchiseeConfirmed
   );
 
@@ -373,13 +376,13 @@ export function NewLeadForm() {
     if (isFranchiseeRole) {
       form.setValue('campaign', 'Franchisee Generated');
       form.setValue('leadSource', '-4');
-      if (droppedOffBrochures || hadConversationWithContact) {
+      if (hadConversationWithContact) {
         form.setValue('bucket', 'account_manager');
       } else {
-        form.setValue('bucket', '' as any);
+        form.setValue('bucket', 'outbound');
       }
     }
-  }, [isFranchiseeRole, droppedOffBrochures, hadConversationWithContact, form]);
+  }, [isFranchiseeRole, hadConversationWithContact, form]);
 
   useEffect(() => {
     if (leadSource === '492239') {
@@ -854,7 +857,7 @@ export function NewLeadForm() {
     const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
     const droppedOffBrochures = values.droppedOffBrochures || false;
     const hadConversationWithContact = values.hadConversationWithContact || false;
-    const isPriority = droppedOffBrochures || hadConversationWithContact;
+    const isPriority = Boolean(hadConversationWithContact);
 
     if (isFranchiseeRole) {
         if (!finalValues.campaign) {
@@ -868,7 +871,7 @@ export function NewLeadForm() {
             (finalValues as any).isPriority = true;
             (finalValues as any).franchiseeReviewPending = false;
         } else {
-            finalValues.bucket = '' as any;
+            finalValues.bucket = 'outbound';
             (finalValues as any).isPriority = false;
             (finalValues as any).franchiseeReviewPending = true;
         }
@@ -940,7 +943,7 @@ export function NewLeadForm() {
                 assignmentUpdates.isPriority = true;
                 assignmentUpdates.franchiseeReviewPending = false;
             } else {
-                assignmentUpdates.bucket = '';
+                assignmentUpdates.bucket = 'outbound';
                 assignmentUpdates.isPriority = false;
                 assignmentUpdates.dialerAssigned = 'Aleyna Harnett';
                 assignmentUpdates.franchiseeReviewPending = true;
@@ -1478,15 +1481,15 @@ export function NewLeadForm() {
                   </div>
 
                   <div className="pt-2">
-                    {droppedOffBrochures || hadConversationWithContact ? (
+                    {hadConversationWithContact ? (
                       <div className="p-3 border border-emerald-300 bg-emerald-50 text-emerald-900 rounded-md text-xs font-semibold flex items-center gap-2">
                         <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-600 animate-pulse flex-shrink-0" />
-                        <span>⚡ <strong>Priority Lead Mode</strong>: Auto-assigned to Account Manager Bucket (routes directly to Account Management).</span>
+                        <span>⚡ <strong>Priority Lead Mode</strong>: Spoke to contact. Auto-assigned to Account Manager Bucket (routes directly to Account Management).</span>
                       </div>
                     ) : (
                       <div className="p-3 border border-blue-300 bg-blue-50 text-blue-900 rounded-md text-xs font-semibold flex items-center gap-2">
                         <span className="flex h-2.5 w-2.5 rounded-full bg-blue-600 flex-shrink-0" />
-                        <span>📋 <strong>Standard Verification Mode</strong>: Defaulted to Unassigned Bucket. Assigned to Aleyna Harnett for review on the Verification Page.</span>
+                        <span>📋 <strong>Outbound Lead Mode</strong>: Defaulted to Outbound Bucket. Assigned to Aleyna Harnett for review on the Verification Page.</span>
                       </div>
                     )}
                   </div>
