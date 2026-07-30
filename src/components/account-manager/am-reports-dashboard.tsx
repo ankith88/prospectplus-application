@@ -27,7 +27,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
-import { cn, parseDateString } from '@/lib/utils';
+import { cn, parseDateString, isManualActivity } from '@/lib/utils';
 import { getAllAppointments, getAllActivities } from '@/services/firebase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -884,6 +884,8 @@ export default function AMReportsDashboard() {
         const counts: Record<string, { name: string; Calls: number; Emails: number; Meetings: number; Updates: number; Total: number }> = {};
         
         allActivities.forEach(act => {
+            if (!isManualActivity(act)) return;
+
             const author = act.author || 'Unknown';
             if (!counts[author]) {
                 counts[author] = { name: author, Calls: 0, Emails: 0, Meetings: 0, Updates: 0, Total: 0 };

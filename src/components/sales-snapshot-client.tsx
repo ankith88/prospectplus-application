@@ -36,7 +36,7 @@ import { collection, query, getDocs, where, limit, documentId, collectionGroup }
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { StatusOutcomeBanner, StatusOutcomeGuideButton } from './status-outcome-guide';
-import { cn, getQuickDateRange } from '@/lib/utils';
+import { cn, getQuickDateRange, isManualActivity } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -947,24 +947,12 @@ export default function SalesSnapshotClient() {
       value
     })).sort((a, b) => b.value - a.value);
 
-    // Activity Leaderboard calculation (Excluding System Users & Bot Accounts)
+    // Activity Leaderboard calculation (Excluding Automated Activities & System Logs)
     const actLeaderboardMap: Record<string, { name: string; Calls: number; Emails: number; Meetings: number; Updates: number; Total: number }> = {};
     filteredActivities.forEach(act => {
-      const author = act.author || 'Unknown Rep';
-      const authorLower = author.toLowerCase();
-      const isSystemAuthor = 
-        authorLower.includes('system') || 
-        authorLower.includes('engine') || 
-        authorLower.includes('webhook') || 
-        authorLower.includes('api') || 
-        authorLower.includes('assistant') || 
-        authorLower.includes('operator') || 
-        authorLower.includes('nudge') ||
-        authorLower.includes('cron') ||
-        authorLower.includes('automation') ||
-        authorLower === 'unknown rep';
+      if (!isManualActivity(act)) return; // Only count actions manually performed by the user
 
-      if (isSystemAuthor) return; // Skip system/automated logs
+      const author = act.author || 'Unknown Rep';
 
       if (!actLeaderboardMap[author]) {
         actLeaderboardMap[author] = { name: author, Calls: 0, Emails: 0, Meetings: 0, Updates: 0, Total: 0 };
@@ -1829,7 +1817,7 @@ export default function SalesSnapshotClient() {
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                       <Goal className="h-4 w-4 text-[#095c7b]" /> Activity Leaderboard
                     </CardTitle>
-                    <SectionHelp content="Ranks users/reps by total volume of logged calls, emails, and meetings." />
+                    <SectionHelp content="Ranks users/reps by total volume of manual actions performed (calls, emails, meetings, and manual notes). Automated activities are excluded." />
                   </CardHeader>
                   <CardContent className="h-[280px]">
                     {metrics.activityLeaderboard.length > 0 ? (
