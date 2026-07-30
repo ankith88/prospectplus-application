@@ -6,6 +6,7 @@ import { usePerformance } from '@/hooks/use-performance';
 import { collection, query, where, getDocs, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead, UserProfile, Activity, Appointment, LeadStatus } from '@/lib/types';
+import { calculateMonthlyValue as calculateMonthlyValueUtil } from '@/lib/mrr';
 type ExtendedAppointment = Appointment & { 
     lead?: Lead; 
     leadName?: string; 
@@ -587,29 +588,7 @@ export default function AMReportsDashboard() {
     };
 
     const calculateRawLeadValue = (lead: Lead): number => {
-        let totalMonthlyValue = 0;
-        if (lead.services && lead.services.length > 0) {
-            for (const service of lead.services) {
-                if (!service.rate) continue;
-                if (service.frequency === 'Adhoc') {
-                     totalMonthlyValue += service.rate * 1;
-                } else if (Array.isArray(service.frequency) && service.frequency.length > 0) {
-                    const weeklyDays = service.frequency.length;
-                    totalMonthlyValue += service.rate * weeklyDays * 4.33;
-                } else if (typeof service.frequency === 'number') {
-                    totalMonthlyValue += service.rate * service.frequency;
-                }
-            }
-        }
-        if (totalMonthlyValue > 0) return totalMonthlyValue;
-        return (
-            (lead as any).estimatedMrr ||
-            (lead as any).monthlyValue ||
-            (lead as any).mrr ||
-            (lead as any).value ||
-            (lead as any).quoteAmount ||
-            0
-        );
+        return calculateMonthlyValueUtil(lead);
     };
 
     // Value Calculation Logic (Pipeline MRR excludes Signed leads)

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { usePerformance } from '@/hooks/use-performance';
 import type { Lead, Activity, LeadStatus, Appointment, VisitNote, LeadBucket } from '@/lib/types';
+import { calculateMonthlyValue } from '@/lib/mrr';
 import { LeadCampaign, getLeadCampaigns } from '@/services/lead-campaigns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
@@ -92,37 +93,6 @@ const parseDateString = (dateVal: any): Date | null => {
     if (isNaN(date.getTime())) return null;
     date.setHours(0, 0, 0, 0);
     return date;
-};
-
-// Value Calculation Logic (MRR)
-const calculateMonthlyValue = (lead: Lead) => {
-    const applicableStatuses = ['Quote Sent', 'Won', 'LocalMile Opportunity', 'LocalMile Pending', 'Trialing LocalMile', 'Free Trial', 'Trialing ShipMate'];
-    const currentStatus = lead.customerStatus || lead.status;
-    
-    if (!applicableStatuses.includes(currentStatus)) {
-        return 0;
-    }
-    
-    if (!lead.services || lead.services.length === 0) {
-        return 0;
-    }
-    
-    let totalMonthlyValue = 0;
-    for (const service of lead.services) {
-        if (!service.rate) continue;
-        
-        if (service.frequency === 'Adhoc') {
-             totalMonthlyValue += service.rate * 1;
-             continue;
-        } else if (Array.isArray(service.frequency)) {
-            const weeklyDays = service.frequency.length;
-            if (weeklyDays > 0) {
-                totalMonthlyValue += service.rate * weeklyDays * 4.33;
-            }
-        }
-    }
-    
-    return totalMonthlyValue;
 };
 
 // Helper to check if status is Signed/Won/Customer

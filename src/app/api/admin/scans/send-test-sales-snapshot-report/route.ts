@@ -3,37 +3,9 @@ import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 import * as admin from 'firebase-admin';
+import { calculateMonthlyValue } from '@/lib/mrr';
 
 export const dynamic = 'force-dynamic';
-
-function calculateMonthlyValue(lead: any): number {
-  const applicableStatuses = ['Quote Sent', 'Won', 'LocalMile Opportunity', 'LocalMile Pending', 'Trialing LocalMile', 'Free Trial', 'Trialing ShipMate'];
-  const currentStatus = lead.customerStatus || lead.status;
-  
-  if (!applicableStatuses.includes(currentStatus)) {
-    return 0;
-  }
-  
-  if (!lead.services || lead.services.length === 0) {
-    return 0;
-  }
-  
-  let totalMonthlyValue = 0;
-  for (const service of lead.services) {
-    if (!service.rate) continue;
-    
-    if (service.frequency === 'Adhoc') {
-      totalMonthlyValue += service.rate * 1;
-    } else if (Array.isArray(service.frequency)) {
-      const weeklyDays = service.frequency.length;
-      if (weeklyDays > 0) {
-        totalMonthlyValue += service.rate * weeklyDays * 4.33;
-      }
-    }
-  }
-  
-  return totalMonthlyValue;
-}
 
 function parseDate(dateVal: any): Date | null {
   if (!dateVal) return null;
