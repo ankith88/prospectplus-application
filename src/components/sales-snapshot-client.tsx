@@ -68,6 +68,61 @@ const SectionHelp = ({ content }: { content: React.ReactNode }) => (
   </Popover>
 );
 
+const getStageHelpContent = (stageName: string, count: number, totalLeads: number, percentage: number) => {
+  switch (stageName) {
+    case 'New / Prospecting':
+      return (
+        <div className="space-y-1.5">
+          <p className="font-bold text-slate-900 border-b pb-1">New / Prospecting Stage</p>
+          <p><strong className="text-sky-700">{count} Stage Count:</strong> Leads sitting specifically in the initial <strong>New</strong> status ({percentage}% of pipeline).</p>
+          <p><strong className="text-[#095c7b]">{totalLeads} Total Sourced:</strong> Combined volume of leads created in the selected date range across <em>all 6 pipeline stages</em>.</p>
+        </div>
+      );
+    case 'Priority & Hot Leads':
+      return (
+        <div className="space-y-1.5">
+          <p className="font-bold text-amber-900 border-b pb-1">Priority &amp; Hot Leads Stage</p>
+          <p><strong className="text-amber-800">{count} Stage Count:</strong> High-priority leads requiring urgent sales focus ({percentage}% of pipeline).</p>
+          <p className="text-slate-600">Includes statuses: <em>Priority Lead, Priority Field Lead, Hot Lead</em>.</p>
+        </div>
+      );
+    case 'Active Engagement':
+      return (
+        <div className="space-y-1.5">
+          <p className="font-bold text-indigo-900 border-b pb-1">Active Engagement Stage</p>
+          <p><strong className="text-indigo-800">{count} Stage Count:</strong> Leads actively in outreach or qualification dialogues ({percentage}% of pipeline).</p>
+          <p className="text-slate-600">Includes statuses: <em>Contacted, Connected, In Progress, Reschedule, In Qualification, Pre Qualified</em>.</p>
+        </div>
+      );
+    case 'High-Intent / Opportunity':
+      return (
+        <div className="space-y-1.5">
+          <p className="font-bold text-purple-900 border-b pb-1">High-Intent / Opportunity Stage</p>
+          <p><strong className="text-purple-800">{count} Stage Count:</strong> Advanced leads with active quotes, accepted SCFs, or ongoing free trials ({percentage}% of pipeline).</p>
+          <p className="text-slate-600">Includes statuses: <em>Qualified, Quote Sent, SCF Accepted, Free Trial, Trialing ShipMate, LocalMile Pending, LPO Review</em>.</p>
+        </div>
+      );
+    case 'Converted':
+      return (
+        <div className="space-y-1.5">
+          <p className="font-bold text-emerald-900 border-b pb-1">Converted Stage (Won)</p>
+          <p><strong className="text-emerald-800">{count} Stage Count:</strong> Successfully closed and signed paying customer accounts ({percentage}% of pipeline).</p>
+          <p className="text-slate-600">Includes statuses: <em>Won, Signed, Customer</em>.</p>
+        </div>
+      );
+    case 'Closed / Inactive':
+      return (
+        <div className="space-y-1.5">
+          <p className="font-bold text-slate-900 border-b pb-1">Closed / Inactive Stage</p>
+          <p><strong className="text-slate-700">{count} Stage Count:</strong> Leads marked as lost, unqualified, or out of service territory ({percentage}% of pipeline).</p>
+          <p className="text-slate-600">Includes statuses: <em>Lost, Lost Customer, Unqualified, Email Brush Off, Out of Territory, Future Follow-up</em>.</p>
+        </div>
+      );
+    default:
+      return <div>Stage metric details for {stageName}.</div>;
+  }
+};
+
 const parseDateString = (dateVal: any): Date | null => {
     if (!dateVal) return null;
     if (dateVal instanceof Date) {
@@ -1333,7 +1388,10 @@ export default function SalesSnapshotClient() {
                     >
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className={cn("text-[10px] font-bold uppercase block leading-none", style.titleColor)}>{stage.name}</span>
+                          <div className="flex items-center gap-1">
+                            <span className={cn("text-[10px] font-bold uppercase block leading-none", style.titleColor)}>{stage.name}</span>
+                            <SectionHelp content={getStageHelpContent(stage.name, stage.count, metrics.totalLeads, stage.percentage)} />
+                          </div>
                           <ExternalLink className={cn("h-3 w-3 opacity-70 group-hover:opacity-100 transition-opacity shrink-0", style.titleColor)} />
                         </div>
                         <span className={cn("text-2xl font-extrabold block", style.countColor)}>{stage.count}</span>
@@ -1341,8 +1399,15 @@ export default function SalesSnapshotClient() {
                         {/* Stage Specific Embedded Milestones & Financials */}
                         <div className="mt-2 space-y-1">
                           {stage.name === 'New / Prospecting' && (
-                            <div className="text-[10px] font-medium text-sky-900 bg-sky-100/70 p-1.5 rounded border border-sky-200/60">
-                              <span className="font-semibold">Total Sourced:</span> {metrics.totalLeads}
+                            <div className="text-[10px] font-medium text-sky-900 bg-sky-100/70 p-1.5 rounded border border-sky-200/60 flex items-center justify-between">
+                              <span><span className="font-semibold">Total Sourced:</span> {metrics.totalLeads}</span>
+                              <SectionHelp content={
+                                <div className="space-y-1.5">
+                                  <p className="font-bold text-slate-900 border-b pb-1">Total Sourced vs. Stage Count</p>
+                                  <p><strong className="text-[#095c7b]">{metrics.totalLeads} Total Sourced:</strong> Total volume of leads created in the selected date range across <em>all 6 pipeline stages</em> combined.</p>
+                                  <p><strong className="text-sky-700">{stage.count} Stage Count:</strong> Leads currently sitting specifically in the <strong>New / Prospecting</strong> stage (Status: New). This accounts for {stage.percentage}% of the total pipeline.</p>
+                                </div>
+                              } />
                             </div>
                           )}
 
@@ -1447,14 +1512,17 @@ export default function SalesSnapshotClient() {
             {isFranchisee && (
               <Card className="shadow-sm card border-[#095c7b]/30 bg-white">
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 gap-3">
-                  <div>
-                    <CardTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
-                      <Briefcase className="h-5 w-5 text-[#095c7b]" />
-                      Franchisee Leads &amp; Progress
-                    </CardTitle>
-                    <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                      Overview of leads generated by {userProfile?.franchisee || 'your franchise'} and their current pipeline progress.
-                    </CardDescription>
+                  <div className="flex items-center gap-2">
+                    <div>
+                      <CardTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
+                        <Briefcase className="h-5 w-5 text-[#095c7b]" />
+                        Franchisee Leads &amp; Progress
+                      </CardTitle>
+                      <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                        Overview of leads generated by {userProfile?.franchisee || 'your franchise'} and their current pipeline progress.
+                      </CardDescription>
+                    </div>
+                    <SectionHelp content="Live list of active leads sourced by your franchisee territory, showing real-time status transitions, assigned sales rep, and MRR value." />
                   </div>
                   <div className="flex items-center gap-3 w-full sm:w-auto">
                     <Input
@@ -1555,7 +1623,7 @@ export default function SalesSnapshotClient() {
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-[#095c7b]" /> Leads Volume Over Time
                   </CardTitle>
-                  <SectionHelp content="Visual representation of new lead registration counts over days in the selected time period." />
+                  <SectionHelp content="Visual representation of daily lead creation counts based on lead entry date. Tracks top-of-funnel acquisition trends across your selected date window." />
                 </CardHeader>
                 <CardContent className="h-[260px]">
                   {metrics.volumeData.length > 0 ? (
@@ -1589,7 +1657,7 @@ export default function SalesSnapshotClient() {
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-[#095c7b]" /> Lead Source breakdown
                   </CardTitle>
-                  <SectionHelp content="Volume distribution and conversion rates (Won %) mapped directly against the original customer source." />
+                  <SectionHelp content="Volume distribution and won customer conversion counts mapped directly by lead origin source (Inbound, Cold Call, Referral, Marketing, etc.)." />
                 </CardHeader>
                 <CardContent className="h-[260px]">
                   {metrics.sourceData.length > 0 ? (
@@ -1619,7 +1687,7 @@ export default function SalesSnapshotClient() {
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Clock className="h-4 w-4 text-[#095c7b]" /> Average Days in Status
                   </CardTitle>
-                  <SectionHelp content="Average days spent by leads in each major pipeline transition. Helps isolate blockages." />
+                  <SectionHelp content="Calculates average days spent by leads in each status stage before progressing. Identifies deal stalls and sales cycle velocity." />
                 </CardHeader>
                 <CardContent className="h-[260px]">
                   {metrics.avgDaysData.length > 0 ? (
@@ -1670,7 +1738,7 @@ export default function SalesSnapshotClient() {
                         Lead Type
                       </button>
                     </div>
-                    <SectionHelp content="Sum of monthly recurring revenue (MRR) pipeline value split across lead buckets or lead types." />
+                    <SectionHelp content="Sum of estimated monthly recurring revenue (MRR) pipeline value split across lead buckets (Outbound, Inbound, Field Sales) or lead types." />
                   </div>
                 </CardHeader>
                 <CardContent className="h-[260px]">
@@ -1712,7 +1780,7 @@ export default function SalesSnapshotClient() {
                     Weekly MRR Pipeline: In-Pipeline (Quotes &amp; Trials) vs Signed (Won)
                   </CardTitle>
                 </div>
-                <SectionHelp content="Weekly breakdown comparing potential In-Pipeline MRR (Quotes, Opportunities, Trials) versus Converted Signed (Won) MRR." />
+                <SectionHelp content="Weekly breakdown comparing potential In-Pipeline MRR (Quotes, Opportunities, Trials) versus Converted Signed (Won) MRR week-by-week." />
               </CardHeader>
               <CardContent className="h-[280px]">
                 {metrics.weeklyMrrData.length > 0 ? (
