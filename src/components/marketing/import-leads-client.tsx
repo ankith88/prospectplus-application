@@ -21,7 +21,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { getAllUsers, getAllFranchisees, logActivity } from '@/services/firebase';
 import type { LeadBucket, UserProfile, Franchisee, Contact, LeadStatus, TaggedAddress } from '@/lib/types';
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs, doc, writeBatch, serverTimestamp, query, where, limit, addDoc, increment } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, writeBatch, serverTimestamp, query, where, limit, addDoc, increment } from 'firebase/firestore';
 import { canAssignToAm } from '@/lib/leave-utils';
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName, cleanAbn } from '@/lib/duplicate-detector';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
@@ -54,6 +54,7 @@ const standardFields = [
   { key: 'address3City', label: 'Address 3 Suburb / City', required: false, desc: 'Suburb / City' },
   { key: 'address3State', label: 'Address 3 State', required: false, desc: 'State' },
   { key: 'address3Zip', label: 'Address 3 Postcode', required: false, desc: 'Postcode' },
+  { key: 'prospectPlusId', label: 'Prospect+ ID / Internal ID', required: false, desc: 'Prospect+ ID (e.g. PP-1024) or NetSuite Internal ID' },
 // Additional Parent Lead / Customer Linkage (Multi-Site Parent)
   { key: 'parentProspectPlusId', label: 'Parent Prospect+ ID / Lead ID', required: false, desc: 'Prospect+ ID (e.g. PP-1024) or Record ID of parent lead or company' },
   { key: 'parentCompanyName', label: 'Parent Company Name', required: false, desc: 'Name of parent business to match and link' },
@@ -375,6 +376,9 @@ export function ImportLeadsClient() {
             if (field.key === 'contact3Email' && (normalizedHeader === 'accountscontactemail' || normalizedHeader === 'contact3email')) return true;
             if (field.key === 'contact3Phone' && (normalizedHeader === 'accountscontactphone' || normalizedHeader === 'contact3phone')) return true;
 
+            // Aliases for Lead ID / Prospect+ ID / Internal ID
+            if (field.key === 'prospectPlusId' && (normalizedHeader === 'internalid' || normalizedHeader === 'prospectplusid' || normalizedHeader === 'prospectid' || normalizedHeader === 'leadid' || normalizedHeader === 'entityid' || normalizedHeader === 'netsuiteid' || normalizedHeader === 'netsuiteinternalid')) return true;
+
             // Aliases for Parent Linkage
             if (field.key === 'parentProspectPlusId' && (normalizedHeader === 'parentprospectplusid' || normalizedHeader === 'parentprospectid' || normalizedHeader === 'parentid' || normalizedHeader === 'parentleadid' || normalizedHeader === 'parententityid' || normalizedHeader === 'parentaccountid')) return true;
             if (field.key === 'parentCompanyName' && (normalizedHeader === 'parentcompanyname' || normalizedHeader === 'parentcompany' || normalizedHeader === 'parentbusinessname' || normalizedHeader === 'parentaccount')) return true;
@@ -499,19 +503,38 @@ export function ImportLeadsClient() {
         compMatches[idx] = null;
       }
       
-      // 3. Duplicate Lead Check (Exact + Core Brand Prefix Query)
-      if (companyName) {
+      // 3. Duplicate Lead Check (Direct ID Lookup + Exact + Core Brand Prefix Query)
+      const rawIdVal = (getVal('prospectPlusId') || row['Internal ID'] || row['internalid'] || row['Prospect+ ID'] || row['prospectplusid'] || '')?.toString().trim();
+      let directDocSnap: any = null;
+      if (rawIdVal) {
         try {
-          const coreBrand = extractCoreBrandName(companyName);
+          const idSnap = await getDoc(doc(firestore, 'leads', rawIdVal));
+          if (idSnap.exists()) {
+            directDocSnap = idSnap;
+          }
+        } catch (e) {}
+      }
+
+      if (directDocSnap) {
+        duplicates[idx] = { id: directDocSnap.id, confidence: 'High', reasons: ['Internal ID Match'] };
+      } else if (companyName) {
+        try {
+          let coreBrand = extractCoreBrandName(companyName);
+          if (coreBrand && coreBrand.length < 3) {
+            const norm = normalizeCompanyName(companyName);
+            const words = norm.split(/\s+/);
+            coreBrand = words.slice(0, Math.min(words.length, 2)).join(' ');
+          }
+
           const qExact = query(collection(firestore, 'leads'), where('companyName', '==', companyName), limit(5));
           let qPrefix = null;
-          if (coreBrand && coreBrand.length >= 3) {
+          if (coreBrand && coreBrand.length >= 2) {
             const coreUpper = coreBrand.charAt(0).toUpperCase() + coreBrand.slice(1);
             qPrefix = query(
               collection(firestore, 'leads'),
               where('companyName', '>=', coreUpper),
               where('companyName', '<=', coreUpper + '\uf8ff'),
-              limit(5)
+              limit(10)
             );
           }
 
@@ -630,18 +653,37 @@ export function ImportLeadsClient() {
         compMatches[actualIdx] = null;
       }
 
-      if (compName) {
+      const rawIdVal = (getVal('prospectPlusId') || row['Internal ID'] || row['internalid'] || row['Prospect+ ID'] || row['prospectplusid'] || '')?.toString().trim();
+      let directDocSnap: any = null;
+      if (rawIdVal) {
         try {
-          const coreBrand = extractCoreBrandName(compName);
+          const idSnap = await getDoc(doc(firestore, 'leads', rawIdVal));
+          if (idSnap.exists()) {
+            directDocSnap = idSnap;
+          }
+        } catch (e) {}
+      }
+
+      if (directDocSnap) {
+        duplicates[actualIdx] = { id: directDocSnap.id, confidence: 'High', reasons: ['Internal ID Match'] };
+      } else if (compName) {
+        try {
+          let coreBrand = extractCoreBrandName(compName);
+          if (coreBrand && coreBrand.length < 3) {
+            const norm = normalizeCompanyName(compName);
+            const words = norm.split(/\s+/);
+            coreBrand = words.slice(0, Math.min(words.length, 2)).join(' ');
+          }
+
           const qExact = query(collection(firestore, 'leads'), where('companyName', '==', compName), limit(5));
           let qPrefix = null;
-          if (coreBrand && coreBrand.length >= 3) {
+          if (coreBrand && coreBrand.length >= 2) {
             const coreUpper = coreBrand.charAt(0).toUpperCase() + coreBrand.slice(1);
             qPrefix = query(
               collection(firestore, 'leads'),
               where('companyName', '>=', coreUpper),
               where('companyName', '<=', coreUpper + '\uf8ff'),
-              limit(5)
+              limit(10)
             );
           }
 
