@@ -929,6 +929,7 @@ export default function ReportsClientPage({
       franchisee: [],
       appointmentAssignedTo: [],
       isFieldSourced: 'all' as 'all' | 'yes' | 'no',
+      campaign: 'all',
     };
     setFilters(defaultFilters);
     setAppliedFilters(defaultFilters);

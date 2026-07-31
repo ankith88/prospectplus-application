@@ -54,6 +54,10 @@ const standardFields = [
   { key: 'address3City', label: 'Address 3 Suburb / City', required: false, desc: 'Suburb / City' },
   { key: 'address3State', label: 'Address 3 State', required: false, desc: 'State' },
   { key: 'address3Zip', label: 'Address 3 Postcode', required: false, desc: 'Postcode' },
+// Additional Parent Lead / Customer Linkage (Multi-Site Parent)
+  { key: 'parentProspectPlusId', label: 'Parent Prospect+ ID / Lead ID', required: false, desc: 'Prospect+ ID (e.g. PP-1024) or Record ID of parent lead or company' },
+  { key: 'parentCompanyName', label: 'Parent Company Name', required: false, desc: 'Name of parent business to match and link' },
+  { key: 'parentAbn', label: 'Parent ABN', required: false, desc: 'ABN of parent company to match and link' },
   // Contact 1 (Primary Contact)
   { key: 'contactFirstName', label: 'Contact 1 First Name', required: false, desc: 'First name of primary contact' },
   { key: 'contactLastName', label: 'Contact 1 Last Name', required: false, desc: 'Last name of primary contact' },
@@ -88,6 +92,12 @@ export function ImportLeadsClient() {
   const [existingLists, setExistingLists] = useState<string[]>([]);
   const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
   
+  // Parent Account Linkage state
+  const [globalParentId, setGlobalParentId] = useState<string>('none');
+  const [parentAccounts, setParentAccounts] = useState<Array<{ id: string; companyName: string; prospectPlusId?: string; abn?: string; type: 'company' | 'lead' }>>([]);
+  const [parentAccountsMap, setParentAccountsMap] = useState<Map<string, { id: string; companyName: string; prospectPlusId?: string }>>(new Map());
+  const [parentMatches, setParentMatches] = useState<Record<number, { id: string; companyName: string; prospectPlusId?: string; source: 'row' | 'global' | 'auto' } | null>>({});
+
   // Step 2 configurations
   const [selectedBucket, setSelectedBucket] = useState<LeadBucket>('outbound');
   const [campaignName, setCampaignName] = useState<string>('Bulk Import');
@@ -132,7 +142,7 @@ export function ImportLeadsClient() {
   }, [columnMappings, requiredFields]);
   const allRequiredMapped = missingRequiredMappings.length === 0;
 
-  // Fetch users, franchisees, journeys, existing lists and companies cache on mount
+  // Fetch users, franchisees, journeys, existing lists and parent accounts on mount
   useEffect(() => {
     async function loadData() {
       try {
@@ -160,20 +170,57 @@ export function ImportLeadsClient() {
         });
         setExistingLists(Array.from(lists));
 
-        // Pre-fetch active existing companies for instant customer matching
-        const compSnap = await getDocs(query(collection(firestore, 'companies'), limit(1000)));
+        // Pre-fetch parent account candidates (companies and leads) for parent-child linking
+        const [compSnap, leadsParentSnap] = await Promise.all([
+          getDocs(query(collection(firestore, 'companies'), limit(1000))),
+          getDocs(query(collection(firestore, 'leads'), limit(1000)))
+        ]);
+
         const compMap = new Map<string, { id: string; name: string }>();
+        const parentAccMap = new Map<string, { id: string; companyName: string; prospectPlusId?: string }>();
+        const pAccounts: Array<{ id: string; companyName: string; prospectPlusId?: string; abn?: string; type: 'company' | 'lead' }> = [];
+
         compSnap.docs.forEach(docSnap => {
           const data = docSnap.data();
-          const compNameNorm = normalizeCompanyName(data.companyName);
-          if (compNameNorm) {
-            compMap.set(compNameNorm, { id: docSnap.id, name: data.companyName || docSnap.id });
-          }
-          const cleanAbnVal = cleanAbn(data.abn);
-          if (cleanAbnVal) {
-            compMap.set(cleanAbnVal, { id: docSnap.id, name: data.companyName || docSnap.id });
+          const name = data.companyName || docSnap.id;
+          const ppId = data.prospectPlusId || data.entityId || '';
+          const abn = cleanAbn(data.abn);
+          const normName = normalizeCompanyName(data.companyName);
+
+          const item = { id: docSnap.id, companyName: name, prospectPlusId: ppId, abn, type: 'company' as const };
+          pAccounts.push(item);
+
+          if (ppId) parentAccMap.set(ppId.toLowerCase().trim(), item);
+          parentAccMap.set(docSnap.id.toLowerCase().trim(), item);
+          if (abn) parentAccMap.set(abn, item);
+          if (normName) parentAccMap.set(normName, item);
+
+          if (normName) compMap.set(normName, { id: docSnap.id, name });
+          if (abn) compMap.set(abn, { id: docSnap.id, name });
+        });
+
+        leadsParentSnap.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          if (!data.parentLeadId) {
+            const name = data.companyName || docSnap.id;
+            const ppId = data.prospectPlusId || data.id || '';
+            const abn = cleanAbn(data.abn);
+            const normName = normalizeCompanyName(data.companyName);
+
+            const item = { id: docSnap.id, companyName: name, prospectPlusId: ppId, abn, type: 'lead' as const };
+            if (!parentAccMap.has(docSnap.id.toLowerCase().trim())) {
+              pAccounts.push(item);
+            }
+
+            if (ppId && !parentAccMap.has(ppId.toLowerCase().trim())) parentAccMap.set(ppId.toLowerCase().trim(), item);
+            if (!parentAccMap.has(docSnap.id.toLowerCase().trim())) parentAccMap.set(docSnap.id.toLowerCase().trim(), item);
+            if (abn && !parentAccMap.has(abn)) parentAccMap.set(abn, item);
+            if (normName && !parentAccMap.has(normName)) parentAccMap.set(normName, item);
           }
         });
+
+        setParentAccounts(pAccounts);
+        setParentAccountsMap(parentAccMap);
         setExistingCompaniesCache(compMap);
       } catch (err) {
         console.error('Failed to load import setup data:', err);
@@ -216,6 +263,7 @@ export function ImportLeadsClient() {
     const headers = standardFields.map(f => f.label).join(',');
     const sampleRow = [
       'Example Enterprise Pty Ltd',
+      'Bulk Import',
       'https://exampleenterprise.com.au',
       '02 9876 5432',
       'info@exampleenterprise.com.au',
@@ -241,6 +289,10 @@ export function ImportLeadsClient() {
       'Sydney',
       'NSW',
       '2000',
+      // Parent linkage
+      'PP-10042',
+      'Parent Enterprise HQ',
+      '98765432109',
       // Contact 1
       'John',
       'Smith',
@@ -322,6 +374,11 @@ export function ImportLeadsClient() {
             if (field.key === 'contact3Email' && (normalizedHeader === 'accountscontactemail' || normalizedHeader === 'contact3email')) return true;
             if (field.key === 'contact3Phone' && (normalizedHeader === 'accountscontactphone' || normalizedHeader === 'contact3phone')) return true;
 
+            // Aliases for Parent Linkage
+            if (field.key === 'parentProspectPlusId' && (normalizedHeader === 'parentprospectplusid' || normalizedHeader === 'parentprospectid' || normalizedHeader === 'parentid' || normalizedHeader === 'parentleadid' || normalizedHeader === 'parententityid' || normalizedHeader === 'parentaccountid')) return true;
+            if (field.key === 'parentCompanyName' && (normalizedHeader === 'parentcompanyname' || normalizedHeader === 'parentcompany' || normalizedHeader === 'parentbusinessname' || normalizedHeader === 'parentaccount')) return true;
+            if (field.key === 'parentAbn' && (normalizedHeader === 'parentabn' || normalizedHeader === 'parentabnnumber')) return true;
+
             return false;
           });
           if (match) {
@@ -369,6 +426,7 @@ export function ImportLeadsClient() {
     const errors: Record<number, string[]> = {};
     const duplicates: Record<number, { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null> = {};
     const compMatches: Record<number, { id: string; name: string } | null> = {};
+    const pMatches: Record<number, { id: string; companyName: string; prospectPlusId?: string; source: 'row' | 'global' | 'auto' } | null> = {};
     const previewData: any[] = [];
     
     // Take up to 20 rows for validation list and preview
@@ -406,7 +464,32 @@ export function ImportLeadsClient() {
 
       errors[idx] = rowErrors;
 
-      // 1. Existing Active Customer Check (Instant Cache Lookup)
+      // 1. Parent Account Resolution (Prospect+ ID, ABN, Company Name, or Global Default)
+      const rowParentPpId = getVal('parentProspectPlusId')?.toLowerCase().trim();
+      const rowParentAbn = cleanAbn(getVal('parentAbn'));
+      const rowParentNameNorm = normalizeCompanyName(getVal('parentCompanyName'));
+
+      let resolvedParent: { id: string; companyName: string; prospectPlusId?: string; source: 'row' | 'global' | 'auto' } | null = null;
+
+      if (rowParentPpId && parentAccountsMap.has(rowParentPpId)) {
+        const found = parentAccountsMap.get(rowParentPpId)!;
+        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
+      } else if (rowParentAbn && parentAccountsMap.has(rowParentAbn)) {
+        const found = parentAccountsMap.get(rowParentAbn)!;
+        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
+      } else if (rowParentNameNorm && parentAccountsMap.has(rowParentNameNorm)) {
+        const found = parentAccountsMap.get(rowParentNameNorm)!;
+        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
+      } else if (globalParentId && globalParentId !== 'none') {
+        const found = parentAccounts.find(p => p.id === globalParentId);
+        if (found) {
+          resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'global' };
+        }
+      }
+
+      pMatches[idx] = resolvedParent;
+
+      // 2. Existing Active Customer Check (Instant Cache Lookup)
       if (abnVal && existingCompaniesCache.has(abnVal)) {
         compMatches[idx] = existingCompaniesCache.get(abnVal)!;
       } else if (normName && existingCompaniesCache.has(normName)) {
@@ -415,7 +498,7 @@ export function ImportLeadsClient() {
         compMatches[idx] = null;
       }
       
-      // 2. Duplicate Lead Check (Exact + Core Brand Prefix Query)
+      // 3. Duplicate Lead Check (Exact + Core Brand Prefix Query)
       if (companyName) {
         try {
           const coreBrand = extractCoreBrandName(companyName);
@@ -500,7 +583,7 @@ export function ImportLeadsClient() {
       });
     }
 
-    // Run duplicate check stats on next 80 entries concurrently
+    // Run duplicate & parent check stats on next 80 entries concurrently
     const remainingRows = csvRows.slice(20, 100);
     const checks = remainingRows.map(async (row, offsetIdx) => {
       const actualIdx = offsetIdx + 20;
@@ -508,9 +591,35 @@ export function ImportLeadsClient() {
         const colHeader = Object.keys(columnMappings).find(k => columnMappings[k] === key);
         return colHeader ? row[colHeader]?.trim() : '';
       };
+
       const compName = getVal('companyName');
       const abnVal = cleanAbn(getVal('abn'));
       const normName = normalizeCompanyName(compName);
+
+      // Parent Account resolution logic
+      const rowParentPpId = getVal('parentProspectPlusId')?.toLowerCase().trim();
+      const rowParentAbn = cleanAbn(getVal('parentAbn'));
+      const rowParentNameNorm = normalizeCompanyName(getVal('parentCompanyName'));
+
+      let resolvedParent: { id: string; companyName: string; prospectPlusId?: string; source: 'row' | 'global' | 'auto' } | null = null;
+
+      if (rowParentPpId && parentAccountsMap.has(rowParentPpId)) {
+        const found = parentAccountsMap.get(rowParentPpId)!;
+        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
+      } else if (rowParentAbn && parentAccountsMap.has(rowParentAbn)) {
+        const found = parentAccountsMap.get(rowParentAbn)!;
+        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
+      } else if (rowParentNameNorm && parentAccountsMap.has(rowParentNameNorm)) {
+        const found = parentAccountsMap.get(rowParentNameNorm)!;
+        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
+      } else if (globalParentId && globalParentId !== 'none') {
+        const found = parentAccounts.find(p => p.id === globalParentId);
+        if (found) {
+          resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'global' };
+        }
+      }
+
+      pMatches[actualIdx] = resolvedParent;
 
       if (abnVal && existingCompaniesCache.has(abnVal)) {
         compMatches[actualIdx] = existingCompaniesCache.get(abnVal)!;
@@ -581,6 +690,7 @@ export function ImportLeadsClient() {
     setValidationErrors(errors);
     setDuplicateLeads(duplicates);
     setExistingCompanyMatches(compMatches);
+    setParentMatches(pMatches);
     setIsValidating(false);
   };
 
@@ -729,6 +839,35 @@ export function ImportLeadsClient() {
           })
         };
 
+        // Parent Linkage resolution for row
+        const rowParentPpId = getVal('parentProspectPlusId')?.toLowerCase().trim();
+        const rowParentAbn = cleanAbn(getVal('parentAbn'));
+        const rowParentNameNorm = normalizeCompanyName(getVal('parentCompanyName'));
+
+        let effectiveParent: { id: string; companyName: string; prospectPlusId?: string } | null = parentMatches[rowIdx] || null;
+
+        if (!effectiveParent) {
+          if (rowParentPpId && parentAccountsMap.has(rowParentPpId)) {
+            const found = parentAccountsMap.get(rowParentPpId)!;
+            effectiveParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId };
+          } else if (rowParentAbn && parentAccountsMap.has(rowParentAbn)) {
+            const found = parentAccountsMap.get(rowParentAbn)!;
+            effectiveParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId };
+          } else if (rowParentNameNorm && parentAccountsMap.has(rowParentNameNorm)) {
+            const found = parentAccountsMap.get(rowParentNameNorm)!;
+            effectiveParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId };
+          } else if (globalParentId && globalParentId !== 'none') {
+            const found = parentAccounts.find(p => p.id === globalParentId);
+            if (found) {
+              effectiveParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId };
+            }
+          }
+        }
+
+        if (effectiveParent) {
+          leadData.parentLeadId = effectiveParent.id;
+        }
+
         const effectiveCampaign = getVal('campaign') || campaignName;
 
         // Bucket specific fields
@@ -830,7 +969,9 @@ export function ImportLeadsClient() {
         batch.set(activityRef, {
           type: 'Update',
           date: nowStr,
-          notes: `Lead imported via Bulk Import in ${selectedBucket.replace('_', ' ')} bucket. Source: ${campaignName}`,
+          notes: effectiveParent
+            ? `Lead imported as child location under parent "${effectiveParent.companyName}" (${effectiveParent.prospectPlusId ? `Prospect+ ID: ${effectiveParent.prospectPlusId}` : `ID: ${effectiveParent.id}`}). Bucket: ${selectedBucket.replace('_', ' ')}. Source: ${campaignName}`
+            : `Lead imported via Bulk Import in ${selectedBucket.replace('_', ' ')} bucket. Source: ${campaignName}`,
           author: authorName
         });
 
@@ -1114,6 +1255,29 @@ export function ImportLeadsClient() {
                   placeholder="e.g. ZoomInfo, Purchased List" 
                   className="bg-white"
                 />
+              </div>
+
+              {/* Parent Account Selection */}
+              <div className="space-y-2 col-span-full border-t pt-4">
+                <Label htmlFor="global-parent-select" className="font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Briefcase className="h-4 w-4 text-[#095c7b]" /> Link as Child of Parent Account / Customer (Optional)
+                </Label>
+                <Select value={globalParentId} onValueChange={setGlobalParentId}>
+                  <SelectTrigger id="global-parent-select" className="bg-white">
+                    <SelectValue placeholder="Select Parent Account (or leave as None)" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    <SelectItem value="none">None (Import as standalone leads)</SelectItem>
+                    {parentAccounts.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        [{p.type === 'company' ? 'Customer' : 'Parent Lead'}{p.prospectPlusId ? ` · ${p.prospectPlusId}` : ''}] {p.companyName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Links all leads imported in this batch as child locations under the selected Parent Account (unless overridden by row-level Parent Prospect+ ID or Parent Company mapping in your CSV).
+                </p>
               </div>
 
               {/* BUCKET SPECIFIC DYNAMIC FIELDS */}
@@ -1490,6 +1654,12 @@ export function ImportLeadsClient() {
                                     {err}
                                   </Badge>
                                 ))}
+
+                                {parentMatches[row.index] && (
+                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-purple-100 text-purple-900 border-purple-300 font-semibold">
+                                    Child of {parentMatches[row.index]?.companyName} {parentMatches[row.index]?.prospectPlusId ? `(${parentMatches[row.index]?.prospectPlusId})` : ''}
+                                  </Badge>
+                                )}
                                 
                                 {isCust && (
                                   <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-blue-100 text-blue-800 border-blue-200 font-semibold">
@@ -1512,7 +1682,7 @@ export function ImportLeadsClient() {
                                   </Badge>
                                 )}
 
-                                {rowErrors.length === 0 && !isDup && !isCust && (
+                                {rowErrors.length === 0 && !isDup && !isCust && !parentMatches[row.index] && (
                                   <Badge className="bg-green-100 text-green-800 border-green-200 text-[9px] px-1.5 py-0" variant="outline">
                                     Passed
                                   </Badge>
