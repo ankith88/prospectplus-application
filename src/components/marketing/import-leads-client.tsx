@@ -21,7 +21,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { getAllUsers, getAllFranchisees, logActivity } from '@/services/firebase';
 import type { LeadBucket, UserProfile, Franchisee, Contact, LeadStatus, TaggedAddress } from '@/lib/types';
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs, doc, writeBatch, serverTimestamp, query, where, limit, addDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, serverTimestamp, query, where, limit, addDoc, increment } from 'firebase/firestore';
 import { canAssignToAm } from '@/lib/leave-utils';
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName, cleanAbn } from '@/lib/duplicate-detector';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
@@ -919,8 +919,6 @@ export function ImportLeadsClient() {
           ? doc(firestore, 'leads', isDuplicateMatch.id)
           : doc(collection(firestore, 'leads'));
 
-        batch.set(leadRef, leadData, { merge: true });
-
         // 2. Multi-Contact subcollection creation
         const contactsToCreate = [
           {
@@ -953,6 +951,7 @@ export function ImportLeadsClient() {
           }
         ];
 
+        let addedContactsCount = 0;
         for (const cConfig of contactsToCreate) {
           const cFirst = getVal(cConfig.firstNameKey);
           const cLast = getVal(cConfig.lastNameKey);
@@ -961,6 +960,7 @@ export function ImportLeadsClient() {
           const cTitle = getVal(cConfig.titleKey);
 
           if (cFirst || cLast || cEmail || cPhone) {
+            addedContactsCount++;
             const contactRef = doc(collection(firestore, 'leads', leadRef.id, 'contacts'));
             const contactData: Contact = {
               id: contactRef.id,
@@ -976,6 +976,12 @@ export function ImportLeadsClient() {
             batch.set(contactRef, contactData, { merge: true });
           }
         }
+
+        if (addedContactsCount > 0) {
+          leadData.contactCount = increment(addedContactsCount);
+        }
+
+        batch.set(leadRef, leadData, { merge: true });
 
         // 3. Create Activity entry
         const activityRef = doc(collection(firestore, 'leads', leadRef.id, 'activity'));
