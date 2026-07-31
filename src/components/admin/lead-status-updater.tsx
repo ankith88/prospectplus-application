@@ -10,7 +10,8 @@ import { Loader } from '@/components/ui/loader';
 import { getLeadsFromFirebase, updateLeadStatus } from '@/services/firebase';
 import type { Lead, LeadStatus } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Calendar as CalendarIcon, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Search, Calendar as CalendarIcon, RefreshCw, CheckCircle2, Users, Filter } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Checkbox } from '@/components/ui/checkbox';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
@@ -148,6 +149,18 @@ export function LeadStatusUpdater() {
       return true;
     });
   }, [items, debouncedSearchTerm, sourceFilter, bucketFilter, statusFilter, amFilter, dialerFilter, dateRange]);
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      !!debouncedSearchTerm ||
+      sourceFilter.length > 0 ||
+      bucketFilter.length > 0 ||
+      statusFilter.length > 0 ||
+      amFilter.length > 0 ||
+      dialerFilter.length > 0 ||
+      !!dateRange?.from
+    );
+  }, [debouncedSearchTerm, sourceFilter, bucketFilter, statusFilter, amFilter, dialerFilter, dateRange]);
 
   // Selections
   const handleSelectItem = (itemId: string, checked: boolean) => {
@@ -377,6 +390,41 @@ export function LeadStatusUpdater() {
           </div>
         </div>
       )}
+
+      {/* Lead Count & Filter Summary Bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 bg-muted/20 rounded-md border border-border/60">
+        <div className="flex items-center gap-2 flex-wrap text-sm">
+          <div className="flex items-center gap-2 font-medium">
+            <Users className="h-4 w-4 text-primary shrink-0" />
+            <span>Matching Leads:</span>
+            <Badge variant="secondary" className="font-bold text-sm px-2.5 py-0.5">
+              {loading ? '...' : filteredItems.length.toLocaleString()}
+            </Badge>
+          </div>
+          {hasActiveFilters && !loading && (
+            <span className="text-xs text-muted-foreground">
+              (Filtered from {items.length.toLocaleString()} total leads)
+            </span>
+          )}
+          {!hasActiveFilters && !loading && (
+            <span className="text-xs text-muted-foreground">
+              (Total in system: {items.length.toLocaleString()})
+            </span>
+          )}
+          {filteredItems.length > 100 && (
+            <Badge variant="outline" className="text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800">
+              Showing first 100 in table
+            </Badge>
+          )}
+        </div>
+
+        {hasActiveFilters && (
+          <div className="flex items-center gap-1.5 text-xs font-medium text-primary">
+            <Filter className="h-3.5 w-3.5" />
+            <span>Filters Active</span>
+          </div>
+        )}
+      </div>
 
       {/* Leads Table */}
       <div className="rounded-md border bg-background">
