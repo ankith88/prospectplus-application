@@ -125,6 +125,7 @@ export function ImportLeadsClient() {
   const [existingCompanyMatches, setExistingCompanyMatches] = useState<Record<number, { id: string; name: string } | null>>({});
   const [existingCompaniesCache, setExistingCompaniesCache] = useState<Map<string, { id: string; name: string }>>(new Map());
   const [duplicateStrategy, setDuplicateStrategy] = useState<'skip' | 'import' | 'update'>('skip');
+  const [matchFieldKey, setMatchFieldKey] = useState<'auto' | 'internalId' | 'prospectPlusId' | 'customerEntityId' | 'abn' | 'companyName'>('auto');
   const [isValidating, setIsValidating] = useState<boolean>(false);
   
   // Step 5 (Import Execution) state
@@ -432,8 +433,177 @@ export function ImportLeadsClient() {
     return { internalId: 'MailPlus Pty Ltd', name: 'MailPlus Pty Ltd' };
   };
 
+  // Helper to query matching leads based on user-selected matchFieldKey
+  const findMatchingLead = async (
+    row: any, 
+    getVal: (key: string) => string, 
+    compName: string, 
+    activeMatchKey: string
+  ) => {
+    const rawIdVal = (getVal('prospectPlusId') || row['Internal ID'] || row['internalid'] || row['Prospect+ ID'] || row['prospectplusid'] || row['Customer ID'] || row['customerEntityId'] || '')?.toString().trim();
+    const abnVal = cleanAbn(getVal('abn') || row['ABN'] || row['abn'] || '');
+
+    // 1. NetSuite Internal ID / Document ID Mode
+    if (activeMatchKey === 'internalId') {
+      if (!rawIdVal) return null;
+      try {
+        const idSnap = await getDoc(doc(firestore, 'leads', rawIdVal));
+        if (idSnap.exists()) return { id: idSnap.id, confidence: 'High' as const, reasons: ['NetSuite Internal ID (Doc ID)'] };
+
+        const numVal = parseInt(rawIdVal, 10);
+        const qStr = query(collection(firestore, 'leads'), where('internalid', '==', rawIdVal), limit(1));
+        const sStr = await getDocs(qStr);
+        if (!sStr.empty) return { id: sStr.docs[0].id, confidence: 'High' as const, reasons: ['internalid Field Match'] };
+
+        if (!isNaN(numVal)) {
+          const qNum = query(collection(firestore, 'leads'), where('internalid', '==', numVal), limit(1));
+          const sNum = await getDocs(qNum);
+          if (!sNum.empty) return { id: sNum.docs[0].id, confidence: 'High' as const, reasons: ['internalid Field Match'] };
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    // 2. Prospect+ ID Mode
+    if (activeMatchKey === 'prospectPlusId') {
+      if (!rawIdVal) return null;
+      try {
+        const qPp = query(collection(firestore, 'leads'), where('prospectPlusId', '==', rawIdVal), limit(1));
+        const sPp = await getDocs(qPp);
+        if (!sPp.empty) return { id: sPp.docs[0].id, confidence: 'High' as const, reasons: ['Prospect+ ID Match'] };
+      } catch (e) {}
+      return null;
+    }
+
+    // 3. Customer Entity ID Mode
+    if (activeMatchKey === 'customerEntityId') {
+      if (!rawIdVal) return null;
+      try {
+        const numVal = parseInt(rawIdVal, 10);
+        const qEntStr = query(collection(firestore, 'leads'), where('customerEntityId', '==', rawIdVal), limit(1));
+        const sEntStr = await getDocs(qEntStr);
+        if (!sEntStr.empty) return { id: sEntStr.docs[0].id, confidence: 'High' as const, reasons: ['Customer Entity ID Match'] };
+        if (!isNaN(numVal)) {
+          const qEntNum = query(collection(firestore, 'leads'), where('customerEntityId', '==', numVal), limit(1));
+          const sEntNum = await getDocs(qEntNum);
+          if (!sEntNum.empty) return { id: sEntNum.docs[0].id, confidence: 'High' as const, reasons: ['Customer Entity ID Match'] };
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    // 4. ABN Mode
+    if (activeMatchKey === 'abn') {
+      if (!abnVal) return null;
+      try {
+        const qAbn = query(collection(firestore, 'leads'), where('abn', '==', abnVal), limit(1));
+        const sAbn = await getDocs(qAbn);
+        if (!sAbn.empty) return { id: sAbn.docs[0].id, confidence: 'High' as const, reasons: ['ABN Match'] };
+      } catch (e) {}
+      return null;
+    }
+
+    // 5. Company Name Only Mode
+    if (activeMatchKey === 'companyName') {
+      if (!compName) return null;
+      try {
+        const qComp = query(collection(firestore, 'leads'), where('companyName', '==', compName), limit(1));
+        const sComp = await getDocs(qComp);
+        if (!sComp.empty) return { id: sComp.docs[0].id, confidence: 'High' as const, reasons: ['Company Name Match'] };
+      } catch (e) {}
+      return null;
+    }
+
+    // 6. Auto-Detect Mode (Default: Document ID + internalid + prospectPlusId + customerEntityId + ABN + Brand Prefix)
+    if (rawIdVal) {
+      try {
+        const idSnap = await getDoc(doc(firestore, 'leads', rawIdVal));
+        if (idSnap.exists()) return { id: idSnap.id, confidence: 'High' as const, reasons: ['Internal ID Match'] };
+
+        const numVal = parseInt(rawIdVal, 10);
+        const queries = [
+          query(collection(firestore, 'leads'), where('internalid', '==', rawIdVal), limit(1)),
+          query(collection(firestore, 'leads'), where('prospectPlusId', '==', rawIdVal), limit(1)),
+          query(collection(firestore, 'leads'), where('customerEntityId', '==', rawIdVal), limit(1))
+        ];
+        if (!isNaN(numVal)) {
+          queries.push(query(collection(firestore, 'leads'), where('internalid', '==', numVal), limit(1)));
+          queries.push(query(collection(firestore, 'leads'), where('customerEntityId', '==', numVal), limit(1)));
+        }
+
+        const querySnaps = await Promise.all(queries.map(q => getDocs(q)));
+        for (const qSnap of querySnaps) {
+          if (!qSnap.empty) return { id: qSnap.docs[0].id, confidence: 'High' as const, reasons: ['Internal ID Field Match'] };
+        }
+      } catch (e) {}
+    }
+
+    if (compName) {
+      try {
+        let coreBrand = extractCoreBrandName(compName);
+        if (coreBrand && coreBrand.length < 3) {
+          const norm = normalizeCompanyName(compName);
+          const words = norm.split(/\s+/);
+          coreBrand = words.slice(0, Math.min(words.length, 2)).join(' ');
+        }
+
+        const qExact = query(collection(firestore, 'leads'), where('companyName', '==', compName), limit(5));
+        let qPrefix = null;
+        if (coreBrand && coreBrand.length >= 2) {
+          const coreUpper = coreBrand.charAt(0).toUpperCase() + coreBrand.slice(1);
+          qPrefix = query(
+            collection(firestore, 'leads'),
+            where('companyName', '>=', coreUpper),
+            where('companyName', '<=', coreUpper + '\uf8ff'),
+            limit(10)
+          );
+        }
+
+        const [exactSnap, prefixSnap] = await Promise.all([
+          getDocs(qExact),
+          qPrefix ? getDocs(qPrefix) : Promise.resolve({ docs: [] } as any)
+        ]);
+
+        const incomingLead = {
+          companyName: compName,
+          customerServiceEmail: getVal('customerServiceEmail'),
+          customerPhone: getVal('customerPhone'),
+          abn: getVal('abn'),
+          address: {
+            street: getVal('street'),
+            city: getVal('city'),
+            state: getVal('state'),
+            zip: getVal('zip'),
+            country: 'Australia'
+          }
+        };
+
+        let bestMatch: { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null = null;
+        let topScore = 0;
+        const checkedIds = new Set<string>();
+
+        const docs = [...exactSnap.docs, ...prefixSnap.docs];
+        docs.forEach(docSnap => {
+          if (checkedIds.has(docSnap.id)) return;
+          checkedIds.add(docSnap.id);
+          const candidateLead = { id: docSnap.id, ...docSnap.data() };
+          const res = evaluateDuplicateScore(incomingLead, candidateLead);
+          if (res.isMatch && res.score > topScore) {
+            topScore = res.score;
+            bestMatch = { id: docSnap.id, confidence: res.confidence, reasons: res.matchedCriteria };
+          }
+        });
+
+        return bestMatch;
+      } catch (e) {}
+    }
+
+    return null;
+  };
+
   // Run Preview Validation and Duplication checks
-  const runValidationAndDuplicates = async () => {
+  const runValidationAndDuplicates = async (overrideMatchKey?: string) => {
+    const activeMatchKey = overrideMatchKey || matchFieldKey;
     setIsValidating(true);
     setStep(4);
     
@@ -512,102 +682,8 @@ export function ImportLeadsClient() {
         compMatches[idx] = null;
       }
       
-      // 3. Duplicate Lead Check (Direct ID & internalid Field Lookup + Exact + Core Brand Prefix Query)
-      const rawIdVal = (getVal('prospectPlusId') || row['Internal ID'] || row['internalid'] || row['Prospect+ ID'] || row['prospectplusid'] || '')?.toString().trim();
-      let directDocSnap: any = null;
-      if (rawIdVal) {
-        try {
-          // 1. Try direct Document ID match
-          const idSnap = await getDoc(doc(firestore, 'leads', rawIdVal));
-          if (idSnap.exists()) {
-            directDocSnap = idSnap;
-          } else {
-            // 2. Query 'internalid', 'prospectPlusId', and 'customerEntityId' fields (both string & numeric)
-            const numVal = parseInt(rawIdVal, 10);
-            const queries = [
-              query(collection(firestore, 'leads'), where('internalid', '==', rawIdVal), limit(1)),
-              query(collection(firestore, 'leads'), where('prospectPlusId', '==', rawIdVal), limit(1)),
-              query(collection(firestore, 'leads'), where('customerEntityId', '==', rawIdVal), limit(1))
-            ];
-            if (!isNaN(numVal)) {
-              queries.push(query(collection(firestore, 'leads'), where('internalid', '==', numVal), limit(1)));
-              queries.push(query(collection(firestore, 'leads'), where('customerEntityId', '==', numVal), limit(1)));
-            }
-
-            const querySnaps = await Promise.all(queries.map(q => getDocs(q)));
-            for (const qSnap of querySnaps) {
-              if (!qSnap.empty) {
-                directDocSnap = qSnap.docs[0];
-                break;
-              }
-            }
-          }
-        } catch (e) {}
-      }
-
-      if (directDocSnap) {
-        duplicates[idx] = { id: directDocSnap.id, confidence: 'High', reasons: ['Internal ID Field Match'] };
-      } else if (companyName) {
-        try {
-          let coreBrand = extractCoreBrandName(companyName);
-          if (coreBrand && coreBrand.length < 3) {
-            const norm = normalizeCompanyName(companyName);
-            const words = norm.split(/\s+/);
-            coreBrand = words.slice(0, Math.min(words.length, 2)).join(' ');
-          }
-
-          const qExact = query(collection(firestore, 'leads'), where('companyName', '==', companyName), limit(5));
-          let qPrefix = null;
-          if (coreBrand && coreBrand.length >= 2) {
-            const coreUpper = coreBrand.charAt(0).toUpperCase() + coreBrand.slice(1);
-            qPrefix = query(
-              collection(firestore, 'leads'),
-              where('companyName', '>=', coreUpper),
-              where('companyName', '<=', coreUpper + '\uf8ff'),
-              limit(10)
-            );
-          }
-
-          const [exactSnap, prefixSnap] = await Promise.all([
-            getDocs(qExact),
-            qPrefix ? getDocs(qPrefix) : Promise.resolve({ docs: [] } as any)
-          ]);
-
-          const incomingLead = {
-            companyName,
-            customerServiceEmail: email,
-            customerPhone: phone,
-            abn: getVal('abn'),
-            address: {
-              street: getVal('street'),
-              city: getVal('city'),
-              state: getVal('state'),
-              zip: getVal('zip'),
-              country: 'Australia'
-            }
-          };
-
-          let bestMatch: { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null = null;
-          let topScore = 0;
-          const checkedIds = new Set<string>();
-
-          const docs = [...exactSnap.docs, ...prefixSnap.docs];
-          docs.forEach(docSnap => {
-            if (checkedIds.has(docSnap.id)) return;
-            checkedIds.add(docSnap.id);
-            const candidateLead = { id: docSnap.id, ...docSnap.data() };
-            const res = evaluateDuplicateScore(incomingLead, candidateLead);
-            if (res.isMatch && res.score > topScore) {
-              topScore = res.score;
-              bestMatch = { id: docSnap.id, confidence: res.confidence, reasons: res.matchedCriteria };
-            }
-          });
-
-          duplicates[idx] = bestMatch;
-        } catch (e) {
-          console.error('Duplication query error', e);
-        }
-      }
+      // 3. Duplicate Lead Check
+      duplicates[idx] = await findMatchingLead(row, getVal, companyName, activeMatchKey);
       
       // Extract contacts info for preview
       const c1First = getVal('contactFirstName');
@@ -683,99 +759,7 @@ export function ImportLeadsClient() {
         compMatches[actualIdx] = null;
       }
 
-      const rawIdVal = (getVal('prospectPlusId') || row['Internal ID'] || row['internalid'] || row['Prospect+ ID'] || row['prospectplusid'] || '')?.toString().trim();
-      let directDocSnap: any = null;
-      if (rawIdVal) {
-        try {
-          // 1. Try direct Document ID match
-          const idSnap = await getDoc(doc(firestore, 'leads', rawIdVal));
-          if (idSnap.exists()) {
-            directDocSnap = idSnap;
-          } else {
-            // 2. Query 'internalid', 'prospectPlusId', and 'customerEntityId' fields (both string & numeric)
-            const numVal = parseInt(rawIdVal, 10);
-            const queries = [
-              query(collection(firestore, 'leads'), where('internalid', '==', rawIdVal), limit(1)),
-              query(collection(firestore, 'leads'), where('prospectPlusId', '==', rawIdVal), limit(1)),
-              query(collection(firestore, 'leads'), where('customerEntityId', '==', rawIdVal), limit(1))
-            ];
-            if (!isNaN(numVal)) {
-              queries.push(query(collection(firestore, 'leads'), where('internalid', '==', numVal), limit(1)));
-              queries.push(query(collection(firestore, 'leads'), where('customerEntityId', '==', numVal), limit(1)));
-            }
-
-            const querySnaps = await Promise.all(queries.map(q => getDocs(q)));
-            for (const qSnap of querySnaps) {
-              if (!qSnap.empty) {
-                directDocSnap = qSnap.docs[0];
-                break;
-              }
-            }
-          }
-        } catch (e) {}
-      }
-
-      if (directDocSnap) {
-        duplicates[actualIdx] = { id: directDocSnap.id, confidence: 'High', reasons: ['Internal ID Field Match'] };
-      } else if (compName) {
-        try {
-          let coreBrand = extractCoreBrandName(compName);
-          if (coreBrand && coreBrand.length < 3) {
-            const norm = normalizeCompanyName(compName);
-            const words = norm.split(/\s+/);
-            coreBrand = words.slice(0, Math.min(words.length, 2)).join(' ');
-          }
-
-          const qExact = query(collection(firestore, 'leads'), where('companyName', '==', compName), limit(5));
-          let qPrefix = null;
-          if (coreBrand && coreBrand.length >= 2) {
-            const coreUpper = coreBrand.charAt(0).toUpperCase() + coreBrand.slice(1);
-            qPrefix = query(
-              collection(firestore, 'leads'),
-              where('companyName', '>=', coreUpper),
-              where('companyName', '<=', coreUpper + '\uf8ff'),
-              limit(10)
-            );
-          }
-
-          const [exactSnap, prefixSnap] = await Promise.all([
-            getDocs(qExact),
-            qPrefix ? getDocs(qPrefix) : Promise.resolve({ docs: [] } as any)
-          ]);
-
-          const incomingLead = {
-            companyName: compName,
-            customerServiceEmail: getVal('customerServiceEmail'),
-            customerPhone: getVal('customerPhone'),
-            abn: getVal('abn'),
-            address: {
-              street: getVal('street'),
-              city: getVal('city'),
-              state: getVal('state'),
-              zip: getVal('zip'),
-              country: 'Australia'
-            }
-          };
-
-          let bestMatch: { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null = null;
-          let topScore = 0;
-          const checkedIds = new Set<string>();
-
-          const docs = [...exactSnap.docs, ...prefixSnap.docs];
-          docs.forEach(docSnap => {
-            if (checkedIds.has(docSnap.id)) return;
-            checkedIds.add(docSnap.id);
-            const candidateLead = { id: docSnap.id, ...docSnap.data() };
-            const res = evaluateDuplicateScore(incomingLead, candidateLead);
-            if (res.isMatch && res.score > topScore) {
-              topScore = res.score;
-              bestMatch = { id: docSnap.id, confidence: res.confidence, reasons: res.matchedCriteria };
-            }
-          });
-
-          duplicates[actualIdx] = bestMatch;
-        } catch (e) {}
-      }
+      duplicates[actualIdx] = await findMatchingLead(row, getVal, compName, activeMatchKey);
     });
     
     await Promise.all(checks);
@@ -851,7 +835,10 @@ export function ImportLeadsClient() {
         }
 
         // Duplicate & Existing Customer handling
-        const isDuplicateMatch = duplicateLeads[rowIdx];
+        let isDuplicateMatch = duplicateLeads[rowIdx];
+        if (isDuplicateMatch === undefined) {
+          isDuplicateMatch = await findMatchingLead(row, getVal, companyName, matchFieldKey);
+        }
         const isExistingCustomerMatch = existingCompanyMatches[rowIdx];
 
         if ((isDuplicateMatch || isExistingCustomerMatch) && duplicateStrategy === 'skip') {
@@ -1750,27 +1737,58 @@ export function ImportLeadsClient() {
               </div>
             ) : (
               <>
-                {/* Duplicate strategy select */}
+                {/* Duplicate strategy & matching criteria selectors */}
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
                     <h4 className="font-bold text-amber-800 text-sm flex items-center gap-1.5">
                       <AlertTriangle className="h-4 w-4" /> Duplicates & Existing Customers ({duplicateCount} duplicate leads, {customerMatchCount} active customers detected)
                     </h4>
                     <p className="text-xs text-amber-700">
-                      We scanned the database for matching leads and active customer profiles. How would you like to handle matches?
+                      Configure your matching field criteria and decide how matching records should be processed during import.
                     </p>
                   </div>
                   
-                  <Select value={duplicateStrategy} onValueChange={(val) => setDuplicateStrategy(val as 'skip' | 'import' | 'update')}>
-                    <SelectTrigger className="w-[300px] bg-white border-amber-300 font-medium">
-                      <SelectValue placeholder="Strategy" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="skip">Skip duplicates & customers (Recommended)</SelectItem>
-                      <SelectItem value="update">Update existing lead records only (Do not create new leads)</SelectItem>
-                      <SelectItem value="import">Import all as new leads anyway (Flag matches)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+                    {/* Match Criteria Selection */}
+                    <div className="flex flex-col gap-1 w-full sm:w-auto text-left">
+                      <span className="text-[10px] uppercase font-bold text-amber-900">Match Lead Record By:</span>
+                      <Select 
+                        value={matchFieldKey} 
+                        onValueChange={(val) => {
+                          const keyVal = val as any;
+                          setMatchFieldKey(keyVal);
+                          runValidationAndDuplicates(keyVal);
+                        }}
+                      >
+                        <SelectTrigger className="w-full sm:w-[220px] bg-white border-amber-300 font-medium text-xs h-9">
+                          <SelectValue placeholder="Match Criteria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">Auto-Detect All Fields (Recommended)</SelectItem>
+                          <SelectItem value="internalId">NetSuite Internal ID (internalid)</SelectItem>
+                          <SelectItem value="prospectPlusId">Prospect+ ID (prospectPlusId)</SelectItem>
+                          <SelectItem value="customerEntityId">Customer Entity ID (customerEntityId)</SelectItem>
+                          <SelectItem value="abn">ABN (abn)</SelectItem>
+                          <SelectItem value="companyName">Company Name Only (companyName)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Duplicate Action Strategy */}
+                    <div className="flex flex-col gap-1 w-full sm:w-auto text-left">
+                      <span className="text-[10px] uppercase font-bold text-amber-900">Handling Strategy:</span>
+                      <Select value={duplicateStrategy} onValueChange={(val) => setDuplicateStrategy(val as 'skip' | 'import' | 'update')}>
+                        <SelectTrigger className="w-full sm:w-[260px] bg-white border-amber-300 font-medium text-xs h-9">
+                          <SelectValue placeholder="Strategy" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="skip">Skip duplicates & customers (Recommended)</SelectItem>
+                          <SelectItem value="update">Update existing lead records only (Do not create new leads)</SelectItem>
+                          <SelectItem value="import">Import all as new leads anyway (Flag matches)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Table Preview */}
