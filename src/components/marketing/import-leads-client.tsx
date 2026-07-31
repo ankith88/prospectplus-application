@@ -1272,7 +1272,7 @@ export function ImportLeadsClient() {
                   <SelectContent>
                     <SelectItem value="Auto-resolve">Auto-resolve from Address Postcode</SelectItem>
                     <SelectItem value="MailPlus Pty Ltd">MailPlus Pty Ltd (Corporate/Fallback)</SelectItem>
-                    {franchisees.map((f) => (
+                    {franchisees.filter(f => f.internalId && f.internalId.trim()).map((f) => (
                       <SelectItem key={f.internalId} value={f.internalId}>{f.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1292,7 +1292,7 @@ export function ImportLeadsClient() {
                         <SelectValue placeholder="Select or type campaign name" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableCampaigns.map((c) => (
+                        {availableCampaigns.filter(c => c.name && c.name.trim()).map((c) => (
                           <SelectItem key={c.id} value={c.name}>
                             {c.name} {c.isBuiltIn ? '(Built-In)' : ''}
                           </SelectItem>
@@ -1341,7 +1341,7 @@ export function ImportLeadsClient() {
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
                     <SelectItem value="none">None (Import as standalone leads)</SelectItem>
-                    {parentAccounts.map((p) => (
+                    {parentAccounts.filter(p => p.id && p.id.trim()).map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         [{p.type === 'company' ? 'Customer' : 'Parent Lead'}{p.prospectPlusId ? ` · ${p.prospectPlusId}` : ''}] {p.companyName}
                       </SelectItem>
@@ -1370,7 +1370,7 @@ export function ImportLeadsClient() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="unassigned">Unassigned</SelectItem>
-                            {activeDialers.map((d) => (
+                            {activeDialers.filter(d => (d.displayName || d.email) && (d.displayName || d.email)?.trim()).map((d) => (
                               <SelectItem key={d.uid} value={d.displayName || d.email}>{d.displayName || d.email}</SelectItem>
                             ))}
                           </SelectContent>
@@ -1402,7 +1402,7 @@ export function ImportLeadsClient() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">Select Field Rep</SelectItem>
-                            {activeFieldReps.map((r) => (
+                            {activeFieldReps.filter(r => (r.displayName || r.email) && (r.displayName || r.email)?.trim()).map((r) => (
                               <SelectItem key={r.uid} value={r.displayName || r.email}>{r.displayName || r.email}</SelectItem>
                             ))}
                           </SelectContent>
@@ -1448,7 +1448,7 @@ export function ImportLeadsClient() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Select AM</SelectItem>
-                          {activeAMs.map((am) => (
+                          {activeAMs.filter(am => (am.displayName || am.email) && (am.displayName || am.email)?.trim()).map((am) => (
                             <SelectItem key={am.uid} value={am.displayName || am.email}>{am.displayName || am.email}</SelectItem>
                           ))}
                         </SelectContent>
@@ -1465,7 +1465,7 @@ export function ImportLeadsClient() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Select CS Rep</SelectItem>
-                          {activeCS.map((cs) => (
+                          {activeCS.filter(cs => (cs.displayName || cs.email) && (cs.displayName || cs.email)?.trim()).map((cs) => (
                             <SelectItem key={cs.uid} value={cs.displayName || cs.email}>{cs.displayName || cs.email}</SelectItem>
                           ))}
                         </SelectContent>
@@ -1481,7 +1481,7 @@ export function ImportLeadsClient() {
                           <SelectValue placeholder="Select Nurture Campaign" />
                         </SelectTrigger>
                         <SelectContent>
-                          {journeys.map((j) => (
+                          {journeys.filter(j => j.id && j.id.trim()).map((j) => (
                             <SelectItem key={j.id} value={j.id}>{j.name}</SelectItem>
                           ))}
                           {journeys.length === 0 && (
@@ -1593,7 +1593,7 @@ export function ImportLeadsClient() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__none__">[ Do not import ]</SelectItem>
-                              {csvHeaders.map((header) => (
+                              {csvHeaders.filter(header => header && header.trim().length > 0).map((header) => (
                                 <SelectItem key={header} value={header}>{header}</SelectItem>
                               ))}
                             </SelectContent>
