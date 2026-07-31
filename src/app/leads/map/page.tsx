@@ -7,10 +7,11 @@ import { useEffect } from 'react';
 import { Loader } from '@/components/ui/loader';
 
 export default function TerritoryMapPage() {
-  const { userProfile, loading } = useAuth();
+  const { userProfile, isSuperAdmin, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.activeRole && userProfile.activeRole !== 'user' && userProfile.activeRole.toLowerCase() !== 'user' && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen', 'Lead Gen Admin', 'Account Manager', 'Account Managers', 'account managers', 'Customer Service', 'Customer Success', 'customer_success'].includes(userProfile.activeRole);
+  const allowedRoles = ['admin', 'super user', 'superadmin', 'Franchisee', 'franchisee', 'Lead Gen', 'Lead Gen Admin', 'Dashback'];
+  const hasAccess = isSuperAdmin || (userProfile?.activeRole && allowedRoles.includes(userProfile.activeRole));
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -31,8 +32,8 @@ export default function TerritoryMapPage() {
   return (
     <div className="flex flex-col gap-6 h-full">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Territory Map</h1>
-        <p className="text-muted-foreground">Visualize your leads and signed customers on the map.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Route Planner Map</h1>
+        <p className="text-muted-foreground">Plan sales routes and visualize leads and signed customers on the map.</p>
       </header>
       <LeadsMapClient />
     </div>

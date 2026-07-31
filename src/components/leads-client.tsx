@@ -28,7 +28,7 @@ import { useDialingSession } from '@/hooks/use-dialing-session'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, addLeadsToMarketingList } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles } from 'lucide-react'
+import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { firestore } from '@/lib/firebase'
@@ -80,7 +80,30 @@ import { canReassignLead, canChangeBucket, isAccountManagerUser } from '@/lib/le
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
-type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'prospectPlusId' | 'customerStatus';
+type SortableLeadKeys = 'companyName' | 'status' | 'prospectPlusId' | 'customerStatus' | 'customerSource';
+
+export function getProspectPlusId(lead: Partial<Lead> & Record<string, any>): string {
+  const pid = lead.prospectPlusId || lead.prospectplusId || lead.prospect_plus_id;
+  if (pid && String(pid).trim() !== '' && String(pid).trim() !== 'undefined') {
+    return String(pid).trim();
+  }
+  const entityId = lead.customerEntityId || lead.entityId;
+  if (entityId && String(entityId).trim() !== '' && String(entityId).trim() !== 'undefined') {
+    return String(entityId).trim();
+  }
+  const internalId = lead.internalid || (lead as any).salesRecordInternalId || lead.id;
+  if (internalId && String(internalId).trim() !== '' && String(internalId).trim() !== 'undefined') {
+    return String(internalId).trim();
+  }
+  return 'N/A';
+}
+
+export function hasLeadContact(lead: Partial<Lead> & Record<string, any>): boolean {
+  if (typeof lead.contactCount === 'number' && lead.contactCount > 0) return true;
+  if (Array.isArray(lead.contacts) && lead.contacts.length > 0) return true;
+  if (lead.customerServiceEmail || lead.customerPhone || lead.contactName || lead.contactEmail || lead.contactPhone) return true;
+  return false;
+}
 type ExpandedLeadDetails = {
     note: Note | null;
     activity: Activity | null;
@@ -601,6 +624,7 @@ export default function LeadsClientPage({
     campaign: 'all',
     suburb: '',
     dateLeadEntered: undefined as DateRange | undefined,
+    dateDialerAssigned: undefined as DateRange | undefined,
     source: [] as string[],
     entityId: '',
     bucket: initialBucket,
@@ -838,6 +862,7 @@ export default function LeadsClientPage({
       campaign: 'all',
       suburb: '',
       dateLeadEntered: undefined,
+      dateDialerAssigned: undefined,
       source: [],
       entityId: '',
       bucket: initialBucket,
@@ -892,17 +917,29 @@ export default function LeadsClientPage({
         
       const parsedDate = parseDateString(lead.dateLeadEntered);
       const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (parsedDate && parsedDate >= startOfDay(filters.dateLeadEntered.from) && parsedDate <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
+      const parsedDialerDate = parseDateString(lead.assignedToDialerAt);
+      const dateDialerAssignedMatch = !filters.dateDialerAssigned?.from || (parsedDialerDate && parsedDialerDate >= startOfDay(filters.dateDialerAssigned.from) && parsedDialerDate <= endOfDay(filters.dateDialerAssigned.to || filters.dateDialerAssigned.from));
       const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
       const entityIdMatch = filters.entityId ? lead.entityId?.toLowerCase().includes(filters.entityId.toLowerCase()) : true;
       const customerStatusMatch = filters.customerStatus.length === 0 || (lead.customerStatus && filters.customerStatus.includes(lead.customerStatus));
 
-      return !isArchived && !isFieldSalesLead && companyNameMatch && prospectPlusIdMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && sourceMatch && entityIdMatch && bucketMatch && customerStatusMatch;
+      return !isArchived && !isFieldSalesLead && companyNameMatch && prospectPlusIdMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && dateDialerAssignedMatch && sourceMatch && entityIdMatch && bucketMatch && customerStatusMatch;
     });
 
     if (sortConfig !== null) {
       leads.sort((a, b) => {
-        let aValue = a[sortConfig.key as keyof Lead] ?? '';
-        let bValue = b[sortConfig.key as keyof Lead] ?? '';
+        let aValue: any = '';
+        let bValue: any = '';
+        if (sortConfig.key === 'prospectPlusId') {
+          aValue = getProspectPlusId(a);
+          bValue = getProspectPlusId(b);
+        } else if (sortConfig.key === 'customerSource') {
+          aValue = a.customerSource || '';
+          bValue = b.customerSource || '';
+        } else {
+          aValue = a[sortConfig.key as keyof Lead] ?? '';
+          bValue = b[sortConfig.key as keyof Lead] ?? '';
+        }
         if (aValue < bValue) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
@@ -1868,6 +1905,23 @@ export default function LeadsClientPage({
                         </div>
 
                         <div className="space-y-2">
+                            <Label htmlFor="dateDialerAssigned">Date Dialer Assigned</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button id="dateDialerAssigned" variant="outline" className="w-full h-10 px-3 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                        <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                                        <span className="truncate">
+                                            {filters.dateDialerAssigned?.from ? (filters.dateDialerAssigned.to ? <>{format(filters.dateDialerAssigned.from, "LLL dd, y")} - {format(filters.dateDialerAssigned.to, "LLL dd, y")}</> : format(filters.dateDialerAssigned.from, "LLL dd, y")) : "Pick a date"}
+                                        </span>
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start">
+                                    <Calendar mode="range" selected={filters.dateDialerAssigned} onSelect={(date) => handleFilterChange('dateDialerAssigned', date)} initialFocus />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+
+                        <div className="space-y-2">
                             <Label htmlFor="customerStatus">Status</Label>
                             <MultiSelectCombobox
                                 options={uniqueCustomerStatuses}
@@ -1951,9 +2005,12 @@ export default function LeadsClientPage({
            ) : myLeads.length > 0 ? (
             <Accordion id="step-leads-table" type="single" collapsible defaultValue="my-leads" className="w-full space-y-2">
               {Object.entries(groupedMyLeads).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => {
+                const sortedLeads = status === 'New' 
+                   ? [...leads].sort((a, b) => (hasLeadContact(b) ? 1 : 0) - (hasLeadContact(a) ? 1 : 0))
+                   : leads;
                 const currentPage = myLeadsPagination[status] || 1;
-                const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
-                const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
+                const totalPages = Math.ceil(sortedLeads.length / LEADS_PER_PAGE);
+                const paginatedLeads = sortedLeads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
                 const isAllInGroupSelected = leads.length > 0 && leads.every(l => selectedLeads.includes(l.id));
 
                 return (
@@ -1998,9 +2055,8 @@ export default function LeadsClientPage({
                                         <TableHead className="px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('prospectPlusId')} className="group -ml-4">Prospect+ ID{getSortIndicator('prospectPlusId')}</Button></TableHead>
                                         <TableHead className="px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
                                         <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
-                                        <TableHead className="hidden sm:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
-                                        <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
-                                        <TableHead className="hidden lg:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('customerStatus')} className="group -ml-4">Status{getSortIndicator('customerStatus')}</Button></TableHead>
+                                        <TableHead className="hidden md:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('customerSource')} className="group -ml-4">Source{getSortIndicator('customerSource')}</Button></TableHead>
+                                        <TableHead className="hidden md:table-cell px-2 md:px-4">Contact</TableHead>
                                         <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -2016,7 +2072,7 @@ export default function LeadsClientPage({
                                                 />
                                             </TableCell>
                                             <TableCell className="px-2 md:px-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
-                                                {lead.prospectPlusId || 'N/A'}
+                                                {getProspectPlusId(lead)}
                                             </TableCell>
                                             <TableCell className="px-2 md:px-4">
                                                 <DropdownMenu>
@@ -2059,14 +2115,20 @@ export default function LeadsClientPage({
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
-                                            <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
-                                            <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
-                                            <TableCell className="hidden lg:table-cell px-2 md:px-4">
-                                                {lead.customerStatus ? (
-                                                    <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200">
-                                                        {lead.customerStatus}
+                                            <TableCell className="text-center px-2 md:px-4 font-medium text-xs text-slate-700">{getCallCount(lead)}</TableCell>
+                                            <TableCell className="hidden md:table-cell px-2 md:px-4 font-medium text-xs text-slate-700">{lead.customerSource || 'N/A'}</TableCell>
+                                            <TableCell className="hidden md:table-cell px-2 md:px-4">
+                                                {hasLeadContact(lead) ? (
+                                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 w-fit">
+                                                        <UserCheck className="w-3 h-3 text-emerald-600" />
+                                                        Has Contact
                                                     </Badge>
-                                                ) : 'N/A'}
+                                                ) : (
+                                                    <Badge variant="outline" className="bg-slate-100/80 text-slate-500 border-slate-200 flex items-center gap-1 w-fit">
+                                                        <UserX className="w-3 h-3 text-slate-400" />
+                                                        No Contact
+                                                    </Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-right px-2 md:px-4">
                                                 <div className="hidden md:inline-flex">
@@ -2087,7 +2149,7 @@ export default function LeadsClientPage({
                                         </TableRow>
                                         {expandedDetails[lead.id] && (
                                             <TableRow>
-                                                <TableCell colSpan={8} className="p-0">
+                                                <TableCell colSpan={7} className="p-0">
                                                     <div className="p-4 bg-secondary/50">
                                                         {expandedDetails[lead.id].loading ? (
                                                             <Loader />
@@ -2235,10 +2297,13 @@ export default function LeadsClientPage({
                     <AccordionContent className="pt-2">
                        <Accordion type="multiple" className="w-full space-y-1">
                           {Object.entries(statusGroups).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => {
+                              const sortedLeads = status === 'New' 
+                                 ? [...leads].sort((a, b) => (hasLeadContact(b) ? 1 : 0) - (hasLeadContact(a) ? 1 : 0))
+                                 : leads;
                               const groupKey = `${dialer}-${status}`;
                               const currentPage = paginationState[groupKey] || 1;
-                              const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
-                              const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
+                              const totalPages = Math.ceil(sortedLeads.length / LEADS_PER_PAGE);
+                              const paginatedLeads = sortedLeads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
                               const areAllInGroupSelected = leads.length > 0 && leads.every(l => selectedLeads.includes(l.id));
  
                               return (
@@ -2268,9 +2333,8 @@ export default function LeadsClientPage({
                                                     <TableHead className="px-2 md:px-4">Prospect+ ID</TableHead>
                                                     <TableHead className="px-2 md:px-4">Company</TableHead>
                                                     <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
-                                                    <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
-                                                    <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
-                                                    <TableHead className="hidden lg:table-cell px-2 md:px-4">Status</TableHead>
+                                                    <TableHead className="hidden md:table-cell px-2 md:px-4">Source</TableHead>
+                                                    <TableHead className="hidden md:table-cell px-2 md:px-4">Contact</TableHead>
                                                     <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                                 </TableRow>
                                             </TableHeader>
@@ -2286,18 +2350,23 @@ export default function LeadsClientPage({
                                                         />
                                                     </TableCell>
                                                     <TableCell className="px-2 md:px-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
-                                                        {lead.prospectPlusId || 'N/A'}
+                                                        {getProspectPlusId(lead)}
                                                     </TableCell>
                                                     <TableCell className="px-2 md:px-4"><Button variant="link" className="p-0 h-auto text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
                                                     <TableCell className="px-2 md:px-4 text-center"><CallAttemptBadge attempts={getCallCount(lead)} variant="default" /></TableCell>
-                                                    <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
-                                                    <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
-                                                    <TableCell className="hidden lg:table-cell px-2 md:px-4">
-                                                        {lead.customerStatus ? (
-                                                            <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200">
-                                                                {lead.customerStatus}
+                                                    <TableCell className="hidden md:table-cell px-2 md:px-4 font-medium text-xs text-slate-700">{lead.customerSource || 'N/A'}</TableCell>
+                                                    <TableCell className="hidden md:table-cell px-2 md:px-4">
+                                                        {hasLeadContact(lead) ? (
+                                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 w-fit">
+                                                                <UserCheck className="w-3 h-3 text-emerald-600" />
+                                                                Has Contact
                                                             </Badge>
-                                                        ) : 'N/A'}
+                                                        ) : (
+                                                            <Badge variant="outline" className="bg-slate-100/80 text-slate-500 border-slate-200 flex items-center gap-1 w-fit">
+                                                                <UserX className="w-3 h-3 text-slate-400" />
+                                                                No Contact
+                                                            </Badge>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell className="text-right px-2 md:px-4">
                                                          <div className="hidden md:inline-flex">
@@ -2328,7 +2397,7 @@ export default function LeadsClientPage({
                                                 </TableRow>
                                                 {expandedDetails[lead.id] && (
                                                     <TableRow>
-                                                        <TableCell colSpan={8} className="p-0">
+                                                        <TableCell colSpan={7} className="p-0">
                                                             <div className="p-4 bg-secondary/50">
                                                                 {expandedDetails[lead.id].loading ? (
                                                                     <Loader />
@@ -2468,10 +2537,13 @@ export default function LeadsClientPage({
            ) : unassignedLeads.length > 0 ? (
             <Accordion type="multiple" defaultValue={['New']} className="w-full space-y-2">
               {Object.entries(groupedUnassignedLeads).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => {
+                const sortedLeads = status === 'New' 
+                  ? [...leads].sort((a, b) => (hasLeadContact(b) ? 1 : 0) - (hasLeadContact(a) ? 1 : 0))
+                  : leads;
                 const groupKey = `unassigned-${status}`;
                 const currentPage = paginationState[groupKey] || 1;
-                const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
-                const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
+                const totalPages = Math.ceil(sortedLeads.length / LEADS_PER_PAGE);
+                const paginatedLeads = sortedLeads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
                 const isAllInGroupSelected = leads.length > 0 && leads.every(l => selectedLeads.includes(l.id));
 
                 return (
@@ -2501,9 +2573,8 @@ export default function LeadsClientPage({
                                         <TableHead className="px-2 md:px-4">Prospect+ ID</TableHead>
                                         <TableHead className="px-2 md:px-4">Company</TableHead>
                                         <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
-                                        <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
-                                        <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
-                                        <TableHead className="hidden lg:table-cell px-2 md:px-4">Status</TableHead>
+                                        <TableHead className="hidden md:table-cell px-2 md:px-4">Source</TableHead>
+                                        <TableHead className="hidden md:table-cell px-2 md:px-4">Contact</TableHead>
                                         <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -2518,7 +2589,7 @@ export default function LeadsClientPage({
                                                 />
                                             </TableCell>
                                             <TableCell className="px-2 md:px-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
-                                                {lead.prospectPlusId || 'N/A'}
+                                                {getProspectPlusId(lead)}
                                             </TableCell>
                                             <TableCell className="px-2 md:px-4">
                                                 <Button variant="link" className="p-0 h-auto text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
@@ -2526,14 +2597,19 @@ export default function LeadsClientPage({
                                                 </Button>
                                             </TableCell>
                                             <TableCell className="px-2 md:px-4 text-center"><CallAttemptBadge attempts={getCallCount(lead)} variant="default" /></TableCell>
-                                            <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
-                                            <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
-                                            <TableCell className="hidden lg:table-cell px-2 md:px-4">
-                                                {lead.customerStatus ? (
-                                                    <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200">
-                                                        {lead.customerStatus}
+                                            <TableCell className="hidden md:table-cell px-2 md:px-4 font-medium text-xs text-slate-700">{lead.customerSource || 'N/A'}</TableCell>
+                                            <TableCell className="hidden md:table-cell px-2 md:px-4">
+                                                {hasLeadContact(lead) ? (
+                                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 w-fit">
+                                                        <UserCheck className="w-3 h-3 text-emerald-600" />
+                                                        Has Contact
                                                     </Badge>
-                                                ) : 'N/A'}
+                                                ) : (
+                                                    <Badge variant="outline" className="bg-slate-100/80 text-slate-500 border-slate-200 flex items-center gap-1 w-fit">
+                                                        <UserX className="w-3 h-3 text-slate-400" />
+                                                        No Contact
+                                                    </Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-right px-2 md:px-4">
                                                 <DropdownMenu>

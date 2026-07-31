@@ -20,25 +20,13 @@ export default function HomePage() {
     }
 
     if (userProfile) {
-      switch (userProfile.activeRole) {
+      switch (userProfile.activeRole as string) {
         case 'admin':
+        case 'super user':
         case 'Sales Manager':
-          router.replace('/admin/dashboard');
-          break;
-        case 'Account Managers':
-        case 'Account Manager':
-        case 'account managers':
-          router.replace('/account-manager/pipeline');
-          break;
-        case 'Customer Success':
-          router.replace('/customer-success/pipeline');
-          break;
-        case 'Customer Service':
-          router.replace('/admin/tickets');
-          break;
         case 'Marketing Admin':
         case 'Marketing Manager':
-          router.replace('/admin/marketing');
+          router.replace('/account-lookup');
           break;
         case 'Field Sales':
         case 'Field Sales Admin':

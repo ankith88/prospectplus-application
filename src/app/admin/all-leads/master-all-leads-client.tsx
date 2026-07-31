@@ -126,7 +126,7 @@ export function MasterAllLeadsClient() {
     const role = userProfile?.activeRole || userProfile?.role || ''
     if (role === 'user' || role.toLowerCase() === 'user') return false
     if (isSuperAdmin) return true
-    return ['admin', 'super user', 'Sales Manager', 'Marketing Admin', 'Marketing Manager', 'Outbound Admin'].includes(role)
+    return ['admin', 'super user', 'Sales Manager', 'Marketing Admin', 'Marketing Manager'].includes(role)
   }, [isSuperAdmin, userProfile])
 
   const [leads, setLeads] = useState<Lead[]>([])

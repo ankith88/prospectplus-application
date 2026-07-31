@@ -955,6 +955,7 @@ export function ImportLeadsClient() {
         // Bucket & Assignments config
         const leadData: any = {
           companyName,
+          ...(getVal('prospectPlusId') && { prospectPlusId: getVal('prospectPlusId') }),
           ...(getVal('websiteUrl') && { websiteUrl: getVal('websiteUrl') }),
           ...(getVal('customerPhone') && { customerPhone: getVal('customerPhone') }),
           ...(getVal('customerServiceEmail') && { customerServiceEmail: getVal('customerServiceEmail') }),
