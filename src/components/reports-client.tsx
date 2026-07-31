@@ -1241,7 +1241,9 @@ export default function ReportsClientPage({
             statusLower.includes('rejected') || 
             statusLower.includes('customer') ||
             statusLower.includes('unqualified') ||
-            statusLower.includes('dnc');
+            statusLower.includes('dnc') ||
+            statusLower.includes('out of territory') ||
+            statusLower.includes('future follow');
 
         if (!isClosed) {
             let activityDates: Date[] = [];

@@ -724,8 +724,16 @@ export default function InboundReportsClientPage({
 
     filteredLeads.forEach(lead => {
         const entered = parseDateString(lead.dateLeadEntered);
-        const normalizedCustomerStatus = (lead.customerStatus || '').toLowerCase();
-        const isClosed = normalizedCustomerStatus.includes('won') || normalizedCustomerStatus.includes('lost') || normalizedCustomerStatus.includes('dead') || normalizedCustomerStatus.includes('rejected') || normalizedCustomerStatus.includes('customer') || normalizedCustomerStatus.includes('signed');
+        const normalizedCustomerStatus = (lead.customerStatus || lead.status || '').toLowerCase();
+        const isClosed = 
+            normalizedCustomerStatus.includes('won') || 
+            normalizedCustomerStatus.includes('lost') || 
+            normalizedCustomerStatus.includes('dead') || 
+            normalizedCustomerStatus.includes('rejected') || 
+            normalizedCustomerStatus.includes('customer') || 
+            normalizedCustomerStatus.includes('signed') ||
+            normalizedCustomerStatus.includes('out of territory') ||
+            normalizedCustomerStatus.includes('future follow');
         const isHotLead = lead.customerStatus === 'Hot Lead';
         
         // Collect all activity dates
@@ -2195,7 +2203,7 @@ export default function InboundReportsClientPage({
                         title: "Stale Leads", 
                         leads: stats.staleLeadsList
                     })}
-                    helpContent="Inbound leads that have been in an open, non-closed status for more than 56 business hours (7 working days, 9am-5pm Mon-Fri Sydney time) without any manual activities or emails logged."
+                    helpContent="Inbound leads that have been in an open status (excluding closed, Out of Territory, and Future Follow-up) for more than 56 business hours (7 working days, 9am-5pm Mon-Fri Sydney time) without any manual activities or emails logged."
                 />
                 <StatCard 
                     title="Avg Time to Close" 
