@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import Papa from 'papaparse';
 import { 
   Briefcase, Inbox, Archive, PlusCircle, ArrowLeft, ArrowRight, Upload, 
-  CheckCircle2, AlertTriangle, Play, HelpCircle, Download, FileSpreadsheet, Loader2, Check 
+  CheckCircle2, AlertTriangle, Play, HelpCircle, Download, FileSpreadsheet, Loader2, Check, FileText 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -137,6 +137,15 @@ export function ImportLeadsClient() {
     failed: 0,
     total: 0
   });
+  const [importLogRecords, setImportLogRecords] = useState<Array<{
+    rowNum: number;
+    companyName: string;
+    internalId?: string;
+    status: 'Created' | 'Updated' | 'Skipped' | 'Failed';
+    details: string;
+  }>>([]);
+  const [logFilter, setLogFilter] = useState<'all' | 'Created' | 'Updated' | 'Skipped' | 'Failed'>('all');
+  const [logSearch, setLogSearch] = useState('');
 
   const requiredFields = useMemo(() => standardFields.filter(f => f.required), []);
   const missingRequiredMappings = useMemo(() => {
@@ -503,20 +512,41 @@ export function ImportLeadsClient() {
         compMatches[idx] = null;
       }
       
-      // 3. Duplicate Lead Check (Direct ID Lookup + Exact + Core Brand Prefix Query)
+      // 3. Duplicate Lead Check (Direct ID & internalid Field Lookup + Exact + Core Brand Prefix Query)
       const rawIdVal = (getVal('prospectPlusId') || row['Internal ID'] || row['internalid'] || row['Prospect+ ID'] || row['prospectplusid'] || '')?.toString().trim();
       let directDocSnap: any = null;
       if (rawIdVal) {
         try {
+          // 1. Try direct Document ID match
           const idSnap = await getDoc(doc(firestore, 'leads', rawIdVal));
           if (idSnap.exists()) {
             directDocSnap = idSnap;
+          } else {
+            // 2. Query 'internalid', 'prospectPlusId', and 'customerEntityId' fields (both string & numeric)
+            const numVal = parseInt(rawIdVal, 10);
+            const queries = [
+              query(collection(firestore, 'leads'), where('internalid', '==', rawIdVal), limit(1)),
+              query(collection(firestore, 'leads'), where('prospectPlusId', '==', rawIdVal), limit(1)),
+              query(collection(firestore, 'leads'), where('customerEntityId', '==', rawIdVal), limit(1))
+            ];
+            if (!isNaN(numVal)) {
+              queries.push(query(collection(firestore, 'leads'), where('internalid', '==', numVal), limit(1)));
+              queries.push(query(collection(firestore, 'leads'), where('customerEntityId', '==', numVal), limit(1)));
+            }
+
+            const querySnaps = await Promise.all(queries.map(q => getDocs(q)));
+            for (const qSnap of querySnaps) {
+              if (!qSnap.empty) {
+                directDocSnap = qSnap.docs[0];
+                break;
+              }
+            }
           }
         } catch (e) {}
       }
 
       if (directDocSnap) {
-        duplicates[idx] = { id: directDocSnap.id, confidence: 'High', reasons: ['Internal ID Match'] };
+        duplicates[idx] = { id: directDocSnap.id, confidence: 'High', reasons: ['Internal ID Field Match'] };
       } else if (companyName) {
         try {
           let coreBrand = extractCoreBrandName(companyName);
@@ -657,15 +687,36 @@ export function ImportLeadsClient() {
       let directDocSnap: any = null;
       if (rawIdVal) {
         try {
+          // 1. Try direct Document ID match
           const idSnap = await getDoc(doc(firestore, 'leads', rawIdVal));
           if (idSnap.exists()) {
             directDocSnap = idSnap;
+          } else {
+            // 2. Query 'internalid', 'prospectPlusId', and 'customerEntityId' fields (both string & numeric)
+            const numVal = parseInt(rawIdVal, 10);
+            const queries = [
+              query(collection(firestore, 'leads'), where('internalid', '==', rawIdVal), limit(1)),
+              query(collection(firestore, 'leads'), where('prospectPlusId', '==', rawIdVal), limit(1)),
+              query(collection(firestore, 'leads'), where('customerEntityId', '==', rawIdVal), limit(1))
+            ];
+            if (!isNaN(numVal)) {
+              queries.push(query(collection(firestore, 'leads'), where('internalid', '==', numVal), limit(1)));
+              queries.push(query(collection(firestore, 'leads'), where('customerEntityId', '==', numVal), limit(1)));
+            }
+
+            const querySnaps = await Promise.all(queries.map(q => getDocs(q)));
+            for (const qSnap of querySnaps) {
+              if (!qSnap.empty) {
+                directDocSnap = qSnap.docs[0];
+                break;
+              }
+            }
           }
         } catch (e) {}
       }
 
       if (directDocSnap) {
-        duplicates[actualIdx] = { id: directDocSnap.id, confidence: 'High', reasons: ['Internal ID Match'] };
+        duplicates[actualIdx] = { id: directDocSnap.id, confidence: 'High', reasons: ['Internal ID Field Match'] };
       } else if (compName) {
         try {
           let coreBrand = extractCoreBrandName(compName);
@@ -747,6 +798,14 @@ export function ImportLeadsClient() {
     let skippedCount = 0;
     let failedCount = 0;
     
+    const importLogs: Array<{
+      rowNum: number;
+      companyName: string;
+      internalId?: string;
+      status: 'Created' | 'Updated' | 'Skipped' | 'Failed';
+      details: string;
+    }> = [];
+    
     const total = csvRows.length;
     const authorName = userProfile?.displayName || 'System Bulk Importer';
     const nowStr = new Date().toISOString();
@@ -782,6 +841,12 @@ export function ImportLeadsClient() {
         
         if (hasMissingRequired) {
           failedCount++;
+          importLogs.push({
+            rowNum: rowIdx + 1,
+            companyName: companyName || `Row ${rowIdx + 1}`,
+            status: 'Failed',
+            details: 'Missing required company name or required fields'
+          });
           continue;
         }
 
@@ -791,6 +856,26 @@ export function ImportLeadsClient() {
 
         if ((isDuplicateMatch || isExistingCustomerMatch) && duplicateStrategy === 'skip') {
           skippedCount++;
+          importLogs.push({
+            rowNum: rowIdx + 1,
+            companyName: companyName || `Row ${rowIdx + 1}`,
+            internalId: isDuplicateMatch?.id || isExistingCustomerMatch?.id,
+            status: 'Skipped',
+            details: isExistingCustomerMatch
+              ? `Existing active customer (${isExistingCustomerMatch.name}) skipped`
+              : `Duplicate lead record (${isDuplicateMatch?.id}) skipped`
+          });
+          continue;
+        }
+
+        if (duplicateStrategy === 'update' && !isDuplicateMatch) {
+          skippedCount++;
+          importLogs.push({
+            rowNum: rowIdx + 1,
+            companyName: companyName || `Row ${rowIdx + 1}`,
+            status: 'Skipped',
+            details: 'No matching lead record found in database to update'
+          });
           continue;
         }
 
@@ -1072,8 +1157,22 @@ export function ImportLeadsClient() {
 
         if (isUpdatingExistingLead) {
           updatedCount++;
+          importLogs.push({
+            rowNum: rowIdx + 1,
+            companyName: companyName || `Row ${rowIdx + 1}`,
+            internalId: leadRef.id,
+            status: 'Updated',
+            details: `Updated existing lead record (${leadRef.id})`
+          });
         } else {
           successCount++;
+          importLogs.push({
+            rowNum: rowIdx + 1,
+            companyName: companyName || `Row ${rowIdx + 1}`,
+            internalId: leadRef.id,
+            status: 'Created',
+            details: `Created new lead record (${leadRef.id})`
+          });
         }
       }
 
@@ -1095,6 +1194,7 @@ export function ImportLeadsClient() {
       });
     }
 
+    setImportLogRecords(importLogs);
     setIsImporting(false);
     setStep(5);
     toast({ 
@@ -1667,8 +1767,8 @@ export function ImportLeadsClient() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="skip">Skip duplicates & customers (Recommended)</SelectItem>
-                      <SelectItem value="update">Update existing lead records with CSV data</SelectItem>
-                      <SelectItem value="import">Import as new leads anyway (Flag matches)</SelectItem>
+                      <SelectItem value="update">Update existing lead records only (Do not create new leads)</SelectItem>
+                      <SelectItem value="import">Import all as new leads anyway (Flag matches)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1871,6 +1971,115 @@ export function ImportLeadsClient() {
                     <div className="text-[10px] text-slate-500 font-bold uppercase">Failed</div>
                   </div>
                 </div>
+
+                {/* Detailed Import Results Summary Log Table */}
+                {importLogRecords.length > 0 && (
+                  <div className="mt-6 border rounded-lg overflow-hidden text-left bg-white shadow-sm">
+                    <div className="p-4 bg-slate-50 border-b flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-[#095c7b]" /> Import Action Audit Log ({importLogRecords.length} Rows)
+                        </h4>
+                        <p className="text-[11px] text-slate-500">Detailed list of every CSV row processed, showing whether it was created, updated, skipped, or failed.</p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input 
+                          placeholder="Search company or ID..." 
+                          value={logSearch}
+                          onChange={(e) => setLogSearch(e.target.value)}
+                          className="h-8 text-xs w-44 bg-white"
+                        />
+
+                        <div className="flex bg-slate-200/80 p-0.5 rounded-md text-[11px] font-semibold text-slate-600">
+                          <button 
+                            type="button"
+                            onClick={() => setLogFilter('all')} 
+                            className={`px-2 py-0.5 rounded ${logFilter === 'all' ? 'bg-white shadow text-slate-900 font-bold' : 'hover:text-slate-900'}`}
+                          >
+                            All ({importLogRecords.length})
+                          </button>
+                          {importStats.success > 0 && (
+                            <button 
+                              type="button"
+                              onClick={() => setLogFilter('Created')} 
+                              className={`px-2 py-0.5 rounded ${logFilter === 'Created' ? 'bg-green-600 text-white font-bold' : 'hover:text-slate-900'}`}
+                            >
+                              Created ({importStats.success})
+                            </button>
+                          )}
+                          {importStats.updated > 0 && (
+                            <button 
+                              type="button"
+                              onClick={() => setLogFilter('Updated')} 
+                              className={`px-2 py-0.5 rounded ${logFilter === 'Updated' ? 'bg-blue-600 text-white font-bold' : 'hover:text-slate-900'}`}
+                            >
+                              Updated ({importStats.updated})
+                            </button>
+                          )}
+                          {importStats.skipped > 0 && (
+                            <button 
+                              type="button"
+                              onClick={() => setLogFilter('Skipped')} 
+                              className={`px-2 py-0.5 rounded ${logFilter === 'Skipped' ? 'bg-amber-600 text-white font-bold' : 'hover:text-slate-900'}`}
+                            >
+                              Skipped ({importStats.skipped})
+                            </button>
+                          )}
+                          {importStats.failed > 0 && (
+                            <button 
+                              type="button"
+                              onClick={() => setLogFilter('Failed')} 
+                              className={`px-2 py-0.5 rounded ${logFilter === 'Failed' ? 'bg-red-600 text-white font-bold' : 'hover:text-slate-900'}`}
+                            >
+                              Failed ({importStats.failed})
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="max-h-[350px] overflow-y-auto">
+                      <Table>
+                        <TableHeader className="bg-slate-100/80 sticky top-0 z-10">
+                          <TableRow>
+                            <TableHead className="w-14 font-bold text-slate-700 text-xs">Row #</TableHead>
+                            <TableHead className="font-bold text-slate-700 text-xs">Company Name</TableHead>
+                            <TableHead className="font-bold text-slate-700 text-xs">Status</TableHead>
+                            <TableHead className="font-bold text-slate-700 text-xs">Lead / Internal ID</TableHead>
+                            <TableHead className="font-bold text-slate-700 text-xs">Action Details</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {importLogRecords
+                            .filter(r => logFilter === 'all' || r.status === logFilter)
+                            .filter(r => !logSearch || r.companyName.toLowerCase().includes(logSearch.toLowerCase()) || (r.internalId && r.internalId.toLowerCase().includes(logSearch.toLowerCase())))
+                            .map((rec, i) => (
+                              <TableRow key={i} className="hover:bg-slate-50">
+                                <TableCell className="font-semibold text-slate-500 text-xs">{rec.rowNum}</TableCell>
+                                <TableCell className="font-semibold text-slate-800 text-xs">{rec.companyName}</TableCell>
+                                <TableCell>
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`text-[10px] font-bold px-2 py-0.5 ${
+                                      rec.status === 'Created' ? 'bg-green-100 text-green-800 border-green-300' :
+                                      rec.status === 'Updated' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                                      rec.status === 'Skipped' ? 'bg-amber-100 text-amber-800 border-amber-300' :
+                                      'bg-red-100 text-red-800 border-red-300'
+                                    }`}
+                                  >
+                                    {rec.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs text-slate-600">{rec.internalId || '-'}</TableCell>
+                                <TableCell className="text-xs text-slate-600">{rec.details}</TableCell>
+                              </TableRow>
+                            ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-center gap-3 pt-4">
                   <Button 
