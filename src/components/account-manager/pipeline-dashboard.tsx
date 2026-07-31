@@ -620,6 +620,7 @@ export default function PipelineDashboard() {
                                         <SelectItem value="all">All Appointments</SelectItem>
                                         <SelectItem value="Pending">Pending</SelectItem>
                                         <SelectItem value="Completed">Completed</SelectItem>
+                                        <SelectItem value="No Show">No Show</SelectItem>
                                         <SelectItem value="Rescheduled">Rescheduled</SelectItem>
                                         <SelectItem value="Cancelled">Cancelled</SelectItem>
                                     </SelectContent>

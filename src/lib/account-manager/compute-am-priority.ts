@@ -202,7 +202,7 @@ export function computeAmPriority(
     const d = appt.date || appt.appointmentDate || appt.duedate || appt.starttime;
     if (!d) return false;
     const status = appt.appointmentStatus || 'Pending';
-    if (status === 'Completed' || status === 'Cancelled') return false;
+    if (status === 'Completed' || status === 'Cancelled' || status === 'No Show') return false;
     
     try {
       const apptDateStr = getSydneyDateString(new Date(d));

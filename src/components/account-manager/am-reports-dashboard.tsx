@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info, CheckCircle } from 'lucide-react';
+import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info, CheckCircle, AlertTriangle } from 'lucide-react';
 import { MultiSelectCombobox, type Option } from '../ui/multi-select-combobox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -43,19 +43,18 @@ const SectionHelp = ({ content }: { content: React.ReactNode }) => (
       <button 
         type="button" 
         className="inline-flex items-center justify-center rounded-full w-4.5 h-4.5 text-muted-foreground hover:text-[#095c7b] hover:bg-[#095c7b]/10 transition-colors focus:outline-none shrink-0"
-        onClick={(e) => e.stopPropagation()}
       >
-        <Info className="h-3.5 w-3.5" />
+        <Info className="w-3.5 h-3.5" />
       </button>
     </PopoverTrigger>
-    <PopoverContent className="w-80 p-4 text-xs space-y-2 shadow-lg border bg-popover text-popover-foreground z-50 leading-relaxed font-normal" onClick={(e) => e.stopPropagation()}>
+    <PopoverContent className="w-64 p-3 text-xs bg-popover text-popover-foreground border border-border shadow-md rounded-lg z-50">
       {content}
     </PopoverContent>
   </Popover>
 );
 
-const StatCard = ({ title, value, icon: Icon, description, onClick, helpContent }: { title: string; value: string | number | React.ReactNode; icon: React.ElementType; description?: React.ReactNode; onClick?: () => void; helpContent?: React.ReactNode }) => (
-  <Card className={cn("border-[#095c7b]/10 shadow-sm", onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
+const StatCard = ({ title, value, icon: Icon, description, onClick, helpContent, className }: { title: string; value: string | number | React.ReactNode; icon: React.ElementType; description?: React.ReactNode; onClick?: () => void; helpContent?: React.ReactNode; className?: string }) => (
+  <Card className={cn("border-[#095c7b]/10 shadow-sm", onClick && "cursor-pointer hover:bg-muted/50 transition-colors", className)} onClick={onClick}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-1.5">
         <span>{title}</span>
@@ -712,6 +711,7 @@ export default function AMReportsDashboard() {
         let cancelled = 0;
         let rescheduled = 0;
         let completed = 0;
+        let noShow = 0;
         const perAm: Record<string, number> = {};
         const perLead: Record<string, number> = {};
         const byWeekCreated: Record<string, number> = {};
@@ -724,6 +724,7 @@ export default function AMReportsDashboard() {
             else if (status === 'Cancelled') cancelled++;
             else if (status === 'Rescheduled') rescheduled++;
             else if (status === 'Completed') completed++;
+            else if (status === 'No Show') noShow++;
 
             const am = app.assignedTo || app.dialerAssigned || app.amName || 'Unknown AM';
             perAm[am] = (perAm[am] || 0) + 1;
@@ -761,8 +762,18 @@ export default function AMReportsDashboard() {
             }
         });
 
+        const todayStart = startOfDay(new Date());
+        const overduePending = relevantAppointments.filter(app => {
+            const status = app.appointmentStatus || 'Pending';
+            if (status !== 'Pending') return false;
+            const appDateStr = app.date || app.duedate || app.appointmentDate || app.starttime;
+            if (!appDateStr) return false;
+            const appDate = parseDateString(appDateStr);
+            return appDate ? appDate < todayStart : false;
+        });
+
         return {
-            scheduled, cancelled, rescheduled, completed,
+            scheduled, cancelled, rescheduled, completed, noShow, overduePending,
             relevantAppointments,
             perAm: Object.entries(perAm).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count),
             perLead: Object.entries(perLead).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count),
@@ -3178,7 +3189,60 @@ export default function AMReportsDashboard() {
                 </TabsContent>
 
                 <TabsContent value="appointments" className="flex-1 mt-0">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                    {/* Overdue Pending Appointments Alert Box */}
+                    {appointmentMetrics.overduePending.length > 0 && (
+                        <div className="mb-6 p-4 rounded-xl border border-rose-300 bg-rose-50/90 dark:bg-rose-950/60 dark:border-rose-900 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                                <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0 animate-pulse" />
+                                <div>
+                                    <h4 className="font-bold text-rose-900 dark:text-rose-200 flex items-center gap-2">
+                                        Past Pending Appointments Needs Status Update ({appointmentMetrics.overduePending.length})
+                                        <Badge variant="destructive" className="font-bold text-[10px] uppercase">Action Required</Badge>
+                                    </h4>
+                                    <p className="text-xs text-rose-700 dark:text-rose-300 mt-0.5">
+                                        These appointments have passed their scheduled date but are still marked as &quot;Pending&quot;. Please update their status to Completed, No Show, Cancelled, or Rescheduled.
+                                    </p>
+                                </div>
+                            </div>
+                            <Button 
+                                variant="destructive" 
+                                size="sm" 
+                                className="font-semibold whitespace-nowrap shrink-0"
+                                onClick={() => {
+                                    const appsWithLeads = appointmentMetrics.overduePending.map(app => ({
+                                        ...app,
+                                        lead: leads.find(l => l.id === app.leadId)
+                                    }));
+                                    setDrillDownAppointments({
+                                        title: "Overdue Pending Appointments (Passed Date)",
+                                        appointments: appsWithLeads
+                                    });
+                                }}
+                            >
+                                Resolve {appointmentMetrics.overduePending.length} Overdue Appointments
+                            </Button>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+                        <StatCard 
+                            title="Overdue Pending" 
+                            value={appointmentMetrics.overduePending.length} 
+                            icon={AlertTriangle} 
+                            description="Past date, missing outcome"
+                            helpContent="Appointments that have passed their meeting date but were not updated from Pending status."
+                            className="border-rose-300 bg-rose-50/80 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200"
+                            onClick={() => {
+                                const appsWithLeads = appointmentMetrics.overduePending.map(app => ({
+                                    ...app,
+                                    lead: leads.find(l => l.id === app.leadId)
+                                }));
+                                setDrillDownAppointments({
+                                    title: "Overdue Pending Appointments (Passed Date)",
+                                    appointments: appsWithLeads
+                                });
+                            }}
+                        />
                         <StatCard 
                             title="Scheduled Appointments" 
                             value={appointmentMetrics.scheduled} 
@@ -3211,6 +3275,24 @@ export default function AMReportsDashboard() {
                                 }));
                                 setDrillDownAppointments({
                                     title: "Cancelled Appointments",
+                                    appointments: appsWithLeads
+                                });
+                            }}
+                        />
+                        <StatCard 
+                            title="No Show Appointments" 
+                            value={appointmentMetrics.noShow} 
+                            icon={CalendarIconLucide} 
+                            description="Appointments marked as No Show"
+                            helpContent="Appointments where the prospect did not show up for the meeting."
+                            onClick={() => {
+                                const list = appointmentMetrics.relevantAppointments.filter(app => app.appointmentStatus === 'No Show');
+                                const appsWithLeads = list.map(app => ({
+                                    ...app,
+                                    lead: leads.find(l => l.id === app.leadId)
+                                }));
+                                setDrillDownAppointments({
+                                    title: "No Show Appointments",
                                     appointments: appsWithLeads
                                 });
                             }}

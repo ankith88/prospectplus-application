@@ -1592,6 +1592,8 @@ export default function FieldActivityReportPage() {
                                         <Badge variant="outline" className={cn(
                                             appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
                                             appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                            appt.appointmentStatus === 'No Show' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                            appt.appointmentStatus === 'Rescheduled' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                                             'bg-blue-50 text-blue-700 border-blue-200'
                                         )}>
                                             {appt.appointmentStatus || 'Pending'}

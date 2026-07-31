@@ -2633,6 +2633,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             const newAppointments = (lead.appointments || []).map((a: any) => a.id === appt.id ? { ...a, ...updates } : a);
             await updateDoc(doc(firestore, 'leads', lead.id), { appointments: newAppointments });
 
+            if (updates.appointmentStatus) {
+                logActivity(lead.id, {
+                    type: 'Update',
+                    notes: `Updated appointment status to ${updates.appointmentStatus}${updates.notes ? `: ${updates.notes}` : ''}`,
+                    author: userProfile?.displayName || user?.displayName || 'Unknown'
+                });
+            }
+
             toast({ title: "Appointment updated" });
         } catch (e: any) {
             toast({ variant: 'destructive', title: "Failed to update appointment: " + e.message });
@@ -5196,6 +5204,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                     className={
                                                         a.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
                                                         a.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                        a.appointmentStatus === 'No Show' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
                                                         a.appointmentStatus === 'Rescheduled' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                                                         'bg-slate-50 text-slate-700 border-slate-200'
                                                     }
@@ -5203,29 +5212,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                     {a.appointmentStatus}
                                                 </Badge>
                                             )}
-                                            {(!a.appointmentStatus || a.appointmentStatus === 'Pending') && (
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="h-6 px-2 text-xs border bg-background">Manage</Button></DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => {
-                                                            const notes = window.prompt("Add notes for completion (optional):");
-                                                            if (notes !== null) handleUpdateAppointment(a, { appointmentStatus: 'Completed', notes });
-                                                        }}>Mark Completed</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => {
-                                                            const notes = window.prompt("Add cancellation reason/notes (optional):");
-                                                            if (notes !== null) handleUpdateAppointment(a, { appointmentStatus: 'Cancelled', notes });
-                                                        }}>Mark Cancelled</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => {
-                                                            if (!lead.bookingUrlId) {
-                                                                toast({ variant: 'destructive', title: "Lead does not have a booking URL ID" });
-                                                                return;
-                                                            }
-                                                            const url = `/book/${lead.bookingUrlId}?reschedule=${a.id}`;
-                                                            window.open(url, '_blank');
-                                                        }}>Reschedule</DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            )}
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="h-6 px-2 text-xs border bg-background">Manage</Button></DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => {
+                                                        const notes = window.prompt("Add notes for completion (optional):");
+                                                        if (notes !== null) handleUpdateAppointment(a, { appointmentStatus: 'Completed', notes });
+                                                    }}>Mark Completed</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => {
+                                                        const notes = window.prompt("Add cancellation reason/notes (optional):");
+                                                        if (notes !== null) handleUpdateAppointment(a, { appointmentStatus: 'Cancelled', notes });
+                                                    }}>Mark Cancelled</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => {
+                                                        const notes = window.prompt("Add no-show reason/notes (optional):");
+                                                        if (notes !== null) handleUpdateAppointment(a, { appointmentStatus: 'No Show', notes });
+                                                    }}>Mark No Show</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => {
+                                                        if (!lead.bookingUrlId) {
+                                                            toast({ variant: 'destructive', title: "Lead does not have a booking URL ID" });
+                                                            return;
+                                                        }
+                                                        const url = `/book/${lead.bookingUrlId}?reschedule=${a.id}`;
+                                                        window.open(url, '_blank');
+                                                    }}>Reschedule</DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </div>
                                     </div>
                                     {a.type && <div className="text-xs text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{a.type === 'teams' ? 'Microsoft Teams Meeting' : 'Phone Call'}</div>}

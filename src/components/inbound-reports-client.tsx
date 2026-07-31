@@ -38,7 +38,8 @@ import {
   Zap,
   Package,
   Activity as ActivityIcon,
-  Layers
+  Layers,
+  AlertTriangle
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -467,8 +468,7 @@ export default function InboundReportsClientPage({
         );
 
         const apptQuery = query(
-            collectionGroup(firestore, 'appointments'),
-            where('duedate', '>=', startISO)
+            collectionGroup(firestore, 'appointments')
         );
 
         const usersQuery = query(collection(firestore, 'users'));
@@ -1405,7 +1405,14 @@ export default function InboundReportsClientPage({
         seenTeamCallIds.add(cleanCallId);
         return true;
     });
-    const filteredAppointments = allAppointments.filter(a => isDateInRange(a.duedate || a.appointmentDate || a.createdAt) && filteredLeadIds.has(a.leadId));
+
+    const filteredAppointments = allAppointments.filter(a => {
+        if (!a.leadId) return false;
+        const isForFilteredLead = filteredLeadIds.has(a.leadId);
+        const apptDateStr = a.date || a.duedate || a.appointmentDate || a.createdAt;
+        const isApptInDateRange = isDateInRange(apptDateStr);
+        return isForFilteredLead || isApptInDateRange;
+    });
 
     const getLeadAM = (l: Lead) => {
         const val = l.accountManagerAssigned;
@@ -1903,7 +1910,36 @@ export default function InboundReportsClientPage({
         repLocalmileLeadsMap,
         allActionedLeadIdsSet,
         amCalledLeadIdsMap,
-        allCalledLeadIdsSet
+        allCalledLeadIdsSet,
+        inboundAppointmentOutcomeData: {
+          completed: filteredAppointments.filter(a => a.appointmentStatus === 'Completed'),
+          rescheduled: filteredAppointments.filter(a => a.appointmentStatus === 'Rescheduled'),
+          cancelled: filteredAppointments.filter(a => a.appointmentStatus === 'Cancelled'),
+          noShow: filteredAppointments.filter(a => a.appointmentStatus === 'No Show'),
+          pending: filteredAppointments.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending'),
+          overduePending: filteredAppointments.filter(a => {
+            const status = a.appointmentStatus || 'Pending';
+            if (status !== 'Pending') return false;
+            const apptDateStr = a.date || a.duedate || a.appointmentDate || a.createdAt;
+            if (!apptDateStr) return false;
+            const apptDate = parseDateString(apptDateStr);
+            return apptDate ? apptDate < startOfDay(new Date()) : false;
+          }),
+          total: filteredAppointments.length,
+          completedLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => a.appointmentStatus === 'Completed').map(a => a.leadId)).has(l.id)),
+          rescheduledLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => a.appointmentStatus === 'Rescheduled').map(a => a.leadId)).has(l.id)),
+          cancelledLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => a.appointmentStatus === 'Cancelled').map(a => a.leadId)).has(l.id)),
+          noShowLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => a.appointmentStatus === 'No Show').map(a => a.leadId)).has(l.id)),
+          pendingLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending').map(a => a.leadId)).has(l.id)),
+          overduePendingLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => {
+            const status = a.appointmentStatus || 'Pending';
+            if (status !== 'Pending') return false;
+            const apptDateStr = a.date || a.duedate || a.appointmentDate || a.createdAt;
+            if (!apptDateStr) return false;
+            const apptDate = parseDateString(apptDateStr);
+            return apptDate ? apptDate < startOfDay(new Date()) : false;
+          }).map(a => a.leadId)).has(l.id)),
+        }
     };
   }, [filteredLeads, allActivities, allAppointments, allUsers, appliedFilters]);
 
@@ -2956,6 +2992,106 @@ export default function InboundReportsClientPage({
                 </CardContent>
             </Card>
             )}
+
+            {/* Inbound Appointment Outcomes Breakdown */}
+            <Card className="w-full shadow-md border-primary/10">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <CalendarIconLucide className="h-5 w-5 text-blue-600" />
+                                <span>Appointment Outcomes Breakdown</span>
+                                <SectionHelp content="Breakdown of inbound appointments by status: Pending, Completed, No Show, Rescheduled, and Cancelled. Click any status card to view the matching leads." />
+                            </CardTitle>
+                            <CardDescription>
+                                Track the status of all inbound scheduled appointments for the selected timeframe.
+                            </CardDescription>
+                        </div>
+                        <Badge variant="secondary" className="text-sm font-semibold">
+                            Total: {stats.inboundAppointmentOutcomeData.total}
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {stats.inboundAppointmentOutcomeData.overduePending.length > 0 && (
+                        <div className="p-3.5 rounded-xl border border-rose-300 bg-rose-50/90 dark:bg-rose-950/60 dark:border-rose-900 shadow-sm flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 animate-pulse" />
+                                <div>
+                                    <h4 className="font-bold text-rose-900 dark:text-rose-200 text-sm flex items-center gap-2">
+                                        Overdue Pending Appointments ({stats.inboundAppointmentOutcomeData.overduePending.length})
+                                        <Badge variant="destructive" className="font-bold text-[10px] uppercase">Action Required</Badge>
+                                    </h4>
+                                    <p className="text-xs text-rose-700 dark:text-rose-300 mt-0.5">
+                                        These appointments passed their meeting date without a status update. Click to review and update status.
+                                    </p>
+                                </div>
+                            </div>
+                            <Button 
+                                variant="destructive" 
+                                size="sm"
+                                className="font-semibold text-xs whitespace-nowrap shrink-0"
+                                onClick={() => setDrillDownData({ title: "Overdue Pending Appointments (Passed Date)", leads: stats.inboundAppointmentOutcomeData.overduePendingLeads })}
+                            >
+                                Resolve Overdue ({stats.inboundAppointmentOutcomeData.overduePending.length})
+                            </Button>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+                        <div 
+                            className="p-4 rounded-xl border bg-rose-100/90 border-rose-300 dark:bg-rose-950/60 dark:border-rose-800 cursor-pointer hover:bg-rose-200/80 transition-colors"
+                            onClick={() => setDrillDownData({ title: "Overdue Pending Appointments (Passed Date)", leads: stats.inboundAppointmentOutcomeData.overduePendingLeads })}
+                        >
+                            <div className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider flex items-center gap-1">
+                                <AlertTriangle className="h-3.5 w-3.5 text-rose-600" /> Overdue Pending
+                            </div>
+                            <div className="text-2xl font-black text-rose-900 dark:text-rose-100 mt-1">{stats.inboundAppointmentOutcomeData.overduePending.length}</div>
+                            <p className="text-xs text-rose-700 dark:text-rose-300 font-medium mt-1">Passed meeting date</p>
+                        </div>
+                        <div 
+                            className="p-4 rounded-xl border bg-blue-50/50 border-blue-200 cursor-pointer hover:bg-blue-100/50 transition-colors"
+                            onClick={() => setDrillDownData({ title: "Pending Appointments", leads: stats.inboundAppointmentOutcomeData.pendingLeads })}
+                        >
+                            <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Scheduled / Pending</div>
+                            <div className="text-2xl font-bold text-blue-900 mt-1">{stats.inboundAppointmentOutcomeData.pending.length}</div>
+                            <p className="text-xs text-blue-600 mt-1">Awaiting meeting date</p>
+                        </div>
+                        <div 
+                            className="p-4 rounded-xl border bg-emerald-50/50 border-emerald-200 cursor-pointer hover:bg-emerald-100/50 transition-colors"
+                            onClick={() => setDrillDownData({ title: "Completed Appointments", leads: stats.inboundAppointmentOutcomeData.completedLeads })}
+                        >
+                            <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Completed</div>
+                            <div className="text-2xl font-bold text-emerald-900 mt-1">{stats.inboundAppointmentOutcomeData.completed.length}</div>
+                            <p className="text-xs text-emerald-600 mt-1">Successfully held</p>
+                        </div>
+                        <div 
+                            className="p-4 rounded-xl border bg-amber-50/50 border-amber-200 cursor-pointer hover:bg-amber-100/50 transition-colors"
+                            onClick={() => setDrillDownData({ title: "No Show Appointments", leads: stats.inboundAppointmentOutcomeData.noShowLeads })}
+                        >
+                            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">No Show</div>
+                            <div className="text-2xl font-bold text-amber-900 mt-1">{stats.inboundAppointmentOutcomeData.noShow.length}</div>
+                            <p className="text-xs text-amber-600 mt-1">Prospect missed appointment</p>
+                        </div>
+                        <div 
+                            className="p-4 rounded-xl border bg-purple-50/50 border-purple-200 cursor-pointer hover:bg-purple-100/50 transition-colors"
+                            onClick={() => setDrillDownData({ title: "Rescheduled Appointments", leads: stats.inboundAppointmentOutcomeData.rescheduledLeads })}
+                        >
+                            <div className="text-xs font-semibold text-purple-700 uppercase tracking-wider">Rescheduled</div>
+                            <div className="text-2xl font-bold text-purple-900 mt-1">{stats.inboundAppointmentOutcomeData.rescheduled.length}</div>
+                            <p className="text-xs text-purple-600 mt-1">Moved to new date</p>
+                        </div>
+                        <div 
+                            className="p-4 rounded-xl border bg-rose-50/50 border-rose-200 cursor-pointer hover:bg-rose-100/50 transition-colors"
+                            onClick={() => setDrillDownData({ title: "Cancelled Appointments", leads: stats.inboundAppointmentOutcomeData.cancelledLeads })}
+                        >
+                            <div className="text-xs font-semibold text-rose-700 uppercase tracking-wider">Cancelled</div>
+                            <div className="text-2xl font-bold text-rose-900 mt-1">{stats.inboundAppointmentOutcomeData.cancelled.length}</div>
+                            <p className="text-xs text-rose-600 mt-1">Meeting cancelled</p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             {!visibleSections && (
               <>

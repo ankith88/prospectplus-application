@@ -1727,7 +1727,7 @@ export function ImportLeadsClient() {
             </Button>
             <Button 
               className="bg-[#095c7b] hover:bg-[#084c66] text-white font-semibold" 
-              onClick={runValidationAndDuplicates}
+              onClick={() => runValidationAndDuplicates()}
               disabled={!allRequiredMapped}
             >
               {!allRequiredMapped 

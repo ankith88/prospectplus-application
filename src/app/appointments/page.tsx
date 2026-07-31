@@ -20,9 +20,12 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download, ArrowUpDown, Route, ClipboardCheck } from 'lucide-react'
+import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download, ArrowUpDown, Route, ClipboardCheck, MoreHorizontal } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getAllAppointments, getLeadsFromFirebase, getVisitNotes } from '@/services/firebase'
+import { getAllAppointments, getLeadsFromFirebase, getVisitNotes, logActivity } from '@/services/firebase'
+import { firestore } from '@/lib/firebase'
+import { doc, setDoc, updateDoc } from 'firebase/firestore'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -114,6 +117,33 @@ export default function AllAppointmentsPage() {
       setLoading(false);
     }
   }
+
+  const handleStatusChange = async (appointment: AppointmentWithLead, newStatus: AppointmentStatus) => {
+    const notes = window.prompt(`Add optional notes for marking as ${newStatus}:`);
+    if (notes === null) return;
+    try {
+      const updates = { appointmentStatus: newStatus, ...(notes ? { notes } : {}) };
+      const docRef = doc(firestore, 'leads', appointment.leadId, 'appointments', appointment.id);
+      await setDoc(docRef, updates, { merge: true });
+
+      const targetLead = allLeads.find(l => l.id === appointment.leadId);
+      if (targetLead?.appointments) {
+        const newAppointments = targetLead.appointments.map((a: any) => a.id === appointment.id ? { ...a, ...updates } : a);
+        await updateDoc(doc(firestore, 'leads', appointment.leadId), { appointments: newAppointments });
+      }
+
+      logActivity(appointment.leadId, {
+        type: 'Update',
+        notes: `Updated appointment status to ${newStatus}${notes ? `: ${notes}` : ''}`,
+        author: userProfile?.displayName || user?.displayName || 'Unknown'
+      });
+
+      setAllAppointments(prev => prev.map(a => a.id === appointment.id ? { ...a, ...updates } : a));
+      toast({ title: `Appointment marked as ${newStatus}` });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: "Failed to update appointment status: " + e.message });
+    }
+  };
 
   useEffect(() => {
     if (!user && !authLoading) {
@@ -634,12 +664,13 @@ export default function AllAppointmentsPage() {
                   <TableHead><Button variant="ghost" onClick={() => requestSort('assignedTo')} className="group -ml-4">Assigned To (Appointment){getSortIndicator('assignedTo')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('duedate')} className="group -ml-4">Date{getSortIndicator('duedate')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('starttime')} className="group -ml-4">Time{getSortIndicator('starttime')}</Button></TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={12} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : sortedAppointments.length > 0 ? (
                   sortedAppointments.map((appointment) => {
@@ -715,11 +746,34 @@ export default function AllAppointmentsPage() {
                             <span>{formatInTimezone(appointment.starttime, appointment.timezone || 'Australia/Sydney', 'HH:mm')}</span>
                           </div>
                        </TableCell>
+                       <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleStatusChange(appointment, 'Completed')}>
+                                Mark Completed
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleStatusChange(appointment, 'Cancelled')}>
+                                Mark Cancelled
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleStatusChange(appointment, 'No Show')}>
+                                Mark No Show
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => window.open(`/leads/${appointment.leadId}`, '_blank')}>
+                                View Lead
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                       </TableCell>
                     </TableRow>
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={12} className="py-10 text-center text-muted-foreground">
                           No appointments found.
                       </TableCell>
                   </TableRow>

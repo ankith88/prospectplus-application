@@ -426,6 +426,7 @@ export default function ReportsClientPage({
   const [activeLeadTypeIndex, setActiveLeadTypeIndex] = useState<number | null>(null);
   const [activeCustomerIndex, setActiveCustomerIndex] = useState<number | null>(null);
   const [trialDrilldown, setTrialDrilldown] = useState<{ title: string; leads: Lead[] } | null>(null);
+  const [incentiveDrillDown, setIncentiveDrillDown] = useState<{ title: string; appts?: Appointment[]; leads?: Lead[] } | null>(null);
   const [dailyViewMode, setDailyViewMode] = useState<'chart' | 'table'>('chart');
   const [dailyMetricMode, setDailyMetricMode] = useState<'unique' | 'actions'>('unique');
   const [burnRateTimeframe, setBurnRateTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
@@ -566,8 +567,7 @@ export default function ReportsClientPage({
         );
 
         const apptQuery = query(
-            collectionGroup(firestore, 'appointments'),
-            where('duedate', '>=', startISO)
+            collectionGroup(firestore, 'appointments')
         );
 
         const fetches: Promise<any>[] = [
@@ -1604,16 +1604,44 @@ export default function ReportsClientPage({
     const totalRecommendedTopUp = burnRateLeaderboard.reduce((acc, d) => acc + d.recommendedTopUp, 0);
 
     // Appointments & Downstream Conversions Leaderboard Data
+    // Filter to ONLY appointments on or after the default/applied Dialer Assignment Date filter (default July 10, 2026)
+    const minAssignmentDate = appliedFilters.dialerAssignmentDate?.from 
+      ? startOfDay(appliedFilters.dialerAssignmentDate.from) 
+      : startOfDay(new Date(2026, 6, 10));
+    const maxAssignmentDate = appliedFilters.dialerAssignmentDate?.to 
+      ? endOfDay(appliedFilters.dialerAssignmentDate.to) 
+      : undefined;
+
+    const incentiveAppointments = filteredAppointments.filter(a => {
+        const dateStr = a.date || a.duedate || a.appointmentDate || a.createdAt;
+        if (!dateStr) return false;
+        const d = parseDateString(dateStr);
+        if (!d) return false;
+        if (d < minAssignmentDate) return false;
+        if (maxAssignmentDate && d > maxAssignmentDate) return false;
+        return true;
+    });
+
+    const incentiveLeadIds = new Set(incentiveAppointments.map(a => a.leadId));
+
     const appointmentIncentiveLeaderboard = allDialers.map(dialer => {
-        const dialerAppts = filteredAppointments.filter(a => a.dialerAssigned === dialer || a.assignedTo === dialer);
+        const dialerAppts = incentiveAppointments.filter(a => a.dialerAssigned === dialer || a.assignedTo === dialer);
         const booked = dialerAppts.length;
+        const completedAppts = dialerAppts.filter(a => a.appointmentStatus === 'Completed');
+        const noShowAppts = dialerAppts.filter(a => a.appointmentStatus === 'No Show');
+        const rescheduledAppts = dialerAppts.filter(a => a.appointmentStatus === 'Rescheduled');
+        const cancelledAppts = dialerAppts.filter(a => a.appointmentStatus === 'Cancelled');
+        const pendingAppts = dialerAppts.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending');
 
-        const dialerLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
-        const dialerTrialLeads = anyTrialLeads.filter(l => l.dialerAssigned === dialer);
+        const dialerLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && incentiveLeadIds.has(l.id));
+        const dialerTrialLeads = anyTrialLeads.filter(l => l.dialerAssigned === dialer && incentiveLeadIds.has(l.id));
 
-        const signed = dialerLeads.filter(isSignedLead).length;
+        const signedLeads = dialerLeads.filter(isSignedLead);
+        const quoteLeads = dialerLeads.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent' || l.customerStatus === 'Quote Sent');
+
+        const signed = signedLeads.length;
         const trial = dialerTrialLeads.length;
-        const quote = dialerLeads.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent' || l.customerStatus === 'Quote Sent').length;
+        const quote = quoteLeads.length;
 
         const totalConverted = signed + trial + quote;
         const conversionRate = booked > 0 ? (totalConverted / booked) * 100 : (dialerLeads.length > 0 ? (totalConverted / dialerLeads.length) * 100 : 0);
@@ -1621,6 +1649,15 @@ export default function ReportsClientPage({
         return {
             name: dialer,
             booked,
+            appts: dialerAppts,
+            completedAppts,
+            noShowAppts,
+            rescheduledAppts,
+            cancelledAppts,
+            pendingAppts,
+            signedLeads,
+            trialLeads: dialerTrialLeads,
+            quoteLeads,
             signed,
             trial,
             quote,
@@ -1629,11 +1666,17 @@ export default function ReportsClientPage({
         };
     }).filter(d => d.booked > 0 || d.totalConverted > 0 || d.signed > 0 || d.trial > 0 || d.quote > 0).sort((a, b) => b.totalConverted - a.totalConverted || b.conversionRate - a.conversionRate);
 
+    const totalCompletedAppts = incentiveAppointments.filter(a => a.appointmentStatus === 'Completed');
+    const totalNoShowAppts = incentiveAppointments.filter(a => a.appointmentStatus === 'No Show');
+    const totalRescheduledAppts = incentiveAppointments.filter(a => a.appointmentStatus === 'Rescheduled');
+    const totalCancelledAppts = incentiveAppointments.filter(a => a.appointmentStatus === 'Cancelled');
+    const totalPendingAppts = incentiveAppointments.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending');
+
     const totalApptsSigned = appointmentIncentiveLeaderboard.reduce((acc, d) => acc + d.signed, 0);
     const totalApptsTrial = appointmentIncentiveLeaderboard.reduce((acc, d) => acc + d.trial, 0);
     const totalApptsQuote = appointmentIncentiveLeaderboard.reduce((acc, d) => acc + d.quote, 0);
     const totalConvertedAppts = totalApptsSigned + totalApptsTrial + totalApptsQuote;
-    const overallApptConversionRate = totalAppointments > 0 ? (totalConvertedAppts / totalAppointments) * 100 : 0;
+    const overallApptConversionRate = incentiveAppointments.length > 0 ? (totalConvertedAppts / incentiveAppointments.length) * 100 : 0;
 
 
 
@@ -2151,6 +2194,13 @@ export default function ReportsClientPage({
       avgTeamRunwayDays,
       totalRecommendedTopUp,
       appointmentIncentiveLeaderboard,
+      incentiveAppointments,
+      anyTrialLeads,
+      totalCompletedAppts,
+      totalNoShowAppts,
+      totalRescheduledAppts,
+      totalCancelledAppts,
+      totalPendingAppts,
       totalApptsSigned,
       totalApptsTrial,
       totalApptsQuote,
@@ -2919,117 +2969,6 @@ export default function ReportsClientPage({
             </Card>
             )}
 
-            {/* Appointments Booked & Downstream Conversions Leaderboard */}
-            {(!visibleSections || visibleSections.includes('appointment-incentives')) && (
-            <Card className="mt-6 border shadow-sm">
-                <CardHeader className="pb-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                            <CardTitle className="flex items-center gap-2 text-xl font-bold">
-                                <Trophy className="h-5 w-5 text-amber-500" />
-                                <span>Appointments & Downstream Conversion Incentive Tracker</span>
-                                <SectionHelp content={
-                                    <div className="space-y-2 text-left">
-                                        <p className="font-semibold text-foreground">Appointment Conversion Incentive</p>
-                                        <p>Tracks appointments set by dialers and measures downstream conversion progress (Signed Deals, Trials Started, and Quotes Sent).</p>
-                                        <p>Incentivises cold callers for high-converting appointment quality, not just raw volume.</p>
-                                    </div>
-                                } />
-                            </CardTitle>
-                            <CardDescription>Measures appointment outcome quality and downstream deal conversions per dialer to incentivize high-value booking.</CardDescription>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.appointmentIncentiveLeaderboard, 'appointment_conversions_leaderboard')}>
-                            <Download className="h-4 w-4 mr-2" /> Export Table
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border">
-                            <div className="text-xs font-medium text-muted-foreground">Total Appts Booked</div>
-                            <div className="text-2xl font-bold mt-1">{stats.totalAppointments}</div>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
-                            <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
-                                <Trophy className="h-3.5 w-3.5 text-emerald-600" /> Converted to Signed
-                            </div>
-                            <div className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-300">
-                                {stats.totalApptsSigned}
-                            </div>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50">
-                            <div className="text-xs font-semibold text-blue-800 dark:text-blue-400 flex items-center gap-1">
-                                <Zap className="h-3.5 w-3.5 text-blue-600" /> Converted to Trial
-                            </div>
-                            <div className="text-2xl font-bold mt-1 text-blue-700 dark:text-blue-300">
-                                {stats.totalApptsTrial}
-                            </div>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/50">
-                            <div className="text-xs font-semibold text-purple-800 dark:text-purple-400 flex items-center gap-1">
-                                <FileText className="h-3.5 w-3.5 text-purple-600" /> Quotes Sent
-                            </div>
-                            <div className="text-2xl font-bold mt-1 text-purple-700 dark:text-purple-300">
-                                {stats.totalApptsQuote}
-                            </div>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
-                            <div className="text-xs font-semibold text-amber-800 dark:text-amber-400">Total Conversion %</div>
-                            <div className="text-2xl font-bold mt-1 text-amber-700 dark:text-amber-300">
-                                {stats.overallApptConversionRate.toFixed(1)}%
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="overflow-x-auto rounded-lg border">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-12 text-center">Rank</TableHead>
-                                    <TableHead>Dialer / Agent</TableHead>
-                                    <TableHead className="text-right">Appts Booked</TableHead>
-                                    <TableHead className="text-right">🏆 Signed Deals</TableHead>
-                                    <TableHead className="text-right">⚡ Trials Started</TableHead>
-                                    <TableHead className="text-right">📄 Quotes Sent</TableHead>
-                                    <TableHead className="text-right">Total Converted</TableHead>
-                                    <TableHead className="text-right">Conversion Success %</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {stats.appointmentIncentiveLeaderboard.length > 0 ? stats.appointmentIncentiveLeaderboard.map((item, idx) => (
-                                    <TableRow key={item.name}>
-                                        <TableCell className="text-center font-bold text-base">
-                                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
-                                        </TableCell>
-                                        <TableCell className="font-medium">{item.name}</TableCell>
-                                        <TableCell 
-                                            className="text-right font-semibold cursor-pointer hover:underline text-blue-600"
-                                            onClick={() => setIsApptListOpen(true)}
-                                        >
-                                            {item.booked}
-                                        </TableCell>
-                                        <TableCell className="text-right font-bold text-emerald-600">{item.signed}</TableCell>
-                                        <TableCell className="text-right font-bold text-blue-600">{item.trial}</TableCell>
-                                        <TableCell className="text-right font-bold text-purple-600">{item.quote}</TableCell>
-                                        <TableCell className="text-right font-extrabold text-foreground">{item.totalConverted}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Badge variant="outline" className="font-bold border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300">
-                                                {item.conversionRate.toFixed(1)}%
-                                            </Badge>
-                                        </TableCell>
-                                    </TableRow>
-                                )) : (
-                                    <TableRow>
-                                        <TableCell colSpan={8} className="text-center py-6 text-muted-foreground italic">No appointment conversion data available for current filters.</TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
-            )}
-
             {/* Outbound Dialer Performance Detailed Report */}
             {(!visibleSections || visibleSections.includes('team-performance')) && (
             <Card className="mt-6">
@@ -3344,6 +3283,197 @@ export default function ReportsClientPage({
                             </TableRow>
                         </TableFooter>
                     </Table>
+                </CardContent>
+            </Card>
+            )}
+
+            {/* Appointments Booked & Downstream Conversions Leaderboard */}
+            {(!visibleSections || visibleSections.includes('appointment-incentives')) && (
+            <Card className="mt-6 border shadow-sm">
+                <CardHeader className="pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                                <Trophy className="h-5 w-5 text-amber-500" />
+                                <span>Appointments & Downstream Conversion Incentive Tracker</span>
+                                <SectionHelp content={
+                                    <div className="space-y-2 text-left">
+                                        <p className="font-semibold text-foreground">Appointment Conversion Incentive</p>
+                                        <p>Tracks appointments set by dialers and measures downstream conversion progress (Signed Deals, Trials Started, and Quotes Sent).</p>
+                                        <p>Incentivises cold callers for high-converting appointment quality, not just raw volume.</p>
+                                    </div>
+                                } />
+                            </CardTitle>
+                            <CardDescription>Measures appointment outcome quality and downstream deal conversions per dialer to incentivize high-value booking.</CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.appointmentIncentiveLeaderboard, 'appointment_conversions_leaderboard')}>
+                            <Download className="h-4 w-4 mr-2" /> Export Table
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                        <div 
+                            className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border cursor-pointer hover:bg-slate-100 transition-colors"
+                            onClick={() => setIncentiveDrillDown({ title: "Incentive Tracker Appointments (From Assignment Date Filter)", appts: stats.incentiveAppointments })}
+                        >
+                            <div className="text-xs font-medium text-muted-foreground">Total Appts Booked</div>
+                            <div className="text-2xl font-bold mt-1 text-slate-800 dark:text-slate-200">{stats.incentiveAppointments.length}</div>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">Click to view all</p>
+                        </div>
+                        <div 
+                            className="p-3.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 cursor-pointer hover:bg-emerald-100/70 transition-colors"
+                            onClick={() => setIncentiveDrillDown({ title: "Completed Appointments", appts: stats.totalCompletedAppts })}
+                        >
+                            <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-400">Completed</div>
+                            <div className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-300">{stats.totalCompletedAppts.length}</div>
+                            <p className="text-[11px] text-emerald-600 mt-0.5">Successfully held</p>
+                        </div>
+                        <div 
+                            className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 cursor-pointer hover:bg-amber-100/70 transition-colors"
+                            onClick={() => setIncentiveDrillDown({ title: "No Show Appointments", appts: stats.totalNoShowAppts })}
+                        >
+                            <div className="text-xs font-semibold text-amber-800 dark:text-amber-400">No Show</div>
+                            <div className="text-2xl font-bold mt-1 text-amber-700 dark:text-amber-300">{stats.totalNoShowAppts.length}</div>
+                            <p className="text-[11px] text-amber-600 mt-0.5">Prospect missed meeting</p>
+                        </div>
+                        <div 
+                            className="p-3.5 rounded-xl bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 cursor-pointer hover:bg-purple-100/70 transition-colors"
+                            onClick={() => setIncentiveDrillDown({ title: "Rescheduled Appointments", appts: stats.totalRescheduledAppts })}
+                        >
+                            <div className="text-xs font-semibold text-purple-800 dark:text-purple-400">Rescheduled</div>
+                            <div className="text-2xl font-bold mt-1 text-purple-700 dark:text-purple-300">{stats.totalRescheduledAppts.length}</div>
+                            <p className="text-[11px] text-purple-600 mt-0.5">Moved to new date</p>
+                        </div>
+                        <div 
+                            className="p-3.5 rounded-xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 cursor-pointer hover:bg-rose-100/70 transition-colors"
+                            onClick={() => setIncentiveDrillDown({ title: "Cancelled Appointments", appts: stats.totalCancelledAppts })}
+                        >
+                            <div className="text-xs font-semibold text-rose-800 dark:text-rose-400">Cancelled</div>
+                            <div className="text-2xl font-bold mt-1 text-rose-700 dark:text-rose-300">{stats.totalCancelledAppts.length}</div>
+                            <p className="text-[11px] text-rose-600 mt-0.5">Meeting cancelled</p>
+                        </div>
+                        <div 
+                            className="p-3.5 rounded-xl bg-teal-50/80 dark:bg-teal-950/30 border border-teal-200 cursor-pointer hover:bg-teal-100/70 transition-colors"
+                            onClick={() => setIncentiveDrillDown({ title: "Converted to Signed Deals", leads: stats.baseFilteredLeads.filter(isSignedLead) })}
+                        >
+                            <div className="text-xs font-semibold text-teal-800 dark:text-teal-400 flex items-center gap-1">
+                                <Trophy className="h-3.5 w-3.5 text-teal-600" /> Signed Deals
+                            </div>
+                            <div className="text-2xl font-bold mt-1 text-teal-700 dark:text-teal-300">{stats.totalApptsSigned}</div>
+                        </div>
+                        <div 
+                            className="p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 cursor-pointer hover:bg-blue-100/70 transition-colors"
+                            onClick={() => setIncentiveDrillDown({ title: "Converted to Trial", leads: stats.anyTrialLeads })}
+                        >
+                            <div className="text-xs font-semibold text-blue-800 dark:text-blue-400 flex items-center gap-1">
+                                <Zap className="h-3.5 w-3.5 text-blue-600" /> Trials Started
+                            </div>
+                            <div className="text-2xl font-bold mt-1 text-blue-700 dark:text-blue-300">{stats.totalApptsTrial}</div>
+                        </div>
+                        <div 
+                            className="p-3.5 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200 cursor-pointer hover:bg-indigo-100/70 transition-colors"
+                            onClick={() => setIncentiveDrillDown({ title: "Quotes Sent", leads: stats.baseFilteredLeads.filter((l: Lead) => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent' || l.customerStatus === 'Quote Sent') })}
+                        >
+                            <div className="text-xs font-semibold text-indigo-800 dark:text-indigo-400 flex items-center gap-1">
+                                <FileText className="h-3.5 w-3.5 text-indigo-600" /> Quotes Sent
+                            </div>
+                            <div className="text-2xl font-bold mt-1 text-indigo-700 dark:text-indigo-300">{stats.totalApptsQuote}</div>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 col-span-2 sm:col-span-1">
+                            <div className="text-xs font-semibold text-amber-800 dark:text-amber-400">Total Conversion %</div>
+                            <div className="text-2xl font-bold mt-1 text-amber-700 dark:text-amber-300">{stats.overallApptConversionRate.toFixed(1)}%</div>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-lg border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-12 text-center">Rank</TableHead>
+                                    <TableHead>Dialer / Agent</TableHead>
+                                    <TableHead className="text-right">Booked</TableHead>
+                                    <TableHead className="text-right">Completed</TableHead>
+                                    <TableHead className="text-right">No Show</TableHead>
+                                    <TableHead className="text-right">Rescheduled</TableHead>
+                                    <TableHead className="text-right">Cancelled</TableHead>
+                                    <TableHead className="text-right">🏆 Signed Deals</TableHead>
+                                    <TableHead className="text-right">⚡ Trials Started</TableHead>
+                                    <TableHead className="text-right">📄 Quotes Sent</TableHead>
+                                    <TableHead className="text-right">Total Converted</TableHead>
+                                    <TableHead className="text-right">Conversion Success %</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.appointmentIncentiveLeaderboard.length > 0 ? stats.appointmentIncentiveLeaderboard.map((item, idx) => (
+                                    <TableRow key={item.name}>
+                                        <TableCell className="text-center font-bold text-base">
+                                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                                        </TableCell>
+                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                        <TableCell 
+                                            className="text-right font-semibold cursor-pointer hover:underline text-blue-600"
+                                            onClick={() => setIncentiveDrillDown({ title: `${item.name} - Booked Appointments`, appts: item.appts })}
+                                        >
+                                            {item.booked}
+                                        </TableCell>
+                                        <TableCell 
+                                            className="text-right font-semibold cursor-pointer hover:underline text-emerald-600"
+                                            onClick={() => setIncentiveDrillDown({ title: `${item.name} - Completed Appointments`, appts: item.completedAppts })}
+                                        >
+                                            {item.completedAppts.length}
+                                        </TableCell>
+                                        <TableCell 
+                                            className="text-right font-semibold cursor-pointer hover:underline text-amber-600"
+                                            onClick={() => setIncentiveDrillDown({ title: `${item.name} - No Show Appointments`, appts: item.noShowAppts })}
+                                        >
+                                            {item.noShowAppts.length}
+                                        </TableCell>
+                                        <TableCell 
+                                            className="text-right font-semibold cursor-pointer hover:underline text-purple-600"
+                                            onClick={() => setIncentiveDrillDown({ title: `${item.name} - Rescheduled Appointments`, appts: item.rescheduledAppts })}
+                                        >
+                                            {item.rescheduledAppts.length}
+                                        </TableCell>
+                                        <TableCell 
+                                            className="text-right font-semibold cursor-pointer hover:underline text-rose-600"
+                                            onClick={() => setIncentiveDrillDown({ title: `${item.name} - Cancelled Appointments`, appts: item.cancelledAppts })}
+                                        >
+                                            {item.cancelledAppts.length}
+                                        </TableCell>
+                                        <TableCell 
+                                            className="text-right font-bold cursor-pointer hover:underline text-teal-600"
+                                            onClick={() => setIncentiveDrillDown({ title: `${item.name} - Signed Deals`, leads: item.signedLeads })}
+                                        >
+                                            {item.signed}
+                                        </TableCell>
+                                        <TableCell 
+                                            className="text-right font-bold cursor-pointer hover:underline text-blue-600"
+                                            onClick={() => setIncentiveDrillDown({ title: `${item.name} - Trials Started`, leads: item.trialLeads })}
+                                        >
+                                            {item.trial}
+                                        </TableCell>
+                                        <TableCell 
+                                            className="text-right font-bold cursor-pointer hover:underline text-indigo-600"
+                                            onClick={() => setIncentiveDrillDown({ title: `${item.name} - Quotes Sent`, leads: item.quoteLeads })}
+                                        >
+                                            {item.quote}
+                                        </TableCell>
+                                        <TableCell className="text-right font-extrabold text-foreground">{item.totalConverted}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Badge variant="outline" className="font-bold border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300">
+                                                {item.conversionRate.toFixed(1)}%
+                                            </Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                )) : (
+                                    <TableRow>
+                                        <TableCell colSpan={12} className="text-center py-6 text-muted-foreground italic">No appointment conversion data available for current filters.</TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
             )}
@@ -4445,6 +4575,8 @@ export default function ReportsClientPage({
                                         <Badge variant="outline" className={cn(
                                             appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
                                             appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                            appt.appointmentStatus === 'No Show' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                            appt.appointmentStatus === 'Rescheduled' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                                             'bg-blue-50 text-blue-700 border-blue-200'
                                         )}>
                                             {appt.appointmentStatus || 'Pending'}
@@ -4523,6 +4655,136 @@ export default function ReportsClientPage({
                             )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No leads found in this cohort.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      {/* Incentive Tracker Pop-up Drill-down Dialog */}
+      <Dialog open={!!incentiveDrillDown} onOpenChange={(open) => !open && setIncentiveDrillDown(null)}>
+          <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div className="space-y-1">
+                        <DialogTitle>{incentiveDrillDown?.title}</DialogTitle>
+                        <DialogDescription>
+                            Total records: {incentiveDrillDown?.appts ? incentiveDrillDown.appts.length : incentiveDrillDown?.leads ? incentiveDrillDown.leads.length : 0}
+                        </DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => {
+                        if (incentiveDrillDown?.appts) {
+                            handleExportList(
+                                incentiveDrillDown.appts,
+                                ['Company/Lead Name', 'Prospect+ ID', 'Lead Status', 'Appt Status', 'Dialer', 'Assigned Sales Rep', 'Appt Date'],
+                                'incentive_drilldown_appts',
+                                (a) => [a.leadName, a.prospectPlusId || a.leadId || 'N/A', a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate ? safeFormat(a.duedate, 'PP') : 'N/A']
+                            );
+                        } else if (incentiveDrillDown?.leads) {
+                            handleExportList(
+                                incentiveDrillDown.leads,
+                                ['Company Name', 'Prospect+ ID', 'Customer Status', 'Dialer', 'Account Manager', 'Date Entered'],
+                                'incentive_drilldown_leads',
+                                (l) => [l.companyName || l.contactName || 'N/A', l.prospectPlusId || l.id || 'N/A', l.customerStatus || 'N/A', l.dialerAssigned || 'N/A', l.accountManagerAssigned || 'N/A', l.dateLeadEntered || 'N/A']
+                            );
+                        }
+                    }}>
+                        <Download className="mr-2 h-4 w-4" /> Export List
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    {incentiveDrillDown?.appts ? (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Lead / Company Name</TableHead>
+                                    <TableHead>Lead Status</TableHead>
+                                    <TableHead>Appt Status</TableHead>
+                                    <TableHead>Dialer</TableHead>
+                                    <TableHead>Assigned Sales Rep</TableHead>
+                                    <TableHead>Appt Date</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {incentiveDrillDown.appts.length > 0 ? incentiveDrillDown.appts.map((apptItem) => {
+                                    const appt = apptItem as any;
+                                    return (
+                                    <TableRow key={appt.id}>
+                                        <TableCell className="font-medium">{appt.leadName || 'N/A'}</TableCell>
+                                        <TableCell><LeadStatusBadge status={appt.leadStatus || 'New'} /></TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className={cn(
+                                                appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                appt.appointmentStatus === 'No Show' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                appt.appointmentStatus === 'Rescheduled' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                'bg-blue-50 text-blue-700 border-blue-200'
+                                            )}>
+                                                {appt.appointmentStatus || 'Pending'}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                        <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
+                                        <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="sm" asChild>
+                                                <Link href={`/leads/${appt.leadId}`} target="_blank">
+                                                    View Record <ExternalLink className="ml-2 h-3 w-3" />
+                                                </Link>
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                );}) : (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">
+                                            No appointments found for this cohort.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    ) : incentiveDrillDown?.leads ? (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Company / Lead Name</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Dialer</TableHead>
+                                    <TableHead>Account Manager</TableHead>
+                                    <TableHead>Date Entered</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {incentiveDrillDown.leads.length > 0 ? incentiveDrillDown.leads.map((leadItem) => {
+                                    const lead = leadItem as any;
+                                    return (
+                                    <TableRow key={lead.id}>
+                                        <TableCell className="font-medium">{lead.companyName || lead.contactName || 'N/A'}</TableCell>
+                                        <TableCell><LeadStatusBadge status={lead.customerStatus || lead.status || 'New'} /></TableCell>
+                                        <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                        <TableCell>{lead.accountManagerAssigned || 'N/A'}</TableCell>
+                                        <TableCell>{lead.dateLeadEntered || 'N/A'}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="sm" asChild>
+                                                <Link href={`/leads/${lead.id}`} target="_blank">
+                                                    View Record <ExternalLink className="ml-2 h-3 w-3" />
+                                                </Link>
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                );}) : (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                            No leads found for this cohort.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    ) : null}
                 </ScrollArea>
               </div>
           </DialogContent>

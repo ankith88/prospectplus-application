@@ -30,19 +30,19 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn("p-3", className)}
+      className={cn("p-3 select-none", className)}
       classNames={{
         months: cn(
-          "flex flex-col sm:flex-row gap-2",
+          "flex flex-col sm:flex-row gap-4 sm:gap-6",
           defaultClassNames.months
         ),
-        month: cn("flex flex-col gap-4", defaultClassNames.month),
+        month: cn("flex flex-col gap-3 max-w-full", defaultClassNames.month),
         month_caption: cn(
           "flex justify-center pt-1 relative items-center h-9",
           defaultClassNames.month_caption
         ),
         caption_label: cn(
-          "text-sm font-medium",
+          "text-sm font-semibold text-foreground",
           defaultClassNames.caption_label
         ),
         nav: cn(
@@ -50,24 +50,24 @@ function Calendar({
           defaultClassNames.nav
         ),
         button_previous: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute left-1 top-0 z-10",
+          buttonVariants({ variant: "outline", size: "icon" }),
+          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute left-1 top-1 z-10",
           defaultClassNames.button_previous
         ),
         button_next: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute right-1 top-0 z-10",
+          buttonVariants({ variant: "outline", size: "icon" }),
+          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute right-1 top-1 z-10",
           defaultClassNames.button_next
         ),
-        table: "w-full border-collapse",
-        weekdays: cn("flex", defaultClassNames.weekdays),
+        table: "w-full border-collapse space-y-1",
+        weekdays: cn("flex justify-between", defaultClassNames.weekdays),
         weekday: cn(
-          "flex-1 rounded-md text-[0.8rem] font-normal text-muted-foreground select-none",
+          "h-8 w-8 sm:h-9 sm:w-9 flex items-center justify-center rounded-md text-[0.8rem] font-medium text-muted-foreground select-none",
           defaultClassNames.weekday
         ),
-        week: cn("mt-2 flex w-full", defaultClassNames.week),
+        week: cn("mt-1 flex w-full justify-between", defaultClassNames.week),
         week_number_header: cn(
-          "w-9 select-none",
+          "w-8 sm:w-9 select-none",
           defaultClassNames.week_number_header
         ),
         week_number: cn(
@@ -75,7 +75,7 @@ function Calendar({
           defaultClassNames.week_number
         ),
         day: cn(
-          "group/day relative aspect-square h-full w-full rounded-md p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-r-md",
+          "group/day relative h-8 w-8 sm:h-9 sm:w-9 p-0 text-center text-sm select-none [&:last-child[data-selected=true]_button]:rounded-r-md",
           props.showWeekNumber
             ? "[&:nth-child(2)[data-selected=true]_button]:rounded-l-md"
             : "[&:first-child[data-selected=true]_button]:rounded-l-md",
@@ -95,7 +95,7 @@ function Calendar({
           defaultClassNames.today
         ),
         outside: cn(
-          "text-muted-foreground aria-selected:text-muted-foreground",
+          "text-muted-foreground opacity-50 aria-selected:text-muted-foreground",
           defaultClassNames.outside
         ),
         disabled: cn(
@@ -111,7 +111,7 @@ function Calendar({
             <div
               data-slot="calendar"
               ref={rootRef}
-              className={cn(className)}
+              className={cn("max-w-full overflow-x-auto", className)}
               {...props}
             />
           )
@@ -148,8 +148,8 @@ function CalendarDayButton({
     <DayButton
       data-slot="calendar-day-button"
       className={cn(
-        buttonVariants({ variant }),
-        "h-full w-full font-normal transition-none data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground data-[selected=true]:opacity-100 data-[today=true]:not-data-[selected=true]:bg-accent data-[today=true]:not-data-[selected=true]:text-accent-foreground",
+        buttonVariants({ variant, size: "icon" }),
+        "h-8 w-8 sm:h-9 sm:w-9 p-0 font-normal transition-none active:scale-100 min-w-0 data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground data-[selected=true]:opacity-100 data-[today=true]:not-data-[selected=true]:bg-accent data-[today=true]:not-data-[selected=true]:text-accent-foreground text-xs sm:text-sm",
         className
       )}
       {...props}
