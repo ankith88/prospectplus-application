@@ -370,10 +370,11 @@ export default function CustomerSuccessReportingClient() {
   // Export CSV
   const handleExportCsv = () => {
     const csvRows = [
-      ['Date', 'Lead Name', 'Company', 'CS Representative', 'Outcome Logged', 'Notes', 'Current Sales Status'],
+      ['Date', 'Lead Name', 'Prospect+ ID', 'Company', 'CS Representative', 'Outcome Logged', 'Notes', 'Current Sales Status'],
       ...filteredCalls.map(c => [
         format(new Date(c.date), 'yyyy-MM-dd HH:mm'),
         `"${(c.leadName || '').replace(/"/g, '""')}"`,
+        `"${((c as any).prospectPlusId || c.leadId || '').replace(/"/g, '""')}"`,
         `"${(c.companyName || '').replace(/"/g, '""')}"`,
         `"${(c.author || '').replace(/"/g, '""')}"`,
         `"${(c.outcome || '').replace(/"/g, '""')}"`,

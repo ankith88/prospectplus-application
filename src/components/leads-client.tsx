@@ -80,7 +80,7 @@ import { canReassignLead, canChangeBucket, isAccountManagerUser } from '@/lib/le
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
-type SortableLeadKeys = 'companyName' | 'status' | 'franchisee';
+type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'prospectPlusId' | 'customerStatus';
 type ExpandedLeadDetails = {
     note: Note | null;
     activity: Activity | null;
@@ -594,6 +594,7 @@ export default function LeadsClientPage({
   const LEADS_PER_PAGE = 10;
   const [paginationState, setPaginationState] = useState<Record<string, number>>({});
   const [filters, setFilters] = useState({
+    prospectPlusId: '',
     companyName: '',
     status: [] as string[],
     franchisee: [] as string[],
@@ -603,7 +604,7 @@ export default function LeadsClientPage({
     source: [] as string[],
     entityId: '',
     bucket: initialBucket,
-    netsuiteStatus: [] as string[],
+    customerStatus: [] as string[],
   });
 
   useEffect(() => {
@@ -830,6 +831,7 @@ export default function LeadsClientPage({
 
   const clearFilters = () => {
     setFilters({
+      prospectPlusId: '',
       companyName: '',
       status: [],
       franchisee: [],
@@ -839,7 +841,7 @@ export default function LeadsClientPage({
       source: [],
       entityId: '',
       bucket: initialBucket,
-      netsuiteStatus: [],
+      customerStatus: [],
     });
     setCurrentPage(1);
   };
@@ -860,6 +862,7 @@ export default function LeadsClientPage({
       }
         
       const companyNameMatch = filters.companyName ? (lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) || (lead.prospectPlusId && lead.prospectPlusId.toLowerCase().includes(filters.companyName.toLowerCase()))) : true;
+      const prospectPlusIdMatch = filters.prospectPlusId ? (lead.prospectPlusId && lead.prospectPlusId.toLowerCase().includes(filters.prospectPlusId.toLowerCase())) : true;
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
@@ -891,9 +894,9 @@ export default function LeadsClientPage({
       const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (parsedDate && parsedDate >= startOfDay(filters.dateLeadEntered.from) && parsedDate <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
       const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
       const entityIdMatch = filters.entityId ? lead.entityId?.toLowerCase().includes(filters.entityId.toLowerCase()) : true;
-      const netsuiteStatusMatch = filters.netsuiteStatus.length === 0 || (lead.netsuiteLeadStatus && filters.netsuiteStatus.includes(lead.netsuiteLeadStatus));
+      const customerStatusMatch = filters.customerStatus.length === 0 || (lead.customerStatus && filters.customerStatus.includes(lead.customerStatus));
 
-      return !isArchived && !isFieldSalesLead && companyNameMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && sourceMatch && entityIdMatch && bucketMatch && netsuiteStatusMatch;
+      return !isArchived && !isFieldSalesLead && companyNameMatch && prospectPlusIdMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && sourceMatch && entityIdMatch && bucketMatch && customerStatusMatch;
     });
 
     if (sortConfig !== null) {
@@ -1017,6 +1020,7 @@ export default function LeadsClientPage({
 
           const row = [
               escapeCsvCell(lead.companyName),
+              escapeCsvCell(lead.prospectPlusId || ''),
               escapeCsvCell(lead.websiteUrl),
               escapeCsvCell(lead.customerPhone),
               escapeCsvCell(lead.customerServiceEmail),
@@ -1106,7 +1110,7 @@ export default function LeadsClientPage({
   };
 
   const leadExportHeaders = [
-    'Company Name', 'Website URL', 'Company Phone', 'Company Email', 'ABN', 'Street Address', 'Suburb / City', 'State', 'Postcode', 'Country',
+    'Company Name', 'Prospect+ ID', 'Website URL', 'Company Phone', 'Company Email', 'ABN', 'Street Address', 'Suburb / City', 'State', 'Postcode', 'Country',
     'Postal Street Address', 'Postal Suburb / City', 'Postal State', 'Postal Postcode',
     'Address 2 Tag', 'Address 2 Street', 'Address 2 Suburb / City', 'Address 2 State', 'Address 2 Postcode',
     'Address 3 Tag', 'Address 3 Street', 'Address 3 Suburb / City', 'Address 3 State', 'Address 3 Postcode',
@@ -1535,8 +1539,8 @@ export default function LeadsClientPage({
     return Array.from(lists).sort((a, b) => a.localeCompare(b));
   }, [allLeads]);
 
-  const uniqueNetSuiteStatuses: Option[] = useMemo(() => {
-    const statuses = new Set(allLeads.map(lead => lead.netsuiteLeadStatus).filter(Boolean));
+  const uniqueCustomerStatuses: Option[] = useMemo(() => {
+    const statuses = new Set(allLeads.map(lead => lead.customerStatus).filter(Boolean));
     return Array.from(statuses).map(s => ({ value: s!, label: s! })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
   
@@ -1792,6 +1796,10 @@ export default function LeadsClientPage({
                 <CollapsibleContent>
                     <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
                         <div className="space-y-2">
+                            <Label htmlFor="prospectPlusId">Prospect+ ID</Label>
+                            <Input id="prospectPlusId" value={filters.prospectPlusId} onChange={(e) => handleFilterChange('prospectPlusId', e.target.value)} placeholder="Filter Prospect+ ID..." />
+                        </div>
+                        <div className="space-y-2">
                             <Label htmlFor="entityId">Customer ID</Label>
                             <Input id="entityId" value={filters.entityId} onChange={(e) => handleFilterChange('entityId', e.target.value)} />
                         </div>
@@ -1859,17 +1867,15 @@ export default function LeadsClientPage({
                             </Popover>
                         </div>
 
-                        {filters.bucket === 'inbound' && (
-                            <div className="space-y-2">
-                                <Label htmlFor="netsuiteStatus">NetSuite Status</Label>
-                                <MultiSelectCombobox
-                                    options={uniqueNetSuiteStatuses}
-                                    selected={filters.netsuiteStatus}
-                                    onSelectedChange={(selected) => handleFilterChange('netsuiteStatus', selected)}
-                                    placeholder="Select NetSuite statuses..."
-                                />
-                            </div>
-                        )}
+                        <div className="space-y-2">
+                            <Label htmlFor="customerStatus">Status</Label>
+                            <MultiSelectCombobox
+                                options={uniqueCustomerStatuses}
+                                selected={filters.customerStatus}
+                                onSelectedChange={(selected) => handleFilterChange('customerStatus', selected)}
+                                placeholder="Select statuses..."
+                            />
+                        </div>
                     </CardContent>
                     {hasActiveFilters && (
                         <CardContent>
@@ -1989,11 +1995,12 @@ export default function LeadsClientPage({
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="w-8 px-2 md:px-4"></TableHead>
+                                        <TableHead className="px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('prospectPlusId')} className="group -ml-4">Prospect+ ID{getSortIndicator('prospectPlusId')}</Button></TableHead>
                                         <TableHead className="px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
                                         <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
                                         <TableHead className="hidden sm:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
                                         <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
-                                        <TableHead className="hidden lg:table-cell px-2 md:px-4">NetSuite Status</TableHead>
+                                        <TableHead className="hidden lg:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('customerStatus')} className="group -ml-4">Status{getSortIndicator('customerStatus')}</Button></TableHead>
                                         <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -2007,6 +2014,9 @@ export default function LeadsClientPage({
                                                     onCheckedChange={(checked) => handleSelectLead(lead.id, !!checked)} 
                                                     aria-label={`Select lead ${lead.companyName}`} 
                                                 />
+                                            </TableCell>
+                                            <TableCell className="px-2 md:px-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                                                {lead.prospectPlusId || 'N/A'}
                                             </TableCell>
                                             <TableCell className="px-2 md:px-4">
                                                 <DropdownMenu>
@@ -2052,9 +2062,9 @@ export default function LeadsClientPage({
                                             <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
                                             <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
                                             <TableCell className="hidden lg:table-cell px-2 md:px-4">
-                                                {lead.netsuiteLeadStatus ? (
+                                                {lead.customerStatus ? (
                                                     <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200">
-                                                        {lead.netsuiteLeadStatus}
+                                                        {lead.customerStatus}
                                                     </Badge>
                                                 ) : 'N/A'}
                                             </TableCell>
@@ -2077,7 +2087,7 @@ export default function LeadsClientPage({
                                         </TableRow>
                                         {expandedDetails[lead.id] && (
                                             <TableRow>
-                                                <TableCell colSpan={6} className="p-0 md:p-0">
+                                                <TableCell colSpan={8} className="p-0">
                                                     <div className="p-4 bg-secondary/50">
                                                         {expandedDetails[lead.id].loading ? (
                                                             <Loader />
@@ -2255,11 +2265,12 @@ export default function LeadsClientPage({
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead className="w-8 px-2 md:px-4"></TableHead>
+                                                    <TableHead className="px-2 md:px-4">Prospect+ ID</TableHead>
                                                     <TableHead className="px-2 md:px-4">Company</TableHead>
                                                     <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
                                                     <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
                                                     <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
-                                                    <TableHead className="hidden lg:table-cell px-2 md:px-4">NetSuite Status</TableHead>
+                                                    <TableHead className="hidden lg:table-cell px-2 md:px-4">Status</TableHead>
                                                     <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                                 </TableRow>
                                             </TableHeader>
@@ -2274,14 +2285,17 @@ export default function LeadsClientPage({
                                                             aria-label={`Select lead ${lead.companyName}`}
                                                         />
                                                     </TableCell>
+                                                    <TableCell className="px-2 md:px-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                                                        {lead.prospectPlusId || 'N/A'}
+                                                    </TableCell>
                                                     <TableCell className="px-2 md:px-4"><Button variant="link" className="p-0 h-auto text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
                                                     <TableCell className="px-2 md:px-4 text-center"><CallAttemptBadge attempts={getCallCount(lead)} variant="default" /></TableCell>
                                                     <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
                                                     <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
                                                     <TableCell className="hidden lg:table-cell px-2 md:px-4">
-                                                        {lead.netsuiteLeadStatus ? (
+                                                        {lead.customerStatus ? (
                                                             <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200">
-                                                                {lead.netsuiteLeadStatus}
+                                                                {lead.customerStatus}
                                                             </Badge>
                                                         ) : 'N/A'}
                                                     </TableCell>
@@ -2314,7 +2328,7 @@ export default function LeadsClientPage({
                                                 </TableRow>
                                                 {expandedDetails[lead.id] && (
                                                     <TableRow>
-                                                        <TableCell colSpan={6} className="p-0">
+                                                        <TableCell colSpan={8} className="p-0">
                                                             <div className="p-4 bg-secondary/50">
                                                                 {expandedDetails[lead.id].loading ? (
                                                                     <Loader />
@@ -2484,11 +2498,12 @@ export default function LeadsClientPage({
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="w-8 px-2 md:px-4"></TableHead>
+                                        <TableHead className="px-2 md:px-4">Prospect+ ID</TableHead>
                                         <TableHead className="px-2 md:px-4">Company</TableHead>
                                         <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
                                         <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
                                         <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
-                                        <TableHead className="hidden lg:table-cell px-2 md:px-4">NetSuite Status</TableHead>
+                                        <TableHead className="hidden lg:table-cell px-2 md:px-4">Status</TableHead>
                                         <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -2502,6 +2517,9 @@ export default function LeadsClientPage({
                                                     aria-label={`Select lead ${lead.companyName}`} 
                                                 />
                                             </TableCell>
+                                            <TableCell className="px-2 md:px-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                                                {lead.prospectPlusId || 'N/A'}
+                                            </TableCell>
                                             <TableCell className="px-2 md:px-4">
                                                 <Button variant="link" className="p-0 h-auto text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                                                     {lead.companyName}
@@ -2511,9 +2529,9 @@ export default function LeadsClientPage({
                                             <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
                                             <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
                                             <TableCell className="hidden lg:table-cell px-2 md:px-4">
-                                                {lead.netsuiteLeadStatus ? (
+                                                {lead.customerStatus ? (
                                                     <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200">
-                                                        {lead.netsuiteLeadStatus}
+                                                        {lead.customerStatus}
                                                     </Badge>
                                                 ) : 'N/A'}
                                             </TableCell>

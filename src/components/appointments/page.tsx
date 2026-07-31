@@ -246,11 +246,12 @@ export default function AllAppointmentsPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'Lead Status', 'Appointment Status', 'Date Created', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time'];
+    const headers = ['Lead Name', 'Prospect+ ID', 'Lead Status', 'Appointment Status', 'Date Created', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time'];
     const rows = sortedAppointments.map(appt => {
         const createdDate = parseDateString(appt.appointmentDate);
         return [
             escapeCsvCell(appt.leadName),
+            escapeCsvCell((appt as any).prospectPlusId || appt.leadId || ''),
             escapeCsvCell(appt.leadStatus),
             escapeCsvCell(appt.appointmentStatus || 'Pending'),
             escapeCsvCell(createdDate ? createdDate.toLocaleDateString() : 'N/A'),

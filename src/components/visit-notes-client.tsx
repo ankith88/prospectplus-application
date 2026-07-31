@@ -381,7 +381,7 @@ export default function VisitNotesClient() {
         return;
     }
 
-    const headers = ['Date', 'Time', 'Captured By', 'Company Name', 'Address', 'Outcome', 'Note Status', 'Lead Status', 'Lead ID', 'Entity ID', 'Field Sales', 'Note Content'];
+    const headers = ['Date', 'Time', 'Captured By', 'Company Name', 'Prospect+ ID', 'Address', 'Outcome', 'Note Status', 'Lead Status', 'Lead ID', 'Entity ID', 'Field Sales', 'Note Content'];
     const rows = filteredNotes.map(note => {
         const record = note.leadId ? recordsMap.get(note.leadId) : null;
         const noteDate = new Date(note.createdAt);
@@ -390,6 +390,7 @@ export default function VisitNotesClient() {
             escapeCsvCell(new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit', hour12: true }).format(noteDate)),
             escapeCsvCell(note.capturedBy),
             escapeCsvCell(note.companyName || 'N/A'),
+            escapeCsvCell(record?.prospectPlusId || (note as any).prospectPlusId || 'N/A'),
             escapeCsvCell(formatAddressString(note.address) || 'N/A'),
             escapeCsvCell(note.outcome?.type || 'N/A'),
             escapeCsvCell(note.status),

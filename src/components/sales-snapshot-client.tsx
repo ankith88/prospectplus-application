@@ -1116,11 +1116,12 @@ export default function SalesSnapshotClient() {
       toast({ title: 'No Data', description: 'List is empty.' });
       return;
     }
-    const headers = ['Company Name', 'Status', 'Bucket', 'User in Charge', 'Lead Type', 'MRR Value', 'Dialer Assigned', 'AM Assigned', 'Franchisee'];
+    const headers = ['Company Name', 'Prospect+ ID', 'Status', 'Bucket', 'User in Charge', 'Lead Type', 'MRR Value', 'Dialer Assigned', 'AM Assigned', 'Franchisee'];
     const csvContent = [
       headers.join(','),
       ...data.map(lead => [
         `"${lead.companyName.replace(/"/g, '""')}"`,
+        `"${(lead.prospectPlusId || lead.id || '').replace(/"/g, '""')}"`,
         `"${lead.customerStatus || lead.status}"`,
         `"${getLeadBucketLabel(lead)}"`,
         `"${getUserInCharge(lead)}"`,

@@ -573,7 +573,7 @@ export default function ArchivedLeadsClientPage() {
 
   const handleExport = () => {
       const headers = [
-          'Company Name', 'Website URL', 'Company Phone', 'Company Email', 'ABN', 'Street Address', 'Suburb / City', 'State', 'Postcode', 'Country',
+          'Company Name', 'Prospect+ ID', 'Website URL', 'Company Phone', 'Company Email', 'ABN', 'Street Address', 'Suburb / City', 'State', 'Postcode', 'Country',
           'Postal Street Address', 'Postal Suburb / City', 'Postal State', 'Postal Postcode',
           'Address 2 Tag', 'Address 2 Street', 'Address 2 Suburb / City', 'Address 2 State', 'Address 2 Postcode',
           'Address 3 Tag', 'Address 3 Street', 'Address 3 Suburb / City', 'Address 3 State', 'Address 3 Postcode',
@@ -598,6 +598,7 @@ export default function ArchivedLeadsClientPage() {
 
           const row = [
               escapeCsvCell(lead.companyName),
+              escapeCsvCell(lead.prospectPlusId || ''),
               escapeCsvCell(lead.websiteUrl),
               escapeCsvCell(lead.customerPhone),
               escapeCsvCell(lead.customerServiceEmail),

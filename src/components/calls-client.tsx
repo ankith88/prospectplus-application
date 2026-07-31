@@ -535,9 +535,10 @@ export default function CallsClientPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'User', 'Status', 'Bucket', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
+    const headers = ['Lead Name', 'Prospect+ ID', 'User', 'Status', 'Bucket', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
     const rows = sortedCalls.map(call => [
         escapeCsvCell(call.leadName),
+        escapeCsvCell((call as any).prospectPlusId || call.leadId || ''),
         escapeCsvCell(call.author || call.dialerAssigned || 'Unassigned'),
         escapeCsvCell(call.leadStatus),
         escapeCsvCell(bucketNames[call.leadBucket || ''] || call.leadBucket || 'N/A'),

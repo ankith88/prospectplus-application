@@ -4066,9 +4066,9 @@ export default function ReportsClientPage({
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         filteredAppointments,
-                        ['Lead Name', 'Lead Status', 'Dialer', 'Account Manager', 'Date', 'Appt Status'],
+                        ['Lead Name', 'Prospect+ ID', 'Lead Status', 'Dialer', 'Account Manager', 'Date', 'Appt Status'],
                         'outbound_appointments',
-                        (a) => [a.leadName, a.leadStatus, a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate ? safeFormat(a.duedate, 'PP') : 'N/A', a.appointmentStatus || 'Pending']
+                        (a) => [a.leadName, a.prospectPlusId || a.leadId || 'N/A', a.leadStatus, a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate ? safeFormat(a.duedate, 'PP') : 'N/A', a.appointmentStatus || 'Pending']
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -4311,10 +4311,11 @@ export default function ReportsClientPage({
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.fieldSourcedLeads,
-                        ['Company', 'Field Rep', 'Visit Outcome', 'Captured Date', 'Current Status', 'Outbound Dialer'],
+                        ['Company', 'Prospect+ ID', 'Field Rep', 'Visit Outcome', 'Captured Date', 'Current Status', 'Outbound Dialer'],
                         'field_sourced_outbound_pipeline',
                         (l) => [
-                            l.companyName, 
+                            l.companyName,
+                            l.prospectPlusId || l.id || 'N/A',
                             l.visitNote?.capturedBy || 'N/A',
                             l.visitNote?.outcome?.type || 'N/A',
                             l.visitNote?.createdAt ? format(new Date(l.visitNote.createdAt), 'PP') : 'N/A',
@@ -4412,9 +4413,9 @@ export default function ReportsClientPage({
                         </div>
                         <Button variant="outline" size="sm" onClick={() => handleExportList(
                             filteredSourcedAppts,
-                            ['Company', 'Lead Status', 'Appt Status', 'Source (Dialer)', 'Assigned Sales Rep', 'Appt Date'],
+                            ['Company', 'Prospect+ ID', 'Lead Status', 'Appt Status', 'Source (Dialer)', 'Assigned Sales Rep', 'Appt Date'],
                             'appointment_outcomes_list',
-                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate ? safeFormat(a.duedate, 'PP') : 'N/A']
+                            (a) => [a.leadName, a.prospectPlusId || a.leadId || 'N/A', a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate ? safeFormat(a.duedate, 'PP') : 'N/A']
                         )}>
                             <Download className="mr-2 h-4 w-4" /> Export
                         </Button>
@@ -4484,9 +4485,9 @@ export default function ReportsClientPage({
                     </div>
                     <Button variant="outline" size="sm" onClick={() => trialDrilldown && handleExportList(
                         trialDrilldown.leads,
-                        ['Company Name', 'Status', 'Dialer', 'Franchisee', 'Date Entered'],
+                        ['Company Name', 'Prospect+ ID', 'Status', 'Dialer', 'Franchisee', 'Date Entered'],
                         trialDrilldown.title.toLowerCase().replace(/\s+/g, '_'),
-                        (l) => [l.companyName, l.status, l.dialerAssigned || 'N/A', l.franchisee || 'N/A', l.dateLeadEntered || 'N/A']
+                        (l) => [l.companyName, l.prospectPlusId || l.id || 'N/A', l.status, l.dialerAssigned || 'N/A', l.franchisee || 'N/A', l.dateLeadEntered || 'N/A']
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>

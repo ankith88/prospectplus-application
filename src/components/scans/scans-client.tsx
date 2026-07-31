@@ -275,7 +275,7 @@ export function ScansClient() {
   }
 
   const exportToCSV = () => {
-    const headers = ['Scan Date', 'Barcode', 'Connote Number', 'Courier & Speed', 'Product Type', 'MailPlus Scan', 'Real-time Status', 'Signed Customer', 'Franchisee', 'Operator', 'Receiver Details'];
+    const headers = ['Scan Date', 'Barcode', 'Connote Number', 'Courier & Speed', 'Product Type', 'MailPlus Scan', 'Real-time Status', 'Signed Customer', 'Prospect+ ID', 'Franchisee', 'Operator', 'Receiver Details'];
     const rows = filteredPackages.map(pkg => {
       let customerNsId = null;
       if (pkg.scans && pkg.scans.length > 0) {
@@ -312,6 +312,7 @@ export function ScansClient() {
         latestScan?.scan_type || '-',
         pkg.real_time_status?.status || '-',
         company?.name || '-',
+        (company as any)?.prospectPlusId || (company as any)?.entityId || '-',
         company?.franchisee || '-',
         operatorName,
         recDetails || '-'

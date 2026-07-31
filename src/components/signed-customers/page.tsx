@@ -587,10 +587,11 @@ export default function SignedCustomersPage() {
       return;
     }
 
-    const headers = ['ID', 'Company Name', 'Franchisee', 'Address', 'Email', 'Phone', 'Last Prospected'];
+    const headers = ['ID', 'Prospect+ ID', 'Company Name', 'Franchisee', 'Address', 'Email', 'Phone', 'Last Prospected'];
     const rows = sortedCompanies.map(lead => {
       return [
         escapeCsvCell((lead as any).entityId || 'N/A'),
+        escapeCsvCell((lead as any).prospectPlusId || 'N/A'),
         escapeCsvCell(lead.companyName),
         escapeCsvCell(lead.franchisee || 'N/A'),
         escapeCsvCell(formatAddress(lead.address as Address)),

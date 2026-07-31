@@ -153,7 +153,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (pathname) {
-      if (pathname.startsWith('/leads') || pathname.startsWith('/inbound-leads') || pathname.startsWith('/franchisee-leads') || pathname.startsWith('/admin/marketing/import-leads')) {
+      if (pathname.startsWith('/leads') || pathname.startsWith('/inbound-leads') || pathname.startsWith('/franchisee-leads') || pathname.startsWith('/admin/marketing/import-leads') || pathname.startsWith('/admin/in-review-leads')) {
         setExpandedStates(prev => ({ ...prev, 'leads-group': true }));
       }
       if (pathname.startsWith('/admin/marketing') && !pathname.startsWith('/admin/marketing/import-leads')) {
@@ -419,7 +419,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canImportLeads = (isSuperAdmin || canView('importLeads')) && !isUserRole;
   const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
   const canViewFranchiseeVerification = (isSuperAdmin || userProfile?.activeRole === 'admin' || canView('franchiseeVerification')) && !isUserRole;
-  const canViewLeadManagementGroup = canCreateLead || isFranchiseeRole || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads || canViewFranchiseeVerification;
   const canViewHistoryAppointments = canView('historyAppointments');
   const canViewHistoryCallsTranscripts = canView('historyCallsTranscripts');
   const canViewFranchisees = canView('franchisees');
@@ -430,8 +429,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewLpoLeads = canView('lpoLeads');
   const canAccessAsk = !!userProfile?.uid && ALLOWED_ASK_UIDS.includes(userProfile.uid);
   const activeRoleStr = userProfile?.activeRole as string;
-  const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin';
+  const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || activeRoleStr === 'Outbound Admin' || activeRoleStr === 'Lead Gen Admin';
   const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const canViewInReviewLeads = (isAdmin || isSuperAdmin || canView('inReviewLeads')) && !isUserRole;
+  const canViewLeadManagementGroup = canCreateLead || isFranchiseeRole || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads || canViewFranchiseeVerification || canViewInReviewLeads;
   
   const allowedMailboxRoles = [
     'admin',
@@ -881,6 +882,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           <Link href="/franchisee-lead-verification">
                             <UserCheck className="h-4 w-4" />
                             <span>Franchisee Lead Review</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {canViewInReviewLeads && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/in-review-leads")}>
+                          <Link href="/admin/in-review-leads">
+                            <ClipboardCheck className="h-4 w-4" />
+                            <span>In Review Leads</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
@@ -1612,6 +1623,7 @@ const isCustomPath = (path: string) => {
 };
 
 const getPageNameFromPath = (path: string) => {
+  if (path === '/admin/in-review-leads') return 'In Review Leads';
   if (path === '/leads/archive') return 'Archived Leads';
   if (path === '/leads/map') return 'Territory Map';
   if (path.startsWith('/leads/')) return 'Lead Profile';

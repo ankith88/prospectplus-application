@@ -270,6 +270,15 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
   const followUpPeriod = form.watch('followUpPeriod');
   const targetPhone = form.watch('targetPhone');
 
+  const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user';
+
+  const isEmailOutcome = useMemo(() => {
+    if (!outcome) return false;
+    if (outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') return true;
+    if (!isUserRole && (outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory')) return true;
+    return false;
+  }, [outcome, isUserRole]);
+
   const getSmsPreview = () => {
     const targetPhoneObj = uniquePhones.find(p => p.phone === targetPhone);
     const contactNameFull = targetPhoneObj ? (targetPhoneObj.name === lead.companyName ? 'there' : targetPhoneObj.name) : 'there';
@@ -565,16 +574,30 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
   }, [isOpen, selectedTemplateId, compilePlaceholders, form]);
 
   useEffect(() => {
-    if (!isOpen || (outcome !== 'Email Interested' && outcome !== 'Email Brush-Off' && outcome !== 'Email Brush Off')) return;
+    if (!isOpen || !outcome) return;
     const activeRole = userProfile?.activeRole;
-    if (activeRole === 'user' || !selectedTemplateId) {
-      applyTemplate('ZNI8yZ4PP5Q7UawHhbZh');
+    const isUserRole = activeRole === 'user' || activeRole?.toLowerCase() === 'user';
+
+    if (outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') {
+      if (isUserRole || !selectedTemplateId) {
+        applyTemplate('ZNI8yZ4PP5Q7UawHhbZh');
+      }
+    } else if (!isUserRole && outcome === 'LOST - No Response') {
+      applyTemplate('IxIOJNAExBaWNsnKfHs0');
+    } else if (!isUserRole && outcome === 'Lost - Out of Territory') {
+      const found = marketingTemplates.find(t => t.name === 'Sales - Out of Territory');
+      if (found) {
+        applyTemplate(found.id);
+      }
     }
-  }, [isOpen, outcome]);
+  }, [isOpen, outcome, userProfile, marketingTemplates]);
 
   useEffect(() => {
     async function fetchTemplateSubject() {
       if (!isOpen || !outcome) return;
+      const activeRole = userProfile?.activeRole;
+      const isUserRole = activeRole === 'user' || activeRole?.toLowerCase() === 'user';
+      if (isUserRole) return;
       
       if (outcome === 'LOST - No Response') {
         try {
@@ -602,7 +625,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
       }
     }
     fetchTemplateSubject();
-  }, [isOpen, outcome, form, compilePlaceholders]);
+  }, [isOpen, outcome, form, compilePlaceholders, userProfile]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -786,7 +809,11 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
         }
     }
 
-    if ((values.outcome === 'Email Interested' || values.outcome === 'Email Brush-Off' || values.outcome === 'Email Brush Off') && values.sendEmail && uniqueEmails.length > 0 && !values.targetEmail) {
+    const isUserRoleSubmitted = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user';
+    const isEmailOutcomeSubmitted = (values.outcome === 'Email Interested' || values.outcome === 'Email Brush-Off' || values.outcome === 'Email Brush Off') ||
+      (!isUserRoleSubmitted && (values.outcome === 'LOST - No Response' || values.outcome === 'Lost - Out of Territory'));
+
+    if (isEmailOutcomeSubmitted && values.sendEmail && uniqueEmails.length > 0 && !values.targetEmail) {
         form.setError('targetEmail', { type: 'manual', message: 'Please select an email address.' });
         return;
     }
@@ -1049,11 +1076,48 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
             });
         }
 
-        // 3. Special handling for Email Interested & Email Brush-Off
-        if ((values.outcome === 'Email Interested' || values.outcome === 'Email Brush-Off' || values.outcome === 'Email Brush Off') && values.sendEmail) {
+        // Special handling for SMS on No Answer for Account Managers / non-user roles
+        if (!isUserRoleSubmitted && values.outcome === 'No Answer' && values.sendSms) {
+            const targetPhone = values.targetPhone || uniquePhones[0]?.phone;
+            if (targetPhone) {
+                try {
+                    const smsResult = await sendSms(targetPhone, getSmsPreview(), userProfile?.activeRole || userProfile?.role);
+                    if (smsResult.success) {
+                        toast({ title: 'SMS Sent', description: "Automatic 'Missed Call' SMS sent successfully." });
+                        logActivity(lead.id, {
+                            type: 'Update',
+                            notes: `Sent automatic 'Missed Call' SMS to ${targetPhone}: "${getSmsPreview()}"`,
+                            author: user.displayName || 'System'
+                        });
+                    } else {
+                        toast({ variant: 'destructive', title: 'SMS Failed', description: smsResult.message || 'Failed to send No Answer SMS.' });
+                    }
+                } catch (e: any) {
+                    console.error('Error sending No Answer SMS:', e);
+                    toast({ variant: 'destructive', title: 'SMS Error', description: e.message || 'Error sending No Answer SMS.' });
+                }
+            } else if (uniquePhones.length > 0) {
+                toast({ variant: 'destructive', title: 'No Phone Selected', description: 'Could not send the No Answer SMS.' });
+            }
+        }
+
+        // Special handling for Email outcomes
+        if (isEmailOutcomeSubmitted && values.sendEmail) {
             const targetEmail = values.targetEmail;
             const targetEmailObj = uniqueEmails.find(e => e.email === targetEmail);
             const contactName = targetEmailObj ? targetEmailObj.name : '';
+
+            let templateIdToUse = selectedTemplateId;
+            if (!templateIdToUse) {
+                if (values.outcome === 'LOST - No Response') {
+                    templateIdToUse = 'IxIOJNAExBaWNsnKfHs0';
+                } else if (values.outcome === 'Lost - Out of Territory') {
+                    const found = marketingTemplates.find(t => t.name === 'Sales - Out of Territory');
+                    templateIdToUse = found?.id || 'ZNI8yZ4PP5Q7UawHhbZh';
+                } else {
+                    templateIdToUse = 'ZNI8yZ4PP5Q7UawHhbZh';
+                }
+            }
 
             if (targetEmail) {
                 try {
@@ -1062,13 +1126,13 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             leadIds: [lead.id],
-                            templateId: selectedTemplateId || 'ZNI8yZ4PP5Q7UawHhbZh',
+                            templateId: templateIdToUse,
                             targetEmail: targetEmail,
                             cc: values.cc || undefined,
                             bcc: values.bcc || undefined,
                             customSubject: values.subject || undefined,
                             customHtml: editableEmailBody || undefined,
-                            customSenderEmail: userProfile?.activeRole === 'user' ? 'localmile@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
+                            customSenderEmail: isUserRoleSubmitted ? 'localmile@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
                             overrideContactName: contactName
                         })
                     });
@@ -1339,7 +1403,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                       </Button>
                     </div>
 
-                    {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && uniqueEmails.length > 0 && (
+                    {isEmailOutcome && uniqueEmails.length > 0 && (
                       <div className="space-y-4">
                         <FormField
                           control={form.control}
@@ -1354,7 +1418,11 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                               </FormControl>
                               <div className="space-y-1 leading-none">
                                 <FormLabel className="text-xs font-medium cursor-pointer">
-                                  {outcome === 'Email Brush-Off' || outcome === 'Email Brush Off'
+                                  {outcome === 'Lost - Out of Territory'
+                                    ? "Send automatic 'Sales - Out of Territory' email"
+                                    : outcome === 'LOST - No Response'
+                                    ? "Send automatic 'No Response' email"
+                                    : outcome === 'Email Brush-Off' || outcome === 'Email Brush Off'
                                     ? "Send 'Email Brush-Off' template email"
                                     : "Send 'Email Interested' template email"}
                                 </FormLabel>
@@ -1476,9 +1544,13 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                                 <FormItem>
                                   <div className="flex items-center justify-between">
                                     <FormLabel className="text-xs font-semibold">
-                                      Send Email To
+                                      {outcome === 'Lost - Out of Territory'
+                                        ? "Send 'Sales - Out of Territory' Email To"
+                                        : outcome === 'LOST - No Response'
+                                        ? "Send 'No Response' Email To"
+                                        : "Send Email To"}
                                     </FormLabel>
-                                     {uniqueEmails.length > 1 && (
+                                    {uniqueEmails.length > 1 && (
                                       <Button
                                         type="button"
                                         variant="outline"
@@ -1540,7 +1612,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                               )}
                             />
 
-                            {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                            {isEmailOutcome && !isUserRole && (
                               <div className="space-y-1.5">
                                 <span className="text-[10px] font-bold uppercase text-slate-400 block">Dynamic Placeholders</span>
                                 <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-lg border max-h-36 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
@@ -1624,7 +1696,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                               )}
                             />
 
-                            {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
+                            {isEmailOutcome && (
                               <div className="space-y-1.5">
                                 <FormLabel className="text-xs font-semibold">Email Preview / Editor</FormLabel>
                                 <div className="border rounded-md bg-white flex flex-col min-h-[350px] relative overflow-hidden">
@@ -1716,6 +1788,69 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                           </div>
                         )}
                       </div>
+                    )}
+                    {!isUserRole && outcome === 'No Answer' && uniquePhones.length > 0 && (
+                      <div className="space-y-4 border p-4 rounded-lg bg-amber-50/40 border-amber-200">
+                        <FormField
+                          control={form.control}
+                          name="sendSms"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3 bg-white">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel className="text-xs font-semibold cursor-pointer">
+                                  Send automatic 'Missed Call' SMS to prospect
+                                </FormLabel>
+                              </div>
+                            </FormItem>
+                          )}
+                        />
+                        {form.watch('sendSms') && (
+                          <FormField
+                            control={form.control}
+                            name="targetPhone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs font-semibold">Select Target Phone Number</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || uniquePhones[0]?.phone}>
+                                  <FormControl>
+                                    <SelectTrigger className="bg-white text-xs">
+                                      <SelectValue placeholder="Select phone number" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {uniquePhones.map(p => (
+                                        <SelectItem key={p.phone} value={p.phone}>
+                                          {p.phone} ({p.label})
+                                        </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {field.value && (
+                                  <div className="mt-3 text-xs bg-muted/65 border border-border/80 rounded-md p-3 text-muted-foreground space-y-1.5">
+                                    <span className="font-semibold text-foreground flex items-center gap-1.5">
+                                      <Info className="h-3.5 w-3.5 text-blue-500" />
+                                      Automatic SMS will be sent:
+                                    </span>
+                                    <p className="italic bg-background/60 p-2.5 rounded border border-border/50 font-mono text-[11px] leading-relaxed">
+                                      "{getSmsPreview()}"
+                                    </p>
+                                  </div>
+                                )}
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {!isUserRole && outcome === 'No Answer' && uniquePhones.length === 0 && (
+                       <p className="text-sm text-destructive">No phone numbers found for this lead. The automatic SMS will not be sent.</p>
                     )}
 
 

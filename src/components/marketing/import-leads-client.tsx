@@ -123,14 +123,15 @@ export function ImportLeadsClient() {
   const [duplicateLeads, setDuplicateLeads] = useState<Record<number, { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null>>({}); // rowIdx -> duplicate match info or null
   const [existingCompanyMatches, setExistingCompanyMatches] = useState<Record<number, { id: string; name: string } | null>>({});
   const [existingCompaniesCache, setExistingCompaniesCache] = useState<Map<string, { id: string; name: string }>>(new Map());
-  const [duplicateStrategy, setDuplicateStrategy] = useState<'skip' | 'import'>('skip');
+  const [duplicateStrategy, setDuplicateStrategy] = useState<'skip' | 'import' | 'update'>('skip');
   const [isValidating, setIsValidating] = useState<boolean>(false);
   
   // Step 5 (Import Execution) state
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [importProgress, setImportProgress] = useState<number>(0);
-  const [importStats, setImportStats] = useState<{ success: number; skipped: number; failed: number; total: number }>({
+  const [importStats, setImportStats] = useState<{ success: number; updated: number; skipped: number; failed: number; total: number }>({
     success: 0,
+    updated: 0,
     skipped: 0,
     failed: 0,
     total: 0
@@ -700,6 +701,7 @@ export function ImportLeadsClient() {
     setImportProgress(0);
     
     let successCount = 0;
+    let updatedCount = 0;
     let skippedCount = 0;
     let failedCount = 0;
     
@@ -744,10 +746,13 @@ export function ImportLeadsClient() {
         // Duplicate & Existing Customer handling
         const isDuplicateMatch = duplicateLeads[rowIdx];
         const isExistingCustomerMatch = existingCompanyMatches[rowIdx];
+
         if ((isDuplicateMatch || isExistingCustomerMatch) && duplicateStrategy === 'skip') {
           skippedCount++;
           continue;
         }
+
+        const isUpdatingExistingLead = (duplicateStrategy === 'update' && !!isDuplicateMatch);
 
         // Address resolution
         const address = {
@@ -817,27 +822,32 @@ export function ImportLeadsClient() {
         // Bucket & Assignments config
         const leadData: any = {
           companyName,
-          websiteUrl: getVal('websiteUrl') || '',
-          customerPhone: getVal('customerPhone') || '',
-          customerServiceEmail: getVal('customerServiceEmail') || '',
-          abn: getVal('abn') || '',
+          ...(getVal('websiteUrl') && { websiteUrl: getVal('websiteUrl') }),
+          ...(getVal('customerPhone') && { customerPhone: getVal('customerPhone') }),
+          ...(getVal('customerServiceEmail') && { customerServiceEmail: getVal('customerServiceEmail') }),
+          ...(getVal('abn') && { abn: getVal('abn') }),
           address,
           ...(postalAddress && { postalAddress }),
           ...(additionalAddresses.length > 0 && { additionalAddresses }),
-          status: 'New' as LeadStatus,
-          customerStatus: 'New',
           bucket: selectedBucket,
           fieldSales: selectedBucket === 'field_sales',
           leadSource: leadSource || 'Bulk Import Wizard',
-          dateLeadEntered: nowStr,
-          createdAt: serverTimestamp(),
-          isDuplicate: !!isDuplicateMatch,
-          similarLeads: isDuplicateMatch ? [isDuplicateMatch.id] : [],
-          ...(isDuplicateMatch && {
-            duplicateConfidence: isDuplicateMatch.confidence,
-            duplicateMatchReasons: isDuplicateMatch.reasons
-          })
         };
+
+        if (!isUpdatingExistingLead) {
+          leadData.status = 'New' as LeadStatus;
+          leadData.customerStatus = 'New';
+          leadData.dateLeadEntered = nowStr;
+          leadData.createdAt = serverTimestamp();
+          leadData.isDuplicate = !!isDuplicateMatch;
+          leadData.similarLeads = isDuplicateMatch ? [isDuplicateMatch.id] : [];
+          if (isDuplicateMatch) {
+            leadData.duplicateConfidence = isDuplicateMatch.confidence;
+            leadData.duplicateMatchReasons = isDuplicateMatch.reasons;
+          }
+        } else {
+          leadData.updatedAt = serverTimestamp();
+        }
 
         // Parent Linkage resolution for row
         const rowParentPpId = getVal('parentProspectPlusId')?.toLowerCase().trim();
@@ -904,9 +914,12 @@ export function ImportLeadsClient() {
           leadData.franchisee = assignedFranchisee;
         }
 
-        // 1. Generate document reference for new Lead
-        const leadRef = doc(collection(firestore, 'leads'));
-        batch.set(leadRef, leadData);
+        // 1. Generate or reference document for Lead
+        const leadRef = isUpdatingExistingLead && isDuplicateMatch
+          ? doc(firestore, 'leads', isDuplicateMatch.id)
+          : doc(collection(firestore, 'leads'));
+
+        batch.set(leadRef, leadData, { merge: true });
 
         // 2. Multi-Contact subcollection creation
         const contactsToCreate = [
@@ -960,29 +973,33 @@ export function ImportLeadsClient() {
               isPrimary: cConfig.isPrimary,
               ...(cConfig.isAccountsPayable ? { isAccountsPayable: true } : {})
             };
-            batch.set(contactRef, contactData);
+            batch.set(contactRef, contactData, { merge: true });
           }
         }
 
-        // 3. Create initial Activity entry
+        // 3. Create Activity entry
         const activityRef = doc(collection(firestore, 'leads', leadRef.id, 'activity'));
         batch.set(activityRef, {
           type: 'Update',
           date: nowStr,
-          notes: effectiveParent
-            ? `Lead imported as child location under parent "${effectiveParent.companyName}" (${effectiveParent.prospectPlusId ? `Prospect+ ID: ${effectiveParent.prospectPlusId}` : `ID: ${effectiveParent.id}`}). Bucket: ${selectedBucket.replace('_', ' ')}. Source: ${campaignName}`
-            : `Lead imported via Bulk Import in ${selectedBucket.replace('_', ' ')} bucket. Source: ${campaignName}`,
+          notes: isUpdatingExistingLead
+            ? `Lead record updated with CSV data via Bulk Import Wizard. Source: ${campaignName}`
+            : effectiveParent
+              ? `Lead imported as child location under parent "${effectiveParent.companyName}" (${effectiveParent.prospectPlusId ? `Prospect+ ID: ${effectiveParent.prospectPlusId}` : `ID: ${effectiveParent.id}`}). Bucket: ${selectedBucket.replace('_', ' ')}. Source: ${campaignName}`
+              : `Lead imported via Bulk Import in ${selectedBucket.replace('_', ' ')} bucket. Source: ${campaignName}`,
           author: authorName
         });
 
-        // 4. Create initial Bucket History entry
-        const historyRef = doc(collection(firestore, 'leads', leadRef.id, 'bucket_history'));
-        batch.set(historyRef, {
-          oldBucket: 'unassigned',
-          newBucket: selectedBucket,
-          date: nowStr,
-          author: authorName
-        });
+        // 4. Create Bucket History entry for new leads
+        if (!isUpdatingExistingLead) {
+          const historyRef = doc(collection(firestore, 'leads', leadRef.id, 'bucket_history'));
+          batch.set(historyRef, {
+            oldBucket: 'unassigned',
+            newBucket: selectedBucket,
+            date: nowStr,
+            author: authorName
+          });
+        }
 
         // Nurture Journey enrollment setup
         if (selectedBucket === 'nurture' && targetJourneyId) {
@@ -1002,10 +1019,14 @@ export function ImportLeadsClient() {
                 actionResult: `Enrolled via bulk import by ${authorName}.`
               }
             ]
-          });
+          }, { merge: true });
         }
 
-        successCount++;
+        if (isUpdatingExistingLead) {
+          updatedCount++;
+        } else {
+          successCount++;
+        }
       }
 
       try {
@@ -1013,13 +1034,13 @@ export function ImportLeadsClient() {
       } catch (err) {
         console.error('Batch commit failed for chunk:', i, err);
         failedCount += chunk.length;
-        successCount -= chunk.length; // rollback success counter for this chunk
       }
 
       const progressVal = Math.min(Math.round(((i + chunk.length) / total) * 100), 100);
       setImportProgress(progressVal);
       setImportStats({
         success: successCount,
+        updated: updatedCount,
         skipped: skippedCount,
         failed: failedCount,
         total
@@ -1028,7 +1049,10 @@ export function ImportLeadsClient() {
 
     setIsImporting(false);
     setStep(5);
-    toast({ title: 'Import Complete', description: `Successfully imported ${successCount} leads.` });
+    toast({ 
+      title: 'Import Complete', 
+      description: `Processed ${total} rows (${successCount} created, ${updatedCount} updated, ${skippedCount} skipped).` 
+    });
   };
 
   // Get total duplicate and existing customer matches counted in our check
@@ -1175,6 +1199,7 @@ export function ImportLeadsClient() {
                     <SelectValue placeholder="Select target bucket" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="in_review">In Review (Review & Verification Queue)</SelectItem>
                     <SelectItem value="outbound">Outbound (Default Dialer Queue)</SelectItem>
                     <SelectItem value="field_sales">Field Sales (Door-to-door reps)</SelectItem>
                     <SelectItem value="inbound">Inbound (Forms/API)</SelectItem>
@@ -1588,13 +1613,14 @@ export function ImportLeadsClient() {
                     </p>
                   </div>
                   
-                  <Select value={duplicateStrategy} onValueChange={(val) => setDuplicateStrategy(val as 'skip' | 'import')}>
-                    <SelectTrigger className="w-[240px] bg-white border-amber-300 font-medium">
+                  <Select value={duplicateStrategy} onValueChange={(val) => setDuplicateStrategy(val as 'skip' | 'import' | 'update')}>
+                    <SelectTrigger className="w-[300px] bg-white border-amber-300 font-medium">
                       <SelectValue placeholder="Strategy" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="skip">Skip duplicates & customers (Recommended)</SelectItem>
-                      <SelectItem value="import">Import anyway (Flag matches)</SelectItem>
+                      <SelectItem value="update">Update existing lead records with CSV data</SelectItem>
+                      <SelectItem value="import">Import as new leads anyway (Flag matches)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1740,18 +1766,22 @@ export function ImportLeadsClient() {
                 <Progress value={importProgress} className="h-3 bg-slate-100" />
                 
                 {/* Real-time stats */}
-                <div className="grid grid-cols-4 gap-4 text-center mt-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center mt-4">
                   <div className="p-3 bg-slate-50 rounded-lg border">
                     <div className="text-2xl font-bold text-slate-800">{importStats.total}</div>
                     <div className="text-[10px] text-slate-500 font-semibold uppercase">Total Rows</div>
                   </div>
                   <div className="p-3 bg-green-50 rounded-lg border border-green-100">
                     <div className="text-2xl font-bold text-green-700">{importStats.success}</div>
-                    <div className="text-[10px] text-green-600 font-semibold uppercase">Imported</div>
+                    <div className="text-[10px] text-green-600 font-semibold uppercase">Created</div>
+                  </div>
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <div className="text-2xl font-bold text-blue-700">{importStats.updated}</div>
+                    <div className="text-[10px] text-blue-600 font-semibold uppercase">Updated</div>
                   </div>
                   <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
                     <div className="text-2xl font-bold text-amber-700">{importStats.skipped}</div>
-                    <div className="text-[10px] text-amber-600 font-semibold uppercase">Skipped Duplicates</div>
+                    <div className="text-[10px] text-amber-600 font-semibold uppercase">Skipped</div>
                   </div>
                   <div className="p-3 bg-red-50 rounded-lg border border-red-100">
                     <div className="text-2xl font-bold text-red-700">{importStats.failed}</div>
@@ -1770,15 +1800,19 @@ export function ImportLeadsClient() {
                 <div>
                   <h3 className="text-2xl font-bold text-slate-800">Bulk Import Complete!</h3>
                   <p className="text-sm text-slate-500 mt-1">
-                    Your leads have been added to the system successfully.
+                    Your lead records have been processed and updated in the system successfully.
                   </p>
                 </div>
 
                 {/* Final stats summary */}
-                <div className="max-w-md mx-auto grid grid-cols-3 gap-3 border rounded-lg p-4 bg-slate-50">
+                <div className="max-w-md mx-auto grid grid-cols-4 gap-2 border rounded-lg p-4 bg-slate-50">
                   <div>
                     <div className="text-xl font-bold text-green-700">{importStats.success}</div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase">Success</div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase">Created</div>
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-blue-700">{importStats.updated}</div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase">Updated</div>
                   </div>
                   <div>
                     <div className="text-xl font-bold text-amber-700">{importStats.skipped}</div>

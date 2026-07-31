@@ -324,9 +324,10 @@ export default function LifecycleDashboard() {
       toast({ title: 'No Data', description: 'Lifecycle lead list is empty.' });
       return;
     }
-    const headers = ['Company Name', 'Franchisee', 'Status', 'Assignee', 'Active Journeys', 'Date Entered'];
+    const headers = ['Company Name', 'Prospect+ ID', 'Franchisee', 'Status', 'Assignee', 'Active Journeys', 'Date Entered'];
     const rows = filteredLifecycleLeads.map(lead => [
       lead.companyName,
+      lead.prospectPlusId || lead.id || 'N/A',
       lead.franchisee || 'N/A',
       lead.customerStatus || lead.status,
       lead.accountManagerAssigned || lead.customerSuccessAssigned || lead.salesRepAssigned || 'Unassigned',

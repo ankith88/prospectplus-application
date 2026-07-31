@@ -3710,7 +3710,22 @@ export default function InboundReportsClientPage({
                     <Button 
                         variant="outline" 
                         size="sm" 
-                        onClick={() => drillDownData && handleExportData(filteredDrillDownLeads, drillDownData.title.toLowerCase().replace(/\s+/g, '_'))}
+                        onClick={() => {
+                            if (!drillDownData) return;
+                            const exportData = filteredDrillDownLeads.map(l => ({
+                                'Company Name': l.companyName || '',
+                                'Prospect+ ID': l.prospectPlusId || l.id || '',
+                                'Customer Status': l.customerStatus || l.status || '',
+                                'Status Reason': l.statusReason || '',
+                                'Franchisee': l.franchisee || '',
+                                'Sales Rep Assigned': l.salesRepAssigned || '',
+                                'Account Manager Assigned': l.accountManagerAssigned || '',
+                                'Email': l.customerServiceEmail || '',
+                                'Phone': l.customerPhone || '',
+                                'Date Lead Entered': l.dateLeadEntered || ''
+                            }));
+                            handleExportData(exportData, drillDownData.title.toLowerCase().replace(/\s+/g, '_'));
+                        }}
                     >
                         <Download className="h-4 w-4 mr-2" /> Export List
                     </Button>

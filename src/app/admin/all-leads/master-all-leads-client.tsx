@@ -44,6 +44,7 @@ import {
 import { format, parseISO } from 'date-fns'
 
 const BUCKET_LABELS: Record<string, string> = {
+  in_review: 'In Review',
   outbound: 'Outbound (Dialer)',
   field_sales: 'Field Sales',
   inbound: 'Inbound',
@@ -557,7 +558,7 @@ export function MasterAllLeadsClient() {
 
       // 1. Generate CSV matching standard Import CSV template
       const headers = [
-        'ProspectPlus ID',
+        'Prospect+ ID',
         'NetSuite ID',
         'Company Name',
         'Website URL',
@@ -569,6 +570,8 @@ export function MasterAllLeadsClient() {
         'Suburb / City',
         'State',
         'Postcode',
+        'Country',
+        'Franchisee',
         'Status',
         'Lead Bucket',
         'Customer Source',
@@ -630,6 +633,8 @@ export function MasterAllLeadsClient() {
         const leadCity = l.address?.city || (l as any).city || l.city || ''
         const leadState = l.address?.state || (l as any).state || l.state || ''
         const leadZip = l.address?.zip || (l as any).zip || (l as any).postcode || ''
+        const leadCountry = l.address?.country || (l as any).country || ''
+        const leadFranchisee = l.franchisee || (l as any).franchiseeName || ''
         const leadEmail = l.customerServiceEmail || (l as any).email || ''
         const leadPhone = l.customerPhone || (l as any).phone || ''
         const leadWebsite = l.websiteUrl || ''
@@ -662,6 +667,8 @@ export function MasterAllLeadsClient() {
           escapeCsv(leadCity),
           escapeCsv(leadState),
           escapeCsv(leadZip),
+          escapeCsv(leadCountry),
+          escapeCsv(leadFranchisee),
           escapeCsv(l.status || ''),
           escapeCsv(l.bucket || 'unassigned'),
           escapeCsv(l.customerSource || ''),
@@ -880,6 +887,7 @@ export function MasterAllLeadsClient() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All Buckets</SelectItem>
+                  <SelectItem value="in_review">In Review</SelectItem>
                   <SelectItem value="outbound">Outbound (Dialer)</SelectItem>
                   <SelectItem value="field_sales">Field Sales</SelectItem>
                   <SelectItem value="inbound">Inbound</SelectItem>
@@ -1018,6 +1026,7 @@ export function MasterAllLeadsClient() {
                   <SelectValue placeholder="Push to Bucket..." />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="in_review">In Review</SelectItem>
                   <SelectItem value="outbound">Outbound (Dialer)</SelectItem>
                   <SelectItem value="field_sales">Field Sales</SelectItem>
                   <SelectItem value="inbound">Inbound</SelectItem>

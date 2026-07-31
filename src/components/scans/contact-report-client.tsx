@@ -154,7 +154,7 @@ export function ContactReportClient() {
 
   const handleExportCSV = () => {
     const headers = [
-      'Rank', 'Customer Name', 'Customer NS ID', 'Franchise', 'Total Barcodes',
+      'Rank', 'Customer Name', 'Prospect+ ID', 'Customer NS ID', 'Franchise', 'Total Barcodes',
       'Last Contacted Date', 'Last Contacted By', 'Last Contact Notes'
     ]
 
@@ -166,6 +166,7 @@ export function ContactReportClient() {
       return [
         idx + 1,
         `"${stat.name.replace(/"/g, '""')}"`,
+        `"${((stat as any).prospectPlusId || stat.id || '').replace(/"/g, '""')}"`,
         `"${stat.id}"`,
         `"${stat.franchisee.replace(/"/g, '""')}"`,
         stat.allTimeBarcodes,

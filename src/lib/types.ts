@@ -1,4 +1,4 @@
-export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing' | 'lpo_plus' | '' | 'blank' | 'unassigned' | (string & {});
+export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing' | 'lpo_plus' | 'in_review' | '' | 'blank' | 'unassigned' | (string & {});
 
 export interface BucketHistory {
   id: string;
@@ -134,6 +134,7 @@ export interface Appointment {
   appointmentStatus?: AppointmentStatus;
   revisit?: boolean;
   leadId: string;
+  prospectPlusId?: string;
   dialerAssigned?: string;
   timezone?: string;
   date?: string;

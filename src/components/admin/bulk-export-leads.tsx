@@ -106,7 +106,7 @@ export function BulkExportLeads() {
 
   const exportLeadsToCsv = (leads: Lead[], filename: string, visitNotes: VisitNote[]) => {
     const headers = [
-      'ProspectPlus ID', 'NetSuite ID', 'Company Name', 'Website URL', 'Company Phone', 'Company Email', 
+      'Prospect+ ID', 'NetSuite ID', 'Company Name', 'Website URL', 'Company Phone', 'Company Email', 
       'ABN (11 digits)', 'Address Line 1', 'Street Address', 'Suburb / City', 'State', 'Postcode', 
       'Status', 'Lead Bucket', 'Campaign', 'Dialer Assigned', 'Sales Rep Assigned', 'Account Manager Assigned', 
       'Franchisee', 'Industry', 'Lead Type', 'Contact 1 First Name', 'Contact 1 Last Name', 'Contact 1 Title', 

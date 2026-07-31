@@ -13,6 +13,7 @@ type ExtendedAppointment = Appointment & {
     leadStatus?: string; 
     dialerAssigned?: string; 
     discoveryData?: any;
+    prospectPlusId?: string;
 };
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -159,6 +160,7 @@ export default function AMReportsDashboard() {
             const primaryContact = app.lead?.contacts?.find(c => c.isPrimary) || app.lead?.contacts?.[0];
             return {
                 'Company Name': app.leadName || app.lead?.companyName || '',
+                'Prospect+ ID': app.prospectPlusId || app.lead?.prospectPlusId || app.leadId || '',
                 'Contact Name': primaryContact?.name || '',
                 'Phone': primaryContact?.phone || app.lead?.customerPhone || '',
                 'Email': primaryContact?.email || '',
@@ -206,6 +208,7 @@ export default function AMReportsDashboard() {
             const primaryContact = l.contacts?.find(c => c.isPrimary) || l.contacts?.[0];
             return {
                 'Company Name': l.companyName || '',
+                'Prospect+ ID': l.prospectPlusId || l.id || '',
                 'Status': l.customerStatus || l.status || '',
                 'Account Manager': l.accountManagerAssigned || '',
                 'Franchisee': l.franchisee || '',

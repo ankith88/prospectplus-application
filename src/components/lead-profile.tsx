@@ -6180,6 +6180,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <SelectValue placeholder="Select bucket" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="in_review">In Review</SelectItem>
                                     <SelectItem value="inbound">Inbound</SelectItem>
                                     <SelectItem value="outbound">Outbound</SelectItem>
                                     <SelectItem value="field_sales">Field Sales</SelectItem>
@@ -6192,7 +6193,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </Select>
                         ) : (
                             <Badge variant="secondary" className="w-max bg-primary/10 text-primary">
-                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.bucket === 'lpo_plus' ? 'LPO.Plus Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                                {lead.bucket === 'in_review' ? 'In Review Bucket' : lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.bucket === 'lpo_plus' ? 'LPO.Plus Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
                             </Badge>
                         )}
                     </div>

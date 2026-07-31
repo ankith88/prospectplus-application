@@ -313,6 +313,7 @@ export default function MarketingListsClient() {
 
       const headers = [
       'Company Name', 
+      'Prospect+ ID',
       'Street', 'City', 'State', 'Zip', 'Country', 
       'Franchisee', 
       'Bucket', 
@@ -335,6 +336,7 @@ export default function MarketingListsClient() {
     leads.forEach(lead => {
       const baseRow = [
         lead.companyName,
+        lead.prospectPlusId || '',
         lead.address?.street || '',
         lead.address?.city || '',
         lead.address?.state || '',
@@ -352,12 +354,12 @@ export default function MarketingListsClient() {
       const contacts = lead.contacts && lead.contacts.length > 0 ? lead.contacts : []
       if (contacts.length === 0) {
         const row = [...baseRow]
-        row.splice(10, 0, '', '', '')
+        row.splice(11, 0, '', '', '')
         rows.push(row.map(escapeCsvCell))
       } else {
         contacts.forEach(contact => {
           const row = [...baseRow]
-          row.splice(10, 0, contact.name || '', contact.email || '', contact.phone || '')
+          row.splice(11, 0, contact.name || '', contact.email || '', contact.phone || '')
           rows.push(row.map(escapeCsvCell))
         })
       }

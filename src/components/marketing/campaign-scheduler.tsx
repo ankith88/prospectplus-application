@@ -354,6 +354,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
               email,
               name,
               companyName: lead.companyName || 'Unknown Company',
+              prospectPlusId: lead.prospectPlusId || lead.id || '',
               salesRep: lead.salesRepAssigned || 'Unassigned',
               dialer: lead.dialerAssigned || 'Unassigned',
               franchisee: lead.franchisee || 'Unassigned',
@@ -384,11 +385,12 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     if (recipientsList.length === 0) return;
     
     // Build CSV headers and content
-    const headers = ['Email', 'Name', 'Company', 'Sales Rep Assigned', 'Dialer Assigned', 'Franchisee', 'Status'];
+    const headers = ['Email', 'Name', 'Company', 'Prospect+ ID', 'Sales Rep Assigned', 'Dialer Assigned', 'Franchisee', 'Status'];
     const rows = recipientsList.map(r => [
       r.email,
       r.name,
       r.companyName,
+      r.prospectPlusId || '',
       r.salesRep,
       r.dialer,
       r.franchisee,
