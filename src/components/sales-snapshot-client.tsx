@@ -1809,35 +1809,8 @@ export default function SalesSnapshotClient() {
 
             {/* Visualisations Grid 3 (Hidden for Franchisees) */}
             {!isFranchisee && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* Activity Leaderboard */}
-                <Card className="shadow-sm card">
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                      <Goal className="h-4 w-4 text-[#095c7b]" /> Activity Leaderboard
-                    </CardTitle>
-                    <SectionHelp content="Ranks users/reps by total volume of manual actions performed (calls, emails, meetings, and manual notes). Automated activities are excluded." />
-                  </CardHeader>
-                  <CardContent className="h-[280px]">
-                    {metrics.activityLeaderboard.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={metrics.activityLeaderboard.slice(0, 10)}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="name" tickLine={false} style={{ fontSize: '10px' }} />
-                          <YAxis tickLine={false} style={{ fontSize: '10px' }} />
-                          <Tooltip />
-                          <Bar dataKey="Calls" stackId="a" fill="#095c7b" />
-                          <Bar dataKey="Emails" stackId="a" fill="#38bdf8" />
-                          <Bar dataKey="Meetings" stackId="a" fill="#fbbf24" />
-                          <Bar dataKey="Updates" stackId="a" fill="#f472b6" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No activities logged in this range.</div>
-                    )}
-                  </CardContent>
-                </Card>
+              <div className="grid grid-cols-1 gap-6">
+
 
                 {/* Appointment Conversion Efficiency */}
                 <Card className="shadow-sm card">
