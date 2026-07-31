@@ -3110,7 +3110,19 @@ export default function ReportsClientPage({
                             {stats.teamPerformanceData.map(dialer => (
                                 <TableRow key={dialer.name}>
                                     <TableCell className="font-medium">{dialer.name}</TableCell>
-                                    <TableCell className="text-right">{dialer['Total Engagement']}</TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-foreground cursor-pointer hover:underline"
+                                        onClick={() => {
+                                            const dialerCallsList = filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+                                            const calledLeadIds = new Set(dialerCallsList.map(c => c.leadId));
+                                            setTrialDrilldown({ 
+                                                title: `${dialer.name} - Calls Made Leads`, 
+                                                leads: stats.baseFilteredLeads.filter(l => calledLeadIds.has(l.id)) 
+                                            });
+                                        }}
+                                    >
+                                        {dialer['Total Engagement']}
+                                    </TableCell>
                                     <TableCell 
                                         className="text-right font-semibold text-foreground cursor-pointer hover:underline"
                                         onClick={() => setTrialDrilldown({ 
@@ -3167,7 +3179,15 @@ export default function ReportsClientPage({
                                     <TableCell className="text-right">{dialer['Avg Attempts'].toFixed(1)}</TableCell>
                                     <TableCell className="text-right">{dialer['Connect Rate'].toFixed(1)}%</TableCell>
                                     <TableCell className="text-right font-bold text-blue-600">{dialer.Appointments}</TableCell>
-                                    <TableCell className="text-right text-orange-600">{dialer['Quotes Sent']}</TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-orange-600 cursor-pointer hover:underline"
+                                        onClick={() => setTrialDrilldown({ 
+                                            title: `${dialer.name} - Quotes Sent Leads`, 
+                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent')) 
+                                        })}
+                                    >
+                                        {dialer['Quotes Sent']}
+                                    </TableCell>
                                     <TableCell 
                                         className="text-right cursor-pointer hover:underline text-indigo-600 font-medium"
                                         onClick={() => setTrialDrilldown({ 
@@ -3210,7 +3230,18 @@ export default function ReportsClientPage({
                         <TableFooter>
                             <TableRow className="font-bold border-t-2 bg-muted/50">
                                 <TableCell className="font-bold">Total</TableCell>
-                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Total Engagement']}</TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-foreground cursor-pointer hover:underline"
+                                    onClick={() => {
+                                        const allCallLeadIds = new Set(filteredCalls.map(c => c.leadId));
+                                        setTrialDrilldown({ 
+                                            title: "All Calls Made Leads", 
+                                            leads: stats.baseFilteredLeads.filter(l => allCallLeadIds.has(l.id)) 
+                                        });
+                                    }}
+                                >
+                                    {stats.teamPerformanceTotals['Total Engagement']}
+                                </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-foreground cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
@@ -3265,7 +3296,15 @@ export default function ReportsClientPage({
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Avg Attempts'].toFixed(1)}</TableCell>
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Connect Rate'].toFixed(1)}%</TableCell>
                                 <TableCell className="text-right font-bold text-blue-600">{stats.teamPerformanceTotals.Appointments}</TableCell>
-                                <TableCell className="text-right font-bold text-orange-600">{stats.teamPerformanceTotals['Quotes Sent']}</TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-orange-600 cursor-pointer hover:underline"
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All Quotes Sent Leads", 
+                                        leads: stats.baseFilteredLeads.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent') 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Quotes Sent']}
+                                </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-indigo-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
@@ -3302,7 +3341,6 @@ export default function ReportsClientPage({
                                 >
                                     {stats.teamPerformanceTotals['ShipMate / LocalMile Trials']}
                                 </TableCell>
-                                <TableCell className="text-right font-bold text-green-600">{stats.teamPerformanceTotals['Signed Customers']}</TableCell>
                             </TableRow>
                         </TableFooter>
                     </Table>

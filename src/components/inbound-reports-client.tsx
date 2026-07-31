@@ -1478,11 +1478,21 @@ export default function InboundReportsClientPage({
 
     const activePipelineStatuses = ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'];
 
+    const amCalledLeadIdsMap = new Map<string, Set<string>>();
+    const allCalledLeadIdsSet = new Set<string>();
+    allAMs.forEach(dialer => amCalledLeadIdsMap.set(dialer, new Set<string>()));
+
     const teamPerformanceData = allAMs.map(dialer => {
       const dialerInboundLeads = filteredLeads.filter(l => getLeadAM(l) === dialer);
       const dialerInboundLeadIds = new Set(dialerInboundLeads.map(l => l.id));
 
       const dialerCallsList = filteredCalls.filter(c => (c.leadId && dialerInboundLeadIds.has(c.leadId)) || c.author === dialer);
+      dialerCallsList.forEach(c => {
+        if (c.leadId) {
+          amCalledLeadIdsMap.get(dialer)?.add(c.leadId);
+          allCalledLeadIdsSet.add(c.leadId);
+        }
+      });
       const dialerCalls = dialerCallsList.length;
       const dialerLeadsCalled = new Set(dialerCallsList.map(c => c.leadId)).size;
       const avgAttempts = dialerLeadsCalled > 0 ? dialerCalls / dialerLeadsCalled : 0;
@@ -1891,7 +1901,9 @@ export default function InboundReportsClientPage({
         amActionedLeadIdsMap,
         repShipmateLeadsMap,
         repLocalmileLeadsMap,
-        allActionedLeadIdsSet
+        allActionedLeadIdsSet,
+        amCalledLeadIdsMap,
+        allCalledLeadIdsSet
     };
   }, [filteredLeads, allActivities, allAppointments, allUsers, appliedFilters]);
 
@@ -2709,7 +2721,18 @@ export default function InboundReportsClientPage({
                             {stats.teamPerformanceData.map(dialer => (
                                 <TableRow key={dialer.name}>
                                     <TableCell className="font-medium">{dialer.name}</TableCell>
-                                    <TableCell className="text-right">{dialer['Total Engagement']}</TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-foreground cursor-pointer hover:underline"
+                                        onClick={() => {
+                                            const calledSet = stats.amCalledLeadIdsMap?.get(dialer.name) || new Set<string>();
+                                            setDrillDownData({ 
+                                                title: `${dialer.name} - Calls Made Leads`, 
+                                                leads: filteredLeads.filter(l => calledSet.has(l.id)) 
+                                            });
+                                        }}
+                                    >
+                                        {dialer['Total Engagement']}
+                                    </TableCell>
                                     <TableCell 
                                         className="text-right font-semibold text-foreground cursor-pointer hover:underline"
                                         onClick={() => setDrillDownData({ 
@@ -2764,7 +2787,15 @@ export default function InboundReportsClientPage({
                                     <TableCell className="text-right">{dialer['Avg Attempts'].toFixed(1)}</TableCell>
                                     <TableCell className="text-right">{dialer['Connect Rate'].toFixed(1)}%</TableCell>
                                     <TableCell className="text-right font-semibold text-blue-600">{dialer.Appointments}</TableCell>
-                                    <TableCell className="text-right font-semibold text-orange-600">{dialer['Quotes Sent']}</TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-orange-600 cursor-pointer hover:underline"
+                                        onClick={() => setDrillDownData({ 
+                                            title: `${dialer.name} - Quotes Sent Leads`, 
+                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && (l.customerStatus === 'Prospect Opportunity' || l.customerStatus === 'Quote Sent')) 
+                                        })}
+                                    >
+                                        {dialer['Quotes Sent']}
+                                    </TableCell>
                                     <TableCell 
                                         className="text-right font-semibold text-indigo-600 cursor-pointer hover:underline"
                                         onClick={() => setDrillDownData({ 
@@ -2814,7 +2845,18 @@ export default function InboundReportsClientPage({
                         <TableFooter>
                             <TableRow className="font-bold border-t-2 bg-muted/50">
                                 <TableCell className="font-bold">Total</TableCell>
-                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Total Engagement']}</TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-foreground cursor-pointer hover:underline"
+                                    onClick={() => {
+                                        const allCalledSet = stats.allCalledLeadIdsSet || new Set<string>();
+                                        setDrillDownData({ 
+                                            title: "All Calls Made Leads", 
+                                            leads: filteredLeads.filter(l => allCalledSet.has(l.id)) 
+                                        });
+                                    }}
+                                >
+                                    {stats.teamPerformanceTotals['Total Engagement']}
+                                </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-foreground cursor-pointer hover:underline"
                                     onClick={() => setDrillDownData({ 
@@ -2863,7 +2905,15 @@ export default function InboundReportsClientPage({
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Avg Attempts'].toFixed(1)}</TableCell>
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Connect Rate'].toFixed(1)}%</TableCell>
                                 <TableCell className="text-right font-bold text-blue-600">{stats.teamPerformanceTotals.Appointments}</TableCell>
-                                <TableCell className="text-right font-bold text-orange-600">{stats.teamPerformanceTotals['Quotes Sent']}</TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-orange-600 cursor-pointer hover:underline"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All Quotes Sent Leads", 
+                                        leads: filteredLeads.filter(l => l.customerStatus === 'Prospect Opportunity' || l.customerStatus === 'Quote Sent') 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Quotes Sent']}
+                                </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-indigo-600 cursor-pointer hover:underline"
                                     onClick={() => setDrillDownData({ 
@@ -2900,7 +2950,6 @@ export default function InboundReportsClientPage({
                                 >
                                     {stats.teamPerformanceTotals['ShipMate / LocalMile Trials']}
                                 </TableCell>
-                                <TableCell className="text-right font-bold text-green-600">{stats.teamPerformanceTotals['Signed Customers']}</TableCell>
                             </TableRow>
                         </TableFooter>
                     </Table>
