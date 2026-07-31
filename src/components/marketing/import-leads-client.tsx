@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import Papa from 'papaparse';
 import { 
   Briefcase, Inbox, Archive, PlusCircle, ArrowLeft, ArrowRight, Upload, 
-  CheckCircle2, AlertTriangle, Play, HelpCircle, Download, FileSpreadsheet, Loader2, Check, FileText 
+  CheckCircle2, AlertTriangle, Play, HelpCircle, Download, FileSpreadsheet, Loader2, Check, FileText, Clock, Timer, Zap 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -128,9 +128,12 @@ export function ImportLeadsClient() {
   const [matchFieldKey, setMatchFieldKey] = useState<'auto' | 'internalId' | 'prospectPlusId' | 'customerEntityId' | 'abn' | 'companyName'>('auto');
   const [isValidating, setIsValidating] = useState<boolean>(false);
   
-  // Step 5 (Import Execution) state
+  // Step 5 (Import Execution & Live Performance Timer) state
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [importProgress, setImportProgress] = useState<number>(0);
+  const [importStartTime, setImportStartTime] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const [processedRowsCount, setProcessedRowsCount] = useState<number>(0);
   const [importStats, setImportStats] = useState<{ success: number; updated: number; skipped: number; failed: number; total: number }>({
     success: 0,
     updated: 0,
@@ -147,6 +150,19 @@ export function ImportLeadsClient() {
   }>>([]);
   const [logFilter, setLogFilter] = useState<'all' | 'Created' | 'Updated' | 'Skipped' | 'Failed'>('all');
   const [logSearch, setLogSearch] = useState('');
+
+  // Live import timer effect
+  useEffect(() => {
+    let interval: any = null;
+    if (isImporting && importStartTime) {
+      interval = setInterval(() => {
+        setElapsedSeconds(Math.floor((Date.now() - importStartTime) / 1000));
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isImporting, importStartTime]);
 
   const requiredFields = useMemo(() => standardFields.filter(f => f.required), []);
   const missingRequiredMappings = useMemo(() => {
@@ -776,6 +792,9 @@ export function ImportLeadsClient() {
   const executeImport = async () => {
     setIsImporting(true);
     setImportProgress(0);
+    setImportStartTime(Date.now());
+    setElapsedSeconds(0);
+    setProcessedRowsCount(0);
     
     let successCount = 0;
     let updatedCount = 0;
@@ -1170,7 +1189,9 @@ export function ImportLeadsClient() {
         failedCount += chunk.length;
       }
 
-      const progressVal = Math.min(Math.round(((i + chunk.length) / total) * 100), 100);
+      const currentProcessed = Math.min(i + chunk.length, total);
+      setProcessedRowsCount(currentProcessed);
+      const progressVal = Math.min(Math.round((currentProcessed / total) * 100), 100);
       setImportProgress(progressVal);
       setImportStats({
         success: successCount,
@@ -1984,17 +2005,82 @@ export function ImportLeadsClient() {
           <CardContent className="space-y-8 py-10 px-6">
             
             {isImporting ? (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center text-sm font-semibold text-slate-700">
-                  <span className="flex items-center gap-1.5">
-                    <Loader2 className="h-5 w-5 animate-spin text-[#095c7b]" /> Importing leads to Firestore...
-                  </span>
-                  <span>{importProgress}%</span>
+              <div className="space-y-6 text-left">
+                {/* Progress Bar & Row Counter */}
+                <div className="bg-slate-50 border rounded-xl p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <Loader2 className="h-6 w-6 animate-spin text-[#095c7b] shrink-0" />
+                      <div>
+                        <span className="font-bold text-slate-800 text-base">Writing Lead Records to Database...</span>
+                        <p className="text-xs text-slate-500">Processing in optimized parallel batches</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-black text-[#095c7b]">{importProgress}%</span>
+                      <div className="text-[11px] font-semibold text-slate-500">
+                        Processed <strong className="text-slate-900 font-bold">{processedRowsCount}</strong> of <strong className="text-slate-900 font-bold">{csvRows.length}</strong> Rows
+                      </div>
+                    </div>
+                  </div>
+
+                  <Progress value={importProgress} className="h-3.5 bg-slate-200" />
+
+                  {/* Live Timer & Performance Speed Breakdown */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <div className="bg-white p-3 rounded-lg border text-center shadow-xs">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
+                        <Clock className="h-3 w-3 text-slate-600" /> Elapsed Time
+                      </div>
+                      <div className="text-lg font-mono font-bold text-slate-800 mt-1">
+                        {(() => {
+                          const m = Math.floor(elapsedSeconds / 60);
+                          const s = elapsedSeconds % 60;
+                          return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                        })()}
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-lg border text-center shadow-xs">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
+                        <Timer className="h-3 w-3 text-blue-600" /> Est. Remaining
+                      </div>
+                      <div className="text-lg font-mono font-bold text-blue-700 mt-1">
+                        {(() => {
+                          const rPerSec = elapsedSeconds > 0 ? (processedRowsCount / elapsedSeconds) : 0;
+                          const remRows = (csvRows.length || 0) - processedRowsCount;
+                          if (processedRowsCount > 0 && rPerSec > 0 && remRows > 0) {
+                            const remSecs = Math.ceil(remRows / rPerSec);
+                            const m = Math.floor(remSecs / 60);
+                            const s = remSecs % 60;
+                            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                          }
+                          return remRows <= 0 ? '00:00' : 'Calculating...';
+                        })()}
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-lg border text-center shadow-xs">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
+                        <Zap className="h-3 w-3 text-amber-600" /> Processing Speed
+                      </div>
+                      <div className="text-lg font-mono font-bold text-amber-700 mt-1">
+                        {elapsedSeconds > 0 ? (processedRowsCount / elapsedSeconds).toFixed(1) : '0.0'}{' '}
+                        <span className="text-xs font-sans font-normal text-slate-500">rows/s</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-lg border text-center shadow-xs">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Rows Remaining</div>
+                      <div className="text-lg font-mono font-bold text-slate-800 mt-1">
+                        {Math.max(0, (csvRows.length || 0) - processedRowsCount)}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <Progress value={importProgress} className="h-3 bg-slate-100" />
-                
+
                 {/* Real-time stats */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center mt-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
                   <div className="p-3 bg-slate-50 rounded-lg border">
                     <div className="text-2xl font-bold text-slate-800">{importStats.total}</div>
                     <div className="text-[10px] text-slate-500 font-semibold uppercase">Total Rows</div>
