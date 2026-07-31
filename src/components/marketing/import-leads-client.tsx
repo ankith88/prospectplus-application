@@ -1738,17 +1738,75 @@ export function ImportLeadsClient() {
             ) : (
               <>
                 {/* Duplicate strategy & matching criteria selectors */}
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-amber-800 text-sm flex items-center gap-1.5">
-                      <AlertTriangle className="h-4 w-4" /> Duplicates & Existing Customers ({duplicateCount} duplicate leads, {customerMatchCount} active customers detected)
+                <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-lg flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                  <div className="space-y-1.5 text-left max-w-xl">
+                    <h4 className="font-bold text-amber-900 text-sm flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0" /> 
+                      Lead Matching Summary: <span className="text-blue-900">{duplicateCount} Matched</span> ({Math.round((duplicateCount / (csvRows.length || 1)) * 100)}%), <span className="text-amber-900">{csvRows.length - duplicateCount} Unmatched</span> out of {csvRows.length} Total Rows
                     </h4>
-                    <p className="text-xs text-amber-700">
-                      Configure your matching field criteria and decide how matching records should be processed during import.
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      {duplicateStrategy === 'update' ? (
+                        <>
+                          <strong className="font-bold text-blue-900">{duplicateCount} leads</strong> matched database records and <strong className="font-bold text-blue-900">will be updated</strong>. 
+                          <strong className="font-bold text-amber-900"> {csvRows.length - duplicateCount} unmatched leads</strong> have no database match and <strong className="font-bold text-amber-900">will be skipped</strong> (0 new leads created).
+                        </>
+                      ) : duplicateStrategy === 'skip' ? (
+                        <>
+                          <strong className="font-bold text-amber-900">{duplicateCount} duplicate leads</strong> matched and <strong className="font-bold text-amber-900">will be skipped</strong>. 
+                          <strong className="font-bold text-green-800"> {csvRows.length - duplicateCount} new leads</strong> will be <strong className="font-bold text-green-800">created</strong>.
+                        </>
+                      ) : (
+                        <>
+                          <strong className="font-bold text-purple-900">{duplicateCount} duplicate leads</strong> matched (flagged for review). 
+                          All <strong className="font-bold text-purple-900">{csvRows.length} records</strong> will be imported as new leads.
+                        </>
+                      )}
                     </p>
+                    <div className="pt-1 flex flex-wrap items-center gap-2 text-xs">
+                      <Badge variant="outline" className="bg-amber-100/90 text-amber-900 border-amber-300 font-semibold text-[11px] py-0.5 px-2">
+                        Matched CSV Column: &quot;{(() => {
+                          if (matchFieldKey === 'internalId') {
+                            const colHeader = Object.keys(columnMappings).find(k => columnMappings[k] === 'prospectPlusId');
+                            if (colHeader) return colHeader;
+                            const fallback = csvHeaders.find(h => /internal\s*id|netsuite|lead\s*id/i.test(h));
+                            return fallback || 'Internal ID / Document ID';
+                          }
+                          if (matchFieldKey === 'prospectPlusId') {
+                            const colHeader = Object.keys(columnMappings).find(k => columnMappings[k] === 'prospectPlusId');
+                            if (colHeader) return colHeader;
+                            const fallback = csvHeaders.find(h => /prospect\+?\s*id/i.test(h));
+                            return fallback || 'Prospect+ ID';
+                          }
+                          if (matchFieldKey === 'customerEntityId') {
+                            const colHeader = Object.keys(columnMappings).find(k => columnMappings[k] === 'prospectPlusId');
+                            if (colHeader) return colHeader;
+                            const fallback = csvHeaders.find(h => /customer\s*id|entity\s*id/i.test(h));
+                            return fallback || 'Customer Entity ID';
+                          }
+                          if (matchFieldKey === 'abn') {
+                            const colHeader = Object.keys(columnMappings).find(k => columnMappings[k] === 'abn');
+                            if (colHeader) return colHeader;
+                            const fallback = csvHeaders.find(h => /abn/i.test(h));
+                            return fallback || 'ABN';
+                          }
+                          if (matchFieldKey === 'companyName') {
+                            const colHeader = Object.keys(columnMappings).find(k => columnMappings[k] === 'companyName');
+                            if (colHeader) return colHeader;
+                            const fallback = csvHeaders.find(h => /company/i.test(h));
+                            return fallback || 'Company Name';
+                          }
+                          return 'Auto-Detect (Internal ID, Prospect+ ID, ABN, Company Name)';
+                        })()}&quot;
+                      </Badge>
+                      {customerMatchCount > 0 && (
+                        <Badge variant="outline" className="bg-blue-100 text-blue-900 border-blue-300 font-semibold text-[11px] py-0.5 px-2">
+                          {customerMatchCount} Active Customers Detected
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   
-                  <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+                  <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
                     {/* Match Criteria Selection */}
                     <div className="flex flex-col gap-1 w-full sm:w-auto text-left">
                       <span className="text-[10px] uppercase font-bold text-amber-900">Match Lead Record By:</span>
@@ -1862,21 +1920,25 @@ export function ImportLeadsClient() {
                                 {isDup && (
                                   <Badge 
                                     variant="outline" 
-                                    className={`text-[9px] px-1.5 py-0 ${
-                                      existingId?.confidence === 'High' 
-                                        ? 'bg-red-100 text-red-800 border-red-200'
-                                        : existingId?.confidence === 'Medium'
-                                        ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                        : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                    className={`text-[9px] px-1.5 py-0 font-semibold ${
+                                      duplicateStrategy === 'update'
+                                        ? 'bg-blue-100 text-blue-900 border-blue-300'
+                                        : 'bg-amber-100 text-amber-900 border-amber-300'
                                     }`}
                                   >
-                                    {existingId?.confidence || 'Duplicate'} Lead ({existingId?.reasons.join(', ') || 'Company'})
+                                    {duplicateStrategy === 'update' ? 'Matched for Update' : 'Duplicate Lead'}: ID {existingId?.id} ({existingId?.reasons.join(', ') || 'Match'})
                                   </Badge>
                                 )}
 
-                                {rowErrors.length === 0 && !isDup && !isCust && !parentMatches[row.index] && (
-                                  <Badge className="bg-green-100 text-green-800 border-green-200 text-[9px] px-1.5 py-0" variant="outline">
-                                    Passed
+                                {!isDup && duplicateStrategy === 'update' && (
+                                  <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 text-[9px] px-1.5 py-0 font-semibold">
+                                    Unmatched (Will be skipped)
+                                  </Badge>
+                                )}
+
+                                {rowErrors.length === 0 && !isDup && !isCust && !parentMatches[row.index] && duplicateStrategy !== 'update' && (
+                                  <Badge className="bg-green-100 text-green-800 border-green-200 text-[9px] px-1.5 py-0 font-semibold" variant="outline">
+                                    New Lead (Passed)
                                   </Badge>
                                 )}
                               </div>
