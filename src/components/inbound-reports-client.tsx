@@ -61,7 +61,7 @@ import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { StatusOutcomeInfo, StatusChartTooltipContent } from './status-outcome-info';
 import { StatusOutcomeBanner, StatusOutcomeGuideButton } from './status-outcome-guide';
-import { cn } from '@/lib/utils';
+import { cn, isManualActivity } from '@/lib/utils';
 import Link from 'next/link';
 import { getStatusColor } from '@/lib/status-colors';
 
@@ -178,33 +178,6 @@ const parseDateString = (dateVal: any): Date | null => {
     return date;
 };
 
-
-const isManualActivity = (act: { type: string; notes?: string; author?: string }): boolean => {
-    if (!act.author) return false;
-    const authorLower = act.author.toLowerCase();
-    
-    const isSystemAuthor = 
-        authorLower.includes('system') || 
-        authorLower.includes('engine') || 
-        authorLower.includes('webhook') || 
-        authorLower.includes('api') || 
-        authorLower.includes('assistant') || 
-        authorLower.includes('operator') || 
-        authorLower.includes('nudge');
-        
-    if (isSystemAuthor) return false;
-    
-    const notesLower = (act.notes || '').toLowerCase();
-    const isSystemNote = 
-        notesLower.includes('bucket changed') || 
-        notesLower.includes('status changed') || 
-        notesLower.includes('imported from') || 
-        notesLower.includes('synced from');
-        
-    if (isSystemNote) return false;
-
-    return true;
-};
 
 const isManualEmail = (email: { campaignId?: string; sender?: string }): boolean => {
     if (email.campaignId) return false;

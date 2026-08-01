@@ -73,7 +73,7 @@ import { CallAttemptBadge } from './call-attempt-badge';
 import { StatusOutcomeInfo, StatusChartTooltipContent } from './status-outcome-info';
 import { StatusOutcomeBanner, StatusOutcomeGuideButton } from './status-outcome-guide';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { cn, getQuickDateRange } from '@/lib/utils';
+import { cn, getQuickDateRange, isManualActivity } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
@@ -81,13 +81,10 @@ import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 const isLostLead = (l: Lead) => {
     const status = l.status || '';
     const customerStatus = l.customerStatus || '';
-    const nsStatus = l.netsuiteLeadStatus || '';
     const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
     return (
         lostStatuses.includes(customerStatus) ||
-        lostStatuses.includes(status) ||
-        nsStatus.includes('Lost') ||
-        nsStatus.includes('Unqualified')
+        lostStatuses.includes(status)
     );
 };
 
@@ -98,9 +95,14 @@ const isSignedLead = (l: Lead) => {
 };
 
 const isActivePipelineLead = (l: Lead, actionedSet?: Set<string>, requireActioned: boolean = true) => {
-    if (isLostLead(l) || isSignedLead(l)) return false;
+    if (isSignedLead(l)) return false;
     if (!actionedSet) return true;
-    return requireActioned ? actionedSet.has(l.id) : !actionedSet.has(l.id);
+    const hasAction = actionedSet.has(l.id);
+    if (!hasAction) {
+        return !requireActioned;
+    }
+    if (isLostLead(l)) return false;
+    return requireActioned;
 };
 
 const isActiveLocalMileLead = (l: Lead) => {
@@ -111,37 +113,6 @@ const isActiveLocalMileLead = (l: Lead) => {
     }
     const status = l.customerStatus || l.status || '';
     return activeStatuses.includes(status);
-};
-
-const isManualActivity = (act: { type?: string; notes?: string; author?: string }): boolean => {
-    if (!act || !act.author) return false;
-    const authorLower = act.author.toLowerCase();
-    
-    const isSystemAuthor = 
-        authorLower.includes('system') || 
-        authorLower.includes('engine') || 
-        authorLower.includes('webhook') || 
-        authorLower.includes('api') || 
-        authorLower.includes('assistant') || 
-        authorLower.includes('operator') || 
-        authorLower.includes('nudge') ||
-        authorLower.includes('script') ||
-        authorLower.includes('backfill');
-        
-    if (isSystemAuthor) return false;
-    
-    const notesLower = (act.notes || '').toLowerCase();
-    const isSystemNote = 
-        notesLower.includes('bucket changed') || 
-        notesLower.includes('status changed') || 
-        notesLower.includes('imported from') || 
-        notesLower.includes('synced from') ||
-        notesLower.includes('performed by: system') ||
-        notesLower.includes('system backfill script');
-        
-    if (isSystemNote) return false;
-
-    return true;
 };
 
 const isManualEmail = (email: { campaignId?: string; sender?: string }): boolean => {
@@ -765,6 +736,7 @@ export default function ReportsClientPage({
             if (!leadId) return null;
             const lead = activeLeadMap.get(leadId);
             if (!lead) return null;
+            if (!isManualActivity(data)) return null;
             
             if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
                 if (lead.franchisee !== userProfile.franchisee) return null;
@@ -914,6 +886,12 @@ export default function ReportsClientPage({
   }, [userProfile, fetchData]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
+    if (filterName === 'dialerAssignmentDate') {
+      const defaultRange = { from: new Date(2026, 6, 10), to: new Date() };
+      const validRange = (value && value.from) ? value : defaultRange;
+      setFilters(prev => ({ ...prev, dialerAssignmentDate: validRange }));
+      return;
+    }
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
@@ -1003,7 +981,12 @@ export default function ReportsClientPage({
             } else {
                 const fromDate = startOfDay(appliedFilters.dialerAssignmentDate.from);
                 const toDate = appliedFilters.dialerAssignmentDate.to ? endOfDay(appliedFilters.dialerAssignmentDate.to) : endOfDay(appliedFilters.dialerAssignmentDate.from);
-                assignmentDateMatch = assignDate >= fromDate && assignDate <= toDate;
+                const leadAssignMatch = assignDate >= fromDate && assignDate <= toDate;
+
+                const callDate = parseDateString(call.date);
+                const callDateMatch = callDate ? (callDate >= fromDate && callDate <= toDate) : false;
+
+                assignmentDateMatch = leadAssignMatch && callDateMatch;
             }
         }
 
@@ -1415,7 +1398,10 @@ export default function ReportsClientPage({
       const dialerCallsListLeadIds = new Set(dialerCallsList.map(c => c.leadId));
 
       const dialerLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
-      const dialerLostPipelineLeads = dialerLeads.filter(isLostLead);
+      const dialerWonLeads = dialerLeads.filter(isSignedLead);
+      const dialerWon = dialerWonLeads.length;
+
+      const dialerLostPipelineLeads = dialerLeads.filter(l => !isSignedLead(l) && dialerCallsListLeadIds.has(l.id) && isLostLead(l));
       const dialerLostPipeline = dialerLostPipelineLeads.length;
 
       const dialerActivePipelineLeads = dialerLeads.filter(l => isActivePipelineLead(l, dialerCallsListLeadIds, true));
@@ -1423,9 +1409,6 @@ export default function ReportsClientPage({
 
       const dialerUnactionedPipelineLeads = dialerLeads.filter(l => isActivePipelineLead(l, dialerCallsListLeadIds, false));
       const dialerUnactionedPipeline = dialerUnactionedPipelineLeads.length;
-
-      const dialerWonLeads = dialerLeads.filter(isSignedLead);
-      const dialerWon = dialerWonLeads.length;
 
       return { 
         name: dialer, 
@@ -1563,8 +1546,8 @@ export default function ReportsClientPage({
         const processedLeadsList = dialerLeads.filter(l => dialerCallsListLeadIds.has(l.id));
         const processedInPeriod = processedLeadsList.length;
 
-        // Un-actioned pool: assigned leads that have NOT been called yet by the dialer (excluding Lost/Signed)
-        const unactionedLeadsList = dialerLeads.filter(l => !dialerCallsListLeadIds.has(l.id) && !isLostLead(l) && !isSignedLead(l));
+        // Un-actioned pool: assigned leads that have NOT been called yet by the dialer (excluding Signed)
+        const unactionedLeadsList = dialerLeads.filter(l => !dialerCallsListLeadIds.has(l.id) && !isSignedLead(l));
         const unactionedPool = unactionedLeadsList.length;
 
         const dailyBurnRate = workingDaysInRange > 0 ? (processedInPeriod / workingDaysInRange) : 0;
@@ -2450,13 +2433,15 @@ export default function ReportsClientPage({
                         </div>
                     </div>
                     <div className="space-y-2">
-                        <Label>Dialer Assignment Date</Label>
+                        <Label className="flex items-center gap-1">
+                            Dialer Assignment Date <span className="text-red-500 font-bold">*</span>
+                        </Label>
                         <div className="relative w-full">
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full h-10 pl-3 pr-8 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
-                                        <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                                        <span className="truncate">
+                                    <Button variant="outline" className="w-full h-10 pl-3 pr-3 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis border-primary/30">
+                                        <CalendarIcon className="mr-2 h-4 w-4 shrink-0 text-primary" />
+                                        <span className="truncate font-medium">
                                             {filters.dialerAssignmentDate?.from ? (
                                                 filters.dialerAssignmentDate.to ? <>{format(filters.dialerAssignmentDate.from, "LLL dd, y")} - {format(filters.dialerAssignmentDate.to, "LLL dd, y")}</> : format(filters.dialerAssignmentDate.from, "LLL dd, y")
                                             ) : (
@@ -2467,18 +2452,6 @@ export default function ReportsClientPage({
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.dialerAssignmentDate} onSelect={(date) => handleFilterChange('dialerAssignmentDate', date)} initialFocus /></PopoverContent>
                             </Popover>
-                            {filters.dialerAssignmentDate && (
-                                <button 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleFilterChange('dialerAssignmentDate', undefined);
-                                    }}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
-                                    title="Clear assignment date filter"
-                                >
-                                    <X className="h-3 w-3" />
-                                </button>
-                            )}
                         </div>
                     </div>
                     <div className="space-y-2">
@@ -3098,11 +3071,15 @@ export default function ReportsClientPage({
                                         {dialer['Active Pipeline']}
                                     </TableCell>
                                     <TableCell 
-                                        className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
-                                        onClick={() => setTrialDrilldown({ 
-                                            title: `${dialer.name} - Lost Pipeline Leads (Archived Lost)`, 
-                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && isLostLead(l)) 
-                                        })}
+                                         className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
+                                         onClick={() => {
+                                             const dialerCallsList = filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+                                             const callLeadIds = new Set(dialerCallsList.map(c => c.leadId));
+                                             setTrialDrilldown({ 
+                                                 title: `${dialer.name} - Lost Pipeline Leads (Archived Lost)`, 
+                                                 leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && !isSignedLead(l) && callLeadIds.has(l.id) && isLostLead(l)) 
+                                             });
+                                         }}
                                     >
                                         {dialer['Lost Pipeline']}
                                     </TableCell>
@@ -3216,10 +3193,13 @@ export default function ReportsClientPage({
                                 </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-slate-500 cursor-pointer hover:underline"
-                                    onClick={() => setTrialDrilldown({ 
-                                        title: "All Lost Pipeline Leads (Archived Lost)", 
-                                        leads: stats.baseFilteredLeads.filter(isLostLead) 
-                                    })}
+                                    onClick={() => {
+                                        const allCallLeadIds = new Set(filteredCalls.map(c => c.leadId));
+                                        setTrialDrilldown({ 
+                                            title: "All Lost Pipeline Leads (Archived Lost)", 
+                                            leads: stats.baseFilteredLeads.filter(l => !isSignedLead(l) && allCallLeadIds.has(l.id) && isLostLead(l)) 
+                                        });
+                                    }}
                                 >
                                     {stats.teamPerformanceTotals['Lost Pipeline']}
                                 </TableCell>

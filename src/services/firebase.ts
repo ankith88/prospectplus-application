@@ -1362,7 +1362,12 @@ async function updateLeadAvatar(leadId: string, avatarUrl: string): Promise<void
   }
 }
 
-async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: string): Promise<void> {
+async function updateLeadStatus(
+    leadId: string, 
+    status: LeadStatus, 
+    reason?: string,
+    options?: { source?: string; isDataManagement?: boolean }
+): Promise<void> {
     try {
         const updates: any = { customerStatus: status, statusReason: reason || '' };
         const now = new Date().toISOString();
@@ -1377,11 +1382,19 @@ async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: str
             updates.customerSuccessAssigned = 'Belinda Urbani';
         }
         await updateDoc(doc(firestore, 'leads', leadId), updates);
+
+        const isDataMgmt = options?.isDataManagement || options?.source === 'data_management' || (reason && reason.toLowerCase().includes('data management'));
         let logNotes = reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}`;
-        if (status === 'LocalMile Pending') {
+        if (isDataMgmt) {
+            logNotes = `Status changed to ${status} via Data Management${reason ? ` (${reason})` : ''}`;
+        } else if (status === 'LocalMile Pending') {
             logNotes += ' - Moved to Customer Success & Assigned to Belinda Urbani';
         }
-        await logActivity(leadId, { type: 'Update', notes: logNotes });
+        await logActivity(leadId, { 
+            type: 'Update', 
+            notes: logNotes,
+            ...(isDataMgmt ? { source: 'data_management', isDataManagement: true, isAutomated: true } : {})
+        });
 
         if (status === 'Won' || (status as string) === 'Signed') {
             try {

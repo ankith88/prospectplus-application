@@ -178,7 +178,7 @@ export function LeadStatusUpdater() {
   // Single Status Update
   const handleSingleStatusUpdate = async (leadId: string, newStatus: LeadStatus) => {
     try {
-      await updateLeadStatus(leadId, newStatus);
+      await updateLeadStatus(leadId, newStatus, 'Data Management single update', { source: 'data_management', isDataManagement: true });
       setItems(prev =>
         prev.map(item => (item.id === leadId ? { ...item, status: newStatus } : item))
       );
@@ -202,7 +202,7 @@ export function LeadStatusUpdater() {
     setUpdating(true);
     try {
       await Promise.all(
-        selectedItems.map(leadId => updateLeadStatus(leadId, bulkStatus as LeadStatus))
+        selectedItems.map(leadId => updateLeadStatus(leadId, bulkStatus as LeadStatus, 'Data Management bulk update', { source: 'data_management', isDataManagement: true }))
       );
       setItems(prev =>
         prev.map(item =>

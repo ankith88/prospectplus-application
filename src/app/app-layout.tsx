@@ -33,7 +33,9 @@ import {
   SidebarGroupLabel,
   SidebarGroupContent,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -59,7 +61,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin, switchRole, updateUserProfile } = useAuth()
   const { canView } = usePermissions()
-  const { isMobile, state } = useSidebar()
+  const { isMobile, state, toggleSidebar } = useSidebar()
   const { startTour } = useOnboarding()
   const { isSessionActive, elapsedTime, sessionLeadIds, leadsVisited, endSession } = useDialingSession()
   const { loadTime, setLoadTime, pageName, setPageName, isCustom, setIsCustom } = usePerformance()
@@ -149,6 +151,126 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [showAreaLog, setShowAreaLog] = useState(false);
   const [hasMissingDeployment, setHasMissingDeployment] = useState(false);
   const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  
+  const getActiveGroupForPath = (path: string): string | null => {
+    if (path.startsWith('/admin/dashboard') || path.startsWith('/admin/financial-dashboard') || path.startsWith('/admin/mailbox')) {
+      return 'dashboards';
+    }
+    if (path.startsWith('/account-lookup') || path.startsWith('/ask')) {
+      return 'search-ai';
+    }
+    if (path === '/leads/map') return 'field-logistics';
+    if (path.startsWith('/leads') || path.startsWith('/inbound-leads') || path.startsWith('/franchisee-leads') || path.startsWith('/admin/marketing/import-leads') || path.startsWith('/franchisee-lead-verification') || path.startsWith('/admin/in-review-leads') || path.startsWith('/admin/all-leads') || path.startsWith('/admin/unassigned-leads') || path.startsWith('/account-manager/pipeline') || path.startsWith('/signed-customers') || path.startsWith('/lost-customers')) {
+      return 'sales-crm';
+    }
+    if (path.startsWith('/customer-success') && !path.includes('/reporting')) {
+      return 'customer-success-group';
+    }
+    if (path.startsWith('/field-sales') || path.startsWith('/capture-visit') || path.startsWith('/visit-notes') || path.startsWith('/saved-routes') || path.startsWith('/prospecting-areas') || path.startsWith('/completed-routes')) {
+      return 'field-logistics';
+    }
+    if ((path.startsWith('/admin/marketing') && !path.startsWith('/admin/marketing/import-leads')) || path.startsWith('/leads/suppressions') || path.startsWith('/admin/brand-bot')) {
+      return 'marketing-group';
+    }
+    if (path.startsWith('/lpo-leads') || path.startsWith('/lpo-opportunities')) {
+      return 'partners-group';
+    }
+    if (path.startsWith('/admin/tickets') || path.startsWith('/scans') || path.startsWith('/appointments') || path.startsWith('/calls') || path.startsWith('/unassigned_calls') || path.startsWith('/transcripts') || path.startsWith('/check-ins')) {
+      if (path === '/admin/tickets/reporting' || path === '/scans/report') return 'analytics-reports';
+      return 'ops-history';
+    }
+    if (path.startsWith('/sales-snapshot') || path.startsWith('/reports') || path.startsWith('/inbound-reporting') || path.startsWith('/admin/lifecycle-dashboard') || path.startsWith('/account-manager/reports') || path.startsWith('/customer-success/reporting') || path.startsWith('/field-activity-report') || path.startsWith('/admin/deployments')) {
+      return 'analytics-reports';
+    }
+    if (path.startsWith('/admin/franchisees')) {
+      return 'network-group';
+    }
+    return null;
+  };
+
+  const isGroupCollapsed = (groupId: string): boolean => {
+    if (collapsedGroups[groupId] !== undefined) {
+      return collapsedGroups[groupId];
+    }
+    const activeGroup = getActiveGroupForPath(pathname);
+    if (activeGroup === groupId) {
+      return false; // Auto-open active group on load when expanded
+    }
+    return true; // Collapse other groups by default when expanded
+  };
+
+  const toggleGroup = (groupId: string) => {
+    setCollapsedGroups(prev => {
+      const isCurrentlyCollapsed = isGroupCollapsed(groupId);
+      const newState = { ...prev, [groupId]: !isCurrentlyCollapsed };
+      try {
+        localStorage.setItem('prospectplus_collapsed_groups', JSON.stringify(newState));
+      } catch {}
+      return newState;
+    });
+  };
+
+  const DEFAULT_PINNED = ['/account-lookup', '/leads', '/sales-snapshot', '/leads/map'];
+  const [pinnedPaths, setPinnedPaths] = useState<string[]>([]);
+  const [showPinModal, setShowPinModal] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('prospectplus_pinned_nav');
+      if (saved) {
+        setPinnedPaths(JSON.parse(saved));
+      } else {
+        setPinnedPaths(DEFAULT_PINNED);
+      }
+    } catch {
+      setPinnedPaths(DEFAULT_PINNED);
+    }
+  }, []);
+
+  const togglePinItem = (href: string) => {
+    setPinnedPaths(prev => {
+      let updated: string[];
+      if (prev.includes(href)) {
+        updated = prev.filter(p => p !== href);
+      } else {
+        updated = [...prev, href];
+      }
+      try {
+        localStorage.setItem('prospectplus_pinned_nav', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const PINNABLE_ITEMS: Record<string, { label: string; category: string; icon: React.ElementType; href: string }> = {
+    '/account-lookup': { label: 'Universal Lookup', category: 'Search & AI', icon: Search, href: '/account-lookup' },
+    '/ask': { label: 'Ask Prospect+', category: 'Search & AI', icon: Sparkles, href: '/ask' },
+    '/admin/dashboard': { label: 'Executive Dashboard', category: 'Dashboards', icon: LayoutDashboard, href: '/admin/dashboard' },
+    '/admin/financial-dashboard': { label: 'Financial Dashboard', category: 'Dashboards', icon: DollarSign, href: '/admin/financial-dashboard' },
+    '/admin/mailbox': { label: 'AI Mailbox', category: 'Dashboards', icon: Sparkles, href: '/admin/mailbox' },
+    '/leads': { label: 'Outbound Leads', category: 'Sales & CRM', icon: Briefcase, href: '/leads' },
+    '/inbound-leads': { label: 'Inbound Leads', category: 'Sales & CRM', icon: Inbox, href: '/inbound-leads' },
+    '/admin/all-leads': { label: 'Master Leads Directory', category: 'Sales & CRM', icon: Layers, href: '/admin/all-leads' },
+    '/account-manager/pipeline': { label: 'AM Pipeline', category: 'Sales & CRM', icon: ListTodo, href: '/account-manager/pipeline' },
+    '/signed-customers': { label: 'Signed Customers', category: 'Sales & CRM', icon: Star, href: '/signed-customers' },
+    '/lost-customers': { label: 'Lost Customers', category: 'Sales & CRM', icon: UserX, href: '/lost-customers' },
+    '/customer-success/pipeline': { label: 'CS Pipeline', category: 'Customer Success', icon: ListTodo, href: '/customer-success/pipeline' },
+    '/field-sales': { label: 'Door-to-Door', category: 'Field & Logistics', icon: Briefcase, href: '/field-sales' },
+    '/saved-routes': { label: 'Saved Routes', category: 'Field & Logistics', icon: Save, href: '/saved-routes' },
+    '/prospecting-areas': { label: 'Prospecting Areas', category: 'Field & Logistics', icon: LayoutGrid, href: '/prospecting-areas' },
+    '/leads/map': { label: 'Route Planner Map', category: 'Field & Logistics', icon: Map, href: '/leads/map' },
+    '/admin/marketing/campaigns': { label: 'Campaigns & Queues', category: 'Marketing', icon: Mail, href: '/admin/marketing/campaigns' },
+    '/lpo-leads': { label: 'Participating LPOs', category: 'Partners', icon: Building, href: '/lpo-leads' },
+    '/admin/tickets': { label: 'All Tickets', category: 'Operations & History', icon: Ticket, href: '/admin/tickets' },
+    '/scans': { label: 'Scan Events', category: 'Operations & History', icon: ScanLine, href: '/scans' },
+    '/appointments': { label: 'All Appointments', category: 'Operations & History', icon: Calendar, href: '/appointments' },
+    '/calls': { label: 'All Calls', category: 'Operations & History', icon: Phone, href: '/calls' },
+    '/sales-snapshot': { label: 'Sales Snapshot', category: 'Analytics & Reports', icon: Layers, href: '/sales-snapshot' },
+    '/reports': { label: 'Outbound Reporting', category: 'Analytics & Reports', icon: BarChart2, href: '/reports' },
+    '/admin/franchisees/directory': { label: 'Franchisees Directory', category: 'Network', icon: Building, href: '/admin/franchisees/directory' },
+    '/admin/franchisees/territory-map': { label: 'Franchisee Territory Map', category: 'Network', icon: Map, href: '/admin/franchisees/territory-map' },
+  };
 
   const toggleExpand = (key: string) => {
     setExpandedStates(prev => ({ ...prev, [key]: !prev[key] }));
@@ -433,6 +555,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewFranchiseeVerification = (isSuperAdmin || userProfile?.activeRole === 'admin' || canView('franchiseeVerification')) && !isUserRole;
   const canViewHistoryAppointments = canView('historyAppointments');
   const canViewHistoryCallsTranscripts = canView('historyCallsTranscripts');
+  const canViewTerritoryMap = isSuperAdmin || (userProfile?.activeRole as string) === 'Franchisee' || (userProfile?.activeRole as string)?.toLowerCase() === 'franchisee' || (userProfile?.activeRole as string) === 'Executive' || (userProfile?.activeRole as string) === 'Outbound Admin';
   const canViewFranchisees = canView('franchisees');
   const canViewAccountManagerPipeline = canView('accountManagerPipeline');
   const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
@@ -469,13 +592,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         .sidebar-nav-theme {
           font-family: 'Inter', sans-serif;
         }
+        .sidebar-nav-theme [data-sidebar="group"] {
+          padding-top: 0.125rem !important;
+          padding-bottom: 0.125rem !important;
+        }
         .sidebar-nav-theme [data-sidebar="group-label"] {
           font-size: 0.6875rem !important;
-          font-weight: 700 !important;
+          font-weight: 800 !important;
           text-transform: uppercase !important;
-          letter-spacing: 0.05em !important;
-          color: #718096 !important;
-          padding: 0.625rem 0.75rem 0.25rem !important;
+          letter-spacing: 0.06em !important;
+          color: #ffffff !important;
+          padding: 0.375rem 0.75rem 0.125rem !important;
+          height: auto !important;
+          min-height: 0 !important;
+        }
+        .sidebar-nav-theme [data-sidebar="menu-button"] {
+          height: 2rem !important;
+          font-size: 0.8125rem !important;
+        }
+        .sidebar-nav-theme [data-sidebar="menu-sub-button"] {
+          height: 1.875rem !important;
+          font-size: 0.775rem !important;
         }
         .sidebar-nav-theme [data-active="true"] {
           background-color: #095c7b !important;
@@ -511,7 +648,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       `}</style>
       <DailyAreaLogDialog isOpen={showAreaLog} onOpenChange={setShowAreaLog} />
       <Sidebar collapsible="icon" className="sidebar-nav-theme">
-        <SidebarHeader className="flex items-center justify-center p-4 h-14 border-b border-sidebar-border overflow-hidden">
+        <SidebarHeader className="flex items-center justify-between px-3 py-2 h-14 border-b border-sidebar-border overflow-hidden">
           <Link href="/leads" className="flex items-center gap-2">
             <div className="logo-text whitespace-nowrap">
               {state === "collapsed" ? (
@@ -521,913 +658,1193 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </Link>
+          <SidebarTrigger className="h-7 w-7 text-sidebar-foreground hover:bg-sidebar-accent hover:text-white transition-colors" />
         </SidebarHeader>
         <SidebarContent>
-          {/* Group 1: DASHBOARDS */}
-          {(canAccessMailbox || canView('executiveDashboard') || (isSuperAdmin && userProfile?.activeRole !== 'user')) && (
-            <SidebarGroup>
-              <SidebarGroupLabel>Dashboards</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {/* Executive Dashboard */}
-                  {canView('executiveDashboard') && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/admin/dashboard")} tooltip="Executive Dashboard">
-                        <Link href="/admin/dashboard">
-                          <LayoutDashboard />
-                          <span>Executive Dashboard</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
+          {state === "collapsed" ? (
+            <SidebarMenu className="py-2 gap-2">
+              {/* Pinned */}
+              <SidebarMenuItem>
+                <SidebarMenuButton 
+                  tooltip="Pinned Shortcuts" 
+                  isActive={false} 
+                  onClick={() => {
+                    setCollapsedGroups(prev => ({ ...prev, 'pinned': false }));
+                    toggleSidebar();
+                  }}
+                  className="hover:bg-sidebar-accent"
+                >
+                  <Star className="h-4 w-4 fill-[#eaf143] text-[#eaf143]" />
+                  <span>Pinned Shortcuts</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
-                  {/* Financial Dashboard */}
-                  {isSuperAdmin && userProfile?.activeRole !== 'user' && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/admin/financial-dashboard")} tooltip="Financial Dashboard">
-                        <Link href="/admin/financial-dashboard">
-                          <DollarSign />
-                          <span>Financial Dashboard</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
-
-                  {/* AI Mailbox */}
-                  {canAccessMailbox && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/admin/mailbox")} tooltip="AI Mailbox">
-                        <Link href="/admin/mailbox">
-                          <Sparkles className="text-[#eaf143] fill-[#eaf143]/20" />
-                          <span>AI Mailbox</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {/* Group 2: SEARCH & AI */}
-          <SidebarGroup>
-            <SidebarGroupLabel>Search & AI</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {/* Universal Lookup */}
+              {/* Group 1: DASHBOARDS */}
+              {(canAccessMailbox || canView('executiveDashboard') || (isSuperAdmin && userProfile?.activeRole !== 'user')) && (
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/account-lookup")} tooltip="Universal Lookup">
-                    <Link href="/account-lookup">
-                      <Search />
-                      <span>Universal Lookup</span>
-                    </Link>
+                  <SidebarMenuButton 
+                    tooltip="Dashboards" 
+                    isActive={getActiveGroupForPath(pathname) === 'dashboards'} 
+                    onClick={() => {
+                      setCollapsedGroups(prev => ({ ...prev, 'dashboards': false }));
+                      toggleSidebar();
+                    }}
+                    className="hover:bg-sidebar-accent"
+                  >
+                    <LayoutDashboard className="h-4 w-4 text-white" />
+                    <span>Dashboards</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+              )}
 
-                {/* Ask Prospect+ */}
-                {canAccessAsk && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/ask")} tooltip="Ask Prospect+">
-                      <Link href="/ask">
-                        <Sparkles />
-                        <span>Ask Prospect+</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+              {/* Group 2: SEARCH & AI */}
+              <SidebarMenuItem>
+                <SidebarMenuButton 
+                  tooltip="Search & AI" 
+                  isActive={getActiveGroupForPath(pathname) === 'search-ai'} 
+                  onClick={() => {
+                    setCollapsedGroups(prev => ({ ...prev, 'search-ai': false }));
+                    toggleSidebar();
+                  }}
+                  className="hover:bg-sidebar-accent"
+                >
+                  <Sparkles className="h-4 w-4 text-[#eaf143]" />
+                  <span>Search & AI</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Group 3: SALES & CRM */}
+              {(canViewLeadManagementGroup || canViewAccountManagerPipeline || canViewCustomers) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    tooltip="Sales & CRM" 
+                    isActive={getActiveGroupForPath(pathname) === 'sales-crm'} 
+                    onClick={() => {
+                      setCollapsedGroups(prev => ({ ...prev, 'sales-crm': false }));
+                      toggleSidebar();
+                    }}
+                    className="hover:bg-sidebar-accent"
+                  >
+                    <Briefcase className="h-4 w-4 text-white" />
+                    <span>Sales & CRM</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
+              {/* Group 4: CUSTOMER SUCCESS */}
+              {canViewCustomerSuccessPipeline && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    tooltip="Customer Success" 
+                    isActive={getActiveGroupForPath(pathname) === 'customer-success-group'} 
+                    onClick={() => {
+                      setCollapsedGroups(prev => ({ ...prev, 'customer-success-group': false }));
+                      toggleSidebar();
+                    }}
+                    className="hover:bg-sidebar-accent"
+                  >
+                    <Users className="h-4 w-4 text-white" />
+                    <span>Customer Success</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
+              {/* Group 5: FIELD & LOGISTICS */}
+              {canViewFieldSalesGroup && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    tooltip="Field & Logistics" 
+                    isActive={getActiveGroupForPath(pathname) === 'field-logistics'} 
+                    onClick={() => {
+                      setCollapsedGroups(prev => ({ ...prev, 'field-logistics': false }));
+                      toggleSidebar();
+                    }}
+                    className="hover:bg-sidebar-accent"
+                  >
+                    <Map className="h-4 w-4 text-white" />
+                    <span>Field & Logistics</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
+              {/* Group 6: MARKETING */}
+              {canViewMarketingGroup && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    tooltip="Marketing" 
+                    isActive={getActiveGroupForPath(pathname) === 'marketing-group'} 
+                    onClick={() => {
+                      setCollapsedGroups(prev => ({ ...prev, 'marketing-group': false }));
+                      toggleSidebar();
+                    }}
+                    className="hover:bg-sidebar-accent"
+                  >
+                    <Mail className="h-4 w-4 text-white" />
+                    <span>Marketing</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
+              {/* Group 7: PARTNERS */}
+              {canViewLpoLeads && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    tooltip="Partners" 
+                    isActive={getActiveGroupForPath(pathname) === 'partners-group'} 
+                    onClick={() => {
+                      setCollapsedGroups(prev => ({ ...prev, 'partners-group': false }));
+                      toggleSidebar();
+                    }}
+                    className="hover:bg-sidebar-accent"
+                  >
+                    <Building className="h-4 w-4 text-white" />
+                    <span>Partners</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
+              {/* Group 8: OPERATIONS & HISTORY */}
+              {(canViewTickets || canViewScans || canViewHistory) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    tooltip="Operations & History" 
+                    isActive={getActiveGroupForPath(pathname) === 'ops-history'} 
+                    onClick={() => {
+                      setCollapsedGroups(prev => ({ ...prev, 'ops-history': false }));
+                      toggleSidebar();
+                    }}
+                    className="hover:bg-sidebar-accent"
+                  >
+                    <Ticket className="h-4 w-4 text-white" />
+                    <span>Operations & History</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
+              {/* Group 9: ANALYTICS & REPORTS */}
+              {(canViewReporting || isFranchiseeRole) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    tooltip="Analytics & Reports" 
+                    isActive={getActiveGroupForPath(pathname) === 'analytics-reports'} 
+                    onClick={() => {
+                      setCollapsedGroups(prev => ({ ...prev, 'analytics-reports': false }));
+                      toggleSidebar();
+                    }}
+                    className="hover:bg-sidebar-accent"
+                  >
+                    <BarChart2 className="h-4 w-4 text-white" />
+                    <span>Analytics & Reports</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
+              {/* Group 10: NETWORK */}
+              {canViewFranchisees && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    tooltip="Network" 
+                    isActive={getActiveGroupForPath(pathname) === 'network-group'} 
+                    onClick={() => {
+                      setCollapsedGroups(prev => ({ ...prev, 'network-group': false }));
+                      toggleSidebar();
+                    }}
+                    className="hover:bg-sidebar-accent"
+                  >
+                    <Globe className="h-4 w-4 text-white" />
+                    <span>Network</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+            </SidebarMenu>
+          ) : (
+            <>
+              {/* Pinned Quick Access */}
+              <SidebarGroup>
+                <SidebarGroupLabel className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel">
+                  <span onClick={() => toggleGroup('pinned')} className="flex items-center gap-1.5 text-[#eaf143] font-bold flex-1">
+                    <Star className="h-3 w-3 fill-[#eaf143] text-[#eaf143]" />
+                    Pinned
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowPinModal(true);
+                      }}
+                      className="px-1.5 py-0.5 text-[10px] font-semibold text-slate-300 hover:text-white hover:bg-slate-700/60 rounded transition-colors"
+                      title="Customize Pinned Shortcuts"
+                    >
+                      + Edit
+                    </button>
+                    <div onClick={() => toggleGroup('pinned')} className="p-0.5">
+                      {isGroupCollapsed('pinned') ? (
+                        <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                      )}
+                    </div>
+                  </div>
+                </SidebarGroupLabel>
+                {!isGroupCollapsed('pinned') && (
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {pinnedPaths.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-slate-400 italic flex items-center justify-between">
+                          <span>No pinned items</span>
+                          <button 
+                            type="button"
+                            onClick={() => setShowPinModal(true)} 
+                            className="text-[11px] text-[#eaf143] underline not-italic hover:text-white"
+                          >
+                            Add pins
+                          </button>
+                        </div>
+                      ) : (
+                        pinnedPaths.map(href => {
+                          const item = PINNABLE_ITEMS[href];
+                          if (!item) return null;
+                          const ItemIcon = item.icon;
+                          return (
+                            <SidebarMenuItem key={href} className="group/pinitem relative flex items-center">
+                              <SidebarMenuButton asChild isActive={isActive(href)} tooltip={item.label} className="w-full pr-7">
+                                <Link href={href}>
+                                  <ItemIcon />
+                                  <span>{item.label}</span>
+                                </Link>
+                              </SidebarMenuButton>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  togglePinItem(href);
+                                }}
+                                className="absolute right-1 text-slate-400 hover:text-red-400 opacity-0 group-hover/pinitem:opacity-100 transition-opacity p-1"
+                                title={`Unpin ${item.label}`}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </SidebarMenuItem>
+                          );
+                        })
+                      )}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
                 )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+              </SidebarGroup>
 
-          {/* Group 3: SALES & CRM */}
-          {(canViewLeadManagementGroup || canViewAccountManagerPipeline || canViewCustomers) && (
-            <SidebarGroup>
-              <SidebarGroupLabel>Sales & CRM</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {/* Leads Group */}
-                  {canViewLeadManagementGroup && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => toggleExpand("leads-group")}>
-                        <Briefcase />
-                        <span>Leads</span>
-                        {expandedStates["leads-group"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                      </SidebarMenuButton>
-                      {expandedStates["leads-group"] && (
-                        <SidebarMenuSub>
-                          {canCreateLead && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/leads/new")}>
-                                <Link href="/leads/new">
-                                  <PlusCircle className="h-4 w-4" />
-                                  <span>New Lead</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {isFranchiseeRole ? (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/franchisee-leads")}>
-                                <Link href="/franchisee-leads">
-                                  <Briefcase className="h-4 w-4" />
-                                  <span>Franchisee Leads</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ) : (
-                            <>
-                              {canViewLeadManagementOutbound && (
-                                <SidebarMenuSubItem>
-                                  <SidebarMenuSubButton asChild isActive={isActive("/leads") && !isActive("/leads/new") && !isActive("/leads/map") && !isActive("/leads/archive")}>
-                                    <Link href="/leads">
-                                      <Briefcase className="h-4 w-4" />
-                                      <span>Outbound Leads</span>
-                                    </Link>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              )}
-                              {canViewInbound && (
-                                <SidebarMenuSubItem>
-                                  <SidebarMenuSubButton asChild isActive={isActive("/inbound-leads")}>
-                                    <Link href="/inbound-leads">
-                                      <Inbox className="h-4 w-4" />
-                                      <span>Inbound Leads</span>
-                                    </Link>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              )}
-                            </>
-                          )}
-                          {canImportLeads && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/import-leads")}>
-                                <Link href="/admin/marketing/import-leads">
-                                  <PlusCircle className="h-4 w-4" />
-                                  <span>Import Leads</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {canViewFranchiseeVerification && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/franchisee-lead-verification")}>
-                                <Link href="/franchisee-lead-verification">
-                                  <UserCheck className="h-4 w-4" />
-                                  <span>Franchisee Lead Review</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {canViewInReviewLeads && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/admin/in-review-leads")}>
-                                <Link href="/admin/in-review-leads">
-                                  <ClipboardCheck className="h-4 w-4" />
-                                  <span>In Review Leads</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {canViewMasterLeadsDirectory && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/admin/all-leads")}>
-                                <Link href="/admin/all-leads">
-                                  <Layers className="h-4 w-4" />
-                                  <span>Master Leads Directory</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {canView('unassignedLeads') && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/admin/unassigned-leads")}>
-                                <Link href="/admin/unassigned-leads">
-                                  <ListTodo className="h-4 w-4" />
-                                  <span>Unassigned Leads</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {canViewLeadManagementArchive && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/leads/archive")}>
-                                <Link href="/leads/archive">
-                                  <Archive className="h-4 w-4" />
-                                  <span>Archived Leads</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                        </SidebarMenuSub>
+              {/* Group 1: DASHBOARDS */}
+              {(canAccessMailbox || canView('executiveDashboard') || (isSuperAdmin && userProfile?.activeRole !== 'user')) && (
+                <SidebarGroup>
+                  <SidebarGroupLabel 
+                    onClick={() => toggleGroup('dashboards')} 
+                    className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                  >
+                    <span className="flex items-center gap-1.5 text-white font-extrabold">
+                      <LayoutDashboard className="h-3.5 w-3.5 text-white/90" />
+                      <span>Dashboards</span>
+                    </span>
+                    {isGroupCollapsed('dashboards') ? (
+                      <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                    )}
+                  </SidebarGroupLabel>
+                  {!isGroupCollapsed('dashboards') && (
+                    <SidebarGroupContent>
+                    <SidebarMenu>
+                      {/* Executive Dashboard */}
+                      {canView('executiveDashboard') && (
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/admin/dashboard")} tooltip="Executive Dashboard">
+                            <Link href="/admin/dashboard">
+                              <LayoutDashboard />
+                              <span>Executive Dashboard</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
                       )}
-                    </SidebarMenuItem>
-                  )}
 
-                  {/* Account Manager Pipeline */}
-                  {canViewAccountManagerPipeline && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")}>
-                        <Link href="/account-manager/pipeline">
-                          <ListTodo />
-                          <span>AM Pipeline</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
-
-                  {/* Customers collapsible group */}
-                  {canViewCustomers && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => toggleExpand("customers")}>
-                        <Star />
-                        <span>Customers</span>
-                        {expandedStates["customers"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                      </SidebarMenuButton>
-                      {expandedStates["customers"] && (
-                        <SidebarMenuSub>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/signed-customers")}>
-                              <Link href="/signed-customers">
-                                <Star className="h-4 w-4" />
-                                <span>Signed Customers</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/lost-customers")}>
-                              <Link href="/lost-customers">
-                                <UserX className="h-4 w-4" />
-                                <span>Lost Customers</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        </SidebarMenuSub>
+                      {/* Financial Dashboard */}
+                      {isSuperAdmin && userProfile?.activeRole !== 'user' && (
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/admin/financial-dashboard")} tooltip="Financial Dashboard">
+                            <Link href="/admin/financial-dashboard">
+                              <DollarSign />
+                              <span>Financial Dashboard</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
                       )}
-                    </SidebarMenuItem>
-                  )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
 
-          {/* Group 4: CUSTOMER SUCCESS */}
-          {canViewCustomerSuccessPipeline && (
-            <SidebarGroup>
-              <SidebarGroupLabel>Customer Success</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton onClick={() => toggleExpand("customer-success")}>
-                      <Users />
+                      {/* AI Mailbox */}
+                      {canAccessMailbox && (
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/admin/mailbox")} tooltip="AI Mailbox">
+                            <Link href="/admin/mailbox">
+                              <Sparkles className="text-[#eaf143] fill-[#eaf143]/20" />
+                              <span>AI Mailbox</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
+
+              {/* Group 2: SEARCH & AI */}
+              <SidebarGroup>
+                <SidebarGroupLabel 
+                  onClick={() => toggleGroup('search-ai')} 
+                  className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                >
+                  <span className="flex items-center gap-1.5 text-white font-extrabold">
+                    <Sparkles className="h-3.5 w-3.5 text-[#eaf143]" />
+                    <span>Search & AI</span>
+                  </span>
+                  {isGroupCollapsed('search-ai') ? (
+                    <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                  )}
+                </SidebarGroupLabel>
+                {!isGroupCollapsed('search-ai') && (
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {/* Universal Lookup */}
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={isActive("/account-lookup")} tooltip="Universal Lookup">
+                          <Link href="/account-lookup">
+                            <Search />
+                            <span>Universal Lookup</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+
+                      {/* Ask Prospect+ */}
+                      {canAccessAsk && (
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/ask")} tooltip="Ask Prospect+">
+                            <Link href="/ask">
+                              <Sparkles />
+                              <span>Ask Prospect+</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                )}
+              </SidebarGroup>
+
+              {/* Group 3: SALES & CRM */}
+              {(canViewLeadManagementGroup || canViewAccountManagerPipeline || canViewCustomers) && (
+                <SidebarGroup>
+                  <SidebarGroupLabel 
+                    onClick={() => toggleGroup('sales-crm')} 
+                    className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                  >
+                    <span className="flex items-center gap-1.5 text-white font-extrabold">
+                      <Briefcase className="h-3.5 w-3.5 text-white/90" />
+                      <span>Sales & CRM</span>
+                    </span>
+                    {isGroupCollapsed('sales-crm') ? (
+                      <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                    )}
+                  </SidebarGroupLabel>
+                  {!isGroupCollapsed('sales-crm') && (
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {canCreateLead && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="New Lead">
+                              <Link href="/leads/new">
+                                <PlusCircle />
+                                <span>New Lead</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {isFranchiseeRole ? (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/franchisee-leads")} tooltip="Franchisee Leads">
+                              <Link href="/franchisee-leads">
+                                <Briefcase />
+                                <span>Franchisee Leads</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ) : (
+                          <>
+                            {canViewLeadManagementOutbound && (
+                              <SidebarMenuItem>
+                                <SidebarMenuButton asChild isActive={isActive("/leads") && !isActive("/leads/new") && !isActive("/leads/map") && !isActive("/leads/archive")} tooltip="Outbound Leads">
+                                  <Link href="/leads">
+                                    <Briefcase />
+                                    <span>Outbound Leads</span>
+                                  </Link>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            )}
+                            {canViewInbound && (
+                              <SidebarMenuItem>
+                                <SidebarMenuButton asChild isActive={isActive("/inbound-leads")} tooltip="Inbound Leads">
+                                  <Link href="/inbound-leads">
+                                    <Inbox />
+                                    <span>Inbound Leads</span>
+                                  </Link>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            )}
+                          </>
+                        )}
+                        {canImportLeads && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/marketing/import-leads")} tooltip="Import Leads">
+                              <Link href="/admin/marketing/import-leads">
+                                <PlusCircle />
+                                <span>Import Leads</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewFranchiseeVerification && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/franchisee-lead-verification")} tooltip="Franchisee Lead Review">
+                              <Link href="/franchisee-lead-verification">
+                                <UserCheck />
+                                <span>Franchisee Lead Review</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewInReviewLeads && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/in-review-leads")} tooltip="In Review Leads">
+                              <Link href="/admin/in-review-leads">
+                                <ClipboardCheck />
+                                <span>In Review Leads</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewMasterLeadsDirectory && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/all-leads")} tooltip="Master Leads Directory">
+                              <Link href="/admin/all-leads">
+                                <Layers />
+                                <span>Master Leads Directory</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canView('unassignedLeads') && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/unassigned-leads")} tooltip="Unassigned Leads">
+                              <Link href="/admin/unassigned-leads">
+                                <ListTodo />
+                                <span>Unassigned Leads</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewLeadManagementArchive && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/leads/archive")} tooltip="Archived Leads">
+                              <Link href="/leads/archive">
+                                <Archive />
+                                <span>Archived Leads</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewAccountManagerPipeline && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")} tooltip="AM Pipeline">
+                              <Link href="/account-manager/pipeline">
+                                <ListTodo />
+                                <span>AM Pipeline</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewCustomers && (
+                          <>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
+                                <Link href="/signed-customers">
+                                  <Star />
+                                  <span>Signed Customers</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/lost-customers")} tooltip="Lost Customers">
+                                <Link href="/lost-customers">
+                                  <UserX />
+                                  <span>Lost Customers</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          </>
+                        )}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
+
+              {/* Group 4: CUSTOMER SUCCESS */}
+              {canViewCustomerSuccessPipeline && (
+                <SidebarGroup>
+                  <SidebarGroupLabel 
+                    onClick={() => toggleGroup('customer-success-group')} 
+                    className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                  >
+                    <span className="flex items-center gap-1.5 text-white font-extrabold">
+                      <Users className="h-3.5 w-3.5 text-white/90" />
                       <span>Customer Success</span>
-                      {expandedStates["customer-success"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                    </SidebarMenuButton>
-                    {expandedStates["customer-success"] && (
-                      <SidebarMenuSub>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={isActive("/customer-success/pipeline")}>
+                    </span>
+                    {isGroupCollapsed('customer-success-group') ? (
+                      <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                    )}
+                  </SidebarGroupLabel>
+                  {!isGroupCollapsed('customer-success-group') && (
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/customer-success/pipeline")} tooltip="CS Pipeline">
                             <Link href="/customer-success/pipeline">
-                              <ListTodo className="h-4 w-4" />
+                              <ListTodo />
                               <span>CS Pipeline</span>
                             </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={isActive("/customer-success/cancellations")}>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/customer-success/cancellations")} tooltip="CS Cancellations">
                             <Link href="/customer-success/cancellations">
-                              <CalendarOff className="h-4 w-4" />
+                              <CalendarOff />
                               <span>CS Cancellations</span>
                             </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={isActive("/customer-success/reporting")}>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/customer-success/reporting")} tooltip="CS Reporting">
                             <Link href="/customer-success/reporting">
-                              <BarChart3 className="h-4 w-4" />
+                              <BarChart3 />
                               <span>CS Reporting</span>
                             </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
+
+              {/* Group 5: FIELD & LOGISTICS */}
+              {canViewFieldSalesGroup && (
+                <SidebarGroup>
+                  <SidebarGroupLabel 
+                    onClick={() => toggleGroup('field-logistics')} 
+                    className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                  >
+                    <span className="flex items-center gap-1.5 text-white font-extrabold">
+                      <Map className="h-3.5 w-3.5 text-white/90" />
+                      <span>Field & Logistics</span>
+                    </span>
+                    {isGroupCollapsed('field-logistics') ? (
+                      <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-white transition-transform" />
                     )}
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {/* Group 5: FIELD & LOGISTICS */}
-          {canViewFieldSalesGroup && (
-            <SidebarGroup>
-              <SidebarGroupLabel>Field & Logistics</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {/* Door-to-Door */}
-                  {canViewFieldSalesD2D && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/field-sales")}>
-                        <Link href="/field-sales">
-                          <Briefcase />
-                          <span>Door-to-Door</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
-
-                  {/* Field Visits */}
-                  {canViewVisits && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => toggleExpand("field-visits")}>
-                        <ClipboardCheck />
-                        <span>Field Visits</span>
-                        {expandedStates["field-visits"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                      </SidebarMenuButton>
-                      {expandedStates["field-visits"] && (
-                        <SidebarMenuSub>
-                          {canCaptureVisit && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive('/capture-visit')}>
-                                <Link href="/capture-visit">
-                                  <PlusCircle className="h-4 w-4" />
-                                  <span>Capture Visit</span>
+                  </SidebarGroupLabel>
+                  {!isGroupCollapsed('field-logistics') && (
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {canViewFieldSalesD2D && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/field-sales")} tooltip="Door-to-Door">
+                              <Link href="/field-sales">
+                                <Briefcase />
+                                <span>Door-to-Door</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canCaptureVisit && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive('/capture-visit')} tooltip="Capture Visit">
+                              <Link href="/capture-visit">
+                                <PlusCircle />
+                                <span>Capture Visit</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canProcessVisits && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive('/visit-notes')} tooltip="Visit Notes">
+                              <Link href="/visit-notes">
+                                <FileText />
+                                <span>Visit Notes</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewD2D && (
+                          <>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/saved-routes")} tooltip="Saved Routes">
+                                <Link href="/saved-routes">
+                                  <Save />
+                                  <span>Saved Routes</span>
                                 </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {canProcessVisits && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive('/visit-notes')}>
-                                <Link href="/visit-notes">
-                                  <FileText className="h-4 w-4" />
-                                  <span>Visit Notes</span>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/prospecting-areas")} tooltip="Prospecting Areas">
+                                <Link href="/prospecting-areas">
+                                  <LayoutGrid />
+                                  <span>Prospecting Areas</span>
                                 </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                        </SidebarMenuSub>
-                      )}
-                    </SidebarMenuItem>
-                  )}
-
-                  {/* Routes & Coverage */}
-                  {canViewD2D && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => toggleExpand("routes-coverage")}>
-                        <Route />
-                        <span>Routes & Coverage</span>
-                        {expandedStates["routes-coverage"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                      </SidebarMenuButton>
-                      {expandedStates["routes-coverage"] && (
-                        <SidebarMenuSub>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/saved-routes")}>
-                              <Link href="/saved-routes">
-                                <Save className="h-4 w-4" />
-                                <span>Saved Routes</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/prospecting-areas")}>
-                              <Link href="/prospecting-areas">
-                                <LayoutGrid className="h-4 w-4" />
-                                <span>Prospecting Areas</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          {canView('teamSchedules') && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/field-sales/schedules")}>
-                                <Link href="/field-sales/schedules">
-                                  <Clock className="h-4 w-4" />
-                                  <span>Team Schedules</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/completed-routes")}>
-                              <Link href="/completed-routes">
-                                <CheckCircle2 className="h-4 w-4" />
-                                <span>Completed Routes</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        </SidebarMenuSub>
-                      )}
-                    </SidebarMenuItem>
-                  )}
-
-                  {/* Route Planner Map */}
-                  {canViewFieldSalesMap && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/leads/map")} tooltip="Route Planner Map">
-                        <Link href="/leads/map">
-                          <Map />
-                          <span>Route Planner Map</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {/* Group 6: MARKETING & PARTNERS */}
-          {(canViewMarketingGroup || canViewLpoLeads) && (
-            <SidebarGroup>
-              <SidebarGroupLabel>Marketing & Partners</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {/* Marketing */}
-                  {canViewMarketingGroup && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => toggleExpand("marketing")}>
-                        <Mail />
-                        <span>Marketing</span>
-                        {expandedStates["marketing"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                      </SidebarMenuButton>
-                      {expandedStates["marketing"] && (
-                        <SidebarMenuSub>
-                          {isMarketingAdmin && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/lead-campaigns")}>
-                                <Link href="/admin/marketing/lead-campaigns">
-                                  <Tag className="h-4 w-4" />
-                                  <span>Lead Campaigns</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {isMarketingAdmin && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/campaigns")}>
-                                <Link href="/admin/marketing/campaigns">
-                                  <Mail className="h-4 w-4" />
-                                  <span>Campaigns & Queues</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {isMarketingAdmin && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/nurture-journeys")}>
-                                <Link href="/admin/marketing/nurture-journeys">
-                                  <Settings className="h-4 w-4" />
-                                  <span>Nurture Journeys</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {isMarketingAdmin && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/nurture-report")}>
-                                <Link href="/admin/marketing/nurture-report">
-                                  <BarChart2 className="h-4 w-4" />
-                                  <span>Nurture Reporting</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing") && !isActive("/admin/marketing/lists") && !isActive("/admin/marketing/campaigns") && !isActive("/admin/marketing/nurture-journeys") && !isActive("/admin/marketing/nurture-report") && !isActive("/admin/marketing/lead-campaigns")}>
-                              <Link href="/admin/marketing">
-                                <FileText className="h-4 w-4" />
-                                <span>Templates & Library</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          {isMarketingAdmin && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/lists")}>
-                                <Link href="/admin/marketing/lists">
-                                  <ListFilter className="h-4 w-4" />
-                                  <span>Marketing Lists</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {isMarketingAdmin && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/leads/suppressions")}>
-                                <Link href="/leads/suppressions">
-                                  <ShieldAlert className="h-4 w-4" />
-                                  <span>Suppression & Opt-Outs</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {isMarketingAdmin && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/admin/brand-bot")}>
-                                <Link href="/admin/brand-bot">
-                                  <Settings className="h-4 w-4" />
-                                  <span>Brand Bot</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                        </SidebarMenuSub>
-                      )}
-                    </SidebarMenuItem>
-                  )}
-
-                  {/* LPO.Plus */}
-                  {canViewLpoLeads && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => toggleExpand("lpo-plus")}>
-                        <Building />
-                        <span>LPO.Plus</span>
-                        {expandedStates["lpo-plus"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                      </SidebarMenuButton>
-                      {expandedStates["lpo-plus"] && (
-                        <SidebarMenuSub>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/lpo-leads")}>
-                              <Link href="/lpo-leads">
-                                <Building className="h-4 w-4" />
-                                <span>Participating LPOs</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/lpo-opportunities")}>
-                              <Link href="/lpo-opportunities">
-                                <ArrowUpRight className="h-4 w-4" />
-                                <span>Shared Opportunities</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        </SidebarMenuSub>
-                      )}
-                    </SidebarMenuItem>
-                  )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {/* Group 7: OPERATIONS & HISTORY */}
-          {(canViewTickets || canViewScans || canViewHistory) && (
-            <SidebarGroup>
-              <SidebarGroupLabel>Operations & History</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {/* Tickets */}
-                  {canViewTickets && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => toggleExpand("tickets")}>
-                        <Ticket />
-                        <span>Tickets</span>
-                        {expandedStates["tickets"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                      </SidebarMenuButton>
-                      {expandedStates["tickets"] && (
-                        <SidebarMenuSub>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets") && !isActive("/admin/tickets/create") && !isActive("/admin/tickets/archived") && !isActive("/admin/tickets/operations") && !isActive("/admin/tickets/it") && !isActive("/admin/tickets/reporting")}>
-                              <Link href="/admin/tickets">
-                                <ListFilter className="h-4 w-4" />
-                                <span>All Tickets</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets/reporting")}>
-                              <Link href="/admin/tickets/reporting">
-                                <BarChart2 className="h-4 w-4" />
-                                <span>Ticket Reporting</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets/create")}>
-                              <Link href="/admin/tickets/create">
-                                <PlusCircle className="h-4 w-4" />
-                                <span>Create Ticket</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets/archived")}>
-                              <Link href="/admin/tickets/archived">
-                                <Archive className="h-4 w-4" />
-                                <span>Archived Tickets</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets/operations")}>
-                              <Link href="/admin/tickets/operations">
-                                <Settings className="h-4 w-4" />
-                                <span>Operations Tickets</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets/it")}>
-                              <Link href="/admin/tickets/it">
-                                <Laptop className="h-4 w-4" />
-                                <span>IT Tickets</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        </SidebarMenuSub>
-                      )}
-                    </SidebarMenuItem>
-                  )}
-
-                  {/* Scans */}
-                  {canViewScans && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => toggleExpand("scans")}>
-                        <ScanLine />
-                        <span>Scans</span>
-                        {expandedStates["scans"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                      </SidebarMenuButton>
-                      {expandedStates["scans"] && (
-                        <SidebarMenuSub>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/scans") && !isActive("/scans/report")}>
-                              <Link href="/scans">
-                                <Package className="h-4 w-4" />
-                                <span>Scan Events</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/scans/report")}>
-                              <Link href="/scans/report">
-                                <BarChart2 className="h-4 w-4" />
-                                <span>Scan Reporting</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          {canView('topBarcodesUsers') && (
-                            <>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild isActive={isActive("/scans/top-users") && !isActive("/scans/top-users/contact-report")}>
-                                  <Link href="/scans/top-users">
-                                    <Star className="h-4 w-4" />
-                                    <span>Top Users</span>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            {canView('teamSchedules') && (
+                              <SidebarMenuItem>
+                                <SidebarMenuButton asChild isActive={isActive("/field-sales/schedules")} tooltip="Team Schedules">
+                                  <Link href="/field-sales/schedules">
+                                    <Clock />
+                                    <span>Team Schedules</span>
                                   </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild isActive={isActive("/scans/top-users/contact-report")}>
-                                  <Link href="/scans/top-users/contact-report">
-                                    <Phone className="h-4 w-4" />
-                                    <span>Top Users Contact Report</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            </>
-                          )}
-                        </SidebarMenuSub>
-                      )}
-                    </SidebarMenuItem>
-                  )}
-
-                  {/* History */}
-                  {canViewHistory && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => toggleExpand("history")}>
-                        <History />
-                        <span>History</span>
-                        {expandedStates["history"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                      </SidebarMenuButton>
-                      {expandedStates["history"] && (
-                        <SidebarMenuSub>
-                          {canViewHistoryAppointments && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/appointments")}>
-                                <Link href="/appointments">
-                                  <Calendar className="h-4 w-4" />
-                                  <span>All Appointments</span>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            )}
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/completed-routes")} tooltip="Completed Routes">
+                                <Link href="/completed-routes">
+                                  <CheckCircle2 />
+                                  <span>Completed Routes</span>
                                 </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {canViewHistoryCallsTranscripts && (
-                            <>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild isActive={isActive("/calls")}>
-                                  <Link href="/calls">
-                                    <Phone className="h-4 w-4" />
-                                    <span>All Calls</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild isActive={isActive("/unassigned_calls")}>
-                                  <Link href="/unassigned_calls">
-                                    <HelpCircle className="h-4 w-4" />
-                                    <span>Unassigned Calls</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild isActive={isActive("/transcripts")}>
-                                  <Link href="/transcripts">
-                                    <FileText className="h-4 w-4" />
-                                    <span>All Transcripts</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            </>
-                          )}
-                          {canViewD2D && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild isActive={isActive("/check-ins")}>
-                                <Link href="/check-ins">
-                                  <CheckSquare className="h-4 w-4" />
-                                  <span>Check-ins</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                        </SidebarMenuSub>
-                      )}
-                    </SidebarMenuItem>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          </>
+                        )}
+                        {canViewFieldSalesMap && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/leads/map")} tooltip="Route Planner Map">
+                              <Link href="/leads/map">
+                                <Map />
+                                <span>Route Planner Map</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
                   )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
+                </SidebarGroup>
+              )}
 
-          {/* Group 8: ANALYTICS & REPORTS */}
-          {(canViewReporting || isFranchiseeRole) && (
-            <SidebarGroup>
-              <SidebarGroupLabel>Analytics & Reports</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {/* Sales Reports Collapsible */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton onClick={() => toggleExpand("sales-reports")}>
-                      <BarChart2 />
-                      <span>Sales Reports</span>
-                      {expandedStates["sales-reports"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                    </SidebarMenuButton>
-                    {expandedStates["sales-reports"] && (
-                      <SidebarMenuSub>
+              {/* Group 6: MARKETING */}
+              {canViewMarketingGroup && (
+                <SidebarGroup>
+                  <SidebarGroupLabel 
+                    onClick={() => toggleGroup('marketing-group')} 
+                    className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                  >
+                    <span className="flex items-center gap-1.5 text-white font-extrabold">
+                      <Mail className="h-3.5 w-3.5 text-white/90" />
+                      <span>Marketing</span>
+                    </span>
+                    {isGroupCollapsed('marketing-group') ? (
+                      <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                    )}
+                  </SidebarGroupLabel>
+                  {!isGroupCollapsed('marketing-group') && (
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {isMarketingAdmin && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/marketing/lead-campaigns")} tooltip="Lead Campaigns">
+                              <Link href="/admin/marketing/lead-campaigns">
+                                <Tag />
+                                <span>Lead Campaigns</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {isMarketingAdmin && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/marketing/campaigns")} tooltip="Campaigns & Queues">
+                              <Link href="/admin/marketing/campaigns">
+                                <Mail />
+                                <span>Campaigns & Queues</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {isMarketingAdmin && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/marketing/nurture-journeys")} tooltip="Nurture Journeys">
+                              <Link href="/admin/marketing/nurture-journeys">
+                                <Settings />
+                                <span>Nurture Journeys</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {isMarketingAdmin && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/marketing/nurture-report")} tooltip="Nurture Reporting">
+                              <Link href="/admin/marketing/nurture-report">
+                                <BarChart2 />
+                                <span>Nurture Reporting</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/admin/marketing") && !isActive("/admin/marketing/lists") && !isActive("/admin/marketing/campaigns") && !isActive("/admin/marketing/nurture-journeys") && !isActive("/admin/marketing/nurture-report") && !isActive("/admin/marketing/lead-campaigns")} tooltip="Templates & Library">
+                            <Link href="/admin/marketing">
+                              <FileText />
+                              <span>Templates & Library</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        {isMarketingAdmin && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/marketing/lists")} tooltip="Marketing Lists">
+                              <Link href="/admin/marketing/lists">
+                                <ListFilter />
+                                <span>Marketing Lists</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {isMarketingAdmin && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/leads/suppressions")} tooltip="Suppression & Opt-Outs">
+                              <Link href="/leads/suppressions">
+                                <ShieldAlert />
+                                <span>Suppression & Opt-Outs</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {isMarketingAdmin && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/brand-bot")} tooltip="Brand Bot">
+                              <Link href="/admin/brand-bot">
+                                <Settings />
+                                <span>Brand Bot</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
+
+              {/* Group 7: PARTNERS */}
+              {canViewLpoLeads && (
+                <SidebarGroup>
+                  <SidebarGroupLabel 
+                    onClick={() => toggleGroup('partners-group')} 
+                    className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                  >
+                    <span className="flex items-center gap-1.5 text-white font-extrabold">
+                      <Building className="h-3.5 w-3.5 text-white/90" />
+                      <span>Partners</span>
+                    </span>
+                    {isGroupCollapsed('partners-group') ? (
+                      <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                    )}
+                  </SidebarGroupLabel>
+                  {!isGroupCollapsed('partners-group') && (
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/lpo-leads")} tooltip="Participating LPOs">
+                            <Link href="/lpo-leads">
+                              <Building />
+                              <span>Participating LPOs</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/lpo-opportunities")} tooltip="Shared Opportunities">
+                            <Link href="/lpo-opportunities">
+                              <ArrowUpRight />
+                              <span>Shared Opportunities</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
+
+              {/* Group 8: OPERATIONS & HISTORY */}
+              {(canViewTickets || canViewScans || canViewHistory) && (
+                <SidebarGroup>
+                  <SidebarGroupLabel 
+                    onClick={() => toggleGroup('ops-history')} 
+                    className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                  >
+                    <span className="flex items-center gap-1.5 text-white font-extrabold">
+                      <Ticket className="h-3.5 w-3.5 text-white/90" />
+                      <span>Operations & History</span>
+                    </span>
+                    {isGroupCollapsed('ops-history') ? (
+                      <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                    )}
+                  </SidebarGroupLabel>
+                  {!isGroupCollapsed('ops-history') && (
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {/* Tickets */}
+                        {canViewTickets && (
+                          <>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/admin/tickets") && !isActive("/admin/tickets/create") && !isActive("/admin/tickets/archived") && !isActive("/admin/tickets/operations") && !isActive("/admin/tickets/it") && !isActive("/admin/tickets/reporting")} tooltip="All Tickets">
+                                <Link href="/admin/tickets">
+                                  <Ticket />
+                                  <span>All Tickets</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/admin/tickets/create")} tooltip="Create Ticket">
+                                <Link href="/admin/tickets/create">
+                                  <PlusCircle />
+                                  <span>Create Ticket</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/admin/tickets/operations")} tooltip="Operations Tickets">
+                                <Link href="/admin/tickets/operations">
+                                  <Settings />
+                                  <span>Operations Tickets</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/admin/tickets/it")} tooltip="IT Tickets">
+                                <Link href="/admin/tickets/it">
+                                  <Laptop />
+                                  <span>IT Tickets</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/admin/tickets/archived")} tooltip="Archived Tickets">
+                                <Link href="/admin/tickets/archived">
+                                  <Archive />
+                                  <span>Archived Tickets</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          </>
+                        )}
+
+                        {/* Scans */}
+                        {canViewScans && (
+                          <>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/scans") && !isActive("/scans/report")} tooltip="Scan Events">
+                                <Link href="/scans">
+                                  <Package />
+                                  <span>Scan Events</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            {canView('topBarcodesUsers') && (
+                              <>
+                                <SidebarMenuItem>
+                                  <SidebarMenuButton asChild isActive={isActive("/scans/top-users") && !isActive("/scans/top-users/contact-report")} tooltip="Top Users">
+                                    <Link href="/scans/top-users">
+                                      <Star />
+                                      <span>Top Users</span>
+                                    </Link>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                  <SidebarMenuButton asChild isActive={isActive("/scans/top-users/contact-report")} tooltip="Top Users Contact Report">
+                                    <Link href="/scans/top-users/contact-report">
+                                      <Phone />
+                                      <span>Top Users Contact Report</span>
+                                    </Link>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              </>
+                            )}
+                          </>
+                        )}
+
+                        {/* History */}
+                        {canViewHistory && (
+                          <>
+                            {canViewHistoryAppointments && (
+                              <SidebarMenuItem>
+                                <SidebarMenuButton asChild isActive={isActive("/appointments")} tooltip="All Appointments">
+                                  <Link href="/appointments">
+                                    <Calendar />
+                                    <span>All Appointments</span>
+                                  </Link>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            )}
+                            {canViewHistoryCallsTranscripts && (
+                              <>
+                                <SidebarMenuItem>
+                                  <SidebarMenuButton asChild isActive={isActive("/calls")} tooltip="All Calls">
+                                    <Link href="/calls">
+                                      <Phone />
+                                      <span>All Calls</span>
+                                    </Link>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                  <SidebarMenuButton asChild isActive={isActive("/unassigned_calls")} tooltip="Unassigned Calls">
+                                    <Link href="/unassigned_calls">
+                                      <HelpCircle />
+                                      <span>Unassigned Calls</span>
+                                    </Link>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                  <SidebarMenuButton asChild isActive={isActive("/transcripts")} tooltip="All Transcripts">
+                                    <Link href="/transcripts">
+                                      <FileText />
+                                      <span>All Transcripts</span>
+                                    </Link>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              </>
+                            )}
+                            {canViewD2D && (
+                              <SidebarMenuItem>
+                                <SidebarMenuButton asChild isActive={isActive("/check-ins")} tooltip="Check-ins">
+                                  <Link href="/check-ins">
+                                    <CheckSquare />
+                                    <span>Check-ins</span>
+                                  </Link>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            )}
+                          </>
+                        )}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
+
+              {/* Group 9: ANALYTICS & REPORTS */}
+              {(canViewReporting || isFranchiseeRole) && (
+                <SidebarGroup>
+                  <SidebarGroupLabel 
+                    onClick={() => toggleGroup('analytics-reports')} 
+                    className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                  >
+                    <span className="flex items-center gap-1.5 text-white font-extrabold">
+                      <BarChart2 className="h-3.5 w-3.5 text-white/90" />
+                      <span>Analytics & Reports</span>
+                    </span>
+                    {isGroupCollapsed('analytics-reports') ? (
+                      <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                    )}
+                  </SidebarGroupLabel>
+                  {!isGroupCollapsed('analytics-reports') && (
+                    <SidebarGroupContent>
+                      <SidebarMenu>
                         {userProfile?.activeRole !== 'user' && userProfile?.activeRole?.toLowerCase() !== 'user' && userProfile?.activeRole !== 'Outbound Admin' && (
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/sales-snapshot")}>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/sales-snapshot")} tooltip="Sales Snapshot">
                               <Link href="/sales-snapshot">
-                                <Layers className="h-4 w-4" />
+                                <Layers />
                                 <span>Sales Snapshot</span>
                               </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
                         )}
                         {canViewReporting && !isFranchiseeRole && !(userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers') && (
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Outbound Reporting">
                               <Link href="/reports">
-                                <BarChart2 className="h-4 w-4" />
+                                <BarChart2 />
                                 <span>Outbound Reporting</span>
                               </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
                         )}
                         {canViewInboundReporting && !isFranchiseeRole && (
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/inbound-reporting")}>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/inbound-reporting")} tooltip="Inbound Reporting">
                               <Link href="/inbound-reporting">
-                                <Inbox className="h-4 w-4" />
+                                <Inbox />
                                 <span>Inbound Reporting</span>
                               </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
                         )}
                         {isAdmin && !(userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Outbound Admin') && (
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/admin/lifecycle-dashboard")}>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/lifecycle-dashboard")} tooltip="Lifecycle Dashboard">
                               <Link href="/admin/lifecycle-dashboard">
-                                <Activity className="h-4 w-4" />
+                                <Activity />
                                 <span>Lifecycle Dashboard</span>
                               </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
                         )}
-                      </SidebarMenuSub>
-                    )}
-                  </SidebarMenuItem>
-
-                  {/* Performance & Operational Reports Collapsible */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton onClick={() => toggleExpand("op-reports")}>
-                      <BarChart3 />
-                      <span>Performance & Operational</span>
-                      {expandedStates["op-reports"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                    </SidebarMenuButton>
-                    {expandedStates["op-reports"] && (
-                      <SidebarMenuSub>
                         {canViewAccountManagerPipeline && (
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/account-manager/reports")}>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/account-manager/reports")} tooltip="AM Reporting">
                               <Link href="/account-manager/reports">
-                                <BarChart3 className="h-4 w-4" />
+                                <BarChart3 />
                                 <span>AM Reporting</span>
                               </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
                         )}
                         {canViewCustomerSuccessPipeline && (
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/customer-success/reporting")}>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/customer-success/reporting")} tooltip="CS Reporting">
                               <Link href="/customer-success/reporting">
-                                <BarChart3 className="h-4 w-4" />
+                                <BarChart3 />
                                 <span>CS Reporting</span>
                               </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewTickets && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/tickets/reporting")} tooltip="Ticket Reporting">
+                              <Link href="/admin/tickets/reporting">
+                                <BarChart2 />
+                                <span>Ticket Reporting</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewScans && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/scans/report")} tooltip="Scan Reporting">
+                              <Link href="/scans/report">
+                                <BarChart2 />
+                                <span>Scan Reporting</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
                         )}
                         {canView('fieldActivityReport') && !isFranchiseeRole && (
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/field-activity-report")} tooltip="Field Activity">
                               <Link href="/field-activity-report">
-                                <BarChart3 className="h-4 w-4" />
+                                <BarChart3 />
                                 <span>Field Activity</span>
                               </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
                         )}
                         {canView('deploymentHistory') && (
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/admin/deployments")}>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/deployments")} tooltip="Deployment History">
                               <Link href="/admin/deployments">
-                                <MapPin className="h-4 w-4" />
+                                <MapPin />
                                 <span>Deployment History</span>
                               </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
                         )}
-                      </SidebarMenuSub>
-                    )}
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
 
-          {/* Group 9: NETWORK */}
-          {canViewFranchisees && (
-            <SidebarGroup>
-              <SidebarGroupLabel>Network</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {/* Franchisees Collapsible */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton onClick={() => toggleExpand("franchisees")}>
-                      <Building />
-                      <span>Franchisees</span>
-                      {expandedStates["franchisees"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
-                    </SidebarMenuButton>
-                    {expandedStates["franchisees"] && (
-                      <SidebarMenuSub>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={isActive("/admin/franchisees/directory")}>
+              {/* Group 10: NETWORK */}
+              {canViewFranchisees && (
+                <SidebarGroup>
+                  <SidebarGroupLabel 
+                    onClick={() => toggleGroup('network-group')} 
+                    className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                  >
+                    <span className="flex items-center gap-1.5 text-white font-extrabold">
+                      <Globe className="h-3.5 w-3.5 text-white/90" />
+                      <span>Network</span>
+                    </span>
+                    {isGroupCollapsed('network-group') ? (
+                      <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                    )}
+                  </SidebarGroupLabel>
+                  {!isGroupCollapsed('network-group') && (
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/admin/franchisees/directory")} tooltip="Franchisees Directory">
                             <Link href="/admin/franchisees/directory">
-                              <Building className="h-4 w-4" />
+                              <Building />
                               <span>Franchisees Directory</span>
                             </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={isActive("/admin/franchisees/operators")}>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/admin/franchisees/operators")} tooltip="Operators Directory">
                             <Link href="/admin/franchisees/operators">
-                              <Users className="h-4 w-4" />
+                              <Users />
                               <span>Operators Directory</span>
                             </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
-                    )}
-                  </SidebarMenuItem>
-
-                  {/* Franchisee Territory Map */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/admin/franchisees/territory-map")} tooltip="Franchisee Territory Map">
-                      <Link href="/admin/franchisees/territory-map">
-                        <Map />
-                        <span>Franchisee Territory Map</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-
-                  {/* Suburb & Lodgement Mapping */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/admin/franchisees/suburb-mapping")} tooltip="Suburb & Lodgement Mapping">
-                      <Link href="/admin/franchisees/suburb-mapping">
-                        <MapPin />
-                        <span>Suburb & Lodgement Mapping</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        {canViewTerritoryMap && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/franchisees/territory-map")} tooltip="Franchisee Territory Map">
+                              <Link href="/admin/franchisees/territory-map">
+                                <Map />
+                                <span>Franchisee Territory Map</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/admin/franchisees/suburb-mapping")} tooltip="Suburb & Lodgement Mapping">
+                            <Link href="/admin/franchisees/suburb-mapping">
+                              <MapPin />
+                              <span>Suburb & Lodgement Mapping</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
+            </>
           )}
         </SidebarContent>
         <SidebarFooter className="p-0">
@@ -1699,6 +2116,60 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <UnassignedCallDialog />
         <AskChatbot />
         <CommandPalette />
+
+        {/* Customize Pinned Shortcuts Dialog */}
+        <Dialog open={showPinModal} onOpenChange={setShowPinModal}>
+          <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-6">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+                <Star className="h-5 w-5 fill-[#eaf143] text-[#095c7b]" />
+                Customize Pinned Quick Access
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-xs text-muted-foreground -mt-2 mb-2">
+              Select the pages you want pinned to the top of your sidebar for instant 1-click access.
+            </p>
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {Array.from(new Set(Object.values(PINNABLE_ITEMS).map(i => i.category))).map(category => (
+                <div key={category} className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b pb-1">
+                    {category}
+                  </h4>
+                  <div className="grid grid-cols-1 gap-1.5 pl-1">
+                    {Object.values(PINNABLE_ITEMS)
+                      .filter(i => i.category === category)
+                      .map(item => {
+                        const isPinned = pinnedPaths.includes(item.href);
+                        const ItemIcon = item.icon;
+                        return (
+                          <label
+                            key={item.href}
+                            className={`flex items-center justify-between p-2 rounded-md border text-sm cursor-pointer transition-colors ${
+                              isPinned ? 'bg-primary/10 border-primary/30 font-medium' : 'bg-card border-border hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <ItemIcon className="h-4 w-4 text-primary" />
+                              <span>{item.label}</span>
+                            </div>
+                            <Checkbox
+                              checked={isPinned}
+                              onCheckedChange={() => togglePinItem(item.href)}
+                            />
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="pt-4 border-t flex justify-end">
+              <Button onClick={() => setShowPinModal(false)} className="bg-[#095c7b] text-white hover:bg-[#074760]">
+                Done
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </SidebarInset>
     </>
   )

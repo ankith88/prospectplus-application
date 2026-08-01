@@ -36,7 +36,7 @@ import { collection, query, getDocs, where, limit, documentId, collectionGroup }
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { StatusOutcomeBanner, StatusOutcomeGuideButton } from './status-outcome-guide';
-import { cn, getQuickDateRange, isManualActivity } from '@/lib/utils';
+import { cn, getQuickDateRange, isManualActivity, parseDateString } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -121,33 +121,6 @@ const getStageHelpContent = (stageName: string, count: number, totalLeads: numbe
     default:
       return <div>Stage metric details for {stageName}.</div>;
   }
-};
-
-const parseDateString = (dateVal: any): Date | null => {
-    if (!dateVal) return null;
-    if (dateVal instanceof Date) {
-        const d = new Date(dateVal);
-        d.setHours(0, 0, 0, 0);
-        return d;
-    }
-    if (typeof dateVal === 'object') {
-        if (typeof dateVal.toDate === 'function') {
-            const d = dateVal.toDate();
-            d.setHours(0, 0, 0, 0);
-            return d;
-        }
-        if ('seconds' in dateVal && 'nanoseconds' in dateVal) {
-            const d = new Date(dateVal.seconds * 1000 + dateVal.nanoseconds / 1000000);
-            d.setHours(0, 0, 0, 0);
-            return d;
-        }
-    }
-    let cleaned = String(dateVal).trim();
-    cleaned = cleaned.replace(/\s*\([^)]*\)$/, '');
-    const date = new Date(cleaned);
-    if (isNaN(date.getTime())) return null;
-    date.setHours(0, 0, 0, 0);
-    return date;
 };
 
 // Helper to check if status is Signed/Won/Customer
@@ -494,6 +467,7 @@ export default function SalesSnapshotClient() {
             const leadId = doc.ref.parent?.parent?.id || '';
             return { id: doc.id, leadId, ...doc.data() } as unknown as (Activity & { leadId: string });
         }).filter(act => {
+            if (!isManualActivity(act)) return false;
             const author = (act.author || '').trim().toLowerCase();
             if (!author || author === 'system' || author === 'api' || author === 'prospectplus' || author.includes('automated')) {
                 return false;
@@ -701,6 +675,7 @@ export default function SalesSnapshotClient() {
   // Filter activities and appointments based on filtered leads and selected date window
   const filteredActivities = useMemo(() => {
     return activities.filter(act => {
+        if (!isManualActivity(act)) return false;
         if (!filteredLeadIds.has(act.leadId)) return false;
         if (appliedFilters.dateRange?.from) {
             const date = new Date(act.date);

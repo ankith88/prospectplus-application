@@ -1127,7 +1127,10 @@ export function ImportLeadsClient() {
             : effectiveParent
               ? `Lead imported as child location under parent "${effectiveParent.companyName}" (${effectiveParent.prospectPlusId ? `Prospect+ ID: ${effectiveParent.prospectPlusId}` : `ID: ${effectiveParent.id}`}). Bucket: ${selectedBucket.replace('_', ' ')}. Source: ${campaignName}`
               : `Lead imported via Bulk Import in ${selectedBucket.replace('_', ' ')} bucket. Source: ${campaignName}`,
-          author: authorName
+          author: authorName,
+          source: 'csv_upload',
+          isCsvUpload: true,
+          isAutomated: true
         });
 
         // 4. Create Bucket History entry for new leads

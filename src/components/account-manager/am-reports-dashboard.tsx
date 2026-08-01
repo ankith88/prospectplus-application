@@ -470,7 +470,7 @@ export default function AMReportsDashboard() {
 
                 const fetchedLeads = [...rawLeads, ...rawCompanies];
                 
-                // Extract and map activities
+                // Extract and map activities (excluding automated, CSV uploads, and Data Management status changes)
                 const activities = activitiesSnap.docs.map(doc => {
                     const data = doc.data() as Activity;
                     return {
@@ -478,7 +478,7 @@ export default function AMReportsDashboard() {
                         id: doc.id,
                         leadId: doc.ref.parent.parent!.id
                     };
-                });
+                }).filter(act => isManualActivity(act));
                 
                 // Map activities to their respective leads
                 const activitiesMap: Record<string, Activity[]> = {};
