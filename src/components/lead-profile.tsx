@@ -321,6 +321,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         setIsDismissed(true);
         setDuplicateLeads([]);
         setCustomerMatches([]);
+        setLead(prev => ({ ...prev, ignoreDuplicateWarning: true }));
         try {
             await dismissDuplicateWarning(lead.id);
             toast({ title: "Dismissed", description: "Duplicate warning dismissed for this record." });
@@ -3151,6 +3152,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         duplicates={duplicateLeads}
         isOpen={isMergeDialogOpen}
         onOpenChange={setIsMergeDialogOpen}
+        onDismissed={() => {
+            handleDismissDuplicate();
+            setIsMergeDialogOpen(false);
+        }}
         onMerged={(targetLeadId) => {
             if (targetLeadId !== lead.id) {
                 window.location.href = `/leads/${targetLeadId}`;
@@ -7297,13 +7302,15 @@ function MergeDuplicatesDialog({
     duplicates,
     isOpen,
     onOpenChange,
-    onMerged
+    onMerged,
+    onDismissed
 }: {
     currentLead: Lead;
     duplicates: Lead[];
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     onMerged: (targetLeadId: string) => void;
+    onDismissed?: () => void;
 }) {
     const [selectedTargetId, setSelectedTargetId] = useState<string>(currentLead.id);
     const [isMerging, setIsMerging] = useState(false);
@@ -7348,7 +7355,11 @@ function MergeDuplicatesDialog({
         try {
             await dismissDuplicateWarning(currentLead.id);
             toast({ title: "Dismissed", description: "Marked as Not a Duplicate. Warning will no longer appear." });
-            onOpenChange(false);
+            if (onDismissed) {
+                onDismissed();
+            } else {
+                onOpenChange(false);
+            }
         } catch (err) {
             console.error("Failed to dismiss duplicate warning:", err);
         } finally {
@@ -7413,8 +7424,8 @@ function MergeDuplicatesDialog({
                                         <div className="text-xs text-slate-600 space-y-1 pt-2 border-t text-[11px]">
                                             <p className="flex items-center gap-1.5"><Building className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{cand.abn ? `ABN: ${cand.abn}` : 'No ABN'}</span></p>
                                             <p className="flex items-start gap-1.5"><MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{addr?.street || 'No Street'}, {addr?.city || 'No City'} {addr?.state || ''} {addr?.zip || ''}</span></p>
-                                            <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{cand.customerPhone || 'No Phone'}</span></p>
-                                            <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{cand.customerServiceEmail || 'No Email'}</span></p>
+                                            <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{cand.customerPhone || cand.contacts?.find((c: any) => c.isPrimary)?.phone || cand.contacts?.[0]?.phone || (cand as any).phone || (cand as any).contactPhone || 'No Phone'}</span></p>
+                                            <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{cand.customerServiceEmail || cand.contacts?.find((c: any) => c.isPrimary)?.email || cand.contacts?.[0]?.email || (cand as any).email || (cand as any).contactEmail || 'No Email'}</span></p>
                                             <p className="flex items-center gap-1.5"><CalendarIcon className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span>Created: {cand.dateLeadEntered ? new Date(cand.dateLeadEntered).toLocaleDateString() : 'Unknown'}</span></p>
                                         </div>
                                     </div>

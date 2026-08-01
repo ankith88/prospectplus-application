@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   Table,
   TableBody,
@@ -39,7 +40,8 @@ import {
   Send,
   Lock,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ExternalLink
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 
@@ -117,6 +119,34 @@ function safeFormatDate(val: any, outputFormat = 'dd/MM/yyyy'): string {
   }
 }
 
+function getLeadFranchisee(lead: any): string {
+  if (!lead) return ''
+  return (
+    lead.franchisee ||
+    lead.franchiseeName ||
+    lead.assignedFranchisee ||
+    lead.franchisee_name ||
+    lead.franchiseeCode ||
+    lead.territory ||
+    (lead.address && typeof lead.address === 'object' ? lead.address.franchisee : '') ||
+    ''
+  )
+}
+
+function isLeadActiveLpo(lead: any): boolean {
+  if (!lead) return false
+  return !!(
+    lead.lpoPlusOpportunity ||
+    lead.bucket === 'lpo_plus' ||
+    lead.status === 'LPO Review' ||
+    lead.status === 'LPO Opportunity' ||
+    lead.parent_lpo_id ||
+    lead.parentLpoId ||
+    lead.lpoName ||
+    lead.isLpo
+  )
+}
+
 export function MasterAllLeadsClient() {
   const { userProfile, isSuperAdmin, loading: authLoading } = useAuth()
   const { toast } = useToast()
@@ -139,6 +169,8 @@ export function MasterAllLeadsClient() {
   const [filterSource, setFilterSource] = useState('ALL')
   const [filterBucket, setFilterBucket] = useState('ALL')
   const [filterStatus, setFilterStatus] = useState('ALL')
+  const [filterFranchisee, setFilterFranchisee] = useState('ALL')
+  const [filterActiveLpo, setFilterActiveLpo] = useState<'ALL' | 'YES' | 'NO'>('ALL')
   const [filterDialer, setFilterDialer] = useState('ALL')
   const [filterAccountManager, setFilterAccountManager] = useState('ALL')
   const [filterExportStatus, setFilterExportStatus] = useState<'ALL' | 'UNEXPORTED' | 'EXPORTED'>('ALL')
@@ -206,6 +238,15 @@ export function MasterAllLeadsClient() {
     return Array.from(set).sort()
   }, [leads])
 
+  const uniqueFranchisees = useMemo(() => {
+    const set = new Set<string>()
+    leads.forEach(l => {
+      const f = getLeadFranchisee(l)
+      if (f) set.add(f)
+    })
+    return Array.from(set).sort()
+  }, [leads])
+
   const uniqueDialers = useMemo(() => {
     const set = new Set<string>()
     leads.forEach(l => {
@@ -247,6 +288,24 @@ export function MasterAllLeadsClient() {
 
       // 4. Status
       if (filterStatus !== 'ALL' && lead.status !== filterStatus) {
+        return false
+      }
+
+      // 4b. Franchisee
+      if (filterFranchisee !== 'ALL') {
+        const leadFran = getLeadFranchisee(lead)
+        if (filterFranchisee === 'UNASSIGNED') {
+          if (leadFran) return false
+        } else if (leadFran !== filterFranchisee) {
+          return false
+        }
+      }
+
+      // 4c. Active LPO
+      if (filterActiveLpo === 'YES' && !isLeadActiveLpo(lead)) {
+        return false
+      }
+      if (filterActiveLpo === 'NO' && isLeadActiveLpo(lead)) {
         return false
       }
 
@@ -314,6 +373,7 @@ export function MasterAllLeadsClient() {
     })
   }, [
     leads, searchQuery, filterSource, filterBucket, filterStatus,
+    filterFranchisee, filterActiveLpo,
     filterDialer, filterAccountManager, filterExportStatus,
     dateCreatedFrom, dateCreatedTo, dateEnteredFrom, dateEnteredTo
   ])
@@ -323,6 +383,7 @@ export function MasterAllLeadsClient() {
     setCurrentPage(1)
   }, [
     searchQuery, filterSource, filterBucket, filterStatus,
+    filterFranchisee, filterActiveLpo,
     filterDialer, filterAccountManager, filterExportStatus,
     dateCreatedFrom, dateCreatedTo, dateEnteredFrom, dateEnteredTo
   ])
@@ -382,6 +443,8 @@ export function MasterAllLeadsClient() {
     setFilterSource('ALL')
     setFilterBucket('ALL')
     setFilterStatus('ALL')
+    setFilterFranchisee('ALL')
+    setFilterActiveLpo('ALL')
     setFilterDialer('ALL')
     setFilterAccountManager('ALL')
     setFilterExportStatus('ALL')
@@ -572,6 +635,7 @@ export function MasterAllLeadsClient() {
         'Postcode',
         'Country',
         'Franchisee',
+        'Is Active LPO',
         'Status',
         'Lead Bucket',
         'Customer Source',
@@ -634,7 +698,8 @@ export function MasterAllLeadsClient() {
         const leadState = l.address?.state || (l as any).state || l.state || ''
         const leadZip = l.address?.zip || (l as any).zip || (l as any).postcode || ''
         const leadCountry = l.address?.country || (l as any).country || ''
-        const leadFranchisee = l.franchisee || (l as any).franchiseeName || ''
+        const leadFranchisee = getLeadFranchisee(l)
+        const isActiveLpo = isLeadActiveLpo(l) ? 'Yes' : 'No'
         const leadEmail = l.customerServiceEmail || (l as any).email || ''
         const leadPhone = l.customerPhone || (l as any).phone || ''
         const leadWebsite = l.websiteUrl || ''
@@ -669,6 +734,7 @@ export function MasterAllLeadsClient() {
           escapeCsv(leadZip),
           escapeCsv(leadCountry),
           escapeCsv(leadFranchisee),
+          escapeCsv(isActiveLpo),
           escapeCsv(l.status || ''),
           escapeCsv(l.bucket || 'unassigned'),
           escapeCsv(l.customerSource || ''),
@@ -917,6 +983,38 @@ export function MasterAllLeadsClient() {
               </Select>
             </div>
 
+            {/* 4b. Franchisee */}
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Franchisee</Label>
+              <Select value={filterFranchisee} onValueChange={setFilterFranchisee}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="All Franchisees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Franchisees</SelectItem>
+                  <SelectItem value="UNASSIGNED">Unassigned / None</SelectItem>
+                  {uniqueFranchisees.map(f => (
+                    <SelectItem key={f} value={f}>{f}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 4c. Active LPO Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Active LPO</Label>
+              <Select value={filterActiveLpo} onValueChange={(val: any) => setFilterActiveLpo(val)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="All LPO Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Leads (LPO & Non-LPO)</SelectItem>
+                  <SelectItem value="YES">Active LPO Only</SelectItem>
+                  <SelectItem value="NO">Non-LPO Only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* 5. Dialer Assigned */}
             <div className="space-y-1">
               <Label className="text-xs font-medium">Dialer Assigned</Label>
@@ -1102,18 +1200,21 @@ export function MasterAllLeadsClient() {
                   <TableHead>Company & ID</TableHead>
                   <TableHead>Bucket</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Franchisee</TableHead>
+                  <TableHead>LPO</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Date Created</TableHead>
                   <TableHead>Date Entered</TableHead>
                   <TableHead>Dialer</TableHead>
                   <TableHead>Account Manager</TableHead>
                   <TableHead className="text-right">Export Tracking</TableHead>
+                  <TableHead className="text-center w-[60px]">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedLeads.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={13} className="text-center py-12 text-muted-foreground">
                       No leads match the specified criteria.
                     </TableCell>
                   </TableRow>
@@ -1122,6 +1223,7 @@ export function MasterAllLeadsClient() {
                     const isSelected = selectedLeads.includes(lead.id)
                     const dateCreatedStr = (lead as any).dateCreated || lead.dateLeadEntered || (lead as any).createdAt
                     const dateEnteredStr = lead.dateLeadEntered || lead.assignedToDialerAt
+                    const leadUrl = lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed' || (lead as any).isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`
 
                     return (
                       <TableRow key={lead.id} className={isSelected ? 'bg-muted/60' : ''}>
@@ -1133,8 +1235,16 @@ export function MasterAllLeadsClient() {
                         </TableCell>
                         <TableCell className="font-medium">
                           <div>
-                            <span className="font-semibold text-slate-900 dark:text-slate-100">{lead.companyName}</span>
-                            <div className="text-[11px] text-muted-foreground flex gap-2">
+                            <Link 
+                              href={leadUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-semibold text-primary hover:underline inline-flex items-center gap-1.5 group"
+                            >
+                              <span>{lead.companyName || 'Unnamed Lead'}</span>
+                              <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
+                            </Link>
+                            <div className="text-[11px] text-muted-foreground flex gap-2 mt-0.5">
                               {lead.entityId && <span>NS ID: {lead.entityId}</span>}
                               {lead.prospectPlusId && <span>PP ID: {lead.prospectPlusId}</span>}
                             </div>
@@ -1149,6 +1259,18 @@ export function MasterAllLeadsClient() {
                           <Badge variant="secondary" className="text-[11px]">
                             {lead.status || 'New'}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          {getLeadFranchisee(lead) || '-'}
+                        </TableCell>
+                        <TableCell>
+                          {isLeadActiveLpo(lead) ? (
+                            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-100 border-amber-300 text-[10px]">
+                              Active LPO
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {lead.customerSource || '-'}
@@ -1189,6 +1311,14 @@ export function MasterAllLeadsClient() {
                               Unexported
                             </Badge>
                           )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button asChild variant="ghost" size="sm" className="h-8 w-8 p-0" title="Open lead profile in new tab">
+                            <Link href={leadUrl} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                              <span className="sr-only">Open lead profile</span>
+                            </Link>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     )

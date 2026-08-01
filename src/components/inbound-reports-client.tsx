@@ -60,7 +60,7 @@ import { collection, query, getDocs, where, orderBy, collectionGroup, or, and } 
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { StatusOutcomeInfo, StatusChartTooltipContent } from './status-outcome-info';
-import { StatusOutcomeBanner, StatusOutcomeGuideButton } from './status-outcome-guide';
+import { StatusOutcomeBanner } from './status-outcome-guide';
 import { cn, isManualActivity } from '@/lib/utils';
 import Link from 'next/link';
 import { getStatusColor } from '@/lib/status-colors';
@@ -2016,7 +2016,6 @@ export default function InboundReportsClientPage({
                       <Inbox className="h-6 w-6 text-primary" />
                       <h1 className="text-3xl font-bold tracking-tight">Inbound Reporting</h1>
                   </div>
-                  <StatusOutcomeGuideButton />
               </div>
               <p className="text-muted-foreground">Lead performance and status tracking for NetSuite Inbound leads.</p>
           </header>

@@ -35,7 +35,7 @@ import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, getDocs, where, limit, documentId, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
-import { StatusOutcomeBanner, StatusOutcomeGuideButton } from './status-outcome-guide';
+import { StatusOutcomeBanner } from './status-outcome-guide';
 import { cn, getQuickDateRange, isManualActivity, parseDateString } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -74,8 +74,8 @@ const getStageHelpContent = (stageName: string, count: number, totalLeads: numbe
       return (
         <div className="space-y-1.5">
           <p className="font-bold text-slate-900 border-b pb-1">New / Prospecting Stage</p>
-          <p><strong className="text-sky-700">{count} Stage Count:</strong> Leads sitting specifically in the initial <strong>New</strong> status ({percentage}% of pipeline).</p>
-          <p><strong className="text-[#095c7b]">{totalLeads} Total Sourced:</strong> Combined volume of leads created in the selected date range across <em>all 6 pipeline stages</em>.</p>
+          <p><strong className="text-sky-700">{count} Stage Count:</strong> Leads sitting in initial <strong>New</strong> or <strong>Unqualified</strong> status ({percentage}% of pipeline).</p>
+          <p><strong className="text-[#095c7b]">{totalLeads} Total Sourced:</strong> Combined volume of leads created in the selected date range across <em>all 7 pipeline stages</em>.</p>
         </div>
       );
     case 'Priority & Hot Leads':
@@ -110,12 +110,20 @@ const getStageHelpContent = (stageName: string, count: number, totalLeads: numbe
           <p className="text-slate-600">Includes statuses: <em>Won, Signed, Customer</em>.</p>
         </div>
       );
-    case 'Closed / Inactive':
+    case 'Closed / Lost':
       return (
         <div className="space-y-1.5">
-          <p className="font-bold text-slate-900 border-b pb-1">Closed / Inactive Stage</p>
-          <p><strong className="text-slate-700">{count} Stage Count:</strong> Leads marked as lost, unqualified, or out of service territory ({percentage}% of pipeline).</p>
-          <p className="text-slate-600">Includes statuses: <em>Lost, Lost Customer, Unqualified, Email Brush Off, Out of Territory, Future Follow-up</em>.</p>
+          <p className="font-bold text-rose-900 border-b pb-1">Closed / Lost Stage</p>
+          <p><strong className="text-rose-800">{count} Stage Count:</strong> Leads marked as lost, lost customer, or out of service territory ({percentage}% of pipeline).</p>
+          <p className="text-slate-600">Includes statuses: <em>Lost, Lost Customer, Out of Territory</em>.</p>
+        </div>
+      );
+    case 'Inactive / Future Follow Up':
+      return (
+        <div className="space-y-1.5">
+          <p className="font-bold text-amber-900 border-b pb-1">Inactive / Future Follow Up Stage</p>
+          <p><strong className="text-amber-800">{count} Stage Count:</strong> Leads on brush-off or future follow-up for potential later re-engagement ({percentage}% of pipeline).</p>
+          <p className="text-slate-600">Includes statuses: <em>Email Brush Off, Future Follow-up</em>.</p>
         </div>
       );
     default:
@@ -179,13 +187,13 @@ const isRecentlySignedUp = (
   return false;
 };
 
-// Group Statuses into 6 Logical Phases
+// Group Statuses into 7 Logical Phases
 const getPipelinePhase = (status: string): string => {
   const s = status || 'New';
   if (['Priority Lead', 'Priority Field Lead', 'Hot Lead'].includes(s)) {
     return 'Priority & Hot Leads';
   }
-  if (['New'].includes(s)) {
+  if (['New', 'Unqualified'].includes(s)) {
     return 'New / Prospecting';
   }
   if (['Contacted', 'Connected', 'In Progress', 'Reschedule', 'In Qualification', 'Pre Qualified'].includes(s)) {
@@ -197,7 +205,13 @@ const getPipelinePhase = (status: string): string => {
   if (['Won', 'Signed', 'Customer'].includes(s)) {
     return 'Converted';
   }
-  return 'Closed / Inactive'; // Lost, Lost Customer, Unqualified, Email Brush Off, Out of Territory, Future Follow-up
+  if (['Lost', 'Lost Customer', 'Out of Territory'].includes(s)) {
+    return 'Closed / Lost';
+  }
+  if (['Email Brush Off', 'Future Follow-up'].includes(s)) {
+    return 'Inactive / Future Follow Up';
+  }
+  return 'Closed / Lost';
 };
 
 const BUCKET_DISPLAY_NAMES: Record<string, string> = {
@@ -273,13 +287,21 @@ const STAGE_COLOR_STYLES: Record<string, {
     barBg: 'bg-emerald-600',
     badgeBg: 'bg-emerald-100 border-emerald-300'
   },
-  'Closed / Inactive': {
-    cardBg: 'bg-slate-100/60 hover:bg-slate-200/70',
-    cardBorder: 'border-slate-200 hover:border-slate-400',
-    titleColor: 'text-slate-700',
-    countColor: 'text-slate-900',
-    barBg: 'bg-slate-400',
-    badgeBg: 'bg-slate-200/70 border-slate-300'
+  'Closed / Lost': {
+    cardBg: 'bg-rose-50/70 hover:bg-rose-100/80',
+    cardBorder: 'border-rose-200 hover:border-rose-400',
+    titleColor: 'text-rose-800',
+    countColor: 'text-rose-950',
+    barBg: 'bg-rose-500',
+    badgeBg: 'bg-rose-100/80 border-rose-200'
+  },
+  'Inactive / Future Follow Up': {
+    cardBg: 'bg-amber-50/60 hover:bg-amber-100/70',
+    cardBorder: 'border-amber-200 hover:border-amber-400',
+    titleColor: 'text-amber-900',
+    countColor: 'text-amber-950',
+    barBg: 'bg-amber-500',
+    badgeBg: 'bg-amber-100/70 border-amber-200'
   }
 };
 
@@ -973,14 +995,15 @@ export default function SalesSnapshotClient() {
       lost: uniqueLeadsWithAppointments > 0 ? (apptLost / uniqueLeadsWithAppointments) * 100 : 0,
     };
 
-    // Pipeline Stages (6 groups)
+    // Pipeline Stages (7 groups)
     const pipelinePhasesMap: Record<string, number> = {
       'New / Prospecting': 0,
       'Priority & Hot Leads': 0,
       'Active Engagement': 0,
       'High-Intent / Opportunity': 0,
       'Converted': 0,
-      'Closed / Inactive': 0
+      'Closed / Lost': 0,
+      'Inactive / Future Follow Up': 0
     };
     filteredLeads.forEach(lead => {
       const phase = getPipelinePhase(lead.customerStatus || lead.status);
@@ -1170,7 +1193,6 @@ export default function SalesSnapshotClient() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <StatusOutcomeGuideButton />
             <Button onClick={triggerPdfExport} variant="outline" size="sm" className="bg-[#095c7b] text-white hover:bg-[#095c7b]/90">
               <Download className="mr-2 h-4 w-4" /> Download PDF Report
             </Button>
@@ -1330,7 +1352,7 @@ export default function SalesSnapshotClient() {
                 </div>
                 <SectionHelp content="High-level stages grouping all lead statuses with embedded milestone counts, quoting rates, and MRR financial values." />
               </CardHeader>
-              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
                 {metrics.pipelineStagesData.map((stage, idx) => {
                   const style = STAGE_COLOR_STYLES[stage.name] || {
                     cardBg: 'bg-slate-50/50 hover:bg-slate-100/80',
@@ -1368,8 +1390,8 @@ export default function SalesSnapshotClient() {
                               <SectionHelp content={
                                 <div className="space-y-1.5">
                                   <p className="font-bold text-slate-900 border-b pb-1">Total Sourced vs. Stage Count</p>
-                                  <p><strong className="text-[#095c7b]">{metrics.totalLeads} Total Sourced:</strong> Total volume of leads created in the selected date range across <em>all 6 pipeline stages</em> combined.</p>
-                                  <p><strong className="text-sky-700">{stage.count} Stage Count:</strong> Leads currently sitting specifically in the <strong>New / Prospecting</strong> stage (Status: New). This accounts for {stage.percentage}% of the total pipeline.</p>
+                                  <p><strong className="text-[#095c7b]">{metrics.totalLeads} Total Sourced:</strong> Total volume of leads created in the selected date range across <em>all 7 pipeline stages</em> combined.</p>
+                                  <p><strong className="text-sky-700">{stage.count} Stage Count:</strong> Leads currently sitting in the <strong>New / Prospecting</strong> stage (Status: New, Unqualified). This accounts for {stage.percentage}% of the total pipeline.</p>
                                 </div>
                               } />
                             </div>
@@ -1443,21 +1465,28 @@ export default function SalesSnapshotClient() {
                             </div>
                           )}
 
-                          {stage.name === 'Closed / Inactive' && (
-                            <div className="text-[10px] font-medium text-slate-700 bg-slate-200/60 p-1.5 rounded border border-slate-300/50">
-                              Lost or unserviceable leads
+                          {stage.name === 'Closed / Lost' && (
+                            <div className="text-[10px] font-medium text-rose-800 bg-rose-100/70 p-1.5 rounded border border-rose-200/60">
+                              Hard lost &amp; unserviceable leads
+                            </div>
+                          )}
+
+                          {stage.name === 'Inactive / Future Follow Up' && (
+                            <div className="text-[10px] font-medium text-amber-900 bg-amber-100/70 p-1.5 rounded border border-amber-200/60">
+                              Soft brush-off &amp; future nurture
                             </div>
                           )}
                         </div>
 
                         <span className={cn("text-[9px] text-muted-foreground block leading-tight mt-2 p-1.5 rounded border transition-colors", style.badgeBg)}>
                           <strong>Includes:</strong> <br/>
-                          {stage.name === 'New / Prospecting' && 'New'}
+                          {stage.name === 'New / Prospecting' && 'New, Unqualified'}
                           {stage.name === 'Priority & Hot Leads' && 'Priority Lead, Priority Field Lead, Hot Lead'}
                           {stage.name === 'Active Engagement' && 'Contacted, Connected, In Progress, Reschedule...'}
                           {stage.name === 'High-Intent / Opportunity' && 'Qualified, Quote Sent, SCF Accepted, Free Trial...'}
                           {stage.name === 'Converted' && 'Won, Signed, Customer'}
-                          {stage.name === 'Closed / Inactive' && 'Lost, Lost Customer, Unqualified...'}
+                          {stage.name === 'Closed / Lost' && 'Lost, Lost Customer, Out of Territory'}
+                          {stage.name === 'Inactive / Future Follow Up' && 'Email Brush Off, Future Follow-up'}
                         </span>
                       </div>
                       <div className="mt-3 pt-2 border-t border-slate-200/60">

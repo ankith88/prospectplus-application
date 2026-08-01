@@ -71,7 +71,7 @@ import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { CallAttemptBadge } from './call-attempt-badge';
 import { StatusOutcomeInfo, StatusChartTooltipContent } from './status-outcome-info';
-import { StatusOutcomeBanner, StatusOutcomeGuideButton } from './status-outcome-guide';
+import { StatusOutcomeBanner } from './status-outcome-guide';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { cn, getQuickDateRange, isManualActivity } from '@/lib/utils';
 import Link from 'next/link';

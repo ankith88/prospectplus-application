@@ -36,7 +36,7 @@ import {
   Clock
 } from 'lucide-react';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
-import { StatusOutcomeBanner, StatusOutcomeGuideButton } from '@/components/status-outcome-guide';
+import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
 import type { DateRange } from 'react-day-picker';
 
 interface CsCallRecord {
@@ -416,7 +416,6 @@ export default function CustomerSuccessReportingClient() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <StatusOutcomeGuideButton className="bg-white/10 hover:bg-white/20 text-white border-0" />
           <Button 
             variant="secondary" 
             size="sm" 
