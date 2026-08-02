@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FullScreenLoader } from "@/components/ui/loader";
@@ -10,7 +10,45 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, MessageSquare, AlertCircle, Sparkles, CheckCircle2, XCircle, Clock, Eye, Download, MessageCircle, Pencil, UploadCloud, File, X, Loader2, Save } from "lucide-react";
+import { 
+  PlusCircle, 
+  MessageSquare, 
+  AlertCircle, 
+  Sparkles, 
+  CheckCircle2, 
+  XCircle, 
+  Clock, 
+  Eye, 
+  Download, 
+  MessageCircle, 
+  Pencil, 
+  UploadCloud, 
+  File, 
+  X, 
+  Loader2, 
+  Save,
+  BarChart3,
+  TrendingUp,
+  LayoutGrid,
+  Table as TableIcon,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  PieChart as LucidePieChart,
+  Paperclip
+} from "lucide-react";
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend
+} from "recharts";
 import Link from "next/link";
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -48,10 +86,14 @@ export default function AppTicketsPage() {
   const [tickets, setTickets] = useState<AppTicket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
   
-  // Filtering & detail view states
+  // Filtering & View states
   const [selectedTicket, setSelectedTicket] = useState<AppTicket | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("open");
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [showAnalytics, setShowAnalytics] = useState<boolean>(true);
 
   // Edit ticket state
   const [editingTicket, setEditingTicket] = useState<AppTicket | null>(null);
@@ -190,8 +232,6 @@ export default function AppTicketsPage() {
     }
   }, [ticketId, tickets]);
 
-  if (loading || loadingTickets) return <FullScreenLoader message="Loading feedback board..." />;
-
   const getStatusBadge = (status: AppTicket["status"]) => {
     switch (status) {
       case "open":
@@ -216,25 +256,25 @@ export default function AppTicketsPage() {
       case "feature":
         return (
           <Badge className="bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-50 flex items-center gap-1 font-medium">
-            <Sparkles className="h-3.5 w-3.5" /> Feature Request
+            <Sparkles className="h-3.5 w-3.5" /> Feature
           </Badge>
         );
       case "bug":
         return (
           <Badge className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-50 flex items-center gap-1 font-medium">
-            <AlertCircle className="h-3.5 w-3.5" /> Bug Report
+            <AlertCircle className="h-3.5 w-3.5" /> Bug
           </Badge>
         );
       case "issue":
         return (
           <Badge className="bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50 flex items-center gap-1 font-medium">
-            <MessageSquare className="h-3.5 w-3.5" /> General Issue
+            <MessageSquare className="h-3.5 w-3.5" /> Issue
           </Badge>
         );
       case "feedback":
         return (
           <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50 flex items-center gap-1 font-medium">
-            <MessageCircle className="h-3.5 w-3.5" /> General Feedback
+            <MessageCircle className="h-3.5 w-3.5" /> Feedback
           </Badge>
         );
       default:
@@ -242,14 +282,106 @@ export default function AppTicketsPage() {
     }
   };
 
-  const filteredTickets = tickets.filter(ticket => {
-    const matchesType = typeFilter === "all" || ticket.type === typeFilter;
-    const matchesStatus = statusFilter === "all" || ticket.status === statusFilter;
-    return matchesType && matchesStatus;
-  });
+  // Metrics computation for reporting
+  const openTicketsCount = useMemo(() => tickets.filter(t => (t.status || "open") === "open").length, [tickets]);
+  const plannedTicketsCount = useMemo(() => tickets.filter(t => t.status === "planned").length, [tickets]);
+  const inProgressTicketsCount = useMemo(() => tickets.filter(t => t.status === "in_progress").length, [tickets]);
+  const testingTicketsCount = useMemo(() => tickets.filter(t => t.status === "testing").length, [tickets]);
+  const completedTicketsCount = useMemo(() => tickets.filter(t => t.status === "completed").length, [tickets]);
+  const declinedTicketsCount = useMemo(() => tickets.filter(t => t.status === "declined").length, [tickets]);
+
+  const activeTicketsCount = openTicketsCount + plannedTicketsCount + inProgressTicketsCount + testingTicketsCount;
+  const resolutionRate = tickets.length > 0 ? Math.round((completedTicketsCount / tickets.length) * 100) : 0;
+
+  // Chart dataset calculations
+  const statusData = useMemo(() => [
+    { name: "Open", value: openTicketsCount, color: "#3b82f6" },
+    { name: "Planned", value: plannedTicketsCount, color: "#a855f7" },
+    { name: "In Progress", value: inProgressTicketsCount, color: "#f59e0b" },
+    { name: "Testing", value: testingTicketsCount, color: "#0891b2" },
+    { name: "Completed", value: completedTicketsCount, color: "#10b981" },
+    { name: "Declined", value: declinedTicketsCount, color: "#f43f5e" }
+  ].filter(item => item.value > 0), [openTicketsCount, plannedTicketsCount, inProgressTicketsCount, testingTicketsCount, completedTicketsCount, declinedTicketsCount]);
+
+  const categoryCounts = useMemo(() => tickets.reduce((acc, t) => {
+    const key = t.type || "feedback";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>), [tickets]);
+
+  const categoryData = useMemo(() => [
+    { name: "Feature Requests", value: categoryCounts["feature"] || 0, color: "#0d9488" },
+    { name: "Bug Reports", value: categoryCounts["bug"] || 0, color: "#e11d48" },
+    { name: "General Feedback", value: categoryCounts["feedback"] || 0, color: "#3b82f6" },
+    { name: "General Issues", value: categoryCounts["issue"] || 0, color: "#ea580c" }
+  ].filter(item => item.value > 0), [categoryCounts]);
+
+  const platformCounts = useMemo(() => tickets.reduce((acc, t) => {
+    const p = t.platform || "ProspectPlus";
+    acc[p] = (acc[p] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>), [tickets]);
+
+  const platformData = useMemo(() => [
+    { name: "ProspectPlus", count: platformCounts["ProspectPlus"] || 0 },
+    { name: "LocalMile.Plus", count: platformCounts["LocalMile.Plus"] || 0 },
+    { name: "LPO.Plus", count: platformCounts["LPO.Plus"] || 0 },
+    { name: "Website", count: platformCounts["Website"] || 0 }
+  ], [platformCounts]);
+
+  // Filtering tickets
+  const filteredTickets = useMemo(() => {
+    return tickets.filter(ticket => {
+      const matchesType = typeFilter === "all" || ticket.type === typeFilter;
+      const matchesStatus = statusFilter === "all" || (ticket.status || "open") === statusFilter;
+      const matchesPlatform = platformFilter === "all" || (ticket.platform || "ProspectPlus") === platformFilter;
+      const queryLower = searchQuery.toLowerCase().trim();
+      const matchesSearch = !queryLower || 
+        ticket.title?.toLowerCase().includes(queryLower) ||
+        ticket.description?.toLowerCase().includes(queryLower) ||
+        ticket.createdByName?.toLowerCase().includes(queryLower) ||
+        ticket.createdByEmail?.toLowerCase().includes(queryLower);
+
+      return matchesType && matchesStatus && matchesPlatform && matchesSearch;
+    });
+  }, [tickets, typeFilter, statusFilter, platformFilter, searchQuery]);
+
+  // CSV Export handler
+  const handleExportCSV = () => {
+    if (filteredTickets.length === 0) {
+      toast.error("No tickets to export.");
+      return;
+    }
+
+    const headers = ["ID", "Title", "Type", "Platform", "Status", "Submitted By", "Submitted Email", "Created Date", "Description"];
+    const rows = filteredTickets.map(t => [
+      t.id,
+      `"${(t.title || "").replace(/"/g, '""')}"`,
+      t.type,
+      t.platform || "ProspectPlus",
+      t.status || "open",
+      `"${(t.createdByName || "").replace(/"/g, '""')}"`,
+      t.createdByEmail || "",
+      t.createdAt ? new Date(t.createdAt.seconds * 1000).toLocaleDateString() : "",
+      `"${(t.description || "").replace(/"/g, '""').replace(/\n/g, ' ')}"`
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `feedback_tickets_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${filteredTickets.length} tickets to CSV.`);
+  };
+
+  if (loading || loadingTickets) return <FullScreenLoader message="Loading feedback board & reporting..." />;
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-7xl mx-auto w-full animate-in fade-in duration-300">
+      {/* Top Title & Primary Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-[#095c7b] flex items-center gap-2">
@@ -259,26 +391,329 @@ export default function AppTicketsPage() {
             Request new features, report bugs, or track current app improvements. All users can view and collaborate.
           </p>
         </div>
-        <div>
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <Button
+            variant="outline"
+            onClick={() => setShowAnalytics(!showAnalytics)}
+            className="border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5 font-semibold flex items-center gap-2"
+          >
+            <BarChart3 className="h-4 w-4" />
+            {showAnalytics ? "Hide Reporting" : "Show Reporting"}
+            {showAnalytics ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+
           <Link href="/app-tickets/create">
-            <Button className="bg-[#eaf143] text-[#095c7b] hover:bg-[#d8e032] font-semibold shadow-md">
-              <PlusCircle className="mr-2 h-4 w-4" />
+            <Button className="bg-[#eaf143] text-[#095c7b] hover:bg-[#d8e032] font-semibold shadow-md flex items-center gap-1.5">
+              <PlusCircle className="h-4 w-4" />
               Submit Feedback / Bug
             </Button>
           </Link>
         </div>
       </div>
 
-      {/* Filters bar */}
-      <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-xl border shadow-sm">
-        <span className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Filters:</span>
-        
-        <div className="flex flex-wrap gap-2">
-          {/* Type Filter */}
+      {/* Embedded Reporting & Analytics Dashboard */}
+      {showAnalytics && (
+        <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200 shadow-xs animate-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-[#095c7b] flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-[#095c7b]" />
+              System Analytics & Overview
+            </h3>
+            <span className="text-xs text-muted-foreground font-medium">
+              Based on {tickets.length} total submissions
+            </span>
+          </div>
+
+          {/* Metric Summary Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="bg-white border border-slate-200 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Submissions</p>
+                <div className="flex items-baseline justify-between mt-1">
+                  <h4 className="text-2xl font-black text-slate-900">{tickets.length}</h4>
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
+                    All Time
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border border-slate-200 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Resolution Rate</p>
+                <div className="flex items-baseline justify-between mt-1">
+                  <h4 className="text-2xl font-black text-emerald-600">{resolutionRate}%</h4>
+                  <span className="text-xs text-slate-500 font-medium">{completedTicketsCount} completed</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border border-slate-200 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Pipeline</p>
+                <div className="flex items-baseline justify-between mt-1">
+                  <h4 className="text-2xl font-black text-amber-600">{activeTicketsCount}</h4>
+                  <span className="text-xs text-slate-500 font-medium">In triage / dev</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border border-slate-200 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Feature Requests</p>
+                <div className="flex items-baseline justify-between mt-1">
+                  <h4 className="text-2xl font-black text-teal-600">{categoryCounts["feature"] || 0}</h4>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {tickets.length > 0 ? Math.round(((categoryCounts["feature"] || 0) / tickets.length) * 100) : 0}% of total
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            {/* Chart 1: Status Breakdown */}
+            <Card className="bg-white border border-slate-200">
+              <CardHeader className="p-4 pb-0">
+                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <LucidePieChart className="h-4 w-4 text-[#095c7b]" /> Status Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-2">
+                <div className="h-[170px] w-full">
+                  {statusData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={statusData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={55}
+                          innerRadius={32}
+                          paddingAngle={3}
+                        >
+                          {statusData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(val: any) => [`${val} tickets`, 'Count']} />
+                        <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-xs text-slate-400">No status data available</div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Chart 2: Category Breakdown */}
+            <Card className="bg-white border border-slate-200">
+              <CardHeader className="p-4 pb-0">
+                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4 text-teal-600" /> Feedback Categories
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-2">
+                <div className="h-[170px] w-full">
+                  {categoryData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={categoryData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={55}
+                          paddingAngle={3}
+                        >
+                          {categoryData.map((entry, index) => (
+                            <Cell key={`cell-cat-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(val: any) => [`${val} tickets`, 'Count']} />
+                        <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-xs text-slate-400">No category data available</div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Chart 3: Platform Breakdown */}
+            <Card className="bg-white border border-slate-200">
+              <CardHeader className="p-4 pb-0">
+                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <BarChart3 className="h-4 w-4 text-purple-600" /> Platform Volume
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-2">
+                <div className="h-[170px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={platformData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip formatter={(val: any) => [`${val} tickets`, 'Count']} />
+                      <Bar dataKey="count" fill="#095c7b" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Status-Based Navigation Tabs */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 no-scrollbar border-b border-gray-200">
+        <button
+          onClick={() => setStatusFilter("all")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
+            statusFilter === "all"
+              ? "bg-[#095c7b] text-white shadow-xs"
+              : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+          }`}
+        >
+          All Tickets
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+            statusFilter === "all" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-700"
+          }`}>
+            {tickets.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("open")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
+            statusFilter === "open"
+              ? "bg-blue-600 text-white shadow-xs ring-2 ring-blue-300"
+              : "bg-white text-blue-700 hover:bg-blue-50 border border-blue-200"
+          }`}
+        >
+          🔵 Open
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+            statusFilter === "open" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-800"
+          }`}>
+            {openTicketsCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("planned")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
+            statusFilter === "planned"
+              ? "bg-purple-600 text-white shadow-xs ring-2 ring-purple-300"
+              : "bg-white text-purple-700 hover:bg-purple-50 border border-purple-200"
+          }`}
+        >
+          🟣 Planned
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+            statusFilter === "planned" ? "bg-white/20 text-white" : "bg-purple-100 text-purple-800"
+          }`}>
+            {plannedTicketsCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("in_progress")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
+            statusFilter === "in_progress"
+              ? "bg-amber-600 text-white shadow-xs ring-2 ring-amber-300"
+              : "bg-white text-amber-700 hover:bg-amber-50 border border-amber-200"
+          }`}
+        >
+          🟡 In Progress
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+            statusFilter === "in_progress" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+          }`}>
+            {inProgressTicketsCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("testing")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
+            statusFilter === "testing"
+              ? "bg-cyan-600 text-white shadow-xs ring-2 ring-cyan-300"
+              : "bg-white text-cyan-700 hover:bg-cyan-50 border border-cyan-200"
+          }`}
+        >
+          🟢 Testing
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+            statusFilter === "testing" ? "bg-white/20 text-white" : "bg-cyan-100 text-cyan-800"
+          }`}>
+            {testingTicketsCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("completed")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
+            statusFilter === "completed"
+              ? "bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-300"
+              : "bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200"
+          }`}
+        >
+          ✅ Completed
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+            statusFilter === "completed" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
+          }`}>
+            {completedTicketsCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("declined")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
+            statusFilter === "declined"
+              ? "bg-rose-600 text-white shadow-xs ring-2 ring-rose-300"
+              : "bg-white text-rose-700 hover:bg-rose-50 border border-rose-200"
+          }`}
+        >
+          🔴 Declined
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+            statusFilter === "declined" ? "bg-white/20 text-white" : "bg-rose-100 text-rose-800"
+          }`}>
+            {declinedTicketsCount}
+          </span>
+        </button>
+      </div>
+
+      {/* Toolbar & Filters Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
+        {/* Left: Search & Filter Controls */}
+        <div className="flex flex-wrap items-center gap-3 flex-1">
+          {/* Search Box */}
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Search by title, description, author..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-8 text-sm h-9 border-gray-200 focus-visible:ring-[#095c7b]"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter */}
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="text-sm rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+            className="text-xs h-9 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b] font-medium"
           >
             <option value="all">All Categories</option>
             <option value="feedback">General Feedback</option>
@@ -287,28 +722,63 @@ export default function AppTicketsPage() {
             <option value="issue">General Issues</option>
           </select>
 
-          {/* Status Filter */}
+          {/* Platform Filter */}
           <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-sm rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+            value={platformFilter}
+            onChange={(e) => setPlatformFilter(e.target.value)}
+            className="text-xs h-9 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b] font-medium"
           >
-            <option value="all">All Statuses</option>
-            <option value="open">Open</option>
-            <option value="planned">Planned</option>
-            <option value="in_progress">In Progress</option>
-            <option value="testing">Testing</option>
-            <option value="completed">Completed</option>
-            <option value="declined">Declined</option>
+            <option value="all">All Platforms</option>
+            <option value="ProspectPlus">ProspectPlus</option>
+            <option value="LocalMile.Plus">LocalMile.Plus</option>
+            <option value="LPO.Plus">LPO.Plus</option>
+            <option value="Website">Website</option>
           </select>
         </div>
 
-        <div className="ml-auto text-xs text-muted-foreground font-medium">
-          Showing {filteredTickets.length} of {tickets.length} tickets
+        {/* Right: View Mode Toggle & CSV Export */}
+        <div className="flex items-center gap-2 justify-between lg:justify-end shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-gray-100">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCSV}
+            className="text-xs h-9 border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+            title="Export filtered list to CSV"
+          >
+            <Download className="h-3.5 w-3.5 text-gray-500" /> Export CSV
+          </Button>
+
+          {/* View Mode Toggle Buttons */}
+          <div className="flex items-center p-1 bg-gray-100 rounded-lg border border-gray-200">
+            <button
+              onClick={() => setViewMode("table")}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                viewMode === "table"
+                  ? "bg-white text-[#095c7b] shadow-xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <TableIcon className="h-3.5 w-3.5" /> Table
+            </button>
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                viewMode === "grid"
+                  ? "bg-white text-[#095c7b] shadow-xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Cards
+            </button>
+          </div>
+
+          <span className="text-xs text-muted-foreground font-medium pl-1 hidden sm:inline">
+            Showing {filteredTickets.length} of {tickets.length}
+          </span>
         </div>
       </div>
 
-      {/* Grid List of Tickets */}
+      {/* Main Content Area: Table View vs Grid View */}
       {filteredTickets.length === 0 ? (
         <Card className="border-dashed border-2 py-12">
           <CardContent className="flex flex-col items-center justify-center text-center space-y-3">
@@ -316,12 +786,109 @@ export default function AppTicketsPage() {
               <MessageSquare className="h-8 w-8 text-[#095c7b]" />
             </div>
             <h3 className="font-semibold text-lg">No tickets found</h3>
-            <p className="text-muted-foreground max-w-sm">
-              There are no tickets matching your active filters. Try clearing them or submit a new idea/bug report.
+            <p className="text-muted-foreground max-w-sm text-sm">
+              There are no tickets matching your active filters or search terms. Try adjusting your parameters.
             </p>
           </CardContent>
         </Card>
+      ) : viewMode === "table" ? (
+        /* Table View */
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-gray-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-4 min-w-[140px]">Type & Platform</th>
+                  <th className="py-3 px-4 min-w-[280px]">Title & Context</th>
+                  <th className="py-3 px-4 w-[130px]">Status</th>
+                  <th className="py-3 px-4 min-w-[180px]">Submitted By & Date</th>
+                  <th className="py-3 px-4 w-[110px]">Media</th>
+                  <th className="py-3 px-4 text-right min-w-[140px]">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-sm">
+                {filteredTickets.map((ticket) => (
+                  <tr 
+                    key={ticket.id}
+                    onClick={() => setSelectedTicket(ticket)}
+                    className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                  >
+                    {/* Category & Platform */}
+                    <td className="py-3.5 px-4 align-top">
+                      <div className="flex flex-col items-start gap-1.5">
+                        {getTypeBadge(ticket.type)}
+                        <Badge variant="outline" className="text-[10px] text-slate-600 bg-slate-50 border-slate-200">
+                          {ticket.platform || "ProspectPlus"}
+                        </Badge>
+                      </div>
+                    </td>
+
+                    {/* Title & Context */}
+                    <td className="py-3.5 px-4 align-top">
+                      <div className="font-bold text-slate-900 group-hover:text-[#095c7b] transition-colors leading-snug line-clamp-1">
+                        {ticket.title}
+                      </div>
+                      <p className="text-xs text-slate-500 line-clamp-2 mt-1 leading-relaxed">
+                        {ticket.description}
+                      </p>
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-3.5 px-4 align-top">
+                      {getStatusBadge(ticket.status || "open")}
+                    </td>
+
+                    {/* Submitted By */}
+                    <td className="py-3.5 px-4 align-top text-xs">
+                      <div className="font-semibold text-slate-800">{ticket.createdByName || "Anonymous"}</div>
+                      <div className="text-slate-400 truncate max-w-[160px]">{ticket.createdByEmail}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        {ticket.createdAt ? new Date(ticket.createdAt.seconds * 1000).toLocaleDateString() : "N/A"}
+                      </div>
+                    </td>
+
+                    {/* Media Attachments */}
+                    <td className="py-3.5 px-4 align-top text-xs">
+                      {ticket.attachments && ticket.attachments.length > 0 ? (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1 font-medium text-[11px] w-fit">
+                          <Paperclip className="h-3 w-3" /> {ticket.attachments.length} file{ticket.attachments.length > 1 ? "s" : ""}
+                        </Badge>
+                      ) : (
+                        <span className="text-slate-300 text-xs">—</span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 px-4 align-top text-right">
+                      <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        {canEditTicket(ticket) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2.5 text-xs text-[#095c7b] border-[#095c7b]/30 hover:bg-[#095c7b]/10 flex items-center gap-1 font-medium"
+                            onClick={() => handleOpenEdit(ticket)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" /> Edit
+                          </Button>
+                        )}
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 px-2.5 text-xs text-[#095c7b] hover:text-[#053647] hover:bg-[#095c7b]/5 flex items-center gap-1 font-medium"
+                          onClick={() => setSelectedTicket(ticket)}
+                        >
+                          <Eye className="h-3.5 w-3.5" /> View
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : (
+        /* Grid Cards View */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTickets.map((ticket) => (
             <Card 
@@ -332,11 +899,11 @@ export default function AppTicketsPage() {
                 <div className="flex items-center justify-between mb-2 gap-2">
                   <div className="flex items-center gap-1.5">
                     {getTypeBadge(ticket.type)}
-                    <Badge variant="outline" className="text-slate-600 bg-slate-50 border-slate-200">
+                    <Badge variant="outline" className="text-slate-600 bg-slate-50 border-slate-200 text-xs">
                       {ticket.platform || "ProspectPlus"}
                     </Badge>
                   </div>
-                  {getStatusBadge(ticket.status)}
+                  {getStatusBadge(ticket.status || "open")}
                 </div>
                 <CardTitle className="line-clamp-2 text-lg font-bold group-hover:text-[#095c7b] transition-colors leading-tight">
                   {ticket.title}
@@ -393,7 +960,7 @@ export default function AppTicketsPage() {
         </div>
       )}
 
-      {/* Ticket Details Dialog */}
+      {/* Ticket Details Dialog Modal */}
       <Dialog open={selectedTicket !== null} onOpenChange={(open) => !open && setSelectedTicket(null)}>
         {selectedTicket && (
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -401,7 +968,7 @@ export default function AppTicketsPage() {
               <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
                 <div className="flex items-center gap-2">
                   {getTypeBadge(selectedTicket.type)}
-                  {getStatusBadge(selectedTicket.status)}
+                  {getStatusBadge(selectedTicket.status || "open")}
                   <Badge variant="outline" className="text-slate-600 bg-slate-50 border-slate-200">
                     Platform: {selectedTicket.platform || "ProspectPlus"}
                   </Badge>
@@ -448,7 +1015,7 @@ export default function AppTicketsPage() {
                     {selectedTicket.attachments.map((file, index) => (
                       <div 
                         key={index} 
-                        className="flex items-center justify-between p-3 rounded-lg border border-gray-100 shadow-sm bg-white hover:bg-gray-50 transition-colors"
+                        className="flex items-center justify-between p-3 rounded-lg border border-gray-100 shadow-xs bg-white hover:bg-gray-50 transition-colors"
                       >
                         <span className="text-xs font-medium truncate max-w-[180px]">{file.name}</span>
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -487,7 +1054,7 @@ export default function AppTicketsPage() {
                     {selectedTicket.history.map((item, idx) => (
                       <div key={idx} className="relative pl-4 space-y-1.5 pb-2">
                         {/* Dot indicator */}
-                        <div className="absolute left-[-21px] top-1.5 bg-[#095c7b] h-2.5 w-2.5 rounded-full border-2 border-white shadow-sm" />
+                        <div className="absolute left-[-21px] top-1.5 bg-[#095c7b] h-2.5 w-2.5 rounded-full border-2 border-white shadow-xs" />
                         
                         <div className="flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
                           <span className="font-semibold text-gray-700">{item.updatedByName}</span>
@@ -500,7 +1067,7 @@ export default function AppTicketsPage() {
                         </div>
 
                         {item.note && (
-                          <div className="bg-amber-50/40 border border-amber-100/50 rounded-lg p-3 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed shadow-sm">
+                          <div className="bg-amber-50/40 border border-amber-100/50 rounded-lg p-3 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed shadow-xs">
                             {item.note}
                           </div>
                         )}

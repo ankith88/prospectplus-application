@@ -479,8 +479,11 @@ export default function AdminAppTicketsPage() {
 
   // KPI calculations
   const totalTicketsCount = tickets.length;
-  const openTicketsCount = tickets.filter(t => t.status === "open").length;
-  const activeTicketsCount = tickets.filter(t => ["open", "planned", "in_progress", "testing"].includes(t.status)).length;
+  const openTicketsCount = tickets.filter(t => (t.status || "open") === "open").length;
+  const plannedTicketsCount = tickets.filter(t => t.status === "planned").length;
+  const inProgressTicketsCount = tickets.filter(t => t.status === "in_progress").length;
+  const testingTicketsCount = tickets.filter(t => t.status === "testing").length;
+  const activeTicketsCount = openTicketsCount + plannedTicketsCount + inProgressTicketsCount + testingTicketsCount;
   const completedTicketsCount = tickets.filter(t => t.status === "completed").length;
   const bugTicketsCount = tickets.filter(t => t.type === "bug").length;
 
@@ -509,65 +512,117 @@ export default function AdminAppTicketsPage() {
       {/* Analytics Dashboard */}
       {showReports && mounted && (
         <div className="space-y-6 animate-in fade-in slide-in-from-top duration-300">
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200/60 shadow-sm hover:shadow-md transition-all">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Total Tickets</p>
-                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{totalTicketsCount}</p>
+          {/* KPI Cards Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+            <Card 
+              onClick={() => { setStatusFilter("all"); setTypeFilter("all"); }}
+              className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200/80 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+            >
+              <CardContent className="p-4 flex flex-col justify-between h-full">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider">Total</p>
+                  <div className="p-1.5 bg-slate-500/10 text-slate-600 rounded-lg group-hover:scale-110 transition-transform">
+                    <BarChart3 className="h-4 w-4" />
+                  </div>
                 </div>
-                <div className="p-3 bg-blue-500/10 text-blue-600 rounded-xl">
-                  <BarChart3 className="h-5 w-5" />
-                </div>
+                <p className="text-2xl font-extrabold text-[#095c7b] mt-2">{totalTicketsCount}</p>
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">All submissions</p>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200/60 shadow-sm hover:shadow-md transition-all">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Active Tickets</p>
-                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{activeTicketsCount}</p>
+            <Card 
+              onClick={() => setStatusFilter("open")}
+              className={`bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200/80 shadow-sm hover:shadow-md transition-all cursor-pointer group ${statusFilter === 'open' ? 'ring-2 ring-blue-500' : ''}`}
+            >
+              <CardContent className="p-4 flex flex-col justify-between h-full">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Open</p>
+                  <div className="p-1.5 bg-blue-500/15 text-blue-700 rounded-lg group-hover:scale-110 transition-transform">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
                 </div>
-                <div className="p-3 bg-amber-500/10 text-amber-600 rounded-xl">
-                  <Clock className="h-5 w-5" />
-                </div>
+                <p className="text-2xl font-extrabold text-blue-900 mt-2">{openTicketsCount}</p>
+                <p className="text-[10px] text-blue-600 mt-1 font-medium">Awaiting triage</p>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-rose-50 to-rose-100 border-rose-200/60 shadow-sm hover:shadow-md transition-all">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Bug Reports</p>
-                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{bugTicketsCount}</p>
+            <Card 
+              onClick={() => setStatusFilter("planned")}
+              className={`bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200/80 shadow-sm hover:shadow-md transition-all cursor-pointer group ${statusFilter === 'planned' ? 'ring-2 ring-purple-500' : ''}`}
+            >
+              <CardContent className="p-4 flex flex-col justify-between h-full">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-extrabold text-purple-700 uppercase tracking-wider">Planned</p>
+                  <div className="p-1.5 bg-purple-500/15 text-purple-700 rounded-lg group-hover:scale-110 transition-transform">
+                    <Calendar className="h-4 w-4" />
+                  </div>
                 </div>
-                <div className="p-3 bg-rose-500/10 text-rose-600 rounded-xl">
-                  <AlertCircle className="h-5 w-5" />
-                </div>
+                <p className="text-2xl font-extrabold text-purple-900 mt-2">{plannedTicketsCount}</p>
+                <p className="text-[10px] text-purple-600 mt-1 font-medium">Release queue</p>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200/60 shadow-sm hover:shadow-md transition-all">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Completed</p>
-                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{completedTicketsCount}</p>
+            <Card 
+              onClick={() => setStatusFilter("in_progress")}
+              className={`bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200/80 shadow-sm hover:shadow-md transition-all cursor-pointer group ${statusFilter === 'in_progress' ? 'ring-2 ring-amber-500' : ''}`}
+            >
+              <CardContent className="p-4 flex flex-col justify-between h-full">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-extrabold text-amber-700 uppercase tracking-wider">In Progress</p>
+                  <div className="p-1.5 bg-amber-500/15 text-amber-700 rounded-lg group-hover:scale-110 transition-transform">
+                    <Clock className="h-4 w-4" />
+                  </div>
                 </div>
-                <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-xl">
-                  <CheckCircle2 className="h-5 w-5" />
-                </div>
+                <p className="text-2xl font-extrabold text-amber-900 mt-2">{inProgressTicketsCount}</p>
+                <p className="text-[10px] text-amber-600 mt-1 font-medium">In development</p>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200/60 shadow-sm hover:shadow-md transition-all">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Open Status</p>
-                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{openTicketsCount}</p>
+            <Card 
+              onClick={() => setStatusFilter("testing")}
+              className={`bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-200/80 shadow-sm hover:shadow-md transition-all cursor-pointer group ${statusFilter === 'testing' ? 'ring-2 ring-cyan-500' : ''}`}
+            >
+              <CardContent className="p-4 flex flex-col justify-between h-full">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-extrabold text-cyan-700 uppercase tracking-wider">Testing</p>
+                  <div className="p-1.5 bg-cyan-500/15 text-cyan-700 rounded-lg group-hover:scale-110 transition-transform">
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
                 </div>
-                <div className="p-3 bg-purple-500/10 text-purple-600 rounded-xl">
-                  <Sparkles className="h-5 w-5" />
+                <p className="text-2xl font-extrabold text-cyan-900 mt-2">{testingTicketsCount}</p>
+                <p className="text-[10px] text-cyan-600 mt-1 font-medium">QA & verification</p>
+              </CardContent>
+            </Card>
+
+            <Card 
+              onClick={() => setStatusFilter("completed")}
+              className={`bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200/80 shadow-sm hover:shadow-md transition-all cursor-pointer group ${statusFilter === 'completed' ? 'ring-2 ring-emerald-500' : ''}`}
+            >
+              <CardContent className="p-4 flex flex-col justify-between h-full">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider">Completed</p>
+                  <div className="p-1.5 bg-emerald-500/15 text-emerald-700 rounded-lg group-hover:scale-110 transition-transform">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
                 </div>
+                <p className="text-2xl font-extrabold text-emerald-900 mt-2">{completedTicketsCount}</p>
+                <p className="text-[10px] text-emerald-600 mt-1 font-medium">Resolved</p>
+              </CardContent>
+            </Card>
+
+            <Card 
+              onClick={() => setTypeFilter("bug")}
+              className={`bg-gradient-to-br from-rose-50 to-rose-100 border-rose-200/80 shadow-sm hover:shadow-md transition-all cursor-pointer group ${typeFilter === 'bug' ? 'ring-2 ring-rose-500' : ''}`}
+            >
+              <CardContent className="p-4 flex flex-col justify-between h-full">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-extrabold text-rose-700 uppercase tracking-wider">Bugs</p>
+                  <div className="p-1.5 bg-rose-500/15 text-rose-700 rounded-lg group-hover:scale-110 transition-transform">
+                    <AlertCircle className="h-4 w-4" />
+                  </div>
+                </div>
+                <p className="text-2xl font-extrabold text-rose-900 mt-2">{bugTicketsCount}</p>
+                <p className="text-[10px] text-rose-600 mt-1 font-medium">Bug reports</p>
               </CardContent>
             </Card>
           </div>
@@ -782,6 +837,129 @@ export default function AdminAppTicketsPage() {
           </div>
         </div>
       )}
+
+      {/* Active Workload Pipeline Buckets Overview */}
+      <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
+          <div>
+            <h3 className="text-base font-extrabold text-[#095c7b] flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-[#095c7b]" /> Active Development Pipeline Buckets
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Live tracking of open requests, planned features, in-progress tasks, and QA testing.
+            </p>
+          </div>
+          <Badge className="w-fit bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/20 font-bold px-3 py-1">
+            {activeTicketsCount} Active Workload Items
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Open Bucket Card */}
+          <div 
+            onClick={() => setStatusFilter("open")}
+            className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+              statusFilter === "open"
+                ? "bg-blue-50/70 border-blue-500 shadow-md"
+                : "bg-gradient-to-b from-blue-50/40 to-white border-blue-100 hover:border-blue-300 hover:shadow-sm"
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-bold text-xs">
+                  🔵 Open Bucket
+                </Badge>
+                <span className="text-2xl font-black text-blue-900">{openTicketsCount}</span>
+              </div>
+              <p className="text-xs text-gray-600 line-clamp-2 mt-1">
+                New feedback & requests awaiting triage, prioritization, and initial review.
+              </p>
+            </div>
+            <div className="mt-4 pt-2 border-t border-blue-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
+              <span>View Open ({openTicketsCount})</span>
+              <span>→</span>
+            </div>
+          </div>
+
+          {/* Planned Bucket Card */}
+          <div 
+            onClick={() => setStatusFilter("planned")}
+            className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+              statusFilter === "planned"
+                ? "bg-purple-50/70 border-purple-500 shadow-md"
+                : "bg-gradient-to-b from-purple-50/40 to-white border-purple-100 hover:border-purple-300 hover:shadow-sm"
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-bold text-xs">
+                  🟣 Planned Bucket
+                </Badge>
+                <span className="text-2xl font-black text-purple-900">{plannedTicketsCount}</span>
+              </div>
+              <p className="text-xs text-gray-600 line-clamp-2 mt-1">
+                Approved features & fixes scheduled in the roadmap for upcoming sprints.
+              </p>
+            </div>
+            <div className="mt-4 pt-2 border-t border-purple-100 flex items-center justify-between text-[11px] font-bold text-purple-700">
+              <span>View Planned ({plannedTicketsCount})</span>
+              <span>→</span>
+            </div>
+          </div>
+
+          {/* In Progress Bucket Card */}
+          <div 
+            onClick={() => setStatusFilter("in_progress")}
+            className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+              statusFilter === "in_progress"
+                ? "bg-amber-50/70 border-amber-500 shadow-md"
+                : "bg-gradient-to-b from-amber-50/40 to-white border-amber-100 hover:border-amber-300 hover:shadow-sm"
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Badge className="bg-amber-100 text-amber-800 border-amber-200 font-bold text-xs">
+                  🟡 In Progress Bucket
+                </Badge>
+                <span className="text-2xl font-black text-amber-900">{inProgressTicketsCount}</span>
+              </div>
+              <p className="text-xs text-gray-600 line-clamp-2 mt-1">
+                Items actively being coded, engineered, and built by the development team.
+              </p>
+            </div>
+            <div className="mt-4 pt-2 border-t border-amber-100 flex items-center justify-between text-[11px] font-bold text-amber-700">
+              <span>View In Progress ({inProgressTicketsCount})</span>
+              <span>→</span>
+            </div>
+          </div>
+
+          {/* Testing Bucket Card */}
+          <div 
+            onClick={() => setStatusFilter("testing")}
+            className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+              statusFilter === "testing"
+                ? "bg-cyan-50/70 border-cyan-500 shadow-md"
+                : "bg-gradient-to-b from-cyan-50/40 to-white border-cyan-100 hover:border-cyan-300 hover:shadow-sm"
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Badge className="bg-cyan-100 text-cyan-800 border-cyan-200 font-bold text-xs">
+                  🟢 Testing Bucket
+                </Badge>
+                <span className="text-2xl font-black text-cyan-900">{testingTicketsCount}</span>
+              </div>
+              <p className="text-xs text-gray-600 line-clamp-2 mt-1">
+                Completed builds undergoing QA testing and user acceptance before release.
+              </p>
+            </div>
+            <div className="mt-4 pt-2 border-t border-cyan-100 flex items-center justify-between text-[11px] font-bold text-cyan-700">
+              <span>View Testing ({testingTicketsCount})</span>
+              <span>→</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Status Tabs */}
       <div className="flex border-b border-gray-200 overflow-x-auto no-scrollbar scroll-smooth gap-2 pb-px">
