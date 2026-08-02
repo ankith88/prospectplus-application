@@ -733,7 +733,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <DailyAreaLogDialog isOpen={showAreaLog} onOpenChange={setShowAreaLog} />
       <Sidebar collapsible="icon" className="sidebar-nav-theme">
         <SidebarHeader className="flex items-center justify-between px-3 py-2 h-14 border-b border-sidebar-border overflow-hidden">
-          <Link href="/leads" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <div className="logo-text whitespace-nowrap">
               {state === "collapsed" ? (
                 <span>p<span className="logo-plus">+</span></span>

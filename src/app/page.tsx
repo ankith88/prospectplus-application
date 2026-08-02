@@ -20,7 +20,44 @@ export default function HomePage() {
     }
 
     if (userProfile) {
-      switch (userProfile.activeRole as string) {
+      const activeRole = (userProfile.activeRole || userProfile.role || '') as string;
+      const lowerRole = activeRole.toLowerCase().trim();
+
+      if (
+        activeRole === 'Customer Service' ||
+        lowerRole === 'customer service' ||
+        lowerRole === 'customer_service' ||
+        lowerRole === 'customer-service'
+      ) {
+        router.replace('/admin/tickets');
+        return;
+      }
+
+      if (
+        activeRole === 'Customer Success' ||
+        lowerRole === 'customer success' ||
+        lowerRole === 'customer_success' ||
+        lowerRole === 'customer-success' ||
+        lowerRole === 'cs'
+      ) {
+        router.replace('/customer-success/pipeline');
+        return;
+      }
+
+      if (
+        activeRole === 'Account Manager' ||
+        activeRole === 'Account Managers' ||
+        lowerRole === 'account manager' ||
+        lowerRole === 'account managers' ||
+        lowerRole === 'account_manager' ||
+        lowerRole === 'account_managers' ||
+        lowerRole === 'am'
+      ) {
+        router.replace('/account-manager/pipeline');
+        return;
+      }
+
+      switch (activeRole) {
         case 'admin':
         case 'super user':
         case 'Sales Manager':
