@@ -318,7 +318,7 @@ export default function AdminAppTicketsPage() {
             },
             body: JSON.stringify({
               to: selectedTicket.createdByEmail,
-              subject: isWaiting ? `[Action Required] Super Admin is waiting on your response: ${selectedTicket.title}` : `[Progress Update] ${selectedTicket.title}`,
+              subject: isWaiting ? `[Action Required] Waiting on your response: ${selectedTicket.title}` : `[Progress Update] ${selectedTicket.title}`,
               html: emailHtml,
               customFrom: "ankith.ravindran@mailplus.com.au",
               cc: ccEmailVal,
