@@ -101,8 +101,12 @@ export function getProspectPlusId(lead: Partial<Lead> & Record<string, any>): st
 export function hasLeadContact(lead: Partial<Lead> & Record<string, any>): boolean {
   if (typeof lead.contactCount === 'number' && lead.contactCount > 0) return true;
   if (Array.isArray(lead.contacts) && lead.contacts.length > 0) return true;
-  if (lead.customerServiceEmail || lead.customerPhone || lead.contactName || lead.contactEmail || lead.contactPhone) return true;
-  return false;
+  
+  const hasName = typeof lead.contactName === 'string' && lead.contactName.trim() !== '' && lead.contactName.trim().toLowerCase() !== 'n/a';
+  const hasEmail = typeof lead.contactEmail === 'string' && lead.contactEmail.trim() !== '' && lead.contactEmail.trim().toLowerCase() !== 'n/a';
+  const hasPhone = typeof lead.contactPhone === 'string' && lead.contactPhone.trim() !== '' && lead.contactPhone.trim().toLowerCase() !== 'n/a';
+  
+  return hasName || hasEmail || hasPhone;
 }
 type ExpandedLeadDetails = {
     note: Note | null;
@@ -2005,9 +2009,7 @@ export default function LeadsClientPage({
            ) : myLeads.length > 0 ? (
             <Accordion id="step-leads-table" type="single" collapsible defaultValue="my-leads" className="w-full space-y-2">
               {Object.entries(groupedMyLeads).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => {
-                const sortedLeads = status === 'New' 
-                   ? [...leads].sort((a, b) => (hasLeadContact(b) ? 1 : 0) - (hasLeadContact(a) ? 1 : 0))
-                   : leads;
+                const sortedLeads = [...leads].sort((a, b) => (hasLeadContact(b) ? 1 : 0) - (hasLeadContact(a) ? 1 : 0));
                 const currentPage = myLeadsPagination[status] || 1;
                 const totalPages = Math.ceil(sortedLeads.length / LEADS_PER_PAGE);
                 const paginatedLeads = sortedLeads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
@@ -2297,9 +2299,7 @@ export default function LeadsClientPage({
                     <AccordionContent className="pt-2">
                        <Accordion type="multiple" className="w-full space-y-1">
                           {Object.entries(statusGroups).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => {
-                              const sortedLeads = status === 'New' 
-                                 ? [...leads].sort((a, b) => (hasLeadContact(b) ? 1 : 0) - (hasLeadContact(a) ? 1 : 0))
-                                 : leads;
+                              const sortedLeads = [...leads].sort((a, b) => (hasLeadContact(b) ? 1 : 0) - (hasLeadContact(a) ? 1 : 0));
                               const groupKey = `${dialer}-${status}`;
                               const currentPage = paginationState[groupKey] || 1;
                               const totalPages = Math.ceil(sortedLeads.length / LEADS_PER_PAGE);
@@ -2537,9 +2537,7 @@ export default function LeadsClientPage({
            ) : unassignedLeads.length > 0 ? (
             <Accordion type="multiple" defaultValue={['New']} className="w-full space-y-2">
               {Object.entries(groupedUnassignedLeads).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => {
-                const sortedLeads = status === 'New' 
-                  ? [...leads].sort((a, b) => (hasLeadContact(b) ? 1 : 0) - (hasLeadContact(a) ? 1 : 0))
-                  : leads;
+                const sortedLeads = [...leads].sort((a, b) => (hasLeadContact(b) ? 1 : 0) - (hasLeadContact(a) ? 1 : 0));
                 const groupKey = `unassigned-${status}`;
                 const currentPage = paginationState[groupKey] || 1;
                 const totalPages = Math.ceil(sortedLeads.length / LEADS_PER_PAGE);

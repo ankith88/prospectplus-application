@@ -211,24 +211,44 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const DEFAULT_PINNED = ['/account-lookup', '/leads', '/sales-snapshot', '/leads/map'];
+  const DEFAULT_PINNED: string[] = [];
   const [pinnedPaths, setPinnedPaths] = useState<string[]>([]);
   const [showPinModal, setShowPinModal] = useState(false);
 
   useEffect(() => {
+    if (!user || !userProfile) {
+      setPinnedPaths([]);
+      return;
+    }
+
+    const userId = user.uid || userProfile.uid;
+    const userPins = userProfile.pinnedNav ?? userProfile.pinnedPaths;
+
+    if (Array.isArray(userPins)) {
+      setPinnedPaths(userPins);
+      try {
+        localStorage.setItem(`prospectplus_pinned_nav_${userId}`, JSON.stringify(userPins));
+      } catch {}
+      return;
+    }
+
+    // Fallback to user-scoped localStorage if not set in user profile yet
     try {
-      const saved = localStorage.getItem('prospectplus_pinned_nav');
+      const saved = localStorage.getItem(`prospectplus_pinned_nav_${userId}`);
       if (saved) {
         setPinnedPaths(JSON.parse(saved));
       } else {
-        setPinnedPaths(DEFAULT_PINNED);
+        setPinnedPaths([]);
       }
     } catch {
-      setPinnedPaths(DEFAULT_PINNED);
+      setPinnedPaths([]);
     }
-  }, []);
+  }, [user, userProfile]);
 
   const togglePinItem = (href: string) => {
+    if (!user && !userProfile) return;
+    const userId = user?.uid || userProfile?.uid;
+
     setPinnedPaths(prev => {
       let updated: string[];
       if (prev.includes(href)) {
@@ -236,38 +256,102 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       } else {
         updated = [...prev, href];
       }
-      try {
-        localStorage.setItem('prospectplus_pinned_nav', JSON.stringify(updated));
-      } catch {}
+
+      if (userId) {
+        try {
+          localStorage.setItem(`prospectplus_pinned_nav_${userId}`, JSON.stringify(updated));
+        } catch {}
+      }
+
+      if (user && userProfile && updateUserProfile) {
+        updateUserProfile({ pinnedNav: updated, pinnedPaths: updated });
+      }
+
       return updated;
     });
   };
 
   const PINNABLE_ITEMS: Record<string, { label: string; category: string; icon: React.ElementType; href: string }> = {
+    // Search & AI
     '/account-lookup': { label: 'Universal Lookup', category: 'Search & AI', icon: Search, href: '/account-lookup' },
     '/ask': { label: 'Ask Prospect+', category: 'Search & AI', icon: Sparkles, href: '/ask' },
+
+    // Dashboards
     '/admin/dashboard': { label: 'Executive Dashboard', category: 'Dashboards', icon: LayoutDashboard, href: '/admin/dashboard' },
     '/admin/financial-dashboard': { label: 'Financial Dashboard', category: 'Dashboards', icon: DollarSign, href: '/admin/financial-dashboard' },
     '/admin/mailbox': { label: 'AI Mailbox', category: 'Dashboards', icon: Sparkles, href: '/admin/mailbox' },
+
+    // Sales & CRM
+    '/leads/new': { label: 'New Lead', category: 'Sales & CRM', icon: PlusCircle, href: '/leads/new' },
     '/leads': { label: 'Outbound Leads', category: 'Sales & CRM', icon: Briefcase, href: '/leads' },
     '/inbound-leads': { label: 'Inbound Leads', category: 'Sales & CRM', icon: Inbox, href: '/inbound-leads' },
+    '/franchisee-leads': { label: 'Franchisee Leads', category: 'Sales & CRM', icon: Briefcase, href: '/franchisee-leads' },
+    '/admin/marketing/import-leads': { label: 'Import Leads', category: 'Sales & CRM', icon: PlusCircle, href: '/admin/marketing/import-leads' },
+    '/franchisee-lead-verification': { label: 'Franchisee Lead Review', category: 'Sales & CRM', icon: UserCheck, href: '/franchisee-lead-verification' },
+    '/admin/in-review-leads': { label: 'In Review Leads', category: 'Sales & CRM', icon: ClipboardCheck, href: '/admin/in-review-leads' },
     '/admin/all-leads': { label: 'Master Leads Directory', category: 'Sales & CRM', icon: Layers, href: '/admin/all-leads' },
+    '/admin/unassigned-leads': { label: 'Unassigned Leads', category: 'Sales & CRM', icon: ListTodo, href: '/admin/unassigned-leads' },
+    '/leads/archive': { label: 'Archived Leads', category: 'Sales & CRM', icon: Archive, href: '/leads/archive' },
     '/account-manager/pipeline': { label: 'AM Pipeline', category: 'Sales & CRM', icon: ListTodo, href: '/account-manager/pipeline' },
     '/signed-customers': { label: 'Signed Customers', category: 'Sales & CRM', icon: Star, href: '/signed-customers' },
     '/lost-customers': { label: 'Lost Customers', category: 'Sales & CRM', icon: UserX, href: '/lost-customers' },
+
+    // Customer Success
     '/customer-success/pipeline': { label: 'CS Pipeline', category: 'Customer Success', icon: ListTodo, href: '/customer-success/pipeline' },
+    '/customer-success/cancellations': { label: 'CS Cancellations', category: 'Customer Success', icon: CalendarOff, href: '/customer-success/cancellations' },
+    '/customer-success/reporting': { label: 'CS Reporting', category: 'Customer Success', icon: BarChart3, href: '/customer-success/reporting' },
+
+    // Field & Logistics
     '/field-sales': { label: 'Door-to-Door', category: 'Field & Logistics', icon: Briefcase, href: '/field-sales' },
+    '/capture-visit': { label: 'Capture Visit', category: 'Field & Logistics', icon: PlusCircle, href: '/capture-visit' },
+    '/visit-notes': { label: 'Visit Notes', category: 'Field & Logistics', icon: FileText, href: '/visit-notes' },
     '/saved-routes': { label: 'Saved Routes', category: 'Field & Logistics', icon: Save, href: '/saved-routes' },
     '/prospecting-areas': { label: 'Prospecting Areas', category: 'Field & Logistics', icon: LayoutGrid, href: '/prospecting-areas' },
+    '/field-sales/schedules': { label: 'Team Schedules', category: 'Field & Logistics', icon: Clock, href: '/field-sales/schedules' },
+    '/completed-routes': { label: 'Completed Routes', category: 'Field & Logistics', icon: CheckCircle2, href: '/completed-routes' },
     '/leads/map': { label: 'Route Planner Map', category: 'Field & Logistics', icon: Map, href: '/leads/map' },
+
+    // Marketing
+    '/admin/marketing/lead-campaigns': { label: 'Lead Campaigns', category: 'Marketing', icon: Tag, href: '/admin/marketing/lead-campaigns' },
     '/admin/marketing/campaigns': { label: 'Campaigns & Queues', category: 'Marketing', icon: Mail, href: '/admin/marketing/campaigns' },
+    '/admin/marketing/nurture-journeys': { label: 'Nurture Journeys', category: 'Marketing', icon: Settings, href: '/admin/marketing/nurture-journeys' },
+    '/admin/marketing/nurture-report': { label: 'Nurture Reporting', category: 'Marketing', icon: BarChart2, href: '/admin/marketing/nurture-report' },
+    '/admin/marketing': { label: 'Templates & Library', category: 'Marketing', icon: FileText, href: '/admin/marketing' },
+    '/admin/marketing/lists': { label: 'Marketing Lists', category: 'Marketing', icon: ListFilter, href: '/admin/marketing/lists' },
+    '/leads/suppressions': { label: 'Suppression & Opt-Outs', category: 'Marketing', icon: ShieldAlert, href: '/leads/suppressions' },
+    '/admin/brand-bot': { label: 'Brand Bot', category: 'Marketing', icon: Settings, href: '/admin/brand-bot' },
+
+    // Partners
     '/lpo-leads': { label: 'Participating LPOs', category: 'Partners', icon: Building, href: '/lpo-leads' },
+    '/lpo-opportunities': { label: 'Shared Opportunities', category: 'Partners', icon: ArrowUpRight, href: '/lpo-opportunities' },
+
+    // Operations & History
     '/admin/tickets': { label: 'All Tickets', category: 'Operations & History', icon: Ticket, href: '/admin/tickets' },
-    '/scans': { label: 'Scan Events', category: 'Operations & History', icon: ScanLine, href: '/scans' },
+    '/admin/tickets/create': { label: 'Create Ticket', category: 'Operations & History', icon: PlusCircle, href: '/admin/tickets/create' },
+    '/admin/tickets/operations': { label: 'Operations Tickets', category: 'Operations & History', icon: Settings, href: '/admin/tickets/operations' },
+    '/admin/tickets/it': { label: 'IT Tickets', category: 'Operations & History', icon: Laptop, href: '/admin/tickets/it' },
+    '/admin/tickets/archived': { label: 'Archived Tickets', category: 'Operations & History', icon: Archive, href: '/admin/tickets/archived' },
+    '/scans': { label: 'Scan Events', category: 'Operations & History', icon: Package, href: '/scans' },
+    '/scans/top-users': { label: 'Top Users', category: 'Operations & History', icon: Star, href: '/scans/top-users' },
+    '/scans/top-users/contact-report': { label: 'Top Users Contact Report', category: 'Operations & History', icon: Phone, href: '/scans/top-users/contact-report' },
     '/appointments': { label: 'All Appointments', category: 'Operations & History', icon: Calendar, href: '/appointments' },
     '/calls': { label: 'All Calls', category: 'Operations & History', icon: Phone, href: '/calls' },
+    '/unassigned_calls': { label: 'Unassigned Calls', category: 'Operations & History', icon: HelpCircle, href: '/unassigned_calls' },
+    '/transcripts': { label: 'All Transcripts', category: 'Operations & History', icon: FileText, href: '/transcripts' },
+    '/check-ins': { label: 'Check-ins', category: 'Operations & History', icon: CheckSquare, href: '/check-ins' },
+
+    // Analytics & Reports
     '/sales-snapshot': { label: 'Sales Snapshot', category: 'Analytics & Reports', icon: Layers, href: '/sales-snapshot' },
     '/reports': { label: 'Outbound Reporting', category: 'Analytics & Reports', icon: BarChart2, href: '/reports' },
+    '/inbound-reporting': { label: 'Inbound Reporting', category: 'Analytics & Reports', icon: Inbox, href: '/inbound-reporting' },
+    '/admin/lifecycle-dashboard': { label: 'Lifecycle Dashboard', category: 'Analytics & Reports', icon: Activity, href: '/admin/lifecycle-dashboard' },
+    '/account-manager/reports': { label: 'AM Reporting', category: 'Analytics & Reports', icon: BarChart3, href: '/account-manager/reports' },
+    '/admin/tickets/reporting': { label: 'Ticket Reporting', category: 'Analytics & Reports', icon: BarChart2, href: '/admin/tickets/reporting' },
+    '/scans/report': { label: 'Scan Reporting', category: 'Analytics & Reports', icon: BarChart2, href: '/scans/report' },
+    '/field-activity-report': { label: 'Field Activity', category: 'Analytics & Reports', icon: BarChart3, href: '/field-activity-report' },
+    '/admin/deployments': { label: 'Deployment History', category: 'Analytics & Reports', icon: MapPin, href: '/admin/deployments' },
+
+    // Network
     '/admin/franchisees/directory': { label: 'Franchisees Directory', category: 'Network', icon: Building, href: '/admin/franchisees/directory' },
     '/admin/franchisees/territory-map': { label: 'Franchisee Territory Map', category: 'Network', icon: Map, href: '/admin/franchisees/territory-map' },
   };

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Bell, Check, Trash2, Info, AlertTriangle, Phone, FileText, Send } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bell, Check, Trash2, Info, AlertTriangle, Phone, FileText, Send, Clock, MessageSquare } from 'lucide-react';
 import {
   Popover,
   PopoverContent,
@@ -26,12 +27,15 @@ interface Notification {
     createdAt: string;
     isRead: boolean;
     callId?: string;
+    ticketId?: string;
+    link?: string;
 }
 
 export function NotificationCenter() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [open, setOpen] = useState(false);
     const { user } = useAuth();
+    const router = useRouter();
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -73,6 +77,8 @@ export function NotificationCenter() {
             case 'admin_broadcast': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
             case 'call_sync': return <Phone className="h-4 w-4 text-blue-500" />;
             case 'transcript_sync': return <FileText className="h-4 w-4 text-green-500" />;
+            case 'app_ticket_waiting': return <Clock className="h-4 w-4 text-amber-600 animate-pulse" />;
+            case 'app_ticket_update': return <MessageSquare className="h-4 w-4 text-blue-500" />;
             default: return <Info className="h-4 w-4 text-muted-foreground" />;
         }
     };
@@ -116,7 +122,16 @@ export function NotificationCenter() {
                                         "p-4 border-b last:border-0 transition-colors cursor-pointer hover:bg-muted/50 relative",
                                         !notif.isRead && "bg-primary/5"
                                     )}
-                                    onClick={() => !notif.isRead && handleMarkAsRead(notif.id)}
+                                    onClick={() => {
+                                        if (!notif.isRead) handleMarkAsRead(notif.id);
+                                        if (notif.link) {
+                                            router.push(notif.link);
+                                            setOpen(false);
+                                        } else if (notif.ticketId) {
+                                            router.push(`/app-tickets?ticketId=${notif.ticketId}`);
+                                            setOpen(false);
+                                        }
+                                    }}
                                 >
                                     {!notif.isRead && <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-full" />}
                                     <div className="flex items-start gap-3">

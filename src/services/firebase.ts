@@ -314,7 +314,23 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
                 getSubCollection<TaggedAddress>('leads', leadId, 'addresses', documentId())
             ]);
 
-            transformedLead.contacts = contacts;
+            let finalContacts = contacts;
+            if (contacts.length === 0 && (data.contactName || data.contactEmail || data.contactPhone)) {
+                const legacyName = typeof data.contactName === 'string' && data.contactName.trim().toLowerCase() !== 'n/a' ? data.contactName.trim() : '';
+                const legacyEmail = typeof data.contactEmail === 'string' && data.contactEmail.trim().toLowerCase() !== 'n/a' ? data.contactEmail.trim() : '';
+                const legacyPhone = typeof data.contactPhone === 'string' && data.contactPhone.trim().toLowerCase() !== 'n/a' ? data.contactPhone.trim() : '';
+                if (legacyName || legacyEmail || legacyPhone) {
+                    finalContacts = [{
+                        id: 'legacy-primary-contact',
+                        name: legacyName || 'Primary Contact',
+                        email: legacyEmail,
+                        phone: legacyPhone,
+                        isPrimary: true
+                    } as Contact];
+                }
+            }
+
+            transformedLead.contacts = finalContacts;
             transformedLead.activity = activities;
             transformedLead.emails = emails;
             transformedLead.notes = notes;
@@ -322,7 +338,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
             transformedLead.tasks = tasks;
             transformedLead.appointments = appointments;
             transformedLead.invoices = invoices;
-            transformedLead.contactCount = contacts.length;
+            transformedLead.contactCount = finalContacts.length;
             transformedLead.bucketHistory = bucketHistory;
             transformedLead.companyInsights = companyInsights;
             transformedLead.additionalAddresses = additionalAddresses;
@@ -461,7 +477,23 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
                 getSubCollection<any>('companies', companyId, 'scfs', documentId())
             ]);
 
-            transformedCompany.contacts = contacts;
+            let finalCompanyContacts = contacts;
+            if (contacts.length === 0 && (data.contactName || data.contactEmail || data.contactPhone)) {
+                const legacyName = typeof data.contactName === 'string' && data.contactName.trim().toLowerCase() !== 'n/a' ? data.contactName.trim() : '';
+                const legacyEmail = typeof data.contactEmail === 'string' && data.contactEmail.trim().toLowerCase() !== 'n/a' ? data.contactEmail.trim() : '';
+                const legacyPhone = typeof data.contactPhone === 'string' && data.contactPhone.trim().toLowerCase() !== 'n/a' ? data.contactPhone.trim() : '';
+                if (legacyName || legacyEmail || legacyPhone) {
+                    finalCompanyContacts = [{
+                        id: 'legacy-primary-contact',
+                        name: legacyName || 'Primary Contact',
+                        email: legacyEmail,
+                        phone: legacyPhone,
+                        isPrimary: true
+                    } as Contact];
+                }
+            }
+
+            transformedCompany.contacts = finalCompanyContacts;
             transformedCompany.activity = activities;
             transformedCompany.emails = emails;
             transformedCompany.notes = notes;
@@ -469,7 +501,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
             transformedCompany.tasks = tasks;
             transformedCompany.appointments = appointments;
             transformedCompany.invoices = invoices;
-            transformedCompany.contactCount = contacts.length;
+            transformedCompany.contactCount = finalCompanyContacts.length;
             transformedCompany.bucketHistory = bucketHistory;
             transformedCompany.companyInsights = companyInsights;
             transformedCompany.additionalAddresses = additionalAddresses;

@@ -358,6 +358,8 @@ export interface UserProfile {
   franchisee?: string
   currentLocation?: { lat: number; lng: number }
   activeRoute?: string[] // IDs of active StorableRoutes
+  pinnedNav?: string[]
+  pinnedPaths?: string[]
   userOnboardingStates?: Record<string, boolean>
   accessibleSharedMailboxes?: string[]
   leaveProfile?: {

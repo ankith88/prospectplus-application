@@ -53,7 +53,7 @@ import {
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { firestore as db, storage } from "@/lib/firebase";
-import { getAllUsers } from "@/services/firebase";
+import { getAllUsers, createNotification } from "@/services/firebase";
 
 interface AppTicket {
   id: string;
@@ -61,7 +61,7 @@ interface AppTicket {
   type: "feature" | "bug" | "issue" | "feedback";
   platform?: "ProspectPlus" | "LocalMile.Plus" | "LPO.Plus" | "Website";
   description: string;
-  status: "open" | "planned" | "in_progress" | "testing" | "completed" | "declined";
+  status: "open" | "planned" | "in_progress" | "testing" | "completed" | "declined" | "waiting_on_user";
   createdBy: string;
   createdByName: string;
   createdByEmail: string;
@@ -241,14 +241,15 @@ export default function AdminAppTicketsPage() {
         history: updatedHistory
       });
 
-      if (sendEmailVal) {
+      if (sendEmailVal || statusVal === "waiting_on_user") {
         const statusLabelMap: Record<string, string> = {
           open: "Open",
           planned: "Planned",
           in_progress: "In Progress",
           testing: "Testing",
           completed: "Completed",
-          declined: "Declined"
+          declined: "Declined",
+          waiting_on_user: "Waiting on User",
         };
         const statusColorMap: Record<string, string> = {
           open: "#3b82f6",
@@ -256,28 +257,51 @@ export default function AdminAppTicketsPage() {
           in_progress: "#f59e0b",
           testing: "#0891b2",
           completed: "#10b981",
-          declined: "#f43f5e"
+          declined: "#f43f5e",
+          waiting_on_user: "#d97706",
         };
         const statusLabel = statusLabelMap[statusVal] || statusVal;
         const statusColor = statusColorMap[statusVal] || "#64748b";
 
-        const emailHtml = `
+        const isWaiting = statusVal === "waiting_on_user";
+
+        // Dispatch In-App Notification to ticket creator
+        if (selectedTicket.createdBy) {
+          try {
+            await createNotification(selectedTicket.createdBy, {
+              title: isWaiting 
+                ? "Action Required: Super Admin is waiting on your input" 
+                : `App Ticket Update: ${statusLabel}`,
+              message: (emailNotesVal.trim() || adminNotesVal.trim())
+                ? (emailNotesVal.trim() || adminNotesVal.trim())
+                : `Your ticket "${selectedTicket.title}" status has been updated to ${statusLabel}.`,
+              type: isWaiting ? "app_ticket_waiting" : "app_ticket_update",
+              ticketId: selectedTicket.id,
+              link: `/app-tickets?ticketId=${selectedTicket.id}`,
+            });
+          } catch (notifErr) {
+            console.error("Failed to dispatch in-app notification:", notifErr);
+          }
+        }
+
+        if (sendEmailVal) {
+          const emailHtml = `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
-  <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">Ticket Progress Update</h2>
+  <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">${isWaiting ? '⚠️ Action Required on Your Support Request' : 'Ticket Progress Update'}</h2>
   <p>Hi <strong>${selectedTicket.createdByName}</strong>,</p>
-  <p>We wanted to let you know that there is an update on your request "<strong>${selectedTicket.title}</strong>".</p>
+  <p>${isWaiting ? 'The Super Admin is currently <strong>waiting on your input or clarification</strong> regarding your request:' : 'We wanted to let you know that there is an update on your request:'} "<strong>${selectedTicket.title}</strong>".</p>
   
-  <div style="margin: 20px 0; padding: 15px; background-color: #f8fafc; border-left: 4px solid #095c7b; border-radius: 4px; border-top: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
-    <p style="margin: 0 0 10px 0;"><strong>Current Status:</strong> <span style="background-color: ${statusColor}15; color: ${statusColor}; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 13px; text-transform: uppercase;">${statusLabel}</span></p>
-    ${emailNotesVal.trim() ? `<p style="margin: 0;"><strong>Notes / Progress details:</strong><br /><span style="color: #475569; font-size: 14px;">${emailNotesVal.trim().replace(/\n/g, '<br />')}</span></p>` : ''}
+  <div style="margin: 20px 0; padding: 15px; background-color: ${isWaiting ? '#fffbeb' : '#f8fafc'}; border-left: 4px solid ${isWaiting ? '#d97706' : '#095c7b'}; border-radius: 4px; border-top: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
+    <p style="margin: 0 0 10px 0;"><strong>Current Status:</strong> <span style="background-color: ${statusColor}20; color: ${statusColor}; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 13px; text-transform: uppercase;">${statusLabel}</span></p>
+    ${emailNotesVal.trim() ? `<p style="margin: 0;"><strong>Message from Super Admin:</strong><br /><span style="color: #475569; font-size: 14px;">${emailNotesVal.trim().replace(/\n/g, '<br />')}</span></p>` : ''}
   </div>
 
-  <p style="font-size: 14px; color: #475569;">You can view the full history and details on the Feedback & Ideas Board by clicking the button below:</p>
+  <p style="font-size: 14px; color: #475569;">Please view your ticket on the Feedback & Ideas Board to respond or provide additional details:</p>
   
   <div style="text-align: center; margin: 25px 0;">
     <a href="${window.location.origin}/app-tickets?ticketId=${selectedTicket.id}" 
        style="background-color: #095c7b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(9, 92, 123, 0.1);">
-       View on Feedback & Ideas Board
+       View Ticket & Respond
     </a>
   </div>
   
@@ -287,26 +311,29 @@ export default function AdminAppTicketsPage() {
 </div>
         `;
 
-        const response = await fetch('/api/campaigns/send-custom-email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            to: selectedTicket.createdByEmail,
-            subject: `[Progress Update] ${selectedTicket.title}`,
-            html: emailHtml,
-            customFrom: "ankith.ravindran@mailplus.com.au",
-            cc: ccEmailVal,
-          }),
-        });
+          const response = await fetch('/api/campaigns/send-custom-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              to: selectedTicket.createdByEmail,
+              subject: isWaiting ? `[Action Required] Super Admin is waiting on your response: ${selectedTicket.title}` : `[Progress Update] ${selectedTicket.title}`,
+              html: emailHtml,
+              customFrom: "ankith.ravindran@mailplus.com.au",
+              cc: ccEmailVal,
+            }),
+          });
 
-        const emailRes = await response.json();
-        if (!emailRes.success) {
-          console.error("Failed to send update email:", emailRes.message);
-          toast.warning("Ticket updated, but progress email failed: " + emailRes.message);
+          const emailRes = await response.json();
+          if (!emailRes.success) {
+            console.error("Failed to send update email:", emailRes.message);
+            toast.warning("Ticket updated, but email failed: " + emailRes.message);
+          } else {
+            toast.success(isWaiting ? "Action Required notification & email sent!" : "Progress update email sent successfully!");
+          }
         } else {
-          toast.success("Progress update email sent successfully!");
+          toast.success("Ticket updated & in-app notification sent.");
         }
       } else {
         toast.success("Ticket updated successfully.");
@@ -334,6 +361,8 @@ export default function AdminAppTicketsPage() {
         return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200">Completed</Badge>;
       case "declined":
         return <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-200">Declined</Badge>;
+      case "waiting_on_user":
+        return <Badge className="bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200 font-bold">Waiting on User</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
@@ -965,6 +994,7 @@ export default function AdminAppTicketsPage() {
       <div className="flex border-b border-gray-200 overflow-x-auto no-scrollbar scroll-smooth gap-2 pb-px">
         {[
           { value: "open", label: "Open", count: statusCounts["open"] || 0 },
+          { value: "waiting_on_user", label: "Waiting on User", count: statusCounts["waiting_on_user"] || 0 },
           { value: "planned", label: "Planned", count: statusCounts["planned"] || 0 },
           { value: "in_progress", label: "In Progress", count: statusCounts["in_progress"] || 0 },
           { value: "testing", label: "Testing", count: statusCounts["testing"] || 0 },
@@ -1307,12 +1337,30 @@ export default function AdminAppTicketsPage() {
                       className="w-full text-sm rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
                     >
                       <option value="open">Open</option>
+                      <option value="waiting_on_user">Waiting on User (Awaiting Response)</option>
                       <option value="planned">Planned</option>
                       <option value="in_progress">In Progress</option>
                       <option value="testing">Testing</option>
                       <option value="completed">Completed</option>
                       <option value="declined">Declined</option>
                     </select>
+                    <div className="pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 font-bold text-xs flex items-center justify-center gap-1.5"
+                        onClick={() => {
+                          setStatusVal("waiting_on_user");
+                          setSendEmailVal(true);
+                          setAdminNotesVal(prev => prev || "Super Admin is awaiting your response/clarification to proceed with this request.");
+                          setEmailNotesVal(prev => prev || "Super Admin is awaiting your response/clarification to proceed with this request.");
+                        }}
+                      >
+                        <Clock className="h-3.5 w-3.5 text-amber-600" />
+                        Quick Action: Mark as 'Waiting on User' & Notify
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">

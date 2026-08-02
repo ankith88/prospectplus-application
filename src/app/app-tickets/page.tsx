@@ -61,7 +61,7 @@ interface AppTicket {
   type: "feature" | "bug" | "issue" | "feedback";
   platform?: "ProspectPlus" | "LocalMile.Plus" | "LPO.Plus" | "Website";
   description: string;
-  status: "open" | "planned" | "in_progress" | "testing" | "completed" | "declined";
+  status: "open" | "planned" | "in_progress" | "testing" | "completed" | "declined" | "waiting_on_user";
   createdBy: string;
   createdByName: string;
   createdByEmail: string;
@@ -246,6 +246,8 @@ export default function AppTicketsPage() {
         return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200">Completed</Badge>;
       case "declined":
         return <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-200">Declined</Badge>;
+      case "waiting_on_user":
+        return <Badge className="bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200 font-bold">Waiting on User</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
@@ -284,24 +286,26 @@ export default function AppTicketsPage() {
 
   // Metrics computation for reporting
   const openTicketsCount = useMemo(() => tickets.filter(t => (t.status || "open") === "open").length, [tickets]);
+  const waitingTicketsCount = useMemo(() => tickets.filter(t => t.status === "waiting_on_user").length, [tickets]);
   const plannedTicketsCount = useMemo(() => tickets.filter(t => t.status === "planned").length, [tickets]);
   const inProgressTicketsCount = useMemo(() => tickets.filter(t => t.status === "in_progress").length, [tickets]);
   const testingTicketsCount = useMemo(() => tickets.filter(t => t.status === "testing").length, [tickets]);
   const completedTicketsCount = useMemo(() => tickets.filter(t => t.status === "completed").length, [tickets]);
   const declinedTicketsCount = useMemo(() => tickets.filter(t => t.status === "declined").length, [tickets]);
 
-  const activeTicketsCount = openTicketsCount + plannedTicketsCount + inProgressTicketsCount + testingTicketsCount;
+  const activeTicketsCount = openTicketsCount + waitingTicketsCount + plannedTicketsCount + inProgressTicketsCount + testingTicketsCount;
   const resolutionRate = tickets.length > 0 ? Math.round((completedTicketsCount / tickets.length) * 100) : 0;
 
   // Chart dataset calculations
   const statusData = useMemo(() => [
     { name: "Open", value: openTicketsCount, color: "#3b82f6" },
+    { name: "Waiting on User", value: waitingTicketsCount, color: "#d97706" },
     { name: "Planned", value: plannedTicketsCount, color: "#a855f7" },
     { name: "In Progress", value: inProgressTicketsCount, color: "#f59e0b" },
     { name: "Testing", value: testingTicketsCount, color: "#0891b2" },
     { name: "Completed", value: completedTicketsCount, color: "#10b981" },
     { name: "Declined", value: declinedTicketsCount, color: "#f43f5e" }
-  ].filter(item => item.value > 0), [openTicketsCount, plannedTicketsCount, inProgressTicketsCount, testingTicketsCount, completedTicketsCount, declinedTicketsCount]);
+  ].filter(item => item.value > 0), [openTicketsCount, waitingTicketsCount, plannedTicketsCount, inProgressTicketsCount, testingTicketsCount, completedTicketsCount, declinedTicketsCount]);
 
   const categoryCounts = useMemo(() => tickets.reduce((acc, t) => {
     const key = t.type || "feedback";
@@ -601,6 +605,22 @@ export default function AppTicketsPage() {
             statusFilter === "open" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-800"
           }`}>
             {openTicketsCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("waiting_on_user")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
+            statusFilter === "waiting_on_user"
+              ? "bg-amber-600 text-white shadow-xs ring-2 ring-amber-300"
+              : "bg-white text-amber-900 hover:bg-amber-50 border border-amber-300"
+          }`}
+        >
+          ⚠️ Waiting on User
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+            statusFilter === "waiting_on_user" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-900"
+          }`}>
+            {waitingTicketsCount}
           </span>
         </button>
 
@@ -999,6 +1019,19 @@ export default function AppTicketsPage() {
             </DialogHeader>
 
             <div className="space-y-6 py-4">
+              {/* Action Required Banner */}
+              {selectedTicket.status === 'waiting_on_user' && (
+                <div className="bg-amber-50 border-2 border-amber-300 text-amber-900 p-4 rounded-xl shadow-xs space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-sm text-amber-900">
+                    <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                    Action Required: Super Admin is waiting on your response
+                  </div>
+                  <p className="text-xs text-amber-800/90 leading-relaxed pl-7">
+                    The admin team has requested additional details or clarification on this request before proceeding. Please review the admin commentary below or update the ticket details.
+                  </p>
+                </div>
+              )}
+
               {/* Description */}
               <div className="space-y-2">
                 <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Notes & Details</h4>
