@@ -8,13 +8,18 @@ const db = getFirestore(adminApp);
 
 const CancellationSchema = z.object({
   leadId: z.string().optional(),
-  companyName: z.string(),
+  netsuiteId: z.string().optional(),
+  companyName: z.string().optional(),
   contactEmail: z.string().email().optional().or(z.literal('')),
   contactPhone: z.string().optional(),
   contactName: z.string().optional(),
+  cancellationTheme: z.string().optional(),
+  cancellationWhy: z.string().optional(),
   cancellationReason: z.string().default('Other'),
-  cancellationDate: z.string(), // ISO format or YYYY-MM-DD
+  cancellationNotes: z.string().optional(),
+  cancellationDate: z.string().optional(), // ISO format or YYYY-MM-DD
   trueServiceCancellationDate: z.string().optional(), // ISO format or YYYY-MM-DD
+  processedBy: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -22,42 +27,53 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validated = CancellationSchema.parse(body);
 
-    let leadId = validated.leadId;
+    const lookupId = validated.leadId || validated.netsuiteId;
+    let leadId = lookupId;
     let existingLead: Lead | null = null;
 
-    if (leadId) {
-      const leadSnap = await db.collection('leads').doc(leadId).get();
+    // 1. Lookup by document ID (leadId / netsuiteId)
+    if (lookupId) {
+      const leadSnap = await db.collection('leads').doc(lookupId).get();
       if (leadSnap.exists) {
         existingLead = { id: leadSnap.id, ...leadSnap.data() } as Lead;
+        leadId = leadSnap.id;
       }
     }
 
-    // Try finding by companyName or email if not found by leadId
-    if (!existingLead) {
-      const leadsRef = db.collection('leads');
-      
-      // Try companyName exact match
-      const qCompany = leadsRef.where('companyName', '==', validated.companyName);
-      const companySnap = await qCompany.get();
+    // 2. Lookup by netsuiteId field if not found by doc ID
+    if (!existingLead && validated.netsuiteId) {
+      const qNs = await db.collection('leads').where('netsuiteId', '==', validated.netsuiteId).limit(1).get();
+      if (!qNs.empty) {
+        const leadDoc = qNs.docs[0];
+        existingLead = { id: leadDoc.id, ...leadDoc.data() } as Lead;
+        leadId = leadDoc.id;
+      }
+    }
+
+    // 3. Lookup by companyName if still not found
+    if (!existingLead && validated.companyName) {
+      const companySnap = await db.collection('leads').where('companyName', '==', validated.companyName).limit(1).get();
       if (!companySnap.empty) {
         const leadDoc = companySnap.docs[0];
         existingLead = { id: leadDoc.id, ...leadDoc.data() } as Lead;
         leadId = leadDoc.id;
-      } else if (validated.contactEmail) {
-        // Try contact email match
-        const qEmail = leadsRef.where('customerServiceEmail', '==', validated.contactEmail);
-        const emailSnap = await qEmail.get();
-        if (!emailSnap.empty) {
-          const leadDoc = emailSnap.docs[0];
-          existingLead = { id: leadDoc.id, ...leadDoc.data() } as Lead;
-          leadId = leadDoc.id;
-        }
+      }
+    }
+
+    // 4. Lookup by contactEmail if still not found
+    if (!existingLead && validated.contactEmail) {
+      const emailSnap = await db.collection('leads').where('customerServiceEmail', '==', validated.contactEmail).limit(1).get();
+      if (!emailSnap.empty) {
+        const leadDoc = emailSnap.docs[0];
+        existingLead = { id: leadDoc.id, ...leadDoc.data() } as Lead;
+        leadId = leadDoc.id;
       }
     }
 
     const requestedDate = new Date().toISOString();
-    const cancellationDate = validated.cancellationDate;
+    const cancellationDate = validated.cancellationDate || requestedDate.split('T')[0];
     const trueServiceCancellationDate = validated.trueServiceCancellationDate || cancellationDate;
+    const companyName = validated.companyName || existingLead?.companyName || 'Unknown Company';
 
     let originalServices = existingLead?.services || [];
 
@@ -66,25 +82,32 @@ export async function POST(request: Request) {
       const leadRef = db.collection('leads').doc(leadId);
       await leadRef.update({
         bucket: 'customer_success',
+        customerStatus: 'Cancellation Requested',
         cancellationRequested: true,
         cancellationReason: validated.cancellationReason,
+        cancellationTheme: validated.cancellationTheme || 'NetSuite Request',
+        cancellationWhy: validated.cancellationWhy || '',
+        cancellationNotes: validated.cancellationNotes || '',
         cancellationdate: cancellationDate,
-        cancellationTheme: 'External Request',
         cancellationCategory: 'External Request',
+        ...(validated.processedBy ? { cancellationProcessedBy: validated.processedBy } : {}),
       });
     } else {
-      // Create new lead in customer_success bucket
+      // Create new lead record in customer_success bucket if not found
       const leadsRef = db.collection('leads');
       const newLeadDoc = await leadsRef.add({
-        companyName: validated.companyName,
+        companyName,
+        netsuiteId: validated.netsuiteId || '',
         customerServiceEmail: validated.contactEmail || '',
         customerPhone: validated.contactPhone || '',
         bucket: 'customer_success',
         customerStatus: 'Cancellation Requested',
         cancellationRequested: true,
         cancellationReason: validated.cancellationReason,
+        cancellationTheme: validated.cancellationTheme || 'NetSuite Request',
+        cancellationWhy: validated.cancellationWhy || '',
+        cancellationNotes: validated.cancellationNotes || '',
         cancellationdate: cancellationDate,
-        cancellationTheme: 'External Request',
         cancellationCategory: 'External Request',
         dateLeadEntered: requestedDate,
         services: [],
@@ -102,27 +125,32 @@ export async function POST(request: Request) {
     const cancellationsRef = db.collection('cancellations');
     const cancelDoc = await cancellationsRef.add({
       leadId,
-      companyName: validated.companyName,
+      netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',
+      companyName,
       contactName: validated.contactName || '',
       contactEmail: validated.contactEmail || '',
       contactPhone: validated.contactPhone || '',
       requestedDate,
       cancellationDate,
       trueServiceCancellationDate,
+      cancellationTheme: validated.cancellationTheme || 'NetSuite Request',
+      cancellationWhy: validated.cancellationWhy || '',
       cancellationReason: validated.cancellationReason,
+      cancellationNotes: validated.cancellationNotes || '',
+      processedBy: validated.processedBy || 'NetSuite Integration',
       status: 'Pending',
       originalServices,
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    // Also log an activity in the lead profile activity subcollection
+    // Log activity in the lead profile activity subcollection
     const activityRef = db.collection('leads').doc(leadId).collection('activity');
     await activityRef.add({
       type: 'Update',
       date: requestedDate,
-      notes: `Cancellation enquiry submitted via External API. Reason: ${validated.cancellationReason}. Requested Stop Date: ${cancellationDate}.`,
-      author: 'External API',
-      syncedWithNetSuite: false
+      notes: `Cancellation request received from NetSuite.${validated.processedBy ? ` (Submitted by: ${validated.processedBy})` : ''}\nTheme: ${validated.cancellationTheme || 'N/A'}\nReason: ${validated.cancellationReason}\nNotes: ${validated.cancellationNotes || 'None'}\nRequested Stop Date: ${cancellationDate}`,
+      author: validated.processedBy ? `NetSuite (${validated.processedBy})` : 'NetSuite Integration',
+      syncedWithNetSuite: true
     });
 
     return NextResponse.json({
@@ -141,10 +169,11 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
     
-    console.error('Error processing cancellation request:', error);
+    console.error('Error processing NetSuite cancellation request:', error);
     return NextResponse.json({
       success: false,
       error: 'Internal server error'
     }, { status: 500 });
   }
 }
+

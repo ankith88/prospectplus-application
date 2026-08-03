@@ -37,6 +37,7 @@ import {
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy';
 import { logActivity } from '@/services/firebase';
+import { ServiceSelectionDialog } from '@/components/service-selection-dialog';
 
 const REASONS = ['Price too high', 'Competitor offer', 'Service Quality issues', 'No longer needed', 'Business closed', 'Other'];
 const COLORS = ['#095c7b', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#a78bfa'];
@@ -62,6 +63,63 @@ export default function CancellationDashboard() {
   const [cancelNotes, setCancelNotes] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Resell workflow states
+  const [fullLeadForResell, setFullLeadForResell] = useState<Lead | null>(null);
+  const [isResellDialogOpen, setIsResellDialogOpen] = useState(false);
+  const [loadingResellLead, setLoadingResellLead] = useState(false);
+
+  const handleOpenResellDialog = async () => {
+    if (!selectedRequest) return;
+    setLoadingResellLead(true);
+    try {
+      const leadSnap = await getDoc(doc(firestore, 'leads', selectedRequest.leadId));
+      if (leadSnap.exists()) {
+        setFullLeadForResell({ id: leadSnap.id, ...leadSnap.data() } as Lead);
+        setIsResellDialogOpen(true);
+      } else {
+        console.error("Lead not found for resell dialog:", selectedRequest.leadId);
+      }
+    } catch (e) {
+      console.error("Failed to load lead for resell:", e);
+    } finally {
+      setLoadingResellLead(false);
+    }
+  };
+
+  const handleResellSuccess = async () => {
+    if (!selectedRequest) return;
+    try {
+      const userDisplayName = userProfile?.displayName || userProfile?.email || 'System';
+      const processedAt = new Date().toISOString();
+
+      await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), {
+        status: 'Saved',
+        saveStrategy: 'Resell / Quote Sent',
+        notes: saveNotes ? `Resell / Quote issued. Notes: ${saveNotes}` : 'Resell / Quote issued to customer',
+        processedBy: userDisplayName,
+        processedAt
+      });
+
+      await updateDoc(doc(firestore, 'leads', selectedRequest.leadId), {
+        cancellationRequested: false,
+        customerStatus: 'Won'
+      });
+
+      await logActivity(selectedRequest.leadId, {
+        type: 'Update',
+        date: processedAt,
+        notes: `Customer Saved from Cancellation via Resell / Quote Update.`,
+        author: userDisplayName,
+      });
+
+      setIsResellDialogOpen(false);
+      setProcessModalOpen(false);
+      fetchRequests();
+    } catch (e) {
+      console.error("Error finalizing resell save for cancellation request:", e);
+    }
+  };
 
   // Dynamic hierarchy states
   const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
@@ -724,116 +782,94 @@ export default function CancellationDashboard() {
 
           {processMode === 'save' ? (
             <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="saveStrategy" className="font-bold text-[#095c7b]">Save Strategy</Label>
-                <Select 
-                  value={saveStrategy} 
-                  onValueChange={(val: any) => setSaveStrategy(val)}
-                >
-                  <SelectTrigger id="saveStrategy">
-                    <SelectValue placeholder="Select strategy..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Keep Existing">Keep Existing Services (No change)</SelectItem>
-                    <SelectItem value="Change Frequency & Price">Change Frequency & Price</SelectItem>
-                    <SelectItem value="Keep Frequency Update Price">Keep Frequency but Update Price</SelectItem>
-                    <SelectItem value="Remove Service">Remove Service</SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Existing Services & Price Points Overview */}
+              <div className="border border-slate-200 p-3.5 rounded-xl bg-slate-50 space-y-2.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#095c7b] flex items-center gap-1.5">
+                    <DollarSign className="w-4 h-4 text-[#095c7b]" /> Current Active Services & Price Points
+                  </span>
+                  <Badge variant="outline" className="text-xs font-semibold text-[#095c7b] bg-[#095c7b]/5 border-[#095c7b]/20">
+                    Est. MRR: ${calculateMRR(selectedRequest?.originalServices || []).toFixed(2)}/mo
+                  </Badge>
+                </div>
+
+                {(!selectedRequest?.originalServices || selectedRequest.originalServices.length === 0) ? (
+                  <div className="text-xs text-slate-500 italic py-1">No existing active services listed on this request.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedRequest.originalServices.map((srv, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200 text-xs shadow-2xs">
+                        <div>
+                          <div className="font-bold text-slate-800">{srv.name}</div>
+                          <div className="text-slate-500 text-[11px] mt-0.5">
+                            Frequency: <span className="font-medium text-slate-700">{Array.isArray(srv.frequency) ? srv.frequency.join(', ') : (srv.frequency || 'Adhoc')}</span>
+                          </div>
+                        </div>
+                        <div className="font-bold text-[#095c7b] bg-[#095c7b]/5 px-3 py-1.5 rounded-md border border-[#095c7b]/15 text-xs">
+                          ${srv.rate ? srv.rate.toFixed(2) : '0.00'} / trip
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Service Selection / Editor */}
-              {saveStrategy !== 'Keep Existing' && (
-                <div className="space-y-4 border border-[#095c7b]/15 p-4 rounded-xl bg-slate-50/50">
-                  <h4 className="font-bold text-sm text-[#095c7b] flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-[#eaf143] fill-[#eaf143]" /> Modify Customer Services
-                  </h4>
-                  
-                  {editServices.length === 0 ? (
-                    <div className="text-xs text-slate-400 italic">No services selected to modify.</div>
-                  ) : (
-                    <div className="space-y-4">
-                      {editServices.map((service, idx) => (
-                        <div key={idx} className="bg-white border border-slate-200 rounded-lg p-3 space-y-2 relative shadow-xs">
-                          
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-sm text-[#095c7b]">{service.name}</span>
-                            {saveStrategy === 'Remove Service' && (
-                              <Button 
-                                size="icon" 
-                                variant="ghost" 
-                                className="h-8 w-8 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-full"
-                                onClick={() => handleRemoveService(idx)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-
-                          {/* Rate input */}
-                          {(saveStrategy === 'Change Frequency & Price' || saveStrategy === 'Keep Frequency Update Price') && (
-                            <div className="flex items-center gap-2 max-w-[150px]">
-                              <Label className="text-xs font-semibold text-slate-500">Rate ($)</Label>
-                              <div className="relative">
-                                <span className="absolute left-2.5 top-2 text-slate-400 text-xs">$</span>
-                                <Input
-                                  type="number"
-                                  className="h-8 pl-6 pr-2 text-xs"
-                                  value={service.rate || 0}
-                                  onChange={(e) => handleUpdateServiceRate(idx, parseFloat(e.target.value) || 0)}
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Frequency checkboxes */}
-                          {saveStrategy === 'Change Frequency & Price' && (
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-semibold text-slate-500">Frequency</Label>
-                              
-                              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                                {(['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const).map(day => {
-                                  const isChecked = Array.isArray(service.frequency) && service.frequency.includes(day);
-                                  return (
-                                    <div key={day} className="flex items-center gap-1.5">
-                                      <Checkbox
-                                        id={`${service.name}-${day}-${idx}`}
-                                        checked={isChecked}
-                                        onCheckedChange={(checked) => handleUpdateServiceFreq(idx, day, !!checked)}
-                                      />
-                                      <Label htmlFor={`${service.name}-${day}-${idx}`} className="text-xs font-medium text-slate-700">{day}</Label>
-                                    </div>
-                                  );
-                                })}
-
-                                <div className="flex items-center gap-1.5 border-l border-slate-200 pl-4">
-                                  <Checkbox
-                                    id={`${service.name}-adhoc-${idx}`}
-                                    checked={service.frequency === 'Adhoc'}
-                                    onCheckedChange={(checked) => handleUpdateServiceFreq(idx, 'Adhoc', !!checked)}
-                                  />
-                                  <Label htmlFor={`${service.name}-adhoc-${idx}`} className="text-xs font-medium text-slate-700">Adhoc</Label>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              {/* Action Card: Launch Resell / Send New Quote Workflow */}
+              <div className="bg-emerald-50/80 border border-emerald-200/90 p-4 rounded-xl space-y-3 shadow-2xs">
+                <div className="flex items-start gap-2.5">
+                  <Sparkles className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5 fill-emerald-100" />
+                  <div>
+                    <h4 className="text-sm font-bold text-emerald-900">Change Service, Frequency or Price</h4>
+                    <p className="text-xs text-emerald-700 mt-0.5">
+                      Launch the official Resell / Send New Quote workflow to modify pricing or pickup days and issue an updated commencement form for customer sign-off.
+                    </p>
+                  </div>
                 </div>
-              )}
+                <Button
+                  onClick={handleOpenResellDialog}
+                  disabled={loadingResellLead}
+                  className="w-full bg-[#095c7b] hover:bg-[#074760] text-white font-semibold text-xs py-2.5 shadow-sm rounded-lg flex items-center justify-center gap-2"
+                >
+                  {loadingResellLead ? (
+                    <Loader />
+                  ) : (
+                    <>
+                      <TrendingUp className="h-4 w-4" />
+                      Modify Services & Send Resell Quote
+                    </>
+                  )}
+                </Button>
+              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="saveNotes" className="font-bold text-slate-700">Retention Notes</Label>
-                <Textarea
-                  id="saveNotes"
-                  placeholder="Enter notes about how the customer was saved, discounts offered, or general agreement..."
-                  value={saveNotes}
-                  onChange={(e) => setSaveNotes(e.target.value)}
-                  className="min-h-[100px]"
-                />
+              {/* Alternative Quick / Direct Save */}
+              <div className="space-y-4 pt-3 border-t border-slate-200/80">
+                <div className="space-y-2">
+                  <Label htmlFor="saveStrategy" className="font-bold text-slate-700 text-xs uppercase tracking-wider">
+                    Or Save with Existing Terms
+                  </Label>
+                  <Select 
+                    value={saveStrategy} 
+                    onValueChange={(val: any) => setSaveStrategy(val)}
+                  >
+                    <SelectTrigger id="saveStrategy">
+                      <SelectValue placeholder="Select strategy..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Keep Existing">Keep Existing Services (No change)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="saveNotes" className="font-bold text-slate-700">Retention Notes</Label>
+                  <Textarea
+                    id="saveNotes"
+                    placeholder="Enter notes about how the customer was saved, discounts offered, or general agreement..."
+                    value={saveNotes}
+                    onChange={(e) => setSaveNotes(e.target.value)}
+                    className="min-h-[90px]"
+                  />
+                </div>
               </div>
 
               <DialogFooter>
@@ -959,6 +995,17 @@ export default function CancellationDashboard() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Service Selection / Resell Dialog for Cancellation Save */}
+      {isResellDialogOpen && fullLeadForResell && (
+        <ServiceSelectionDialog
+          isOpen={isResellDialogOpen}
+          onOpenChange={setIsResellDialogOpen}
+          lead={fullLeadForResell}
+          mode="Resell"
+          onSuccess={handleResellSuccess}
+        />
+      )}
 
     </div>
   );
