@@ -46,7 +46,7 @@ import { Loader, FullScreenLoader } from "@/components/ui/loader"
 import { NotificationCenter } from "@/components/notification-center"
 import { UniversalSearch } from "@/components/universal-search"
 import { CommandPalette } from "@/components/command-palette"
-import { salesReps, ALLOWED_ASK_UIDS } from "@/lib/constants"
+import { salesReps, ALLOWED_ASK_UIDS, EXCLUDED_LOGIN_ACTIVITY_UIDS } from "@/lib/constants"
 import { DailyAreaLogDialog } from "@/components/daily-area-log-dialog"
 import { UnassignedCallDialog } from "@/components/unassigned-call-dialog"
 import { getTodayDeploymentForUser } from "@/services/firebase"
@@ -1942,25 +1942,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
                 {expandedStates["admin-settings"] && (
                   <SidebarMenuSub>
-                    {userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' && (
-                      <>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={isActive('/admin/login-report')}>
-                            <Link href="/admin/login-report">
-                              <Clock className="h-4 w-4" />
-                              <span>Login Activity</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={isActive('/admin/app-tickets')}>
-                            <Link href="/admin/app-tickets">
-                              <Ticket className="h-4 w-4" />
-                              <span>App Tickets</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </>
+                    {isSuperAdmin && !EXCLUDED_LOGIN_ACTIVITY_UIDS.includes(userProfile?.uid || '') && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive('/admin/login-report')}>
+                          <Link href="/admin/login-report">
+                            <Clock className="h-4 w-4" />
+                            <span>Login Activity</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {isSuperAdmin && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive('/admin/app-tickets')}>
+                          <Link href="/admin/app-tickets">
+                            <Ticket className="h-4 w-4" />
+                            <span>App Tickets</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
                     )}
                     {isSuperAdmin && (
                     <SidebarMenuSubItem>

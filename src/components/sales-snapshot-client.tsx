@@ -91,7 +91,7 @@ const getStageHelpContent = (stageName: string, count: number, totalLeads: numbe
         <div className="space-y-1.5">
           <p className="font-bold text-indigo-900 border-b pb-1">Active Engagement Stage</p>
           <p><strong className="text-indigo-800">{count} Stage Count:</strong> Leads actively in outreach or qualification dialogues ({percentage}% of pipeline).</p>
-          <p className="text-slate-600">Includes statuses: <em>Contacted, Connected, In Progress, Reschedule, In Qualification, Pre Qualified</em>.</p>
+          <p className="text-slate-600">Includes statuses: <em>Contacted, Connected, In Progress, Reschedule, In Qualification, Pre Qualified, Appointment Booked</em>.</p>
         </div>
       );
     case 'High-Intent / Opportunity':
@@ -196,10 +196,10 @@ const getPipelinePhase = (status: string): string => {
   if (['New', 'Unqualified'].includes(s)) {
     return 'New / Prospecting';
   }
-  if (['Contacted', 'Connected', 'In Progress', 'Reschedule', 'In Qualification', 'Pre Qualified'].includes(s)) {
+  if (['Contacted', 'Connected', 'In Progress', 'Reschedule', 'In Qualification', 'Pre Qualified', 'Appointment Booked'].includes(s)) {
     return 'Active Engagement';
   }
-  if (['Qualified', 'Prospect Opportunity', 'Customer Opportunity', 'LocalMile Opportunity', 'Quote Sent', 'Trialing ShipMate', 'Free Trial', 'LocalMile Pending', 'LPO Review', 'High Touch'].includes(s)) {
+  if (['Qualified', 'Prospect Opportunity', 'Customer Opportunity', 'LocalMile Opportunity', 'Quote Sent', 'Quote Accepted', 'Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Pending', 'LPO Review', 'LPO Opportunity', 'High Touch'].includes(s)) {
     return 'High-Intent / Opportunity';
   }
   if (['Won', 'Signed', 'Customer'].includes(s)) {

@@ -3,28 +3,30 @@ import type { Lead } from '@/lib/types';
 /**
  * Calculates monthly recurring revenue (MRR) for a lead or company object based on its configured services, rates, and frequencies.
  */
-export function calculateMonthlyValue(lead: Lead | any): number {
+export function calculateMonthlyValue(lead: Lead | any, ignoreStatusCheck: boolean = false): number {
   if (!lead) return 0;
 
   const currentStatus = (lead.customerStatus || lead.status || '').trim();
 
-  // Filter out lost / inactive leads
-  const inactiveStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
-  if (inactiveStatuses.includes(currentStatus)) {
-    return 0;
-  }
+  if (!ignoreStatusCheck) {
+    // Filter out lost / inactive leads
+    const inactiveStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+    if (inactiveStatuses.includes(currentStatus)) {
+      return 0;
+    }
 
-  // Allowed statuses where MRR is calculated
-  const applicableStatuses = [
-    'Quote Sent', 'Won', 'Signed', 'Customer', 'LocalMile Opportunity',
-    'LocalMile Pending', 'Trialing LocalMile', 'Free Trial', 'Trialing ShipMate',
-    'Prospect Opportunity', 'Customer Opportunity', 'LPO Review', 'High Touch',
-    'Qualified', 'Appointment Booked', 'In Qualification', 'In Progress',
-    'Connected', 'Priority Lead', 'Priority Field Lead', 'New'
-  ];
+    // Allowed statuses where MRR is calculated
+    const applicableStatuses = [
+      'Quote Sent', 'Won', 'Signed', 'Customer', 'LocalMile Opportunity',
+      'LocalMile Pending', 'Trialing LocalMile', 'Free Trial', 'Trialing ShipMate',
+      'Prospect Opportunity', 'Customer Opportunity', 'LPO Review', 'High Touch',
+      'Qualified', 'Appointment Booked', 'In Qualification', 'In Progress',
+      'Connected', 'Priority Lead', 'Priority Field Lead', 'New'
+    ];
 
-  if (currentStatus && !applicableStatuses.includes(currentStatus)) {
-    return 0;
+    if (currentStatus && !applicableStatuses.includes(currentStatus)) {
+      return 0;
+    }
   }
 
   let totalMonthlyValue = 0;

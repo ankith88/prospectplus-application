@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info, CheckCircle, AlertTriangle, MapPin } from 'lucide-react';
 import { MultiSelectCombobox, type Option } from '../ui/multi-select-combobox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -590,7 +590,7 @@ export default function AMReportsDashboard() {
     };
 
     const calculateRawLeadValue = (lead: Lead): number => {
-        return calculateMonthlyValueUtil(lead);
+        return calculateMonthlyValueUtil(lead, true);
     };
 
     // Value Calculation Logic (Pipeline MRR excludes Signed leads)
@@ -1029,40 +1029,84 @@ export default function AMReportsDashboard() {
         const groupedByStatus: Record<string, SummaryGroup> = {};
         const groupedByFranchisee: Record<string, SummaryGroup> = {};
 
-        const addToGroup = (record: Record<string, SummaryGroup>, key: string, leadItem: any) => {
+        const getGroup = (record: Record<string, SummaryGroup>, key: string): SummaryGroup => {
             if (!record[key]) {
                 record[key] = { key, totalLeads: 0, totalValue: 0, totalActivities: 0, totalDurationMinutes: 0, leads: [] };
             }
-            if (!record[key].leads.find((l: any) => l.id === leadItem.id)) {
-                record[key].totalLeads++;
-                record[key].totalValue += leadItem.value;
-                record[key].totalActivities += leadItem.activityCount;
-                record[key].totalDurationMinutes += leadItem.durationMinutes;
-                record[key].leads.push(leadItem);
-            }
+            return record[key];
         };
 
-        valueByLead.forEach(leadItem => {
-            addToGroup(groupedByStatus, leadItem.status || 'Unknown', leadItem);
-            
-            const originalLead = displayedLeads.find(l => l.id === leadItem.id);
-            const franchisee = originalLead?.franchisee || 'Unassigned';
-            addToGroup(groupedByFranchisee, franchisee, leadItem);
-            
-            const leadActivities = allActivities.filter(a => a.leadId === leadItem.id);
-            const amAuthors = Array.from(new Set(leadActivities.map(a => a.author)));
-            if (amAuthors.length === 0) {
-                addToGroup(groupedByAM, 'No AM Activity', leadItem);
-            } else {
-                amAuthors.forEach(author => {
-                    addToGroup(groupedByAM, author, leadItem);
+        // Populate Performance Summary tables using all displayedLeads so counts match header totals
+        displayedLeads.forEach(lead => {
+            const isLost = isLostLead(lead);
+            const isSigned = !isLost && isSignedLead(lead);
+            const rawVal = calculateRawLeadValue(lead);
+            const status = isLost ? (lead.customerStatus || lead.status || 'Lost') : (isSigned ? 'Signed' : (lead.customerStatus || lead.status || 'New'));
+            const franchisee = lead.franchisee || 'Unassigned';
+            const amAssigned = lead.accountManagerAssigned || 'Unassigned';
+
+            const leadActivities = allActivities.filter(a => a.leadId === lead.id);
+            const leadDuration = leadActivities.reduce((sum, act) => sum + act.durationMinutes, 0);
+
+            const summaryLeadItem = {
+                id: lead.id,
+                name: lead.companyName,
+                value: rawVal,
+                status: status,
+                leadType: lead.leadType || 'Unknown',
+                activityCount: leadActivities.length,
+                durationMinutes: leadDuration,
+                lastContacted: leadActivities.length > 0 ? leadActivities[0].date : null
+            };
+
+            // Group By Status
+            const stGroup = getGroup(groupedByStatus, status || 'Unknown');
+            stGroup.totalLeads += 1;
+            stGroup.totalValue += rawVal;
+            stGroup.totalActivities += leadActivities.length;
+            stGroup.totalDurationMinutes += leadDuration;
+            stGroup.leads.push(summaryLeadItem);
+
+            // Group By Franchisee
+            const frGroup = getGroup(groupedByFranchisee, franchisee);
+            frGroup.totalLeads += 1;
+            frGroup.totalValue += rawVal;
+            frGroup.totalActivities += leadActivities.length;
+            frGroup.totalDurationMinutes += leadDuration;
+            frGroup.leads.push(summaryLeadItem);
+
+            // Group By AM (Leads count & value attributed to assigned AM)
+            const amGroup = getGroup(groupedByAM, amAssigned);
+            amGroup.totalLeads += 1;
+            amGroup.totalValue += rawVal;
+            amGroup.leads.push(summaryLeadItem);
+        });
+
+        // Attribute activities and activity duration to activity author for AM breakdown
+        allActivities.forEach(act => {
+            const author = act.author || 'Unassigned';
+            const amGroup = getGroup(groupedByAM, author);
+            amGroup.totalActivities += 1;
+            amGroup.totalDurationMinutes += act.durationMinutes || 0;
+
+            const leadObj = displayedLeads.find(l => l.id === act.leadId);
+            if (leadObj && !amGroup.leads.some(l => l.id === act.leadId)) {
+                amGroup.leads.push({
+                    id: leadObj.id,
+                    name: leadObj.companyName,
+                    value: calculateRawLeadValue(leadObj),
+                    status: isLostLead(leadObj) ? (leadObj.customerStatus || leadObj.status || 'Lost') : (isSignedLead(leadObj) ? 'Signed' : (leadObj.customerStatus || leadObj.status || 'New')),
+                    leadType: leadObj.leadType || 'Unknown',
+                    activityCount: 1,
+                    durationMinutes: act.durationMinutes || 0,
+                    lastContacted: act.date
                 });
             }
         });
 
-        const summaryByAM = Object.values(groupedByAM).sort((a,b) => b.totalValue - a.totalValue);
-        const summaryByStatus = Object.values(groupedByStatus).sort((a,b) => b.totalValue - a.totalValue);
-        const summaryByFranchisee = Object.values(groupedByFranchisee).sort((a,b) => b.totalValue - a.totalValue);
+        const summaryByAM = Object.values(groupedByAM).sort((a,b) => b.totalValue !== a.totalValue ? b.totalValue - a.totalValue : b.totalActivities - a.totalActivities);
+        const summaryByStatus = Object.values(groupedByStatus).sort((a,b) => b.totalValue !== a.totalValue ? b.totalValue - a.totalValue : b.totalLeads - a.totalLeads);
+        const summaryByFranchisee = Object.values(groupedByFranchisee).sort((a,b) => b.totalValue !== a.totalValue ? b.totalValue - a.totalValue : b.totalLeads - a.totalLeads);
 
         return {
             totalCalls,
@@ -1424,6 +1468,68 @@ export default function AMReportsDashboard() {
         };
     }, [displayedLeads]);
 
+    const isDirectOutOfTerritory = (l: Lead): boolean => {
+        const status = (l.status || '').toLowerCase();
+        const customerStatus = (l.customerStatus || '').toLowerCase();
+        return status === 'out of territory' || customerStatus === 'out of territory';
+    };
+
+    const isLostOutOfTerritory = (l: Lead): boolean => {
+        if (isDirectOutOfTerritory(l)) return false;
+        const status = (l.status || '').toLowerCase();
+        const customerStatus = (l.customerStatus || '').toLowerCase();
+        const nsStatus = (l.netsuiteLeadStatus || '').toLowerCase();
+        const isLost = 
+            status.includes('lost') || 
+            status.includes('unqualified') || 
+            customerStatus.includes('lost') || 
+            customerStatus.includes('unqualified') || 
+            nsStatus.includes('lost') || 
+            nsStatus.includes('unqualified');
+        
+        if (!isLost) return false;
+        const reason = (l.statusReason || (l as any).reason || (l as any).cancellationReason || (l as any).statusReasonDetails || '').toLowerCase();
+        return reason.includes('out of territory');
+    };
+
+    const isAnyOutOfTerritory = (l: Lead): boolean => {
+        const reason = (l.statusReason || (l as any).reason || (l as any).cancellationReason || (l as any).statusReasonDetails || '').toLowerCase();
+        return isDirectOutOfTerritory(l) || isLostOutOfTerritory(l) || reason.includes('out of territory');
+    };
+
+    const outOfTerritoryMetrics = useMemo(() => {
+        const directLeads = displayedLeads.filter(isDirectOutOfTerritory);
+        const lostLeads = displayedLeads.filter(isLostOutOfTerritory);
+        const totalLeads = displayedLeads.filter(isAnyOutOfTerritory);
+
+        const byAmMap: Record<string, { am: string; direct: number; lost: number; total: number; leads: Lead[] }> = {};
+
+        displayedLeads.forEach(l => {
+            if (isAnyOutOfTerritory(l)) {
+                const am = l.accountManagerAssigned || 'Unassigned';
+                if (!byAmMap[am]) {
+                    byAmMap[am] = { am, direct: 0, lost: 0, total: 0, leads: [] };
+                }
+                byAmMap[am].total += 1;
+                byAmMap[am].leads.push(l);
+                if (isDirectOutOfTerritory(l)) {
+                    byAmMap[am].direct += 1;
+                } else {
+                    byAmMap[am].lost += 1;
+                }
+            }
+        });
+
+        const byAm = Object.values(byAmMap).sort((a, b) => b.total - a.total);
+
+        return {
+            directLeads,
+            lostLeads,
+            totalLeads,
+            byAm
+        };
+    }, [displayedLeads]);
+
     const summaryChartData = useMemo(() => {
         const data = summaryTab === 'am' ? metrics.summaryByAM : 
                      summaryTab === 'status' ? metrics.summaryByStatus : 
@@ -1690,6 +1796,16 @@ export default function AMReportsDashboard() {
             {/* Top KPI Cards */}
             <div id="step-am-metrics" className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
                 <StatCard 
+                    title="Filtered Leads" 
+                    value={displayedLeads.length} 
+                    icon={Users} 
+                    description="Matching all selected filters"
+                    onClick={() => {
+                        setDrillDownData({ title: "Filtered Leads", leads: displayedLeads });
+                    }}
+                    helpContent="Total number of leads assigned to Account Managers that match the selected filtering criteria."
+                />
+                <StatCard 
                     title="Total Activities" 
                     value={metrics.totalActivities} 
                     icon={ActivityIcon} 
@@ -1700,17 +1816,6 @@ export default function AMReportsDashboard() {
                         setDrillDownData({ title: "Leads with Activities", leads: activeLeads });
                     }}
                     helpContent="Total number of touchpoint activities logged, including Calls, Emails, and Meetings during the selected period."
-                />
-                <StatCard 
-                    title="Pipeline MRR" 
-                    value={`$${metrics.totalPipelineValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} 
-                    icon={DollarSign} 
-                    description="Active Pipeline (Excl. Signed/Lost)"
-                    onClick={() => {
-                        const mrrLeads = displayedLeads.filter(l => calculateMonthlyValue(l) > 0);
-                        setDrillDownData({ title: "Leads with Active Pipeline MRR", leads: mrrLeads });
-                    }}
-                    helpContent="Active Monthly Recurring Revenue in pipeline based on quotes sent or active opportunities (excluding Signed and Lost leads)."
                 />
                 <StatCard 
                     title="Leads with MRR" 
@@ -1724,21 +1829,15 @@ export default function AMReportsDashboard() {
                     helpContent="Count of active assigned leads in pipeline (excluding Signed and Lost) that have a quoted MRR value."
                 />
                 <StatCard 
-                    title="Signed MRR" 
-                    value={`$${metrics.totalSignedMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} 
+                    title="Pipeline MRR" 
+                    value={`$${metrics.totalPipelineValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} 
                     icon={DollarSign} 
-                    description="Won / Closed Customer Revenue"
+                    description="Active Pipeline (Excl. Signed/Lost)"
                     onClick={() => {
-                        const isLostLead = (l: Lead) => {
-                            const st = l.customerStatus || l.status || '';
-                            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
-                            return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
-                        };
-                        const dateRangeFilter = appliedActivityDateRange || appliedLeadEnteredDateRange;
-                        const signedLeads = displayedLeads.filter(l => !isLostLead(l) && isSignedLead(l) && isSignedUpInDateRange(l, dateRangeFilter));
-                        setDrillDownData({ title: "Signed Leads & Companies", leads: signedLeads });
+                        const mrrLeads = displayedLeads.filter(l => calculateMonthlyValue(l) > 0);
+                        setDrillDownData({ title: "Leads with Active Pipeline MRR", leads: mrrLeads });
                     }}
-                    helpContent="Total Monthly Recurring Revenue generated by active Signed customers and won leads (excluding Lost)."
+                    helpContent="Active Monthly Recurring Revenue in pipeline based on quotes sent or active opportunities (excluding Signed and Lost leads)."
                 />
                 <StatCard 
                     title="Signed Leads" 
@@ -1758,14 +1857,21 @@ export default function AMReportsDashboard() {
                     helpContent="Total count of active leads and companies that have been marked as Signed / Won (excluding Lost)."
                 />
                 <StatCard 
-                    title="Filtered Leads" 
-                    value={displayedLeads.length} 
-                    icon={Users} 
-                    description="Matching all selected filters"
+                    title="Signed MRR" 
+                    value={`$${metrics.totalSignedMrr.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} 
+                    icon={DollarSign} 
+                    description="Won / Closed Customer Revenue"
                     onClick={() => {
-                        setDrillDownData({ title: "Filtered Leads", leads: displayedLeads });
+                        const isLostLead = (l: Lead) => {
+                            const st = l.customerStatus || l.status || '';
+                            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+                            return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
+                        };
+                        const dateRangeFilter = appliedActivityDateRange || appliedLeadEnteredDateRange;
+                        const signedLeads = displayedLeads.filter(l => !isLostLead(l) && isSignedLead(l) && isSignedUpInDateRange(l, dateRangeFilter));
+                        setDrillDownData({ title: "Signed Leads & Companies", leads: signedLeads });
                     }}
-                    helpContent="Total number of leads assigned to Account Managers that match the selected filtering criteria."
+                    helpContent="Total Monthly Recurring Revenue generated by active Signed customers and won leads (excluding Lost)."
                 />
             </div>
 
@@ -1908,6 +2014,110 @@ export default function AMReportsDashboard() {
                                     </TableBody>
                                 </Table>
                             </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Out of Territory Leads Summary Card */}
+                    <Card className="border-[#095c7b]/10 shadow-sm mt-6">
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
+                                        <MapPin className="h-5 w-5 text-amber-600" />
+                                        <span>Out of Territory & Lost (Out of Territory) Leads</span>
+                                        <SectionHelp content="Overview of leads assigned to AMs that are designated as Out of Territory by status or lost reason." />
+                                    </CardTitle>
+                                    <CardDescription>Breakdown of Out of Territory status leads and leads marked Lost with reason Out of Territory.</CardDescription>
+                                </div>
+                                <Badge variant="secondary" className="text-xs font-semibold">
+                                    Total: {outOfTerritoryMetrics.totalLeads.length}
+                                </Badge>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-6 space-y-6">
+                            {/* Stat tiles */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div 
+                                    className="p-4 rounded-xl border bg-amber-50/50 border-amber-200 cursor-pointer hover:bg-amber-100/50 transition-colors"
+                                    onClick={() => setDrillDownData({ title: "Total Out of Territory Leads", leads: outOfTerritoryMetrics.totalLeads })}
+                                >
+                                    <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Total Out of Territory</div>
+                                    <div className="text-2xl font-bold text-amber-900 mt-1">{outOfTerritoryMetrics.totalLeads.length}</div>
+                                    <p className="text-xs text-amber-600 mt-1">Direct Status + Marked Lost</p>
+                                </div>
+                                <div 
+                                    className="p-4 rounded-xl border bg-blue-50/50 border-blue-200 cursor-pointer hover:bg-blue-100/50 transition-colors"
+                                    onClick={() => setDrillDownData({ title: "Direct Out of Territory Status Leads", leads: outOfTerritoryMetrics.directLeads })}
+                                >
+                                    <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Out of Territory (Status)</div>
+                                    <div className="text-2xl font-bold text-blue-900 mt-1">{outOfTerritoryMetrics.directLeads.length}</div>
+                                    <p className="text-xs text-blue-600 mt-1">Status set to Out of Territory</p>
+                                </div>
+                                <div 
+                                    className="p-4 rounded-xl border bg-rose-50/50 border-rose-200 cursor-pointer hover:bg-rose-100/50 transition-colors"
+                                    onClick={() => setDrillDownData({ title: "Lost - Out of Territory Leads", leads: outOfTerritoryMetrics.lostLeads })}
+                                >
+                                    <div className="text-xs font-semibold text-rose-700 uppercase tracking-wider">Lost (Reason: Out of Territory)</div>
+                                    <div className="text-2xl font-bold text-rose-900 mt-1">{outOfTerritoryMetrics.lostLeads.length}</div>
+                                    <p className="text-xs text-rose-600 mt-1">Status is Lost with Out of Territory reason</p>
+                                </div>
+                            </div>
+
+                            {/* Table by AM */}
+                            {outOfTerritoryMetrics.byAm.length > 0 ? (
+                                <div className="border rounded-lg overflow-hidden">
+                                    <Table>
+                                        <TableHeader className="bg-slate-50">
+                                            <TableRow>
+                                                <TableHead>Account Manager</TableHead>
+                                                <TableHead className="text-right">Direct Out of Territory</TableHead>
+                                                <TableHead className="text-right">Lost (Out of Territory Reason)</TableHead>
+                                                <TableHead className="text-right font-bold">Total Out of Territory</TableHead>
+                                                <TableHead className="text-right">Action</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {outOfTerritoryMetrics.byAm.map((row) => (
+                                                <TableRow key={row.am} className="hover:bg-slate-50/80">
+                                                    <TableCell className="font-semibold text-[#095c7b]">{row.am}</TableCell>
+                                                    <TableCell 
+                                                        className="text-right font-medium text-blue-600 cursor-pointer hover:underline"
+                                                        onClick={() => setDrillDownData({ title: `${row.am} - Direct Out of Territory Status Leads`, leads: row.leads.filter(isDirectOutOfTerritory) })}
+                                                    >
+                                                        {row.direct}
+                                                    </TableCell>
+                                                    <TableCell 
+                                                        className="text-right font-medium text-rose-600 cursor-pointer hover:underline"
+                                                        onClick={() => setDrillDownData({ title: `${row.am} - Lost (Out of Territory Reason) Leads`, leads: row.leads.filter(isLostOutOfTerritory) })}
+                                                    >
+                                                        {row.lost}
+                                                    </TableCell>
+                                                    <TableCell 
+                                                        className="text-right font-bold text-slate-900 cursor-pointer hover:underline"
+                                                        onClick={() => setDrillDownData({ title: `${row.am} - Total Out of Territory Leads`, leads: row.leads })}
+                                                    >
+                                                        {row.total}
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="sm"
+                                                            className="h-7 text-xs font-semibold text-[#095c7b]"
+                                                            onClick={() => setDrillDownData({ title: `${row.am} - Out of Territory Leads`, leads: row.leads })}
+                                                        >
+                                                            View Leads
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            ) : (
+                                <div className="py-6 text-center text-muted-foreground italic bg-slate-50/50 rounded-lg border">
+                                    No Out of Territory leads found for the selected filter criteria.
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

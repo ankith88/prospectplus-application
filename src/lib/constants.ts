@@ -85,7 +85,14 @@ export const salesReps = [
 
 export const SUPER_ADMIN_UIDS = [
   'ncyhwLtOG1W7TZ43PkYCcObeCAf2', // Original Admin
-  'a543AEr3TcaHyj4c1Gh0fJoQ6UB2'  // New Super Admin
+  'a543AEr3TcaHyj4c1Gh0fJoQ6UB2', // New Super Admin
+  'xmvOICErk9WvpS8Psc9Geys2QQ62',
+  'L3hjsZYldoVjVr8MAFRJt0bSGL12'
+];
+
+export const EXCLUDED_LOGIN_ACTIVITY_UIDS = [
+  'xmvOICErk9WvpS8Psc9Geys2QQ62',
+  'L3hjsZYldoVjVr8MAFRJt0bSGL12'
 ];
 
 export const ALLOWED_ASK_UIDS = [

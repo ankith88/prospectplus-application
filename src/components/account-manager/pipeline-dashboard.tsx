@@ -402,6 +402,15 @@ export default function PipelineDashboard() {
         });
     }, [filteredLeads]);
 
+    const noShowAppointmentsLeads = useMemo(() => {
+        return filteredLeads.filter(lead => {
+            return lead.appointments?.some(app => {
+                const apptStatus = app.appointmentStatus;
+                return apptStatus === 'No Show';
+            });
+        });
+    }, [filteredLeads]);
+
     const priorityLeads = useMemo(() => {
         const today = startOfDay(new Date()).getTime();
         return filteredLeads.filter(lead => {
@@ -783,7 +792,7 @@ export default function PipelineDashboard() {
                     <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
                         <TabsList id="step-retention-segments" className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
                             <TabsTrigger value="appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Appointments <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{pastPendingAppointmentsLeads.length + todayAppointmentsLeads.length + futureAppointmentsLeads.length}</Badge>
+                                Appointments <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{pastPendingAppointmentsLeads.length + todayAppointmentsLeads.length + futureAppointmentsLeads.length + noShowAppointmentsLeads.length}</Badge>
                             </TabsTrigger>
                             <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                                 Priority <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{priorityLeads.length}</Badge>
@@ -900,7 +909,7 @@ export default function PipelineDashboard() {
                                             {pastPendingAppointmentsLeads.length}
                                         </Badge>
                                     </div>
-                                    <LeadGrid leads={pastPendingAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} emptyMessage="No past pending appointments." />
+                                    <LeadGrid leads={pastPendingAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} isPastSection={true} emptyMessage="No past pending appointments." />
                                 </div>
                             )}
 
@@ -924,6 +933,17 @@ export default function PipelineDashboard() {
                                     </Badge>
                                 </div>
                                 <LeadGrid leads={futureAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} emptyMessage="No future appointments scheduled." />
+                            </div>
+
+                            <div className="space-y-3 pt-4 border-t border-amber-200/80">
+                                <div className="flex items-center gap-2 px-1">
+                                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                                    <h3 className="text-sm font-bold text-amber-700 uppercase tracking-wider">No Show Appointments</h3>
+                                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs">
+                                        {noShowAppointmentsLeads.length}
+                                    </Badge>
+                                </div>
+                                <LeadGrid leads={noShowAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} appointmentColumnHeader="No Show Appointment" isNoShowSection={true} emptyMessage="No appointments marked as No Show." />
                             </div>
                         </TabsContent>
                         <TabsContent value="priority" className="m-0 h-full">
@@ -1001,6 +1021,7 @@ function LeadGrid({
     canUnassign,
     appointmentColumnHeader,
     isPastSection = false,
+    isNoShowSection = false,
     emptyMessage = "No leads in this bucket."
 }: { 
     leads: Lead[], 
@@ -1016,6 +1037,7 @@ function LeadGrid({
     canUnassign?: boolean,
     appointmentColumnHeader?: string,
     isPastSection?: boolean,
+    isNoShowSection?: boolean,
     emptyMessage?: string
 }) {
     if (leads.length === 0) {
@@ -1073,7 +1095,7 @@ function LeadGrid({
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedLeads.map(lead => (
-                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} />
+                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} isPastSection={isPastSection} isNoShowSection={isNoShowSection} />
                 ))}
             </div>
         );
@@ -1093,7 +1115,7 @@ function LeadGrid({
                         <AccordionContent className="pt-2 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {groupedLeads[status].map(lead => (
-                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} />
+                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} isPastSection={isPastSection} isNoShowSection={isNoShowSection} />
                                 ))}
                             </div>
                         </AccordionContent>
@@ -1149,7 +1171,15 @@ function LeadGrid({
                         const allAppointments = Array.from(allAppointmentsMap.values());
 
                         let upcomingAppointment: any = null;
-                        if (isPastSection) {
+                        if (isNoShowSection) {
+                            upcomingAppointment = allAppointments
+                                .filter(a => a.appointmentStatus === 'No Show')
+                                .sort((a, b) => {
+                                    const dA = parseApptDate(a)?.getTime() || 0;
+                                    const dB = parseApptDate(b)?.getTime() || 0;
+                                    return dB - dA;
+                                })[0];
+                        } else if (isPastSection) {
                             upcomingAppointment = allAppointments
                                 .filter(a => {
                                     const parsed = parseApptDate(a);
@@ -1331,6 +1361,11 @@ function LeadGrid({
                                                     return parsed ? format(parsed, 'MMM d, yyyy h:mm a') : (upcomingAppointment.date || upcomingAppointment.appointmentDate || '-');
                                                 })()}
                                             </span>
+                                            {upcomingAppointment.appointmentStatus === 'No Show' && (
+                                                <Badge variant="outline" className="ml-1 text-[10px] bg-amber-50 text-amber-700 border-amber-200 uppercase font-semibold">
+                                                    No Show
+                                                </Badge>
+                                            )}
                                         </div>
                                     ) : (
                                         <span className="text-slate-400 italic text-xs">-</span>
@@ -1412,7 +1447,7 @@ function LeadGrid({
     );
 }
 
-function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accountManagers, canReassign, canUnassign }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, onAmReassign?: (leadId: string, amName: string) => void, accountManagers?: UserProfile[], canReassign?: boolean, canUnassign?: boolean }) {
+function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accountManagers, canReassign, canUnassign, isPastSection = false, isNoShowSection = false }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, onAmReassign?: (leadId: string, amName: string) => void, accountManagers?: UserProfile[], canReassign?: boolean, canUnassign?: boolean, isPastSection?: boolean, isNoShowSection?: boolean }) {
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
     const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
     
@@ -1441,17 +1476,44 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
     lead.appointments?.forEach(a => allAppointmentsMap.set(a.id, a));
     const allAppointments = Array.from(allAppointmentsMap.values());
 
-    const upcomingAppointment = allAppointments
-        .filter(a => {
-            const parsed = parseApptDate(a);
-            const status = a.appointmentStatus || 'Pending';
-            return parsed && status === 'Pending';
-        })
-        .sort((a, b) => {
-            const dA = parseApptDate(a)?.getTime() || 0;
-            const dB = parseApptDate(b)?.getTime() || 0;
-            return dA - dB;
-        })[0] || allAppointments[0];
+    let upcomingAppointment: any = null;
+    if (isNoShowSection) {
+        upcomingAppointment = allAppointments
+            .filter(a => a.appointmentStatus === 'No Show')
+            .sort((a, b) => {
+                const dA = parseApptDate(a)?.getTime() || 0;
+                const dB = parseApptDate(b)?.getTime() || 0;
+                return dB - dA;
+            })[0];
+    } else if (isPastSection) {
+        upcomingAppointment = allAppointments
+            .filter(a => {
+                const parsed = parseApptDate(a);
+                const status = a.appointmentStatus || 'Pending';
+                return parsed && startOfDay(parsed).getTime() < startOfDay(now).getTime() && status === 'Pending';
+            })
+            .sort((a, b) => {
+                const dA = parseApptDate(a)?.getTime() || 0;
+                const dB = parseApptDate(b)?.getTime() || 0;
+                return dB - dA;
+            })[0];
+    } else {
+        upcomingAppointment = allAppointments
+            .filter(a => {
+                const parsed = parseApptDate(a);
+                const status = a.appointmentStatus || 'Pending';
+                return parsed && status === 'Pending';
+            })
+            .sort((a, b) => {
+                const dA = parseApptDate(a)?.getTime() || 0;
+                const dB = parseApptDate(b)?.getTime() || 0;
+                return dA - dB;
+            })[0];
+    }
+
+    if (!upcomingAppointment && allAppointments.length > 0) {
+        upcomingAppointment = allAppointments[0];
+    }
         
     return (
         <Card className="hover:shadow-md transition-shadow cursor-pointer border-[#095c7b]/10 group flex flex-col justify-between" onClick={onClick}>
@@ -1632,14 +1694,21 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                         ) : null;
                     })()}
                     {upcomingAppointment && (
-                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#095c7b]/10">
-                            <Calendar className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
-                            <span className="text-xs font-semibold text-[#095c7b]">
-                                Appt: {(() => {
-                                    const parsed = parseApptDate(upcomingAppointment);
-                                    return parsed ? format(parsed, 'MMM d, yyyy h:mm a') : (upcomingAppointment.date || upcomingAppointment.appointmentDate || '-');
-                                })()}
-                            </span>
+                        <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-[#095c7b]/10">
+                            <div className="flex items-center gap-2">
+                                <Calendar className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
+                                <span className="text-xs font-semibold text-[#095c7b]">
+                                    Appt: {(() => {
+                                        const parsed = parseApptDate(upcomingAppointment);
+                                        return parsed ? format(parsed, 'MMM d, yyyy h:mm a') : (upcomingAppointment.date || upcomingAppointment.appointmentDate || '-');
+                                    })()}
+                                </span>
+                            </div>
+                            {upcomingAppointment.appointmentStatus === 'No Show' && (
+                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 uppercase font-semibold shrink-0">
+                                    No Show
+                                </Badge>
+                            )}
                         </div>
                     )}
                 </div>

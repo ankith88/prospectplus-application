@@ -102,6 +102,36 @@ const isActiveLocalMileLead = (l: Lead) => {
     return activeStatuses.includes(status);
 };
 
+const isDirectOutOfTerritory = (l: Lead): boolean => {
+    const status = (l.status || '').toLowerCase();
+    const customerStatus = (l.customerStatus || '').toLowerCase();
+    return status === 'out of territory' || customerStatus === 'out of territory';
+};
+
+const isLostOutOfTerritory = (l: Lead): boolean => {
+    if (isDirectOutOfTerritory(l)) return false;
+    const status = (l.status || '').toLowerCase();
+    const customerStatus = (l.customerStatus || '').toLowerCase();
+    const nsStatus = (l.netsuiteLeadStatus || '').toLowerCase();
+    const isLost = 
+        status.includes('lost') || 
+        status.includes('unqualified') || 
+        customerStatus.includes('lost') || 
+        customerStatus.includes('unqualified') || 
+        nsStatus.includes('lost') || 
+        nsStatus.includes('unqualified');
+    
+    if (!isLost) return false;
+    const reason = (l.statusReason || (l as any).reason || (l as any).cancellationReason || (l as any).statusReasonDetails || '').toLowerCase();
+    return reason.includes('out of territory');
+};
+
+const isAnyOutOfTerritory = (l: Lead): boolean => {
+    const reason = (l.statusReason || (l as any).reason || (l as any).cancellationReason || (l as any).statusReasonDetails || '').toLowerCase();
+    return isDirectOutOfTerritory(l) || isLostOutOfTerritory(l) || reason.includes('out of territory');
+};
+
+
 
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (
   <Popover>
@@ -468,7 +498,8 @@ export default function InboundReportsClientPage({
 
             const apptsList = apptSnap.docs.map((doc: any) => ({
                 id: doc.id,
-                ...doc.data()
+                ...doc.data(),
+                leadId: doc.data()?.leadId || doc.ref.parent?.parent?.id,
             } as Appointment));
             setAllAppointments(apptsList);
         } else {
@@ -538,6 +569,11 @@ export default function InboundReportsClientPage({
 
             const isInbound = (l: Lead) => {
                 if (l.bucket === 'inbound') return true;
+                if (l.inboundDetails || (l as any).inboundType) return true;
+                const sourceLower = (l.customerSource || '').toLowerCase();
+                const leadSourceLower = ((l as any).leadSource || '').toLowerCase();
+                if (sourceLower.includes('inbound') || sourceLower.includes('website') || sourceLower.includes('web') || sourceLower.includes('online') || sourceLower.includes('registration') || sourceLower.includes('form') || sourceLower.includes('direct') || sourceLower.includes('organic')) return true;
+                if (leadSourceLower.includes('inbound') || leadSourceLower.includes('website') || leadSourceLower.includes('web')) return true;
                 const hasWebsite = Object.entries(l).some(([key, val]) => {
                     if (typeof val !== 'string') return false;
                     const keyLower = key.toLowerCase();
@@ -559,7 +595,8 @@ export default function InboundReportsClientPage({
 
             const apptsList = apptSnap.docs.map((doc: any) => ({
                 id: doc.id,
-                ...doc.data()
+                ...doc.data(),
+                leadId: doc.data()?.leadId || doc.ref.parent?.parent?.id,
             } as Appointment));
             setAllAppointments(apptsList);
 
@@ -1379,10 +1416,11 @@ export default function InboundReportsClientPage({
         return true;
     });
 
+    const allInboundLeadIds = new Set(allLeads.map(l => l.id));
     const filteredAppointments = allAppointments.filter(a => {
-        if (!a.leadId) return false;
+        if (!a.leadId || !allInboundLeadIds.has(a.leadId)) return false;
         const isForFilteredLead = filteredLeadIds.has(a.leadId);
-        const apptDateStr = a.date || a.duedate || a.appointmentDate || a.createdAt;
+        const apptDateStr = a.date || a.duedate || a.appointmentDate || (a as any).starttime || a.createdAt;
         const isApptInDateRange = isDateInRange(apptDateStr);
         return isForFilteredLead || isApptInDateRange;
     });
@@ -1846,6 +1884,39 @@ export default function InboundReportsClientPage({
       leadSet.forEach(id => allActionedLeadIdsSet.add(id));
     });
 
+    const directOutOfTerritoryLeads = filteredLeads.filter(isDirectOutOfTerritory);
+    const lostOutOfTerritoryLeads = filteredLeads.filter(isLostOutOfTerritory);
+    const totalOutOfTerritoryLeads = filteredLeads.filter(isAnyOutOfTerritory);
+
+    const amOutOfTerritoryMap = new Map<string, { am: string; direct: number; lost: number; total: number; leads: Lead[] }>();
+    allAMs.forEach(am => {
+      amOutOfTerritoryMap.set(am, { am, direct: 0, lost: 0, total: 0, leads: [] });
+    });
+
+    totalOutOfTerritoryLeads.forEach(l => {
+      const am = getLeadAM(l);
+      if (!amOutOfTerritoryMap.has(am)) {
+        amOutOfTerritoryMap.set(am, { am, direct: 0, lost: 0, total: 0, leads: [] });
+      }
+      const item = amOutOfTerritoryMap.get(am)!;
+      item.total += 1;
+      item.leads.push(l);
+      if (isDirectOutOfTerritory(l)) {
+        item.direct += 1;
+      } else {
+        item.lost += 1;
+      }
+    });
+
+    const outOfTerritoryByAM = Array.from(amOutOfTerritoryMap.values()).filter(x => x.total > 0).sort((a, b) => b.total - a.total);
+
+    const outOfTerritoryData = {
+      directLeads: directOutOfTerritoryLeads,
+      lostLeads: lostOutOfTerritoryLeads,
+      totalLeads: totalOutOfTerritoryLeads,
+      byAM: outOfTerritoryByAM,
+    };
+
     return {
         inboundJourneyStats,
         shipmateJourney,
@@ -1857,6 +1928,7 @@ export default function InboundReportsClientPage({
         quoteSentCount,
         conversionRate,
         hotLeadsRate,
+        outOfTerritoryData,
         netsuiteStatusData,
         customerStatusData,
         leadTypeData,
@@ -1884,37 +1956,44 @@ export default function InboundReportsClientPage({
         allActionedLeadIdsSet,
         amCalledLeadIdsMap,
         allCalledLeadIdsSet,
-        inboundAppointmentOutcomeData: {
-          completed: filteredAppointments.filter(a => a.appointmentStatus === 'Completed'),
-          rescheduled: filteredAppointments.filter(a => a.appointmentStatus === 'Rescheduled'),
-          cancelled: filteredAppointments.filter(a => a.appointmentStatus === 'Cancelled'),
-          noShow: filteredAppointments.filter(a => a.appointmentStatus === 'No Show'),
-          pending: filteredAppointments.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending'),
-          overduePending: filteredAppointments.filter(a => {
+        inboundAppointmentOutcomeData: (() => {
+          const allInboundLeadMap = new Map(allLeads.map(l => [l.id, l]));
+          const getLeadsForAppts = (appts: Appointment[]) => {
+            const leadIds = Array.from(new Set(appts.map(a => a.leadId)));
+            return leadIds.map(id => allInboundLeadMap.get(id)).filter(Boolean) as Lead[];
+          };
+          const completedAppts = filteredAppointments.filter(a => a.appointmentStatus === 'Completed');
+          const rescheduledAppts = filteredAppointments.filter(a => a.appointmentStatus === 'Rescheduled');
+          const cancelledAppts = filteredAppointments.filter(a => a.appointmentStatus === 'Cancelled');
+          const noShowAppts = filteredAppointments.filter(a => a.appointmentStatus === 'No Show');
+          const pendingAppts = filteredAppointments.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending');
+          const overduePendingAppts = filteredAppointments.filter(a => {
             const status = a.appointmentStatus || 'Pending';
             if (status !== 'Pending') return false;
-            const apptDateStr = a.date || a.duedate || a.appointmentDate || a.createdAt;
+            const apptDateStr = a.date || a.duedate || a.appointmentDate || (a as any).starttime || a.createdAt;
             if (!apptDateStr) return false;
             const apptDate = parseDateString(apptDateStr);
             return apptDate ? apptDate < startOfDay(new Date()) : false;
-          }),
-          total: filteredAppointments.length,
-          completedLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => a.appointmentStatus === 'Completed').map(a => a.leadId)).has(l.id)),
-          rescheduledLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => a.appointmentStatus === 'Rescheduled').map(a => a.leadId)).has(l.id)),
-          cancelledLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => a.appointmentStatus === 'Cancelled').map(a => a.leadId)).has(l.id)),
-          noShowLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => a.appointmentStatus === 'No Show').map(a => a.leadId)).has(l.id)),
-          pendingLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending').map(a => a.leadId)).has(l.id)),
-          overduePendingLeads: filteredLeads.filter(l => new Set(filteredAppointments.filter(a => {
-            const status = a.appointmentStatus || 'Pending';
-            if (status !== 'Pending') return false;
-            const apptDateStr = a.date || a.duedate || a.appointmentDate || a.createdAt;
-            if (!apptDateStr) return false;
-            const apptDate = parseDateString(apptDateStr);
-            return apptDate ? apptDate < startOfDay(new Date()) : false;
-          }).map(a => a.leadId)).has(l.id)),
-        }
+          });
+
+          return {
+            completed: completedAppts,
+            rescheduled: rescheduledAppts,
+            cancelled: cancelledAppts,
+            noShow: noShowAppts,
+            pending: pendingAppts,
+            overduePending: overduePendingAppts,
+            total: filteredAppointments.length,
+            completedLeads: getLeadsForAppts(completedAppts),
+            rescheduledLeads: getLeadsForAppts(rescheduledAppts),
+            cancelledLeads: getLeadsForAppts(cancelledAppts),
+            noShowLeads: getLeadsForAppts(noShowAppts),
+            pendingLeads: getLeadsForAppts(pendingAppts),
+            overduePendingLeads: getLeadsForAppts(overduePendingAppts),
+          };
+        })()
     };
-  }, [filteredLeads, allActivities, allAppointments, allUsers, appliedFilters]);
+  }, [filteredLeads, allLeads, allActivities, allAppointments, allUsers, appliedFilters]);
 
   const drillDownAvailableStatuses = useMemo(() => {
     if (!drillDownData) return [];
@@ -2297,6 +2376,17 @@ export default function InboundReportsClientPage({
                         leads: stats.shipmateJourney.leads.filter(l => !isLostLead(l)) 
                     })}
                     helpContent="Total inbound leads that started a ShipMate trial in this period."
+                />
+                <StatCard 
+                    title="Out of Territory" 
+                    value={stats.outOfTerritoryData.totalLeads.length} 
+                    icon={MapPin} 
+                    description={`${stats.outOfTerritoryData.directLeads.length} direct, ${stats.outOfTerritoryData.lostLeads.length} lost`}
+                    onClick={() => setDrillDownData({ 
+                        title: "Out of Territory Leads (All)", 
+                        leads: stats.outOfTerritoryData.totalLeads 
+                    })}
+                    helpContent="Inbound leads that are out of territory, including direct 'Out of Territory' status and leads marked Lost with reason 'Out of Territory'."
                 />
             </div>
             )}
@@ -3062,6 +3152,132 @@ export default function InboundReportsClientPage({
                             <p className="text-xs text-rose-600 mt-1">Meeting cancelled</p>
                         </div>
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* Out of Territory Leads Breakdown */}
+            <Card id="step-report-out-of-territory" className="w-full shadow-md border-primary/10 mt-6">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <MapPin className="h-5 w-5 text-amber-600" />
+                                <span>Out of Territory & Lost (Out of Territory) Breakdown</span>
+                                <SectionHelp content="Inbound leads that fall outside operating service areas. Shows leads with status 'Out of Territory' as well as leads marked 'Lost' with reason 'Out of Territory'." />
+                            </CardTitle>
+                            <CardDescription>
+                                Track leads identified as Out of Territory by status or lost reason across Account Managers.
+                            </CardDescription>
+                        </div>
+                        <Badge variant="secondary" className="text-sm font-semibold">
+                            Total Out of Territory: {stats.outOfTerritoryData.totalLeads.length}
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    {/* Summary Tiles */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div 
+                            className="p-4 rounded-xl border bg-amber-50/50 border-amber-200 cursor-pointer hover:bg-amber-100/50 transition-colors"
+                            onClick={() => setDrillDownData({ title: "Total Out of Territory Leads", leads: stats.outOfTerritoryData.totalLeads })}
+                        >
+                            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Total Out of Territory</div>
+                            <div className="text-2xl font-bold text-amber-900 mt-1">{stats.outOfTerritoryData.totalLeads.length}</div>
+                            <p className="text-xs text-amber-600 mt-1">Direct Status + Marked Lost</p>
+                        </div>
+
+                        <div 
+                            className="p-4 rounded-xl border bg-blue-50/50 border-blue-200 cursor-pointer hover:bg-blue-100/50 transition-colors"
+                            onClick={() => setDrillDownData({ title: "Direct Out of Territory Status Leads", leads: stats.outOfTerritoryData.directLeads })}
+                        >
+                            <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Out of Territory (Status)</div>
+                            <div className="text-2xl font-bold text-blue-900 mt-1">{stats.outOfTerritoryData.directLeads.length}</div>
+                            <p className="text-xs text-blue-600 mt-1">Status set to Out of Territory</p>
+                        </div>
+
+                        <div 
+                            className="p-4 rounded-xl border bg-rose-50/50 border-rose-200 cursor-pointer hover:bg-rose-100/50 transition-colors"
+                            onClick={() => setDrillDownData({ title: "Lost - Out of Territory Leads", leads: stats.outOfTerritoryData.lostLeads })}
+                        >
+                            <div className="text-xs font-semibold text-rose-700 uppercase tracking-wider">Lost (Reason: Out of Territory)</div>
+                            <div className="text-2xl font-bold text-rose-900 mt-1">{stats.outOfTerritoryData.lostLeads.length}</div>
+                            <p className="text-xs text-rose-600 mt-1">Status is Lost with Out of Territory reason</p>
+                        </div>
+                    </div>
+
+                    {/* AM Breakdown Table */}
+                    {stats.outOfTerritoryData.byAM.length > 0 ? (
+                        <div className="border rounded-lg overflow-hidden">
+                            <Table>
+                                <TableHeader className="bg-slate-50">
+                                    <TableRow>
+                                        <TableHead>Account Manager / Agent</TableHead>
+                                        <TableHead className="text-right">Direct Out of Territory</TableHead>
+                                        <TableHead className="text-right">Lost (Out of Territory Reason)</TableHead>
+                                        <TableHead className="text-right font-bold">Total Out of Territory</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {stats.outOfTerritoryData.byAM.map((row) => (
+                                        <TableRow key={row.am} className="hover:bg-muted/50">
+                                            <TableCell className="font-medium text-foreground">{row.am}</TableCell>
+                                            <TableCell 
+                                                className="text-right font-semibold text-blue-600 cursor-pointer hover:underline"
+                                                onClick={() => setDrillDownData({ title: `${row.am} - Direct Out of Territory Leads`, leads: row.leads.filter(isDirectOutOfTerritory) })}
+                                            >
+                                                {row.direct}
+                                            </TableCell>
+                                            <TableCell 
+                                                className="text-right font-semibold text-rose-600 cursor-pointer hover:underline"
+                                                onClick={() => setDrillDownData({ title: `${row.am} - Lost (Out of Territory Reason) Leads`, leads: row.leads.filter(isLostOutOfTerritory) })}
+                                            >
+                                                {row.lost}
+                                            </TableCell>
+                                            <TableCell 
+                                                className="text-right font-bold text-slate-900 dark:text-slate-100 cursor-pointer hover:underline"
+                                                onClick={() => setDrillDownData({ title: `${row.am} - Total Out of Territory Leads`, leads: row.leads })}
+                                            >
+                                                {row.total}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm"
+                                                    className="h-7 text-xs font-semibold text-primary"
+                                                    onClick={() => setDrillDownData({ title: `${row.am} - Out of Territory Leads`, leads: row.leads })}
+                                                >
+                                                    View Leads
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                                <TableFooter className="bg-slate-100/80 font-bold">
+                                    <TableRow>
+                                        <TableCell>Total</TableCell>
+                                        <TableCell className="text-right text-blue-700">{stats.outOfTerritoryData.directLeads.length}</TableCell>
+                                        <TableCell className="text-right text-rose-700">{stats.outOfTerritoryData.lostLeads.length}</TableCell>
+                                        <TableCell className="text-right text-slate-900">{stats.outOfTerritoryData.totalLeads.length}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm"
+                                                className="h-7 text-xs font-semibold"
+                                                onClick={() => setDrillDownData({ title: "All Out of Territory Leads", leads: stats.outOfTerritoryData.totalLeads })}
+                                            >
+                                                View All ({stats.outOfTerritoryData.totalLeads.length})
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                </TableFooter>
+                            </Table>
+                        </div>
+                    ) : (
+                        <div className="py-8 text-center text-muted-foreground italic bg-slate-50/50 rounded-lg border">
+                            No Out of Territory leads found for the selected filter criteria.
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
