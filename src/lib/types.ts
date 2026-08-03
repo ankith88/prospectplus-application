@@ -356,6 +356,9 @@ export interface UserProfile {
   linkedSalesRep?: string
   linkedBDR?: string
   franchisee?: string
+  franchiseeId?: string
+  franchiseeInternalId?: string
+  historicalFranchiseeIds?: string[]
   currentLocation?: { lat: number; lng: number }
   activeRoute?: string[] // IDs of active StorableRoutes
   pinnedNav?: string[]
@@ -788,6 +791,17 @@ export interface Franchisee {
   nominatedPostOfficeText?: string;
   starTrackLodgementPoints?: any[] | string;
   mpExpressLodgementPoints?: any[] | string;
+  currentOwnerUserId?: string;
+  linkedUserIds?: string[];
+  linkedUserEmail?: string;
+  ownershipHistory?: {
+    userId: string;
+    ownerName?: string;
+    sharedEmail?: string;
+    personalEmail?: string;
+    startDate?: string;
+    endDate?: string;
+  }[];
 }
 
 export interface Operator {

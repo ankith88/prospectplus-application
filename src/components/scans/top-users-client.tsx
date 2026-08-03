@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Star, TrendingDown, TrendingUp, Minus, Download, FileText, ExternalLink, RefreshCw, Phone, PhoneCall, Mail } from 'lucide-react'
+import { Star, TrendingDown, TrendingUp, Minus, Download, FileText, ExternalLink, RefreshCw, Phone, PhoneCall, Mail, Filter, RotateCcw } from 'lucide-react'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getQuickDateRange } from '@/lib/utils'
@@ -134,6 +134,7 @@ export function TopUsersClient() {
 
   const [loading, setLoading] = useState(true)
   const [topUsers, setTopUsers] = useState<CustomerStats[]>([])
+  // Draft filter states (bound to UI controls)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterColorCode, setFilterColorCode] = useState('all')
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
@@ -142,6 +143,17 @@ export function TopUsersClient() {
   const [customEndDate, setCustomEndDate] = useState('')
   const [sortBy, setSortBy] = useState('rank')
   const [timeframeMode, setTimeframeMode] = useState<'weekly' | 'monthly'>('weekly')
+
+  // Applied filter states (used for API calls & active table filtering)
+  const [appliedSearchTerm, setAppliedSearchTerm] = useState('')
+  const [appliedColorCode, setAppliedColorCode] = useState('all')
+  const [appliedFranchise, setAppliedFranchise] = useState<string[]>([])
+  const [appliedFilterDateRange, setAppliedFilterDateRange] = useState('prev_and_this_month')
+  const [appliedCustomStartDate, setAppliedCustomStartDate] = useState('')
+  const [appliedCustomEndDate, setAppliedCustomEndDate] = useState('')
+  const [appliedSortBy, setAppliedSortBy] = useState('rank')
+  const [appliedTimeframeMode, setAppliedTimeframeMode] = useState<'weekly' | 'monthly'>('weekly')
+
   const [selectedCustomerForNote, setSelectedCustomerForNote] = useState<{ id: string; companyName: string; type: 'companies' | 'leads' } | null>(null)
 
   // Call dialog state
@@ -160,7 +172,12 @@ export function TopUsersClient() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [cachedAt, setCachedAt] = useState<string | null>(null)
 
-  const fetchData = async (forceRefresh = false) => {
+  const fetchData = async (
+    forceRefresh = false,
+    rangeToFetch = appliedFilterDateRange,
+    startToFetch = appliedCustomStartDate,
+    endToFetch = appliedCustomEndDate
+  ) => {
     const startTimePerf = performance.now()
     try {
       setLoading(true)
@@ -174,17 +191,17 @@ export function TopUsersClient() {
       let startDate = new Date(0)
       let endDate = new Date(today)
 
-      if (filterDateRange && filterDateRange !== 'all' && filterDateRange !== 'custom') {
-        const range = getQuickDateRange(filterDateRange === 'last_7' ? 'last7' : (filterDateRange === 'last_30' ? 'last30' : filterDateRange))
+      if (rangeToFetch && rangeToFetch !== 'all' && rangeToFetch !== 'custom') {
+        const range = getQuickDateRange(rangeToFetch === 'last_7' ? 'last7' : (rangeToFetch === 'last_30' ? 'last30' : rangeToFetch))
         startDate = range.from
         endDate = range.to
-      } else if (filterDateRange === 'custom') {
-        if (customStartDate) {
-          startDate = new Date(customStartDate)
+      } else if (rangeToFetch === 'custom') {
+        if (startToFetch) {
+          startDate = new Date(startToFetch)
           startDate.setHours(0, 0, 0, 0)
         }
-        if (customEndDate) {
-          endDate = new Date(customEndDate)
+        if (endToFetch) {
+          endDate = new Date(endToFetch)
           endDate.setHours(23, 59, 59, 999)
         }
       }
@@ -194,7 +211,7 @@ export function TopUsersClient() {
       }
       endStr = endDate.toISOString()
 
-      const url = `/api/scans/top-users?startDate=${encodeURIComponent(startStr)}&endDate=${encodeURIComponent(endStr)}&range=${encodeURIComponent(filterDateRange)}${forceRefresh ? '&refresh=true' : ''}`
+      const url = `/api/scans/top-users?startDate=${encodeURIComponent(startStr)}&endDate=${encodeURIComponent(endStr)}&range=${encodeURIComponent(rangeToFetch)}${forceRefresh ? '&refresh=true' : ''}`
       const res = await fetch(url)
       if (!res.ok) throw new Error('API request failed')
       const data = await res.json()
@@ -213,8 +230,43 @@ export function TopUsersClient() {
   }
 
   useEffect(() => {
-    fetchData()
-  }, [filterDateRange, customStartDate, customEndDate])
+    fetchData(false, 'prev_and_this_month', '', '')
+  }, [])
+
+  const handleApplyFilters = () => {
+    setAppliedSearchTerm(searchTerm);
+    setAppliedColorCode(filterColorCode);
+    setAppliedFranchise(selectedFranchise);
+    setAppliedFilterDateRange(filterDateRange);
+    setAppliedCustomStartDate(customStartDate);
+    setAppliedCustomEndDate(customEndDate);
+    setAppliedSortBy(sortBy);
+    setAppliedTimeframeMode(timeframeMode);
+
+    fetchData(false, filterDateRange, customStartDate, customEndDate);
+  };
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setFilterColorCode('all');
+    setSelectedFranchise([]);
+    setFilterDateRange('prev_and_this_month');
+    setCustomStartDate('');
+    setCustomEndDate('');
+    setSortBy('rank');
+    setTimeframeMode('weekly');
+
+    setAppliedSearchTerm('');
+    setAppliedColorCode('all');
+    setAppliedFranchise([]);
+    setAppliedFilterDateRange('prev_and_this_month');
+    setAppliedCustomStartDate('');
+    setAppliedCustomEndDate('');
+    setAppliedSortBy('rank');
+    setAppliedTimeframeMode('weekly');
+
+    fetchData(false, 'prev_and_this_month', '', '');
+  };
 
   const handleSaveCallOutcome = async () => {
     if (!selectedCustomerForCall || !selectedCustomerForCall.stat.companyId) return;
@@ -271,26 +323,26 @@ export function TopUsersClient() {
   const filteredStats = useMemo(() => {
     let result = topUsers.filter(stat => {
       // Search term
-      if (searchTerm && !stat.name.toLowerCase().includes(searchTerm.toLowerCase()) && 
-          !stat.franchisee.toLowerCase().includes(searchTerm.toLowerCase()) &&
-          !stat.id.toLowerCase().includes(searchTerm.toLowerCase()) &&
-          !(stat.prospectPlusId && stat.prospectPlusId.toLowerCase().includes(searchTerm.toLowerCase())) &&
-          !(stat.contactName && stat.contactName.toLowerCase().includes(searchTerm.toLowerCase())) &&
-          !(stat.phone && stat.phone.toLowerCase().includes(searchTerm.toLowerCase())) &&
-          !(stat.email && stat.email.toLowerCase().includes(searchTerm.toLowerCase()))) {
+      if (appliedSearchTerm && !stat.name.toLowerCase().includes(appliedSearchTerm.toLowerCase()) && 
+          !stat.franchisee.toLowerCase().includes(appliedSearchTerm.toLowerCase()) &&
+          !stat.id.toLowerCase().includes(appliedSearchTerm.toLowerCase()) &&
+          !(stat.prospectPlusId && stat.prospectPlusId.toLowerCase().includes(appliedSearchTerm.toLowerCase())) &&
+          !(stat.contactName && stat.contactName.toLowerCase().includes(appliedSearchTerm.toLowerCase())) &&
+          !(stat.phone && stat.phone.toLowerCase().includes(appliedSearchTerm.toLowerCase())) &&
+          !(stat.email && stat.email.toLowerCase().includes(appliedSearchTerm.toLowerCase()))) {
         return false
       }
 
       // Franchisee
-      if (selectedFranchise.length > 0 && !selectedFranchise.includes(stat.franchisee)) {
+      if (appliedFranchise.length > 0 && !appliedFranchise.includes(stat.franchisee)) {
         return false
       }
 
       // Color Code / Status
-      const status = timeframeMode === 'weekly' 
+      const status = appliedTimeframeMode === 'weekly' 
         ? getUsageStatus(stat.currentWeekScans, stat.weeklyAverage)
         : getUsageStatus(stat.currentMonthScans, stat.monthlyAverage)
-      if (filterColorCode !== 'all' && filterColorCode !== status) {
+      if (appliedColorCode !== 'all' && appliedColorCode !== status) {
         return false
       }
 
@@ -298,24 +350,24 @@ export function TopUsersClient() {
     })
 
     // Sort
-    if (sortBy === 'color_red') {
+    if (appliedSortBy === 'color_red') {
       result.sort((a, b) => {
-        const statusA = timeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage)
-        const statusB = timeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage)
+        const statusA = appliedTimeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage)
+        const statusB = appliedTimeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage)
         const valMap = { below: 1, similar: 2, above: 3 }
         return valMap[statusA as keyof typeof valMap] - valMap[statusB as keyof typeof valMap]
       })
-    } else if (sortBy === 'color_green') {
+    } else if (appliedSortBy === 'color_green') {
       result.sort((a, b) => {
-        const statusA = timeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage)
-        const statusB = timeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage)
+        const statusA = appliedTimeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage)
+        const statusB = appliedTimeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage)
         const valMap = { above: 1, similar: 2, below: 3 }
         return valMap[statusA as keyof typeof valMap] - valMap[statusB as keyof typeof valMap]
       })
     }
 
     return result
-  }, [topUsers, searchTerm, selectedFranchise, filterColorCode, sortBy, timeframeMode])
+  }, [topUsers, appliedSearchTerm, appliedFranchise, appliedColorCode, appliedSortBy, appliedTimeframeMode])
 
   const handleExportCSV = () => {
     const headers = [
@@ -419,67 +471,47 @@ export function TopUsersClient() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader id="step-top-filters" className="pb-3 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
-          <div>
-            <CardTitle className="text-base">Top Signed Customers</CardTitle>
-            <CardDescription>
-              Ranked by scan volume within the selected period. Color coding compares current vs historical performance relative to the end date.
-              <div className="flex flex-wrap items-center gap-4 mt-3 text-xs font-medium text-slate-600">
-                <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-100 border border-red-200"></div> Below Average (&lt;90%)</span>
-                <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-orange-100 border border-orange-200"></div> Similar (90% - 110%)</span>
-                <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-100 border border-green-200"></div> Above Average (&gt;110%)</span>
-              </div>
-            </CardDescription>
+      {/* Dedicated Filter Section */}
+      <Card id="step-top-filters" className="border border-slate-200 bg-slate-50/70 dark:bg-slate-900/50 shadow-sm">
+        <CardHeader className="pb-3 border-b border-slate-200/60 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                <Filter className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                Report Filters & Search Controls
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-500 mt-0.5">
+                Configure your desired filters below and click <strong className="text-slate-700 dark:text-slate-300">Apply Filters</strong> to update the report.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2.5 self-end sm:self-auto">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleResetFilters}
+                className="h-9 text-xs flex items-center gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset
+              </Button>
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={handleApplyFilters}
+                className="h-9 text-xs bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 text-white font-medium flex items-center gap-1.5 px-4 shadow-sm"
+              >
+                <Filter className="h-3.5 w-3.5" />
+                Apply Filters
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-            <div className="w-40">
-              <Select value={timeframeMode} onValueChange={(val: 'weekly' | 'monthly') => setTimeframeMode(val)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="weekly">Mode: Weekly</SelectItem>
-                  <SelectItem value="monthly">Mode: Monthly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-48">
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sort By" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="rank">Sort: Rank (Barcodes)</SelectItem>
-                  <SelectItem value="color_red">Sort: Color (Red First)</SelectItem>
-                  <SelectItem value="color_green">Sort: Color (Green First)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-40">
-              <Select value={filterColorCode} onValueChange={setFilterColorCode}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Color Code" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Filter: All Colors</SelectItem>
-                  <SelectItem value="below">Red (Below Avg)</SelectItem>
-                  <SelectItem value="similar">Orange (Similar)</SelectItem>
-                  <SelectItem value="above">Green (Above Avg)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-48">
-              <MultiSelectCombobox 
-                options={uniqueFranchisees} 
-                selected={selectedFranchise} 
-                onSelectedChange={setSelectedFranchise} 
-                placeholder="Filter Franchise..." 
-              />
-            </div>
-            <div className="w-40">
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">Scan Date Range</Label>
               <Select value={filterDateRange} onValueChange={setFilterDateRange}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-white dark:bg-slate-800">
                   <SelectValue placeholder="Scan Date Range" />
                 </SelectTrigger>
                 <SelectContent>
@@ -496,33 +528,107 @@ export function TopUsersClient() {
                 </SelectContent>
               </Select>
             </div>
+
             {filterDateRange === 'custom' && (
               <>
-                <div className="w-40">
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">Start Date</Label>
                   <Input 
                     type="date" 
                     value={customStartDate} 
                     onChange={e => setCustomStartDate(e.target.value)} 
-                    title="Start Date"
+                    className="bg-white dark:bg-slate-800"
                   />
                 </div>
-                <div className="w-40">
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">End Date</Label>
                   <Input 
                     type="date" 
                     value={customEndDate} 
                     onChange={e => setCustomEndDate(e.target.value)} 
-                    title="End Date"
+                    className="bg-white dark:bg-slate-800"
                   />
                 </div>
               </>
             )}
-            <div className="w-48">
-              <Input 
-                placeholder="Search..." 
-                value={searchTerm} 
-                onChange={e => setSearchTerm(e.target.value)} 
+
+            <div className="space-y-1">
+              <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">Mode</Label>
+              <Select value={timeframeMode} onValueChange={(val: 'weekly' | 'monthly') => setTimeframeMode(val)}>
+                <SelectTrigger className="bg-white dark:bg-slate-800">
+                  <SelectValue placeholder="Mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Mode: Weekly</SelectItem>
+                  <SelectItem value="monthly">Mode: Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">Sort By</Label>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="bg-white dark:bg-slate-800">
+                  <SelectValue placeholder="Sort By" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rank">Sort: Rank (Barcodes)</SelectItem>
+                  <SelectItem value="color_red">Sort: Color (Red First)</SelectItem>
+                  <SelectItem value="color_green">Sort: Color (Green First)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">Color Code</Label>
+              <Select value={filterColorCode} onValueChange={setFilterColorCode}>
+                <SelectTrigger className="bg-white dark:bg-slate-800">
+                  <SelectValue placeholder="Color Code" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Filter: All Colors</SelectItem>
+                  <SelectItem value="below">Red (Below Avg)</SelectItem>
+                  <SelectItem value="similar">Orange (Similar)</SelectItem>
+                  <SelectItem value="above">Green (Above Avg)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">Franchise</Label>
+              <MultiSelectCombobox 
+                options={uniqueFranchisees} 
+                selected={selectedFranchise} 
+                onSelectedChange={setSelectedFranchise} 
+                placeholder="Filter Franchise..." 
               />
             </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">Search Customer</Label>
+              <Input 
+                placeholder="Search name, ID, contact..." 
+                value={searchTerm} 
+                onChange={e => setSearchTerm(e.target.value)} 
+                className="bg-white dark:bg-slate-800"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+          <div>
+            <CardTitle className="text-base">Top Signed Customers</CardTitle>
+            <CardDescription>
+              Ranked by scan volume within the selected period. Color coding compares current vs historical performance relative to the end date.
+              <div className="flex flex-wrap items-center gap-4 mt-3 text-xs font-medium text-slate-600">
+                <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-100 border border-red-200"></div> Below Average (&lt;90%)</span>
+                <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-orange-100 border border-orange-200"></div> Similar (90% - 110%)</span>
+                <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-100 border border-green-200"></div> Above Average (&gt;110%)</span>
+              </div>
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent id="step-top-table">

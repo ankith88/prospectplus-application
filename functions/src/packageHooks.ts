@@ -145,9 +145,6 @@ export const aggregateScanMetrics = functions
       
       // We will aggregate metrics for the current month
       const packagesRef = db.collection("packages");
-      // Getting all packages for the month using sync_date (format DD-MM-YYYY)
-      // Since format is DD-MM-YYYY, string comparison is tricky. We'll fetch all and filter in memory for now, 
-      // or we can just fetch the recent ones. Since it's a server function, memory is less of an issue than client.
       const snapshot = await packagesRef.get();
       
       let totalPackages = 0;
@@ -162,7 +159,6 @@ export const aggregateScanMetrics = functions
       for (const doc of snapshot.docs) {
         const pkg = doc.data();
         
-        // Basic date check - only aggregate recent
         if (!pkg.updated_at) continue;
         const updatedAtDate = pkg.updated_at.toDate ? pkg.updated_at.toDate() : new Date(pkg.updated_at);
         if (updatedAtDate < firstDayOfMonth) continue;
@@ -179,9 +175,8 @@ export const aggregateScanMetrics = functions
         }
 
         if (rtStatus.toLowerCase().includes('delivered') && pkg.scans && pkg.scans.length > 0) {
-           // Simplistic calc for aggregation
            totalDeliveredWithSyncDate++;
-           onTimeDeliveryCount++; // dummy logic for now to prevent heavy CPU
+           onTimeDeliveryCount++;
         }
         
         pkg.scans?.forEach((scan: any) => {
@@ -209,6 +204,22 @@ export const aggregateScanMetrics = functions
     } catch (error) {
       functions.logger.error("Error aggregating scan metrics:", error);
     }
+  });
+
+/**
+ * Scheduled function that runs daily at 7 AM Sydney time.
+ * Automatically recalculates and caches the Top 100 Barcode Users report
+ * for all preset date ranges in Firestore.
+ */
+export const refreshTopUsersReportDaily = functions
+  .region("australia-southeast1")
+  .runWith({ memory: "1GB", timeoutSeconds: 540 })
+  .pubsub.schedule("0 7 * * *")
+  .timeZone("Australia/Sydney")
+  .onRun(async (context) => {
+    functions.logger.info("Starting scheduled daily top users report caching at 7:00 AM Sydney time...");
+    await cacheTopUsersReport(db);
+    functions.logger.info("Scheduled daily top users report caching completed successfully.");
   });
 
 export async function cacheTopUsersReport(db: admin.firestore.Firestore) {

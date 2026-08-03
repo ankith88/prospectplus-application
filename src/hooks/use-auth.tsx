@@ -310,6 +310,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             await updateProfile(newUser, { displayName: displayName });
 
+            const franchiseeIdVal = userData.franchiseeId || userData.franchiseeInternalId || null;
+
             const userProfileData = {
                 uid: newUser.uid,
                 email: userData.email,
@@ -325,9 +327,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 linkedSalesRep: userData.linkedSalesRep || null,
                 linkedBDR: userData.linkedBDR || null,
                 franchisee: userData.franchisee || null,
+                franchiseeId: franchiseeIdVal,
+                franchiseeInternalId: franchiseeIdVal,
             };
 
             await setDoc(doc(firestore, "users", newUser.uid), userProfileData);
+
+            // Automatically link with franchisees collection if franchiseeId is provided
+            if (franchiseeIdVal && (userData.role === 'Franchisee' || userData.role?.toLowerCase() === 'franchisee')) {
+                try {
+                    const franRef = doc(firestore, "franchisees", franchiseeIdVal);
+                    const franSnap = await getDoc(franRef);
+                    if (franSnap.exists()) {
+                        const existingData = franSnap.data() || {};
+                        const existingUsers: string[] = existingData.linkedUserIds || [];
+                        const updatedUsers = Array.from(new Set([...existingUsers, newUser.uid]));
+                        await updateDoc(franRef, {
+                            currentOwnerUserId: newUser.uid,
+                            linkedUserIds: updatedUsers,
+                            linkedUserEmail: userData.email,
+                            mainContact: displayName || existingData.mainContact,
+                            updatedAt: new Date().toISOString()
+                        });
+                    }
+                } catch (franLinkErr) {
+                    console.warn("Could not automatically update franchisee doc on user creation:", franLinkErr);
+                }
+            }
+
             return newUser.uid;
 
         } catch (error) {

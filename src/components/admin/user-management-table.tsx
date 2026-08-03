@@ -16,8 +16,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
-import { getAllUsers, updateUser } from '@/services/firebase';
-import type { UserProfile, AdminApprovalRequest } from '@/lib/types';
+import { getAllUsers, updateUser, getAllFranchisees } from '@/services/firebase';
+import type { UserProfile, AdminApprovalRequest, Franchisee } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
 import { Lock, Mail, UserX, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -56,9 +56,11 @@ export function UserManagementTable() {
   const [newLinkedSalesRep, setNewLinkedSalesRep] = useState('');
   const [newLinkedBDR, setNewLinkedBDR] = useState('');
   const [newFranchisee, setNewFranchisee] = useState('');
+  const [newFranchiseeId, setNewFranchiseeId] = useState('');
   const [newPhoneNumber, setNewPhoneNumber] = useState('');
   const [newMobileNumber, setNewMobileNumber] = useState('');
   const [newAircallPhoneNumber, setNewAircallPhoneNumber] = useState('');
+  const [allFranchisees, setAllFranchisees] = useState<Franchisee[]>([]);
 
   // Bulk Selection State
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -83,12 +85,14 @@ export function UserManagementTable() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-        const [fetchedUsers, fetchedRequests] = await Promise.all([
+        const [fetchedUsers, fetchedRequests, fetchedFranchisees] = await Promise.all([
           getAllUsers(),
           getAllAdminApprovalRequests(),
+          getAllFranchisees(),
         ]);
         setUsers(fetchedUsers);
         setApprovalRequests(fetchedRequests);
+        setAllFranchisees(fetchedFranchisees);
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch users.' });
     } finally {
@@ -99,7 +103,6 @@ export function UserManagementTable() {
   useEffect(() => {
     fetchUsers();
 
-    // Parse URL search parameters for approval feedback
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const approvalSuccess = urlParams.get('approvalSuccess');
@@ -126,6 +129,7 @@ export function UserManagementTable() {
       setNewLinkedSalesRep(userToEdit.linkedSalesRep || '');
       setNewLinkedBDR(userToEdit.linkedBDR || '');
       setNewFranchisee(userToEdit.franchisee || '');
+      setNewFranchiseeId(userToEdit.franchiseeId || userToEdit.franchiseeInternalId || '');
       setNewPhoneNumber(userToEdit.phoneNumber || '');
       setNewMobileNumber(userToEdit.mobileNumber || userToEdit.phoneNumber || '');
       setNewAircallPhoneNumber(userToEdit.aircallPhoneNumber || '');
@@ -202,6 +206,8 @@ export function UserManagementTable() {
         updateData.franchisee = '';
       } else if (effectiveAssignedRoles.includes('Franchisee')) {
         updateData.franchisee = newFranchisee;
+        updateData.franchiseeId = newFranchiseeId || undefined;
+        updateData.franchiseeInternalId = newFranchiseeId || undefined;
         updateData.linkedSalesRep = '';
         updateData.linkedBDR = '';
       } else {
@@ -692,9 +698,35 @@ export function UserManagementTable() {
                     </Select>
                 </div>
                 {newAssignedRoles.includes('Franchisee') && (
-                    <div className="space-y-2">
-                        <Label>Franchise Name</Label>
-                        <Input value={newFranchisee} onChange={(e) => setNewFranchisee(e.target.value)} placeholder="e.g. Sydney City" />
+                    <div className="space-y-3 border p-3 rounded-md bg-muted/30">
+                        <div className="space-y-2">
+                            <Label>Link Franchise Entity</Label>
+                            <Select 
+                                value={newFranchiseeId} 
+                                onValueChange={(val) => {
+                                    setNewFranchiseeId(val);
+                                    const selectedFr = allFranchisees.find(f => String(f.internalId) === val);
+                                    if (selectedFr) {
+                                        setNewFranchisee(selectedFr.name);
+                                    }
+                                }}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select existing franchise..." />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-60">
+                                    {allFranchisees.map((fr) => (
+                                        <SelectItem key={fr.internalId} value={String(fr.internalId)}>
+                                            {fr.name || 'Unnamed'} ({fr.internalId})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Franchise Display Name</Label>
+                            <Input value={newFranchisee} onChange={(e) => setNewFranchisee(e.target.value)} placeholder="e.g. Alexandria" />
+                        </div>
                     </div>
                 )}
                 {newAssignedRoles.includes('Field Sales') && (

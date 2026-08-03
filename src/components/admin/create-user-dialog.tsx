@@ -28,8 +28,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '../ui/loader';
-import { getAllUsers } from '@/services/firebase';
-import type { UserProfile } from '@/lib/types';
+import { getAllUsers, getAllFranchisees } from '@/services/firebase';
+import type { UserProfile, Franchisee } from '@/lib/types';
 
 
 const formSchema = z.object({
@@ -45,6 +45,9 @@ const formSchema = z.object({
   linkedSalesRep: z.string().optional(),
   linkedBDR: z.string().optional(),
   franchisee: z.string().optional(),
+  franchiseeId: z.string().optional(),
+  isOwnershipTransfer: z.boolean().optional().default(false),
+  oldOwnerPersonalEmail: z.string().optional(),
   sendWelcomeEmail: z.boolean().default(true),
 });
 
@@ -74,33 +77,39 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       linkedSalesRep: '',
       linkedBDR: '',
       franchisee: '',
+      franchiseeId: '',
+      isOwnershipTransfer: false,
+      oldOwnerPersonalEmail: '',
       sendWelcomeEmail: true,
     },
   });
 
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [allFranchisees, setAllFranchisees] = useState<Franchisee[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      const fetchUsers = async () => {
+      const fetchData = async () => {
         setLoadingUsers(true);
         try {
-          const users = await getAllUsers();
+          const [users, frs] = await Promise.all([getAllUsers(), getAllFranchisees()]);
           setAllUsers(users);
+          setAllFranchisees(frs);
         } catch (error) {
-          console.error('Failed to fetch users:', error);
+          console.error('Failed to fetch users/franchisees:', error);
         } finally {
           setLoadingUsers(false);
         }
       };
-      fetchUsers();
+      fetchData();
     }
   }, [isOpen]);
 
   const activeBDRs = allUsers.filter(u => u.assignedRoles?.includes('user') && !u.disabled);
 
   const role = form.watch('role');
+  const isOwnershipTransfer = form.watch('isOwnershipTransfer');
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
@@ -108,14 +117,30 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       const isSuperAdminRequiringApproval = userProfile?.uid === 'a543AEr3TcaHyj4c1Gh0fJoQ6UB2';
       const isGrantingAdmin = values.role === 'admin';
       
-      // If super admin a543AEr3TcaHyj4c1Gh0fJoQ6UB2 is granting admin access,
-      // create user with 'user' role first and trigger approval request
       const effectiveRole = (isSuperAdminRequiringApproval && isGrantingAdmin) ? 'user' : values.role;
 
-      const newUserId = await signUpAndCreateProfile({
-        ...values,
-        role: effectiveRole,
-      });
+      // Handle Franchise Ownership Transfer flow if requested
+      if (values.role === 'Franchisee' && values.isOwnershipTransfer && values.franchiseeId && values.oldOwnerPersonalEmail) {
+        const transferRes = await fetch('/api/admin/transfer-franchisee-ownership', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            franchiseeId: values.franchiseeId,
+            newOwnerEmail: values.email,
+            newOwnerName: `${values.firstName} ${values.lastName}`.trim(),
+            oldOwnerPersonalEmail: values.oldOwnerPersonalEmail,
+          }),
+        });
+        const transferData = await transferRes.json();
+        if (!transferRes.ok || !transferData.success) {
+          throw new Error(transferData.message || 'Franchise ownership transfer failed');
+        }
+      } else {
+        await signUpAndCreateProfile({
+          ...values,
+          role: effectiveRole,
+        });
+      }
 
       if (isSuperAdminRequiringApproval && isGrantingAdmin && newUserId) {
         const { createAdminApprovalRequest } = await import('@/services/admin-approval');
@@ -275,14 +300,75 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                 <FormMessage /></FormItem>
             )}/>
             {role === 'Franchisee' && (
-                <FormField control={form.control} name="franchisee" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Franchise Name*</FormLabel>
-                      <FormControl><Input {...field} placeholder="e.g. Sydney City" /></FormControl>
-                      <FormDescription>Users with the Franchisee role will only see leads and signed customers associated with this specific franchise.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                )}/>
+                <div className="space-y-4 border p-3 rounded-md bg-muted/30">
+                  <FormField control={form.control} name="franchiseeId" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Link Franchise Entity*</FormLabel>
+                        <Select 
+                          onValueChange={(val) => {
+                            field.onChange(val);
+                            const selectedFr = allFranchisees.find(f => String(f.internalId) === val);
+                            if (selectedFr) {
+                              form.setValue('franchisee', selectedFr.name);
+                            }
+                          }} 
+                          value={field.value}
+                        >
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select existing franchise..." /></SelectTrigger></FormControl>
+                          <SelectContent className="max-h-60">
+                            {allFranchisees.map(fr => (
+                              <SelectItem key={fr.internalId} value={String(fr.internalId)}>
+                                {fr.name || 'Unnamed'} ({fr.internalId})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Select the official franchise entity to link with this user account.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                  )}/>
+
+                  <FormField control={form.control} name="franchisee" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Franchise Display Name</FormLabel>
+                        <FormControl><Input {...field} placeholder="e.g. Alexandria" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                  )}/>
+
+                  <div className="pt-2 border-t space-y-3">
+                    <FormField control={form.control} name="isOwnershipTransfer" render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                              Is Franchise Ownership Transfer / Sale?
+                            </FormLabel>
+                            <FormDescription className="text-xs">
+                              Check this if replacing an existing franchisee owner so their historic account is preserved under their personal email.
+                            </FormDescription>
+                          </div>
+                        </FormItem>
+                    )}/>
+
+                    {isOwnershipTransfer && (
+                      <FormField control={form.control} name="oldOwnerPersonalEmail" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Old Owner Personal Email*</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="email" placeholder="e.g. tanvi.hegde@mailplus.com.au" />
+                            </FormControl>
+                            <FormDescription className="text-xs">
+                              The outgoing franchisee will sign in using this personal email to retain access to their past leads & activity.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                      )}/>
+                    )}
+                  </div>
+                </div>
             )}
             {role === 'Field Sales' && (
               <>
