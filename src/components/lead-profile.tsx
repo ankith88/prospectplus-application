@@ -875,6 +875,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   // Cancellation Request Dialog State
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [cancelMode, setCancelMode] = useState<'request' | 'cancel'>('request');
   const [isEditNoteOpen, setIsEditNoteOpen] = useState(false);
   const [noteToEdit, setNoteToEdit] = useState<Note | null>(null);
 
@@ -6082,10 +6083,32 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     {isCompanyProfile && (
                         <>
                             {lead.status !== 'Lost Customer' ? (
-                                <Button className="w-full justify-start bg-background hover:bg-destructive/10 text-destructive border-destructive/20 hover:border-destructive/30 font-medium" variant="outline" onClick={() => setIsCancelDialogOpen(true)}>
-                                    <FileX className="mr-2 h-4 w-4" />
-                                    {isAdmin ? 'Cancel Customer' : 'Request Cancellation'}
-                                </Button>
+                                <>
+                                    <Button 
+                                        className="w-full justify-start bg-background hover:bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300 font-medium" 
+                                        variant="outline" 
+                                        onClick={() => {
+                                            setCancelMode('request');
+                                            setIsCancelDialogOpen(true);
+                                        }}
+                                    >
+                                        <FileX className="mr-2 h-4 w-4 text-amber-600" />
+                                        Request Cancellation
+                                    </Button>
+                                    {isAdmin && (
+                                        <Button 
+                                            className="w-full justify-start bg-background hover:bg-destructive/10 text-destructive border-destructive/20 hover:border-destructive/30 font-medium" 
+                                            variant="outline" 
+                                            onClick={() => {
+                                                setCancelMode('cancel');
+                                                setIsCancelDialogOpen(true);
+                                            }}
+                                        >
+                                            <FileX className="mr-2 h-4 w-4 text-destructive" />
+                                            Cancel Customer Directly
+                                        </Button>
+                                    )}
+                                </>
                             ) : (
                                 <div className="text-xs text-center py-1.5 px-3 bg-muted rounded-lg text-muted-foreground border">
                                     Customer status: Lost Customer
@@ -6431,6 +6454,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         isOpen={isCancelDialogOpen}
         onOpenChange={setIsCancelDialogOpen}
         lead={lead}
+        mode={cancelMode}
         onSuccess={(updates) => {
             if (updates) {
                 setLead(prev => prev ? { ...prev, ...updates } : prev);

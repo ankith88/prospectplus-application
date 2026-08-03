@@ -139,6 +139,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
   // Cancellation Request Dialog State
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [cancelMode, setCancelMode] = useState<'request' | 'cancel'>('request');
   
   // Onboarding Request state
   const [isOnboardingDialogOpen, setIsOnboardingDialogOpen] = useState(false);
@@ -861,10 +862,32 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
                     </Button>
                     {company.status !== 'Lost Customer' ? (
-                        <Button className="w-full justify-start bg-background hover:bg-destructive/10 text-destructive border-destructive/20 hover:border-destructive/30" variant="outline" onClick={() => setIsCancelDialogOpen(true)}>
-                            <FileX className="mr-2 h-4 w-4" />
-                            {isAdmin ? 'Cancel Customer' : 'Request Cancellation'}
-                        </Button>
+                        <>
+                            <Button 
+                                className="w-full justify-start bg-background hover:bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300 font-medium" 
+                                variant="outline" 
+                                onClick={() => {
+                                    setCancelMode('request');
+                                    setIsCancelDialogOpen(true);
+                                }}
+                            >
+                                <FileX className="mr-2 h-4 w-4 text-amber-600" />
+                                Request Cancellation
+                            </Button>
+                            {isAdmin && (
+                                <Button 
+                                    className="w-full justify-start bg-background hover:bg-destructive/10 text-destructive border-destructive/20 hover:border-destructive/30 font-medium" 
+                                    variant="outline" 
+                                    onClick={() => {
+                                        setCancelMode('cancel');
+                                        setIsCancelDialogOpen(true);
+                                    }}
+                                >
+                                    <FileX className="mr-2 h-4 w-4 text-destructive" />
+                                    Cancel Customer Directly
+                                </Button>
+                            )}
+                        </>
                     ) : (
                         <div className="text-xs text-center py-1.5 px-3 bg-muted rounded-lg text-muted-foreground border">
                             Customer status: Lost Customer
@@ -1041,6 +1064,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         isOpen={isCancelDialogOpen}
         onOpenChange={setIsCancelDialogOpen}
         lead={company}
+        mode={cancelMode}
         onSuccess={(updates) => {
             if (updates) {
                 setCompany(prev => ({ ...prev, ...updates }));

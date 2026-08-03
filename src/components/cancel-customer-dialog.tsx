@@ -26,6 +26,7 @@ export interface CancelCustomerDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead?: Lead | null;
+  mode?: 'request' | 'cancel';
   onSuccess?: (updatedLeadDetails?: Partial<Lead>) => void;
 }
 
@@ -33,6 +34,7 @@ export function CancelCustomerDialog({
   isOpen,
   onOpenChange,
   lead,
+  mode,
   onSuccess,
 }: CancelCustomerDialogProps) {
   const { user, userProfile, isSuperAdmin } = useAuth();
@@ -42,6 +44,8 @@ export function CancelCustomerDialog({
     userProfile?.activeRole === 'admin' ||
     userProfile?.role === 'admin' ||
     isSuperAdmin;
+
+  const isDirectCancel = mode ? mode === 'cancel' : isAdmin;
 
   const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
   const [requestedBy, setRequestedBy] = useState('');
@@ -118,7 +122,7 @@ export function CancelCustomerDialog({
       const userEmail = userProfile?.email || user?.email || 'System';
       const nowIso = new Date().toISOString();
 
-      if (isAdmin) {
+      if (isDirectCancel) {
         // Direct cancellation for Admin users
         const updates: any = {
           customerStatus: 'Lost Customer',
@@ -153,7 +157,7 @@ export function CancelCustomerDialog({
           cancellationWhyId: selectedWhyId,
           cancellationCategory: selectedWhyObj?.name || '',
           status: 'Cancelled',
-          notes: `Direct cancellation completed by Admin ${userDisplayName}`,
+          notes: `Direct cancellation completed by ${userDisplayName}`,
           originalServices: lead.services || [],
           requestedBy,
           processedBy: `${userDisplayName} (${userEmail})`,
@@ -165,7 +169,7 @@ export function CancelCustomerDialog({
 
         await logActivity(lead.id, {
           type: 'Update',
-          notes: `Direct customer cancellation completed by Admin ${userDisplayName}. Effective Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
+          notes: `Direct customer cancellation completed by ${userDisplayName}. Effective Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
           author: userDisplayName,
         });
 
@@ -182,7 +186,7 @@ export function CancelCustomerDialog({
         onOpenChange(false);
         onSuccess?.(updates);
       } else {
-        // Non-admin cancellation request
+        // Non-admin or explicit cancellation request
         const updates: any = {
           bucket: 'customer_success',
           cancellationRequested: true,
@@ -252,10 +256,10 @@ export function CancelCustomerDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isAdmin ? 'Cancel Customer' : 'Request Customer Cancellation'}
+            {isDirectCancel ? 'Cancel Customer Directly' : 'Request Customer Cancellation'}
           </DialogTitle>
           <DialogDescription>
-            {isAdmin
+            {isDirectCancel
               ? 'Directly cancel this signed customer account and set status to Lost Customer.'
               : 'Submit a customer cancellation request to be processed by the Customer Success team.'}
           </DialogDescription>
@@ -320,8 +324,8 @@ export function CancelCustomerDialog({
           >
             {isSubmitting ? (
               <Loader />
-            ) : isAdmin ? (
-              'Cancel Customer'
+            ) : isDirectCancel ? (
+              'Cancel Customer Directly'
             ) : (
               'Submit Request'
             )}

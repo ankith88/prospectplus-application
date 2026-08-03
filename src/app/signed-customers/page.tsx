@@ -98,6 +98,7 @@ export default function SignedCustomersPage() {
 
   const [selectedCancelLead, setSelectedCancelLead] = useState<Lead | null>(null);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [cancelMode, setCancelMode] = useState<'request' | 'cancel'>('request');
 
   const [selectedOnboardingLead, setSelectedOnboardingLead] = useState<Lead | null>(null);
   const [isOnboardingDialogOpen, setIsOnboardingDialogOpen] = useState(false);
@@ -1294,15 +1295,29 @@ export default function SignedCustomersPage() {
                                <CalendarCheck className="mr-2 h-4 w-4 text-primary" /> Organise Onboarding
                              </DropdownMenuItem>
                              <DropdownMenuItem 
-                               className="text-destructive focus:text-destructive"
-                               onClick={() => {
-                                 setSelectedCancelLead(lead as unknown as Lead);
-                                 setIsCancelDialogOpen(true);
-                               }}
-                             >
-                               <FileX className="mr-2 h-4 w-4" />
-                               {isAdmin ? 'Cancel Customer' : 'Request Cancellation'}
-                             </DropdownMenuItem>
+                                className="text-amber-700 focus:text-amber-800"
+                                onClick={() => {
+                                  setSelectedCancelLead(lead as unknown as Lead);
+                                  setCancelMode('request');
+                                  setIsCancelDialogOpen(true);
+                                }}
+                              >
+                                <FileX className="mr-2 h-4 w-4 text-amber-600" />
+                                Request Cancellation
+                              </DropdownMenuItem>
+                              {isAdmin && (
+                                <DropdownMenuItem 
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => {
+                                    setSelectedCancelLead(lead as unknown as Lead);
+                                    setCancelMode('cancel');
+                                    setIsCancelDialogOpen(true);
+                                  }}
+                                >
+                                  <FileX className="mr-2 h-4 w-4 text-destructive" />
+                                  Cancel Customer Directly
+                                </DropdownMenuItem>
+                              )}
                            </DropdownMenuContent>
                          </DropdownMenu>
                        </TableCell>
@@ -1544,6 +1559,7 @@ export default function SignedCustomersPage() {
           isOpen={isCancelDialogOpen}
           onOpenChange={setIsCancelDialogOpen}
           lead={selectedCancelLead}
+          mode={cancelMode}
           onSuccess={(updates) => {
             if (selectedCancelLead && updates?.status === 'Lost Customer') {
               setAllMapData((prev) => prev.filter((item) => item.id !== selectedCancelLead.id));
