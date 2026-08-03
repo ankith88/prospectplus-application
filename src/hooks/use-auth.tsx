@@ -22,7 +22,7 @@ import {
 } from 'firebase/auth';
 import { app, firestore } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import type { UserProfile, SavedRoute, UserRole } from '@/lib/types';
 import { getUserRoutes } from '@/services/firebase';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';

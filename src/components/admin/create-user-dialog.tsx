@@ -119,6 +119,8 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       
       const effectiveRole = (isSuperAdminRequiringApproval && isGrantingAdmin) ? 'user' : values.role;
 
+      let newUserId: string | undefined;
+
       // Handle Franchise Ownership Transfer flow if requested
       if (values.role === 'Franchisee' && values.isOwnershipTransfer && values.franchiseeId && values.oldOwnerPersonalEmail) {
         const transferRes = await fetch('/api/admin/transfer-franchisee-ownership', {
@@ -135,11 +137,13 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
         if (!transferRes.ok || !transferData.success) {
           throw new Error(transferData.message || 'Franchise ownership transfer failed');
         }
+        newUserId = transferData.newUserId || transferData.userId;
       } else {
-        await signUpAndCreateProfile({
+        const createdId = await signUpAndCreateProfile({
           ...values,
           role: effectiveRole,
         });
+        if (createdId) newUserId = createdId;
       }
 
       if (isSuperAdminRequiringApproval && isGrantingAdmin && newUserId) {
