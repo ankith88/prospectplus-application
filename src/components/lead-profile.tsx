@@ -62,6 +62,7 @@ import {
   FileX,
   ChevronDown,
   ChevronRight,
+  GitMerge,
 } from 'lucide-react'
 import { encryptLeadId } from '@/lib/localmile-security'
 import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser } from '@/lib/lead-permissions'
@@ -495,15 +496,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           
           // 1. Fetch by franchisee_id doc ID
           if (lead.franchisee_id) {
-            const fDoc = await getDoc(doc(firestore, 'franchisees', lead.franchisee_id));
+            const fDoc = await getDoc(doc(firestore, 'franchisees', String(lead.franchisee_id)));
             if (fDoc.exists()) {
               franchiseeDoc = { id: fDoc.id, ...fDoc.data() };
             } else {
-              // 2. Fetch by internalId matching franchisee_id
-              const q = query(collection(firestore, 'franchisees'), where('internalId', '==', lead.franchisee_id));
-              const qSnap = await getDocs(q);
-              if (!qSnap.empty) {
-                franchiseeDoc = { id: qSnap.docs[0].id, ...qSnap.docs[0].data() };
+              // 2. Fetch by internalId matching franchisee_id (string or number)
+              const q1 = query(collection(firestore, 'franchisees'), where('internalId', '==', String(lead.franchisee_id)));
+              const qSnap1 = await getDocs(q1);
+              if (!qSnap1.empty) {
+                franchiseeDoc = { id: qSnap1.docs[0].id, ...qSnap1.docs[0].data() };
+              } else {
+                const q2 = query(collection(firestore, 'franchisees'), where('internalId', '==', Number(lead.franchisee_id)));
+                const qSnap2 = await getDocs(q2);
+                if (!qSnap2.empty) {
+                  franchiseeDoc = { id: qSnap2.docs[0].id, ...qSnap2.docs[0].data() };
+                }
               }
             }
           }
@@ -647,21 +654,45 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 // Query 3: Check companies collection for existing active customers
                 const qCompanies = query(collection(firestore, 'companies'), where('companyName', '==', lead.companyName), limit(5));
 
-                const [exactSnap, prefixSnap, companiesSnap] = await Promise.all([
+                // Additional Queries for leads: prospectPlusId, email, phone, abn
+                const extraLeadQueries: Promise<any>[] = [];
+                if (lead.prospectPlusId) {
+                    extraLeadQueries.push(getDocs(query(collection(firestore, 'leads'), where('prospectPlusId', '==', lead.prospectPlusId), limit(10))).catch(() => null));
+                }
+                if (lead.customerServiceEmail) {
+                    extraLeadQueries.push(getDocs(query(collection(firestore, 'leads'), where('customerServiceEmail', '==', lead.customerServiceEmail), limit(10))).catch(() => null));
+                }
+                if (lead.customerPhone) {
+                    extraLeadQueries.push(getDocs(query(collection(firestore, 'leads'), where('customerPhone', '==', lead.customerPhone), limit(10))).catch(() => null));
+                }
+                if ((lead as any).abn) {
+                    extraLeadQueries.push(getDocs(query(collection(firestore, 'leads'), where('abn', '==', (lead as any).abn), limit(10))).catch(() => null));
+                }
+
+                const [exactSnap, prefixSnap, companiesSnap, ...extraSnaps] = await Promise.all([
                     getDocs(qExact),
                     qPrefix ? getDocs(qPrefix) : Promise.resolve({ docs: [] } as any),
-                    getDocs(qCompanies)
+                    getDocs(qCompanies),
+                    ...extraLeadQueries
                 ]);
 
-                const candidateDocs = [...exactSnap.docs, ...prefixSnap.docs];
+                const extraDocs = extraSnaps.flatMap(s => (s && s.docs) ? s.docs : []);
+                const candidateDocs = [...exactSnap.docs, ...prefixSnap.docs, ...extraDocs];
                 for (const docSnap of candidateDocs) {
                     if (checkedIds.has(docSnap.id)) continue;
                     checkedIds.add(docSnap.id);
                     const candidateData = docSnap.data();
                     if (candidateData.ignoreDuplicateWarning) continue;
 
+                    const isDirectFieldMatch = Boolean(
+                        (lead.prospectPlusId && candidateData.prospectPlusId === lead.prospectPlusId) ||
+                        (lead.customerServiceEmail && candidateData.customerServiceEmail === lead.customerServiceEmail) ||
+                        (lead.customerPhone && candidateData.customerPhone === lead.customerPhone) ||
+                        ((lead as any).abn && candidateData.abn === (lead as any).abn)
+                    );
+
                     const scoreRes = evaluateDuplicateScore(lead, candidateData as any);
-                    if (scoreRes.isMatch) {
+                    if (scoreRes.isMatch || isDirectFieldMatch) {
                         matches.push({ id: docSnap.id, ...candidateData } as Lead);
                     }
                 }
@@ -1571,7 +1602,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
       parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || '');
       parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || userProfile?.displayName || userProfile?.firstName || 'Representative');
-      parsedBody = parsedBody.replace(/\{\{Franchisee\.Name\}\}/gi, leadData.franchisee || 'MailPlus');
+      const franName = franchiseeDetails?.name || franchiseeDetails?.mainContact || leadData.franchisee || 'MailPlus';
+      const franContact = franchiseeDetails?.mainContact || franchiseeDetails?.name || leadData.franchisee || 'MailPlus';
+      const franEmail = franchiseeDetails?.email || '';
+      const franMobile = franchiseeDetails?.mobile || franchiseeDetails?.phone || franchiseeDetails?.mainContactPhone || '';
+
+      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/gi, contactName);
+      parsedBody = parsedBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
+      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || '');
+      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || userProfile?.displayName || userProfile?.firstName || 'Representative');
+      
+      parsedBody = parsedBody.replace(/\{\{Franchisee\.Name\}\}/gi, franName);
+      parsedBody = parsedBody.replace(/\{\{franchisee_name\}\}/gi, franName);
+      parsedBody = parsedBody.replace(/\{\{Franchisee\.MainContact\}\}/gi, franContact);
+      parsedBody = parsedBody.replace(/\{\{Franchisee\.ContactName\}\}/gi, franContact);
+      parsedBody = parsedBody.replace(/\{\{Franchisee\.Email\}\}/gi, franEmail);
+      parsedBody = parsedBody.replace(/\{\{franchisee_email\}\}/gi, franEmail);
+      parsedBody = parsedBody.replace(/\{\{Franchisee\.Mobile\}\}/gi, franMobile);
+      parsedBody = parsedBody.replace(/\{\{franchisee_mobile\}\}/gi, franMobile);
+
       parsedBody = parsedBody.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
       parsedBody = parsedBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
       parsedBody = parsedBody.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
@@ -1630,7 +1680,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{products_details_html\}\}/gi, productTableHtml);
     }
     return parsedBody;
-  }, [selectedTemplateId, templates, lead, userProfile, accountManagerMobile, accountManagerCalendly, serviceTableHtml, productTableHtml]);
+  }, [selectedTemplateId, templates, lead, userProfile, accountManagerMobile, accountManagerCalendly, serviceTableHtml, productTableHtml, franchiseeDetails]);
 
   useEffect(() => {
     setEditableEmailBody(bulkEmailPreviewBody);
@@ -1639,11 +1689,38 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   useEffect(() => {
     if (selectedTemplateId) {
       const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
-      setEmailSubject(selectedTemplate?.subject || '');
+      if (selectedTemplate?.subject) {
+        let subject = selectedTemplate.subject;
+        const franName = franchiseeDetails?.name || franchiseeDetails?.mainContact || (lead as any)?.franchisee || 'MailPlus';
+        const franContact = franchiseeDetails?.mainContact || franchiseeDetails?.name || (lead as any)?.franchisee || 'MailPlus';
+        const franEmail = franchiseeDetails?.email || '';
+        const franMobile = franchiseeDetails?.mobile || franchiseeDetails?.phone || '';
+
+        const primaryContact = lead?.contacts?.find((c: any) => c.isPrimary) || (lead?.contacts?.[0] || null);
+        const contactName = primaryContact?.name || 'Customer';
+        const contactFirstName = contactName.split(' ')[0];
+
+        subject = subject.replace(/\{\{Contact\.Name\}\}/gi, contactName);
+        subject = subject.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+        subject = subject.replace(/\{\{Company\.Name\}\}/gi, (lead as any)?.companyName || '');
+        subject = subject.replace(/\{\{SalesRep\.Name\}\}/gi, (lead as any)?.salesRepAssigned || userProfile?.displayName || 'Representative');
+        subject = subject.replace(/\{\{Franchisee\.Name\}\}/gi, franName);
+        subject = subject.replace(/\{\{franchisee_name\}\}/gi, franName);
+        subject = subject.replace(/\{\{Franchisee\.MainContact\}\}/gi, franContact);
+        subject = subject.replace(/\{\{Franchisee\.ContactName\}\}/gi, franContact);
+        subject = subject.replace(/\{\{Franchisee\.Email\}\}/gi, franEmail);
+        subject = subject.replace(/\{\{franchisee_email\}\}/gi, franEmail);
+        subject = subject.replace(/\{\{Franchisee\.Mobile\}\}/gi, franMobile);
+        subject = subject.replace(/\{\{franchisee_mobile\}\}/gi, franMobile);
+
+        setEmailSubject(subject);
+      } else {
+        setEmailSubject('');
+      }
     } else {
       setEmailSubject('');
     }
-  }, [selectedTemplateId, templates]);
+  }, [selectedTemplateId, templates, lead, franchiseeDetails, userProfile]);
 
   const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3325,6 +3402,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
             Refresh Data
           </Button>
+          {!isCompanyProfile && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsMergeDialogOpen(true)}
+              className="h-9 border-amber-300 text-amber-900 hover:bg-amber-50 font-semibold"
+            >
+              <GitMerge className="mr-2 h-4 w-4 text-amber-600" />
+              Merge Lead
+            </Button>
+          )}
         </div>
         {isSessionActive && (
           <div className="flex items-center gap-2">
@@ -7315,9 +7403,60 @@ function MergeDuplicatesDialog({
     const [selectedTargetId, setSelectedTargetId] = useState<string>(currentLead.id);
     const [isMerging, setIsMerging] = useState(false);
     const [isDismissing, setIsDismissing] = useState(false);
+    const [additionalCandidates, setAdditionalCandidates] = useState<Lead[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSearchingLead, setIsSearchingLead] = useState(false);
     const { toast } = useToast();
 
-    const allCandidates = useMemo(() => [currentLead, ...duplicates], [currentLead, duplicates]);
+    const handleSearchAddLead = async () => {
+        const trimmed = searchQuery.trim();
+        if (!trimmed) return;
+        setIsSearchingLead(true);
+        try {
+            let foundLead = await getLeadFromFirebase(trimmed, false);
+            if (!foundLead) {
+                const qPid = query(collection(firestore, 'leads'), where('prospectPlusId', '==', trimmed), limit(1));
+                const snap = await getDocs(qPid);
+                if (!snap.empty) {
+                    foundLead = { id: snap.docs[0].id, ...snap.docs[0].data() } as Lead;
+                }
+            }
+            if (!foundLead) {
+                const qComp = query(collection(firestore, 'leads'), where('companyName', '==', trimmed), limit(1));
+                const snap = await getDocs(qComp);
+                if (!snap.empty) {
+                    foundLead = { id: snap.docs[0].id, ...snap.docs[0].data() } as Lead;
+                }
+            }
+
+            if (foundLead) {
+                if (foundLead.id === currentLead.id) {
+                    toast({ title: "Same Lead", description: "This is already the current lead." });
+                } else if (allCandidates.some(c => c.id === foundLead.id)) {
+                    toast({ title: "Already Added", description: "This lead is already in the candidates list." });
+                } else {
+                    setAdditionalCandidates(prev => [...prev, foundLead]);
+                    toast({ title: "Lead Added", description: `Added ${foundLead.companyName} (${foundLead.id}) to candidates list.` });
+                    setSearchQuery('');
+                }
+            } else {
+                toast({ variant: "destructive", title: "Not Found", description: `No lead found matching "${trimmed}".` });
+            }
+        } catch (err) {
+            console.error("Error searching lead for merge:", err);
+            toast({ variant: "destructive", title: "Error", description: "Failed to search lead." });
+        } finally {
+            setIsSearchingLead(false);
+        }
+    };
+
+    const allCandidates = useMemo(() => {
+        const combined = [currentLead, ...duplicates, ...additionalCandidates];
+        const uniqueMap = new Map<string, Lead>();
+        combined.forEach(c => uniqueMap.set(c.id, c));
+        return Array.from(uniqueMap.values());
+    }, [currentLead, duplicates, additionalCandidates]);
+
     const selectedLead = useMemo(() => allCandidates.find(c => c.id === selectedTargetId), [allCandidates, selectedTargetId]);
 
     const handleMerge = async () => {
@@ -7380,6 +7519,29 @@ function MergeDuplicatesDialog({
                 </DialogHeader>
 
                 <div className="py-4 space-y-4">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-3 bg-slate-50 border rounded-xl">
+                        <div className="flex-1 flex items-center gap-2 bg-white px-3 py-1.5 border rounded-lg">
+                            <Search className="h-4 w-4 text-slate-400 shrink-0" />
+                            <input
+                                type="text"
+                                className="w-full text-xs outline-none bg-transparent"
+                                placeholder="Search & add candidate lead by ID, Prospect+ ID, or company name..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSearchAddLead()}
+                            />
+                        </div>
+                        <Button
+                            size="sm"
+                            onClick={handleSearchAddLead}
+                            disabled={isSearchingLead || !searchQuery.trim()}
+                            className="bg-[#095c7b] hover:bg-[#084c66] text-white shrink-0"
+                        >
+                            {isSearchingLead ? <Loader className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+                            Add Lead
+                        </Button>
+                    </div>
+
                     <Label className="font-bold text-sm text-slate-800">Select Lead Record to Retain (Master Record)</Label>
                     
                     {/* Side-by-side Comparative Cards */}

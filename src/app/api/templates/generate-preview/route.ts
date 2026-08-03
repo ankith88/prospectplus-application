@@ -27,6 +27,9 @@ export async function POST(request: Request) {
     let companyName = 'Your Company';
     let salesRepName = 'Sales Representative';
     let franchiseeName = 'MailPlus';
+    let franchiseeMainContact = '';
+    let franchiseeEmail = '';
+    let franchiseeMobile = '';
     let accountManagerName = 'Account Manager';
     let accountManagerMobile = '0412 345 678';
     let accountManagerCalendly = 'https://calendly.com/sample';
@@ -53,6 +56,42 @@ export async function POST(request: Request) {
         leadScfLink = leadData.dynamicScfUrl || leadScfLink;
         bookingUrlId = leadData.bookingUrlId || '';
         generalBookingUrlId = leadData.generalBookingUrlId || '';
+
+        // Fetch Franchisee contact details from franchisees collection
+        try {
+          let franchiseeData: any = null;
+          if (leadData.franchisee_id) {
+            const fIdStr = String(leadData.franchisee_id);
+            const franDoc = await db.collection('franchisees').doc(fIdStr).get();
+            if (franDoc.exists) {
+              franchiseeData = franDoc.data();
+            } else {
+              const franSnap1 = await db.collection('franchisees').where('internalId', '==', fIdStr).limit(1).get();
+              if (!franSnap1.empty) {
+                franchiseeData = franSnap1.docs[0].data();
+              } else {
+                const franSnap2 = await db.collection('franchisees').where('internalId', '==', Number(leadData.franchisee_id)).limit(1).get();
+                if (!franSnap2.empty) {
+                  franchiseeData = franSnap2.docs[0].data();
+                }
+              }
+            }
+          }
+          if (!franchiseeData && leadData.franchisee) {
+            const franSnap = await db.collection('franchisees').where('name', '==', leadData.franchisee).limit(1).get();
+            if (!franSnap.empty) {
+              franchiseeData = franSnap.docs[0].data();
+            }
+          }
+          if (franchiseeData) {
+            franchiseeName = franchiseeData.name || franchiseeData.mainContact || leadData.franchisee || franchiseeName;
+            franchiseeMainContact = franchiseeData.mainContact || franchiseeData.name || '';
+            franchiseeEmail = franchiseeData.email || '';
+            franchiseeMobile = franchiseeData.mobile || franchiseeData.phone || '';
+          }
+        } catch (err) {
+          console.error('[Template Preview] Failed to fetch franchisee details:', err);
+        }
 
         if (accountManagerName !== 'Account Manager') {
             const usersSnap = await db.collection('users').get();
@@ -101,6 +140,12 @@ export async function POST(request: Request) {
     templateHtml = templateHtml.replace(/\{\{sales_rep_name\}\}/gi, salesRepName);
     templateHtml = templateHtml.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
     templateHtml = templateHtml.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
+    templateHtml = templateHtml.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);
+    templateHtml = templateHtml.replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeMainContact);
+    templateHtml = templateHtml.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
+    templateHtml = templateHtml.replace(/\{\{franchisee_email\}\}/gi, franchiseeEmail);
+    templateHtml = templateHtml.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);
+    templateHtml = templateHtml.replace(/\{\{franchisee_mobile\}\}/gi, franchiseeMobile);
     templateHtml = templateHtml.replace(/\{\{AccountManager\.Name\}\}/gi, accountManagerName);
     templateHtml = templateHtml.replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile);
     templateHtml = templateHtml.replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly);

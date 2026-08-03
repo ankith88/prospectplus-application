@@ -50,7 +50,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { AddContactForm } from './add-contact-form';
 import { EditPostalAddressDialog } from './edit-postal-address-dialog';
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs, query, where, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc, getDoc, limit } from 'firebase/firestore';
 import { generatePricingTable, generateSuburbMapping } from '@/lib/pricing-helpers';
 import { encryptLeadId } from '@/lib/localmile-security';
 
@@ -378,24 +378,49 @@ export function ServiceSelectionDialog({
   useEffect(() => {
     if (lead) {
       setContacts(lead.contacts || []);
-      if (lead.franchisee && lead.franchisee !== 'Unassigned') {
-        getFranchiseeByName(lead.franchisee).then(f => {
-          if (f) {
-            setFranchisee(f);
-            if (f.email) setFranchiseeEmail(f.email);
-            // Check premium eligibility (suburb matching in franchisee's starTrackSuburbsJson)
-            const eligible = f.starTrackSuburbsJson?.some(mapping => 
-              mapping.suburbs?.toUpperCase() === lead.address?.city?.toUpperCase() &&
-              mapping.state?.toUpperCase() === lead.address?.state?.toUpperCase() &&
-              mapping.post_code === lead.address?.zip
-            ) || false;
-            setIsPremiumEligible(eligible);
+      const fetchFran = async () => {
+        let f: Franchisee | null = null;
+        if (lead.franchisee_id) {
+          try {
+            const fIdStr = String(lead.franchisee_id);
+            const fDoc = await getDoc(doc(firestore, 'franchisees', fIdStr));
+            if (fDoc.exists()) {
+              f = { internalId: fDoc.id, ...fDoc.data() } as Franchisee;
+            } else {
+              const q1 = query(collection(firestore, 'franchisees'), where('internalId', '==', fIdStr), limit(1));
+              const snap1 = await getDocs(q1);
+              if (!snap1.empty) {
+                f = { internalId: snap1.docs[0].id, ...snap1.docs[0].data() } as Franchisee;
+              } else {
+                const q2 = query(collection(firestore, 'franchisees'), where('internalId', '==', Number(lead.franchisee_id)), limit(1));
+                const snap2 = await getDocs(q2);
+                if (!snap2.empty) {
+                  f = { internalId: snap2.docs[0].id, ...snap2.docs[0].data() } as Franchisee;
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Error fetching franchisee by id:", e);
           }
-        });
-      } else {
-        setFranchisee(null);
-        setIsPremiumEligible(false);
-      }
+        }
+        if (!f && lead.franchisee && lead.franchisee !== 'Unassigned') {
+          f = await getFranchiseeByName(lead.franchisee);
+        }
+        if (f) {
+          setFranchisee(f);
+          if (f.email) setFranchiseeEmail(f.email);
+          const eligible = f.starTrackSuburbsJson?.some(mapping => 
+            mapping.suburbs?.toUpperCase() === lead.address?.city?.toUpperCase() &&
+            mapping.state?.toUpperCase() === lead.address?.state?.toUpperCase() &&
+            mapping.post_code === lead.address?.zip
+          ) || false;
+          setIsPremiumEligible(eligible);
+        } else {
+          setFranchisee(null);
+          setIsPremiumEligible(false);
+        }
+      };
+      fetchFran();
     }
   }, [lead]);
 
@@ -677,8 +702,19 @@ export function ServiceSelectionDialog({
     resolved = resolved.replace(/\{\{company_name\}\}/gi, lead.companyName || '');
     resolved = resolved.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepName);
     resolved = resolved.replace(/\{\{sales_rep_name\}\}/gi, salesRepName);
-    resolved = resolved.replace(/\{\{Franchisee\.Name\}\}/gi, lead.franchisee || 'MailPlus');
-    resolved = resolved.replace(/\{\{franchisee_name\}\}/gi, lead.franchisee || 'MailPlus');
+    const franName = franchisee?.name || franchisee?.mainContact || lead.franchisee || 'MailPlus';
+    const franContact = franchisee?.mainContact || franchisee?.name || lead.franchisee || 'MailPlus';
+    const franEmailVal = franchisee?.email || franchiseeEmail || '';
+    const franMobileVal = franchisee?.mobile || (franchisee as any)?.phone || '';
+
+    resolved = resolved.replace(/\{\{Franchisee\.Name\}\}/gi, franName);
+    resolved = resolved.replace(/\{\{franchisee_name\}\}/gi, franName);
+    resolved = resolved.replace(/\{\{Franchisee\.MainContact\}\}/gi, franContact);
+    resolved = resolved.replace(/\{\{Franchisee\.ContactName\}\}/gi, franContact);
+    resolved = resolved.replace(/\{\{Franchisee\.Email\}\}/gi, franEmailVal);
+    resolved = resolved.replace(/\{\{franchisee_email\}\}/gi, franEmailVal);
+    resolved = resolved.replace(/\{\{Franchisee\.Mobile\}\}/gi, franMobileVal);
+    resolved = resolved.replace(/\{\{franchisee_mobile\}\}/gi, franMobileVal);
     resolved = resolved.replace(/\{\{AccountManager\.Name\}\}/gi, lead.accountManagerAssigned || salesRepName);
     resolved = resolved.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
     resolved = resolved.replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly);
@@ -831,7 +867,19 @@ export function ServiceSelectionDialog({
         const data = await res.json();
         if (!data.success) throw new Error(data.message);
  
-        await updateLeadStatus(lead.id, 'Quote Sent');
+        const isCompanyOrSignedCustomer = 
+          mode === 'Resell' ||
+          (lead as any).leadType === 'Company' ||
+          ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(lead.status || '') ||
+          (typeof window !== 'undefined' && window.location.pathname.startsWith('/companies/'));
+
+        const isResendingQuote = 
+          !!scfId ||
+          ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won', 'Signed Customer'].includes(lead.status || '');
+
+        if (!isCompanyOrSignedCustomer && !isResendingQuote) {
+          await updateLeadStatus(lead.id, 'Quote Sent');
+        }
         await logActivity(lead.id, {
             type: 'Update',
             notes: `Processed sales option: Quote for services and sent email.`,

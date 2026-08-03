@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       const leadData = leadDoc.data() || {};
       const companyName = leadData.companyName || 'Unknown Company';
       const salesRepAssigned = leadData.salesRepAssigned || 'Sales Representative';
-      const franchiseeName = leadData.franchisee || 'MailPlus';
+      let franchiseeName = leadData.franchisee || 'MailPlus';
 
       // Fetch contacts
       const contactsSnap = await leadDoc.ref.collection('contacts').get();
@@ -195,9 +195,20 @@ export async function POST(request: Request) {
         try {
           let franchiseeData: any = null;
           if (leadData.franchisee_id) {
-            const franDoc = await db.collection('franchisees').doc(leadData.franchisee_id).get();
+            const fIdStr = String(leadData.franchisee_id);
+            const franDoc = await db.collection('franchisees').doc(fIdStr).get();
             if (franDoc.exists) {
               franchiseeData = franDoc.data();
+            } else {
+              const franSnap1 = await db.collection('franchisees').where('internalId', '==', fIdStr).limit(1).get();
+              if (!franSnap1.empty) {
+                franchiseeData = franSnap1.docs[0].data();
+              } else {
+                const franSnap2 = await db.collection('franchisees').where('internalId', '==', Number(leadData.franchisee_id)).limit(1).get();
+                if (!franSnap2.empty) {
+                  franchiseeData = franSnap2.docs[0].data();
+                }
+              }
             }
           }
           if (!franchiseeData && leadData.franchisee) {
@@ -207,9 +218,10 @@ export async function POST(request: Request) {
             }
           }
           if (franchiseeData) {
-            franchiseeMainContact = franchiseeData.mainContact || '';
+            franchiseeName = franchiseeData.name || franchiseeData.mainContact || leadData.franchisee || 'MailPlus';
+            franchiseeMainContact = franchiseeData.mainContact || franchiseeData.name || '';
             franchiseeEmail = franchiseeData.email || '';
-            franchiseeMobile = franchiseeData.mobile || '';
+            franchiseeMobile = franchiseeData.mobile || franchiseeData.phone || '';
           }
         } catch (err) {
           console.error('[Send Direct] Failed to fetch franchisee details:', err);
@@ -279,10 +291,14 @@ export async function POST(request: Request) {
 
         compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
         compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
+        compiledBody = compiledBody.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
         compiledBody = compiledBody.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);
         compiledBody = compiledBody.replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeMainContact);
         compiledBody = compiledBody.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
+        compiledBody = compiledBody.replace(/\{\{franchisee_email\}\}/gi, franchiseeEmail);
         compiledBody = compiledBody.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);
+        compiledBody = compiledBody.replace(/\{\{franchisee_mobile\}\}/gi, franchiseeMobile);
 
         // Resolve subject placeholders
         let compiledSubject = subjectLine;
@@ -292,6 +308,7 @@ export async function POST(request: Request) {
         compiledSubject = compiledSubject.replace(/\{\{Company\.Name\}\}/gi, companyName);
         compiledSubject = compiledSubject.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
         compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
+        compiledSubject = compiledSubject.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
         compiledSubject = compiledSubject.replace(/\{\{sender\.email\}\}/gi, customSenderEmail || senderEmail);
         compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
         compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
@@ -314,8 +331,14 @@ export async function POST(request: Request) {
 
         compiledSubject = compiledSubject.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
         compiledSubject = compiledSubject.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
+        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
+        compiledSubject = compiledSubject.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
         compiledSubject = compiledSubject.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);
         compiledSubject = compiledSubject.replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeMainContact);
+        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
+        compiledSubject = compiledSubject.replace(/\{\{franchisee_email\}\}/gi, franchiseeEmail);
+        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);
+        compiledSubject = compiledSubject.replace(/\{\{franchisee_mobile\}\}/gi, franchiseeMobile);
         compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
         compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);
 

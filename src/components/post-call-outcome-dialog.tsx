@@ -462,6 +462,50 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
     }
   }, [isOpen, callActivity, form, lead.status]);
 
+  const [franchiseeDetails, setFranchiseeDetails] = useState<any | null>(null);
+
+  useEffect(() => {
+    const fetchFranchisee = async () => {
+      if (!lead?.franchisee_id && !lead?.franchisee) {
+        setFranchiseeDetails(null);
+        return;
+      }
+      try {
+        let fDocData = null;
+        if (lead.franchisee_id) {
+          const fIdStr = String(lead.franchisee_id);
+          const fDoc = await getDoc(doc(db, 'franchisees', fIdStr));
+          if (fDoc.exists()) {
+            fDocData = { id: fDoc.id, ...fDoc.data() };
+          } else {
+            const q1 = query(collection(db, 'franchisees'), where('internalId', '==', fIdStr));
+            const qSnap1 = await getDocs(q1);
+            if (!qSnap1.empty) {
+              fDocData = { id: qSnap1.docs[0].id, ...qSnap1.docs[0].data() };
+            } else {
+              const q2 = query(collection(db, 'franchisees'), where('internalId', '==', Number(lead.franchisee_id)));
+              const qSnap2 = await getDocs(q2);
+              if (!qSnap2.empty) {
+                fDocData = { id: qSnap2.docs[0].id, ...qSnap2.docs[0].data() };
+              }
+            }
+          }
+        }
+        if (!fDocData && lead.franchisee) {
+          const q = query(collection(db, 'franchisees'), where('name', '==', lead.franchisee));
+          const qSnap = await getDocs(q);
+          if (!qSnap.empty) {
+            fDocData = { id: qSnap.docs[0].id, ...qSnap.docs[0].data() };
+          }
+        }
+        setFranchiseeDetails(fDocData);
+      } catch (e) {
+        console.error('Error fetching franchisee in post call outcome dialog:', e);
+      }
+    };
+    fetchFranchisee();
+  }, [lead?.franchisee_id, lead?.franchisee]);
+
   const compilePlaceholders = useCallback((text: string) => {
     if (!text) return '';
     let result = text;
@@ -471,7 +515,10 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
     const contactFirstName = primaryContact?.firstName || contactName.split(' ')[0] || contactName;
 
     const salesRep = lead.salesRepAssigned || userProfile?.displayName || userProfile?.name || 'MailPlus Representative';
-    const franchiseeName = lead.franchisee || userProfile?.franchisee || 'MailPlus';
+    const franchiseeName = franchiseeDetails?.name || franchiseeDetails?.mainContact || lead.franchisee || userProfile?.franchisee || 'MailPlus';
+    const franchiseeContact = franchiseeDetails?.mainContact || franchiseeDetails?.name || lead.franchisee || franchiseeName;
+    const franchiseeEmail = franchiseeDetails?.email || (lead as any).franchiseeEmail || 'sales@mailplus.com.au';
+    const franchiseeMobile = franchiseeDetails?.mobile || franchiseeDetails?.phone || (lead as any).franchiseeMobile || '';
 
     const companyName = lead.companyName || 'your company';
     const city = lead.address?.city || lead.city || '';
@@ -490,10 +537,13 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
       .replace(/\{\{Company\.Name\}\}/gi, companyName)
       .replace(/\{\{SalesRep\.Name\}\}/gi, salesRep)
       .replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName)
-      .replace(/\{\{Franchisee\.MainContact\}\}/gi, (lead as any).franchiseeMainContact || franchiseeName)
-      .replace(/\{\{Franchisee\.ContactName\}\}/gi, (lead as any).franchiseeMainContact || franchiseeName)
-      .replace(/\{\{Franchisee\.Email\}\}/gi, (lead as any).franchiseeEmail || 'sales@mailplus.com.au')
-      .replace(/\{\{Franchisee\.Mobile\}\}/gi, (lead as any).franchiseeMobile || '')
+      .replace(/\{\{franchisee_name\}\}/gi, franchiseeName)
+      .replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeContact)
+      .replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeContact)
+      .replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail)
+      .replace(/\{\{franchisee_email\}\}/gi, franchiseeEmail)
+      .replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile)
+      .replace(/\{\{franchisee_mobile\}\}/gi, franchiseeMobile)
       .replace(/\{\{AccountManager\.Name\}\}/gi, lead.accountManagerAssigned || salesRep)
       .replace(/\{\{AccountManager\.Mobile\}\}/gi, (lead as any).accountManagerMobile || '')
       .replace(/\{\{AccountManager\.Calendly\}\}/gi, (lead as any).salesRepAssignedCalendlyLink || '')
@@ -520,7 +570,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
       .replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, (lead as any).scheduledServiceDate || '');
 
     return result;
-  }, [lead, userProfile]);
+  }, [lead, userProfile, franchiseeDetails]);
 
   const applyTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);

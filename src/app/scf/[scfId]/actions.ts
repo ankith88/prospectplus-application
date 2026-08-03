@@ -78,28 +78,61 @@ export async function acceptScfAction(leadId: string, scfId: string) {
           console.log(`[SCF Accept] NetSuite Script 2514 Response Body: ${text2}`);
 
           // Status update AFTER NetSuite APIs complete
-          console.log(`[SCF Accept] NetSuite API calls completed. Updating Lead status to Quote Accepted...`);
-          await leadRef.update({ 
-            status: 'Quote Accepted', 
-            customerStatus: 'Quote Accepted',
-            scfAcceptedAt: nowStr
-          });
+          const currentStatus = leadData?.status || leadData?.customerStatus || '';
+          const isCompanyOrSignedCustomer = 
+            leadData?.leadType === 'Company' ||
+            ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(currentStatus);
+
+          console.log(`[SCF Accept] NetSuite API calls completed. Updating Lead status (isCompanyOrSignedCustomer: ${isCompanyOrSignedCustomer})...`);
+          if (!isCompanyOrSignedCustomer) {
+            await leadRef.update({ 
+              status: 'Quote Accepted', 
+              customerStatus: 'Quote Accepted',
+              scfAcceptedAt: nowStr
+            });
+          } else {
+            await leadRef.update({ 
+              scfAcceptedAt: nowStr
+            });
+          }
         } else {
           console.warn(`[SCF Accept] NetSuite Script 1900 response did not contain success message. Body: ${text1}`);
+          const currentStatus = leadData?.status || leadData?.customerStatus || '';
+          const isCompanyOrSignedCustomer = 
+            leadData?.leadType === 'Company' ||
+            ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(currentStatus);
+
+          if (!isCompanyOrSignedCustomer) {
+            await leadRef.update({ 
+              status: 'Quote Accepted',
+              customerStatus: 'Quote Accepted',
+              scfAcceptedAt: nowStr
+            });
+          } else {
+            await leadRef.update({ 
+              scfAcceptedAt: nowStr
+            });
+          }
+        }
+      } catch (err) {
+        console.error("[SCF Accept] NetSuite API calls failed with error:", err);
+        // Fallback status update
+        const currentStatus = leadData?.status || leadData?.customerStatus || '';
+        const isCompanyOrSignedCustomer = 
+          leadData?.leadType === 'Company' ||
+          ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(currentStatus);
+
+        if (!isCompanyOrSignedCustomer) {
           await leadRef.update({ 
             status: 'Quote Accepted',
             customerStatus: 'Quote Accepted',
             scfAcceptedAt: nowStr
           });
+        } else {
+          await leadRef.update({ 
+            scfAcceptedAt: nowStr
+          });
         }
-      } catch (err) {
-        console.error("[SCF Accept] NetSuite API calls failed with error:", err);
-        // Fallback status update
-        await leadRef.update({ 
-          status: 'Quote Accepted',
-          customerStatus: 'Quote Accepted',
-          scfAcceptedAt: nowStr
-        });
       }
     }
 

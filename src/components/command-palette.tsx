@@ -105,19 +105,46 @@ export function CommandPalette() {
         const data = await res.json();
         const items: SearchResultItem[] = [];
 
-        // Add Individuals (Companies / Leads)
-        (data.individuals || []).slice(0, 8).forEach((item: any) => {
-          const isCompany = item.type === 'company';
-          items.push({
-            id: `${item.type}-${item.id}`,
-            type: item.type,
-            title: item.companyName,
-            subtitle: `${item.prospectPlusId ? `ID: ${item.prospectPlusId} · ` : ''}${item.franchisee || 'Unassigned'} · ${item.accountManagerAssigned || item.status}`,
-            badge: isCompany ? 'Customer' : 'Lead',
-            badgeColor: isCompany ? 'bg-[#e4f2e6] text-[#2f7d4f]' : 'bg-[#fef3c7] text-[#92400e]',
-            url: isCompany ? `/companies/${item.id}` : `/leads/${item.id}`,
-          });
+        const rawIndividuals = data.individuals || [];
+        const companyIdsSet = new Set<string>();
+        rawIndividuals.forEach((item: any) => {
+          if (item.type === 'company') {
+            if (item.id) companyIdsSet.add(String(item.id).toLowerCase());
+            if (item.prospectPlusId) companyIdsSet.add(String(item.prospectPlusId).toLowerCase());
+            if (item.entityId) companyIdsSet.add(String(item.entityId).toLowerCase());
+          }
         });
+
+        // Add Individuals (Companies / Leads - omit duplicate leads if company exists with same ID)
+        rawIndividuals
+          .filter((item: any) => {
+            if (item.type === 'lead') {
+              const leadId = String(item.id || '').toLowerCase();
+              const prospectPlusId = String(item.prospectPlusId || '').toLowerCase();
+              const entityId = String(item.entityId || '').toLowerCase();
+              if (
+                (leadId && companyIdsSet.has(leadId)) ||
+                (prospectPlusId && companyIdsSet.has(prospectPlusId)) ||
+                (entityId && companyIdsSet.has(entityId))
+              ) {
+                return false;
+              }
+            }
+            return true;
+          })
+          .slice(0, 8)
+          .forEach((item: any) => {
+            const isCompany = item.type === 'company';
+            items.push({
+              id: `${item.type}-${item.id}`,
+              type: item.type,
+              title: item.companyName,
+              subtitle: `${item.prospectPlusId ? `ID: ${item.prospectPlusId} · ` : ''}${item.franchisee || 'Unassigned'} · ${item.accountManagerAssigned || item.status}`,
+              badge: isCompany ? 'Customer' : 'Lead',
+              badgeColor: isCompany ? 'bg-[#e4f2e6] text-[#2f7d4f]' : 'bg-[#fef3c7] text-[#92400e]',
+              url: isCompany ? `/companies/${item.id}` : `/leads/${item.id}`,
+            });
+          });
 
         // Add Tickets
         (data.tickets || []).slice(0, 4).forEach((ticket: any) => {

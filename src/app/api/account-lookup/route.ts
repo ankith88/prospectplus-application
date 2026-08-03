@@ -713,6 +713,40 @@ export async function GET(req: NextRequest) {
     // Sort individual items by relevance score
     individualItems.sort((a, b) => (b.score || 0) - (a.score || 0));
 
+    // Collect all company IDs and Prospect+ IDs for deduplication (prefer companies over leads when Prospect+ IDs match)
+    const companyIdsSet = new Set<string>();
+    const getDocIds = (doc: any) => {
+      const ids = new Set<string>();
+      if (doc.id) ids.add(String(doc.id).toLowerCase().trim());
+      if (doc.prospectPlusId) ids.add(String(doc.prospectPlusId).toLowerCase().trim());
+      if (doc.entityId) ids.add(String(doc.entityId).toLowerCase().trim());
+      return ids;
+    };
+
+    individualItems.forEach(item => {
+      if (item.type === 'company') {
+        getDocIds(item).forEach(id => companyIdsSet.add(id));
+      }
+    });
+
+    for (const [key, item] of matchedDocs.entries()) {
+      if (item.type === 'company') {
+        const ids = getDocIds({ id: item.id, ...item.data });
+        ids.forEach(id => companyIdsSet.add(id));
+      }
+    }
+
+    const deduplicatedIndividualItems = individualItems.filter(item => {
+      if (item.type !== 'lead') return true;
+      const leadIds = getDocIds(item);
+      for (const id of leadIds) {
+        if (companyIdsSet.has(id)) {
+          return false; // Omit lead if company with same Prospect+ ID / doc ID exists
+        }
+      }
+      return true;
+    });
+
     // Process matched tickets
     const ticketItems: any[] = [];
     const seenTicketIds = new Set<string>();
@@ -760,7 +794,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       groups,
-      individuals: individualItems,
+      individuals: deduplicatedIndividualItems,
       tickets: ticketItems
     });
   } catch (error: any) {
