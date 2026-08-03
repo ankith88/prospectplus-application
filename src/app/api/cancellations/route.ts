@@ -3,6 +3,7 @@ import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { Lead } from '@/lib/types';
+import { sendCancellationNotificationEmail } from '@/lib/cancellation-email';
 
 const db = getFirestore(adminApp);
 
@@ -152,6 +153,27 @@ export async function POST(request: Request) {
       author: validated.processedBy ? `NetSuite (${validated.processedBy})` : 'NetSuite Integration',
       syncedWithNetSuite: true
     });
+
+    // Send cancellation notification email to sarah.hart@mailplus.com.au & alexandra.bathman@mailplus.com.au
+    try {
+      await sendCancellationNotificationEmail({
+        leadId,
+        netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',
+        companyName,
+        contactName: validated.contactName || '',
+        contactEmail: validated.contactEmail || '',
+        contactPhone: validated.contactPhone || '',
+        cancellationTheme: validated.cancellationTheme || 'NetSuite Request',
+        cancellationWhy: validated.cancellationWhy || '',
+        cancellationReason: validated.cancellationReason,
+        cancellationNotes: validated.cancellationNotes || '',
+        cancellationDate,
+        trueServiceCancellationDate,
+        processedBy: validated.processedBy || 'NetSuite Integration',
+      });
+    } catch (emailErr) {
+      console.error('[Cancellations Route] Error sending cancellation notification email:', emailErr);
+    }
 
     return NextResponse.json({
       success: true,

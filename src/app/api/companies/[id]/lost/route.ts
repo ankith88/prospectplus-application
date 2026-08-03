@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { sendCancellationNotificationEmail } from '@/lib/cancellation-email';
 
 const db = getFirestore(adminApp);
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
@@ -112,6 +113,27 @@ export async function PATCH(
       author: cancelledBy,
       syncedWithNetSuite: false
     });
+
+    // Send cancellation notification email
+    try {
+      await sendCancellationNotificationEmail({
+        leadId: companyId,
+        netsuiteId: currentData.netsuiteId || '',
+        companyName,
+        contactName: currentData.contacts?.[0]?.name || '',
+        contactEmail: currentData.customerServiceEmail || '',
+        contactPhone: currentData.customerPhone || '',
+        cancellationTheme: cancellationTheme || '',
+        cancellationWhy: cancellationCategory || '',
+        cancellationReason: cancellationReason || 'Other',
+        cancellationNotes: notes || '',
+        cancellationDate,
+        trueServiceCancellationDate: cancellationDate,
+        processedBy: cancelledBy,
+      });
+    } catch (emailErr) {
+      console.error('[Companies Lost Route] Error sending cancellation notification email:', emailErr);
+    }
 
     return NextResponse.json({
       success: true,

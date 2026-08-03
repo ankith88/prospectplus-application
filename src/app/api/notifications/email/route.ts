@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
+import { sendCancellationNotificationEmail } from '@/lib/cancellation-email';
 
 export async function POST(request: Request) {
   try {
@@ -8,6 +9,14 @@ export async function POST(request: Request) {
 
     const origin = request.headers.get('origin') || request.headers.get('referer') || 'https://prospect.mailplus.com.au';
     const baseUrl = origin.replace(/\/$/, '');
+
+    if (type === 'cancellation_request') {
+      const res = await sendCancellationNotificationEmail({
+        ...(payload || {}),
+        baseUrl,
+      });
+      return NextResponse.json({ ...res });
+    }
 
     if (type === 'lead_assignment_request') {
       const { leadId, companyName, currentAssignee, requesterName, requesterEmail, requestNotes } = payload || {};

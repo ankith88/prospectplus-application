@@ -173,6 +173,30 @@ export function CancelCustomerDialog({
           author: userDisplayName,
         });
 
+        // Trigger email notification to sarah.hart@mailplus.com.au & cc alexandra.bathman@mailplus.com.au
+        fetch('/api/notifications/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'cancellation_request',
+            payload: {
+              leadId: lead.id,
+              netsuiteId: leadAny.netsuiteId || '',
+              companyName: lead.companyName || `${leadAny.firstName || ''} ${leadAny.lastName || ''}`.trim(),
+              contactName: lead.contacts?.[0]?.name || leadAny.contactName || '',
+              contactEmail: lead.customerServiceEmail || leadAny.email || '',
+              contactPhone: lead.customerPhone || leadAny.phone || '',
+              cancellationTheme: selectedThemeObj?.name || '',
+              cancellationWhy: selectedWhyObj?.name || '',
+              cancellationReason: selectedReasonObj?.name || '',
+              cancellationNotes: '',
+              cancellationDate,
+              trueServiceCancellationDate: cancellationDate,
+              processedBy: `${userDisplayName} (${userEmail})`,
+            }
+          })
+        }).catch(err => console.error("Error triggering cancellation email notification:", err));
+
         // Deactivate LocalMile access if active
         deactivateLocalMileAccessForLead(lead.id, lead.contacts).catch(err => {
           console.error("Failed to deactivate LocalMile access during direct cancellation:", err);
@@ -230,6 +254,30 @@ export function CancelCustomerDialog({
           notes: `Cancellation request submitted by ${requestedBy}. Requested Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
           author: userDisplayName,
         });
+
+        // Trigger email notification to sarah.hart@mailplus.com.au & cc alexandra.bathman@mailplus.com.au
+        fetch('/api/notifications/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'cancellation_request',
+            payload: {
+              leadId: lead.id,
+              netsuiteId: leadAny.netsuiteId || '',
+              companyName: lead.companyName || `${leadAny.firstName || ''} ${leadAny.lastName || ''}`.trim(),
+              contactName: lead.contacts?.[0]?.name || leadAny.contactName || '',
+              contactEmail: lead.customerServiceEmail || leadAny.email || '',
+              contactPhone: lead.customerPhone || leadAny.phone || '',
+              cancellationTheme: selectedThemeObj?.name || '',
+              cancellationWhy: selectedWhyObj?.name || '',
+              cancellationReason: selectedReasonObj?.name || '',
+              cancellationNotes: '',
+              cancellationDate,
+              trueServiceCancellationDate: cancellationDate,
+              processedBy: `${userDisplayName} (${userEmail})`,
+            }
+          })
+        }).catch(err => console.error("Error triggering cancellation email notification:", err));
 
         toast({
           title: 'Request Submitted',
