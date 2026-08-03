@@ -856,6 +856,10 @@ export function ServiceSelectionDialog({
         const result = await response.json();
         if (!result.success) throw new Error(result.message);
 
+        if (mode === 'Signup') {
+          await updateLeadStatus(lead.id, 'Won');
+        }
+
         let activityNotes = `Sent Signup confirmation email to ${emailPreviewData.to}`;
         if (mode === 'Resend SCF') {
           activityNotes = `Resent SCF email to ${emailPreviewData.to}`;
@@ -1438,8 +1442,7 @@ export function ServiceSelectionDialog({
              }
            }
 
-           // 2. Update status to Won and duplicate to companies AFTER NetSuite API calls complete
-           await updateLeadStatus(lead.id, 'Won');
+           // 2. Update services AFTER NetSuite API calls complete
            await updateLeadServices(lead.id, serviceSelections);
            
             const selectedContacts = contacts.filter(c => values.selectedContactIds?.includes(c.id));
