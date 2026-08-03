@@ -1969,7 +1969,7 @@ export default function LeadsClientPage({
                     </>
                 )}
                 {selectedLeads.length > 0 && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {userProfile?.activeRole?.toLowerCase() !== 'user' && (
                           <>
                             <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">

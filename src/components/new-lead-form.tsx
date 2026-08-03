@@ -1769,16 +1769,17 @@ export function NewLeadForm() {
         </Card>
 
         {canShowRemainingSections && (
-          <div className="flex flex-col sm:flex-row justify-end gap-3">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 sm:gap-3">
             <Button
               type="button"
               variant="outline"
-              disabled={isSubmitting || isCardAnalyzing}
               onClick={form.handleSubmit((data) => onSubmit(data, true))}
+              disabled={isSubmitting || isCardAnalyzing}
+              className="w-full sm:w-auto"
             >
-              {isSubmitting ? <Loader /> : 'Create & Add Another'}
+              {isSubmitting ? <Loader /> : 'Save & Add Another'}
             </Button>
-            <Button type="submit" disabled={isSubmitting || isCardAnalyzing}>
+            <Button type="submit" disabled={isSubmitting || isCardAnalyzing} className="w-full sm:w-auto">
               {isSubmitting ? <Loader /> : 'Create Lead'}
             </Button>
           </div>
@@ -1790,10 +1791,10 @@ export function NewLeadForm() {
       setShowCardScanner(open);
       if (!open) setFrontCardImage(null);
     }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100vw-32px)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Camera className="w-5 h-5 text-primary" /> Scan Business Card / Brochure
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Camera className="w-5 h-5 text-primary shrink-0" /> Scan Business Card / Brochure
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -1805,25 +1806,25 @@ export function NewLeadForm() {
             )}
           </div>
           {!frontCardImage ? (
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button type="button" className="w-full" disabled={!hasCameraPermission} onClick={() => {
                 const img = handleCaptureCardPhoto();
                 if (img) setFrontCardImage(img);
               }}>
                 Capture Front
               </Button>
-              <Button type="button" variant="outline" onClick={() => setShowCardScanner(false)}>Cancel</Button>
+              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowCardScanner(false)}>Cancel</Button>
             </div>
           ) : (
             <div className="space-y-2">
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button type="button" className="w-full" onClick={() => {
                   const backImg = handleCaptureCardPhoto();
                   handleRunCardAnalysis(frontCardImage, backImg);
                 }}>
                   Capture Back & Analyze
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setFrontCardImage(null)}>Retake Front</Button>
+                <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setFrontCardImage(null)}>Retake Front</Button>
               </div>
               <Button type="button" variant="secondary" className="w-full" onClick={() => handleRunCardAnalysis(frontCardImage, null)}>
                 Skip Back & Analyze Front Only

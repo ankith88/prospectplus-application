@@ -54,6 +54,7 @@ import { useOnboarding } from "@/components/onboarding/onboarding-provider"
 import { AskChatbot } from "@/components/ask/ask-chatbot"
 import { useDialingSession } from "@/hooks/use-dialing-session"
 import { usePerformance } from "@/hooks/use-performance"
+import { cn } from "@/lib/utils"
 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -61,11 +62,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin, switchRole, updateUserProfile } = useAuth()
   const { canView } = usePermissions()
-  const { isMobile, state, toggleSidebar } = useSidebar()
+  const { isMobile, state, toggleSidebar, setOpenMobile } = useSidebar()
   const { startTour } = useOnboarding()
   const { isSessionActive, elapsedTime, sessionLeadIds, leadsVisited, endSession } = useDialingSession()
   const { loadTime, setLoadTime, pageName, setPageName, isCustom, setIsCustom } = usePerformance()
   const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
 
   useEffect(() => {
     if (isCustomPath(pathname)) {
@@ -733,19 +738,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <DailyAreaLogDialog isOpen={showAreaLog} onOpenChange={setShowAreaLog} />
       <Sidebar collapsible="icon" className="sidebar-nav-theme">
         <SidebarHeader className="flex items-center justify-between px-3 py-2 h-14 border-b border-sidebar-border overflow-hidden">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2" onClick={() => setOpenMobile(false)}>
             <div className="logo-text whitespace-nowrap">
-              {state === "collapsed" ? (
+              {state === "collapsed" && !isMobile ? (
                 <span>p<span className="logo-plus">+</span></span>
               ) : (
                 <span>prospect<span className="logo-plus">.plus</span></span>
               )}
             </div>
           </Link>
-          <SidebarTrigger className="h-7 w-7 text-sidebar-foreground hover:bg-sidebar-accent hover:text-white transition-colors" />
+          <div className="flex items-center gap-1">
+            {isMobile && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
+                onClick={() => setOpenMobile(false)}
+                title="Close Navigation"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+            <SidebarTrigger className="h-7 w-7 text-sidebar-foreground hover:bg-sidebar-accent hover:text-white transition-colors" />
+          </div>
         </SidebarHeader>
         <SidebarContent>
-          {state === "collapsed" ? (
+          {state === "collapsed" && !isMobile ? (
             <SidebarMenu className="py-2 gap-2">
               {/* Pinned */}
               <SidebarMenuItem>
@@ -943,6 +961,49 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarMenu>
           ) : (
             <>
+              {/* Main Pages Section for Mobile / Franchisees */}
+              <SidebarGroup>
+                <SidebarGroupLabel className="flex items-center gap-1.5 text-[#eaf143] font-bold text-xs uppercase tracking-wider">
+                  <Star className="h-3 w-3 fill-[#eaf143] text-[#eaf143]" />
+                  Main Pages
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="Create New Lead">
+                        <Link href="/leads/new" onClick={() => setOpenMobile(false)}>
+                          <PlusCircle className="text-[#eaf143] h-4 w-4" />
+                          <span className="font-semibold text-white">Create New Lead</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={isActive("/account-lookup")} tooltip="Universal Lookup">
+                        <Link href="/account-lookup" onClick={() => setOpenMobile(false)}>
+                          <Search className="text-[#eaf143] h-4 w-4" />
+                          <span className="font-semibold text-white">Universal Lookup</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={isActive("/sales-snapshot")} tooltip="Sales SnapShot">
+                        <Link href="/sales-snapshot" onClick={() => setOpenMobile(false)}>
+                          <Layers className="text-[#eaf143] h-4 w-4" />
+                          <span className="font-semibold text-white">Sales SnapShot</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={isActive("/franchisee-leads") || (isActive("/leads") && isFranchiseeRole)} tooltip="Franchisee Leads">
+                        <Link href={isFranchiseeRole ? "/franchisee-leads" : "/leads"} onClick={() => setOpenMobile(false)}>
+                          <Briefcase className="text-[#eaf143] h-4 w-4" />
+                          <span className="font-semibold text-white">{isFranchiseeRole ? "Franchisee Leads" : "Outbound Leads"}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
               {/* Pinned Quick Access */}
               <SidebarGroup>
                 <SidebarGroupLabel className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel">
@@ -2016,34 +2077,41 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-         <header className="flex h-14 items-center justify-between gap-4 border-b bg-sidebar text-sidebar-foreground px-4 sm:px-6 sticky top-0 z-30">
-          <div className="flex items-center gap-4">
-            <SidebarTrigger />
+          <header className="flex h-14 items-center justify-between gap-2 sm:gap-4 border-b bg-sidebar text-sidebar-foreground px-2 sm:px-6 sticky top-0 z-30">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <SidebarTrigger className="hidden md:inline-flex" />
+            <Link href="/" className="md:hidden flex items-center gap-1">
+              <span className="logo-text text-lg font-bold text-white tracking-tight">
+                prospect<span className="logo-plus">.plus</span>
+              </span>
+            </Link>
           </div>
           
           <div className="flex-1 flex justify-center">
-             <h2 className="logo-text text-xl sm:block hidden">
+             <h2 className="logo-text text-lg sm:text-xl md:block hidden">
                prospect<span className="logo-plus">.plus</span>
              </h2>
           </div>
 
-          <div className="flex items-center gap-2 lg:gap-4">
-            <PerformanceTimer loadTime={loadTime} pageName={pageName || getPageNameFromPath(pathname)} />
+          <div className="flex items-center gap-1 sm:gap-2 lg:gap-4">
+            <div className="hidden sm:inline-flex">
+              <PerformanceTimer loadTime={loadTime} pageName={pageName || getPageNameFromPath(pathname)} />
+            </div>
             {userProfile?.linkedSalesRep && (
-                <Button variant="outline" size="sm" onClick={handleCalendlyClick} className="bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
+                <Button variant="outline" size="sm" onClick={handleCalendlyClick} className="hidden md:inline-flex bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
                     <Calendar className="mr-2 h-4 w-4" />
                     {userProfile.linkedSalesRep} Calendar
                 </Button>
             )}
-           <Button variant="ghost" size="icon" onClick={() => startTour()} title="Start Walkthrough">
-             <HelpCircle className="h-5 w-5" />
+           <Button variant="ghost" size="icon" onClick={() => startTour()} title="Start Walkthrough" className="h-8 w-8 sm:h-9 sm:w-9">
+             <HelpCircle className="h-4 w-4 sm:h-5 sm:w-5" />
            </Button>
            <UniversalSearch />
            <NotificationCenter />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button id="step-settings-panel" variant="ghost" className="flex items-center gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent group">
-                 <User className="h-5 w-5" />
+              <Button id="step-settings-panel" variant="ghost" className="flex items-center gap-1 sm:gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent group p-1.5 sm:px-3">
+                 <User className="h-4 w-4 sm:h-5 sm:w-5" />
                  <div className="hidden md:flex flex-col items-start">
                    <span className="font-medium text-sm truncate group-hover:text-sidebar-hover-foreground">{user?.displayName}</span>
                    {(userProfile?.aircallPhoneNumber || userProfile?.phoneNumber) && (
@@ -2187,16 +2255,98 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
         )}
 
-        <div ref={containerRef} className="p-4 sm:p-6 lg:p-8 flex-grow">
+        <div ref={containerRef} className="p-3 sm:p-6 lg:p-8 pb-20 md:pb-8 flex-grow max-w-full overflow-x-hidden">
             {isBlockedForUserRole(pathname, userProfile?.activeRole) ? (
               <AccessDenied />
             ) : (
               children
             )}
         </div>
-        <footer className="p-4 sm:p-6 text-center text-xs text-muted-foreground border-t">
+        <footer className="p-4 sm:p-6 text-center text-xs text-muted-foreground border-t pb-24 md:pb-6">
           {new Date().getFullYear()} prospect.plus. All rights reserved.
         </footer>
+
+        {/* Mobile Bottom Navigation Bar */}
+        <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#095c7b] border-t border-teal-800/60 shadow-lg px-2 py-1 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
+          <div className="grid grid-cols-5 gap-1 items-end justify-items-center max-w-md mx-auto">
+            {/* 1. Left 1: Leads */}
+            <Link
+              href={isFranchiseeRole ? "/franchisee-leads" : "/leads"}
+              className={cn(
+                "flex flex-col items-center justify-center w-full py-1 rounded-lg transition-colors text-[10px] font-medium gap-0.5",
+                isActive("/franchisee-leads") || (isActive("/leads") && !isActive("/leads/new"))
+                  ? "text-[#eaf143] font-bold"
+                  : "text-slate-200 hover:text-white"
+              )}
+            >
+              <Briefcase className={cn("h-5 w-5", isActive("/franchisee-leads") || (isActive("/leads") && !isActive("/leads/new")) ? "text-[#eaf143] stroke-[2.5]" : "text-slate-300")} />
+              <span className="truncate max-w-[64px] text-center leading-tight">Leads</span>
+            </Link>
+
+            {/* 2. Left 2: Lookup */}
+            <Link
+              href="/account-lookup"
+              className={cn(
+                "flex flex-col items-center justify-center w-full py-1 rounded-lg transition-colors text-[10px] font-medium gap-0.5",
+                isActive("/account-lookup")
+                  ? "text-[#eaf143] font-bold"
+                  : "text-slate-200 hover:text-white"
+              )}
+            >
+              <Search className={cn("h-5 w-5", isActive("/account-lookup") ? "text-[#eaf143] stroke-[2.5]" : "text-slate-300")} />
+              <span className="truncate max-w-[64px] text-center leading-tight">Lookup</span>
+            </Link>
+
+            {/* 3. CENTER: Create Lead (Prominent Action Button) */}
+            <Link
+              href="/leads/new"
+              className="flex flex-col items-center justify-center w-full relative -mt-3.5 group"
+            >
+              <div className={cn(
+                "h-11 w-11 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95 ring-4 ring-[#095c7b]",
+                isActive("/leads/new")
+                  ? "bg-[#eaf143] text-[#095c7b]"
+                  : "bg-[#eaf143] text-[#095c7b] hover:bg-yellow-300"
+              )}>
+                <Plus className="h-6 w-6 stroke-[3]" />
+              </div>
+              <span className={cn(
+                "text-[10px] font-semibold mt-0.5 truncate max-w-[68px] text-center leading-tight",
+                isActive("/leads/new") ? "text-[#eaf143] font-bold" : "text-slate-200"
+              )}>
+                Create Lead
+              </span>
+            </Link>
+
+            {/* 4. Right 1: Snapshot */}
+            <Link
+              href="/sales-snapshot"
+              className={cn(
+                "flex flex-col items-center justify-center w-full py-1 rounded-lg transition-colors text-[10px] font-medium gap-0.5",
+                isActive("/sales-snapshot")
+                  ? "text-[#eaf143] font-bold"
+                  : "text-slate-200 hover:text-white"
+              )}
+            >
+              <Layers className={cn("h-5 w-5", isActive("/sales-snapshot") ? "text-[#eaf143] stroke-[2.5]" : "text-slate-300")} />
+              <span className="truncate max-w-[64px] text-center leading-tight">Snapshot</span>
+            </Link>
+
+            {/* 5. Right 2: Signed */}
+            <Link
+              href="/signed-customers"
+              className={cn(
+                "flex flex-col items-center justify-center w-full py-1 rounded-lg transition-colors text-[10px] font-medium gap-0.5",
+                isActive("/signed-customers")
+                  ? "text-[#eaf143] font-bold"
+                  : "text-slate-200 hover:text-white"
+              )}
+            >
+              <Star className={cn("h-5 w-5", isActive("/signed-customers") ? "text-[#eaf143] fill-[#eaf143] stroke-[2.5]" : "text-slate-300")} />
+              <span className="truncate max-w-[64px] text-center leading-tight">Signed</span>
+            </Link>
+          </div>
+        </nav>
         <UnassignedCallDialog />
         <AskChatbot />
         <CommandPalette />

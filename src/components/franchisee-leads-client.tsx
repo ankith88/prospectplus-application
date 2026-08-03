@@ -672,42 +672,42 @@ export default function FranchiseeLeadsClientPage() {
   ].filter(Boolean).length;
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-[1450px]">
+    <div className="container mx-auto p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6 max-w-[1450px]">
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-800 to-teal-950 p-6 rounded-2xl text-white shadow-xl border border-slate-700/50">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-800 to-teal-950 p-4 sm:p-6 rounded-2xl text-white shadow-xl border border-slate-700/50">
         <div className="space-y-1.5">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-white">
               Franchisee Leads Overview
             </h1>
             {franchiseeName && (
-              <Badge className="bg-teal-500/20 text-teal-300 border-teal-500/30 text-sm font-semibold px-3 py-1">
+              <Badge className="bg-teal-500/20 text-teal-300 border-teal-500/30 text-xs sm:text-sm font-semibold px-2.5 py-0.5 sm:px-3 sm:py-1">
                 {franchiseeName}
               </Badge>
             )}
           </div>
-          <p className="text-slate-300 text-sm md:text-base max-w-3xl">
+          <p className="text-slate-300 text-xs sm:text-sm md:text-base max-w-3xl leading-relaxed">
             Comprehensive lead reporting hub for your franchise. Track pipeline status, quotes sent, active trials, customer sources, and contact assigned Account Managers directly.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <Button 
             variant="outline" 
             size="sm" 
             onClick={fetchData} 
             disabled={refreshing}
-            className="bg-white/10 hover:bg-white/20 text-white border-white/20 hover:border-white/30 backdrop-blur-sm"
+            className="bg-white/10 hover:bg-white/20 text-white border-white/20 hover:border-white/30 backdrop-blur-sm text-xs sm:text-sm"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Button 
             asChild
             size="sm" 
-            className="bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold shadow-lg shadow-teal-500/20 border-none"
+            className="bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold shadow-lg shadow-teal-500/20 border-none text-xs sm:text-sm"
           >
             <Link href="/leads/new">
-              <Briefcase className="h-4 w-4 mr-2" />
+              <Briefcase className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
               New Lead
             </Link>
           </Button>
@@ -715,18 +715,18 @@ export default function FranchiseeLeadsClientPage() {
       </div>
 
       {/* KPI Performance Reporting Banner */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 md:gap-4">
         {/* Total Leads */}
         <Card 
           onClick={() => setSelectedCategoryTab('all')}
           className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'all' ? 'border-l-slate-800 ring-2 ring-slate-400/20 bg-slate-50 dark:bg-slate-900' : 'border-l-slate-400'}`}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
               <span>Total Leads</span>
-              <Briefcase className="h-4 w-4 text-slate-400" />
+              <Briefcase className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
             </div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
               {metrics.total}
             </div>
             <div className="text-xs text-slate-500 mt-1 flex items-center gap-1 flex-wrap">
@@ -745,15 +745,15 @@ export default function FranchiseeLeadsClientPage() {
           onClick={() => setSelectedCategoryTab('actioned')}
           className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'actioned' ? 'border-l-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/30' : 'border-l-blue-500'}`}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">
               <span>Active / Actioned</span>
-              <Clock className="h-4 w-4 text-blue-500" />
+              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
             </div>
-            <div className="text-2xl font-bold text-blue-950 dark:text-blue-100">
+            <div className="text-xl sm:text-2xl font-bold text-blue-950 dark:text-blue-100">
               {metrics.actioned}
             </div>
-            <p className="text-xs text-slate-500 mt-1">In progress & follow-ups</p>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">In progress & follow-ups</p>
           </CardContent>
         </Card>
 
@@ -762,15 +762,15 @@ export default function FranchiseeLeadsClientPage() {
           onClick={() => setSelectedCategoryTab('quote')}
           className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'quote' ? 'border-l-amber-600 ring-2 ring-amber-500/20 bg-amber-50/50 dark:bg-amber-950/30' : 'border-l-amber-500'}`}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">
               <span>Quotes Sent</span>
-              <FileText className="h-4 w-4 text-amber-500" />
+              <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500" />
             </div>
-            <div className="text-2xl font-bold text-amber-950 dark:text-amber-100">
+            <div className="text-xl sm:text-2xl font-bold text-amber-950 dark:text-amber-100">
               {metrics.quote}
             </div>
-            <p className="text-xs text-slate-500 mt-1">Pending customer sign-up</p>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Pending sign-up</p>
           </CardContent>
         </Card>
 
@@ -779,47 +779,47 @@ export default function FranchiseeLeadsClientPage() {
           onClick={() => setSelectedCategoryTab('trial')}
           className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'trial' ? 'border-l-purple-600 ring-2 ring-purple-500/20 bg-purple-50/50 dark:bg-purple-950/30' : 'border-l-purple-500'}`}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">
               <span>Free Trials</span>
-              <Sparkles className="h-4 w-4 text-purple-500" />
+              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500" />
             </div>
-            <div className="text-2xl font-bold text-purple-950 dark:text-purple-100">
+            <div className="text-xl sm:text-2xl font-bold text-purple-950 dark:text-purple-100">
               {metrics.trial}
             </div>
-            <p className="text-xs text-slate-500 mt-1">Active trialing accounts</p>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Trialing accounts</p>
           </CardContent>
         </Card>
 
         {/* Lost / Closed */}
         <Card 
           onClick={() => setSelectedCategoryTab('lost')}
-          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'lost' ? 'border-l-rose-600 ring-2 ring-rose-500/20 bg-rose-50/50 dark:bg-rose-950/30' : 'border-l-rose-400'}`}
+          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 col-span-2 sm:col-span-1 ${selectedCategoryTab === 'lost' ? 'border-l-rose-600 ring-2 ring-rose-500/20 bg-rose-50/50 dark:bg-rose-950/30' : 'border-l-rose-400'}`}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-1">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-1">
               <span>Lost / Closed</span>
-              <HelpCircle className="h-4 w-4 text-rose-400" />
+              <HelpCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-400" />
             </div>
-            <div className="text-2xl font-bold text-rose-950 dark:text-rose-100">
+            <div className="text-xl sm:text-2xl font-bold text-rose-950 dark:text-rose-100">
               {metrics.lost}
             </div>
-            <p className="text-xs text-slate-500 mt-1">Archived or lost</p>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Archived or lost</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Advanced Filters Card */}
       <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
-        <CardContent className="p-4 md:p-6 space-y-4">
+        <CardContent className="p-3 sm:p-4 md:p-6 space-y-4">
           {/* Quick Category Tabs */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1.5 sm:pb-0 max-w-full scrollbar-none">
               <Button
                 variant={selectedCategoryTab === 'all' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setSelectedCategoryTab('all')}
-                className={selectedCategoryTab === 'all' ? 'bg-slate-900 text-white' : ''}
+                className={`shrink-0 text-xs ${selectedCategoryTab === 'all' ? 'bg-slate-900 text-white' : ''}`}
               >
                 All Leads ({metrics.total})
               </Button>
@@ -827,7 +827,7 @@ export default function FranchiseeLeadsClientPage() {
                 variant={selectedCategoryTab === 'actioned' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setSelectedCategoryTab('actioned')}
-                className={selectedCategoryTab === 'actioned' ? 'bg-blue-600 text-white' : ''}
+                className={`shrink-0 text-xs ${selectedCategoryTab === 'actioned' ? 'bg-blue-600 text-white' : ''}`}
               >
                 <Clock className="h-3.5 w-3.5 mr-1.5" />
                 Active / Actioned ({metrics.actioned})
@@ -836,7 +836,7 @@ export default function FranchiseeLeadsClientPage() {
                 variant={selectedCategoryTab === 'quote' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setSelectedCategoryTab('quote')}
-                className={selectedCategoryTab === 'quote' ? 'bg-amber-600 text-white' : ''}
+                className={`shrink-0 text-xs ${selectedCategoryTab === 'quote' ? 'bg-amber-600 text-white' : ''}`}
               >
                 <FileText className="h-3.5 w-3.5 mr-1.5" />
                 Quote Sent ({metrics.quote})
@@ -845,7 +845,7 @@ export default function FranchiseeLeadsClientPage() {
                 variant={selectedCategoryTab === 'trial' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setSelectedCategoryTab('trial')}
-                className={selectedCategoryTab === 'trial' ? 'bg-purple-600 text-white' : ''}
+                className={`shrink-0 text-xs ${selectedCategoryTab === 'trial' ? 'bg-purple-600 text-white' : ''}`}
               >
                 <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                 Free Trial ({metrics.trial})
@@ -857,7 +857,7 @@ export default function FranchiseeLeadsClientPage() {
                 variant="ghost"
                 size="sm"
                 onClick={handleClearFilters}
-                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 self-start sm:self-auto shrink-0"
               >
                 <X className="h-3.5 w-3.5 mr-1" />
                 Clear All Filters ({activeFiltersCount})

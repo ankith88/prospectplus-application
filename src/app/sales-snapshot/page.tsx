@@ -26,5 +26,9 @@ export default function SalesSnapshotPage() {
     return <AccessDenied />;
   }
 
-  return <SalesSnapshotClient />;
+  return (
+    <div className="w-full max-w-full overflow-x-hidden min-w-0">
+      <SalesSnapshotClient />
+    </div>
+  );
 }

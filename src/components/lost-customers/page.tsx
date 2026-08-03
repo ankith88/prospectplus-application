@@ -420,14 +420,14 @@ export default function LostCustomersComponent() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-[#095c7b] flex items-center gap-2">
-            <XCircle className="h-8 w-8 text-destructive" />
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#095c7b] flex items-center gap-2">
+            <XCircle className="h-7 w-7 sm:h-8 sm:w-8 text-destructive" />
             Lost Customers
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             A comprehensive list of signed customers who have cancelled their services.
           </p>
         </div>
@@ -435,26 +435,26 @@ export default function LostCustomersComponent() {
 
       {/* Monthly Cancellation Report */}
       <Card className="border border-sky-100 bg-[#095c7b]/5 overflow-hidden shadow-sm">
-        <CardHeader className="bg-[#095c7b] text-white py-4 px-6 flex flex-row justify-between items-center">
+        <CardHeader className="bg-[#095c7b] text-white py-4 px-4 sm:px-6 flex flex-row justify-between items-center">
           <div>
-            <CardTitle className="text-lg font-bold flex items-center gap-2">
-              <Calendar className="h-5 w-5" /> {appliedReportingStats.rangeName} Cancellation Summary
+            <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5" /> {appliedReportingStats.rangeName} Cancellation Summary
             </CardTitle>
             <CardDescription className="text-sky-100 text-xs">
               Overview of cancellations recorded for the applied date range.
             </CardDescription>
           </div>
-          <Badge variant="secondary" className="text-[#095c7b] bg-white hover:bg-white text-sm font-bold px-3 py-1">
+          <Badge variant="secondary" className="text-[#095c7b] bg-white hover:bg-white text-xs sm:text-sm font-bold px-2.5 py-0.5 sm:px-3 sm:py-1">
             {appliedReportingStats.total} Total
           </Badge>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           {appliedReportingStats.total === 0 ? (
             <p className="text-sm text-center text-muted-foreground py-4">
               No cancellations recorded for {appliedReportingStats.rangeName} yet.
             </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {/* Themes Pie Chart */}
               <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-100 shadow-2xs flex flex-col justify-between">
                 <div>

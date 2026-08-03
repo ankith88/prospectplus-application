@@ -104,8 +104,8 @@ export function AskChatbot() {
 
   return (
     <>
-      {/* Floating Action Button */}
-      <div className="fixed bottom-6 right-6 z-50">
+      {/* Floating Action Button - Hidden on mobile viewports */}
+      <div className="hidden md:block fixed bottom-6 right-6 z-50">
         <Button
           onClick={() => setIsOpen(!isOpen)}
           className={`h-14 w-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 border-none ${
@@ -120,7 +120,7 @@ export function AskChatbot() {
 
       {/* Slide-out Drawer Container */}
       <div
-        className={`fixed top-0 right-0 h-full w-[450px] max-w-[90vw] bg-white border-l border-border shadow-2xl z-40 transition-transform duration-300 ease-in-out flex flex-col ${
+        className={`hidden md:flex fixed top-0 right-0 h-full w-[450px] max-w-[90vw] bg-white border-l border-border shadow-2xl z-40 transition-transform duration-300 ease-in-out flex-col ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >

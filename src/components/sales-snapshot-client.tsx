@@ -1175,29 +1175,29 @@ export default function SalesSnapshotClient() {
         }
       `}</style>
 
-      <div id="print-area" className="space-y-6">
-        <header className="flex flex-row items-center justify-between no-print">
+      <div id="print-area" className="space-y-6 max-w-full overflow-x-hidden">
+        <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 no-print">
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight text-[#095c7b]">Sales Process Snapshot</h1>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#095c7b]">Sales Process Snapshot</h1>
               {userProfile?.activeRole === 'Franchisee' && userProfile?.franchisee && (
-                <Badge className="bg-teal-700 text-white font-semibold text-xs px-3 py-1">
+                <Badge className="bg-teal-700 text-white font-semibold text-xs px-2.5 py-0.5 sm:px-3 sm:py-1">
                   {userProfile.franchisee} Franchise
                 </Badge>
               )}
             </div>
-            <p className="text-muted-foreground mt-0.5">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
               {userProfile?.activeRole === 'Franchisee'
                 ? `Unified conversion metrics and pipeline analysis for ${userProfile.franchisee || 'your franchise'}.`
                 : 'Unified conversion metrics across Inbound, Outbound, Field Sales, and AM.'}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Button onClick={triggerPdfExport} variant="outline" size="sm" className="bg-[#095c7b] text-white hover:bg-[#095c7b]/90">
-              <Download className="mr-2 h-4 w-4" /> Download PDF Report
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <Button onClick={triggerPdfExport} variant="outline" size="sm" className="bg-[#095c7b] text-white hover:bg-[#095c7b]/90 text-xs sm:text-sm">
+              <Download className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" /> Download Report
             </Button>
-            <Button onClick={fetchData} variant="outline" size="sm" disabled={loading || isRefreshing}>
-              <RefreshCw className={cn("mr-2 h-4 w-4", (loading || isRefreshing) && "animate-spin")} />
+            <Button onClick={fetchData} variant="outline" size="sm" disabled={loading || isRefreshing} className="text-xs sm:text-sm">
+              <RefreshCw className={cn("mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4", (loading || isRefreshing) && "animate-spin")} />
               {isRefreshing ? 'Refreshing...' : 'Refresh'}
             </Button>
           </div>
@@ -1312,11 +1312,11 @@ export default function SalesSnapshotClient() {
                   <MultiSelectCombobox options={statusOptions} selected={filters.status} onSelectedChange={(val) => setFilters(prev => ({ ...prev, status: val }))} placeholder="All Statuses" />
                 </div>
 
-                <div className="flex justify-between items-center col-span-full pt-2">
-                  <Button variant="ghost" onClick={clearFilters} className="text-xs text-muted-foreground"><X className="mr-2 h-3.5 w-3.5" /> Reset Filters</Button>
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 col-span-full pt-2">
+                  <Button variant="ghost" onClick={clearFilters} className="text-xs text-muted-foreground justify-start sm:justify-center"><X className="mr-2 h-3.5 w-3.5" /> Reset Filters</Button>
+                  <div className="flex items-center justify-between sm:justify-end gap-3">
                     {hasUnappliedFilters && <span className="text-xs text-amber-600 font-medium">Pending changes...</span>}
-                    <Button onClick={applyFilters} className={cn("bg-[#095c7b] hover:bg-[#095c7b]/90 text-white font-semibold text-xs", hasUnappliedFilters && "scale-105 shadow-md bg-amber-500 hover:bg-amber-600")}>
+                    <Button onClick={applyFilters} className={cn("bg-[#095c7b] hover:bg-[#095c7b]/90 text-white font-semibold text-xs w-full sm:w-auto", hasUnappliedFilters && "scale-105 shadow-md bg-amber-500 hover:bg-amber-600")}>
                       Apply Filter Range
                     </Button>
                   </div>
@@ -1344,15 +1344,15 @@ export default function SalesSnapshotClient() {
           <div className="space-y-6">
             
             {/* Unified Management & Franchisee Pipeline Stage Breakdown with Embedded Milestones */}
-            <Card className="shadow-sm card">
+            <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div className="flex items-center gap-1.5">
-                  <Layers className="h-5 w-5 text-[#095c7b]" />
-                  <CardTitle className="text-sm font-semibold">Management &amp; Franchisee Pipeline Stage Breakdown</CardTitle>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Layers className="h-5 w-5 text-[#095c7b] shrink-0" />
+                  <CardTitle className="text-sm font-semibold truncate">Management &amp; Franchisee Pipeline Stage Breakdown</CardTitle>
                 </div>
                 <SectionHelp content="High-level stages grouping all lead statuses with embedded milestone counts, quoting rates, and MRR financial values." />
               </CardHeader>
-              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 min-w-0 max-w-full overflow-hidden">
                 {metrics.pipelineStagesData.map((stage, idx) => {
                   const style = STAGE_COLOR_STYLES[stage.name] || {
                     cardBg: 'bg-slate-50/50 hover:bg-slate-100/80',
@@ -1366,7 +1366,7 @@ export default function SalesSnapshotClient() {
                   return (
                     <div 
                       key={idx} 
-                      className={cn("p-3 border rounded-lg flex flex-col justify-between min-h-[220px] cursor-pointer transition-all group shadow-sm hover:shadow-md", style.cardBg, style.cardBorder)}
+                      className={cn("p-3 border rounded-lg flex flex-col justify-between min-h-[220px] min-w-0 max-w-full overflow-hidden cursor-pointer transition-all group shadow-sm hover:shadow-md", style.cardBg, style.cardBorder)}
                       onClick={() => {
                         setDrilldownType('stage');
                         setSelectedStage(stage.name);
@@ -1536,7 +1536,8 @@ export default function SalesSnapshotClient() {
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[380px] rounded-md border">
-                    <Table>
+                    <div className="w-full overflow-x-auto">
+                      <Table className="w-full min-w-[600px]">
                       <TableHeader className="bg-slate-50 sticky top-0 z-10">
                         <TableRow>
                           <TableHead className="font-semibold text-xs">Company / Business</TableHead>
@@ -1602,16 +1603,17 @@ export default function SalesSnapshotClient() {
                         )}
                       </TableBody>
                     </Table>
-                  </ScrollArea>
+                  </div>
+                </ScrollArea>
                 </CardContent>
               </Card>
             )}
 
             {/* Visualisations Grid 1 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0 max-w-full overflow-hidden">
               
               {/* Leads Volume Over Time */}
-              <Card className="shadow-sm card">
+              <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-[#095c7b]" /> Leads Volume Over Time
@@ -1645,7 +1647,7 @@ export default function SalesSnapshotClient() {
               </Card>
 
               {/* Lead Source Breakdown */}
-              <Card className="shadow-sm card">
+              <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-[#095c7b]" /> Lead Source breakdown
@@ -1672,10 +1674,10 @@ export default function SalesSnapshotClient() {
             </div>
 
             {/* Visualisations Grid 2 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0 max-w-full overflow-hidden">
               
               {/* Average Days in Status */}
-              <Card className="shadow-sm card">
+              <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Clock className="h-4 w-4 text-[#095c7b]" /> Average Days in Status
@@ -1700,7 +1702,7 @@ export default function SalesSnapshotClient() {
               </Card>
 
               {/* Pipeline Value by Bucket & Lead Type */}
-              <Card className="shadow-sm card">
+              <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <div className="flex items-center gap-2">
                     <DollarSign className="h-4 w-4 text-[#095c7b]" />
@@ -1765,7 +1767,7 @@ export default function SalesSnapshotClient() {
             </div>
 
             {/* Weekly MRR Pipeline: In-Pipeline vs Signed MRR */}
-            <Card className="shadow-sm card">
+            <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-[#095c7b]" />
@@ -1818,7 +1820,7 @@ export default function SalesSnapshotClient() {
 
 
                 {/* Appointment Conversion Efficiency */}
-                <Card className="shadow-sm card">
+                <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                       <Percent className="h-4 w-4 text-[#095c7b]" /> Appointment Conversion Efficiency
@@ -1826,7 +1828,8 @@ export default function SalesSnapshotClient() {
                     <SectionHelp content="Measures rates of leads with scheduled appointments converting to Won status, Quote status, Trial status, or Lost status." />
                   </CardHeader>
                   <CardContent className="flex flex-col justify-center h-[280px]">
-                    <Table>
+                    <div className="w-full overflow-x-auto">
+                      <Table className="w-full min-w-[280px]">
                       <TableHeader className="bg-slate-50">
                         <TableRow>
                           <TableHead className="text-xs font-semibold">Transition Stage</TableHead>
@@ -1851,7 +1854,8 @@ export default function SalesSnapshotClient() {
                           <TableCell className="text-right text-xs py-3 font-bold text-rose-500">{metrics.appointmentEfficiency.lost.toFixed(1)}%</TableCell>
                         </TableRow>
                       </TableBody>
-                    </Table>
+                      </Table>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -1859,7 +1863,7 @@ export default function SalesSnapshotClient() {
 
             {/* Bucket & User Assignment Breakdown Table (Hidden for Franchisees) */}
             {!isFranchisee && (
-              <Card className="shadow-sm card">
+              <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <User className="h-4 w-4 text-[#095c7b]" /> Bucket &amp; Rep Assignment Breakdown
@@ -1867,7 +1871,7 @@ export default function SalesSnapshotClient() {
                   <SectionHelp content="Shows the total volume of leads assigned to each user/rep segmented by their originating source bucket." />
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 min-w-0 max-w-full overflow-hidden">
                     {Object.entries(metrics.assignmentMap).map(([bucket, users]) => {
                       const displayName = bucket === 'outbound' ? 'Outbound' :
                                           bucket === 'inbound' ? 'Inbound' :
@@ -1876,7 +1880,7 @@ export default function SalesSnapshotClient() {
                                           bucket === 'customer_success' ? 'Customer Success' :
                                           bucket === 'nurture' ? 'Nurture' : 'Marketing';
                       return (
-                        <div key={bucket} className="border rounded-lg p-3 bg-slate-50/50 flex flex-col justify-between min-h-[180px]">
+                        <div key={bucket} className="border rounded-lg p-3 bg-slate-50/50 flex flex-col justify-between min-h-[180px] min-w-0 max-w-full overflow-hidden">
                           <div>
                             <h3 className="text-[11px] font-bold text-[#095c7b] border-b pb-1.5 mb-2.5 uppercase tracking-wider">{displayName}</h3>
                             <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
@@ -1902,7 +1906,7 @@ export default function SalesSnapshotClient() {
 
             {/* Franchisee Process Breakdown (Hidden for Franchisees) */}
             {!isFranchisee && (
-              <Card className="shadow-sm card">
+              <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Layers className="h-4 w-4 text-[#095c7b]" /> Franchisee Process Breakdown
@@ -1911,7 +1915,8 @@ export default function SalesSnapshotClient() {
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[300px] rounded-md border">
-                    <Table>
+                    <div className="w-full overflow-x-auto">
+                      <Table className="w-full min-w-[500px]">
                       <TableHeader className="bg-[#f8fafb] sticky top-0 z-10">
                         <TableRow>
                           <TableHead className="font-semibold text-xs">Franchisee</TableHead>
@@ -1944,7 +1949,8 @@ export default function SalesSnapshotClient() {
                         )}
                       </TableBody>
                     </Table>
-                  </ScrollArea>
+                  </div>
+                </ScrollArea>
                 </CardContent>
               </Card>
             )}
@@ -1954,7 +1960,7 @@ export default function SalesSnapshotClient() {
 
       {/* Drilldown Dialog Modal */}
       <Dialog open={drilldownType !== null} onOpenChange={(open) => { if (!open) { setDrilldownType(null); setSelectedStage(null); } setDrilldownSearch(''); }}>
-        <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col p-6 overflow-hidden">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-5xl max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-lg font-bold text-[#095c7b]">
               {drilldownType === 'mrr' && `Leads Contributing to Pipeline MRR ($${metrics.totalPipelineMRR.toLocaleString(undefined, { maximumFractionDigits: 0 })})`}
@@ -2041,8 +2047,8 @@ export default function SalesSnapshotClient() {
             </Button>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto max-h-[50vh] sm:max-h-[55vh] border rounded-md relative">
-            <Table>
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto max-h-[50vh] sm:max-h-[55vh] border rounded-md relative">
+            <Table className="w-full min-w-[650px]">
               <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                 <TableRow>
                   <TableHead className="text-xs font-semibold bg-slate-50">Company Name</TableHead>
