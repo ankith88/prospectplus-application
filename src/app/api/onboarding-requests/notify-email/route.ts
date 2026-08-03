@@ -25,14 +25,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Missing companyName parameter.' }, { status: 400 });
     }
 
-    // Determine base URL
-    const urlObj = new URL(request.url);
-    let baseUrl = `${urlObj.protocol}//${urlObj.host}`;
-    if (baseUrl.includes('0.0.0.0') || baseUrl.includes('127.0.0.1')) {
-      baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
-    }
-
-    const onboardingPageUrl = `${baseUrl}/customer-success/onboarding`;
+    const onboardingPageUrl = 'https://prospectplus.com.au/customer-success/onboarding';
 
     // Fetch assigned user's email from Firestore (default to Liam)
     let recipientEmail = 'liam.bathman@mailplus.com.au';
