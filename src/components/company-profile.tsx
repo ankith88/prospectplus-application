@@ -29,7 +29,11 @@ import {
   ExternalLink,
   Trash2,
   Plus,
+  CalendarCheck,
 } from 'lucide-react'
+import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
+import { getOnboardingRequestByLeadId } from '@/services/onboarding-service'
+import type { OnboardingRequest } from '@/lib/types'
 import React, { useState, useEffect, useMemo } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData, UserProfile } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -135,6 +139,18 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
   // Cancellation Request Dialog State
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  
+  // Onboarding Request state
+  const [isOnboardingDialogOpen, setIsOnboardingDialogOpen] = useState(false);
+  const [existingOnboardingRequest, setExistingOnboardingRequest] = useState<OnboardingRequest | null>(null);
+
+  useEffect(() => {
+    if (company?.id) {
+      getOnboardingRequestByLeadId(company.id)
+        .then(req => setExistingOnboardingRequest(req))
+        .catch(err => console.error('Error fetching onboarding request for company:', err));
+    }
+  }, [company?.id]);
   
   // Upsell & Address Request states
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
@@ -838,6 +854,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                             <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
                         </Button>
                     )}
+                    <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-primary border-primary/20" variant="outline" onClick={() => setIsOnboardingDialogOpen(true)}>
+                        <CalendarCheck className="mr-2 h-4 w-4 text-primary" />Organise Onboarding Request
+                    </Button>
                     <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                         <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
                     </Button>
@@ -1195,6 +1214,16 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <OrganiseOnboardingDialog
+        open={isOnboardingDialogOpen}
+        onOpenChange={setIsOnboardingDialogOpen}
+        lead={company}
+        onSuccess={() => {
+          if (company?.id) {
+            getOnboardingRequestByLeadId(company.id).then(req => setExistingOnboardingRequest(req));
+          }
+        }}
+      />
     </>
   )
 }

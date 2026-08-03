@@ -38,7 +38,8 @@ import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-s
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { CalendarIcon, UserPlus, Package, MousePointerClick, CheckCircle2, Circle, Layers, Truck, Building2 } from 'lucide-react';
+import { CalendarIcon, UserPlus, Package, MousePointerClick, CheckCircle2, Circle, Layers, Truck, Building2, Loader2, Sparkles } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { isBankingServiceSelected, isH2hServiceSelected, getNearbyBanks, saveOrUpdateTaggedAddress, type BankLocationOption } from '@/lib/bank-utils';
 import { GoogleAddressInput } from './google-address-input';
 import { Calendar } from './ui/calendar';
@@ -53,6 +54,7 @@ import { firestore } from '@/lib/firebase';
 import { collection, getDocs, query, where, doc, updateDoc, getDoc, limit } from 'firebase/firestore';
 import { generatePricingTable, generateSuburbMapping } from '@/lib/pricing-helpers';
 import { encryptLeadId } from '@/lib/localmile-security';
+import { isContactEmpty } from '@/lib/contact-utils';
 
 interface Template {
   id: string;
@@ -88,6 +90,7 @@ const formSchema = z.object({
   startDate: z.date().optional(),
   selectedContactId: z.string().optional(),
   selectedContactIds: z.array(z.string()).optional(),
+  shipmateContactIds: z.array(z.string()).optional(),
   rates: z.record(z.coerce.number().min(0)).optional(),
   createLocalMileSchedules: z.record(z.boolean().optional()).optional(),
   createLocalMileAccount: z.boolean().optional(),
@@ -116,6 +119,8 @@ export function ServiceSelectionDialog({
   scfId,
 }: ServiceSelectionDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingStep, setSubmittingStep] = useState<string>('');
+  const [submittingProgress, setSubmittingProgress] = useState<number>(0);
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [isPostalAddressDialogOpen, setIsPostalAddressDialogOpen] = useState(false);
   const [localLead, setLocalLead] = useState<Lead | null>(lead);
@@ -377,7 +382,7 @@ export function ServiceSelectionDialog({
 
   useEffect(() => {
     if (lead) {
-      setContacts(lead.contacts || []);
+      setContacts((lead.contacts || []).filter(c => !isContactEmpty(c)));
       const fetchFran = async () => {
         let f: Franchisee | null = null;
         if (lead.franchisee_id) {
@@ -548,7 +553,8 @@ export function ServiceSelectionDialog({
          initialRates['MP Parcel Pickup'] = initialRates['MP Parcel Pickup'] ?? 0;
       }
 
-      const defaultContact = lead?.contacts?.find(c => c.isPrimary) || (lead?.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null);
+      const validContacts = (lead?.contacts || []).filter(c => !isContactEmpty(c));
+      const defaultContact = validContacts.find(c => c.isPrimary) || (validContacts.length > 0 ? validContacts[0] : null);
       const defaultContactId = (lead as any)?.bookingContactId || (lead as any)?.serviceCommencementContactId || (defaultContact ? defaultContact.id : undefined);
 
       form.reset({
@@ -1085,6 +1091,18 @@ export function ServiceSelectionDialog({
       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select at least one contact to receive the quote/email.' });
       return;
     }
+
+    if (mode === 'Signup' && (selectionType === 'both' || selectionType === 'products')) {
+      if (!values.shipmateContactIds || values.shipmateContactIds.length === 0) {
+        form.setError('shipmateContactIds' as any, { type: 'manual', message: 'Please select at least one contact for ShipMate access.' });
+        toast({ 
+          variant: 'destructive', 
+          title: 'ShipMate Access Required', 
+          description: 'Selecting at least one contact for ShipMate access is mandatory when signing up for Products or Both.' 
+        });
+        return;
+      }
+    }
     
     // Fallback for fields relying on selectedContactId
     values.selectedContactId = values.selectedContactIds[0];
@@ -1095,7 +1113,15 @@ export function ServiceSelectionDialog({
       return;
     }
 
+    handleConfirm(values);
+  };
+
+  const handleConfirm = async (values: FormValues) => {
+    if (!lead) return;
+
     setIsSubmitting(true);
+    setSubmittingProgress(10);
+    setSubmittingStep('Initializing contact preferences & permissions...');
 
     try {
       if (values.selectedContactIds) {
@@ -1144,6 +1170,9 @@ export function ServiceSelectionDialog({
         
         await updateLeadStatus(lead.id, 'Free Trial');
       } else if (mode === 'Quote' || mode === 'Signup' || mode === 'Resell') {
+        setSubmittingProgress(30);
+        setSubmittingStep('Syncing account details & services with NetSuite...');
+
         const premiumPlan = (selectionType !== 'services' && isPremiumEligible) ? (values.chosenPremiumPlan || 'Merchant') : 'None';
         const expressPlan = (selectionType !== 'services') ? (values.chosenExpressPlan || 'Merchant') : 'None';
         const pricingTable = selectionType === 'services' ? [] : generatePricingTable(premiumPlan, expressPlan);
@@ -1316,6 +1345,9 @@ export function ServiceSelectionDialog({
         });
 
         if (mode === 'Quote' || mode === 'Resell') {
+            setSubmittingProgress(60);
+            setSubmittingStep('Generating service commencement contract & link...');
+
             const existingScfs = await getScfRecords(lead.id);
             let scfId: string;
             
@@ -1362,6 +1394,9 @@ export function ServiceSelectionDialog({
             await updateLeadCommReg(lead.id, lead.commRegId || '', scfUrl);
             
             try {
+              setSubmittingProgress(85);
+              setSubmittingStep('Compiling quote & resell email preview template...');
+
               const res = await fetch('/api/scf/generate-quote-preview', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -1394,6 +1429,7 @@ export function ServiceSelectionDialog({
                       logoUrl: data.logoUrl || '',
                       senderEmail: defaultSenderEmail
                   });
+                  setSubmittingProgress(100);
                   setShowEmailPreview(true);
                   setIsSubmitting(false);
                   return; // Wait for user to click send email
@@ -1642,7 +1678,80 @@ export function ServiceSelectionDialog({
               </DialogDescription>
           </DialogHeader>
           
-          {showEmailPreview ? (
+          {isSubmitting ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-[360px]">
+              <div className="w-full max-w-md bg-card border border-border/80 rounded-2xl p-6 sm:p-8 shadow-xl text-center space-y-6 animate-in fade-in-50 zoom-in-95 duration-200">
+                <div className="relative inline-flex items-center justify-center">
+                  <div className="absolute -inset-2 rounded-full bg-primary/20 animate-ping opacity-75" />
+                  <div className="relative p-4 bg-primary/10 text-primary rounded-full border border-primary/20">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <h3 className="font-bold text-lg text-foreground tracking-tight">
+                    {mode === 'Signup' ? 'Preparing Signup Email' : mode === 'Quote' ? 'Preparing Quote Email' : mode === 'Resell' ? 'Preparing Resell Email' : 'Processing Request'}
+                  </h3>
+                  <p className="text-xs text-muted-foreground transition-all duration-300 min-h-[20px] font-medium">
+                    {submittingStep || 'Please wait while system processes your request...'}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className="text-muted-foreground">Progress</span>
+                    <span className="font-mono text-primary font-bold text-sm">{Math.round(submittingProgress)}%</span>
+                  </div>
+                  <Progress value={submittingProgress} className="h-3 w-full bg-muted transition-all duration-300" />
+                </div>
+
+                <div className="grid grid-cols-4 gap-1.5 pt-4 text-[10px] border-t border-border/60">
+                  <div className={cn("flex flex-col items-center gap-1.5 font-medium transition-colors", submittingProgress >= 10 ? "text-primary font-semibold" : "text-muted-foreground/50")}>
+                    <div className={cn("w-2.5 h-2.5 rounded-full transition-all", submittingProgress >= 10 ? "bg-primary shadow-xs" : "bg-muted")} />
+                    <span>Contacts</span>
+                  </div>
+                  <div className={cn("flex flex-col items-center gap-1.5 font-medium transition-colors", submittingProgress >= 30 ? "text-primary font-semibold" : "text-muted-foreground/50")}>
+                    <div className={cn("w-2.5 h-2.5 rounded-full transition-all", submittingProgress >= 30 ? "bg-primary shadow-xs" : "bg-muted")} />
+                    <span>NetSuite</span>
+                  </div>
+                  <div className={cn("flex flex-col items-center gap-1.5 font-medium transition-colors", submittingProgress >= 60 ? "text-primary font-semibold" : "text-muted-foreground/50")}>
+                    <div className={cn("w-2.5 h-2.5 rounded-full transition-all", submittingProgress >= 60 ? "bg-primary shadow-xs" : "bg-muted")} />
+                    <span>SCF Link</span>
+                  </div>
+                  <div className={cn("flex flex-col items-center gap-1.5 font-medium transition-colors", submittingProgress >= 85 ? "text-primary font-semibold" : "text-muted-foreground/50")}>
+                    <div className={cn("w-2.5 h-2.5 rounded-full transition-all", submittingProgress >= 85 ? "bg-primary shadow-xs" : "bg-muted")} />
+                    <span>Preview</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : isSending ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-[360px]">
+              <div className="w-full max-w-md bg-card border border-border/80 rounded-2xl p-6 sm:p-8 shadow-xl text-center space-y-6 animate-in fade-in-50 zoom-in-95 duration-200">
+                <div className="relative inline-flex items-center justify-center">
+                  <div className="absolute -inset-2 rounded-full bg-primary/20 animate-ping opacity-75" />
+                  <div className="relative p-4 bg-primary/10 text-primary rounded-full border border-primary/20">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <h3 className="font-bold text-lg text-foreground tracking-tight">Sending Email</h3>
+                  <p className="text-xs text-muted-foreground transition-all duration-300 min-h-[20px] font-medium">
+                    {submittingStep || 'Delivering email to customer and updating records...'}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className="text-muted-foreground">Sending Progress</span>
+                    <span className="font-mono text-primary font-bold text-sm">{Math.round(submittingProgress)}%</span>
+                  </div>
+                  <Progress value={submittingProgress} className="h-3 w-full bg-muted transition-all duration-300" />
+                </div>
+              </div>
+            </div>
+          ) : showEmailPreview ? (
              <div className="flex-1 flex flex-col overflow-hidden pt-4">
                <div className="flex-1 overflow-y-auto pr-2 space-y-4 min-h-0">
                  {(mode === 'Signup' || mode === 'Quote' || mode === 'Resend SCF' || mode === 'Confirm Signup' || mode === 'Resell') && (
@@ -2048,53 +2157,57 @@ export function ServiceSelectionDialog({
                               <FormItem>
                                 <FormLabel>Send {mode === 'Quote' || mode === 'Resell' ? 'Commencement Form' : 'Email'} To</FormLabel>
                                 <div className="max-h-48 overflow-y-auto w-full rounded-md border p-4 space-y-3">
-                                    {(contacts || []).map((contact, index) => {
-                                      const contactVal = contact.id || contact.email || `contact-${index}`;
-                                      return (
-                                        <FormField
-                                          key={contactVal}
-                                          control={form.control}
-                                          name="selectedContactIds"
-                                          render={({ field }) => {
-                                            const currentValue = field.value || [];
-                                            const isChecked = currentValue.includes(contactVal);
-                                            return (
-                                              <FormItem
-                                                key={contactVal}
-                                                className="flex flex-row items-start space-x-3 space-y-0"
-                                              >
-                                                <FormControl>
-                                                  <Checkbox
-                                                    checked={isChecked}
-                                                    onCheckedChange={(checked) => {
-                                                      return checked
-                                                        ? field.onChange([...currentValue, contactVal])
-                                                        : field.onChange(
-                                                            currentValue.filter(
-                                                              (value) => value !== contactVal
+                                    {(contacts || []).filter(c => !isContactEmpty(c)).length > 0 ? (
+                                      (contacts || []).filter(c => !isContactEmpty(c)).map((contact, index) => {
+                                        const contactVal = contact.id || contact.email || `contact-${index}`;
+                                        return (
+                                          <FormField
+                                            key={contactVal}
+                                            control={form.control}
+                                            name="selectedContactIds"
+                                            render={({ field }) => {
+                                              const currentValue = field.value || [];
+                                              const isChecked = currentValue.includes(contactVal);
+                                              return (
+                                                <FormItem
+                                                  key={contactVal}
+                                                  className="flex flex-row items-start space-x-3 space-y-0"
+                                                >
+                                                  <FormControl>
+                                                    <Checkbox
+                                                      checked={isChecked}
+                                                      onCheckedChange={(checked) => {
+                                                        return checked
+                                                          ? field.onChange([...currentValue, contactVal])
+                                                          : field.onChange(
+                                                              currentValue.filter(
+                                                                (value) => value !== contactVal
+                                                              )
                                                             )
-                                                          )
-                                                    }}
-                                                  />
-                                                </FormControl>
-                                                <FormLabel className="text-sm font-normal flex flex-col w-full cursor-pointer">
-                                                  <span className="flex items-center gap-2 font-medium">
-                                                    {contact.name}
-                                                    {contact.isPrimary && (
-                                                      <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 py-0 px-1.5 h-3.5 font-bold">Primary</Badge>
-                                                    )}
-                                                    {contact.isAccountsPayable && (
-                                                      <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-700 border-purple-200 py-0 px-1.5 h-3.5 font-bold">AP</Badge>
-                                                    )}
-                                                  </span>
-                                                  <span className="text-xs text-muted-foreground">{contact.email}</span>
-                                                </FormLabel>
-                                              </FormItem>
-                                            )
-                                          }}
-                                        />
-                                      )
-                                    })}
+                                                      }}
+                                                    />
+                                                  </FormControl>
+                                                  <FormLabel className="text-sm font-normal flex flex-col w-full cursor-pointer">
+                                                    <span className="flex items-center gap-2 font-medium">
+                                                      {contact.name || 'Unnamed Contact'}
+                                                      {contact.isPrimary && (
+                                                        <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 py-0 px-1.5 h-3.5 font-bold">Primary</Badge>
+                                                      )}
+                                                      {contact.isAccountsPayable && (
+                                                        <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-700 border-purple-200 py-0 px-1.5 h-3.5 font-bold">AP</Badge>
+                                                      )}
+                                                    </span>
+                                                    <span className="text-xs text-muted-foreground">{contact.email}</span>
+                                                  </FormLabel>
+                                                </FormItem>
+                                              )
+                                            }}
+                                          />
+                                        )
+                                      })
+                                    ) : (
+                                      <p className="text-xs text-muted-foreground italic">No contacts available.</p>
+                                    )}
                                 </div>
                                 <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setIsAddingContact(true)}>
                                     <UserPlus className="mr-2 h-4 w-4" /> Add New Contact

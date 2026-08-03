@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
 import { updateContactSendEmail, updateContactInLead } from '@/services/firebase';
+import { isContactEmpty } from '@/lib/contact-utils';
 
 interface LocalMileAccessDialogProps {
   isOpen: boolean;
@@ -154,7 +155,7 @@ export function LocalMileAccessDialog({
 
             <div className="space-y-3">
               <Label className="text-sm font-semibold">Select Contacts</Label>
-              {lead.contacts && lead.contacts.length > 0 ? lead.contacts.map((contact) => {
+              {lead.contacts && lead.contacts.filter(c => !isContactEmpty(c)).length > 0 ? lead.contacts.filter(c => !isContactEmpty(c)).map((contact) => {
                 const isValidContact = Boolean(contact.name?.trim() && contact.email?.trim());
                 return (
                   <div key={contact.id} className={`flex items-center space-x-3 rounded-md border p-3 ${!isValidContact ? 'opacity-60 bg-muted/30' : ''}`}>

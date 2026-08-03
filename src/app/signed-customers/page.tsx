@@ -23,9 +23,10 @@ import { useAuth } from '@/hooks/use-auth'
 import { usePermissions } from '@/hooks/use-permissions'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, FileX, MoreHorizontal } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, FileX, MoreHorizontal, CalendarCheck } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { CancelCustomerDialog } from '@/components/cancel-customer-dialog'
+import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -97,6 +98,9 @@ export default function SignedCustomersPage() {
 
   const [selectedCancelLead, setSelectedCancelLead] = useState<Lead | null>(null);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+
+  const [selectedOnboardingLead, setSelectedOnboardingLead] = useState<Lead | null>(null);
+  const [isOnboardingDialogOpen, setIsOnboardingDialogOpen] = useState(false);
 
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -1283,6 +1287,12 @@ export default function SignedCustomersPage() {
                              <DropdownMenuItem onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
                                <Building className="mr-2 h-4 w-4" /> View Profile
                              </DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => {
+                               setSelectedOnboardingLead(lead as unknown as Lead);
+                               setIsOnboardingDialogOpen(true);
+                             }}>
+                               <CalendarCheck className="mr-2 h-4 w-4 text-primary" /> Organise Onboarding
+                             </DropdownMenuItem>
                              <DropdownMenuItem 
                                className="text-destructive focus:text-destructive"
                                onClick={() => {
@@ -1538,6 +1548,15 @@ export default function SignedCustomersPage() {
             if (selectedCancelLead && updates?.status === 'Lost Customer') {
               setAllMapData((prev) => prev.filter((item) => item.id !== selectedCancelLead.id));
             }
+          }}
+        />
+
+        <OrganiseOnboardingDialog
+          open={isOnboardingDialogOpen}
+          onOpenChange={setIsOnboardingDialogOpen}
+          lead={selectedOnboardingLead}
+          onSuccess={() => {
+            toast({ title: 'Success', description: 'Onboarding request submitted successfully.' });
           }}
         />
     </>

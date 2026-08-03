@@ -43,6 +43,7 @@ import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivat
 import { Checkbox } from '@/components/ui/checkbox'
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
 import { LossReasonPicker } from '@/components/loss-reason-picker'
+import { isContactEmpty } from '@/lib/contact-utils'
 import { getMergedCancellationHierarchy } from '@/lib/cancellation-reasons-mapper'
 import { CallAttemptBadge } from './call-attempt-badge'
 
@@ -420,11 +421,12 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
         setSelectedCarriers(parseCarriers(lead?.currentCarrier));
         setPushToLpoPlusRequested(false);
         setTempLeadType(lead?.leadType || '');
-        const primaryContactIds = lead?.contacts?.filter(c => c.isPrimary).map(c => c.id) || [];
+        const validContacts = (lead?.contacts || []).filter(c => !isContactEmpty(c));
+        const primaryContactIds = validContacts.filter(c => c.isPrimary).map(c => c.id);
         if (primaryContactIds.length > 0) {
           setSelectedRegisterContacts(primaryContactIds);
-        } else if (lead?.contacts && lead.contacts.length > 0) {
-          setSelectedRegisterContacts([lead.contacts[0].id]);
+        } else if (validContacts.length > 0) {
+          setSelectedRegisterContacts([validContacts[0].id]);
         } else {
           setSelectedRegisterContacts([]);
         }
@@ -2242,9 +2244,9 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                           <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
                             Select Contact(s) for Trial Access <span className="text-destructive">*</span>
                           </Label>
-                          {lead.contacts && lead.contacts.length > 0 ? (
+                          {lead.contacts && lead.contacts.filter(c => !isContactEmpty(c)).length > 0 ? (
                             <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                              {lead.contacts.map((contact) => {
+                              {lead.contacts.filter(c => !isContactEmpty(c)).map((contact) => {
                                 const isValidContact = Boolean(contact.name?.trim() && contact.email?.trim());
                                 return (
                                   <div key={contact.id} className={cn("flex items-center space-x-2.5 rounded-md border p-2 bg-white text-xs", !isValidContact && "opacity-60 bg-slate-50")}>

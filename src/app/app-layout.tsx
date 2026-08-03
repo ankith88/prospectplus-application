@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -302,6 +302,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/lost-customers': { label: 'Lost Customers', category: 'Sales & CRM', icon: UserX, href: '/lost-customers' },
 
     // Customer Success
+    '/customer-success/onboarding': { label: 'Onboarding Requests', category: 'Customer Success', icon: CalendarCheck, href: '/customer-success/onboarding' },
     '/customer-success/pipeline': { label: 'CS Pipeline', category: 'Customer Success', icon: ListTodo, href: '/customer-success/pipeline' },
     '/customer-success/cancellations': { label: 'CS Cancellations', category: 'Customer Success', icon: CalendarOff, href: '/customer-success/cancellations' },
     '/customer-success/reporting': { label: 'CS Reporting', category: 'Customer Success', icon: BarChart3, href: '/customer-success/reporting' },
@@ -648,6 +649,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewFranchisees = canView('franchisees');
   const canViewAccountManagerPipeline = canView('accountManagerPipeline');
   const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
+  const canViewCustomerSuccessOnboarding = canView('customerSuccessOnboarding') || user?.uid === 'Uh71ctLejpg8dietKngBQwnqivI2';
   const canViewScans = canView('scans');
   const canViewTickets = canView('tickets');
   const canViewLpoLeads = canView('lpoLeads');
@@ -1365,6 +1367,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   {!isGroupCollapsed('customer-success-group') && (
                     <SidebarGroupContent>
                       <SidebarMenu>
+                        {canViewCustomerSuccessOnboarding && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/customer-success/onboarding")} tooltip="Onboarding Requests">
+                              <Link href="/customer-success/onboarding">
+                                <CalendarCheck />
+                                <span>Onboarding Requests</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
                         <SidebarMenuItem>
                           <SidebarMenuButton asChild isActive={isActive("/customer-success/pipeline")} tooltip="CS Pipeline">
                             <Link href="/customer-success/pipeline">

@@ -63,7 +63,9 @@ import {
   ChevronDown,
   ChevronRight,
   GitMerge,
+  CalendarCheck,
 } from 'lucide-react'
+import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
 import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser } from '@/lib/lead-permissions'
 import { RequestAssignmentDialog } from '@/components/request-assignment-dialog'
@@ -107,6 +109,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { LossReasonPicker } from './loss-reason-picker'
 import { CancelCustomerDialog } from '@/components/cancel-customer-dialog'
+import { isContactEmpty } from '@/lib/contact-utils'
 import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
 import { CallAttemptBadge } from './call-attempt-badge'
 import { Input } from './ui/input'
@@ -317,6 +320,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [isDismissed, setIsDismissed] = useState<boolean>(false);
     const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
     const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+    const [isOnboardingDialogOpen, setIsOnboardingDialogOpen] = useState(false);
 
     const handleDismissDuplicate = async () => {
         setIsDismissed(true);
@@ -3065,6 +3069,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           <Button
             variant="default"
             size="sm"
+            onClick={() => setIsOnboardingDialogOpen(true)}
+            className="bg-emerald-700 text-white hover:bg-emerald-800 font-semibold shadow-sm"
+          >
+            <CalendarCheck className="mr-2 h-4 w-4" />
+            Organise Onboarding Request
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
             onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}
             className="bg-[#095c7b] text-white hover:bg-[#095c7b]/90 font-semibold shadow-sm"
           >
@@ -4865,7 +4878,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </Button>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        {contacts.map(contact => (
+                        {contacts.filter(c => !isContactEmpty(c)).map(contact => (
                             <Card key={contact.id} className="p-3 text-sm relative group">
                                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                                     <Button 
@@ -6034,6 +6047,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </Button>
                                 </>
                             )}
+                            <Button className="w-full justify-start font-medium bg-background hover:bg-muted text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsOnboardingDialogOpen(true)}>
+                                <CalendarCheck className="mr-2 h-4 w-4 text-emerald-600" />Organise Onboarding Request
+                            </Button>
                             <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => { setResendScfId(undefined); setIsServiceSelectionOpen(true); setServiceSelectionMode('Confirm Signup'); }}>
                                 <Mail className="mr-2 h-4 w-4" />Resend Signup Confirmation
                             </Button>
@@ -6993,7 +7009,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                    {lead.contacts && lead.contacts.length > 0 && (
                                     <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-dashed border-slate-200 mt-1">
                                       <span className="text-[10px] text-slate-500 font-semibold mr-1">Quick Add Contact Email:</span>
-                                      {lead.contacts.map((contact: any) => {
+                                      {lead.contacts.filter((c: any) => !isContactEmpty(c)).map((contact: any) => {
                                         if (!contact.email) return null;
                                         return (
                                           <div key={contact.id || contact.email} className="inline-flex items-center gap-1 bg-slate-200/60 hover:bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded text-[10px] transition-colors border border-slate-300">
@@ -7381,6 +7397,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DialogFooter>
         </DialogContent>
     </Dialog>
+    <OrganiseOnboardingDialog
+      open={isOnboardingDialogOpen}
+      onOpenChange={setIsOnboardingDialogOpen}
+      lead={lead}
+      onSuccess={() => {
+        toast({ title: "Success", description: "Onboarding request submitted successfully." });
+      }}
+    />
     </>
   )
 }

@@ -76,3 +76,22 @@ export function extractContactsFromDiscoveryData(data: Partial<DiscoveryData>): 
 
   return contacts;
 }
+
+/**
+ * Checks if a contact object is empty (i.e. lacks a valid name, email, and phone, or has only empty/whitespace strings).
+ */
+export function isContactEmpty(contact: Partial<Contact> | null | undefined): boolean {
+  if (!contact) return true;
+  const hasName = Boolean(contact.name && contact.name.trim().length > 0 && contact.name.trim().toLowerCase() !== 'n/a');
+  const hasEmail = Boolean(contact.email && contact.email.trim().length > 0 && contact.email.trim().toLowerCase() !== 'n/a');
+  const hasPhone = Boolean(contact.phone && contact.phone.trim().length > 0 && contact.phone.trim().toLowerCase() !== 'n/a');
+  return !hasName && !hasEmail && !hasPhone;
+}
+
+/**
+ * Checks if a contact object is valid/non-empty.
+ */
+export function isNonEmptyContact(contact: Partial<Contact> | null | undefined): boolean {
+  return !isContactEmpty(contact);
+}
+

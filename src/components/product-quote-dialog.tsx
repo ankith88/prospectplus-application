@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Send, ChevronDown } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { firestore } from '@/lib/firebase';
@@ -23,6 +24,7 @@ import { Lead } from '@/lib/types';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useAuth } from '@/hooks/use-auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
+import { isContactEmpty } from '@/lib/contact-utils';
 
 interface ProductQuoteDialogProps {
   isOpen: boolean;
@@ -125,6 +127,8 @@ export function ProductQuoteDialog({
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [sendingStep, setSendingStep] = useState<string>('');
+  const [sendingProgress, setSendingProgress] = useState<number>(0);
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(true);
 
   // Email Selections
@@ -188,11 +192,11 @@ export function ProductQuoteDialog({
     }
     if (lead.contacts) {
       lead.contacts.forEach((contact, idx) => {
-        if (contact.email) {
+        if (!isContactEmpty(contact) && contact.email?.trim()) {
           emails.push({
-            email: contact.email,
-            label: `Contact: ${contact.name || 'Unnamed'}`,
-            name: contact.name,
+            email: contact.email.trim(),
+            label: `Contact: ${contact.name?.trim() || 'Unnamed'}`,
+            name: contact.name?.trim(),
           });
         }
       });
@@ -429,8 +433,13 @@ export function ProductQuoteDialog({
     }
 
     setIsSending(true);
+    setSendingProgress(35);
+    setSendingStep('Preparing product quote email payload...');
     try {
       const toEmails = selectedTo.join(',');
+
+      setSendingProgress(60);
+      setSendingStep('Dispatching quote email via email campaign API...');
 
       const response = await fetch('/api/campaigns/send-custom-email', {
         method: 'POST',
@@ -449,6 +458,8 @@ export function ProductQuoteDialog({
 
       const result = await response.json();
       if (result.success) {
+        setSendingProgress(100);
+        setSendingStep('Quote sent successfully!');
         toast({ title: 'Quote Sent', description: 'Your quote has been dispatched successfully.' });
         onClose();
       } else {
@@ -458,6 +469,7 @@ export function ProductQuoteDialog({
       toast({ variant: 'destructive', title: 'Error', description: 'An unexpected error occurred while sending the quote.' });
     } finally {
       setIsSending(false);
+      setSendingProgress(0);
     }
   };
 
@@ -477,7 +489,33 @@ export function ProductQuoteDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {isLoadingTemplate ? (
+        {isSending ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-[300px]">
+            <div className="w-full max-w-md bg-card border border-border/80 rounded-2xl p-6 sm:p-8 shadow-xl text-center space-y-6 animate-in fade-in-50 zoom-in-95 duration-200">
+              <div className="relative inline-flex items-center justify-center">
+                <div className="absolute -inset-2 rounded-full bg-primary/20 animate-ping opacity-75" />
+                <div className="relative p-4 bg-primary/10 text-primary rounded-full border border-primary/20">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              </div>
+              
+              <div className="space-y-1.5">
+                <h3 className="font-bold text-lg text-foreground tracking-tight">Sending Product Quote Email</h3>
+                <p className="text-xs text-muted-foreground transition-all duration-300 min-h-[20px] font-medium">
+                  {sendingStep || 'Delivering quote email to customer and updating records...'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-muted-foreground">Sending Progress</span>
+                  <span className="font-mono text-primary font-bold text-sm">{Math.round(sendingProgress)}%</span>
+                </div>
+                <Progress value={sendingProgress} className="h-3 w-full bg-muted transition-all duration-300" />
+              </div>
+            </div>
+          </div>
+        ) : isLoadingTemplate ? (
           <div className="flex-1 flex justify-center items-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
@@ -661,8 +699,17 @@ export function ProductQuoteDialog({
             disabled={isSending || selectedTo.length === 0 || isLoadingTemplate}
             className="gap-2"
           >
-            {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Send Quote
+            {isSending ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending... ({Math.round(sendingProgress)}%)
+              </span>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Send Quote
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

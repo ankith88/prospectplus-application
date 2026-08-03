@@ -915,4 +915,51 @@ export interface LeadSuburbMapping {
   drivers: SuburbDriver[];
 }
 
+export type OnboardingRequestStatus = 'Pending' | 'Appointment Booked' | 'Completed' | 'Cancelled';
+export type OnboardingRequestPriority = 'Standard' | 'Urgent';
 
+export interface OnboardingAppointmentDetails {
+  appointmentDate: string; // ISO date string
+  appointmentType?: string; // e.g. 'Video Call', 'Phone Call', 'Onsite Visit'
+  locationOrLink?: string;
+  notes?: string;
+  scheduledByUid: string;
+  scheduledByName: string;
+  scheduledAt: string; // ISO date string
+}
+
+export interface OnboardingRequest {
+  id: string;
+  leadId: string;
+  companyId?: string;
+  companyName: string;
+  contactName: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  requestedByUid: string;
+  requestedByName: string;
+  requestedAt: string; // ISO date string
+  status: OnboardingRequestStatus;
+  priority: OnboardingRequestPriority;
+  assignedToUid: string;
+  assignedToName: string;
+  preferredTimeframe?: string;
+  notes?: string;
+  appointmentDetails?: OnboardingAppointmentDetails;
+  completedAt?: string;
+  completedByUid?: string;
+  completedByName?: string;
+  cancelledAt?: string;
+  cancellationReason?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OnboardingMetricsSummary {
+  totalRequests: number;
+  pendingCount: number;
+  bookedCount: number;
+  completedCount: number;
+  cancelledCount: number;
+  bookingRatePercentage: number;
+}
