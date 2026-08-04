@@ -48,7 +48,7 @@ const leadStatuses: LeadStatus[] = [
     'New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Appointment Booked', 'Unqualified', 
     'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 
     'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 
-    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Out of Territory', 'Future Follow-up'
+    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Out of Territory', 'Future Follow-up', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'
 ];
 
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (

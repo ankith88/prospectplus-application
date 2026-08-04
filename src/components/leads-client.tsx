@@ -389,7 +389,7 @@ export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsA
     );
 }
 
-const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Qualified', 'Pre Qualified', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Future Follow-up', 'LPO Opportunity'];
+const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Qualified', 'Pre Qualified', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Future Follow-up', 'LPO Opportunity', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
 
 
 interface LeadsClientPageProps {

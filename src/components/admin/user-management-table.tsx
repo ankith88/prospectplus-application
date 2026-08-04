@@ -57,6 +57,16 @@ export function UserManagementTable() {
   const [newLinkedBDR, setNewLinkedBDR] = useState('');
   const [newFranchisee, setNewFranchisee] = useState('');
   const [newFranchiseeId, setNewFranchiseeId] = useState('');
+  const [newFranchiseeRole, setNewFranchiseeRole] = useState<'owner' | 'investor'>('owner');
+  const [newPersonalEmail, setNewPersonalEmail] = useState('');
+  const [newAbn, setNewAbn] = useState('');
+  const [newStreet, setNewStreet] = useState('');
+  const [newSuburb, setNewSuburb] = useState('');
+  const [newState, setNewState] = useState('');
+  const [newPostcode, setNewPostcode] = useState('');
+  const [newBsb, setNewBsb] = useState('');
+  const [newAccountNumber, setNewAccountNumber] = useState('');
+  const [newAccountName, setNewAccountName] = useState('');
   const [newPhoneNumber, setNewPhoneNumber] = useState('');
   const [newMobileNumber, setNewMobileNumber] = useState('');
   const [newAircallPhoneNumber, setNewAircallPhoneNumber] = useState('');
@@ -133,6 +143,16 @@ export function UserManagementTable() {
       setNewPhoneNumber(userToEdit.phoneNumber || '');
       setNewMobileNumber(userToEdit.mobileNumber || userToEdit.phoneNumber || '');
       setNewAircallPhoneNumber(userToEdit.aircallPhoneNumber || '');
+      setNewFranchiseeRole(userToEdit.franchiseeRole || 'owner');
+      setNewPersonalEmail(userToEdit.personalEmail || '');
+      setNewAbn(userToEdit.abn || '');
+      setNewStreet(userToEdit.addressDetails?.street || '');
+      setNewSuburb(userToEdit.addressDetails?.suburb || '');
+      setNewState(userToEdit.addressDetails?.state || '');
+      setNewPostcode(userToEdit.addressDetails?.postcode || '');
+      setNewBsb(userToEdit.bankDetails?.bsb || '');
+      setNewAccountNumber(userToEdit.bankDetails?.accountNumber || '');
+      setNewAccountName(userToEdit.bankDetails?.accountName || '');
     }
   }, [userToEdit]);
 
@@ -208,6 +228,30 @@ export function UserManagementTable() {
         updateData.franchisee = newFranchisee;
         updateData.franchiseeId = newFranchiseeId || undefined;
         updateData.franchiseeInternalId = newFranchiseeId || undefined;
+        updateData.franchiseeRole = newFranchiseeRole;
+        updateData.personalEmail = newPersonalEmail;
+        updateData.abn = newAbn;
+        updateData.addressDetails = {
+          street: newStreet,
+          suburb: newSuburb,
+          state: newState,
+          postcode: newPostcode,
+          fullAddress: [newStreet, newSuburb, newState, newPostcode].filter(Boolean).join(', '),
+        };
+        updateData.bankDetails = {
+          bsb: newBsb,
+          accountNumber: newAccountNumber,
+          accountName: newAccountName,
+        };
+        if (newFranchiseeId) {
+          updateData.linkedFranchisees = [{
+            franchiseeId: newFranchiseeId,
+            franchiseeName: newFranchisee,
+            relationship: newFranchiseeRole,
+            isDefault: true,
+          }];
+          updateData.activeFranchiseeId = newFranchiseeId;
+        }
         updateData.linkedSalesRep = '';
         updateData.linkedBDR = '';
       } else {

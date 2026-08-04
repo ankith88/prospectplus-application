@@ -44,6 +44,7 @@ import PerformanceTimer from "@/components/performance-timer"
 import { AccessDenied } from "@/components/access-denied"
 import { Loader, FullScreenLoader } from "@/components/ui/loader"
 import { NotificationCenter } from "@/components/notification-center"
+import { FranchiseeSwitcher } from "@/components/franchisee-switcher"
 import { UniversalSearch } from "@/components/universal-search"
 import { CommandPalette } from "@/components/command-palette"
 import { salesReps, ALLOWED_ASK_UIDS, EXCLUDED_LOGIN_ACTIVITY_UIDS } from "@/lib/constants"
@@ -1972,6 +1973,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                         <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/operations/franchise-prospects")} tooltip="Franchise Prospects">
+                            <Link href="/operations/franchise-prospects">
+                              <UserCheck />
+                              <span>Franchise Prospects</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
                           <SidebarMenuButton asChild isActive={isActive("/admin/franchisees/operators")} tooltip="Operators Directory">
                             <Link href="/admin/franchisees/operators">
                               <Users />
@@ -2121,6 +2130,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
            </Button>
            <UniversalSearch />
            <NotificationCenter />
+           <FranchiseeSwitcher />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button id="step-settings-panel" variant="ghost" className="flex items-center gap-1 sm:gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent group p-1.5 sm:px-3">

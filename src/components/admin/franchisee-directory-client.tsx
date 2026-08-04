@@ -581,6 +581,75 @@ export default function FranchiseeDirectoryClient() {
               
               <ScrollArea className="flex-1 p-6">
                 <div className="space-y-8">
+                  {/* Linked Users (Owners & Investors) Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 border-b pb-2">
+                      <h3 className="text-lg font-semibold">Owners & Investors (Linked Users)</h3>
+                      <Badge variant="outline" className="ml-auto">
+                        {(selectedFranchisee.linkedUsers?.length || selectedFranchisee.owners?.length || selectedFranchisee.investors?.length || 0)} Linked
+                      </Badge>
+                    </div>
+
+                    {((selectedFranchisee.linkedUsers && selectedFranchisee.linkedUsers.length > 0) ||
+                      (selectedFranchisee.owners && selectedFranchisee.owners.length > 0) ||
+                      (selectedFranchisee.investors && selectedFranchisee.investors.length > 0)) ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(selectedFranchisee.linkedUsers || [
+                          ...(selectedFranchisee.owners || []).map((o: any) => ({ ...o, relationship: 'owner' })),
+                          ...(selectedFranchisee.investors || []).map((i: any) => ({ ...i, relationship: 'investor' })),
+                        ]).map((usr: any, index: number) => (
+                          <div key={usr.userId || index} className="p-4 border rounded-lg bg-slate-50/50 space-y-3">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-bold text-base text-slate-900">{usr.name || usr.email}</h4>
+                                <p className="text-xs text-slate-600">{usr.email}</p>
+                                {usr.personalEmail && (
+                                  <p className="text-xs text-slate-500">Personal: {usr.personalEmail}</p>
+                                )}
+                              </div>
+                              <Badge className={usr.relationship === 'owner' ? 'bg-emerald-600 text-white' : 'bg-purple-600 text-white'}>
+                                {usr.relationship === 'owner' ? 'Owner' : 'Investor'}
+                              </Badge>
+                            </div>
+
+                            <div className="pt-2 border-t grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-slate-400 font-semibold uppercase text-[10px] block">ABN</span>
+                                <span className="font-medium text-slate-800">{usr.abn || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold uppercase text-[10px] block">BSB</span>
+                                <span className="font-medium text-slate-800">{usr.bankDetails?.bsb || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold uppercase text-[10px] block">Account Number</span>
+                                <span className="font-medium text-slate-800">{usr.bankDetails?.accountNumber || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-semibold uppercase text-[10px] block">Account Name</span>
+                                <span className="font-medium text-slate-800">{usr.bankDetails?.accountName || 'N/A'}</span>
+                              </div>
+                            </div>
+
+                            {usr.addressDetails && (usr.addressDetails.street || usr.addressDetails.suburb || usr.addressDetails.fullAddress) && (
+                              <div className="pt-2 border-t text-xs">
+                                <span className="text-slate-400 font-semibold uppercase text-[10px] block">Address</span>
+                                <span className="font-medium text-slate-800">
+                                  {usr.addressDetails.fullAddress ||
+                                    `${usr.addressDetails.street || ''}, ${usr.addressDetails.suburb || ''} ${usr.addressDetails.state || ''} ${usr.addressDetails.postcode || ''}`}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-6 border border-dashed rounded-lg text-center text-sm text-muted-foreground">
+                        No specific owner/investor profile linked yet. Link users via Admin User Settings.
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold border-b pb-2">Main Courier Territory Bounds</h3>
                     {selectedFranchisee.territoryJson && selectedFranchisee.territoryJson.length > 0 ? (

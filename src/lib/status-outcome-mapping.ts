@@ -129,6 +129,14 @@ export const WORKFLOW_STATUS_EXPLANATIONS: Record<string, { category: StatusDeta
     category: 'Sales Pipeline Workflow',
     description: 'Customer currently active on a ShipMate trial period.',
   },
+  'LocalMile Trial Stopped': {
+    category: 'Disqualified & Lost',
+    description: 'LocalMile free trial was manually cancelled or stopped.',
+  },
+  'ShipMate Trial Stopped': {
+    category: 'Disqualified & Lost',
+    description: 'ShipMate free trial was manually cancelled or stopped.',
+  },
   'Quote Sent': {
     category: 'Sales Pipeline Workflow',
     description: 'Formal proposal or Standing Order Form (SCF) issued to prospect.',

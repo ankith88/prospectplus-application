@@ -47,6 +47,7 @@ import {
   ListFilter,
   Package,
   AlertCircle,
+  AlertTriangle,
   Check,
   Clock,
   CheckCircle2,
@@ -994,6 +995,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [allMarketingLists, setAllMarketingLists] = useState<string[]>([]);
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
+  const [stopTrialType, setStopTrialType] = useState<'LocalMile' | 'ShipMate' | null>(null);
+  const [stopTrialReason, setStopTrialReason] = useState('');
+  const [isStoppingTrial, setIsStoppingTrial] = useState(false);
   const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
   const [isPostalAddressDialogOpen, setIsPostalAddressDialogOpen] = useState(false);
   const [isSofDialogOpen, setIsSofDialogOpen] = useState(false);
@@ -2623,6 +2627,53 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
+  const handleConfirmStopTrial = async () => {
+    if (!stopTrialType) return;
+    setIsStoppingTrial(true);
+    try {
+        const newStatus: LeadStatus = stopTrialType === 'LocalMile' ? 'LocalMile Trial Stopped' : 'ShipMate Trial Stopped';
+        const author = user?.displayName || user?.email || 'System';
+        const reasonText = stopTrialReason.trim() ? ` Reason: ${stopTrialReason.trim()}` : '';
+
+        const updateData: Partial<Lead> = {
+            status: newStatus,
+            customerStatus: newStatus,
+        };
+
+        await updateLeadDetails(lead.id, lead, updateData);
+
+        await logActivity(lead.id, {
+            type: 'Update',
+            notes: `${stopTrialType} Free Trial stopped by ${author}.${reasonText} Status changed to ${newStatus}.`,
+            author
+        });
+
+        setLead(prev => ({
+            ...prev,
+            status: newStatus,
+            customerStatus: newStatus,
+        }));
+
+        toast({
+            title: 'Free Trial Stopped',
+            description: `${stopTrialType} free trial stopped. Status updated to ${newStatus}.`
+        });
+
+        setStopTrialType(null);
+        setStopTrialReason('');
+        await refreshLeadData();
+    } catch (error: any) {
+        console.error('Error stopping trial:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: `Could not stop ${stopTrialType} free trial.`
+        });
+    } finally {
+        setIsStoppingTrial(false);
+    }
+  };
+
   const handleDiscoverySave = async (data: DiscoveryData) => {
     try {
         await updateLeadDiscoveryData(lead.id, data);
@@ -3085,7 +3136,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenuSub>
     );
 
-    let salesItems: React.ReactNode[] = isMailPlusPtyLtd ? [] : [quoteItem, signupItem, freeTrialItem];
+    const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
+    const isTrialingShipMate = lead.status === 'Trialing ShipMate' || lead.customerStatus === 'Trialing ShipMate';
+
+    const stopLocalMileItem = isTrialingLocalMile ? (
+        <DropdownMenuItem 
+            key="stop-localmile"
+            className="text-amber-700 dark:text-amber-400 font-medium cursor-pointer"
+            onSelect={(e) => {
+                e.preventDefault();
+                setStopTrialType('LocalMile');
+            }}
+        >
+            <AlertTriangle className="mr-2 h-4 w-4 text-amber-600" />Stop LocalMile Trial
+        </DropdownMenuItem>
+    ) : null;
+
+    const stopShipMateItem = isTrialingShipMate ? (
+        <DropdownMenuItem 
+            key="stop-shipmate"
+            className="text-amber-700 dark:text-amber-400 font-medium cursor-pointer"
+            onSelect={(e) => {
+                e.preventDefault();
+                setStopTrialType('ShipMate');
+            }}
+        >
+            <AlertTriangle className="mr-2 h-4 w-4 text-amber-600" />Stop ShipMate Trial
+        </DropdownMenuItem>
+    ) : null;
+
+    let salesItems: React.ReactNode[] = isMailPlusPtyLtd ? [] : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
 
     if (salesItems.length === 0) return null;
 
@@ -3730,12 +3810,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       )}
 
 
-      {lead.status === 'Trialing ShipMate' && (
+      {(lead.status === 'Trialing ShipMate' || lead.customerStatus === 'Trialing ShipMate') && (
           <Alert className="bg-blue-50 border-blue-200 text-blue-800 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                   <CheckCircle2 className="h-5 w-5 text-blue-600 shrink-0" />
                   <div>
-                      <AlertTitle className="font-semibold text-blue-900">ShipMate Onboarding Status</AlertTitle>
+                      <AlertTitle className="font-semibold text-blue-900">ShipMate Free Trial Active</AlertTitle>
                       <AlertDescription className="text-blue-700">
                           {lead.providedShipMateOnboarding 
                               ? "ShipMate Onboarding has been successfully completed for this customer." 
@@ -3743,37 +3823,69 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                       </AlertDescription>
                   </div>
               </div>
-              <div className="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-sm shrink-0">
-                  <Checkbox 
-                      id="shipmate-onboarding" 
-                      checked={lead.providedShipMateOnboarding || false}
-                      onCheckedChange={async (checked) => {
-                          const isChecked = !!checked;
-                          try {
-                              await updateLeadDetails(lead.id, lead, { providedShipMateOnboarding: isChecked });
-                              setLead(prev => ({ ...prev, providedShipMateOnboarding: isChecked }));
-                              await logActivity(lead.id, {
-                                  type: 'Update',
-                                  notes: `ShipMate Onboarding status changed to: ${isChecked ? 'Completed' : 'Not Provided'}`,
-                                  author: user?.displayName || 'Unknown'
-                              });
-                              toast({
-                                  title: isChecked ? 'Onboarding Complete' : 'Onboarding Reset',
-                                  description: isChecked ? 'Marked ShipMate Onboarding as provided.' : 'Marked ShipMate Onboarding as pending.',
-                              });
-                          } catch (e) {
-                              toast({
-                                  variant: 'destructive',
-                                  title: 'Error',
-                                  description: 'Failed to update onboarding status.',
-                              });
-                          }
-                      }}
-                  />
-                  <label htmlFor="shipmate-onboarding" className="text-sm font-semibold text-blue-950 cursor-pointer select-none">
-                      Onboarding Provided
-                  </label>
+              <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-sm">
+                      <Checkbox 
+                          id="shipmate-onboarding" 
+                          checked={lead.providedShipMateOnboarding || false}
+                          onCheckedChange={async (checked) => {
+                              const isChecked = !!checked;
+                              try {
+                                  await updateLeadDetails(lead.id, lead, { providedShipMateOnboarding: isChecked });
+                                  setLead(prev => ({ ...prev, providedShipMateOnboarding: isChecked }));
+                                  await logActivity(lead.id, {
+                                      type: 'Update',
+                                      notes: `ShipMate Onboarding status changed to: ${isChecked ? 'Completed' : 'Not Provided'}`,
+                                      author: user?.displayName || 'Unknown'
+                                  });
+                                  toast({
+                                      title: isChecked ? 'Onboarding Complete' : 'Onboarding Reset',
+                                      description: isChecked ? 'Marked ShipMate Onboarding as provided.' : 'Marked ShipMate Onboarding as pending.',
+                                  });
+                              } catch (e) {
+                                  toast({
+                                      variant: 'destructive',
+                                      title: 'Error',
+                                      description: 'Failed to update onboarding status.',
+                                  });
+                              }
+                          }}
+                      />
+                      <label htmlFor="shipmate-onboarding" className="text-sm font-semibold text-blue-950 cursor-pointer select-none">
+                          Onboarding Provided
+                      </label>
+                  </div>
+                  <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-amber-300 bg-white text-amber-800 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 font-medium shadow-sm"
+                      onClick={() => setStopTrialType('ShipMate')}
+                  >
+                      <AlertTriangle className="mr-1.5 h-3.5 w-3.5 text-amber-600" /> Stop Trial
+                  </Button>
               </div>
+          </Alert>
+      )}
+
+      {(lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile') && (
+          <Alert className="bg-cyan-50 border-cyan-200 text-cyan-800 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-cyan-600 shrink-0" />
+                  <div>
+                      <AlertTitle className="font-semibold text-cyan-900">LocalMile Free Trial Active</AlertTitle>
+                      <AlertDescription className="text-cyan-700">
+                          This customer is currently trialing LocalMile. Free trials remaining: <strong>{lead.localMileTrialsRemaining ?? 5}</strong>
+                      </AlertDescription>
+                  </div>
+              </div>
+              <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-300 bg-white text-amber-800 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 font-medium shrink-0 shadow-sm"
+                  onClick={() => setStopTrialType('LocalMile')}
+              >
+                  <AlertTriangle className="mr-1.5 h-3.5 w-3.5 text-amber-600" /> Stop LocalMile Trial
+              </Button>
           </Alert>
       )}
 
@@ -6419,6 +6531,51 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
+    <Dialog open={!!stopTrialType} onOpenChange={(open) => { if (!open) { setStopTrialType(null); setStopTrialReason(''); } }}>
+        <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-amber-900">
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    Stop {stopTrialType} Free Trial
+                </DialogTitle>
+                <DialogDescription className="text-slate-600 pt-1">
+                    Are you sure you want to stop the <strong>{stopTrialType}</strong> free trial for <strong>{lead.companyName || 'this customer'}</strong>? This will change the status to <strong>{stopTrialType === 'LocalMile' ? 'LocalMile Trial Stopped' : 'ShipMate Trial Stopped'}</strong>.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-3">
+                <div className="grid gap-2">
+                    <label htmlFor="stop-trial-reason" className="text-xs font-semibold text-slate-700">
+                        Reason / Notes (Optional)
+                    </label>
+                    <Textarea
+                        id="stop-trial-reason"
+                        placeholder="Provide details on why the free trial is being stopped..."
+                        value={stopTrialReason}
+                        onChange={(e) => setStopTrialReason(e.target.value)}
+                        rows={3}
+                    />
+                </div>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+                <Button variant="outline" onClick={() => { setStopTrialType(null); setStopTrialReason(''); }} disabled={isStoppingTrial}>
+                    Cancel
+                </Button>
+                <Button 
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-semibold" 
+                    onClick={handleConfirmStopTrial} 
+                    disabled={isStoppingTrial}
+                >
+                    {isStoppingTrial ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Stopping...
+                        </>
+                    ) : (
+                        `Stop ${stopTrialType} Trial`
+                    )}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     <EditAddressDialog lead={lead} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <EditPostalAddressDialog lead={lead} isOpen={isPostalAddressDialogOpen} onOpenChange={setIsPostalAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <SofDialog lead={lead} isOpen={isSofDialogOpen} onOpenChange={setIsSofDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />

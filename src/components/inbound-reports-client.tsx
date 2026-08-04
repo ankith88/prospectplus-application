@@ -71,7 +71,7 @@ const isLostLead = (l: Lead) => {
     const status = l.status || '';
     const customerStatus = l.customerStatus || '';
     const nsStatus = l.netsuiteLeadStatus || '';
-    const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+    const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
     return (
         lostStatuses.includes(customerStatus) ||
         lostStatuses.includes(status) ||

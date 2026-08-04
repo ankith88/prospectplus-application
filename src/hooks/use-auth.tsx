@@ -110,6 +110,7 @@ interface AuthContextType {
     signUpAndCreateProfile: (userData: any) => Promise<string | void>;
     refreshToken: () => Promise<string | null>;
     switchRole: (newRole: UserRole) => void;
+    switchFranchisee: (franchiseeId: string) => Promise<void>;
     completeOnboardingState: (routeKey: string) => Promise<void>;
     updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
     isSuperAdmin: boolean;
@@ -129,6 +130,7 @@ const AuthContext = createContext<AuthContextType>({
     signUpAndCreateProfile: async () => {},
     refreshToken: async () => null,
     switchRole: () => {},
+    switchFranchisee: async () => {},
     completeOnboardingState: async () => {},
     updateUserProfile: async () => {},
     isSuperAdmin: false,
@@ -176,6 +178,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         const savedRole = typeof window !== 'undefined' ? localStorage.getItem(`activeRole_${user.uid}`) as UserRole : null;
                         const validRole = savedRole && (fullProfile.assignedRoles?.includes(savedRole) || fullProfile.role === savedRole) ? savedRole : null;
                         fullProfile.activeRole = validRole || fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
+
+                        if (fullProfile.linkedFranchisees && fullProfile.linkedFranchisees.length > 0) {
+                            const savedFranId = typeof window !== 'undefined' ? localStorage.getItem(`activeFranchiseeId_${user.uid}`) : null;
+                            const activeFran = fullProfile.linkedFranchisees.find(f => f.franchiseeId === savedFranId) || fullProfile.linkedFranchisees[0];
+                            if (activeFran) {
+                                fullProfile.activeFranchiseeId = activeFran.franchiseeId;
+                                fullProfile.franchiseeId = activeFran.franchiseeId;
+                                fullProfile.franchiseeInternalId = activeFran.franchiseeId;
+                                fullProfile.franchisee = activeFran.franchiseeName;
+                                fullProfile.franchiseeRole = activeFran.relationship;
+                            }
+                        }
+
                         setUserProfile(fullProfile);
 
                         // Track daily login only when tab is actively visible (prevents background tab refreshes overnight)
@@ -311,8 +326,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             await updateProfile(newUser, { displayName: displayName });
 
             const franchiseeIdVal = userData.franchiseeId || userData.franchiseeInternalId || null;
+            const franchiseeRoleVal = userData.franchiseeRole || 'owner';
 
-            const userProfileData = {
+            let linkedFrans: Array<{ franchiseeId: string; franchiseeName: string; relationship: 'owner' | 'investor'; isDefault?: boolean }> = userData.linkedFranchisees || [];
+            if (linkedFrans.length === 0 && franchiseeIdVal) {
+                linkedFrans = [{
+                    franchiseeId: franchiseeIdVal,
+                    franchiseeName: userData.franchisee || '',
+                    relationship: franchiseeRoleVal,
+                    isDefault: true,
+                }];
+            }
+
+            const userProfileData: Record<string, any> = {
                 uid: newUser.uid,
                 email: userData.email,
                 firstName: userData.firstName,
@@ -329,29 +355,71 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 franchisee: userData.franchisee || null,
                 franchiseeId: franchiseeIdVal,
                 franchiseeInternalId: franchiseeIdVal,
+                franchiseeRole: franchiseeRoleVal,
+                personalEmail: userData.personalEmail || null,
+                abn: userData.abn || null,
+                addressDetails: userData.addressDetails || null,
+                bankDetails: userData.bankDetails || null,
+                linkedFranchisees: linkedFrans,
+                activeFranchiseeId: franchiseeIdVal,
             };
 
             await setDoc(doc(firestore, "users", newUser.uid), userProfileData);
 
-            // Automatically link with franchisees collection if franchiseeId is provided
-            if (franchiseeIdVal && (userData.role === 'Franchisee' || userData.role?.toLowerCase() === 'franchisee')) {
-                try {
-                    const franRef = doc(firestore, "franchisees", franchiseeIdVal);
-                    const franSnap = await getDoc(franRef);
-                    if (franSnap.exists()) {
-                        const existingData = franSnap.data() || {};
-                        const existingUsers: string[] = existingData.linkedUserIds || [];
-                        const updatedUsers = Array.from(new Set([...existingUsers, newUser.uid]));
-                        await updateDoc(franRef, {
-                            currentOwnerUserId: newUser.uid,
-                            linkedUserIds: updatedUsers,
-                            linkedUserEmail: userData.email,
-                            mainContact: displayName || existingData.mainContact,
-                            updatedAt: new Date().toISOString()
-                        });
+            // Sync with franchisees collection for each linked franchisee
+            if (linkedFrans.length > 0 && (userData.role === 'Franchisee' || userData.role?.toLowerCase() === 'franchisee')) {
+                for (const fran of linkedFrans) {
+                    if (!fran.franchiseeId) continue;
+                    try {
+                        const franRef = doc(firestore, "franchisees", fran.franchiseeId);
+                        const franSnap = await getDoc(franRef);
+                        if (franSnap.exists()) {
+                            const existingData = franSnap.data() || {};
+                            const existingUserIds: string[] = existingData.linkedUserIds || [];
+                            const updatedUserIds = Array.from(new Set([...existingUserIds, newUser.uid]));
+
+                            const userDetailObj = {
+                                userId: newUser.uid,
+                                name: displayName,
+                                email: userData.email,
+                                personalEmail: userData.personalEmail || '',
+                                abn: userData.abn || '',
+                                bankDetails: userData.bankDetails || {},
+                                addressDetails: userData.addressDetails || {},
+                                relationship: fran.relationship,
+                            };
+
+                            const existingLinked: any[] = existingData.linkedUsers || [];
+                            const filteredLinked = existingLinked.filter((u: any) => u.userId !== newUser.uid);
+                            filteredLinked.push(userDetailObj);
+
+                            const existingOwners: any[] = existingData.owners || [];
+                            const filteredOwners = existingOwners.filter((u: any) => u.userId !== newUser.uid);
+                            if (fran.relationship === 'owner') filteredOwners.push(userDetailObj);
+
+                            const existingInvestors: any[] = existingData.investors || [];
+                            const filteredInvestors = existingInvestors.filter((u: any) => u.userId !== newUser.uid);
+                            if (fran.relationship === 'investor') filteredInvestors.push(userDetailObj);
+
+                            const updatePayload: Record<string, any> = {
+                                linkedUserIds: updatedUserIds,
+                                linkedUsers: filteredLinked,
+                                owners: filteredOwners,
+                                investors: filteredInvestors,
+                                updatedAt: new Date().toISOString(),
+                            };
+
+                            if (fran.relationship === 'owner') {
+                                updatePayload.currentOwnerUserId = newUser.uid;
+                                updatePayload.linkedUserEmail = userData.email;
+                                updatePayload.mainContact = displayName || existingData.mainContact;
+                            }
+
+                            await updateDoc(franRef, updatePayload);
+                        }
+                    } catch (franLinkErr) {
+                        console.warn("Could not automatically update franchisee doc on user creation:", franLinkErr);
                     }
-                } catch (franLinkErr) {
-                    console.warn("Could not automatically update franchisee doc on user creation:", franLinkErr);
                 }
             }
 
@@ -382,6 +450,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             router.push('/');
         }
     }, [userProfile, router]);
+
+    const switchFranchisee = useCallback(async (targetFranchiseeId: string) => {
+        if (!userProfile) return;
+        const target = userProfile.linkedFranchisees?.find(f => f.franchiseeId === targetFranchiseeId);
+        if (target) {
+            const updates: Partial<UserProfile> = {
+                activeFranchiseeId: target.franchiseeId,
+                franchiseeId: target.franchiseeId,
+                franchiseeInternalId: target.franchiseeId,
+                franchisee: target.franchiseeName,
+                franchiseeRole: target.relationship,
+            };
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(`activeFranchiseeId_${userProfile.uid}`, target.franchiseeId);
+            }
+            setUserProfile(prev => prev ? { ...prev, ...updates } : prev);
+            if (user) {
+                const userDocRef = doc(firestore, "users", user.uid);
+                await updateDoc(userDocRef, updates).catch(err => console.warn("Failed saving active franchisee to Firestore:", err));
+            }
+        }
+    }, [user, userProfile]);
 
     const completeOnboardingState = useCallback(async (routeKey: string) => {
         if (user && userProfile) {
@@ -436,6 +526,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signUpAndCreateProfile,
         refreshToken,
         switchRole,
+        switchFranchisee,
         completeOnboardingState,
         updateUserProfile,
         isSuperAdmin: userProfile ? SUPER_ADMIN_UIDS.includes(userProfile.uid) : false,

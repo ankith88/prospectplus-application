@@ -38,9 +38,9 @@ import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-s
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { CalendarIcon, UserPlus, Package, MousePointerClick, CheckCircle2, Circle, Layers, Truck, Building2, Loader2, Sparkles } from 'lucide-react';
+import { CalendarIcon, UserPlus, Package, MousePointerClick, CheckCircle2, Circle, Layers, Truck, Building2, Loader2, Sparkles, Search } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { isBankingServiceSelected, isH2hServiceSelected, getNearbyBanks, saveOrUpdateTaggedAddress, type BankLocationOption } from '@/lib/bank-utils';
+import { isBankingServiceSelected, isH2hServiceSelected, getNearbyBanks, saveOrUpdateTaggedAddress, normalizeState, type BankLocationOption } from '@/lib/bank-utils';
 import { GoogleAddressInput } from './google-address-input';
 import { Calendar } from './ui/calendar';
 import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
@@ -167,6 +167,7 @@ export function ServiceSelectionDialog({
   const [partnerLocations, setPartnerLocations] = useState<any[]>([]);
   const [selectedBankId, setSelectedBankId] = useState<string>(lead?.bankLocationId || '');
   const [selectedBank, setSelectedBank] = useState<any | null>(null);
+  const [bankSearchQuery, setBankSearchQuery] = useState<string>('');
   const [h2hAddress, setH2hAddress] = useState<any | null>(null);
 
   useEffect(() => {
@@ -2561,37 +2562,85 @@ export function ServiceSelectionDialog({
                         )}
 
                         {/* Mandatory Bank Location Selection when EB or CB is selected */}
-                        {(selectionType === 'services' || selectionType === 'both') && isBankingServiceSelected(selectedServices) && (
-                          <div className="mt-4 p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2">
-                            <Label className="font-semibold text-slate-800 text-xs flex items-center gap-1.5">
-                              <Building2 className="h-4 w-4 text-[#095c7b]" />
-                              Select Bank Location <span className="text-rose-500">*</span>
-                            </Label>
-                            <p className="text-[11px] text-slate-500">
-                              Selecting a Bank partner location is mandatory for Express Banking (EB) and Cash Banking (CB) services. Showing nearby banks ordered by proximity.
-                            </p>
-                            <Select
-                              value={selectedBankId}
-                              onValueChange={(val) => {
-                                setSelectedBankId(val);
-                                const nearby = getNearbyBanks(lead, partnerLocations);
-                                const found = nearby.find(b => b.id === val);
-                                setSelectedBank(found ? found.raw : null);
-                              }}
-                            >
-                              <SelectTrigger className="w-full bg-white text-xs border-slate-200 h-9">
-                                <SelectValue placeholder="Select closest Bank location..." />
-                              </SelectTrigger>
-                              <SelectContent className="max-h-60 overflow-y-auto">
-                                {getNearbyBanks(lead, partnerLocations).map((b) => (
-                                  <SelectItem key={b.id} value={b.id} className="text-xs">
-                                    {b.displayLabel}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
+                        {(selectionType === 'services' || selectionType === 'both') && isBankingServiceSelected(selectedServices) && (() => {
+                          const stateVal = normalizeState(lead?.state || lead?.address?.state || '');
+                          const nearbyBanks = getNearbyBanks(lead, partnerLocations);
+                          const query = bankSearchQuery.trim().toLowerCase();
+
+                          let displayBanks = nearbyBanks.filter((b) => {
+                            if (!query) return true;
+                            return (
+                              (b.name || '').toLowerCase().includes(query) ||
+                              (b.suburb || b.city || '').toLowerCase().includes(query) ||
+                              (b.postCode || b.postcode || '').toLowerCase().includes(query) ||
+                              (b.displayLabel || '').toLowerCase().includes(query)
+                            );
+                          });
+
+                          const isFallback = query !== '' && displayBanks.length === 0;
+                          if (isFallback) {
+                            const allStateBanks = getNearbyBanks({ ...lead, state: '' }, partnerLocations);
+                            displayBanks = allStateBanks.filter((b) =>
+                              (b.name || '').toLowerCase().includes(query) ||
+                              (b.suburb || b.city || '').toLowerCase().includes(query) ||
+                              (b.postCode || b.postcode || '').toLowerCase().includes(query) ||
+                              (b.displayLabel || '').toLowerCase().includes(query)
+                            );
+                          }
+
+                          return (
+                            <div className="mt-4 p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2.5">
+                              <Label className="font-semibold text-slate-800 text-xs flex items-center gap-1.5">
+                                <Building2 className="h-4 w-4 text-[#095c7b]" />
+                                Select Bank Location <span className="text-rose-500">*</span>
+                              </Label>
+                              <p className="text-[11px] text-slate-500">
+                                Selecting a Bank partner location is mandatory for Express Banking (EB) and Cash Banking (CB) services.
+                                {stateVal ? ` Showing bank locations in ${stateVal}.` : ' Showing all nearby bank locations.'}
+                              </p>
+
+                              <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                <Input
+                                  type="text"
+                                  placeholder="Search bank name, suburb, or postcode..."
+                                  value={bankSearchQuery}
+                                  onChange={(e) => setBankSearchQuery(e.target.value)}
+                                  className="pl-8 h-8 text-xs bg-white border-slate-200"
+                                />
+                              </div>
+
+                              <Select
+                                value={selectedBankId}
+                                onValueChange={(val) => {
+                                  setSelectedBankId(val);
+                                  const allLocs = isFallback ? getNearbyBanks({ ...lead, state: '' }, partnerLocations) : nearbyBanks;
+                                  const found = allLocs.find(b => b.id === val);
+                                  setSelectedBank(found ? found.raw : null);
+                                }}
+                              >
+                                <SelectTrigger className="w-full bg-white text-xs border-slate-200 h-9">
+                                  <SelectValue placeholder="Select Bank location..." />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-60 overflow-y-auto">
+                                  {displayBanks.length > 0 ? (
+                                    displayBanks.map((b) => (
+                                      <SelectItem key={b.id} value={b.id} className="text-xs">
+                                        {b.displayLabel}
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <div className="p-2 text-xs text-slate-500 text-center">
+                                      {query
+                                        ? `No bank locations match "${bankSearchQuery}"`
+                                        : `No bank locations found${stateVal ? ` in ${stateVal}` : ''}.`}
+                                    </div>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          );
+                        })()}
 
                         {/* Mandatory H2H Address Selection when H2H service is selected */}
                         {(selectionType === 'services' || selectionType === 'both') && isH2hServiceSelected(selectedServices) && (

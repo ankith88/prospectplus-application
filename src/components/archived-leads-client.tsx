@@ -131,7 +131,7 @@ type ExpandedLeadDetails = {
 };
 
 const LEADS_PER_PAGE = 100;
-const archivedStatuses: LeadStatus[] = ['Qualified', 'Appointment Booked', 'Pre Qualified', 'Won', 'Lost', 'Lost Customer', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'Free Trial', 'LocalMile Pending', 'LocalMile Opportunity', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted'];
+const archivedStatuses: LeadStatus[] = ['Qualified', 'Appointment Booked', 'Pre Qualified', 'Won', 'Lost', 'Lost Customer', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'Free Trial', 'LocalMile Pending', 'LocalMile Opportunity', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
 
 const getDefaultFilters = (role?: string) => {
   const isOutboundOrUser = role === 'user' || role?.toLowerCase() === 'user' || role === 'Outbound Admin';

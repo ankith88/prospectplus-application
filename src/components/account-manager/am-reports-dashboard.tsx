@@ -941,7 +941,7 @@ export default function AMReportsDashboard() {
 
         const isLostLead = (l: Lead) => {
             const st = l.customerStatus || l.status || '';
-            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
             return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
         };
 
@@ -1287,7 +1287,7 @@ export default function AMReportsDashboard() {
     const signedLeadsData = useMemo(() => {
         const isLostLead = (l: Lead) => {
             const st = l.customerStatus || l.status || '';
-            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
             return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
         };
 
@@ -1379,7 +1379,7 @@ export default function AMReportsDashboard() {
     const lostLeadsData = useMemo(() => {
         const isLostLead = (l: Lead) => {
             const st = l.customerStatus || l.status || '';
-            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
             return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
         };
 
@@ -1847,7 +1847,7 @@ export default function AMReportsDashboard() {
                     onClick={() => {
                         const isLostLead = (l: Lead) => {
                             const st = l.customerStatus || l.status || '';
-                            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+                            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
                             return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
                         };
                         const dateRangeFilter = appliedActivityDateRange || appliedLeadEnteredDateRange;
@@ -1864,7 +1864,7 @@ export default function AMReportsDashboard() {
                     onClick={() => {
                         const isLostLead = (l: Lead) => {
                             const st = l.customerStatus || l.status || '';
-                            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+                            const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
                             return lostStatuses.includes(st) || st.toLowerCase().includes('lost');
                         };
                         const dateRangeFilter = appliedActivityDateRange || appliedLeadEnteredDateRange;

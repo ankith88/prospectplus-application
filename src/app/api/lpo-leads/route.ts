@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
     try {
       await sendPhysicalEmail({
         to: 'kerry.oneill@mailplus.com.au',
-        cc: 'michael.cdaid@mailplus.com.au',
+        cc: 'michael.cdaid@mailplus.com.au, ankith.ravindran@mailplus.com.au',
         subject: `New LPO Lead: ${lpoName}`,
         html: emailHtml,
       });

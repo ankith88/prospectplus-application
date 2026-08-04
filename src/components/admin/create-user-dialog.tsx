@@ -46,6 +46,16 @@ const formSchema = z.object({
   linkedBDR: z.string().optional(),
   franchisee: z.string().optional(),
   franchiseeId: z.string().optional(),
+  franchiseeRole: z.enum(['owner', 'investor']).default('owner'),
+  personalEmail: z.string().optional(),
+  abn: z.string().optional(),
+  street: z.string().optional(),
+  suburb: z.string().optional(),
+  state: z.string().optional(),
+  postcode: z.string().optional(),
+  bsb: z.string().optional(),
+  accountNumber: z.string().optional(),
+  accountName: z.string().optional(),
   isOwnershipTransfer: z.boolean().optional().default(false),
   oldOwnerPersonalEmail: z.string().optional(),
   sendWelcomeEmail: z.boolean().default(true),
@@ -78,6 +88,16 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       linkedBDR: '',
       franchisee: '',
       franchiseeId: '',
+      franchiseeRole: 'owner',
+      personalEmail: '',
+      abn: '',
+      street: '',
+      suburb: '',
+      state: '',
+      postcode: '',
+      bsb: '',
+      accountNumber: '',
+      accountName: '',
       isOwnershipTransfer: false,
       oldOwnerPersonalEmail: '',
       sendWelcomeEmail: true,
@@ -139,9 +159,22 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
         }
         newUserId = transferData.newUserId || transferData.userId;
       } else {
+        const fullAddressStr = [values.street, values.suburb, values.state, values.postcode].filter(Boolean).join(', ');
         const createdId = await signUpAndCreateProfile({
           ...values,
           role: effectiveRole,
+          addressDetails: {
+            street: values.street || '',
+            suburb: values.suburb || '',
+            state: values.state || '',
+            postcode: values.postcode || '',
+            fullAddress: fullAddressStr,
+          },
+          bankDetails: {
+            bsb: values.bsb || '',
+            accountNumber: values.accountNumber || '',
+            accountName: values.accountName || '',
+          },
         });
         if (createdId) newUserId = createdId;
       }
@@ -332,13 +365,98 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                       </FormItem>
                   )}/>
 
-                  <FormField control={form.control} name="franchisee" render={({ field }) => (
+                  <FormField control={form.control} name="franchiseeRole" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Franchise Display Name</FormLabel>
-                        <FormControl><Input {...field} placeholder="e.g. Alexandria" /></FormControl>
+                        <FormLabel>Franchisee Relationship / Type*</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select designation..." /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            <SelectItem value="owner">Owner</SelectItem>
+                            <SelectItem value="investor">Investor</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Specify whether this user is an Owner or Investor of the linked franchise.</FormDescription>
                         <FormMessage />
                       </FormItem>
                   )}/>
+
+                  <FormField control={form.control} name="personalEmail" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Personal Email Address</FormLabel>
+                        <FormControl><Input type="email" {...field} placeholder="e.g. personal.email@gmail.com" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                  )}/>
+
+                  <div className="pt-2 border-t space-y-3">
+                    <FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-700">Business & Bank Details</FormLabel>
+                    <FormField control={form.control} name="abn" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">ABN (Australian Business Number)</FormLabel>
+                          <FormControl><Input {...field} placeholder="e.g. 12 345 678 901" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                    )}/>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <FormField control={form.control} name="bsb" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">BSB</FormLabel>
+                            <FormControl><Input {...field} placeholder="000-000" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                      )}/>
+                      <FormField control={form.control} name="accountNumber" render={({ field }) => (
+                          <FormItem className="col-span-2">
+                            <FormLabel className="text-xs">Bank Account Number</FormLabel>
+                            <FormControl><Input {...field} placeholder="12345678" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                      )}/>
+                    </div>
+
+                    <FormField control={form.control} name="accountName" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Bank Account Name</FormLabel>
+                          <FormControl><Input {...field} placeholder="e.g. Smith Logistics Pty Ltd" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                    )}/>
+                  </div>
+
+                  <div className="pt-2 border-t space-y-3">
+                    <FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-700">Address Details</FormLabel>
+                    <FormField control={form.control} name="street" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Street Address</FormLabel>
+                          <FormControl><Input {...field} placeholder="123 High Street" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                    )}/>
+                    <div className="grid grid-cols-3 gap-2">
+                      <FormField control={form.control} name="suburb" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Suburb</FormLabel>
+                            <FormControl><Input {...field} placeholder="Sydney" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                      )}/>
+                      <FormField control={form.control} name="state" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">State</FormLabel>
+                            <FormControl><Input {...field} placeholder="NSW" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                      )}/>
+                      <FormField control={form.control} name="postcode" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Postcode</FormLabel>
+                            <FormControl><Input {...field} placeholder="2000" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                      )}/>
+                    </div>
+                  </div>
 
                   <div className="pt-2 border-t space-y-3">
                     <FormField control={form.control} name="isOwnershipTransfer" render={({ field }) => (

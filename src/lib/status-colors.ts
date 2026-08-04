@@ -39,7 +39,9 @@ export const STATUS_COLORS: Record<string, string> = {
   'Reschedule': '#f97316',
   'Future Follow-up': '#f97316',
 
-  // Negative / Dead (Red)
+  // Negative / Dead / Stopped (Red / Amber)
+  'LocalMile Trial Stopped': '#f59e0b',
+  'ShipMate Trial Stopped': '#f59e0b',
   'Lost': '#ef4444',
   'Lost Customer': '#ef4444',
   'Unqualified': '#ef4444',

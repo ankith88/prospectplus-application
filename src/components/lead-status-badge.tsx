@@ -60,7 +60,9 @@ export function LeadStatusBadge({ status, showInfoTooltip }: LeadStatusBadgeProp
     'Address Check': "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700 font-semibold",
     'Address Confirmed': "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700 font-semibold",
 
-    // Negative / Dead (Red)
+    // Negative / Dead / Trial Stopped (Red / Amber)
+    'LocalMile Trial Stopped': "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700 font-medium",
+    'ShipMate Trial Stopped': "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700 font-medium",
     Lost: "bg-red-100 text-red-800 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-800",
     'Lost Customer': "bg-red-100 text-red-800 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-800",
     Unqualified: "bg-red-100 text-red-800 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-800",

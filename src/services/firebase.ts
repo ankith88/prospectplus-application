@@ -157,7 +157,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Appointment Booked', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'LPO Opportunity', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Out of Territory', 'Future Follow-up', 'No Answer', 'Address Check', 'Address Confirmed'];
+    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Appointment Booked', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'LPO Opportunity', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Out of Territory', 'Future Follow-up', 'No Answer', 'Address Check', 'Address Confirmed', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
     if (typeof status === 'string') {
         const trimmedStatus = status.trim();
         if (trimmedStatus === 'SUSPECT-Unqualified' || trimmedStatus === 'SUSPECT - Unqualified') return 'New';
@@ -865,7 +865,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
 
 async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
     try {
-        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'LPO Opportunity', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Future Follow-up', 'Appointment Booked'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'LPO Opportunity', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Future Follow-up', 'Appointment Booked', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
         
         let q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         if (franchisee) q = query(q, where('franchisee', '==', franchisee));

@@ -57,6 +57,8 @@ export type LeadStatus =
   | 'No Answer'
   | 'Address Check'
   | 'Address Confirmed'
+  | 'LocalMile Trial Stopped'
+  | 'ShipMate Trial Stopped'
 
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
@@ -389,6 +391,28 @@ export interface UserProfile {
   sidebarAlwaysOpen?: boolean;
   adminApprovalStatus?: 'pending' | 'approved' | 'rejected';
   pendingAdminRequestId?: string;
+  franchiseeRole?: 'owner' | 'investor';
+  personalEmail?: string;
+  abn?: string;
+  addressDetails?: {
+    street?: string;
+    suburb?: string;
+    state?: string;
+    postcode?: string;
+    fullAddress?: string;
+  };
+  bankDetails?: {
+    bsb?: string;
+    accountNumber?: string;
+    accountName?: string;
+  };
+  linkedFranchisees?: Array<{
+    franchiseeId: string;
+    franchiseeName: string;
+    relationship: 'owner' | 'investor';
+    isDefault?: boolean;
+  }>;
+  activeFranchiseeId?: string;
 }
 
 export interface AdminApprovalRequest {
@@ -806,6 +830,58 @@ export interface Franchisee {
     startDate?: string;
     endDate?: string;
   }[];
+  owners?: Array<{
+    userId: string;
+    name: string;
+    email: string;
+    personalEmail?: string;
+    abn?: string;
+    bankDetails?: { bsb?: string; accountNumber?: string; accountName?: string };
+    addressDetails?: any;
+  }>;
+  investors?: Array<{
+    userId: string;
+    name: string;
+    email: string;
+    personalEmail?: string;
+    abn?: string;
+    bankDetails?: { bsb?: string; accountNumber?: string; accountName?: string };
+    addressDetails?: any;
+  }>;
+  linkedUsers?: Array<{
+    userId: string;
+    name: string;
+    email: string;
+    personalEmail?: string;
+    abn?: string;
+    bankDetails?: { bsb?: string; accountNumber?: string; accountName?: string };
+    addressDetails?: any;
+    relationship: 'owner' | 'investor';
+  }>;
+}
+
+export interface FranchiseProspect {
+  id: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  preferredState?: string;
+  preferredTerritory?: string;
+  message?: string;
+  status: 'New' | 'Contacted' | 'Under Review' | 'Converted' | 'Rejected' | 'Archived';
+  notes?: Array<{
+    id: string;
+    text: string;
+    createdAt: string;
+    createdByName: string;
+    createdByUid: string;
+  }>;
+  submittedAt: string;
+  sourceApp?: string;
+  convertedUserId?: string;
+  convertedFranchiseeId?: string;
 }
 
 export interface Operator {

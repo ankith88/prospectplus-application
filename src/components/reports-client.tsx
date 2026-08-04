@@ -81,7 +81,7 @@ import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 const isLostLead = (l: Lead) => {
     const status = l.status || '';
     const customerStatus = l.customerStatus || '';
-    const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+    const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'];
     return (
         lostStatuses.includes(customerStatus) ||
         lostStatuses.includes(status)
@@ -292,7 +292,7 @@ const leadStatuses: LeadStatus[] = [
     'New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Appointment Booked', 'Unqualified', 
     'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 
     'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 
-    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Out of Territory', 'Future Follow-up', 'Address Check', 'Address Confirmed'
+    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Out of Territory', 'Future Follow-up', 'Address Check', 'Address Confirmed', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'
 ];
 
 const safeGetStatus = (status: any): LeadStatus => {

@@ -26,7 +26,7 @@ const LEAD_STATUSES: LeadStatus[] = [
   'Lost Customer', 'LPO Review', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity',
   'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity',
   'Priority Field Lead', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted',
-  'Out of Territory', 'Future Follow-up'
+  'Out of Territory', 'Future Follow-up', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'
 ];
 
 export function LeadStatusUpdater() {

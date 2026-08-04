@@ -84,7 +84,25 @@ export interface BankLocationOption {
 }
 
 /**
- * Retrieves and sorts all partner locations of locationType "Bank" by proximity to lead site address
+ * Normalizes state names and abbreviations to standard uppercase shorthand (e.g., 'NSW', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'ACT', 'NT')
+ */
+export function normalizeState(stateStr?: string | null): string {
+  if (!stateStr) return '';
+  const s = stateStr.toString().trim().toLowerCase().replace(/[^a-z]/g, '');
+  if (!s) return '';
+  if (s === 'nsw' || s === 'newsouthwales') return 'NSW';
+  if (s === 'vic' || s === 'victoria') return 'VIC';
+  if (s === 'qld' || s === 'queensland') return 'QLD';
+  if (s === 'sa' || s === 'southaustralia') return 'SA';
+  if (s === 'wa' || s === 'westernaustralia') return 'WA';
+  if (s === 'tas' || s === 'tasmania') return 'TAS';
+  if (s === 'act' || s === 'australiancapitalterritory') return 'ACT';
+  if (s === 'nt' || s === 'northernterritory') return 'NT';
+  return stateStr.toString().trim().toUpperCase();
+}
+
+/**
+ * Retrieves and sorts partner locations of locationType "Bank" in the same state as the lead/company
  */
 export function getNearbyBanks(lead: any, partnerLocations: any[]): BankLocationOption[] {
   // Extract site address & coordinates from lead fields
@@ -94,11 +112,24 @@ export function getNearbyBanks(lead: any, partnerLocations: any[]): BankLocation
   const leadZip = (lead?.zip || lead?.postcode || lead?.postCode || lead?.address?.zip || lead?.address?.postcode || '').toString().trim();
   const leadCity = (lead?.city || lead?.suburb || lead?.address?.city || lead?.address?.suburb || '').toString().trim().toLowerCase();
 
+  // Extract lead/company state from lead.state (or fallback to address.state)
+  const rawLeadState = (lead?.state || lead?.address?.state || '').toString().trim();
+  const leadState = normalizeState(rawLeadState);
+
   const bankLocs: BankLocationOption[] = [];
 
   partnerLocations.forEach((loc) => {
     const locType = (loc.locationType || loc.type || '').toString().trim();
     if (locType.toLowerCase() === 'bank') {
+      const locState = normalizeState(loc.state || loc.address?.state);
+
+      // Filter by state: if lead/company state is present, only include bank locations in the same state
+      if (leadState) {
+        if (!locState || locState !== leadState) {
+          return;
+        }
+      }
+
       const locLat = parseFloat(loc.lat || loc.latitude);
       const locLng = parseFloat(loc.lng || loc.longitude);
       const hasCoords = leadLatNum !== null && leadLngNum !== null && !isNaN(leadLatNum) && !isNaN(leadLngNum) && !isNaN(locLat) && !isNaN(locLng);
