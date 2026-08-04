@@ -38,6 +38,8 @@ import React, { useState, useEffect, useMemo } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData, UserProfile } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { format, isValid } from 'date-fns'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import {
   Table,
@@ -62,10 +64,7 @@ import { RequestAddressChangeDialog } from '@/components/request-address-change-
 import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
-import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { format, isValid } from 'date-fns'
-import { Alert, AlertTitle, AlertDescription } from './ui/alert'
-import { logActivity, logUpsell, getAllUsers, getCompanyFromFirebase, deleteAdditionalAddress, getOperatorsForFranchisee } from '@/services/firebase'
+import { logActivity, getAllUsers, getCompanyFromFirebase, deleteAdditionalAddress, getOperatorsForFranchisee } from '@/services/firebase'
 import { formatInTimezone, parseDateString, safeFormatDate } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
 import { Label } from './ui/label'
@@ -153,14 +152,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     }
   }, [company?.id]);
   
-  // Upsell & Address Request states
-  const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
+  // Address Request states & Notify Upsell state
   const [isNotifyUpsellDialogOpen, setIsNotifyUpsellDialogOpen] = useState(false);
   const [isReqAddressDialogOpen, setIsReqAddressDialogOpen] = useState(false);
-  const [isUpselling, setIsUpselling] = useState(false);
-  const [upsellRepUid, setUpsellRepUid] = useState('');
-  const [upsellNotes, setUpsellNotes] = useState('');
-  const [fieldReps, setFieldReps] = useState<UserProfile[]>([]);
 
   // Franchisee & Operators state
   const [franchiseeDetails, setFranchiseeDetails] = useState<any | null>(null);
@@ -337,17 +331,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     fetchInvoices();
   }, [company.id]);
 
-  useEffect(() => {
-      if (isUpsellDialogOpen) {
-          getAllUsers().then(users => {
-              const reps = users.filter(u => (u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('Dashback') || u.assignedRoles?.includes('admin') || u.assignedRoles?.includes('Field Sales Admin')) && !u.disabled);
-              setFieldReps(reps);
-              if (userProfile && (userProfile.activeRole === 'Field Sales' || userProfile.activeRole === 'admin')) {
-                  setUpsellRepUid(userProfile.uid);
-              }
-          });
-      }
-  }, [isUpsellDialogOpen, userProfile]);
+
 
 
 
@@ -379,38 +363,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     }, 'companies');
   };
 
-  const handleConfirmUpsell = async () => {
-    if (!company.id || !upsellRepUid) return;
-    setIsUpselling(true);
-    try {
-      const rep = fieldReps.find(r => r.uid === upsellRepUid);
-      
-      // 1. Sync with NetSuite
-      const nsResult = await sendUpsellToNetSuite({ leadId: company.id });
-      
-      // 2. Log in Firebase for Activity and Commission reporting
-      await logUpsell({
-          companyId: company.id,
-          companyName: company.companyName,
-          repUid: upsellRepUid,
-          repName: rep?.displayName || 'Unknown Rep',
-          date: new Date().toISOString(),
-          notes: upsellNotes
-      });
 
-      if (nsResult.success) {
-          toast({ title: 'Upsell Recorded', description: 'Activity logged and NetSuite notified.' });
-      } else {
-          toast({ variant: 'destructive', title: 'Partial Success', description: `Logged in prospect.plus, but NetSuite sync failed: ${nsResult.message}` });
-      }
-      setIsUpsellDialogOpen(false);
-      setUpsellNotes('');
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message });
-    } finally {
-      setIsUpselling(false);
-    }
-  };
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
@@ -846,13 +799,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             <Card className="border-primary bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                    {['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '') ? (
+                    {['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '') && (
                         <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsNotifyUpsellDialogOpen(true)}>
                             <TrendingUp className="mr-2 h-4 w-4" />Notify AM for Upsell
-                        </Button>
-                    ) : (
-                        <Button className="w-full justify-start bg-background hover:bg-muted font-medium" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
-                            <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
                         </Button>
                     )}
                     <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-primary border-primary/20" variant="outline" onClick={() => setIsOnboardingDialogOpen(true)}>
@@ -1022,43 +971,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       </main>
     </div>
     
-    <Dialog open={isUpsellDialogOpen} onOpenChange={setIsUpsellDialogOpen}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Record Upsell</DialogTitle>
-                <DialogDescription>Mark this customer as having been successfully upsold by a representative.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                    <Label>Field Representative*</Label>
-                    <Select value={upsellRepUid} onValueChange={setUpsellRepUid}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select representative..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {fieldReps.map(rep => (
-                                <SelectItem key={rep.uid} value={rep.uid}>{rep.displayName}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label>Upsell Details / Notes</Label>
-                    <Textarea 
-                        placeholder="What was upsold? e.g., Added parcel delivery service." 
-                        value={upsellNotes} 
-                        onChange={(e) => setUpsellNotes(e.target.value)} 
-                    />
-                </div>
-            </div>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setIsUpsellDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleConfirmUpsell} disabled={isUpselling || !upsellRepUid}>
-                    {isUpselling ? <Loader /> : 'Confirm Upsell ($50 Commission)'}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
+
 
     <CancelCustomerDialog
         isOpen={isCancelDialogOpen}

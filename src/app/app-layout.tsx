@@ -304,7 +304,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     // Customer Success
     '/customer-success/onboarding': { label: 'Onboarding Requests', category: 'Customer Success', icon: CalendarCheck, href: '/customer-success/onboarding' },
     '/customer-success/pipeline': { label: 'CS Pipeline', category: 'Customer Success', icon: ListTodo, href: '/customer-success/pipeline' },
-    '/customer-success/cancellations': { label: 'CS Cancellations', category: 'Customer Success', icon: CalendarOff, href: '/customer-success/cancellations' },
+    '/customer-success/cs-requests': { label: 'CS Requests', category: 'Customer Success', icon: ListTodo, href: '/customer-success/cs-requests' },
+    '/customer-success/cancellations': { label: 'CS Requests', category: 'Customer Success', icon: ListTodo, href: '/customer-success/cs-requests' },
     '/customer-success/reporting': { label: 'CS Reporting', category: 'Customer Success', icon: BarChart3, href: '/customer-success/reporting' },
 
     // Field & Logistics
@@ -609,7 +610,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   if (isSigningOut) return <FullScreenLoader message="Signing out..." />;
   if (isSigningIn) return <FullScreenLoader message="Signing in..." />;
   
-  if (isAuthPage || pathname.startsWith('/scf/') || pathname.startsWith('/sof/') || pathname.startsWith('/lpo-opportunity/') || pathname.startsWith('/hotel-leads') || pathname.startsWith('/book/') || pathname.startsWith('/localmile-registration/')) {
+  if (isAuthPage || pathname.startsWith('/customer-request/') || pathname.startsWith('/scf/') || pathname.startsWith('/sof/') || pathname.startsWith('/lpo-opportunity/') || pathname.startsWith('/hotel-leads') || pathname.startsWith('/book/') || pathname.startsWith('/localmile-registration/')) {
     return <main className="flex min-h-svh flex-1 flex-col bg-background">{children}</main>;
   }
 
@@ -1386,10 +1387,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                         <SidebarMenuItem>
-                          <SidebarMenuButton asChild isActive={isActive("/customer-success/cancellations")} tooltip="CS Cancellations">
-                            <Link href="/customer-success/cancellations">
-                              <CalendarOff />
-                              <span>CS Cancellations</span>
+                          <SidebarMenuButton asChild isActive={isActive("/customer-success/cs-requests") || isActive("/customer-success/cancellations")} tooltip="CS Requests">
+                            <Link href="/customer-success/cs-requests">
+                              <ListTodo />
+                              <span>CS Requests</span>
                             </Link>
                           </SidebarMenuButton>
                         </SidebarMenuItem>

@@ -264,9 +264,11 @@ export interface Invoice {
 }
 
 export interface ServiceSelection {
-    name: 'Outgoing Mail Lodgement' | 'Express Banking';
-    frequency: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] | 'Adhoc';
+    id?: string;
+    name: string;
+    frequency: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] | 'Adhoc' | string;
     rate?: number;
+    quantity?: number;
     trialStartDate?: string;
     trialEndDate?: string;
     startDate?: string;
@@ -522,6 +524,8 @@ export interface Lead {
   cancellationdate?: string;
   customerStatus?: string;
   cancellationRequested?: boolean;
+  serviceChangeRequested?: boolean;
+  lastServiceChangeRequestDate?: string;
   netsuiteLeadStatus?: string;
   droppedOffBrochures?: boolean;
   hadConversationWithContact?: boolean;
@@ -888,6 +892,58 @@ export interface CancellationRequest {
   serviceRateChanged?: boolean;
   serviceFrequencyChanged?: boolean;
   serviceDeleted?: boolean;
+}
+
+export type CSRequestType = 'change_of_service' | 'cancellation';
+export type ServiceChangeCategory = 'price_change' | 'frequency_change' | 'add_service' | 'remove_service';
+
+export interface CSRequest {
+  id: string;
+  leadId: string;
+  prospectPlusId?: string;
+  netsuiteId?: string;
+  companyName: string;
+  requestType: CSRequestType;
+  
+  // Contact details
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  
+  // Service change details
+  serviceChangeCategories?: ServiceChangeCategory[];
+  requestedServices?: ServiceSelection[];
+  effectiveDate?: string;
+  
+  // Cancellation details
+  cancellationTheme?: string;
+  cancellationThemeId?: string;
+  cancellationWhyId?: string;
+  cancellationReason?: string;
+  cancellationReasonId?: string;
+  cancellationDate?: string;
+  trueServiceCancellationDate?: string;
+  saveStrategy?: string;
+  
+  // Request metadata
+  attachments?: Array<{
+    name: string;
+    url: string;
+    size?: number;
+    type?: string;
+    uploadedAt?: string;
+  }>;
+  requestedDate: string; // ISO string
+  notes?: string;
+  status: 'Pending' | 'In Progress' | 'Completed' | 'Saved' | 'Cancelled';
+  originalServices?: ServiceSelection[];
+  updatedServices?: ServiceSelection[];
+  processedBy?: string;
+  processedAt?: string;
+  createdAt?: any;
+  callsCount?: number;
+  originalMRR?: number;
+  savedMRR?: number;
 }
 
 export interface PricingTableRow {
