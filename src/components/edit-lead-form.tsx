@@ -88,6 +88,7 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
         phone: values.customerPhone ?? lead.customerPhone ?? '',
         franchiseeId: lead.franchisee_id ?? lead.franchisee ?? '',
         prospectPlusId: lead.id,
+        abn: values.abn ?? lead.abn ?? '',
       });
 
       if (nsResult.success && nsCustomerResult.success) {

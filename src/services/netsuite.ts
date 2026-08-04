@@ -634,15 +634,16 @@ export interface NetSuiteUpdateCustomerPayload {
     phone: string;
     franchiseeId: string;
     prospectPlusId: string;
+    abn?: string;
 }
 
 /**
  * Sends updated customer/company details to NetSuite Scriptlet 1900 with operation 'updateCustomer'.
- * @param payload The customer update payload containing document IDs, company name, email, phone, and franchisee ID.
+ * @param payload The customer update payload containing document IDs, company name, email, phone, franchisee ID, and abn.
  * @returns A promise that resolves with the result of the NetSuite API call.
  */
 export async function sendCompanyCustomerUpdateToNetSuite(payload: NetSuiteUpdateCustomerPayload): Promise<{ success: boolean; message: string }> {
-    const { internalId, companyName, email, phone, franchiseeId, prospectPlusId } = payload;
+    const { internalId, companyName, email, phone, franchiseeId, prospectPlusId, abn } = payload;
 
     if (!internalId && !prospectPlusId) {
         const errorMsg = 'Invalid payload: internalId or prospectPlusId is required.';
@@ -661,6 +662,7 @@ export async function sendCompanyCustomerUpdateToNetSuite(payload: NetSuiteUpdat
             phone: phone || '',
             franchiseeId: franchiseeId || '',
             prospectPlusId: prospectPlusId || internalId,
+            abn: abn || '',
         }
     };
 
