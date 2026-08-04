@@ -2,19 +2,13 @@
 
 import React, { useEffect, useRef } from "react";
 import Head from "next/head";
-import { useJsApiLoader } from "@react-google-maps/api";
-
-const libraries: ("places")[] = ["places"];
+import { useGoogleMapsScript } from "@/hooks/use-google-maps";
 
 export default function HotelLeadsForm() {
   const streetInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  const { isLoaded } = useJsApiLoader({
-    id: "google-map-script",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries,
-  });
+  const { isLoaded } = useGoogleMapsScript();
 
   useEffect(() => {
     if (isLoaded && streetInputRef.current && !autocompleteRef.current && window.google) {

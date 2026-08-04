@@ -30,12 +30,11 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { sendAddressUpdateToNetSuite } from "@/services/netsuite"
 import type { Lead, Address } from "@/lib/types"
-import { useJsApiLoader } from '@react-google-maps/api'
+import { useGoogleMapsScript } from '@/hooks/use-google-maps'
 import { firestore } from "@/lib/firebase"
 import { updateLeadDetails } from "@/services/firebase"
 import { collection, query, where, getDocs } from "firebase/firestore"
 
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 const boxTypes = ["PO Box", "P.O. Box", "GPO Box", "G.P.O Box"];
 
 const formSchema = z.object({
@@ -138,11 +137,7 @@ export function EditPostalAddressDialog({
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesService = useRef<google.maps.places.PlacesService | null>(null);
   
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries,
-  });
+  const { isLoaded } = useGoogleMapsScript();
 
   const dummyDivRef = useCallback((node: HTMLDivElement | null) => {
     if (node && isLoaded && window.google && !placesService.current) {

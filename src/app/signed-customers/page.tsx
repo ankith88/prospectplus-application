@@ -33,7 +33,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
-import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, DrawingManagerF } from '@react-google-maps/api'
+import { GoogleMap, MarkerF, InfoWindowF, DrawingManagerF } from '@react-google-maps/api'
+import { useGoogleMapsScript } from '@/hooks/use-google-maps'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import {
   Dialog,
@@ -76,8 +77,6 @@ const center = {
   lat: -25.2744,
   lng: 133.7751,
 };
-
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 export default function SignedCustomersPage() {
   const [allMapData, setAllMapData] = useState<MapLead[]>([]);
@@ -129,11 +128,7 @@ export default function SignedCustomersPage() {
   const [companiesPerPage, setCompaniesPerPage] = useState(500);
 
 
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries,
-  });
+  const { isLoaded, loadError } = useGoogleMapsScript();
   
   const geoSearchInputRef = useCallback((node: HTMLInputElement) => {
     if (node !== null && isLoaded && map && !autocompleteRef.current) {

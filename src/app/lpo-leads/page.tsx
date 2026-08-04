@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { collection, query, orderBy, onSnapshot, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { useJsApiLoader } from '@react-google-maps/api';
+import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { FullScreenLoader } from '@/components/ui/loader';
@@ -60,11 +60,7 @@ export default function LpoLeadsListPage() {
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesService = useRef<google.maps.places.PlacesService | null>(null);
 
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: ['places']
-  });
+  const { isLoaded } = useGoogleMapsScript();
 
   useEffect(() => {
     if (isCreateOpen && isLoaded && window.google && !autocompleteService.current) {

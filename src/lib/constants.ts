@@ -101,3 +101,11 @@ export const ALLOWED_ASK_UIDS = [
   'L3hjsZYldoVjVr8MAFRJt0bSGL12',
   'a543AEr3TcaHyj4c1Gh0fJoQ6UB2'
 ];
+
+export const GOOGLE_MAPS_LIBRARIES: ('places' | 'drawing' | 'geometry' | 'visualization')[] = [
+  'places',
+  'drawing',
+  'geometry',
+  'visualization',
+];
+

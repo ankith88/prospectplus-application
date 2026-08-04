@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Franchisee } from '@/lib/types';
 import { getAllFranchisees } from '@/services/firebase';
-import { GoogleMap, useJsApiLoader, InfoWindowF, Autocomplete, CircleF } from '@react-google-maps/api';
+import { GoogleMap, InfoWindowF, Autocomplete, CircleF } from '@react-google-maps/api';
+import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { Loader } from '@/components/ui/loader';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,8 +19,6 @@ const defaultCenter = {
   lat: -25.2744,
   lng: 133.7751,
 };
-
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 // Cache to prevent duplicate Geocoding lookups for the same postcode/suburb
 const geocodeCache = new Map<string, google.maps.LatLngLiteral>();
@@ -62,11 +61,7 @@ export default function TerritoryMapClient() {
 
   const { toast } = useToast();
   
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
-    libraries,
-  });
+  const { isLoaded, loadError } = useGoogleMapsScript();
 
   useEffect(() => {
     async function loadData() {

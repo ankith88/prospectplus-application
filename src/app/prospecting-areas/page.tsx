@@ -13,7 +13,6 @@ import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes, saveUserRoute } from '@/services/firebase';
 import {
   GoogleMap,
-  useJsApiLoader,
   MarkerF,
   InfoWindowF,
   PolygonF,
@@ -21,6 +20,7 @@ import {
   HeatmapLayerF,
   PolylineF,
 } from '@react-google-maps/api';
+import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -51,8 +51,6 @@ const defaultCenter = {
   lat: -33.8688,
   lng: 151.2093,
 };
-
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 const formatAddressDisplay = (address?: Address) => {
     if (!address) return '';
@@ -97,11 +95,7 @@ export default function ProspectingAreasPage() {
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries,
-  });
+  const { isLoaded, loadError } = useGoogleMapsScript();
 
   const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
   const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen Admin';

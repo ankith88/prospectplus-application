@@ -657,6 +657,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewLpoLeads = canView('lpoLeads');
   const canAccessAsk = !!userProfile?.uid && ALLOWED_ASK_UIDS.includes(userProfile.uid);
   const activeRoleStr = userProfile?.activeRole as string;
+  const canViewFranchiseProspects = isSuperAdmin || ['admin', 'super user', 'Operations', 'operations'].includes(activeRoleStr);
   const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || activeRoleStr === 'Outbound Admin' || activeRoleStr === 'Lead Gen Admin';
   const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
   const canViewInReviewLeads = (isAdmin || isSuperAdmin || canView('inReviewLeads')) && !isUserRole;
@@ -1972,14 +1973,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             </Link>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
-                        <SidebarMenuItem>
-                          <SidebarMenuButton asChild isActive={isActive("/operations/franchise-prospects")} tooltip="Franchise Prospects">
-                            <Link href="/operations/franchise-prospects">
-                              <UserCheck />
-                              <span>Franchise Prospects</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
+                        {canViewFranchiseProspects && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/operations/franchise-prospects")} tooltip="Franchise Prospects">
+                              <Link href="/operations/franchise-prospects">
+                                <UserCheck />
+                                <span>Franchise Prospects</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
                         <SidebarMenuItem>
                           <SidebarMenuButton asChild isActive={isActive("/admin/franchisees/operators")} tooltip="Operators Directory">
                             <Link href="/admin/franchisees/operators">

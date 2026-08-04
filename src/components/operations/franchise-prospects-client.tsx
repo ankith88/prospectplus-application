@@ -15,9 +15,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, UserCheck, Mail, Phone, MapPin, Calendar, Clock, FileText, Plus, CheckCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
+import { AccessDenied } from '@/components/access-denied';
 import { CreateUserDialog } from '@/components/admin/create-user-dialog';
 
 export default function FranchiseProspectsClient() {
+  const { toast } = useToast();
+  const { userProfile, isSuperAdmin } = useAuth();
+
+  const activeRole = userProfile?.activeRole || userProfile?.role || '';
+  const isAllowed = isSuperAdmin || ['admin', 'super user', 'Operations', 'operations', 'Outbound Admin'].includes(activeRole);
+
   const [prospects, setProspects] = useState<FranchiseProspect[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProspect, setSelectedProspect] = useState<FranchiseProspect | null>(null);
@@ -35,9 +42,6 @@ export default function FranchiseProspectsClient() {
   // Convert to Franchisee User Dialog
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   const [prefillUserData, setPrefillUserData] = useState<any>(null);
-
-  const { toast } = useToast();
-  const { userProfile } = useAuth();
 
   const fetchProspects = async () => {
     setLoading(true);
@@ -166,8 +170,12 @@ export default function FranchiseProspectsClient() {
     }
   };
 
+  if (!isAllowed) {
+    return <AccessDenied customPageName="Franchise Prospects" />;
+  }
+
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -273,7 +281,7 @@ export default function FranchiseProspectsClient() {
       <Card className="shadow-sm overflow-hidden border">
         {loading ? (
           <div className="py-16 flex flex-col items-center justify-center space-y-3">
-            <Loader size="lg" />
+            <Loader />
             <p className="text-sm text-muted-foreground">Loading franchise prospects...</p>
           </div>
         ) : filteredProspects.length === 0 ? (

@@ -134,16 +134,27 @@ export function UserManagementTable() {
   
   useEffect(() => {
     if (userToEdit) {
-      setNewAssignedRoles(userToEdit.assignedRoles || (userToEdit.role ? [userToEdit.role] : []));
-      setNewDefaultRole(userToEdit.defaultRole || userToEdit.role || 'user');
+      const assigned = userToEdit.assignedRoles || (userToEdit.role ? [userToEdit.role] : []);
+      const isFranchiseeUser = assigned.includes('Franchisee') || userToEdit.role === 'Franchisee' || userToEdit.defaultRole === 'Franchisee';
+
+      if (isFranchiseeUser) {
+        setNewAssignedRoles(['Franchisee']);
+        setNewDefaultRole('Franchisee');
+      } else {
+        setNewAssignedRoles(assigned);
+        setNewDefaultRole(userToEdit.defaultRole || userToEdit.role || 'user');
+      }
+
+      const linkedFran = userToEdit.linkedFranchisees?.[0];
+
       setNewLinkedSalesRep(userToEdit.linkedSalesRep || '');
       setNewLinkedBDR(userToEdit.linkedBDR || '');
-      setNewFranchisee(userToEdit.franchisee || '');
-      setNewFranchiseeId(userToEdit.franchiseeId || userToEdit.franchiseeInternalId || '');
+      setNewFranchisee(userToEdit.franchisee || linkedFran?.franchiseeName || '');
+      setNewFranchiseeId(userToEdit.franchiseeId || userToEdit.franchiseeInternalId || linkedFran?.franchiseeId || '');
       setNewPhoneNumber(userToEdit.phoneNumber || '');
       setNewMobileNumber(userToEdit.mobileNumber || userToEdit.phoneNumber || '');
       setNewAircallPhoneNumber(userToEdit.aircallPhoneNumber || '');
-      setNewFranchiseeRole(userToEdit.franchiseeRole || 'owner');
+      setNewFranchiseeRole(userToEdit.franchiseeRole || linkedFran?.relationship || 'owner');
       setNewPersonalEmail(userToEdit.personalEmail || '');
       setNewAbn(userToEdit.abn || '');
       setNewStreet(userToEdit.addressDetails?.street || '');
@@ -195,6 +206,12 @@ export function UserManagementTable() {
       let effectiveDefaultRole = newDefaultRole;
       let approvalRequested = false;
 
+      // Enforce: Franchisee role users cannot be assigned any other roles
+      if (effectiveAssignedRoles.includes('Franchisee')) {
+        effectiveAssignedRoles = ['Franchisee'];
+        effectiveDefaultRole = 'Franchisee';
+      }
+
       if (isSuperAdminRequiringApproval && isTryingToGrantAdmin && !userCurrentlyHasAdmin) {
         // Strip 'admin' from immediate update
         effectiveAssignedRoles = effectiveAssignedRoles.filter(r => r !== 'admin');
@@ -218,7 +235,7 @@ export function UserManagementTable() {
         defaultRole: effectiveDefaultRole as UserRole, 
         phoneNumber: newMobileNumber, 
         mobileNumber: newMobileNumber, 
-        aircallPhoneNumber: newAircallPhoneNumber 
+        aircallPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newAircallPhoneNumber 
       };
       if (effectiveAssignedRoles.includes('Field Sales')) {
         updateData.linkedSalesRep = newLinkedSalesRep;
@@ -698,53 +715,71 @@ export function UserManagementTable() {
       </AlertDialog>
 
       <Dialog open={!!userToEdit} onOpenChange={(open) => !open && setUserToEdit(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[650px]">
             <DialogHeader>
                 <DialogTitle>Edit User: {userToEdit?.displayName}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                    <Label>Assigned Roles</Label>
-                    <div className="grid grid-cols-2 gap-2 border p-3 rounded-md max-h-48 overflow-y-auto">
-                        {[
-                          'user', 'Outbound Admin', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin',
-                          'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Admin', 'Marketing Manager', 'Customer Success', 'Customer Service',
-                          'Operations', 'Finance', 'Finanace Manager', 'Finance Manager', 'Data Admin'
-                        ].map((role) => (
-                            <div key={role} className="flex items-center space-x-2">
-                                <Checkbox
-                                    id={`role-${role}`}
-                                    checked={newAssignedRoles.includes(role as UserRole)}
-                                    onCheckedChange={(checked) => {
-                                        if (checked) {
-                                            setNewAssignedRoles(prev => [...prev, role as UserRole]);
-                                        } else {
-                                            setNewAssignedRoles(prev => prev.filter(r => r !== role));
-                                        }
-                                    }}
-                                />
-                                <label htmlFor={`role-${role}`} className="text-sm">{role}</label>
-                            </div>
-                        ))}
+                {newAssignedRoles.includes('Franchisee') ? (
+                    <div className="space-y-1 pb-1">
+                        <Label>User Role</Label>
+                        <div>
+                          <Badge variant="secondary" className="font-semibold text-xs px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950 dark:text-amber-200">
+                            Franchisee
+                          </Badge>
+                        </div>
                     </div>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="default-role-select">Default Role</Label>
-                    <Select value={newDefaultRole} onValueChange={(value) => setNewDefaultRole(value as UserRole)}>
-                        <SelectTrigger id="default-role-select">
-                            <SelectValue placeholder="Select default role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {newAssignedRoles.map((role) => (
-                                <SelectItem key={role} value={role}>{role}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                {newAssignedRoles.includes('Franchisee') && (
-                    <div className="space-y-3 border p-3 rounded-md bg-muted/30">
+                ) : (
+                    <>
                         <div className="space-y-2">
-                            <Label>Link Franchise Entity</Label>
+                            <Label>Assigned Roles</Label>
+                            <div className="grid grid-cols-2 gap-2 border p-3 rounded-md max-h-48 overflow-y-auto">
+                                {[
+                                  'user', 'Outbound Admin', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin',
+                                  'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Admin', 'Marketing Manager', 'Customer Success', 'Customer Service',
+                                  'Operations', 'Finance', 'Finanace Manager', 'Finance Manager', 'Data Admin'
+                                ].map((role) => (
+                                    <div key={role} className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`role-${role}`}
+                                            checked={newAssignedRoles.includes(role as UserRole)}
+                                            onCheckedChange={(checked) => {
+                                                if (checked) {
+                                                    if (role === 'Franchisee') {
+                                                      setNewAssignedRoles(['Franchisee']);
+                                                      setNewDefaultRole('Franchisee');
+                                                    } else {
+                                                      setNewAssignedRoles(prev => [...prev.filter(r => r !== 'Franchisee'), role as UserRole]);
+                                                    }
+                                                } else {
+                                                    setNewAssignedRoles(prev => prev.filter(r => r !== role));
+                                                }
+                                            }}
+                                        />
+                                        <label htmlFor={`role-${role}`} className="text-sm">{role}</label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="default-role-select">Default Role</Label>
+                            <Select value={newDefaultRole} onValueChange={(value) => setNewDefaultRole(value as UserRole)}>
+                                <SelectTrigger id="default-role-select">
+                                    <SelectValue placeholder="Select default role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {newAssignedRoles.map((role) => (
+                                        <SelectItem key={role} value={role}>{role}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </>
+                )}
+                {newAssignedRoles.includes('Franchisee') && (
+                    <div className="space-y-4 border p-3.5 rounded-md bg-muted/30 text-sm">
+                        <div className="space-y-2">
+                            <Label className="text-xs font-semibold">Link Franchise Entity*</Label>
                             <Select 
                                 value={newFranchiseeId} 
                                 onValueChange={(val) => {
@@ -766,10 +801,103 @@ export function UserManagementTable() {
                                     ))}
                                 </SelectContent>
                             </Select>
+                            <p className="text-[11px] text-muted-foreground">Select the official franchise entity to link with this user account.</p>
                         </div>
                         <div className="space-y-2">
-                            <Label>Franchise Display Name</Label>
-                            <Input value={newFranchisee} onChange={(e) => setNewFranchisee(e.target.value)} placeholder="e.g. Alexandria" />
+                            <Label className="text-xs font-semibold">Franchisee Relationship / Type*</Label>
+                            <Select value={newFranchiseeRole} onValueChange={(val: 'owner' | 'investor') => setNewFranchiseeRole(val)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select designation..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="owner">Owner</SelectItem>
+                                    <SelectItem value="investor">Investor</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-[11px] text-muted-foreground">Specify whether this user is an Owner or Investor of the linked franchise.</p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs font-semibold">Personal Email Address</Label>
+                            <Input 
+                                type="email" 
+                                value={newPersonalEmail} 
+                                onChange={(e) => setNewPersonalEmail(e.target.value)} 
+                                placeholder="e.g. personal.email@gmail.com" 
+                            />
+                        </div>
+                        <div className="pt-2 border-t space-y-3">
+                            <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">BUSINESS & BANK DETAILS</Label>
+                            <div className="space-y-2">
+                                <Label className="text-xs">ABN (Australian Business Number)</Label>
+                                <Input 
+                                    value={newAbn} 
+                                    onChange={(e) => setNewAbn(e.target.value)} 
+                                    placeholder="e.g. 12 345 678 901" 
+                                />
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="space-y-1">
+                                    <Label className="text-xs">BSB</Label>
+                                    <Input 
+                                        value={newBsb} 
+                                        onChange={(e) => setNewBsb(e.target.value)} 
+                                        placeholder="000-000" 
+                                    />
+                                </div>
+                                <div className="col-span-2 space-y-1">
+                                    <Label className="text-xs">Bank Account Number</Label>
+                                    <Input 
+                                        value={newAccountNumber} 
+                                        onChange={(e) => setNewAccountNumber(e.target.value)} 
+                                        placeholder="12345678" 
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-xs">Bank Account Name</Label>
+                                <Input 
+                                    value={newAccountName} 
+                                    onChange={(e) => setNewAccountName(e.target.value)} 
+                                    placeholder="e.g. Smith Logistics Pty Ltd" 
+                                />
+                            </div>
+                        </div>
+                        <div className="pt-2 border-t space-y-3">
+                            <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">ADDRESS DETAILS</Label>
+                            <div className="space-y-2">
+                                <Label className="text-xs">Street Address</Label>
+                                <Input 
+                                    value={newStreet} 
+                                    onChange={(e) => setNewStreet(e.target.value)} 
+                                    placeholder="123 High Street" 
+                                />
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="space-y-1">
+                                    <Label className="text-xs">Suburb</Label>
+                                    <Input 
+                                        value={newSuburb} 
+                                        onChange={(e) => setNewSuburb(e.target.value)} 
+                                        placeholder="Sydney" 
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs">State</Label>
+                                    <Input 
+                                        value={newState} 
+                                        onChange={(e) => setNewState(e.target.value)} 
+                                        placeholder="NSW" 
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs">Postcode</Label>
+                                    <Input 
+                                        value={newPostcode} 
+                                        onChange={(e) => setNewPostcode(e.target.value)} 
+                                        placeholder="2000" 
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -809,10 +937,12 @@ export function UserManagementTable() {
                      <Label htmlFor="mobile-number">Mobile Number</Label>
                      <Input id="mobile-number" value={newMobileNumber} onChange={(e) => setNewMobileNumber(e.target.value)} placeholder="e.g. 0412345678" />
                  </div>
-                 <div className="space-y-2">
-                     <Label htmlFor="aircall-number">AirCall Number</Label>
-                     <Input id="aircall-number" value={newAircallPhoneNumber} onChange={(e) => setNewAircallPhoneNumber(e.target.value)} placeholder="e.g. +61298765432" />
-                 </div>
+                 {!newAssignedRoles.includes('Franchisee') && (
+                   <div className="space-y-2">
+                       <Label htmlFor="aircall-number">AirCall Number</Label>
+                       <Input id="aircall-number" value={newAircallPhoneNumber} onChange={(e) => setNewAircallPhoneNumber(e.target.value)} placeholder="e.g. +61298765432" />
+                   </div>
+                 )}
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setUserToEdit(null)}>Cancel</Button>

@@ -268,9 +268,6 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       onUserCreated();
       onOpenChange(false);
       form.reset();
-      onUserCreated();
-      onOpenChange(false);
-      form.reset();
     } catch (error: any) {
       console.error('Failed to create user:', error);
       toast({
@@ -286,7 +283,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Create New User</DialogTitle>
           <DialogDescription>Fill in the details to create a new user account.</DialogDescription>
@@ -531,12 +528,16 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
              <FormField control={form.control} name="mobileNumber" render={({ field }) => (
                  <FormItem><FormLabel>Mobile Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
              )}/>
-             <FormField control={form.control} name="aircallPhoneNumber" render={({ field }) => (
-                 <FormItem><FormLabel>AirCall Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-             )}/>
-             <FormField control={form.control} name="aircallUserId" render={({ field }) => (
-                <FormItem><FormLabel>AirCall User ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
+             {role !== 'Franchisee' && (
+               <>
+                 <FormField control={form.control} name="aircallPhoneNumber" render={({ field }) => (
+                     <FormItem><FormLabel>AirCall Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                 )}/>
+                 <FormField control={form.control} name="aircallUserId" render={({ field }) => (
+                    <FormItem><FormLabel>AirCall User ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                 )}/>
+               </>
+             )}
             <FormField control={form.control} name="sendWelcomeEmail" render={({ field }) => (
                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm">
                   <FormControl>

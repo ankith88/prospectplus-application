@@ -3,11 +3,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useJsApiLoader } from '@react-google-maps/api';
+import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import type { Address } from '@/lib/types';
 import { MapPin } from 'lucide-react';
-
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 interface GoogleAddressInputProps {
   label?: string;
@@ -61,11 +59,7 @@ export function GoogleAddressInput({
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesService = useRef<google.maps.places.PlacesService | null>(null);
 
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries,
-  });
+  const { isLoaded } = useGoogleMapsScript();
 
   const dummyDivRef = useCallback((node: HTMLDivElement | null) => {
     if (node && isLoaded && window.google && !placesService.current) {

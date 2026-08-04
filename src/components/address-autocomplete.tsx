@@ -4,10 +4,8 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Input } from './ui/input';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
-import { useJsApiLoader } from '@react-google-maps/api';
+import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import type { Address } from '@/lib/types';
-
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 const parseAddressComponents = (components: google.maps.GeocoderAddressComponent[]): Address => {
     const address: Partial<Address> = { country: 'Australia' };
@@ -40,11 +38,7 @@ export function AddressAutocomplete({ onAddressSelect }: AddressAutocompleteProp
     const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
     const placesService = useRef<google.maps.places.PlacesService | null>(null);
     
-    const { isLoaded } = useJsApiLoader({
-        id: 'google-map-script',
-        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-        libraries,
-    });
+    const { isLoaded } = useGoogleMapsScript();
 
     const dummyDivRef = useCallback((node: HTMLDivElement | null) => {
         if (node && isLoaded && window.google && !placesService.current) {

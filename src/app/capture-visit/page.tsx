@@ -54,7 +54,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import SummaryStep from '@/components/capture-visit/summary-step';
 import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
-import { useJsApiLoader } from '@react-google-maps/api';
+import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, startOfToday } from 'date-fns';
@@ -343,11 +343,7 @@ function CaptureVisitContent() {
     const searchParams = useSearchParams();
     const noteIdToEdit = searchParams.get('noteId');
 
-    const { isLoaded } = useJsApiLoader({
-        id: 'google-map-script',
-        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-        libraries: ['places', 'drawing', 'geometry', 'visualization'],
-    });
+    const { isLoaded } = useGoogleMapsScript();
 
     const captureForm = useForm<z.infer<typeof noteSchema>>({
         resolver: zodResolver(noteSchema),

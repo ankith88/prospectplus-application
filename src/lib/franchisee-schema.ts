@@ -12,6 +12,50 @@ export const SuburbMappingSchema = z.object({
   lng: z.number().optional(),
 });
 
+export const FranchisorFeesSchema = z.object({
+  adminFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
+  marketingFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
+  headOfficeFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
+});
+
+export const AddressSchema = z.object({
+  address1: z.string().nullable().optional().transform(v => v ?? ""),
+  address2: z.string().nullable().optional().transform(v => v ?? ""),
+  suburb: z.string().nullable().optional().transform(v => v ?? ""),
+  state: z.string().nullable().optional().transform(v => v ?? ""),
+  postcode: z.string().nullable().optional().transform(v => v ?? ""),
+});
+
+export const NextOfKinSchema = z.object({
+  name: z.string().nullable().optional().transform(v => v ?? ""),
+  mobile: z.string().nullable().optional().transform(v => v ?? ""),
+  relationship: z.string().nullable().optional().transform(v => v ?? ""),
+});
+
+export const FranchiseeUserSchema = z.object({
+  uid: z.string().optional(),
+  email: z.string().email(),
+  password: z.string().min(6, 'Password must be at least 6 characters').optional(),
+  firstName: z.string().nullable().optional().transform(v => v ?? ""),
+  lastName: z.string().nullable().optional().transform(v => v ?? ""),
+  displayName: z.string().nullable().optional().transform(v => v ?? ""),
+  personalEmail: z.string().email().or(z.literal('')).nullable().optional().transform(v => v ?? ""),
+  dateOfBirth: z.string().nullable().optional().transform(v => v ?? ""),
+  nextOfKin: NextOfKinSchema.optional(),
+  businessStartDate: z.string().nullable().optional().transform(v => v ?? ""),
+  address: AddressSchema.optional(),
+  abn: z.string().nullable().optional().transform(v => v ?? ""),
+  typeOfOwner: z.enum([
+    'Sole Trader',
+    'Company',
+    'Partnership',
+    'Director',
+    'Owner Operator',
+    'Multi-Unit Owner'
+  ]).or(z.string()).nullable().optional().transform(v => v ?? ""),
+  role: z.string().optional().default('Franchisee'),
+});
+
 export const FranchiseeSchema = z.object({
   internalId: z.string().or(z.number()).transform(val => String(val)),
   name: z.string().nullable().optional().transform(v => v ?? ""),
@@ -31,6 +75,10 @@ export const FranchiseeSchema = z.object({
       return num;
     }))
     .optional().default(0),
+  adminFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
+  marketingFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
+  headOfficeFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
+  franchisorFees: FranchisorFeesSchema.optional(),
   salesRepAssigned: z.string().nullable().optional().transform(v => v ?? ""),
   activeProjects: z.array(z.string())
     .or(z.string().transform(val => val ? val.split(',').map(s => s.trim()) : []))
@@ -53,6 +101,7 @@ export const FranchiseeSchema = z.object({
   nominatedPostOfficeText: z.string().nullable().optional().transform(v => v ?? ""),
   starTrackLodgementPoints: z.array(z.any()).or(z.string()).nullable().optional(),
   mpExpressLodgementPoints: z.array(z.any()).or(z.string()).nullable().optional(),
+  users: z.array(FranchiseeUserSchema).optional(),
 });
 
 export const UpdateFranchiseeSchema = z.object({
@@ -73,6 +122,10 @@ export const UpdateFranchiseeSchema = z.object({
       return num;
     }))
     .optional(),
+  adminFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional(),
+  marketingFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional(),
+  headOfficeFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional(),
+  franchisorFees: FranchisorFeesSchema.optional(),
   salesRepAssigned: z.string().nullable().optional(),
   activeProjects: z.array(z.string())
     .or(z.string().transform(val => val ? val.split(',').map(s => s.trim()) : []))
@@ -95,6 +148,7 @@ export const UpdateFranchiseeSchema = z.object({
   nominatedPostOfficeText: z.string().nullable().optional(),
   starTrackLodgementPoints: z.array(z.any()).or(z.string()).nullable().optional(),
   mpExpressLodgementPoints: z.array(z.any()).or(z.string()).nullable().optional(),
+  users: z.array(FranchiseeUserSchema).optional(),
 });
 
 export const OperatorSchema = z.object({

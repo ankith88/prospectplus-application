@@ -51,12 +51,10 @@ import { useAuth } from '@/hooks/use-auth';
 import { Textarea } from './ui/textarea';
 import Image from 'next/image';
 import { Label } from '@/components/ui/label';
-import { useJsApiLoader } from '@react-google-maps/api';
+import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { canAssignToAm } from '@/lib/leave-utils';
 
 const abnRegex = /^\d{11}$/;
-
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 const isValidRealEmail = (val: string | undefined | null) => {
     if (!val) return true;
@@ -295,11 +293,7 @@ export function NewLeadForm() {
   const companySearchRef = useRef<HTMLInputElement | null>(null);
   const companyAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries,
-  });
+  const { isLoaded, loadError } = useGoogleMapsScript();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

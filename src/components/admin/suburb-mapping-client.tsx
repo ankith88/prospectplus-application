@@ -5,7 +5,8 @@ import { doc, getDoc, getDocs, collection, query, where, updateDoc } from 'fireb
 import { firestore } from '@/lib/firebase';
 import { Franchisee, Operator } from '@/lib/types';
 import { getAllFranchisees, getOperatorsForFranchisee } from '@/services/firebase';
-import { useJsApiLoader, Autocomplete } from '@react-google-maps/api';
+import { Autocomplete } from '@react-google-maps/api';
+import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { Loader } from '@/components/ui/loader';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -18,8 +19,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { MapPin, Plus, Trash2, ShieldAlert, Check, Copy, Info } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places'];
 
 interface SuburbItem {
   suburbs: string;
@@ -76,11 +75,7 @@ export default function SuburbMappingClient() {
 
   const { toast } = useToast();
   
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
-    libraries,
-  });
+  const { isLoaded, loadError } = useGoogleMapsScript();
 
   // Load all franchisees & depots initially
   useEffect(() => {

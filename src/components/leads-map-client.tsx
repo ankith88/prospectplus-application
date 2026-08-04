@@ -34,7 +34,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { cn } from '@/lib/utils';
-import { useJsApiLoader } from '@react-google-maps/api';
+import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { Textarea } from './ui/textarea';
 import { collection, doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
@@ -63,8 +63,6 @@ const defaultCenter = {
   lat: -25.2744,
   lng: 133.7751,
 };
-
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 async function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.6): Promise<string> {
     return new Promise((resolve) => {
@@ -198,11 +196,7 @@ export default function LeadsMapClient() {
     const searchParams = useSearchParams();
     const { toast } = useToast();
 
-    const { isLoaded, loadError } = useJsApiLoader({
-        id: 'google-map-script',
-        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-        libraries,
-    });
+    const { isLoaded, loadError } = useGoogleMapsScript();
     
     const infoWindowOptions = useMemo(() => {
         if (!isLoaded) return {};

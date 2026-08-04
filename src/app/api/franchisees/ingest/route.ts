@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { FranchiseeSchema } from '@/lib/franchisee-schema';
+import { syncFranchiseeUsers } from '@/lib/franchisee-user-service';
 import { z } from 'zod';
 
 export async function POST(request: Request) {
@@ -20,44 +21,63 @@ export async function POST(request: Request) {
     }
 
     const db = adminApp.firestore();
-    let batch = db.batch();
     const franchiseesRef = db.collection('franchisees');
 
     let processedCount = 0;
-    let batchCount = 0;
     const errors: { index: number; error: any }[] = [];
 
-    // Parse and prepare batch operations
+    // Parse and process franchisee operations
     for (let i = 0; i < body.length; i++) {
       try {
         const parsedData = FranchiseeSchema.parse(body[i]);
-        
-        // Ensure ID matches internalId 
         const docRef = franchiseesRef.doc(parsedData.internalId);
-        
-        batch.set(docRef, parsedData, { merge: true }); // Merge ensures we can update existing gracefully
-        processedCount++;
-        batchCount++;
 
-        // Firestore batches have a 500 document limit, so commit every 400
-        if (batchCount === 400) {
-          await batch.commit();
-          batch = db.batch();
-          batchCount = 0;
+        // Normalize franchisor fees
+        const franchisorFees = {
+          adminFee: parsedData.franchisorFees?.adminFee ?? parsedData.adminFee ?? 0,
+          marketingFee: parsedData.franchisorFees?.marketingFee ?? parsedData.marketingFee ?? 0,
+          headOfficeFee: parsedData.franchisorFees?.headOfficeFee ?? parsedData.headOfficeFee ?? 0,
+        };
+
+        const franchiseePayload: Record<string, any> = {
+          ...parsedData,
+          adminFee: franchisorFees.adminFee,
+          marketingFee: franchisorFees.marketingFee,
+          headOfficeFee: franchisorFees.headOfficeFee,
+          franchisorFees,
+        };
+
+        // Remove users array from direct franchisee document save
+        delete franchiseePayload.users;
+
+        // Process associated users if provided
+        if (parsedData.users && parsedData.users.length > 0) {
+          const newLinkedUids = await syncFranchiseeUsers(
+            parsedData.internalId,
+            parsedData.name || '',
+            parsedData.users
+          );
+
+          const existingDoc = await docRef.get();
+          const existingLinked: string[] = existingDoc.exists ? (existingDoc.data()?.linkedUserIds || []) : [];
+          const updatedLinkedUserIds = Array.from(new Set([...existingLinked, ...newLinkedUids]));
+
+          franchiseePayload.linkedUserIds = updatedLinkedUserIds;
+          if (newLinkedUids.length > 0 && !existingDoc.data()?.currentOwnerUserId) {
+            franchiseePayload.currentOwnerUserId = newLinkedUids[0];
+          }
         }
+
+        await docRef.set(franchiseePayload, { merge: true });
+        processedCount++;
 
       } catch (err) {
         if (err instanceof z.ZodError) {
            errors.push({ index: i, error: err.errors });
         } else {
-           errors.push({ index: i, error: String(err) });
+           errors.push({ index: i, error: String((err as any)?.message || err) });
         }
       }
-    }
-
-    // Commit any remaining operations in the final batch
-    if (batchCount > 0) {
-      await batch.commit();
     }
 
     return NextResponse.json({ 
