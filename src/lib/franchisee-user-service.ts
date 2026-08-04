@@ -88,6 +88,13 @@ export async function syncFranchiseeUsers(
           [firstName, lastName].filter(Boolean).join(' ') ||
           franchiseeName;
 
+    // Accumulate all linked franchisee IDs (existing linked IDs + payload linked IDs + current franchiseeId)
+    const existingLinkedFranchisees: string[] = existingData.linkedFranchiseeIds || (existingData.franchiseeId ? [String(existingData.franchiseeId)] : []);
+    const payloadLinkedFranchisees: string[] = (userInput.linkedFranchiseeIds || []).map(String);
+    const accumulatedLinkedFranchiseeIds = Array.from(
+      new Set([...existingLinkedFranchisees, ...payloadLinkedFranchisees, String(franchiseeId)])
+    ).filter(Boolean);
+
     const updatedUserObj: Record<string, any> = {
       uid,
       email,
@@ -97,9 +104,10 @@ export async function syncFranchiseeUsers(
       activeRole: userInput.role || existingData.activeRole || 'Franchisee',
       assignedRoles: existingData.assignedRoles || [userInput.role || 'Franchisee'],
       defaultRole: existingData.defaultRole || userInput.role || 'Franchisee',
-      franchiseeId: String(franchiseeId),
-      franchiseeInternalId: String(franchiseeId),
-      franchisee: franchiseeName,
+      franchiseeId: existingData.franchiseeId || String(franchiseeId),
+      franchiseeInternalId: existingData.franchiseeInternalId || String(franchiseeId),
+      franchisee: existingData.franchisee || franchiseeName,
+      linkedFranchiseeIds: accumulatedLinkedFranchiseeIds,
       updatedAt: nowStr,
     };
 

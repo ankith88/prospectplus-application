@@ -68,9 +68,11 @@ export async function GET(request: Request) {
     // If franchiseeId is provided for verification, check if linked to that franchisee
     let isLinkedToFranchisee = undefined;
     if (userDocData && franchiseeId) {
+      const userLinkedIds: string[] = (userDocData.linkedFranchiseeIds || []).map(String);
       isLinkedToFranchisee =
         String(userDocData.franchiseeId) === franchiseeId ||
-        String(userDocData.franchiseeInternalId) === franchiseeId;
+        String(userDocData.franchiseeInternalId) === franchiseeId ||
+        userLinkedIds.includes(franchiseeId);
     }
 
     if (!exists) {
@@ -98,6 +100,7 @@ export async function GET(request: Request) {
         franchiseeId: userDocData?.franchiseeId || null,
         franchiseeInternalId: userDocData?.franchiseeInternalId || null,
         franchisee: userDocData?.franchisee || null,
+        linkedFranchiseeIds: userDocData?.linkedFranchiseeIds || (userDocData?.franchiseeId ? [String(userDocData.franchiseeId)] : []),
         typeOfOwner: userDocData?.typeOfOwner || null,
         abn: userDocData?.abn || null,
         businessStartDate: userDocData?.businessStartDate || null,

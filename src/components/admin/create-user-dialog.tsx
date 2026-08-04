@@ -232,8 +232,8 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
 
     <div style="border-top: 1px solid #f1f5f9; padding-top: 20px; margin-top: 28px; font-size: 14px; color: #64748b;">
       <p style="margin: 0;">Kind regards,</p>
-      <p style="margin: 4px 0 0 0; font-weight: 600; color: #1e293b;">Ankith Ravindran</p>
-      <p style="margin: 2px 0 0 0;">MailPlus Outbound Leads CRM Team</p>
+      <p style="margin: 4px 0 0 0; font-weight: 600; color: #1e293b;">MailPlus IT Support Team</p>
+      <p style="margin: 2px 0 0 0;">mailplusit@mailplus.com.au</p>
     </div>
   </div>
 </div>
@@ -247,7 +247,8 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
           body: JSON.stringify({
             to: values.email,
             subject: 'Your Prospect+ Account is Ready',
-            customFrom: 'ankith.ravindran@mailplus.com.au',
+            customFrom: 'MailPlus IT Support <mailplusit@mailplus.com.au>',
+            bcc: userProfile?.email || undefined,
             html: emailHtml,
           }),
         });

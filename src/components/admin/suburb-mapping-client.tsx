@@ -128,11 +128,11 @@ export default function SuburbMappingClient() {
       });
       
       // Set mapped suburb lists
-      setMainTerritory(franchisee.territoryJson ? franchisee.territoryJson.map(sanitizeSuburbItem) : []);
-      setStarTrackSuburbs(franchisee.starTrackSuburbsJson ? franchisee.starTrackSuburbsJson.map(sanitizeSuburbItem) : []);
-      setTgeSuburbs(franchisee.tgeSuburbsJSON ? franchisee.tgeSuburbsJSON.map(sanitizeSuburbItem) : []);
-      setIronMountainSuburbs(franchisee.ironMountainSuburbsJson ? franchisee.ironMountainSuburbsJson.map(sanitizeSuburbItem) : []);
-      setAusPostSuburbs(franchisee.ausPostSuburbsJson ? franchisee.ausPostSuburbsJson.map(sanitizeSuburbItem) : []);
+      setMainTerritory(parseSuburbList(franchisee.territoryJson));
+      setStarTrackSuburbs(parseSuburbList(franchisee.starTrackSuburbsJson));
+      setTgeSuburbs(parseSuburbList(franchisee.tgeSuburbsJSON));
+      setIronMountainSuburbs(parseSuburbList(franchisee.ironMountainSuburbsJson));
+      setAusPostSuburbs(parseSuburbList(franchisee.ausPostSuburbsJson));
       
       // Parse lodgement points
       setExpressLodgement(parseLodgementPoints(franchisee.mpExpressLodgementPoints));
@@ -151,6 +151,17 @@ export default function SuburbMappingClient() {
   };
 
   const sanitizeSuburbItem = (item: any): SuburbItem => {
+    if (!item || typeof item !== 'object') {
+      return {
+        suburbs: '',
+        post_code: '',
+        state: '',
+        primary_op: [],
+        secondary_op: '',
+        next_day: false,
+        parent_lpo_id: '',
+      };
+    }
     let primary_op: string[] = [];
     if (Array.isArray(item.primary_op)) {
       primary_op = item.primary_op;
@@ -170,26 +181,66 @@ export default function SuburbMappingClient() {
     };
   };
 
+  const parseSuburbList = (raw: any): SuburbItem[] => {
+    if (!raw) return [];
+    let parsed: any = raw;
+    if (typeof raw === 'string') {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = [];
+      }
+    }
+
+    let arrayData: any[] = [];
+    if (Array.isArray(parsed)) {
+      arrayData = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      if (parsed.suburbs || parsed.post_code || parsed.state) {
+        arrayData = [parsed];
+      } else {
+        const values = Object.values(parsed);
+        if (values.length > 0 && typeof values[0] === 'object') {
+          arrayData = values;
+        }
+      }
+    }
+
+    return arrayData.map(sanitizeSuburbItem);
+  };
+
   const parseLodgementPoints = (pts: any): LodgementPoint[] => {
     if (!pts) return [];
-    let parsed: any[] = [];
+    let parsed: any = pts;
     if (typeof pts === 'string') {
       try {
         parsed = JSON.parse(pts);
       } catch {
         parsed = [];
       }
-    } else if (Array.isArray(pts)) {
-      parsed = pts;
+    }
+
+    let arrayData: any[] = [];
+    if (Array.isArray(parsed)) {
+      arrayData = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      if (parsed.depotId || parsed.depot_id || parsed.depot || parsed.name || parsed.suburb) {
+        arrayData = [parsed];
+      } else {
+        const values = Object.values(parsed);
+        if (values.length > 0 && typeof values[0] === 'object') {
+          arrayData = values;
+        }
+      }
     }
     
-    return parsed.map(pt => ({
-      depotId: pt.depotId || pt.depot_id || pt.depot || '',
-      name: pt.name || pt.depot || '',
-      suburb: pt.suburb || pt.city || '',
-      postcode: pt.postcode || pt.post_code || pt.zip || '',
-      state: pt.state || '',
-      operators: Array.isArray(pt.operators) ? pt.operators : (pt.operatorId || pt.operator_id || pt.operator ? [pt.operatorId || pt.operator_id || pt.operator] : [])
+    return arrayData.map(pt => ({
+      depotId: pt?.depotId || pt?.depot_id || pt?.depot || '',
+      name: pt?.name || pt?.depot || '',
+      suburb: pt?.suburb || pt?.city || '',
+      postcode: pt?.postcode || pt?.post_code || pt?.zip || '',
+      state: pt?.state || '',
+      operators: Array.isArray(pt?.operators) ? pt.operators : (pt?.operatorId || pt?.operator_id || pt?.operator ? [pt.operatorId || pt.operator_id || pt.operator] : [])
     }));
   };
 
@@ -677,7 +728,7 @@ export default function SuburbMappingClient() {
             ) : (
               <div className="flex flex-wrap gap-1 max-w-[200px] overflow-hidden truncate">
                 {selectedOps.map(op => (
-                  <Badge key={op.internalId} variant="secondary" className="text-[10px] py-0 px-1 bg-slate-100">
+                  <Badge key={op.internalId} variant="secondary" className="text-[10px] py-0 px-1.5 bg-slate-100 text-slate-800 border border-slate-200 font-medium">
                     {op.givenNames} {op.surname}
                   </Badge>
                 ))}

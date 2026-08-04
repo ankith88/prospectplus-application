@@ -16,12 +16,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
-import { getAllUsers, updateUser, getAllFranchisees } from '@/services/firebase';
+import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely } from '@/services/firebase';
 import type { UserProfile, AdminApprovalRequest, Franchisee } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
-import { Lock, Mail, UserX, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { CreateUserDialog } from './create-user-dialog';
 import { SendNotificationDialog } from './send-notification-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -81,13 +82,17 @@ export function UserManagementTable() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notificationTargetUsers, setNotificationTargetUsers] = useState<{ uid: string; displayName: string }[]>([]);
 
+  // Deletion State
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+
   // Search, Tab and Sort State
   const [activeTab, setActiveTab] = useState<'active' | 'disabled' | 'all'>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof UserProfile; direction: 'ascending' | 'descending' } | null>({ key: 'displayName', direction: 'ascending' });
 
   const { toast } = useToast();
-  const { sendPasswordReset, userProfile } = useAuth();
+  const { sendPasswordReset, userProfile, isSuperAdmin } = useAuth();
 
   const isOriginalAdmin = userProfile?.uid === ORIGINAL_ADMIN_UID;
   const isSuperAdminRequiringApproval = userProfile?.uid === SUPER_ADMIN_REQUIRING_APPROVAL_UID;
@@ -182,14 +187,69 @@ export function UserManagementTable() {
         setUserToToggle(null);
     }
   };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete || !userProfile?.uid) return;
+
+    if (SUPER_ADMIN_UIDS.includes(userToDelete.uid)) {
+      toast({
+        variant: 'destructive',
+        title: 'Action Forbidden',
+        description: 'Super Admin accounts cannot be deleted.',
+      });
+      setUserToDelete(null);
+      return;
+    }
+
+    if (userToDelete.uid === userProfile.uid) {
+      toast({
+        variant: 'destructive',
+        title: 'Action Not Allowed',
+        description: 'You cannot delete your own account.',
+      });
+      setUserToDelete(null);
+      return;
+    }
+
+    setIsDeletingUser(true);
+    try {
+      await deleteUserCompletely(userToDelete.uid, userProfile.uid);
+      setUsers(prev => prev.filter(u => u.uid !== userToDelete.uid));
+      setSelectedUserIds(prev => prev.filter(id => id !== userToDelete.uid));
+      toast({
+        title: 'User Deleted Permanently',
+        description: `User ${userToDelete.displayName || userToDelete.email} was completely deleted from Authentication and Firestore.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Delete Failed',
+        description: error.message || 'Could not delete user.',
+      });
+    } finally {
+      setIsDeletingUser(false);
+      setUserToDelete(null);
+    }
+  };
   
   const handleSendResetEmail = async (email: string) => {
     setIsSendingReset(email);
     try {
-        await sendPasswordReset(email);
-        toast({ title: 'Success', description: `Password reset email sent to ${email}.` });
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: `Could not send reset email.` });
+        const response = await fetch('/api/admin/users/send-password-reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || 'Failed to send reset email.');
+        }
+        toast({ 
+          title: 'Reset Email Sent', 
+          description: `Branded password reset email sent to ${email} from mailplusit@mailplus.com.au.` 
+        });
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: error.message || `Could not send reset email.` });
     } finally {
         setIsSendingReset(null);
     }
@@ -643,21 +703,64 @@ export function UserManagementTable() {
                         {user.disabled ? 'Disabled' : 'Active'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNotifySingle(user)} title="Send Alert">
-                          <BellRing className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => setUserToEdit(user)}>
-                          <Edit className="mr-2 h-4 w-4" /> Edit
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleSendResetEmail(user.email)} disabled={!!isSendingReset}>
-                          {isSendingReset === user.email ? <Loader/> : <Mail className="mr-2 h-4 w-4" />}
-                          Reset Password
-                      </Button>
-                      <Button variant={user.disabled ? "secondary" : "destructive"} size="sm" onClick={() => setUserToToggle(user)}>
-                          <UserX className="mr-2 h-4 w-4" />
-                          {user.disabled ? 'Enable' : 'Disable'}
-                      </Button>
+                    <TableCell className="text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          className="h-8 w-8" 
+                          onClick={() => handleNotifySingle(user)} 
+                          title="Send Alert Notification"
+                        >
+                            <BellRing className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          className="h-8 w-8" 
+                          onClick={() => setUserToEdit(user)} 
+                          title="Edit User Details"
+                        >
+                            <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          className="h-8 w-8" 
+                          onClick={() => handleSendResetEmail(user.email)} 
+                          disabled={isSendingReset === user.email}
+                          title="Send Password Reset Email"
+                        >
+                            {isSendingReset === user.email ? <Loader className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
+                        </Button>
+                        <Button 
+                          variant={user.disabled ? "secondary" : "outline"} 
+                          size="icon" 
+                          className="h-8 w-8" 
+                          onClick={() => setUserToToggle(user)}
+                          title={user.disabled ? 'Enable User Account' : 'Disable User Account'}
+                        >
+                            {user.disabled ? <UserCheck className="h-4 w-4 text-emerald-600" /> : <UserX className="h-4 w-4 text-amber-600" />}
+                        </Button>
+                        {isSuperAdmin && (
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setUserToDelete(user)}
+                            disabled={SUPER_ADMIN_UIDS.includes(user.uid) || user.uid === userProfile?.uid}
+                            title={
+                              SUPER_ADMIN_UIDS.includes(user.uid)
+                                ? 'Super Admin accounts cannot be deleted'
+                                : user.uid === userProfile?.uid
+                                ? 'You cannot delete your own logged-in account'
+                                : 'Delete User Permanently'
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                   );
@@ -677,6 +780,35 @@ export function UserManagementTable() {
           </Table>
         </div>
       </div>
+
+       <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <Trash2 className="h-5 w-5" /> Delete User Account Permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span>
+                Are you sure you want to completely delete the user account for{' '}
+                <strong className="text-foreground">{userToDelete?.displayName || userToDelete?.email}</strong> ({userToDelete?.email})?
+              </span>
+              <span className="block text-destructive font-medium pt-2">
+                ⚠️ Warning: This action CANNOT be undone. The user will be permanently removed from both <strong>Firebase Authentication</strong> and the <strong>Firestore Database</strong>.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingUser}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteUser}
+              disabled={isDeletingUser}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+            >
+              {isDeletingUser ? <Loader /> : 'Delete User Permanently'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
        <AlertDialog open={!!userToToggle} onOpenChange={(open) => !open && setUserToToggle(null)}>
         <AlertDialogContent>

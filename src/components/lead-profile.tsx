@@ -3465,7 +3465,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         )}
       </div>
 
-      {lead.isDuplicate && (
+      {!isCompanyProfile && lead.isDuplicate && (
           <Alert className="bg-orange-50 border-orange-200 text-orange-800">
               <AlertCircle className="h-4 w-4 !text-orange-800" />
               <AlertTitle className="font-bold">Merged Lead Record</AlertTitle>

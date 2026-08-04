@@ -78,6 +78,7 @@ export const FranchiseeUserSchema = z.object({
   bsbNumber: z.string().nullable().optional().transform(v => v ?? ""),
   bankAccountNumber: z.string().nullable().optional().transform(v => v ?? ""),
   bankAccount: BankAccountSchema.optional(),
+  linkedFranchiseeIds: z.array(z.string()).optional(),
   role: z.string().optional().default('Franchisee'),
 });
 

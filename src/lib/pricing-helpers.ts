@@ -49,17 +49,24 @@ export function generatePricingTable(premiumPlan: string, expressPlan: string): 
 
 function parseLodgementPoints(points: any[] | string | undefined | null): any[] {
   if (!points) return [];
+  let parsed: any = points;
   if (typeof points === 'string') {
     try {
-      const parsed = JSON.parse(points);
-      return Array.isArray(parsed) ? parsed : Object.values(parsed);
+      parsed = JSON.parse(points);
     } catch {
       return [];
     }
   }
-  if (Array.isArray(points)) return points;
-  if (typeof points === 'object') {
-    return Object.values(points);
+
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === 'object') {
+    if (parsed.depotId || parsed.depot_id || parsed.depot || parsed.suburb || parsed.postcode) {
+      return [parsed];
+    }
+    const values = Object.values(parsed);
+    if (values.length > 0 && typeof values[0] === 'object') {
+      return values;
+    }
   }
   return [];
 }

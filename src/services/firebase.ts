@@ -1800,6 +1800,22 @@ async function updateUser(uid: string, data: Partial<UserProfile>): Promise<void
     await updateDoc(doc(firestore, 'users', uid), prepareForFirestore(data));
 }
 
+async function deleteUserCompletely(uid: string, requestorUid: string): Promise<void> {
+    const response = await fetch('/api/admin/users/delete', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uid, requestorUid }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to delete user completely.');
+    }
+}
+
+
 async function addAdditionalAddress(leadId: string, address: Omit<TaggedAddress, 'id'>, isCompany: boolean): Promise<string> {
     const colName = isCompany ? 'companies' : 'leads';
     const ref = collection(firestore, colName, leadId, 'addresses');
@@ -3191,6 +3207,7 @@ export {
     updateScorecardAnalysis,
     getAllUsers,
     updateUser,
+    deleteUserCompletely,
     createNotification,
     markNotificationAsRead,
     markAllNotificationsAsRead,

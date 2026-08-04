@@ -1973,6 +1973,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             </Link>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/admin/franchisees/presales")} tooltip="Territory Presales">
+                            <Link href="/admin/franchisees/presales">
+                              <Tag />
+                              <span>Territory Presales</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
                         {canViewFranchiseProspects && (
                           <SidebarMenuItem>
                             <SidebarMenuButton asChild isActive={isActive("/operations/franchise-prospects")} tooltip="Franchise Prospects">

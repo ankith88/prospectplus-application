@@ -25,13 +25,14 @@ import { Loader } from '@/components/ui/loader';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, MapPin, Download, RefreshCw } from 'lucide-react';
+import { Search, MapPin, Download, RefreshCw, Tag } from 'lucide-react';
 import { SmsDialog } from '@/components/sms-dialog';
 import { EmailDialog } from '@/components/email-dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { BulkImportOperators } from '@/components/admin/bulk-import-operators';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { TerritoryPresaleWizard } from '@/components/admin/territory-presale-wizard';
 
 export default function FranchiseeDirectoryClient() {
   const [franchisees, setFranchisees] = useState<Franchisee[]>([]);
@@ -57,6 +58,7 @@ export default function FranchiseeDirectoryClient() {
   // Selection & Sync states
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [presaleWizardFranchiseeId, setPresaleWizardFranchiseeId] = useState<string | null>(null);
 
   const { user, userProfile, isSuperAdmin } = useAuth();
   const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
@@ -425,13 +427,13 @@ export default function FranchiseeDirectoryClient() {
               <TableHead className="whitespace-nowrap">Nominated Post Office</TableHead>
               <TableHead className="whitespace-nowrap">Campaigns</TableHead>
               <TableHead className="whitespace-nowrap">Sales Rep</TableHead>
-              {isSuperAdmin && <TableHead className="whitespace-nowrap text-right">Actions</TableHead>}
+              <TableHead className="whitespace-nowrap text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedFranchisees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={isSuperAdmin ? 13 : 11} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={13} className="text-center text-muted-foreground py-8">
                   No active franchisees found matching your filters.
                 </TableCell>
               </TableRow>
@@ -544,21 +546,35 @@ export default function FranchiseeDirectoryClient() {
                     </div>
                   </TableCell>
                   <TableCell>{franchisee.salesRepAssigned || 'Unassigned'}</TableCell>
-                  {isSuperAdmin && (
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        onClick={() => handleSync([franchisee.internalId])}
-                        disabled={syncing}
-                        className="h-8 w-8 p-0"
-                        title="Sync Franchisee"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPresaleWizardFranchiseeId(franchisee.internalId);
+                        }}
+                        className="h-7 text-[11px] px-2 gap-1 border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/10 font-semibold"
+                        title="Mark Territory for Sale / Presales"
                       >
-                        <RefreshCw className={`h-4 w-4 text-muted-foreground hover:text-primary ${syncing ? 'animate-spin' : ''}`} />
-                        <span className="sr-only">Sync</span>
+                        <Tag className="h-3 w-3 text-[#095c7b]" /> Presale
                       </Button>
-                    </TableCell>
-                  )}
+                      {isSuperAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSync([franchisee.internalId])}
+                          disabled={syncing}
+                          className="h-7 w-7 p-0"
+                          title="Sync Franchisee"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 text-muted-foreground hover:text-primary ${syncing ? 'animate-spin' : ''}`} />
+                          <span className="sr-only">Sync</span>
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -570,13 +586,19 @@ export default function FranchiseeDirectoryClient() {
         <DialogContent className="max-w-5xl w-[95vw] h-[90vh] flex flex-col p-0 overflow-hidden">
           {selectedFranchisee && (
             <>
-              <div className="p-6 border-b shrink-0">
+              <div className="p-6 border-b shrink-0 flex items-center justify-between">
                 <DialogHeader>
                   <DialogTitle className="text-2xl">{selectedFranchisee.name}</DialogTitle>
                   <DialogDescription>
                     Territory Coverage & Operational Boundaries
                   </DialogDescription>
                 </DialogHeader>
+                <Button
+                  onClick={() => setPresaleWizardFranchiseeId(selectedFranchisee.internalId)}
+                  className="bg-[#095c7b] hover:bg-[#07465e] text-white text-xs gap-1.5 font-semibold"
+                >
+                  <Tag className="h-4 w-4 text-[#eaf143]" /> Mark Territory for Sale / Presales
+                </Button>
               </div>
               
               <ScrollArea className="flex-1 p-6">
@@ -921,6 +943,16 @@ export default function FranchiseeDirectoryClient() {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Territory Presale Wizard Modal */}
+      {presaleWizardFranchiseeId && (
+        <TerritoryPresaleWizard
+          open={!!presaleWizardFranchiseeId}
+          onOpenChange={(open) => !open && setPresaleWizardFranchiseeId(null)}
+          franchiseeId={presaleWizardFranchiseeId}
+          franchiseeName={franchisees.find((f) => String(f.internalId) === String(presaleWizardFranchiseeId))?.name || ''}
+        />
       )}
     </div>
   );
