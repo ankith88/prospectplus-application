@@ -46,11 +46,14 @@ export const FranchiseeUserSchema = z.object({
   address: AddressSchema.optional(),
   abn: z.string().nullable().optional().transform(v => v ?? ""),
   typeOfOwner: z.enum([
+    '- New -',
+    'Company Owned',
+    'Investor / Manager',
+    'Owner / Operator',
     'Sole Trader',
     'Company',
     'Partnership',
     'Director',
-    'Owner Operator',
     'Multi-Unit Owner'
   ]).or(z.string()).nullable().optional().transform(v => v ?? ""),
   role: z.string().optional().default('Franchisee'),
