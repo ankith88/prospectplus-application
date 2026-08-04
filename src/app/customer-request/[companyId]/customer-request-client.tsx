@@ -40,7 +40,6 @@ import {
 interface PublicCompany {
   id: string;
   prospectPlusId?: string;
-  abn?: string;
   companyName: string;
   netsuiteId: string;
   contactName: string;
@@ -226,9 +225,7 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
       const payload = {
         requestType,
         leadId: company.id,
-        prospectPlusId: company.prospectPlusId || company.id,
         netsuiteId: company.netsuiteId,
-        abn: company.abn || '',
         companyName: company.companyName,
         contactName,
         contactEmail,

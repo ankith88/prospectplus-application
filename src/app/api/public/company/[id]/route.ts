@@ -49,7 +49,6 @@ export async function GET(
       prospectPlusId: (existingLead as any).prospectPlusId || (existingLead as any).prospectplusId || (existingLead as any).prospect_plus_id || leadId,
       companyName: existingLead.companyName || 'Valued Customer',
       netsuiteId: (existingLead as any).netsuiteId || '',
-      abn: existingLead.abn || (existingLead as any).abnNumber || (existingLead as any).abn_number || '',
       contactName: primaryContact.name || (existingLead as any).contactName || '',
       contactEmail: primaryContact.email || existingLead.customerServiceEmail || '',
       contactPhone: primaryContact.phone || existingLead.customerPhone || '',

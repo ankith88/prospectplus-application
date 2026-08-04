@@ -298,7 +298,8 @@ function SelectServicesContent() {
              salesRepId: salesRepId,
              services: mappedServices,
              commDate: format(values.startDate, 'dd/MM/yyyy'),
-             accountManagerName: lead.accountManagerAssigned
+             accountManagerName: lead.accountManagerAssigned,
+             createShipMateAccount: values.shipmateAccess || undefined
           });
           
           if (!nsResponse.success) throw new Error(nsResponse.message);

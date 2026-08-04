@@ -96,6 +96,7 @@ export interface QuoteServicePayload {
   accountManagerId?: string;
   accountManagerName?: string;
   commDate: string;
+  createShipMateAccount?: boolean;
   services: {
     id: string;
     name: string;

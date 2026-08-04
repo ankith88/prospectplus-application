@@ -20,7 +20,6 @@ const CSRequestSchema = z.object({
   leadId: z.string().optional(),
   prospectPlusId: z.string().optional(),
   netsuiteId: z.string().optional(),
-  abn: z.string().optional(),
   companyName: z.string().optional(),
   contactEmail: z.string().email().optional().or(z.literal('')),
   contactPhone: z.string().optional(),
@@ -104,7 +103,6 @@ export async function POST(request: Request) {
     const requestedDate = new Date().toISOString();
     const companyName = validated.companyName || existingLead?.companyName || 'Unknown Company';
     const prospectPlusId = validated.prospectPlusId || (existingLead as any)?.prospectPlusId || (existingLead as any)?.prospectplusId || (existingLead as any)?.prospect_plus_id || leadId;
-    const abn = validated.abn || existingLead?.abn || (existingLead as any)?.abnNumber || (existingLead as any)?.abn_number || '';
     const originalServices = existingLead?.services || [];
     const originalMRR = calculateServicesMRR(originalServices);
     const isCancellation = validated.requestType === 'cancellation';
@@ -150,7 +148,6 @@ export async function POST(request: Request) {
       leadId,
       prospectPlusId,
       netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',
-      abn,
       companyName,
       contactName: validated.contactName || '',
       contactEmail: validated.contactEmail || '',
@@ -186,7 +183,6 @@ export async function POST(request: Request) {
         leadId,
         prospectPlusId,
         netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',
-        abn,
         companyName,
         contactName: validated.contactName || '',
         contactEmail: validated.contactEmail || '',
@@ -231,7 +227,6 @@ export async function POST(request: Request) {
         leadId,
         prospectPlusId,
         netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',
-        abn,
         companyName,
         contactName: validated.contactName || '',
         contactEmail: validated.contactEmail || '',

@@ -1267,6 +1267,7 @@ export function ServiceSelectionDialog({
             accountManagerId: salesRepId,
             accountManagerName: amNameVal,
             commDate: commDateVal,
+            createShipMateAccount: values.createShipMateAccount || undefined,
             services: mappedServices,
             dateArray: []
           }
@@ -1287,6 +1288,7 @@ export function ServiceSelectionDialog({
            accountManagerId: salesRepId,
            accountManagerName: amNameVal,
            commDate: commDateVal,
+           createShipMateAccount: values.createShipMateAccount || undefined,
            services: mappedServices
         });
         console.groupEnd();
@@ -1300,6 +1302,7 @@ export function ServiceSelectionDialog({
            services: mappedServices,
            commDate: commDateVal,
            accountManagerName: amNameVal,
+           createShipMateAccount: values.createShipMateAccount || undefined,
         })
           .then(async (nsResponse) => {
              console.group(`✅ [NetSuite API 1900 Response]`);
@@ -1500,6 +1503,7 @@ export function ServiceSelectionDialog({
                services: mappedServices,
                commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
                accountManagerName: lead.accountManagerAssigned,
+               createShipMateAccount: values.createShipMateAccount || undefined,
              });
              if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
                 await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);

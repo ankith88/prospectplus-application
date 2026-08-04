@@ -902,7 +902,6 @@ export interface CSRequest {
   leadId: string;
   prospectPlusId?: string;
   netsuiteId?: string;
-  abn?: string;
   companyName: string;
   requestType: CSRequestType;
   
