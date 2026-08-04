@@ -35,8 +35,16 @@ function normalizeService(s: any): ServiceSelection {
 
   let frequency: any = s.frequency;
   if (typeof frequency === 'string') {
-    frequency = [frequency];
-  } else if (!Array.isArray(frequency)) {
+    if (['adhoc', 'ad-hoc', 'ad hoc'].includes(frequency.trim().toLowerCase())) {
+      frequency = 'Adhoc';
+    } else {
+      frequency = [frequency];
+    }
+  } else if (Array.isArray(frequency)) {
+    if (frequency.length === 1 && typeof frequency[0] === 'string' && ['adhoc', 'ad-hoc', 'ad hoc'].includes(frequency[0].trim().toLowerCase())) {
+      frequency = 'Adhoc';
+    }
+  } else {
     frequency = [];
   }
 
