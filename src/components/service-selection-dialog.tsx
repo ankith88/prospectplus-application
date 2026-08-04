@@ -366,16 +366,20 @@ export function ServiceSelectionDialog({
   useEffect(() => {
     if (isOpen && (selectionType === 'products' || selectionType === 'both')) {
       const currentServices = form.getValues('selectedServices') || [];
-      if (!currentServices.includes('MP Parcel Pickup')) {
+      if (selectionType === 'products') {
+        if (currentServices.length !== 1 || currentServices[0] !== 'MP Parcel Pickup') {
+          form.setValue('selectedServices', ['MP Parcel Pickup']);
+        }
+      } else if (!currentServices.includes('MP Parcel Pickup')) {
         form.setValue('selectedServices', [...currentServices, 'MP Parcel Pickup']);
-        const currentRates = form.getValues('rates') || {};
-        if (currentRates['MP Parcel Pickup'] === undefined) {
-          form.setValue('rates', { ...currentRates, 'MP Parcel Pickup': 0 });
-        }
-        const currentFreqs = form.getValues('frequencies') || {};
-        if (!currentFreqs['MP Parcel Pickup']) {
-          form.setValue('frequencies', { ...currentFreqs, 'MP Parcel Pickup': 'Adhoc' });
-        }
+      }
+      const currentRates = form.getValues('rates') || {};
+      if (currentRates['MP Parcel Pickup'] === undefined) {
+        form.setValue('rates', { ...currentRates, 'MP Parcel Pickup': 0 });
+      }
+      const currentFreqs = form.getValues('frequencies') || {};
+      if (!currentFreqs['MP Parcel Pickup']) {
+        form.setValue('frequencies', { ...currentFreqs, 'MP Parcel Pickup': 'Adhoc' });
       }
     }
   }, [selectionType, isOpen, form]);
@@ -547,7 +551,12 @@ export function ServiceSelectionDialog({
          }
       }
 
-      if ((selectionType === 'products' || selectionType === 'both') && !initialSelectedServices.includes('MP Parcel Pickup')) {
+      const currentSelectionType = selectionType || (lead as any)?.lastSelectionType || null;
+      if (currentSelectionType === 'products') {
+         initialSelectedServices = ['MP Parcel Pickup'];
+         initialFrequencies['MP Parcel Pickup'] = initialFrequencies['MP Parcel Pickup'] || 'Adhoc';
+         initialRates['MP Parcel Pickup'] = initialRates['MP Parcel Pickup'] ?? 0;
+      } else if (currentSelectionType === 'both' && !initialSelectedServices.includes('MP Parcel Pickup')) {
          initialSelectedServices.push('MP Parcel Pickup');
          initialFrequencies['MP Parcel Pickup'] = initialFrequencies['MP Parcel Pickup'] || 'Adhoc';
          initialRates['MP Parcel Pickup'] = initialRates['MP Parcel Pickup'] ?? 0;
@@ -568,6 +577,7 @@ export function ServiceSelectionDialog({
           createShipMateAccount: false,
           selectedContactId: defaultContactId,
           selectedContactIds: defaultContactId ? [defaultContactId] : [],
+          shipmateContactIds: defaultContactId ? [defaultContactId] : [],
       });
     } else {
         setIsAddingContact(false);
@@ -1092,6 +1102,13 @@ export function ServiceSelectionDialog({
       return;
     }
 
+    if (!values.shipmateContactIds || values.shipmateContactIds.length === 0) {
+      if (values.selectedContactIds && values.selectedContactIds.length > 0) {
+        values.shipmateContactIds = values.selectedContactIds;
+        form.setValue('shipmateContactIds', values.selectedContactIds);
+      }
+    }
+
     if (mode === 'Signup' && (selectionType === 'both' || selectionType === 'products')) {
       if (!values.shipmateContactIds || values.shipmateContactIds.length === 0) {
         form.setError('shipmateContactIds' as any, { type: 'manual', message: 'Please select at least one contact for ShipMate access.' });
@@ -1106,6 +1123,16 @@ export function ServiceSelectionDialog({
     
     // Fallback for fields relying on selectedContactId
     values.selectedContactId = values.selectedContactIds[0];
+
+    if (selectionType === 'products') {
+      values.selectedServices = ['MP Parcel Pickup'];
+      if (values.rates?.['MP Parcel Pickup'] === undefined) {
+        values.rates = { ...(values.rates || {}), 'MP Parcel Pickup': 0 };
+      }
+      if (!values.frequencies?.['MP Parcel Pickup']) {
+        values.frequencies = { ...(values.frequencies || {}), 'MP Parcel Pickup': 'Adhoc' };
+      }
+    }
 
     if (mode === 'Signup' && !values.startDate) {
       form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
@@ -2082,10 +2109,27 @@ export function ServiceSelectionDialog({
                                     role="button"
                                     tabIndex={0}
                                     onClick={async () => {
-                                      setSelectionType(opt.id as 'both' | 'services' | 'products');
+                                      const newType = opt.id as 'both' | 'services' | 'products';
+                                      setSelectionType(newType);
+                                      if (newType === 'products') {
+                                        form.setValue('selectedServices', ['MP Parcel Pickup']);
+                                        const currentRates = form.getValues('rates') || {};
+                                        form.setValue('rates', { ...currentRates, 'MP Parcel Pickup': currentRates['MP Parcel Pickup'] ?? 0 });
+                                        const currentFreqs = form.getValues('frequencies') || {};
+                                        form.setValue('frequencies', { ...currentFreqs, 'MP Parcel Pickup': currentFreqs['MP Parcel Pickup'] || 'Adhoc' });
+                                      } else if (newType === 'both') {
+                                        const currentServices = form.getValues('selectedServices') || [];
+                                        if (!currentServices.includes('MP Parcel Pickup')) {
+                                          form.setValue('selectedServices', [...currentServices, 'MP Parcel Pickup']);
+                                          const currentRates = form.getValues('rates') || {};
+                                          form.setValue('rates', { ...currentRates, 'MP Parcel Pickup': currentRates['MP Parcel Pickup'] ?? 0 });
+                                          const currentFreqs = form.getValues('frequencies') || {};
+                                          form.setValue('frequencies', { ...currentFreqs, 'MP Parcel Pickup': currentFreqs['MP Parcel Pickup'] || 'Adhoc' });
+                                        }
+                                      }
                                       if (lead) {
                                         try {
-                                          await updateLeadDetails(lead.id, lead, { lastSelectionType: opt.id as any });
+                                          await updateLeadDetails(lead.id, lead, { lastSelectionType: newType as any });
                                         } catch (err) {
                                           console.error("Failed to save selection type:", err);
                                         }
@@ -2181,13 +2225,13 @@ export function ServiceSelectionDialog({
                                                     <Checkbox
                                                       checked={isChecked}
                                                       onCheckedChange={(checked) => {
-                                                        return checked
-                                                          ? field.onChange([...currentValue, contactVal])
-                                                          : field.onChange(
-                                                              currentValue.filter(
-                                                                (value) => value !== contactVal
-                                                              )
-                                                            )
+                                                        const nextContactIds = checked
+                                                          ? [...currentValue, contactVal]
+                                                          : currentValue.filter(
+                                                              (value) => value !== contactVal
+                                                            );
+                                                        field.onChange(nextContactIds);
+                                                        form.setValue('shipmateContactIds', nextContactIds);
                                                       }}
                                                     />
                                                   </FormControl>
@@ -2326,8 +2370,21 @@ export function ServiceSelectionDialog({
                           />
                         )}
 
-                        {(selectionType === 'services' || selectionType === 'both') && selectedServices.length > 0 && (
+                        {selectedServices.length > 0 && (
                           <div className="rounded-md border mt-6 bg-card overflow-hidden shadow-sm">
+                            <div className="bg-muted/30 px-4 py-2.5 border-b flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Truck className="w-4 h-4 text-primary" />
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                                  {selectionType === 'products' ? 'Included Default Service' : 'Selected Services'}
+                                </h4>
+                              </div>
+                              {selectionType === 'products' && (
+                                <span className="text-[11px] bg-primary/10 text-primary font-medium px-2 py-0.5 rounded-full border border-primary/20">
+                                  Default service for Products Only
+                                </span>
+                              )}
+                            </div>
                             <Table>
                               <TableHeader className="bg-muted/50">
                                 <TableRow>
@@ -2465,34 +2522,36 @@ export function ServiceSelectionDialog({
                                     )}
                                     
                                     <TableCell className="align-top text-right">
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
-                                        onClick={() => {
-                                          const newSelected = selectedServices.filter(s => s !== serviceName);
-                                          form.setValue('selectedServices', newSelected);
-                                          
-                                          const freqs = { ...form.getValues('frequencies') };
-                                          delete freqs[serviceName];
-                                          form.setValue('frequencies', freqs);
-                                          
-                                          const rates = { ...form.getValues('rates') };
-                                          delete rates[serviceName];
-                                          form.setValue('rates', rates);
-                                          form.clearErrors(`rates.${serviceName}` as any);
-                                          form.clearErrors(`frequencies.${serviceName}` as any);
-                                          
-                                          const schedules = { ...form.getValues('createLocalMileSchedules') };
-                                          if (schedules[serviceName] !== undefined) {
-                                            delete schedules[serviceName];
-                                            form.setValue('createLocalMileSchedules', schedules);
-                                          }
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
+                                      {!(selectionType === 'products' && serviceName === 'MP Parcel Pickup') && (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
+                                          onClick={() => {
+                                            const newSelected = selectedServices.filter(s => s !== serviceName);
+                                            form.setValue('selectedServices', newSelected);
+                                            
+                                            const freqs = { ...form.getValues('frequencies') };
+                                            delete freqs[serviceName];
+                                            form.setValue('frequencies', freqs);
+                                            
+                                            const rates = { ...form.getValues('rates') };
+                                            delete rates[serviceName];
+                                            form.setValue('rates', rates);
+                                            form.clearErrors(`rates.${serviceName}` as any);
+                                            form.clearErrors(`frequencies.${serviceName}` as any);
+                                            
+                                            const schedules = { ...form.getValues('createLocalMileSchedules') };
+                                            if (schedules[serviceName] !== undefined) {
+                                              delete schedules[serviceName];
+                                              form.setValue('createLocalMileSchedules', schedules);
+                                            }
+                                          }}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      )}
                                     </TableCell>
                                   </TableRow>
                                 ))}

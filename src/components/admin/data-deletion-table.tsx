@@ -52,8 +52,8 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
       setLoading(true);
       try {
         const data = collectionName === 'leads'
-          ? await getLeadsFromFirebase({ summary: true })
-          : await getCompaniesFromFirebase();
+          ? await getLeadsFromFirebase({ summary: true, includeDuplicates: true })
+          : await getCompaniesFromFirebase({ skipCoordinateCheck: true });
         setItems(data);
       } catch (error) {
         console.error(`Failed to fetch ${collectionName}:`, error);
@@ -86,10 +86,19 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {
-        const lowercasedSearchTerm = debouncedSearchTerm.toLowerCase();
-        const lowercasedCampaignFilter = debouncedCampaignFilter.toLowerCase();
+        const lowercasedSearchTerm = debouncedSearchTerm.trim().toLowerCase();
+        const lowercasedCampaignFilter = debouncedCampaignFilter.trim().toLowerCase();
         
-        const nameMatch = debouncedSearchTerm ? item.companyName.toLowerCase().includes(lowercasedSearchTerm) || item.id.toLowerCase().includes(lowercasedSearchTerm) : true;
+        const companyName = item.companyName || '';
+        const nameMatch = lowercasedSearchTerm
+          ? (
+              companyName.toLowerCase().includes(lowercasedSearchTerm) ||
+              (item.id && item.id.toLowerCase().includes(lowercasedSearchTerm)) ||
+              (item.entityId && item.entityId.toLowerCase().includes(lowercasedSearchTerm)) ||
+              (item.salesRecordInternalId && String(item.salesRecordInternalId).toLowerCase().includes(lowercasedSearchTerm)) ||
+              (item.prospectPlusId && String(item.prospectPlusId).toLowerCase().includes(lowercasedSearchTerm))
+            )
+          : true;
         
         let campaignMatch = true;
         if (lowercasedCampaignFilter) {

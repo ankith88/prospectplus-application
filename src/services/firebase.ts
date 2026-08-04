@@ -515,8 +515,8 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
     }
 }
 
-async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: string[], summary?: boolean, dialerAssigned?: string, franchisee?: string }): Promise<Lead[]> {
-  const { leadId, leadIds, summary = false, dialerAssigned, franchisee } = options || {};
+async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: string[], summary?: boolean, dialerAssigned?: string, franchisee?: string, includeDuplicates?: boolean }): Promise<Lead[]> {
+  const { leadId, leadIds, summary = false, dialerAssigned, franchisee, includeDuplicates = false } = options || {};
   
   if (leadId) {
       const lead = await getLeadFromFirebase(leadId, !summary);
@@ -535,7 +535,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
 
     const snapshot = await getDocs(leadsQuery);
     const leads = snapshot.docs
-        .filter((doc) => !doc.data().isDuplicate)
+        .filter((doc) => includeDuplicates || !doc.data().isDuplicate)
         .map((doc) => {
         const data = sanitizeData(doc.data() || {});
         let address: Address | undefined;
@@ -556,7 +556,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           id: doc.id,
           entityId: data['customerEntityId'] || data['entityId'] || '',
           salesRecordInternalId: data.salesRecordInternalId,
-          companyName: data.companyName || 'Unknown Company',
+          companyName: data.companyName || data.company || data.name || data.customerName || 'Unknown Company',
           status: safeGetStatus(data.customerStatus),
           customerStatus: data.customerStatus,
           statusReason: data.statusReason,
@@ -804,7 +804,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     id: doc.id,
                     entityId: data['customerEntityId'] || data['entityId'] || '',
                     salesRecordInternalId: data.salesRecordInternalId,
-                    companyName: data.companyName || 'Unknown Company',
+                    companyName: data.companyName || data.company || data.name || data.customerName || 'Unknown Company',
                     status: safeGetStatus(data.customerStatus),
                     customerStatus: data.customerStatus,
                     profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,

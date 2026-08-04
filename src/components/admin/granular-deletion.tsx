@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
-import { getLeadFromFirebase, bulkDeleteSubCollectionItems } from '@/services/firebase';
+import { getLeadFromFirebase, getCompanyFromFirebase, bulkDeleteSubCollectionItems } from '@/services/firebase';
 import type { Lead, Contact, Note, Activity, Appointment } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Trash2, Search } from 'lucide-react';
@@ -49,19 +49,23 @@ export function GranularDeletion() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchTerm) return;
+    const cleanId = searchTerm.trim();
+    if (!cleanId) return;
     setLoading(true);
     setLead(null);
     setSelectedItems({ contacts: [], notes: [], activity: [], appointments: [] });
     try {
-      const fetchedLead = await getLeadFromFirebase(searchTerm, true);
+      let fetchedLead = await getLeadFromFirebase(cleanId, true);
+      if (!fetchedLead) {
+        fetchedLead = await getCompanyFromFirebase(cleanId, true);
+      }
       if (fetchedLead) {
         setLead(fetchedLead);
       } else {
-        toast({ variant: 'destructive', title: 'Not Found', description: `No lead found with ID: ${searchTerm}` });
+        toast({ variant: 'destructive', title: 'Not Found', description: `No lead or signed customer found with ID: ${cleanId}` });
       }
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch lead data.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch record data.' });
     } finally {
       setLoading(false);
     }
