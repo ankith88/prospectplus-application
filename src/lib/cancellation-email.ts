@@ -6,6 +6,7 @@ export interface CSRequestNotificationData {
   leadId?: string;
   prospectPlusId?: string;
   netsuiteId?: string;
+  abn?: string;
   companyName: string;
   contactName?: string;
   contactEmail?: string;
@@ -38,6 +39,7 @@ export async function sendCSRequestNotificationEmail(data: CSRequestNotification
       leadId,
       prospectPlusId,
       netsuiteId,
+      abn,
       companyName,
       contactName,
       contactEmail,
@@ -144,6 +146,7 @@ export async function sendCSRequestNotificationEmail(data: CSRequestNotification
                     <p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Company Name:</strong> ${companyName}</p>
                     ${(prospectPlusId || leadId) ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Prospect+ ID:</strong> #${prospectPlusId || leadId}</p>` : ''}
                     ${netsuiteId ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">NetSuite ID:</strong> #${netsuiteId}</p>` : ''}
+                    ${abn ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">ABN:</strong> ${abn}</p>` : ''}
                     ${contactName ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Contact Person:</strong> ${contactName}</p>` : ''}
                     ${contactEmail ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Email:</strong> <a href="mailto:${contactEmail}" style="color: #095c7b; text-decoration: underline;">${contactEmail}</a></p>` : ''}
                     ${contactPhone ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Phone:</strong> ${contactPhone}</p>` : ''}

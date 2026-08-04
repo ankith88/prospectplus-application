@@ -627,6 +627,79 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
     }
 }
 
+export interface NetSuiteUpdateCustomerPayload {
+    internalId: string;
+    companyName: string;
+    email: string;
+    phone: string;
+    franchiseeId: string;
+    prospectPlusId: string;
+}
+
+/**
+ * Sends updated customer/company details to NetSuite Scriptlet 1900 with operation 'updateCustomer'.
+ * @param payload The customer update payload containing document IDs, company name, email, phone, and franchisee ID.
+ * @returns A promise that resolves with the result of the NetSuite API call.
+ */
+export async function sendCompanyCustomerUpdateToNetSuite(payload: NetSuiteUpdateCustomerPayload): Promise<{ success: boolean; message: string }> {
+    const { internalId, companyName, email, phone, franchiseeId, prospectPlusId } = payload;
+
+    if (!internalId && !prospectPlusId) {
+        const errorMsg = 'Invalid payload: internalId or prospectPlusId is required.';
+        console.error(`[NetSuite Customer Update Error] ${errorMsg}`);
+        return { success: false, message: errorMsg };
+    }
+
+    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc";
+
+    const requestData = {
+        operation: "updateCustomer",
+        requestParams: {
+            internalId: internalId || prospectPlusId,
+            companyName: companyName || '',
+            email: email || '',
+            phone: phone || '',
+            franchiseeId: franchiseeId || '',
+            prospectPlusId: prospectPlusId || internalId,
+        }
+    };
+
+    const url = `${baseUrl}&requestData=${encodeURIComponent(JSON.stringify(requestData))}`;
+
+    console.log(`[NetSuite Customer Update Service] Sending customer update for ${internalId || prospectPlusId} to NetSuite...`);
+    console.log(`[NetSuite Customer Update Service] Final Request URL being called: ${url}`);
+    console.log(`[NetSuite Customer Update Service] Payload:`, requestData);
+
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, TIMEOUT_DURATION);
+
+        const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
+
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[NetSuite Customer Update Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
+            return { success: false, message: `NetSuite API request failed with status ${response.status}. ${errorBody}` };
+        }
+
+        const responseBody = await response.text();
+        console.log(`[NetSuite Customer Update Service] Successfully sent customer update. Response: ${responseBody}`);
+        return { success: true, message: 'Customer details updated in NetSuite.' };
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            console.error(`[NetSuite Customer Update Error] Request for customer update ${internalId || prospectPlusId} timed out.`);
+            return { success: false, message: 'The request to NetSuite timed out.' };
+        }
+        console.error("[NetSuite Customer Update Error] A fatal error occurred during fetch:", error);
+        console.error(`[NetSuite Customer Update Error] Failed URL: ${url}`);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+    }
+}
+
 
 interface NetSuiteAddressUpdatePayload {
     leadId: string;

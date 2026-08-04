@@ -724,6 +724,12 @@ export default function CSRequestsDashboard() {
                       <span className="font-bold text-slate-800">#{selectedRequest.netsuiteId}</span>
                     </div>
                   )}
+                  {selectedRequest.abn && (
+                    <div>
+                      <span className="font-semibold text-slate-500">ABN:</span>{' '}
+                      <span className="font-bold text-slate-800">{selectedRequest.abn}</span>
+                    </div>
+                  )}
                   <div>
                     <span className="font-semibold text-slate-500">Contact Person:</span>{' '}
                     <span className="font-bold text-slate-800">{selectedRequest.contactName || 'N/A'}</span>

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { updateLeadDetails } from "@/services/firebase"
-import { sendLeadUpdateToNetSuite, sendAddressUpdateToNetSuite } from "@/services/netsuite"
+import { sendLeadUpdateToNetSuite, sendAddressUpdateToNetSuite, sendCompanyCustomerUpdateToNetSuite } from "@/services/netsuite"
 import type { Lead, Address } from "@/lib/types"
 import { industryCategories } from "@/lib/constants"
 import { ScrollArea } from "./ui/scroll-area"
@@ -69,7 +69,7 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
       await updateLeadDetails(lead.id, lead, values);
       onLeadUpdated(values, lead);
 
-      // Call NetSuite
+      // Call NetSuite (Script 2165)
       const nsResult = await sendLeadUpdateToNetSuite({
         leadId: lead.id,
         companyName: values.companyName,
@@ -80,18 +80,31 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
         abn: values.abn,
       });
 
+      // Call NetSuite Customer Update (Script 1900 - operation: updateCustomer)
+      const nsCustomerResult = await sendCompanyCustomerUpdateToNetSuite({
+        internalId: lead.id,
+        companyName: values.companyName || lead.companyName || '',
+        email: values.customerServiceEmail ?? lead.customerServiceEmail ?? '',
+        phone: values.customerPhone ?? lead.customerPhone ?? '',
+        franchiseeId: lead.franchisee_id ?? lead.franchisee ?? '',
+        prospectPlusId: lead.id,
+      });
 
-
-      if (nsResult.success) {
+      if (nsResult.success && nsCustomerResult.success) {
         toast({
           title: "Profile Updated",
           description: "Details successfully saved and synced with NetSuite.",
+        });
+      } else if (nsResult.success || nsCustomerResult.success) {
+        toast({
+          title: "Profile Updated",
+          description: "Details saved. Partial sync completed with NetSuite.",
         });
       } else {
         toast({
           variant: "destructive",
           title: "NetSuite Sync Failed",
-          description: nsResult.message,
+          description: nsCustomerResult.message || nsResult.message,
         });
       }
 
