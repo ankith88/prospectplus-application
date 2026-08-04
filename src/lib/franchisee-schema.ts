@@ -32,6 +32,12 @@ export const NextOfKinSchema = z.object({
   relationship: z.string().nullable().optional().transform(v => v ?? ""),
 });
 
+export const BankAccountSchema = z.object({
+  bankAccountName: z.string().nullable().optional().transform(v => v ?? ""),
+  bsbNumber: z.string().nullable().optional().transform(v => v ?? ""),
+  bankAccountNumber: z.string().nullable().optional().transform(v => v ?? ""),
+});
+
 export const FranchiseeUserSchema = z.object({
   uid: z.string().optional(),
   email: z.string().email(),
@@ -56,6 +62,10 @@ export const FranchiseeUserSchema = z.object({
     'Director',
     'Multi-Unit Owner'
   ]).or(z.string()).nullable().optional().transform(v => v ?? ""),
+  bankAccountName: z.string().nullable().optional().transform(v => v ?? ""),
+  bsbNumber: z.string().nullable().optional().transform(v => v ?? ""),
+  bankAccountNumber: z.string().nullable().optional().transform(v => v ?? ""),
+  bankAccount: BankAccountSchema.optional(),
   role: z.string().optional().default('Franchisee'),
 });
 

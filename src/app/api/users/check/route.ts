@@ -104,6 +104,14 @@ export async function GET(request: Request) {
         dateOfBirth: userDocData?.dateOfBirth || null,
         nextOfKin: userDocData?.nextOfKin || null,
         address: userDocData?.address || null,
+        bankAccountName: userDocData?.bankAccountName || userDocData?.bankAccount?.bankAccountName || null,
+        bsbNumber: userDocData?.bsbNumber || userDocData?.bankAccount?.bsbNumber || null,
+        bankAccountNumber: userDocData?.bankAccountNumber || userDocData?.bankAccount?.bankAccountNumber || null,
+        bankAccount: userDocData?.bankAccount || (userDocData?.bankAccountName ? {
+          bankAccountName: userDocData.bankAccountName,
+          bsbNumber: userDocData.bsbNumber,
+          bankAccountNumber: userDocData.bankAccountNumber,
+        } : null),
         createdAt: userDocData?.createdAt || authUser?.metadata?.creationTime || null,
         updatedAt: userDocData?.updatedAt || null,
       }

@@ -137,6 +137,41 @@ export async function syncFranchiseeUsers(
       };
     }
 
+    if (
+      userInput.bankAccountName !== undefined ||
+      userInput.bsbNumber !== undefined ||
+      userInput.bankAccountNumber !== undefined ||
+      userInput.bankAccount !== undefined
+    ) {
+      const bankAccountName =
+        userInput.bankAccount?.bankAccountName ??
+        userInput.bankAccountName ??
+        existingData.bankAccountName ??
+        existingData.bankAccount?.bankAccountName ??
+        '';
+      const bsbNumber =
+        userInput.bankAccount?.bsbNumber ??
+        userInput.bsbNumber ??
+        existingData.bsbNumber ??
+        existingData.bankAccount?.bsbNumber ??
+        '';
+      const bankAccountNumber =
+        userInput.bankAccount?.bankAccountNumber ??
+        userInput.bankAccountNumber ??
+        existingData.bankAccountNumber ??
+        existingData.bankAccount?.bankAccountNumber ??
+        '';
+
+      updatedUserObj.bankAccountName = bankAccountName;
+      updatedUserObj.bsbNumber = bsbNumber;
+      updatedUserObj.bankAccountNumber = bankAccountNumber;
+      updatedUserObj.bankAccount = {
+        bankAccountName,
+        bsbNumber,
+        bankAccountNumber,
+      };
+    }
+
     if (!existingDoc.exists) {
       updatedUserObj.createdAt = nowStr;
     }
