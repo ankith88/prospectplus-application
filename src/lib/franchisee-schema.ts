@@ -12,10 +12,22 @@ export const SuburbMappingSchema = z.object({
   lng: z.number().optional(),
 });
 
+const parseFeeValue = (val: any): number => {
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    const num = parseFloat(trimmed);
+    if (isNaN(num)) return 0;
+    if (trimmed.endsWith('%')) return num / 100;
+    return num;
+  }
+  return 0;
+};
+
 export const FranchisorFeesSchema = z.object({
-  adminFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
-  marketingFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
-  headOfficeFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
+  adminFee: z.number().or(z.string().transform(parseFeeValue)).optional().default(0),
+  marketingFee: z.number().or(z.string().transform(parseFeeValue)).optional().default(0),
+  headOfficeFee: z.number().or(z.string().transform(parseFeeValue)).optional().default(0),
 });
 
 export const AddressSchema = z.object({
@@ -88,9 +100,9 @@ export const FranchiseeSchema = z.object({
       return num;
     }))
     .optional().default(0),
-  adminFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
-  marketingFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
-  headOfficeFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional().default(0),
+  adminFee: z.number().or(z.string().transform(parseFeeValue)).optional().default(0),
+  marketingFee: z.number().or(z.string().transform(parseFeeValue)).optional().default(0),
+  headOfficeFee: z.number().or(z.string().transform(parseFeeValue)).optional().default(0),
   franchisorFees: FranchisorFeesSchema.optional(),
   salesRepAssigned: z.string().nullable().optional().transform(v => v ?? ""),
   activeProjects: z.array(z.string())
@@ -135,9 +147,9 @@ export const UpdateFranchiseeSchema = z.object({
       return num;
     }))
     .optional(),
-  adminFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional(),
-  marketingFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional(),
-  headOfficeFee: z.number().or(z.string().transform(v => parseFloat(v) || 0)).optional(),
+  adminFee: z.number().or(z.string().transform(parseFeeValue)).optional(),
+  marketingFee: z.number().or(z.string().transform(parseFeeValue)).optional(),
+  headOfficeFee: z.number().or(z.string().transform(parseFeeValue)).optional(),
   franchisorFees: FranchisorFeesSchema.optional(),
   salesRepAssigned: z.string().nullable().optional(),
   activeProjects: z.array(z.string())
