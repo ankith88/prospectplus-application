@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { MapPin, Plus, Trash2, ShieldAlert, Check, Copy, Info } from 'lucide-react';
+import { MapPin, Plus, Trash2, ShieldAlert, Check, Copy, Info, ChevronDown } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 
@@ -135,10 +135,10 @@ export default function SuburbMappingClient() {
       setAusPostSuburbs(parseSuburbList(franchisee.ausPostSuburbsJson));
       
       // Parse lodgement points
-      setExpressLodgement(parseLodgementPoints(franchisee.mpExpressLodgementPoints));
-      setStarTrackLodgement(parseLodgementPoints(franchisee.starTrackLodgementPoints));
+      setExpressLodgement(parseLodgementPoints(franchisee.mpExpressLodgementPoints, depots));
+      setStarTrackLodgement(parseLodgementPoints(franchisee.starTrackLodgementPoints, depots));
     }
-  }, [selectedFranchiseeId, franchisees]);
+  }, [selectedFranchiseeId, franchisees, depots]);
 
   const clearMappingStates = () => {
     setMainTerritory([]);
@@ -209,7 +209,7 @@ export default function SuburbMappingClient() {
     return arrayData.map(sanitizeSuburbItem);
   };
 
-  const parseLodgementPoints = (pts: any): LodgementPoint[] => {
+  const parseLodgementPoints = (pts: any, depotsList: any[] = []): LodgementPoint[] => {
     if (!pts) return [];
     let parsed: any = pts;
     if (typeof pts === 'string') {
@@ -222,26 +222,93 @@ export default function SuburbMappingClient() {
 
     let arrayData: any[] = [];
     if (Array.isArray(parsed)) {
-      arrayData = parsed;
+      arrayData = parsed.flat();
     } else if (parsed && typeof parsed === 'object') {
-      if (parsed.depotId || parsed.depot_id || parsed.depot || parsed.name || parsed.suburb) {
+      if (Array.isArray(parsed.data)) {
+        arrayData = parsed.data.flat();
+      } else if (parsed.depotId || parsed.depot_id || parsed.depot || parsed.ncl_id || parsed.name || parsed.ncl_name) {
         arrayData = [parsed];
       } else {
         const values = Object.values(parsed);
-        if (values.length > 0 && typeof values[0] === 'object') {
-          arrayData = values;
+        if (values.length > 0) {
+          arrayData = values.flat();
         }
       }
     }
     
-    return arrayData.map(pt => ({
-      depotId: pt?.depotId || pt?.depot_id || pt?.depot || '',
-      name: pt?.name || pt?.depot || '',
-      suburb: pt?.suburb || pt?.city || '',
-      postcode: pt?.postcode || pt?.post_code || pt?.zip || '',
-      state: pt?.state || '',
-      operators: Array.isArray(pt?.operators) ? pt.operators : (pt?.operatorId || pt?.operator_id || pt?.operator ? [pt.operatorId || pt.operator_id || pt.operator] : [])
-    }));
+    return arrayData.map(pt => {
+      if (!pt || typeof pt !== 'object') {
+        return {
+          depotId: '',
+          name: '',
+          suburb: '',
+          postcode: '',
+          state: '',
+          operators: [],
+          operatorId: ''
+        };
+      }
+
+      const depotId = String(pt?.ncl_id || pt?.depotId || pt?.depot_id || pt?.depot || pt?.id || pt?.internalId || '');
+      
+      // Match with depots (partner_locations)
+      const matchedDepot = depotsList.find(d => 
+        String(d.internalId || d.id) === depotId || String(d.ncl_id) === depotId
+      );
+
+      const name = pt?.ncl_name || pt?.name || pt?.depot || matchedDepot?.name || '';
+      
+      let suburb = pt?.suburb || matchedDepot?.suburb || '';
+      let postcode = pt?.postcode || pt?.post_code || pt?.zip || matchedDepot?.postCode || matchedDepot?.postcode || '';
+      let state = pt?.state || matchedDepot?.state || '';
+
+      // Fallback: Parse ncl_address if suburb, state or postcode are missing
+      if ((!suburb || !state || !postcode) && pt?.ncl_address) {
+        const addr = String(pt.ncl_address);
+        const parts = addr.split(',').map(s => s.trim());
+        if (parts.length >= 2) {
+          const lastPart = parts[parts.length - 1];
+          const statePostMatch = lastPart.match(/([A-Z]{2,3})?\s*-?\s*(\d{4})/i);
+          if (statePostMatch) {
+            if (!state && statePostMatch[1]) state = statePostMatch[1].toUpperCase();
+            if (!postcode && statePostMatch[2]) postcode = statePostMatch[2];
+          }
+          if (!suburb && parts.length >= 2) {
+            suburb = parts[parts.length - 2];
+          }
+        }
+      }
+
+      // Handle operators: op_primary_id or operators or operatorId
+      let operators: string[] = [];
+      const opRaw = pt?.op_primary_id ?? pt?.operators ?? pt?.operatorId ?? pt?.operator_id ?? pt?.operator;
+      if (Array.isArray(opRaw)) {
+        operators = opRaw.map(o => String(o));
+      } else if (typeof opRaw === 'string' && opRaw) {
+        try {
+          const parsedOps = JSON.parse(opRaw);
+          if (Array.isArray(parsedOps)) {
+            operators = parsedOps.map(o => String(o));
+          } else {
+            operators = [opRaw];
+          }
+        } catch {
+          operators = opRaw.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      } else if (typeof opRaw === 'number') {
+        operators = [String(opRaw)];
+      }
+
+      return {
+        depotId,
+        name,
+        suburb,
+        postcode,
+        state,
+        operators,
+        operatorId: operators[0] || ''
+      };
+    });
   };
 
   // Clone Main Territory to TGE (Express)
@@ -717,47 +784,82 @@ export default function SuburbMappingClient() {
 
   // Operator popover picker
   function renderOperatorPopover(selectedIds: string[], onChange: (ids: string[]) => void) {
-    const selectedOps = operators.filter(o => selectedIds.includes(o.internalId));
+    const selectedOps = operators.filter(o => selectedIds.some(id => String(id) === String(o.internalId)));
+    const isAllSelected = operators.length > 0 && selectedOps.length === operators.length;
+
+    const handleToggleAll = () => {
+      if (isAllSelected) {
+        onChange([]);
+      } else {
+        onChange(operators.map(o => String(o.internalId)));
+      }
+    };
     
     return (
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="w-56 justify-start text-left bg-white font-normal border-slate-200">
-            {selectedOps.length === 0 ? (
-              <span className="text-slate-400 text-xs">Select Operators...</span>
-            ) : (
-              <div className="flex flex-wrap gap-1 max-w-[200px] overflow-hidden truncate">
-                {selectedOps.map(op => (
-                  <Badge key={op.internalId} variant="secondary" className="text-[10px] py-0 px-1.5 bg-slate-100 text-slate-800 border border-slate-200 font-medium">
-                    {op.givenNames} {op.surname}
+          <Button variant="outline" size="sm" className="h-9 w-full min-w-[180px] max-w-[260px] justify-between text-left bg-white font-normal border-slate-200 hover:border-slate-300 shadow-sm px-2.5">
+            <div className="flex items-center gap-1 overflow-hidden truncate mr-1">
+              {selectedOps.length === 0 ? (
+                <span className="text-slate-400 text-xs">Select Operators...</span>
+              ) : isAllSelected ? (
+                <Badge variant="secondary" className="text-[11px] py-0.5 px-2 bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium shrink-0">
+                  All Operators ({operators.length})
+                </Badge>
+              ) : selectedOps.length === 1 ? (
+                <Badge variant="secondary" className="text-[11px] py-0.5 px-2 bg-slate-100 text-slate-700 border border-slate-200 font-medium truncate">
+                  {selectedOps[0].givenNames} {selectedOps[0].surname}
+                </Badge>
+              ) : (
+                <>
+                  <Badge variant="secondary" className="text-[11px] py-0.5 px-2 bg-slate-100 text-slate-700 border border-slate-200 font-medium truncate max-w-[120px]">
+                    {selectedOps[0].givenNames} {selectedOps[0].surname}
                   </Badge>
-                ))}
-              </div>
-            )}
+                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-slate-50 text-slate-500 border-slate-200 font-semibold shrink-0">
+                    +{selectedOps.length - 1}
+                  </Badge>
+                </>
+              )}
+            </div>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-56 p-2 bg-white shadow-md border border-slate-200" align="start">
-          <div className="space-y-1 max-h-48 overflow-y-auto">
+        <PopoverContent className="w-60 p-2 bg-white shadow-lg border border-slate-200 rounded-lg" align="start">
+          {operators.length > 0 && (
+            <div className="flex items-center justify-between px-1.5 pb-2 mb-1 border-b border-slate-100">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                {selectedOps.length} of {operators.length} Selected
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleAll}
+                className="text-[11px] font-medium text-[#095c7b] hover:underline"
+              >
+                {isAllSelected ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
+          )}
+          <div className="space-y-0.5 max-h-52 overflow-y-auto">
             {operators.length === 0 ? (
-              <div className="p-2 text-xs text-slate-400 text-center">No operators available</div>
+              <div className="p-3 text-xs text-slate-400 text-center">No operators available</div>
             ) : (
               operators.map(op => {
-                const isSelected = selectedIds.includes(op.internalId);
+                const isSelected = selectedIds.some(id => String(id) === String(op.internalId));
                 return (
                   <div
                     key={op.internalId}
-                    className="flex items-center space-x-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer text-xs"
+                    className="flex items-center space-x-2 p-1.5 hover:bg-slate-50 rounded-md cursor-pointer text-xs select-none transition-colors"
                     onClick={() => {
                       const newIds = isSelected
-                        ? selectedIds.filter(id => id !== op.internalId)
-                        : [...selectedIds, op.internalId];
+                        ? selectedIds.filter(id => String(id) !== String(op.internalId))
+                        : [...selectedIds, String(op.internalId)];
                       onChange(newIds);
                     }}
                   >
-                    <div className={`w-3.5 h-3.5 border rounded flex items-center justify-center ${isSelected ? 'bg-[#095c7b] border-[#095c7b] text-white' : 'border-slate-300'}`}>
-                      {isSelected && <Check className="w-2.5 h-2.5" />}
+                    <div className={`w-4 h-4 border rounded flex items-center justify-center transition-colors ${isSelected ? 'bg-[#095c7b] border-[#095c7b] text-white' : 'border-slate-300 bg-white'}`}>
+                      {isSelected && <Check className="w-3 h-3 stroke-[2.5]" />}
                     </div>
-                    <span>{op.givenNames} {op.surname}</span>
+                    <span className="text-slate-700 font-medium">{op.givenNames} {op.surname}</span>
                   </div>
                 );
               })

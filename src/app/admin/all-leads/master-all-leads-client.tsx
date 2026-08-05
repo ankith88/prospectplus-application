@@ -599,30 +599,35 @@ export function MasterAllLeadsClient() {
 
     setIsExporting(true)
     try {
-      // Fetch subcollection contacts for selected leads to guarantee full contact export
+      // Fetch subcollection contacts for selected leads in batches of 15 to avoid resource-exhausted error
       const contactsByLeadId: Record<string, Contact[]> = {}
-      await Promise.all(leadsToExport.map(async (lead) => {
-        let contactsList: Contact[] = lead.contacts || []
-        if (contactsList.length === 0) {
-          try {
-            const subContacts = await getLeadContacts(lead.id)
-            if (subContacts && subContacts.length > 0) {
-              contactsList = subContacts
-            } else {
-              const compContacts = await getSubCollection<Contact>('companies', lead.id, 'contacts', 'name', 'asc')
-              contactsList = compContacts || []
+      const BATCH_SIZE = 15
+      for (let i = 0; i < leadsToExport.length; i += BATCH_SIZE) {
+        const batch = leadsToExport.slice(i, i + BATCH_SIZE)
+        await Promise.all(batch.map(async (lead) => {
+          let contactsList: Contact[] = lead.contacts || []
+          if (contactsList.length === 0) {
+            try {
+              const subContacts = await getLeadContacts(lead.id)
+              if (subContacts && subContacts.length > 0) {
+                contactsList = subContacts
+              } else {
+                const compContacts = await getSubCollection<Contact>('companies', lead.id, 'contacts', 'name', 'asc')
+                contactsList = compContacts || []
+              }
+            } catch {
+              contactsList = []
             }
-          } catch {
-            contactsList = []
           }
-        }
-        contactsByLeadId[lead.id] = contactsList
-      }))
+          contactsByLeadId[lead.id] = contactsList
+        }))
+      }
 
       // 1. Generate CSV matching standard Import CSV template
       const headers = [
         'Prospect+ ID',
         'NetSuite ID',
+        'Internal ID',
         'Company Name',
         'Website URL',
         'Company Phone',
@@ -692,6 +697,7 @@ export function MasterAllLeadsClient() {
         const historyCompanies = (l.exportHistory || []).map(h => `${h.exportedToCompany} (${safeFormatDate(h.exportedAt)})`).join('; ')
         const exportCount = l.exportHistory?.length || (l.isExported ? 1 : 0)
 
+        const leadInternalId = l.internalid || l.internalId || l.salesRecordInternalId || ''
         const leadAddress1 = l.address?.address1 || (l as any).address1 || ''
         const leadStreet = l.address?.street || (l as any).street || ''
         const leadCity = l.address?.city || (l as any).city || l.city || ''
@@ -722,6 +728,7 @@ export function MasterAllLeadsClient() {
         return [
           escapeCsv(l.prospectPlusId || l.id),
           escapeCsv(l.entityId || ''),
+          escapeCsv(leadInternalId),
           escapeCsv(l.companyName || ''),
           escapeCsv(leadWebsite),
           escapeCsv(leadPhone),

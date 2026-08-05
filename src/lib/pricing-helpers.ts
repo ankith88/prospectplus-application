@@ -58,17 +58,31 @@ function parseLodgementPoints(points: any[] | string | undefined | null): any[] 
     }
   }
 
-  if (Array.isArray(parsed)) return parsed;
-  if (parsed && typeof parsed === 'object') {
-    if (parsed.depotId || parsed.depot_id || parsed.depot || parsed.suburb || parsed.postcode) {
-      return [parsed];
-    }
-    const values = Object.values(parsed);
-    if (values.length > 0 && typeof values[0] === 'object') {
-      return values;
+  let arrayData: any[] = [];
+  if (Array.isArray(parsed)) {
+    arrayData = parsed.flat();
+  } else if (parsed && typeof parsed === 'object') {
+    if (Array.isArray(parsed.data)) {
+      arrayData = parsed.data.flat();
+    } else if (parsed.depotId || parsed.depot_id || parsed.depot || parsed.ncl_id || parsed.suburb || parsed.postcode) {
+      arrayData = [parsed];
+    } else {
+      const values = Object.values(parsed);
+      if (values.length > 0) {
+        arrayData = values.flat();
+      }
     }
   }
-  return [];
+
+  return arrayData.map(pt => ({
+    depotId: String(pt?.ncl_id || pt?.depotId || pt?.depot_id || pt?.depot || ''),
+    ncl_id: String(pt?.ncl_id || pt?.depotId || pt?.depot_id || ''),
+    name: pt?.ncl_name || pt?.name || pt?.depot || '',
+    suburb: pt?.suburb || '',
+    postcode: pt?.postcode || pt?.post_code || pt?.zip || '',
+    state: pt?.state || '',
+    operators: Array.isArray(pt?.op_primary_id) ? pt.op_primary_id : (Array.isArray(pt?.operators) ? pt.operators : [])
+  }));
 }
 
 export function generateSuburbMapping(lead: Lead, franchisee: Franchisee | null): LeadSuburbMapping[] {

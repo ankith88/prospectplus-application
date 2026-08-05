@@ -97,17 +97,23 @@ export default function FranchiseeLeadVerificationClient() {
         return isFranchiseeOrPending && isBucketValid && !isAssignedToUserOrAm(l);
       });
 
-      // Fetch contacts only for the filtered pending leads
-      const pendingLeadsWithContacts = await Promise.all(
-        pendingLeads.map(async (l) => {
-          try {
-            const contacts = await getLeadContacts(l.id);
-            return { ...l, contacts, contactCount: contacts.length };
-          } catch {
-            return l;
-          }
-        })
-      );
+      // Fetch contacts only for the filtered pending leads in batches of 15
+      const BATCH_SIZE = 15;
+      const pendingLeadsWithContacts: typeof pendingLeads = [];
+      for (let i = 0; i < pendingLeads.length; i += BATCH_SIZE) {
+        const batch = pendingLeads.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map(async (l) => {
+            try {
+              const contacts = await getLeadContacts(l.id);
+              return { ...l, contacts, contactCount: contacts.length };
+            } catch {
+              return l;
+            }
+          })
+        );
+        pendingLeadsWithContacts.push(...batchResults);
+      }
 
       setLeads(pendingLeadsWithContacts);
     } catch (error) {
@@ -131,13 +137,13 @@ export default function FranchiseeLeadVerificationClient() {
     if (targetBucket === 'account_manager') {
       const ams = sortedUsers.filter(u => 
         u.assignedRoles?.some(r => ['Account Manager', 'Account Managers', 'account managers'].includes(r)) ||
-        u.activeRole === 'Account Manager' || u.activeRole === 'admin' || u.activeRole === 'superadmin'
+        u.activeRole === 'Account Manager' || u.activeRole === 'admin' || (u.activeRole as string) === 'superadmin'
       );
       return ams.length > 0 ? ams : sortedUsers;
     } else {
       const reps = sortedUsers.filter(u => 
         u.assignedRoles?.some(r => ['user', 'Dialer', 'dialers', 'Outbound Rep'].includes(r)) ||
-        u.activeRole === 'user' || u.activeRole === 'admin' || u.activeRole === 'superadmin'
+        u.activeRole === 'user' || u.activeRole === 'admin' || (u.activeRole as string) === 'superadmin'
       );
       return reps.length > 0 ? reps : sortedUsers;
     }

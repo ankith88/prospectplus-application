@@ -966,49 +966,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarMenu>
           ) : (
             <>
-              {/* Main Pages Section for Mobile / Franchisees */}
-              <SidebarGroup>
-                <SidebarGroupLabel className="flex items-center gap-1.5 text-[#eaf143] font-bold text-xs uppercase tracking-wider">
-                  <Star className="h-3 w-3 fill-[#eaf143] text-[#eaf143]" />
-                  Main Pages
-                </SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="Create New Lead">
-                        <Link href="/leads/new" onClick={() => setOpenMobile(false)}>
-                          <PlusCircle className="text-[#eaf143] h-4 w-4" />
-                          <span className="font-semibold text-white">Create New Lead</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/account-lookup")} tooltip="Universal Lookup">
-                        <Link href="/account-lookup" onClick={() => setOpenMobile(false)}>
-                          <Search className="text-[#eaf143] h-4 w-4" />
-                          <span className="font-semibold text-white">Universal Lookup</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/sales-snapshot")} tooltip="Sales SnapShot">
-                        <Link href="/sales-snapshot" onClick={() => setOpenMobile(false)}>
-                          <Layers className="text-[#eaf143] h-4 w-4" />
-                          <span className="font-semibold text-white">Sales SnapShot</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/franchisee-leads") || (isActive("/leads") && isFranchiseeRole)} tooltip="Franchisee Leads">
-                        <Link href={isFranchiseeRole ? "/franchisee-leads" : "/leads"} onClick={() => setOpenMobile(false)}>
-                          <Briefcase className="text-[#eaf143] h-4 w-4" />
-                          <span className="font-semibold text-white">{isFranchiseeRole ? "Franchisee Leads" : "Outbound Leads"}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
               {/* Pinned Quick Access */}
               <SidebarGroup>
                 <SidebarGroupLabel className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel">

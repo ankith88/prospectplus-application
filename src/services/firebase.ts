@@ -218,6 +218,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
+          internalid: data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.salesRecordInternalId || '')),
+          internalId: data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.salesRecordInternalId || '')),
           entityId: data['customerEntityId'] || data['entityId'] || '',
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
@@ -378,6 +380,8 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
 
         const transformedCompany: Lead = {
           id: docSnapshot.id,
+          internalid: data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.salesRecordInternalId || '')),
+          internalId: data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.salesRecordInternalId || '')),
           entityId: data['customerEntityId'] || data['entityId'] || '',
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
@@ -554,6 +558,8 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
 
         return {
           id: doc.id,
+          internalid: data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.salesRecordInternalId || '')),
+          internalId: data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.salesRecordInternalId || '')),
           entityId: data['customerEntityId'] || data['entityId'] || '',
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: data.companyName || data.company || data.name || data.customerName || 'Unknown Company',
@@ -692,6 +698,8 @@ function subscribeLeadsFromFirebase(
 
         return {
           id: doc.id,
+          internalid: data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.salesRecordInternalId || '')),
+          internalId: data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.salesRecordInternalId || '')),
           entityId: data['customerEntityId'] || data['entityId'] || '',
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: data.companyName || 'Unknown Company',
@@ -802,6 +810,8 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
 
                 return {
                     id: doc.id,
+                    internalid: data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.salesRecordInternalId || '')),
+                    internalId: data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.salesRecordInternalId || '')),
                     entityId: data['customerEntityId'] || data['entityId'] || '',
                     salesRecordInternalId: data.salesRecordInternalId,
                     companyName: data.companyName || data.company || data.name || data.customerName || 'Unknown Company',

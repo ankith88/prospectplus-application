@@ -472,6 +472,8 @@ export interface FieldSalesSchedule {
 
 export interface Lead {
   id: string
+  internalid?: string
+  internalId?: string
   entityId?: string
   companyName: string
   status: LeadStatus
