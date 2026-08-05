@@ -92,8 +92,8 @@ function SelectServicesContent() {
 
   useEffect(() => {
     if (lead && partnerLocations.length > 0 && !selectedBankId) {
-      const targetId = lead.bankLocationId || (lead as any).partnerLocationId || (lead as any).bankLocation?.id || (lead as any).postalAddress?.partnerLocationId;
-      const targetName = lead.bankLocationName || (lead as any).partnerLocationName;
+      const targetId = lead.bankLocationId || (lead as any).bankLocation?.id;
+      const targetName = lead.bankLocationName || (lead as any).bankLocation?.name;
 
       if (targetId) {
         const found = partnerLocations.find(l => l.id === targetId || (l as any).internalId === targetId);
@@ -388,8 +388,6 @@ function SelectServicesContent() {
         await updateLeadDetails(lead.id, lead, {
           bankLocationId: bankLocId,
           bankLocationName: bankLocName,
-          partnerLocationId: bankLocId,
-          partnerLocationName: bankLocName,
           bankLocation: {
             id: bankLocId,
             name: bankLocName,
@@ -699,6 +697,17 @@ function SelectServicesContent() {
                                                  );
                                                }
 
+                                               const activeBankId = selectedBankId || (selectedBank ? String(selectedBank.id || selectedBank.internalId) : '') || String(lead?.bankLocationId || (lead as any)?.partnerLocationId || '');
+                                               const matchingBank = displayBanks.find(b =>
+                                                 b.id === activeBankId ||
+                                                 String(b.raw?.id) === activeBankId ||
+                                                 String(b.raw?.internalId) === activeBankId
+                                               ) || (activeBankId ? null : displayBanks.find(b =>
+                                                 (lead?.bankLocationName && b.name.toLowerCase() === lead.bankLocationName.toLowerCase()) ||
+                                                 ((lead as any)?.partnerLocationName && b.name.toLowerCase() === (lead as any).partnerLocationName.toLowerCase())
+                                               ));
+                                               const effectiveValue = matchingBank ? matchingBank.id : activeBankId;
+
                                                return (
                                                  <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2.5 mt-4">
                                                    <Label className="font-semibold text-slate-800 text-xs flex items-center gap-1.5">
@@ -722,11 +731,11 @@ function SelectServicesContent() {
                                                    </div>
 
                                                    <Select
-                                                     value={selectedBankId}
+                                                     value={effectiveValue}
                                                      onValueChange={(val) => {
                                                        setSelectedBankId(val);
                                                        const allLocs = isFallback ? getNearbyBanks({ ...lead, state: '' }, partnerLocations) : nearbyBanks;
-                                                       const found = allLocs.find(b => b.id === val);
+                                                       const found = allLocs.find(b => b.id === val || String(b.raw?.id) === val || String(b.raw?.internalId) === val);
                                                        setSelectedBank(found ? found.raw : null);
                                                      }}
                                                    >

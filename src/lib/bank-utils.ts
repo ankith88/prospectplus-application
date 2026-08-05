@@ -116,16 +116,34 @@ export function getNearbyBanks(lead: any, partnerLocations: any[]): BankLocation
   const rawLeadState = (lead?.state || lead?.address?.state || '').toString().trim();
   const leadState = normalizeState(rawLeadState);
 
+  // Extract saved bank location identifiers from lead (do NOT fall back to postal/AMPO partner locations)
+  const savedLocId = String(lead?.bankLocationId || lead?.bankLocation?.id || lead?.bankLocation?.internalId || '').trim();
+  const savedLocName = String(lead?.bankLocationName || lead?.bankLocation?.name || '').trim().toLowerCase();
+
   const bankLocs: BankLocationOption[] = [];
+  const addedIds = new Set<string>();
 
   partnerLocations.forEach((loc) => {
-    const locType = (loc.locationType || loc.type || '').toString().trim();
-    if (locType.toLowerCase() === 'bank') {
+    const locDocId = String(loc.id || '').trim();
+    const locInternalId = String(loc.internalId || '').trim();
+    const locName = String(loc.name || loc.locationName || '').trim().toLowerCase();
+    const locType = (loc.locationType || loc.type || '').toString().trim().toLowerCase();
+
+    // Check if this location matches the lead's saved location
+    const isSavedLocation = Boolean(
+      (savedLocId && (locDocId === savedLocId || locInternalId === savedLocId)) ||
+      (savedLocName && locName && (locName === savedLocName || locName.includes(savedLocName) || savedLocName.includes(locName)))
+    );
+
+    // Accept if it is a Bank, AusPost, LPO, or Post Office location, or if it is the saved location for this lead
+    const isBankOrAusPost = locType === 'bank' || locType === 'auspost' || locType === 'lpo' || locType === 'post office' || locType === 'postshop' || !locType;
+
+    if (isSavedLocation || isBankOrAusPost) {
       const locState = normalizeState(loc.state || loc.address?.state);
 
-      // Filter by state: if lead/company state is present, only include bank locations in the same state
-      if (leadState) {
-        if (!locState || locState !== leadState) {
+      // Filter by state unless it is the explicitly saved location for this lead
+      if (leadState && !isSavedLocation) {
+        if (locState && locState !== leadState) {
           return;
         }
       }
@@ -150,30 +168,46 @@ export function getNearbyBanks(lead: any, partnerLocations: any[]): BankLocation
         label += ` (Suburb Match)`;
       }
 
-      bankLocs.push({
-        id: loc.id || loc.internalId,
-        name: loc.name || 'Bank Location',
-        address1: loc.address1,
-        address2: loc.address2,
-        suburb: loc.suburb,
-        city: loc.city || loc.suburb,
-        state: loc.state,
-        postCode: loc.postCode || loc.postcode,
-        postcode: loc.postCode || loc.postcode,
-        phone: loc.phone,
-        lat: isNaN(locLat) ? undefined : locLat,
-        latitude: isNaN(locLat) ? undefined : locLat,
-        lng: isNaN(locLng) ? undefined : locLng,
-        longitude: isNaN(locLng) ? undefined : locLng,
-        distanceKm,
-        displayLabel: label,
-        raw: loc,
-      });
+      const optionId = locDocId || locInternalId;
+      if (!addedIds.has(optionId)) {
+        addedIds.add(optionId);
+        bankLocs.push({
+          id: optionId,
+          name: loc.name || 'Bank Location',
+          address1: loc.address1,
+          address2: loc.address2,
+          suburb: loc.suburb,
+          city: loc.city || loc.suburb,
+          state: loc.state,
+          postCode: loc.postCode || loc.postcode,
+          postcode: loc.postCode || loc.postcode,
+          phone: loc.phone,
+          lat: isNaN(locLat) ? undefined : locLat,
+          latitude: isNaN(locLat) ? undefined : locLat,
+          lng: isNaN(locLng) ? undefined : locLng,
+          longitude: isNaN(locLng) ? undefined : locLng,
+          distanceKm,
+          displayLabel: label,
+          raw: loc,
+        });
+      }
     }
   });
 
-  // Sort: closest distance first, fallback to postcode match, then suburb match, then name
+  // Sort: saved location first, then closest distance, postcode match, suburb match, then name
   bankLocs.sort((a, b) => {
+    const aDocId = String(a.raw.id || '').trim();
+    const aIntId = String(a.raw.internalId || '').trim();
+    const aName = String(a.name || '').trim().toLowerCase();
+    const bDocId = String(b.raw.id || '').trim();
+    const bIntId = String(b.raw.internalId || '').trim();
+    const bName = String(b.name || '').trim().toLowerCase();
+
+    const isASaved = Boolean(savedLocId && (aDocId === savedLocId || aIntId === savedLocId)) || Boolean(savedLocName && aName && (aName === savedLocName || aName.includes(savedLocName) || savedLocName.includes(aName)));
+    const isBSaved = Boolean(savedLocId && (bDocId === savedLocId || bIntId === savedLocId)) || Boolean(savedLocName && bName && (bName === savedLocName || bName.includes(savedLocName) || savedLocName.includes(bName)));
+    if (isASaved && !isBSaved) return -1;
+    if (isBSaved && !isASaved) return 1;
+
     if (a.distanceKm !== null && b.distanceKm !== null) {
       return a.distanceKm - b.distanceKm;
     }

@@ -34,7 +34,6 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
   const [postOfficeName, setPostOfficeName] = useState<string>(
     lead.postalAddress?.partnerLocationName ||
     (lead as any).partnerLocationName ||
-    lead.bankLocationName ||
     (lead as any).partnerLocation ||
     ""
   )
@@ -43,7 +42,6 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
     const resolvePostOffice = async () => {
       const directName = lead.postalAddress?.partnerLocationName ||
                          (lead as any).partnerLocationName ||
-                         lead.bankLocationName ||
                          (lead as any).partnerLocation;
       if (directName) {
         setPostOfficeName(directName);
@@ -51,8 +49,7 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
       }
 
       const partnerId = lead.postalAddress?.partnerLocationId ||
-                        (lead as any).partnerLocationId ||
-                        lead.bankLocationId;
+                        (lead as any).partnerLocationId;
 
       if (partnerId) {
         try {

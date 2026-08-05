@@ -80,8 +80,8 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
         const locs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setPartnerLocations(locs);
 
-        const targetId = lead.bankLocationId || (lead as any).partnerLocationId || (lead as any).bankLocation?.id || (lead as any).postalAddress?.partnerLocationId;
-        const targetName = lead.bankLocationName || (lead as any).partnerLocationName;
+        const targetId = lead.bankLocationId || (lead as any).bankLocation?.id;
+        const targetName = lead.bankLocationName || (lead as any).bankLocation?.name;
 
         if (targetId) {
           const found = locs.find(l => l.id === targetId || (l as any).internalId === targetId);
@@ -220,8 +220,6 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
         await updateLeadDetails(lead.id, lead, {
           bankLocationId: bankLocId,
           bankLocationName: bankLocName,
-          partnerLocationId: bankLocId,
-          partnerLocationName: bankLocName,
           bankLocation: {
             id: bankLocId,
             name: bankLocName,
@@ -429,6 +427,17 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
                   );
                 }
 
+                const activeBankId = selectedBankId || (selectedBank ? String(selectedBank.id || selectedBank.internalId) : '') || String(lead?.bankLocationId || (lead as any)?.partnerLocationId || '');
+                const matchingBank = displayBanks.find(b =>
+                  b.id === activeBankId ||
+                  String(b.raw?.id) === activeBankId ||
+                  String(b.raw?.internalId) === activeBankId
+                ) || (activeBankId ? null : displayBanks.find(b =>
+                  (lead?.bankLocationName && b.name.toLowerCase() === lead.bankLocationName.toLowerCase()) ||
+                  ((lead as any)?.partnerLocationName && b.name.toLowerCase() === (lead as any).partnerLocationName.toLowerCase())
+                ));
+                const effectiveValue = matchingBank ? matchingBank.id : activeBankId;
+
                 return (
                   <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2.5">
                     <Label className="font-semibold text-slate-800 text-xs flex items-center gap-1.5">
@@ -452,11 +461,11 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
                     </div>
 
                     <Select
-                      value={selectedBankId}
+                      value={effectiveValue}
                       onValueChange={(val) => {
                         setSelectedBankId(val);
                         const allLocs = isFallback ? getNearbyBanks({ ...lead, state: '' }, partnerLocations) : nearbyBanks;
-                        const found = allLocs.find(b => b.id === val);
+                        const found = allLocs.find(b => b.id === val || String(b.raw?.id) === val || String(b.raw?.internalId) === val);
                         setSelectedBank(found ? found.raw : null);
                       }}
                     >

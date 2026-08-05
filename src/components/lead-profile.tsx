@@ -469,8 +469,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [operatorMap, setOperatorMap] = useState<Record<string, string>>({});
 
     useEffect(() => {
-      const directName = lead.postalAddress?.partnerLocationName || (lead as any).partnerLocationName || (lead as any).bankLocationName;
-      const locId = lead.postalAddress?.partnerLocationId || (lead as any).partnerLocationId || (lead as any).bankLocationId;
+      const directName = lead.postalAddress?.partnerLocationName || (lead as any).partnerLocationName;
+      const locId = lead.postalAddress?.partnerLocationId || (lead as any).partnerLocationId;
 
       if (directName) {
         setPartnerLocationName(directName);
@@ -494,7 +494,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       } else {
         setPartnerLocationName(null);
       }
-    }, [lead.postalAddress?.partnerLocationId, lead.postalAddress?.partnerLocationName, (lead as any).partnerLocationId, (lead as any).partnerLocationName, (lead as any).bankLocationId, (lead as any).bankLocationName]);
+    }, [lead.postalAddress?.partnerLocationId, lead.postalAddress?.partnerLocationName, (lead as any).partnerLocationId, (lead as any).partnerLocationName]);
 
     useEffect(() => {
       const fetchOperators = async () => {

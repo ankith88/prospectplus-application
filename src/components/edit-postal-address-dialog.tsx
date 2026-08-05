@@ -341,18 +341,12 @@ export function EditPostalAddressDialog({
       };
       if (values.partnerLocationId) {
         updateData.partnerLocationId = values.partnerLocationId;
-        if (!lead.bankLocationId) {
-          updateData.bankLocationId = values.partnerLocationId;
-        }
         if (selectedPartnerLoc) {
           updateData.partnerLocation = selectedPartnerLoc;
         }
       }
       if (partnerLocName) {
         updateData.partnerLocationName = partnerLocName;
-        if (!lead.bankLocationName) {
-          updateData.bankLocationName = partnerLocName;
-        }
       }
 
       await updateLeadDetails(lead.id, lead, updateData);

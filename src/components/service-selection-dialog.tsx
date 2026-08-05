@@ -183,8 +183,8 @@ export function ServiceSelectionDialog({
         setPartnerLocations(locs);
 
         const currentLead = localLead || lead;
-        const targetId = currentLead?.bankLocationId || (currentLead as any)?.partnerLocationId || (currentLead as any)?.bankLocation?.id || (currentLead as any)?.postalAddress?.partnerLocationId;
-        const targetName = currentLead?.bankLocationName || (currentLead as any)?.partnerLocationName;
+        const targetId = currentLead?.bankLocationId || (currentLead as any)?.bankLocation?.id;
+        const targetName = currentLead?.bankLocationName || (currentLead as any)?.bankLocation?.name;
 
         if (targetId) {
           const pre = locs.find(l => l.id === targetId || (l as any).internalId === targetId);
@@ -1587,8 +1587,6 @@ export function ServiceSelectionDialog({
              const locUpdates = {
                bankLocationId: bankLocId,
                bankLocationName: bankLocName,
-               partnerLocationId: bankLocId,
-               partnerLocationName: bankLocName,
                bankLocation: {
                  id: bankLocId,
                  name: bankLocName,
@@ -1702,8 +1700,6 @@ export function ServiceSelectionDialog({
         const locUpdates = {
           bankLocationId: bankLocId,
           bankLocationName: bankLocName,
-          partnerLocationId: bankLocId,
-          partnerLocationName: bankLocName,
           bankLocation: {
             id: bankLocId,
             name: bankLocName,
@@ -2654,6 +2650,17 @@ export function ServiceSelectionDialog({
                             );
                           }
 
+                          const activeBankId = selectedBankId || (selectedBank ? String(selectedBank.id || selectedBank.internalId) : '') || String(lead?.bankLocationId || lead?.partnerLocationId || '');
+                          const matchingBank = displayBanks.find(b =>
+                            b.id === activeBankId ||
+                            String(b.raw?.id) === activeBankId ||
+                            String(b.raw?.internalId) === activeBankId
+                          ) || (activeBankId ? null : displayBanks.find(b =>
+                            (lead?.bankLocationName && b.name.toLowerCase() === lead.bankLocationName.toLowerCase()) ||
+                            (lead?.partnerLocationName && b.name.toLowerCase() === lead.partnerLocationName.toLowerCase())
+                          ));
+                          const effectiveValue = matchingBank ? matchingBank.id : activeBankId;
+
                           return (
                             <div className="mt-4 p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2.5">
                               <Label className="font-semibold text-slate-800 text-xs flex items-center gap-1.5">
@@ -2677,11 +2684,11 @@ export function ServiceSelectionDialog({
                               </div>
 
                               <Select
-                                value={selectedBankId}
+                                value={effectiveValue}
                                 onValueChange={(val) => {
                                   setSelectedBankId(val);
                                   const allLocs = isFallback ? getNearbyBanks({ ...lead, state: '' }, partnerLocations) : nearbyBanks;
-                                  const found = allLocs.find(b => b.id === val);
+                                  const found = allLocs.find(b => b.id === val || String(b.raw?.id) === val || String(b.raw?.internalId) === val);
                                   setSelectedBank(found ? found.raw : null);
                                 }}
                               >
