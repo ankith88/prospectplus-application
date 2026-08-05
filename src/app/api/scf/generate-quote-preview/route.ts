@@ -88,9 +88,9 @@ export async function POST(request: Request) {
       <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
         <thead>
           <tr style="background-color: #075d7b; text-align: left; color: #ffffff;">
-            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; color: #ffffff;">Service</th>
-            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; color: #ffffff;">Frequency</th>
-            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; text-align: right; color: #ffffff;">Rate</th>
+            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; background-color: #075d7b; color: #ffffff;">Service</th>
+            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; background-color: #075d7b; color: #ffffff;">Frequency</th>
+            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; text-align: right; background-color: #075d7b; color: #ffffff;">Rate</th>
           </tr>
         </thead>
         <tbody>
@@ -119,11 +119,11 @@ export async function POST(request: Request) {
         <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; border-bottom: 1px solid #e2e8f0;">
           <thead>
             <tr style="background-color: #f7f6f4; text-align: left; border-bottom: 1px solid #e2e8f0; color: #4b5563;">
-              <th style="padding: 12px 10px; font-weight: 500;">Product</th>
-              <th style="padding: 12px 10px; font-weight: 500;">Weight</th>
-              <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Base Price</th>
-              <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Surcharge</th>
-              <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total</th>
+              <th style="padding: 12px 10px; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Product</th>
+              <th style="padding: 12px 10px; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Weight</th>
+              <th style="padding: 12px 10px; text-align: right; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Base Price</th>
+              <th style="padding: 12px 10px; text-align: right; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Surcharge</th>
+              <th style="padding: 12px 10px; text-align: right; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Total</th>
             </tr>
           </thead>
           <tbody>

@@ -191,6 +191,8 @@ export interface Address {
   country: string
   lat?: number;
   lng?: number;
+  partnerLocationId?: string;
+  partnerLocationName?: string;
 }
 
 export interface TaggedAddress extends Address {

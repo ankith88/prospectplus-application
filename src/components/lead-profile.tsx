@@ -463,9 +463,38 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [loadingFranchisee, setLoadingFranchisee] = useState(false);
     const [operators, setOperators] = useState<any[]>([]);
     const [loadingOperators, setLoadingOperators] = useState(false);
+    const [partnerLocationName, setPartnerLocationName] = useState<string | null>(null);
     const [isOperatorsModalOpen, setIsOperatorsModalOpen] = useState(false);
     const [isSuburbsModalOpen, setIsSuburbsModalOpen] = useState(false);
     const [operatorMap, setOperatorMap] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+      const directName = lead.postalAddress?.partnerLocationName || (lead as any).partnerLocationName || (lead as any).bankLocationName;
+      const locId = lead.postalAddress?.partnerLocationId || (lead as any).partnerLocationId || (lead as any).bankLocationId;
+
+      if (directName) {
+        setPartnerLocationName(directName);
+        return;
+      }
+
+      if (locId) {
+        getDoc(doc(firestore, 'partner_locations', String(locId)))
+          .then(snap => {
+            if (snap.exists()) {
+              const data = snap.data();
+              setPartnerLocationName(data.name || data.locationName || null);
+            } else {
+              setPartnerLocationName(null);
+            }
+          })
+          .catch(err => {
+            console.error("Failed to fetch partner location name:", err);
+            setPartnerLocationName(null);
+          });
+      } else {
+        setPartnerLocationName(null);
+      }
+    }, [lead.postalAddress?.partnerLocationId, lead.postalAddress?.partnerLocationName, (lead as any).partnerLocationId, (lead as any).partnerLocationName, (lead as any).bankLocationId, (lead as any).bankLocationName]);
 
     useEffect(() => {
       const fetchOperators = async () => {
@@ -1520,9 +1549,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 <table width="100%" border="0" cellpadding="10" cellspacing="0" style="border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
   <thead>
     <tr style="background-color: #075d7b; color: #ffffff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-      <th align="left" style="padding: 10px 12px; font-weight: 600;">Service Name</th>
-      <th align="left" style="padding: 10px 12px; font-weight: 600;">Frequency</th>
-      <th align="right" style="padding: 10px 12px; font-weight: 600;">Rate</th>
+      <th align="left" style="padding: 10px 12px; font-weight: 600; background-color: #075d7b; color: #ffffff;">Service Name</th>
+      <th align="left" style="padding: 10px 12px; font-weight: 600; background-color: #075d7b; color: #ffffff;">Frequency</th>
+      <th align="right" style="padding: 10px 12px; font-weight: 600; background-color: #075d7b; color: #ffffff;">Rate</th>
     </tr>
   </thead>
   <tbody>
@@ -1550,10 +1579,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 <table width="100%" border="0" cellpadding="10" cellspacing="0" style="border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
   <thead>
     <tr style="background-color: #075d7b; color: #ffffff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-      <th align="left" style="padding: 10px 12px; font-weight: 600;">Product</th>
-      <th align="left" style="padding: 10px 12px; font-weight: 600;">Weight</th>
-      <th align="right" style="padding: 10px 12px; font-weight: 600;">Base Price (Inc. GST)</th>
-      <th align="right" style="padding: 10px 12px; font-weight: 600;">Total (Inc. Fuel Surcharge & GST)</th>
+      <th align="left" style="padding: 10px 12px; font-weight: 600; background-color: #075d7b; color: #ffffff;">Product</th>
+      <th align="left" style="padding: 10px 12px; font-weight: 600; background-color: #075d7b; color: #ffffff;">Weight</th>
+      <th align="right" style="padding: 10px 12px; font-weight: 600; background-color: #075d7b; color: #ffffff;">Base Price (Inc. GST)</th>
+      <th align="right" style="padding: 10px 12px; font-weight: 600; background-color: #075d7b; color: #ffffff;">Total (Inc. Fuel Surcharge & GST)</th>
     </tr>
   </thead>
   <tbody>
@@ -4381,6 +4410,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         <div>
                                             {lead.postalAddress.address1 && (
                                                 <p className="text-sm font-bold text-foreground">{lead.postalAddress.address1}</p>
+                                            )}
+                                            {(partnerLocationName || lead.postalAddress.partnerLocationName) && (
+                                                <div className="flex items-center gap-1.5 text-xs font-semibold text-primary my-1 bg-primary/10 px-2 py-0.5 rounded border border-primary/20 w-fit">
+                                                    <Building className="w-3.5 h-3.5 text-primary shrink-0" />
+                                                    <span>{partnerLocationName || lead.postalAddress.partnerLocationName}</span>
+                                                </div>
                                             )}
                                             {lead.postalAddress.street && (
                                                 <p className="text-sm font-semibold text-foreground">{lead.postalAddress.street}</p>

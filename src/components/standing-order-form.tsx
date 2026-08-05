@@ -10,6 +10,8 @@ import { updateLeadDetails } from "@/services/firebase"
 import type { Lead } from "@/lib/types"
 import { Loader } from "./ui/loader"
 import { FileDown, Edit, Check, Trash2, CalendarIcon } from "lucide-react"
+import { firestore } from "@/lib/firebase"
+import { doc, getDoc, getDocs, collection, query, where } from "firebase/firestore"
 
 interface SofDialogProps {
   lead: Lead
@@ -29,6 +31,84 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
   const [signatureUrl, setSignatureUrl] = useState(lead.sofDetails?.signatureDataUrl ?? "")
   const [isSaving, setIsSaving] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
+  const [postOfficeName, setPostOfficeName] = useState<string>(
+    lead.postalAddress?.partnerLocationName ||
+    (lead as any).partnerLocationName ||
+    lead.bankLocationName ||
+    (lead as any).partnerLocation ||
+    ""
+  )
+
+  useEffect(() => {
+    const resolvePostOffice = async () => {
+      const directName = lead.postalAddress?.partnerLocationName ||
+                         (lead as any).partnerLocationName ||
+                         lead.bankLocationName ||
+                         (lead as any).partnerLocation;
+      if (directName) {
+        setPostOfficeName(directName);
+        return;
+      }
+
+      const partnerId = lead.postalAddress?.partnerLocationId ||
+                        (lead as any).partnerLocationId ||
+                        lead.bankLocationId;
+
+      if (partnerId) {
+        try {
+          const docRef = doc(firestore, 'partner_locations', partnerId);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const name = data.name || data.locationName || '';
+            if (name) {
+              setPostOfficeName(name);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching partner location by ID:", err);
+        }
+      }
+
+      const zip = lead.postalAddress?.zip || lead.address?.zip || (lead as any).zip || (lead as any).postcode;
+      const suburb = lead.postalAddress?.city || lead.address?.city || lead.city;
+      if (zip || suburb) {
+        try {
+          const promises = [];
+          if (zip) {
+            promises.push(getDocs(query(
+              collection(firestore, 'partner_locations'),
+              where('locationType', '==', 'AusPost'),
+              where('postCode', '==', String(zip).trim())
+            )));
+          }
+          if (suburb) {
+            promises.push(getDocs(query(
+              collection(firestore, 'partner_locations'),
+              where('locationType', '==', 'AusPost'),
+              where('suburb', '==', String(suburb).trim().toUpperCase())
+            )));
+          }
+          const snaps = await Promise.all(promises);
+          for (const snap of snaps) {
+            if (!snap.empty) {
+              const data = snap.docs[0].data();
+              const name = data.name || data.locationName || '';
+              if (name) {
+                setPostOfficeName(name);
+                return;
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error querying partner locations by zip/suburb:", err);
+        }
+      }
+    };
+
+    resolvePostOffice();
+  }, [lead]);
 
   // Initialize canvas drawing contexts and default line properties
   useEffect(() => {
@@ -264,18 +344,35 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
     const addr1 = (lead.postalAddress.address1 || "").trim();
     const street = (lead.postalAddress.street || "").trim();
     if (addr1) {
-      const match1 = addr1.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box|Box)\s+([A-Za-z0-9\-]+)$/i);
+      const match1 = addr1.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box|Box|Locked Bag)\s+([A-Za-z0-9\-]+)$/i);
       if (match1) {
-        postalBoxText = match1[2];
+        const foundPrefix = match1[1].toUpperCase();
+        const prefix = foundPrefix.includes('GPO') ? 'GPO Box' : foundPrefix.includes('LOCKED') ? 'Locked Bag' : 'PO Box';
+        postalBoxText = `${prefix} ${match1[2]}`;
+      } else if (/^[A-Za-z0-9\-]+$/.test(addr1)) {
+        postalBoxText = `PO Box ${addr1}`;
       } else {
         postalBoxText = addr1;
       }
     } else if (street) {
-      const match2 = street.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box|Box)\s+([A-Za-z0-9\-]+)(?:,\s*(.*))?$/i);
+      const match2 = street.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box|Box|Locked Bag)\s+([A-Za-z0-9\-]+)(?:,\s*(.*))?$/i);
       if (match2) {
-        postalBoxText = match2[2];
+        const foundPrefix = match2[1].toUpperCase();
+        const prefix = foundPrefix.includes('GPO') ? 'GPO Box' : foundPrefix.includes('LOCKED') ? 'Locked Bag' : 'PO Box';
+        postalBoxText = `${prefix} ${match2[2]}`;
+      } else if (/^[A-Za-z0-9\-]+$/.test(street)) {
+        postalBoxText = `PO Box ${street}`;
       } else {
         postalBoxText = street;
+      }
+    }
+  } else if ((lead as any).boxNumber || (lead as any).postalAddress1) {
+    const rawBox = clean((lead as any).boxNumber) || clean((lead as any).postalAddress1);
+    if (rawBox) {
+      if (/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box|Box|Locked Bag)/i.test(rawBox)) {
+        postalBoxText = rawBox;
+      } else {
+        postalBoxText = `PO Box ${rawBox}`;
       }
     }
   }
@@ -350,9 +447,15 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
             </p>
 
             {/* To Box */}
-            <div className="bg-[#eef5fc] p-3 rounded mb-4 border border-dashed border-sky-300">
+            <div className="bg-[#eef5fc] p-3 rounded mb-4 border border-dashed border-sky-300 flex items-baseline">
               <span className="font-bold">To: Postal Manager</span>
-              <span className="border-b border-dotted border-black ml-2 inline-block w-64 h-4"></span>
+              {postOfficeName ? (
+                <span className="font-bold border-b border-black ml-2 px-1 text-sm text-slate-900 tracking-wide" style={{ fontSize: "13px" }}>
+                  {postOfficeName.toUpperCase()}
+                </span>
+              ) : (
+                <span className="border-b border-dotted border-black ml-2 inline-block w-64 h-4"></span>
+              )}
             </div>
 
             {/* Authority Statement */}

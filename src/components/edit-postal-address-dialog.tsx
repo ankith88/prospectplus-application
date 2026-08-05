@@ -320,6 +320,9 @@ export function EditPostalAddressDialog({
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+      const selectedPartnerLoc = partnerLocations.find(l => l.id === values.partnerLocationId);
+      const partnerLocName = selectedPartnerLoc ? (selectedPartnerLoc.name || selectedPartnerLoc.locationName || '') : '';
+
       const updatedPostalAddress = {
         address1: `${values.boxType} ${values.boxNumber}`,
         street: values.address.street,
@@ -330,13 +333,24 @@ export function EditPostalAddressDialog({
         lat: values.address.lat ?? undefined,
         lng: values.address.lng ?? undefined,
         partnerLocationId: values.partnerLocationId || undefined,
+        partnerLocationName: partnerLocName || undefined,
       };
 
-      await updateLeadDetails(lead.id, lead, {
+      const updateData: Record<string, any> = {
         postalAddress: updatedPostalAddress,
-      });
+      };
+      if (values.partnerLocationId) {
+        updateData.partnerLocationId = values.partnerLocationId;
+        updateData.bankLocationId = values.partnerLocationId;
+      }
+      if (partnerLocName) {
+        updateData.partnerLocationName = partnerLocName;
+        updateData.bankLocationName = partnerLocName;
+      }
 
-      onLeadUpdated({ postalAddress: updatedPostalAddress }, lead)
+      await updateLeadDetails(lead.id, lead, updateData);
+
+      onLeadUpdated(updateData, lead);
 
       const mergedSiteAddress = {
           ...lead.address,

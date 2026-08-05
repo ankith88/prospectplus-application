@@ -284,10 +284,10 @@ export function ProductQuoteDialog({
       <table style="width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; border-bottom: 1px solid #e5e7eb;">
         <thead>
           <tr style="background-color: #f7f6f4; text-align: left; border-bottom: 1px solid #e5e7eb; color: #4b5563;">
-            <th style="padding: 12px 10px; font-weight: 500;">Product</th>
-            <th style="padding: 12px 10px; font-weight: 500;">Weight</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Base Price (Inc. GST)</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total (Inc. Fuel Surcharge & GST)</th>
+            <th style="padding: 12px 10px; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Product</th>
+            <th style="padding: 12px 10px; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Weight</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Base Price (Inc. GST)</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Total (Inc. Fuel Surcharge & GST)</th>
           </tr>
         </thead>
         <tbody>

@@ -608,9 +608,9 @@ export function ServiceSelectionDialog({
       <table style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #ced4da;">
         <thead>
           <tr style="background-color: #075d7b; text-align: left; color: #ffffff;">
-            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; color: #ffffff;">Service</th>
-            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; color: #ffffff;">Frequency</th>
-            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; text-align: right; color: #ffffff;">Rate</th>
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; background-color: #075d7b; color: #ffffff; text-align: left;">Service</th>
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; background-color: #075d7b; color: #ffffff; text-align: left;">Frequency</th>
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; text-align: right; background-color: #075d7b; color: #ffffff;">Rate</th>
           </tr>
         </thead>
         <tbody>
@@ -649,10 +649,10 @@ export function ServiceSelectionDialog({
       <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; border-bottom: 1px solid #e5e7eb;">
         <thead>
           <tr style="background-color: #f7f6f4; text-align: left; border-bottom: 1px solid #e5e7eb; color: #4b5563;">
-            <th style="padding: 12px 10px; font-weight: 500;">Product</th>
-            <th style="padding: 12px 10px; font-weight: 500;">Weight</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Base Price (Inc. GST)</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total (Inc. Fuel Surcharge & GST)</th>
+            <th style="padding: 12px 10px; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Product</th>
+            <th style="padding: 12px 10px; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Weight</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Base Price (Inc. GST)</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500; background-color: #f7f6f4; color: #4b5563;">Total (Inc. Fuel Surcharge & GST)</th>
           </tr>
         </thead>
         <tbody>

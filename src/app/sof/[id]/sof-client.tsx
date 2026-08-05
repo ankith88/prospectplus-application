@@ -52,7 +52,12 @@ function formatPostalAddress(lead: Lead): string {
   if (!lead) return 'N/A';
 
   const p = lead.postalAddress;
-  const boxTypeNum = cleanField(p?.address1) || cleanField((lead as any).postalAddress1) || (cleanField((lead as any).boxNumber) ? `PO Box ${cleanField((lead as any).boxNumber)}` : '');
+  let boxTypeNum = cleanField(p?.address1) || cleanField((lead as any).postalAddress1) || (cleanField((lead as any).boxNumber) ? `PO Box ${cleanField((lead as any).boxNumber)}` : '');
+  if (boxTypeNum && !/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box|Box|Locked Bag)/i.test(boxTypeNum)) {
+    if (/^[A-Za-z0-9\-]+$/.test(boxTypeNum)) {
+      boxTypeNum = `PO Box ${boxTypeNum}`;
+    }
+  }
   const street = cleanField(p?.street) || cleanField((lead as any).postalStreet);
   const city = cleanField(p?.city) || cleanField((lead as any).postalCity) || cleanField(lead.city);
   const state = cleanField(p?.state) || cleanField((lead as any).postalState) || cleanField(lead.state);

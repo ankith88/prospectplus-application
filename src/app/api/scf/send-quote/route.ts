@@ -266,10 +266,10 @@ export async function POST(request: Request) {
     let serviceDetailsHtml = `
       <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
         <thead>
-          <tr style="background-color: #f1f5f9; text-align: left;">
-            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0;">Service</th>
-            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0;">Frequency</th>
-            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0;">Rate</th>
+          <tr style="background-color: #075d7b; text-align: left; color: #ffffff;">
+            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; background-color: #075d7b; color: #ffffff; text-align: left;">Service</th>
+            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; background-color: #075d7b; color: #ffffff; text-align: left;">Frequency</th>
+            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; text-align: right; background-color: #075d7b; color: #ffffff;">Rate</th>
           </tr>
         </thead>
         <tbody>
