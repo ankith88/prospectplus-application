@@ -441,15 +441,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return await auth.currentUser.getIdToken(true);
     }, [auth]);
 
-    const switchRole = useCallback((newRole: UserRole) => {
+    const switchRole = useCallback(async (newRole: UserRole) => {
         if (userProfile) {
             if (typeof window !== 'undefined') {
                 localStorage.setItem(`activeRole_${userProfile.uid}`, newRole);
             }
             setUserProfile({ ...userProfile, activeRole: newRole });
+            if (user) {
+                const userDocRef = doc(firestore, "users", user.uid);
+                await updateDoc(userDocRef, { activeRole: newRole }).catch(err => console.warn("Failed saving active role to Firestore:", err));
+            }
             router.push('/');
         }
-    }, [userProfile, router]);
+    }, [user, userProfile, router]);
 
     const switchFranchisee = useCallback(async (targetFranchiseeId: string) => {
         if (!userProfile) return;

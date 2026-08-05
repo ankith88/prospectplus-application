@@ -25,6 +25,7 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useAuth } from '@/hooks/use-auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { isContactEmpty } from '@/lib/contact-utils';
+import { encryptLeadId } from '@/lib/localmile-security';
 
 interface ProductQuoteDialogProps {
   isOpen: boolean;
@@ -375,12 +376,23 @@ export function ProductQuoteDialog({
         <a href="https://www.thermogard.com/" target="_blank" rel="noopener noreferrer">https://www.thermogard.com/</a></p>
       `;
 
+      const encryptedId = lead.id ? encryptLeadId(lead.id) : '';
+      const sofPublicLink = lead.sofLink || (lead as any).standingOrderFormLink || (lead.id ? `https://prospectplus.com.au/sof/${encryptedId}` : '');
+
       let finalBody = rawBody
         .replace(/\{\{Contact\.Name\}\}/gi, firstName)
         .replace(/\{\{FirstName\}\}/gi, firstName)
         .replace(/\{\{Company\.Name\}\}/gi, lead.companyName || 'Your Company')
         .replace(/\{\{Sender\.Signature\}\}/gi, senderSignatureVal)
         .replace(/\{\{Thermoguard\.Link\}\}/gi, thermoguardLinkVal)
+        .replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink)
+        .replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink)
+        .replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink)
+        .replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink)
+        .replace(/\{\{SOFLink\}\}/gi, sofPublicLink)
+        .replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink)
+        .replace(/\{\{sof_link\}\}/gi, sofPublicLink)
+        .replace(/\{\{SOF_Link\}\}/gi, sofPublicLink)
         .replace(/\{\{prm_1kg\}\}/gi, getProductValue('1kg', 'base'))
         .replace(/\{\{fsc_1kg\}\}/gi, getProductValue('1kg', 'surcharge'))
         .replace(/\{\{prm_3kg\}\}/gi, getProductValue('3kg', 'base'))
@@ -407,6 +419,12 @@ export function ProductQuoteDialog({
       resolvedSubject = resolvedSubject.replace(/\{\{Contact\.Name\}\}/gi, contactName);
       resolvedSubject = resolvedSubject.replace(/\{\{Company\.Name\}\}/gi, lead.companyName || '');
       resolvedSubject = resolvedSubject.replace(/\{\{SalesRep\.Name\}\}/gi, userProfile?.displayName || userProfile?.firstName || 'Account Manager');
+      resolvedSubject = resolvedSubject.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
+      resolvedSubject = resolvedSubject.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
+      resolvedSubject = resolvedSubject.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
+      resolvedSubject = resolvedSubject.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
+      resolvedSubject = resolvedSubject.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
+      resolvedSubject = resolvedSubject.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
 
       setSubject(resolvedSubject);
       setMessage(finalBody);
@@ -626,6 +644,7 @@ export function ProductQuoteDialog({
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Contact.Name}}')}>Contact Name</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Company.Name}}')}>Company Name</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{SalesRep.Name}}')}>Sales Rep Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Lead.StandingOrderFormLink}}')}>Standing Order Form Link</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -640,7 +659,18 @@ export function ProductQuoteDialog({
             <div className="space-y-2 flex flex-col min-h-[300px]">
               <div className="flex justify-between items-center">
                 <Label htmlFor="message">Message</Label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 text-xs" 
+                    onClick={() => {
+                      setMessage(prev => prev + ' {{Lead.StandingOrderFormLink}}');
+                    }}
+                  >
+                    + Standing Order Link
+                  </Button>
                   <Button 
                     type="button" 
                     variant="outline" 

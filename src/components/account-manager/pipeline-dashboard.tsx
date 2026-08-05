@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Table as TableIcon, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal, Calendar, ListChecks } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Table as TableIcon, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal, Calendar, ListChecks, ListTodo, CheckCircle2 } from 'lucide-react';
 import { parseISO, startOfDay, format } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { logActivity, updateLeadDetails } from '@/services/firebase';
@@ -33,6 +33,20 @@ import { LeadNotesDialog } from './lead-notes-dialog';
 
 export const parseApptDate = (app: any): Date | null => {
     const raw = app?.date || app?.appointmentDate || app?.duedate;
+    if (!raw) return null;
+    if (raw instanceof Date) return raw;
+    if (typeof raw === 'object' && typeof raw.toDate === 'function') return raw.toDate();
+    if (typeof raw === 'object' && 'seconds' in raw) return new Date(raw.seconds * 1000 + (raw.nanoseconds || 0) / 1000000);
+    try {
+        const parsed = new Date(raw);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    } catch {
+        return null;
+    }
+};
+
+export const parseTaskDate = (task: any): Date | null => {
+    const raw = task?.dueDate || task?.duedate || task?.createdAt;
     if (!raw) return null;
     if (raw instanceof Date) return raw;
     if (typeof raw === 'object' && typeof raw.toDate === 'function') return raw.toDate();
@@ -182,8 +196,9 @@ export default function PipelineDashboard() {
 
                     const filteredLeadsWithoutCompanies = filteredLeads.filter(l => !signedCompanyIds.has(l.id));
                     
-                    // Fetch appointments scheduled in the last 30 days or future in a single query using existing index
+                    // Fetch appointments and tasks in parallel
                     const appointmentsByLead: Record<string, any[]> = {};
+                    const tasksByLead: Record<string, any[]> = {};
                     const thirtyDaysAgo = new Date();
                     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
                     const startISO = thirtyDaysAgo.toISOString();
@@ -192,9 +207,20 @@ export default function PipelineDashboard() {
                         collectionGroup(firestore, 'appointments'),
                         where('duedate', '>=', startISO)
                     );
+                    const taskQuery = query(collectionGroup(firestore, 'tasks'));
                     
-                    const apptSnap = await getDocs(apptQuery);
-                    apptSnap.docs.forEach(doc => {
+                    const [apptSnap, taskSnap] = await Promise.all([
+                        getDocs(apptQuery).catch(err => {
+                            console.error("Error fetching appointments:", err);
+                            return { docs: [] } as any;
+                        }),
+                        getDocs(taskQuery).catch(err => {
+                            console.error("Error fetching tasks:", err);
+                            return { docs: [] } as any;
+                        })
+                    ]);
+
+                    apptSnap.docs.forEach((doc: any) => {
                         const parentId = doc.ref.parent.parent?.id;
                         if (parentId) {
                             if (!appointmentsByLead[parentId]) {
@@ -204,16 +230,36 @@ export default function PipelineDashboard() {
                         }
                     });
 
+                    taskSnap.docs.forEach((doc: any) => {
+                        const parentId = doc.ref.parent.parent?.id;
+                        if (parentId) {
+                            if (!tasksByLead[parentId]) {
+                                tasksByLead[parentId] = [];
+                            }
+                            tasksByLead[parentId].push({ ...doc.data(), id: doc.id });
+                        }
+                    });
+
                     const fetchedLeads = filteredLeadsWithoutCompanies.map((l) => {
                         const appts = appointmentsByLead[l.id] || [];
-                        const existing = l.appointments || [];
-                        const combined = [...existing];
+                        const existingAppts = l.appointments || [];
+                        const combinedAppts = [...existingAppts];
                         appts.forEach(appt => {
-                            if (!combined.some(ex => ex.id === appt.id)) {
-                                combined.push(appt);
+                            if (!combinedAppts.some(ex => ex.id === appt.id)) {
+                                combinedAppts.push(appt);
                             }
                         });
-                        return { ...l, appointments: combined };
+
+                        const tsks = tasksByLead[l.id] || [];
+                        const existingTsks = l.tasks || [];
+                        const combinedTsks = [...existingTsks];
+                        tsks.forEach(tsk => {
+                            if (!combinedTsks.some(ex => ex.id === tsk.id)) {
+                                combinedTsks.push(tsk);
+                            }
+                        });
+
+                        return { ...l, appointments: combinedAppts, tasks: combinedTsks };
                     });
                     
                     setLeads(fetchedLeads);
@@ -408,6 +454,48 @@ export default function PipelineDashboard() {
                 const apptStatus = app.appointmentStatus;
                 return apptStatus === 'No Show';
             });
+        });
+    }, [filteredLeads]);
+
+    const pastPendingTasksLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.tasks?.some(t => {
+                if (t.isCompleted) return false;
+                const taskDate = parseTaskDate(t);
+                if (!taskDate) return false;
+                return startOfDay(taskDate).getTime() < today;
+            });
+        });
+    }, [filteredLeads]);
+
+    const todayTasksLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.tasks?.some(t => {
+                if (t.isCompleted) return false;
+                const taskDate = parseTaskDate(t);
+                if (!taskDate) return false;
+                return startOfDay(taskDate).getTime() === today;
+            });
+        });
+    }, [filteredLeads]);
+
+    const futureTasksLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.tasks?.some(t => {
+                if (t.isCompleted) return false;
+                const taskDate = parseTaskDate(t);
+                if (!taskDate) return false;
+                return startOfDay(taskDate).getTime() > today;
+            });
+        });
+    }, [filteredLeads]);
+
+    const completedTasksLeads = useMemo(() => {
+        return filteredLeads.filter(lead => {
+            return lead.tasks?.some(t => t.isCompleted);
         });
     }, [filteredLeads]);
 
@@ -794,6 +882,9 @@ export default function PipelineDashboard() {
                             <TabsTrigger value="appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                                 Appointments <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{pastPendingAppointmentsLeads.length + todayAppointmentsLeads.length + futureAppointmentsLeads.length + noShowAppointmentsLeads.length}</Badge>
                             </TabsTrigger>
+                            <TabsTrigger value="tasks" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Tasks & Reminders <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{pastPendingTasksLeads.length + todayTasksLeads.length + futureTasksLeads.length + completedTasksLeads.length}</Badge>
+                            </TabsTrigger>
                             <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                                 Priority <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{priorityLeads.length}</Badge>
                             </TabsTrigger>
@@ -946,6 +1037,55 @@ export default function PipelineDashboard() {
                                 <LeadGrid leads={noShowAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} appointmentColumnHeader="No Show Appointment" isNoShowSection={true} emptyMessage="No appointments marked as No Show." />
                             </div>
                         </TabsContent>
+                        <TabsContent value="tasks" className="m-0 h-full space-y-6">
+                            {pastPendingTasksLeads.length > 0 && (
+                                <div className="space-y-3 pb-4 border-b border-rose-200/80">
+                                    <div className="flex items-center gap-2 px-1">
+                                        <AlertCircle className="h-4 w-4 text-rose-600" />
+                                        <h3 className="text-sm font-bold text-rose-700 uppercase tracking-wider">Overdue Tasks & Reminders (Action Required)</h3>
+                                        <Badge variant="secondary" className="bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs">
+                                            {pastPendingTasksLeads.length}
+                                        </Badge>
+                                    </div>
+                                    <LeadGrid leads={pastPendingTasksLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} isPastTaskSection={true} taskColumnHeader="Overdue Task / Reminder" emptyMessage="No overdue tasks." />
+                                </div>
+                            )}
+
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 px-1">
+                                    <ListTodo className="h-4 w-4 text-[#095c7b]" />
+                                    <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider">Today's Tasks & Reminders</h3>
+                                    <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none font-bold text-xs">
+                                        {todayTasksLeads.length}
+                                    </Badge>
+                                </div>
+                                <LeadGrid leads={todayTasksLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} isTodayTaskSection={true} taskColumnHeader="Today's Task / Reminder" emptyMessage="No tasks scheduled for today." />
+                            </div>
+
+                            <div className="space-y-3 pt-4 border-t border-slate-200/80">
+                                <div className="flex items-center gap-2 px-1">
+                                    <ListTodo className="h-4 w-4 text-[#095c7b]" />
+                                    <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider">Future Tasks & Reminders</h3>
+                                    <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none font-bold text-xs">
+                                        {futureTasksLeads.length}
+                                    </Badge>
+                                </div>
+                                <LeadGrid leads={futureTasksLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} isFutureTaskSection={true} taskColumnHeader="Upcoming Task / Reminder" emptyMessage="No future tasks scheduled." />
+                            </div>
+
+                            {completedTasksLeads.length > 0 && (
+                                <div className="space-y-3 pt-4 border-t border-emerald-200/80">
+                                    <div className="flex items-center gap-2 px-1">
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                        <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wider">Completed Tasks & Reminders</h3>
+                                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs">
+                                            {completedTasksLeads.length}
+                                        </Badge>
+                                    </div>
+                                    <LeadGrid leads={completedTasksLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} isCompletedTaskSection={true} taskColumnHeader="Completed Task / Reminder" emptyMessage="No completed tasks." />
+                                </div>
+                            )}
+                        </TabsContent>
                         <TabsContent value="priority" className="m-0 h-full">
                             <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} />
                         </TabsContent>
@@ -1020,8 +1160,13 @@ function LeadGrid({
     canReassign,
     canUnassign,
     appointmentColumnHeader,
+    taskColumnHeader,
     isPastSection = false,
     isNoShowSection = false,
+    isPastTaskSection = false,
+    isTodayTaskSection = false,
+    isFutureTaskSection = false,
+    isCompletedTaskSection = false,
     emptyMessage = "No leads in this bucket."
 }: { 
     leads: Lead[], 
@@ -1036,8 +1181,13 @@ function LeadGrid({
     canReassign?: boolean,
     canUnassign?: boolean,
     appointmentColumnHeader?: string,
+    taskColumnHeader?: string,
     isPastSection?: boolean,
     isNoShowSection?: boolean,
+    isPastTaskSection?: boolean,
+    isTodayTaskSection?: boolean,
+    isFutureTaskSection?: boolean,
+    isCompletedTaskSection?: boolean,
     emptyMessage?: string
 }) {
     if (leads.length === 0) {
@@ -1095,7 +1245,7 @@ function LeadGrid({
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedLeads.map(lead => (
-                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} isPastSection={isPastSection} isNoShowSection={isNoShowSection} />
+                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} isPastSection={isPastSection} isNoShowSection={isNoShowSection} isPastTaskSection={isPastTaskSection} isTodayTaskSection={isTodayTaskSection} isFutureTaskSection={isFutureTaskSection} isCompletedTaskSection={isCompletedTaskSection} />
                 ))}
             </div>
         );
@@ -1115,7 +1265,7 @@ function LeadGrid({
                         <AccordionContent className="pt-2 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {groupedLeads[status].map(lead => (
-                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} isPastSection={isPastSection} isNoShowSection={isNoShowSection} />
+                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} isPastSection={isPastSection} isNoShowSection={isNoShowSection} isPastTaskSection={isPastTaskSection} isTodayTaskSection={isTodayTaskSection} isFutureTaskSection={isFutureTaskSection} isCompletedTaskSection={isCompletedTaskSection} />
                                 ))}
                             </div>
                         </AccordionContent>
@@ -1124,6 +1274,8 @@ function LeadGrid({
             </Accordion>
         );
     }
+
+    const isTaskMode = Boolean(taskColumnHeader || isPastTaskSection || isTodayTaskSection || isFutureTaskSection || isCompletedTaskSection);
 
     // Default: 'table' (List layout)
     return (
@@ -1138,7 +1290,7 @@ function LeadGrid({
                         <TableHead className="font-bold text-[#095c7b]">Weekly Parcels</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Service Option</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Contact Details</TableHead>
-                        <TableHead className="font-bold text-[#095c7b]">{appointmentColumnHeader || "Upcoming Appointment"}</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">{taskColumnHeader || appointmentColumnHeader || "Upcoming Appointment"}</TableHead>
                         <TableHead className="font-bold text-[#095c7b] text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -1207,6 +1359,42 @@ function LeadGrid({
 
                         if (!upcomingAppointment && allAppointments.length > 0) {
                             upcomingAppointment = allAppointments[0];
+                        }
+
+                        const allTasksMap = new Map();
+                        lead.tasks?.forEach(t => allTasksMap.set(t.id, t));
+                        const allTasks = Array.from(allTasksMap.values());
+
+                        let relevantTask: any = null;
+                        if (isPastTaskSection) {
+                            relevantTask = allTasks
+                                .filter(t => {
+                                    if (t.isCompleted) return false;
+                                    const parsed = parseTaskDate(t);
+                                    return parsed && startOfDay(parsed).getTime() < startOfDay(now).getTime();
+                                })
+                                .sort((a, b) => (parseTaskDate(b)?.getTime() || 0) - (parseTaskDate(a)?.getTime() || 0))[0];
+                        } else if (isTodayTaskSection) {
+                            relevantTask = allTasks
+                                .filter(t => {
+                                    if (t.isCompleted) return false;
+                                    const parsed = parseTaskDate(t);
+                                    return parsed && startOfDay(parsed).getTime() === startOfDay(now).getTime();
+                                })[0];
+                        } else if (isFutureTaskSection) {
+                            relevantTask = allTasks
+                                .filter(t => {
+                                    if (t.isCompleted) return false;
+                                    const parsed = parseTaskDate(t);
+                                    return parsed && startOfDay(parsed).getTime() > startOfDay(now).getTime();
+                                })
+                                .sort((a, b) => (parseTaskDate(a)?.getTime() || 0) - (parseTaskDate(b)?.getTime() || 0))[0];
+                        } else if (isCompletedTaskSection) {
+                            relevantTask = allTasks
+                                .filter(t => t.isCompleted)
+                                .sort((a, b) => (parseTaskDate(b)?.getTime() || 0) - (parseTaskDate(a)?.getTime() || 0))[0];
+                        } else if (allTasks.length > 0) {
+                            relevantTask = allTasks.find(t => !t.isCompleted) || allTasks[0];
                         }
                             
                         const currentStatus = lead.customerStatus || lead.status;
@@ -1352,7 +1540,31 @@ function LeadGrid({
                                 </TableCell>
 
                                 <TableCell>
-                                    {upcomingAppointment ? (
+                                    {isTaskMode ? (
+                                        relevantTask ? (
+                                            <div className="flex flex-col gap-0.5 text-xs text-[#095c7b]">
+                                                <div className="flex items-center gap-1.5 font-semibold">
+                                                    <ListTodo className="h-3.5 w-3.5 shrink-0 text-[#095c7b]" />
+                                                    <span className="line-clamp-1">{relevantTask.title}</span>
+                                                    {relevantTask.isCompleted && (
+                                                        <Badge variant="outline" className="ml-1 text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 uppercase font-semibold shrink-0">
+                                                            Done
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                {relevantTask.dueDate && (
+                                                    <span className="text-[11px] text-slate-500 pl-5">
+                                                        Due: {(() => {
+                                                            const parsed = parseTaskDate(relevantTask);
+                                                            return parsed ? format(parsed, 'MMM d, yyyy') : relevantTask.dueDate;
+                                                        })()}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-400 italic text-xs">-</span>
+                                        )
+                                    ) : upcomingAppointment ? (
                                         <div className="flex items-center gap-1.5 text-xs text-[#095c7b] font-semibold">
                                             <Calendar className="h-3.5 w-3.5 shrink-0" />
                                             <span>
@@ -1447,7 +1659,39 @@ function LeadGrid({
     );
 }
 
-function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accountManagers, canReassign, canUnassign, isPastSection = false, isNoShowSection = false }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, onAmReassign?: (leadId: string, amName: string) => void, accountManagers?: UserProfile[], canReassign?: boolean, canUnassign?: boolean, isPastSection?: boolean, isNoShowSection?: boolean }) {
+function LeadCard({ 
+    lead, 
+    onCall, 
+    onClick, 
+    onEmail, 
+    onNotes, 
+    onAmReassign, 
+    accountManagers, 
+    canReassign, 
+    canUnassign, 
+    isPastSection = false, 
+    isNoShowSection = false,
+    isPastTaskSection = false,
+    isTodayTaskSection = false,
+    isFutureTaskSection = false,
+    isCompletedTaskSection = false
+}: { 
+    lead: Lead, 
+    onCall: (id: string, phone: string) => void, 
+    onClick: () => void, 
+    onEmail: () => void, 
+    onNotes: () => void, 
+    onAmReassign?: (leadId: string, amName: string) => void, 
+    accountManagers?: UserProfile[], 
+    canReassign?: boolean, 
+    canUnassign?: boolean, 
+    isPastSection?: boolean, 
+    isNoShowSection?: boolean,
+    isPastTaskSection?: boolean,
+    isTodayTaskSection?: boolean,
+    isFutureTaskSection?: boolean,
+    isCompletedTaskSection?: boolean
+}) {
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
     const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
     
@@ -1513,6 +1757,43 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
 
     if (!upcomingAppointment && allAppointments.length > 0) {
         upcomingAppointment = allAppointments[0];
+    }
+
+    const isTaskMode = Boolean(isPastTaskSection || isTodayTaskSection || isFutureTaskSection || isCompletedTaskSection);
+    const allTasksMap = new Map();
+    lead.tasks?.forEach(t => allTasksMap.set(t.id, t));
+    const allTasks = Array.from(allTasksMap.values());
+
+    let relevantTask: any = null;
+    if (isPastTaskSection) {
+        relevantTask = allTasks
+            .filter(t => {
+                if (t.isCompleted) return false;
+                const parsed = parseTaskDate(t);
+                return parsed && startOfDay(parsed).getTime() < startOfDay(now).getTime();
+            })
+            .sort((a, b) => (parseTaskDate(b)?.getTime() || 0) - (parseTaskDate(a)?.getTime() || 0))[0];
+    } else if (isTodayTaskSection) {
+        relevantTask = allTasks
+            .filter(t => {
+                if (t.isCompleted) return false;
+                const parsed = parseTaskDate(t);
+                return parsed && startOfDay(parsed).getTime() === startOfDay(now).getTime();
+            })[0];
+    } else if (isFutureTaskSection) {
+        relevantTask = allTasks
+            .filter(t => {
+                if (t.isCompleted) return false;
+                const parsed = parseTaskDate(t);
+                return parsed && startOfDay(parsed).getTime() > startOfDay(now).getTime();
+            })
+            .sort((a, b) => (parseTaskDate(a)?.getTime() || 0) - (parseTaskDate(b)?.getTime() || 0))[0];
+    } else if (isCompletedTaskSection) {
+        relevantTask = allTasks
+            .filter(t => t.isCompleted)
+            .sort((a, b) => (parseTaskDate(b)?.getTime() || 0) - (parseTaskDate(a)?.getTime() || 0))[0];
+    } else if (allTasks.length > 0) {
+        relevantTask = allTasks.find(t => !t.isCompleted) || allTasks[0];
     }
         
     return (
@@ -1693,7 +1974,33 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                             </div>
                         ) : null;
                     })()}
-                    {upcomingAppointment && (
+                    {isTaskMode && relevantTask ? (
+                        <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-[#095c7b]/10">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <ListTodo className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
+                                <div className="flex flex-col text-xs font-semibold text-[#095c7b] truncate">
+                                    <span className="truncate" title={relevantTask.title}>{relevantTask.title}</span>
+                                    {relevantTask.dueDate && (
+                                        <span className="text-[10px] text-slate-500 font-normal">
+                                            Due: {(() => {
+                                                const parsed = parseTaskDate(relevantTask);
+                                                return parsed ? format(parsed, 'MMM d, yyyy') : relevantTask.dueDate;
+                                            })()}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            {relevantTask.isCompleted ? (
+                                <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 uppercase font-semibold shrink-0">
+                                    Done
+                                </Badge>
+                            ) : (
+                                <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 uppercase font-semibold shrink-0">
+                                    Task
+                                </Badge>
+                            )}
+                        </div>
+                    ) : upcomingAppointment ? (
                         <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-[#095c7b]/10">
                             <div className="flex items-center gap-2">
                                 <Calendar className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
@@ -1710,7 +2017,7 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                                 </Badge>
                             )}
                         </div>
-                    )}
+                    ) : null}
                 </div>
             </CardContent>
         </Card>

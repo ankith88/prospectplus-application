@@ -15,12 +15,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send } from 'lucide-react';
+import { Loader2, Send, ChevronDown } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { Lead } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor';
+import { encryptLeadId } from '@/lib/localmile-security';
 
 interface LeadEmailDialogProps {
   isOpen: boolean;
@@ -73,20 +75,44 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
     if (template && lead) {
       const primaryContact = lead.contacts?.find(c => c.isPrimary) || (lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null);
       const contactName = primaryContact?.name || 'Customer';
+      const encryptedId = lead.id ? encryptLeadId(lead.id) : '';
+      const sofPublicLink = lead.sofLink || (lead as any).standingOrderFormLink || (lead.id ? `https://prospectplus.com.au/sof/${encryptedId}` : '');
       
       let parsedSubject = template.subject || '';
-      parsedSubject = parsedSubject.replace(/\{\{Contact\.Name\}\}/g, contactName);
-      parsedSubject = parsedSubject.replace(/\{\{Company\.Name\}\}/g, lead.companyName || '');
-      parsedSubject = parsedSubject.replace(/\{\{SalesRep\.Name\}\}/g, userProfile?.displayName || userProfile?.firstName || 'Account Manager');
+      parsedSubject = parsedSubject.replace(/\{\{Contact\.Name\}\}/gi, contactName);
+      parsedSubject = parsedSubject.replace(/\{\{Company\.Name\}\}/gi, lead.companyName || '');
+      parsedSubject = parsedSubject.replace(/\{\{SalesRep\.Name\}\}/gi, userProfile?.displayName || userProfile?.firstName || 'Account Manager');
+      parsedSubject = parsedSubject.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
+      parsedSubject = parsedSubject.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
+      parsedSubject = parsedSubject.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
+      parsedSubject = parsedSubject.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
+      parsedSubject = parsedSubject.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
+      parsedSubject = parsedSubject.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
       setSubject(parsedSubject);
       
       let parsedBody = template.body;
-      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/g, contactName);
-      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/g, lead.companyName || '');
-      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/g, userProfile?.displayName || userProfile?.firstName || 'Account Manager');
+      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/gi, contactName);
+      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/gi, lead.companyName || '');
+      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/gi, userProfile?.displayName || userProfile?.firstName || 'Account Manager');
+      parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{sof_link\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{SOF_Link\}\}/gi, sofPublicLink);
       
       setMessage(parsedBody);
     }
+  };
+
+  const insertPlaceholder = (ph: string) => {
+    setMessage(prev => prev + ' ' + ph);
+  };
+
+  const insertSubjectPlaceholder = (ph: string) => {
+    setSubject(prev => prev + ph);
   };
 
   const handleSend = async () => {
@@ -177,7 +203,22 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="subject">Subject</Label>
+              <div className="flex justify-between items-center">
+                <Label htmlFor="subject">Subject</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs px-2 py-1 gap-1">
+                      Placeholders <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto">
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Contact.Name}}')}>Contact Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Company.Name}}')}>Company Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{SalesRep.Name}}')}>Sales Rep Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Lead.StandingOrderFormLink}}')}>Standing Order Form Link</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               <Input
                 id="subject"
                 placeholder="Email Subject"
@@ -188,7 +229,18 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="message">Message</Label>
+              <div className="flex justify-between items-center">
+                <Label htmlFor="message">Message</Label>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-7 text-xs" 
+                  onClick={() => insertPlaceholder('{{Lead.StandingOrderFormLink}}')}
+                >
+                  + Standing Order Link
+                </Button>
+              </div>
               <Textarea
                 id="message"
                 placeholder="Enter your email text..."

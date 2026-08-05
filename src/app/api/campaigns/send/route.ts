@@ -309,13 +309,15 @@ export async function POST(request: Request) {
           const n = String(name).toLowerCase();
           return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
         });
-        const hasPostalForSof = !!(docData.postalAddress?.street || docData.postalAddress?.address1 || docData.postalAddress?.city || docData.postalAddress?.zip);
-        const sofPublicLink = (hasAmpoForSof && hasPostalForSof)
-          ? (docData.sofLink || (docSnap.id ? `https://prospectplus.com.au/sof/${encryptLeadId(docSnap.id)}` : ''))
-          : '';
+        const sofPublicLink = docData.sofLink || (docData as any).standingOrderFormLink || (docSnap.id ? `https://prospectplus.com.au/sof/${encryptLeadId(docSnap.id)}` : '');
         compiledBody = compiledBody.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
         compiledBody = compiledBody.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
         compiledBody = compiledBody.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
+        compiledBody = compiledBody.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
+        compiledBody = compiledBody.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
+        compiledBody = compiledBody.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
+        compiledBody = compiledBody.replace(/\{\{sof_link\}\}/gi, sofPublicLink);
+        compiledBody = compiledBody.replace(/\{\{SOF_Link\}\}/gi, sofPublicLink);
 
         compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
         compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);

@@ -15,9 +15,12 @@ function checkHasAmpo(data: any): boolean {
 }
 
 function checkHasPostalAddress(data: any): boolean {
-  if (!data || !data.postalAddress) return false;
-  const p = data.postalAddress;
-  return !!(p.street || p.address1 || p.city || p.zip);
+  if (!data) return false;
+  if (data.postalAddress) {
+    const p = data.postalAddress;
+    if (p.street || p.address1 || p.city || p.zip) return true;
+  }
+  return !!(data.postalAddress1 || data.boxNumber || data.postalStreet);
 }
 
 export default async function SofPage({ params }: { params: Promise<{ id: string }> }) {

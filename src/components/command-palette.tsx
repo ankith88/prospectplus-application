@@ -17,7 +17,7 @@ interface SearchResultItem {
 
 export function CommandPalette() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -93,6 +93,9 @@ export function CommandPalette() {
         if (user) {
           const idToken = await user.getIdToken();
           headers['Authorization'] = `Bearer ${idToken}`;
+          if (userProfile?.activeRole) {
+            headers['X-Active-Role'] = userProfile.activeRole;
+          }
         }
 
         const res = await fetch(`/api/account-lookup?q=${encodeURIComponent(trimmed)}&type=all`, {
@@ -105,9 +108,34 @@ export function CommandPalette() {
         const data = await res.json();
         const items: SearchResultItem[] = [];
 
-        const rawIndividuals = data.individuals || [];
+        const seenIds = new Set<string>();
         const companyIdsSet = new Set<string>();
-        rawIndividuals.forEach((item: any) => {
+        const combinedAccounts: any[] = [];
+
+        // Extract sites from groups first
+        (data.groups || []).forEach((group: any) => {
+          (group.sites || []).forEach((site: any) => {
+            const key = `${site.type}-${site.id}`;
+            if (!seenIds.has(key)) {
+              seenIds.add(key);
+              combinedAccounts.push({
+                ...site,
+                groupName: group.name,
+              });
+            }
+          });
+        });
+
+        // Add individual accounts
+        (data.individuals || []).forEach((item: any) => {
+          const key = `${item.type}-${item.id}`;
+          if (!seenIds.has(key)) {
+            seenIds.add(key);
+            combinedAccounts.push(item);
+          }
+        });
+
+        combinedAccounts.forEach((item: any) => {
           if (item.type === 'company') {
             if (item.id) companyIdsSet.add(String(item.id).toLowerCase());
             if (item.prospectPlusId) companyIdsSet.add(String(item.prospectPlusId).toLowerCase());
@@ -115,8 +143,8 @@ export function CommandPalette() {
           }
         });
 
-        // Add Individuals (Companies / Leads - omit duplicate leads if company exists with same ID)
-        rawIndividuals
+        // Add Companies / Leads (omit duplicate leads if company exists with same ID)
+        combinedAccounts
           .filter((item: any) => {
             if (item.type === 'lead') {
               const leadId = String(item.id || '').toLowerCase();
@@ -132,14 +160,15 @@ export function CommandPalette() {
             }
             return true;
           })
-          .slice(0, 8)
+          .slice(0, 10)
           .forEach((item: any) => {
             const isCompany = item.type === 'company';
+            const groupTag = item.groupName ? ` · Group: ${item.groupName}` : '';
             items.push({
               id: `${item.type}-${item.id}`,
               type: item.type,
               title: item.companyName,
-              subtitle: `${item.prospectPlusId ? `ID: ${item.prospectPlusId} · ` : ''}${item.franchisee || 'Unassigned'} · ${item.accountManagerAssigned || item.status}`,
+              subtitle: `${item.prospectPlusId ? `ID: ${item.prospectPlusId} · ` : ''}${item.franchisee || 'Unassigned'} · ${item.accountManagerAssigned || item.status}${groupTag}`,
               badge: isCompany ? 'Customer' : 'Lead',
               badgeColor: isCompany ? 'bg-[#e4f2e6] text-[#2f7d4f]' : 'bg-[#fef3c7] text-[#92400e]',
               url: isCompany ? `/companies/${item.id}` : `/leads/${item.id}`,

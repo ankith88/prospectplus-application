@@ -594,18 +594,15 @@ export default function LeadsClientPage({
       parsedBody = parsedBody.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
       parsedBody = parsedBody.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
       
-      const hasAmpoForSof = leadData.services?.some((s: any) => {
-        const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
-        const n = String(name).toLowerCase();
-        return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
-      });
-      const hasPostalForSof = !!(leadData.postalAddress?.street || leadData.postalAddress?.address1 || leadData.postalAddress?.city || leadData.postalAddress?.zip);
-      const sofPublicLink = (hasAmpoForSof && hasPostalForSof)
-        ? (leadData.sofLink || (leadData.id ? `https://prospectplus.com.au/sof/${encryptLeadId(leadData.id)}` : ''))
-        : '';
+      const sofPublicLink = leadData.sofLink || (leadData as any).standingOrderFormLink || (leadData.id ? `https://prospectplus.com.au/sof/${encryptLeadId(leadData.id)}` : '');
       parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
       parsedBody = parsedBody.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
       parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{sof_link\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{SOF_Link\}\}/gi, sofPublicLink);
       
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');

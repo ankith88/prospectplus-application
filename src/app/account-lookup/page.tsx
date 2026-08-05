@@ -50,10 +50,10 @@ interface Ticket {
 }
 
 export default function AccountLookupPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [searchType, setSearchType] = useState<'all' | 'company' | 'id' | 'address' | 'email' | 'phone' | 'package' | 'ticket'>('all');
+  const [searchType, setSearchType] = useState<'all' | 'company' | 'id' | 'invoice' | 'address' | 'email' | 'phone' | 'package' | 'ticket'>('all');
   const [loading, setLoading] = useState(false);
   const [searchingPackage, setSearchingPackage] = useState(false);
   const [packageResult, setPackageResult] = useState<any>(null);
@@ -91,6 +91,9 @@ export default function AccountLookupPage() {
         if (user) {
           const idToken = await user.getIdToken();
           headers['Authorization'] = `Bearer ${idToken}`;
+          if (userProfile?.activeRole) {
+            headers['X-Active-Role'] = userProfile.activeRole;
+          }
         }
 
         // 1. Fetch Accounts & Tickets
@@ -249,6 +252,17 @@ export default function AccountLookupPage() {
             }`}
           >
             Prospect+ ID
+          </button>
+
+          <button
+            onClick={() => setSearchType('invoice')}
+            className={`text-xs border rounded-full px-3 py-1 font-semibold transition-all ${
+              searchType === 'invoice'
+                ? 'bg-[#17414d] text-white border-[#17414d]'
+                : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
+            }`}
+          >
+            Invoice Number
           </button>
 
           <button

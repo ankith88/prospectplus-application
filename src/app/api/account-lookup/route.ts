@@ -89,6 +89,7 @@ export async function GET(req: NextRequest) {
 
     // Authenticate user & check franchisee restriction
     const authHeader = req.headers.get('Authorization');
+    const activeRoleHeader = req.headers.get('X-Active-Role');
     let isFranchisee = false;
     let userFranchisee = '';
 
@@ -100,7 +101,7 @@ export async function GET(req: NextRequest) {
         const userDoc = await db.collection('users').doc(uid).get();
         if (userDoc.exists) {
           const userProfile = userDoc.data() || {};
-          const role = userProfile.activeRole || '';
+          const role = activeRoleHeader || userProfile.activeRole || userProfile.role || '';
           isFranchisee = role === 'Franchisee';
           userFranchisee = userProfile.franchisee || '';
         }
@@ -133,12 +134,21 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const possibleIds = Array.from(new Set([q.trim(), extractedId.trim()])).filter(id => id.length >= 2 && !id.includes('/'));
+    const strippedInvId = q.replace(/^INV/i, '').trim();
+
+    const possibleIds = Array.from(new Set([
+      q.trim(),
+      extractedId.trim(),
+      strippedInvId,
+      digitsOnly,
+    ])).filter(id => id.length >= 2 && !id.includes('/'));
 
     // Base search strings including full query and individual words
     const baseSearchStrings = new Set<string>([
       q,
       extractedId,
+      strippedInvId,
+      digitsOnly,
       q.toLowerCase(),
       q.toUpperCase(),
       q.charAt(0).toUpperCase() + q.slice(1).toLowerCase(),
@@ -166,6 +176,7 @@ export async function GET(req: NextRequest) {
     const companyPromises: Promise<any>[] = [];
     const contactPromises: Promise<any>[] = [];
     const ticketPromises: Promise<any>[] = [];
+    const invoicePromises: Promise<any>[] = [];
 
     // Direct document ID and internalid lookups
     for (const id of possibleIds) {
@@ -388,12 +399,80 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // 6. Invoice Number / Document ID Queries (subcollection collectionGroup & main doc)
+    if (type === 'all' || type === 'id' || type === 'invoice') {
+      if (q.length >= 2) {
+        const invoiceFields = ['invoiceDocumentID', 'invoiceNum', 'documentId', 'invoiceInternalID', 'tranId', 'tranid', 'number', 'id'];
+
+        for (const id of possibleIds) {
+          // Check lastInvoiceNumber on main lead/company docs
+          leadPromises.push(db.collection('leads').where('lastInvoiceNumber', '==', id).limit(10).get());
+          leadPromises.push(db.collection('leads').where('lastInvoiceNumber', '==', id.toUpperCase()).limit(10).get());
+          companyPromises.push(db.collection('companies').where('lastInvoiceNumber', '==', id).limit(10).get());
+          companyPromises.push(db.collection('companies').where('lastInvoiceNumber', '==', id.toUpperCase()).limit(10).get());
+
+          // Check subcollection invoices
+          for (const field of invoiceFields) {
+            invoicePromises.push(
+              db.collectionGroup('invoices')
+                .where(field, '==', id)
+                .limit(10)
+                .get()
+            );
+            invoicePromises.push(
+              db.collectionGroup('invoices')
+                .where(field, '==', id.toUpperCase())
+                .limit(10)
+                .get()
+            );
+          }
+        }
+
+        for (const searchStr of searchStrings) {
+          if (searchStr.length >= 2) {
+            companyPromises.push(
+              db.collection('companies')
+                .where('lastInvoiceNumber', '>=', searchStr)
+                .where('lastInvoiceNumber', '<=', searchStr + '\uf8ff')
+                .limit(20)
+                .get()
+            );
+            companyPromises.push(
+              db.collection('companies')
+                .where('lastInvoiceNumber', '>=', searchStr.toUpperCase())
+                .where('lastInvoiceNumber', '<=', searchStr.toUpperCase() + '\uf8ff')
+                .limit(20)
+                .get()
+            );
+
+            for (const field of ['invoiceDocumentID', 'invoiceNum', 'documentId']) {
+              invoicePromises.push(
+                db.collectionGroup('invoices')
+                  .where(field, '>=', searchStr)
+                  .where(field, '<=', searchStr + '\uf8ff')
+                  .limit(20)
+                  .get()
+              );
+              invoicePromises.push(
+                db.collectionGroup('invoices')
+                  .where(field, '>=', searchStr.toUpperCase())
+                  .where(field, '<=', searchStr.toUpperCase() + '\uf8ff')
+                  .limit(20)
+                  .get()
+              );
+            }
+          }
+        }
+      }
+    }
+
     // Resolve all initial queries in parallel using safe resolver
-    const [leadSnaps, companySnaps, contactSnaps, ticketSnaps] = await Promise.all([
+    const [leadSnaps, companySnaps, contactSnaps, ticketSnaps, invoiceSnaps] = await Promise.all([
       safeResolve(leadPromises),
       safeResolve(companyPromises),
       safeResolve(contactPromises),
       safeResolve(ticketPromises),
+      safeResolve(invoicePromises),
     ]);
 
     // Keep track of direct matches
@@ -418,9 +497,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Fetch parents for matched contacts
-    const parentFetchPromises: Promise<any>[] = [];
-    const contactMatchedParents: { id: string; type: 'lead' | 'company' }[] = [];
+    // Fetch parents for matched contacts and invoices with explicit item mapping
+    const parentFetchItems: { ref: any; type: 'lead' | 'company'; matchedInvoice?: string }[] = [];
 
     for (const snap of contactSnaps) {
       if (snap.docs) {
@@ -430,20 +508,53 @@ export async function GET(req: NextRequest) {
             const type = parentRef.path.startsWith('leads') ? 'lead' : 'company';
             const key = `${type}-${parentRef.id}`;
             if (!rawMatchedDocs.has(key)) {
-              contactMatchedParents.push({ id: parentRef.id, type });
-              parentFetchPromises.push(parentRef.get());
+              parentFetchItems.push({ ref: parentRef, type });
             }
           }
         }
       }
     }
 
-    if (parentFetchPromises.length > 0) {
-      const parentSnaps = await safeResolve(parentFetchPromises);
+    for (const snap of invoiceSnaps) {
+      if (snap.docs) {
+        for (const doc of snap.docs) {
+          const invData = doc.data();
+          const invDocId = invData.invoiceDocumentID || invData.invoiceNum || invData.documentId || invData.tranId || invData.tranid || doc.id;
+          const parentRef = doc.ref.parent.parent;
+          if (parentRef) {
+            const type = parentRef.path.startsWith('leads') ? 'lead' : 'company';
+            const key = `${type}-${parentRef.id}`;
+            if (!rawMatchedDocs.has(key)) {
+              parentFetchItems.push({ ref: parentRef, type, matchedInvoice: invDocId });
+            } else {
+              const existing = rawMatchedDocs.get(key);
+              if (existing && existing.data) {
+                existing.data._matchedInvoiceNumber = invDocId;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (parentFetchItems.length > 0) {
+      const parentSnaps = await Promise.all(
+        parentFetchItems.map(item =>
+          item.ref.get().catch((err: any) => {
+            console.warn('Failed fetching parent doc for contact/invoice:', err);
+            return null;
+          })
+        )
+      );
+
       parentSnaps.forEach((snap, idx) => {
-        if (snap.exists) {
-          const match = contactMatchedParents[idx];
-          rawMatchedDocs.set(`${match.type}-${match.id}`, { type: match.type, id: match.id, data: snap.data() });
+        if (snap && snap.exists) {
+          const item = parentFetchItems[idx];
+          const data = snap.data() || {};
+          if (item.matchedInvoice) {
+            data._matchedInvoiceNumber = item.matchedInvoice;
+          }
+          rawMatchedDocs.set(`${item.type}-${snap.id}`, { type: item.type, id: snap.id, data });
         }
       });
     }
@@ -459,7 +570,9 @@ export async function GET(req: NextRequest) {
         String(data.internalid || '').toLowerCase() === id.toLowerCase() ||
         String(data.internalId || '').toLowerCase() === id.toLowerCase() ||
         String(data.prospectPlusId || '').toLowerCase() === id.toLowerCase() ||
-        String(data.entityId || data.customerEntityId || '').toLowerCase() === id.toLowerCase()
+        String(data.entityId || data.customerEntityId || '').toLowerCase() === id.toLowerCase() ||
+        String(data._matchedInvoiceNumber || '').toLowerCase() === id.toLowerCase() ||
+        String(data.lastInvoiceNumber || '').toLowerCase() === id.toLowerCase()
       );
 
       if (isDirectIdMatch) {
@@ -475,19 +588,31 @@ export async function GET(req: NextRequest) {
       const phoneFieldStr = (data.customerPhone || data.phone || '').toString();
       const phoneDigits = phoneFieldStr.replace(/\D/g, '');
 
+      const matchedInvoiceStr = (data._matchedInvoiceNumber || '').toLowerCase();
+      const lastInvoiceNumberStr = (data.lastInvoiceNumber || '').toLowerCase();
+
       const resolvedAddr = resolveAddress(data);
       const addressStr = resolvedAddr
         ? `${resolvedAddr.address1} ${resolvedAddr.street} ${resolvedAddr.city} ${resolvedAddr.state} ${resolvedAddr.zip}`.toLowerCase()
         : '';
 
-      const fullCombinedStr = `${companyNameStr} ${prospectPlusIdStr} ${entityIdStr} ${emailFieldStr} ${addressStr} ${phoneFieldStr} ${phoneDigits}`.toLowerCase();
+      const fullCombinedStr = `${companyNameStr} ${prospectPlusIdStr} ${entityIdStr} ${emailFieldStr} ${addressStr} ${phoneFieldStr} ${phoneDigits} ${matchedInvoiceStr} ${lastInvoiceNumberStr}`.toLowerCase();
 
       // Check match based on selected searchType tab
       if (type === 'company') {
         const matches = queryWords.every(w => companyNameStr.includes(w));
         if (!matches) continue;
       } else if (type === 'id') {
-        const matches = queryWords.every(w => prospectPlusIdStr.includes(w) || entityIdStr.includes(w));
+        const matches = queryWords.every(w => {
+          const cleanW = w.replace(/^inv/i, '');
+          return prospectPlusIdStr.includes(w) || entityIdStr.includes(w) || matchedInvoiceStr.includes(w) || (cleanW.length >= 2 && matchedInvoiceStr.includes(cleanW)) || lastInvoiceNumberStr.includes(w) || (cleanW.length >= 2 && lastInvoiceNumberStr.includes(cleanW));
+        });
+        if (!matches) continue;
+      } else if (type === 'invoice') {
+        const matches = queryWords.every(w => {
+          const cleanW = w.replace(/^inv/i, '');
+          return matchedInvoiceStr.includes(w) || (cleanW.length >= 2 && matchedInvoiceStr.includes(cleanW)) || lastInvoiceNumberStr.includes(w) || (cleanW.length >= 2 && lastInvoiceNumberStr.includes(cleanW));
+        });
         if (!matches) continue;
       } else if (type === 'address') {
         const matches = queryWords.every(w => addressStr.includes(w));
@@ -508,7 +633,10 @@ export async function GET(req: NextRequest) {
         }
       } else {
         // 'all' type: every query word must appear somewhere in the combined document text
-        const matches = queryWords.every(w => fullCombinedStr.includes(w) || (digitsOnly.length >= 3 && phoneDigits.includes(w)));
+        const matches = queryWords.every(w => {
+          const cleanW = w.replace(/^inv/i, '');
+          return fullCombinedStr.includes(w) || (cleanW.length >= 2 && fullCombinedStr.includes(cleanW)) || (digitsOnly.length >= 3 && phoneDigits.includes(w));
+        });
         if (!matches) continue;
       }
 
@@ -682,7 +810,7 @@ export async function GET(req: NextRequest) {
                 accountManagerAssigned: site.data.accountManagerAssigned || 'Unassigned',
                 address: resolveAddress(site.data),
                 lastInvoiceDate: site.data.lastInvoiceDate || null,
-                lastInvoiceNumber: site.data.lastInvoiceNumber || null,
+                lastInvoiceNumber: site.data.lastInvoiceNumber || site.data._matchedInvoiceNumber || null,
                }))
             });
           }
@@ -704,7 +832,7 @@ export async function GET(req: NextRequest) {
           accountManagerAssigned: item.data.accountManagerAssigned || 'Unassigned',
           address: resolveAddress(item.data),
           lastInvoiceDate: item.data.lastInvoiceDate || null,
-          lastInvoiceNumber: item.data.lastInvoiceNumber || null,
+          lastInvoiceNumber: item.data.lastInvoiceNumber || item.data._matchedInvoiceNumber || null,
           score: (item as any).score || 0,
         });
       }

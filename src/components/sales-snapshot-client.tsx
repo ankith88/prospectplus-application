@@ -189,14 +189,17 @@ const isRecentlySignedUp = (
 
 // Group Statuses into 7 Logical Phases
 const getPipelinePhase = (status: string): string => {
-  const s = status || 'New';
+  let s = (status || 'New').trim();
+  if (s === 'SUSPECT-Unqualified' || s === 'SUSPECT - Unqualified' || s.toUpperCase() === 'SUSPECT-UNQUALIFIED' || s.toUpperCase().startsWith('SUSPECT')) {
+    s = 'New';
+  }
   if (['Priority Lead', 'Priority Field Lead', 'Hot Lead'].includes(s)) {
     return 'Priority & Hot Leads';
   }
-  if (['New', 'Unqualified'].includes(s)) {
+  if (['New', 'Unqualified', 'Address Check', 'Address Confirmed'].includes(s)) {
     return 'New / Prospecting';
   }
-  if (['Contacted', 'Connected', 'In Progress', 'Reschedule', 'In Qualification', 'Pre Qualified', 'Appointment Booked'].includes(s)) {
+  if (['Contacted', 'Connected', 'In Progress', 'Reschedule', 'In Qualification', 'Pre Qualified', 'Appointment Booked', 'No Answer'].includes(s)) {
     return 'Active Engagement';
   }
   if (['Qualified', 'Prospect Opportunity', 'Customer Opportunity', 'LocalMile Opportunity', 'Quote Sent', 'Quote Accepted', 'Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Pending', 'LPO Review', 'LPO Opportunity', 'High Touch'].includes(s)) {
@@ -205,13 +208,13 @@ const getPipelinePhase = (status: string): string => {
   if (['Won', 'Signed', 'Customer'].includes(s)) {
     return 'Converted';
   }
-  if (['Lost', 'Lost Customer', 'Out of Territory'].includes(s)) {
+  if (['Lost', 'Lost Customer', 'Out of Territory', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'].includes(s)) {
     return 'Closed / Lost';
   }
   if (['Email Brush Off', 'Future Follow-up'].includes(s)) {
     return 'Inactive / Future Follow Up';
   }
-  return 'Closed / Lost';
+  return 'New / Prospecting';
 };
 
 const BUCKET_DISPLAY_NAMES: Record<string, string> = {
@@ -342,6 +345,7 @@ export default function SalesSnapshotClient() {
   const [drilldownType, setDrilldownType] = useState<'mrr' | 'appointments' | 'quotes' | 'scfs' | 'trials' | 'signed' | 'signed_mrr' | 'stage' | null>(null);
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [drilldownSearch, setDrilldownSearch] = useState('');
+  const [drilldownStatusFilter, setDrilldownStatusFilter] = useState<string | null>(null);
   const [franchiseeLeadSearch, setFranchiseeLeadSearch] = useState('');
   const [pipelineValueGroupBy, setPipelineValueGroupBy] = useState<'leadType' | 'bucket'>('bucket');
   
@@ -1067,6 +1071,44 @@ export default function SalesSnapshotClient() {
         franchiseeData
     };
   }, [filteredLeads, filteredActivities, filteredAppointments, appliedFilters.dateFilterType]);
+
+  const activeDrilldownLeads = useMemo(() => {
+    if (!drilldownType) return [];
+    return filteredLeads.filter(l => {
+      const status = l.customerStatus || l.status;
+      const isSigned = isSignedStatus(status);
+
+      if (drilldownType === 'mrr') return !isSigned && calculateMonthlyValue(l) > 0;
+      if (drilldownType === 'signed_mrr') return isSigned && calculateMonthlyValue(l) > 0;
+      if (drilldownType === 'appointments') return (metrics.leadApptCounts[l.id] || 0) > 0;
+      if (drilldownType === 'quotes') return status === 'Quote Sent';
+      if (drilldownType === 'scfs') {
+        return !isSigned && (!!l.scfAcceptedAt || status === 'Quote Accepted' || (l.scfLinks && l.scfLinks.some(s => s.status === 'Accepted')));
+      }
+      if (drilldownType === 'trials') {
+        return !!l.trialStartedAt || ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(status);
+      }
+      if (drilldownType === 'signed') {
+        const leadActs = activities.filter(a => a.leadId === l.id);
+        return isRecentlySignedUp(l, leadActs, appliedFilters.dateRange, appliedFilters.dateFilterType);
+      }
+      if (drilldownType === 'stage' && selectedStage) {
+        return getPipelinePhase(l.customerStatus || l.status) === selectedStage;
+      }
+      return false;
+    });
+  }, [drilldownType, selectedStage, filteredLeads, activities, metrics.leadApptCounts, appliedFilters.dateRange, appliedFilters.dateFilterType]);
+
+  const statusBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {};
+    activeDrilldownLeads.forEach(lead => {
+      const s = lead.customerStatus || lead.status || 'New';
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([status, count]) => ({ status, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [activeDrilldownLeads]);
 
   const franchiseeLeadsList = useMemo(() => {
     if (!isFranchisee) return [];
@@ -1959,7 +2001,17 @@ export default function SalesSnapshotClient() {
       </div>
 
       {/* Drilldown Dialog Modal */}
-      <Dialog open={drilldownType !== null} onOpenChange={(open) => { if (!open) { setDrilldownType(null); setSelectedStage(null); } setDrilldownSearch(''); }}>
+      <Dialog 
+        open={drilldownType !== null} 
+        onOpenChange={(open) => { 
+          if (!open) { 
+            setDrilldownType(null); 
+            setSelectedStage(null); 
+            setDrilldownStatusFilter(null);
+          } 
+          setDrilldownSearch(''); 
+        }}
+      >
         <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-5xl max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-lg font-bold text-[#095c7b]">
@@ -1994,13 +2046,59 @@ export default function SalesSnapshotClient() {
           {drilldownType === 'stage' && selectedStage && (
             <div className="bg-[#095c7b]/10 border border-[#095c7b]/30 text-[#095c7b] rounded-md p-3 my-1 flex items-center justify-between text-xs font-semibold shrink-0">
               <span>Pipeline Stage Breakdown: <span className="font-extrabold text-sm">{selectedStage}</span></span>
-              <span className="font-normal">{filteredLeads.filter(l => getPipelinePhase(l.customerStatus || l.status) === selectedStage).length} lead(s) in this stage</span>
+              <span className="font-normal">{activeDrilldownLeads.length} lead(s) in this stage</span>
+            </div>
+          )}
+
+          {/* Lead Status Breakdown Summary Section */}
+          {statusBreakdown.length > 0 && (
+            <div className="bg-slate-50/90 border border-slate-200 rounded-lg p-3 my-1 shrink-0 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5 text-[#095c7b]" />
+                  Status Breakdown ({activeDrilldownLeads.length} Lead{activeDrilldownLeads.length === 1 ? '' : 's'})
+                </span>
+                {drilldownStatusFilter && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDrilldownStatusFilter(null)}
+                    className="h-5 px-1.5 text-[10px] text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
+                  >
+                    Clear status filter
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {statusBreakdown.map(({ status, count }) => {
+                  const isSelected = drilldownStatusFilter === status;
+                  const percentage = activeDrilldownLeads.length > 0 ? Math.round((count / activeDrilldownLeads.length) * 100) : 0;
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setDrilldownStatusFilter(isSelected ? null : status)}
+                      className={cn(
+                        "flex items-center gap-2 rounded-md px-2.5 py-1 text-xs border transition-all cursor-pointer shadow-2xs",
+                        isSelected 
+                          ? "bg-[#095c7b]/10 border-[#095c7b] ring-1 ring-[#095c7b]" 
+                          : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-100/70"
+                      )}
+                      title={`Click to filter list by status: ${status}`}
+                    >
+                      <LeadStatusBadge status={status as LeadStatus} />
+                      <span className="font-bold text-slate-800 text-xs">{count} lead{count === 1 ? '' : 's'}</span>
+                      <span className="text-[10px] text-slate-500 font-medium">({percentage}%)</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
           <div className="flex items-center justify-between gap-4 my-2 shrink-0">
             <Input 
-              placeholder="Search by Company, Bucket, or User..." 
+              placeholder="Search by Company, Status, Bucket, or User..." 
               value={drilldownSearch}
               onChange={(e) => setDrilldownSearch(e.target.value)}
               className="max-w-sm text-xs"
@@ -2010,32 +2108,21 @@ export default function SalesSnapshotClient() {
               variant="outline" 
               className="bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-semibold"
               onClick={() => {
-                let listToExport: Lead[] = [];
-                if (drilldownType === 'mrr') {
-                  listToExport = [...metrics.mrrLeadsList].sort((a, b) => calculateMonthlyValue(b) - calculateMonthlyValue(a));
-                } else if (drilldownType === 'signed_mrr') {
-                  listToExport = [...metrics.signedMrrLeadsList].sort((a, b) => calculateMonthlyValue(b) - calculateMonthlyValue(a));
-                } else if (drilldownType === 'appointments') {
-                  listToExport = filteredLeads.filter(l => metrics.leadApptCounts[l.id] > 0);
-                } else if (drilldownType === 'quotes') {
-                  listToExport = filteredLeads.filter(l => (l.customerStatus || l.status) === 'Quote Sent');
-                } else if (drilldownType === 'scfs') {
-                  listToExport = filteredLeads.filter(l => {
-                    const status = l.customerStatus || l.status;
-                    return !isSignedStatus(status) && (!!l.scfAcceptedAt || status === 'Quote Accepted' || (l.scfLinks && l.scfLinks.some(s => s.status === 'Accepted')));
-                  });
-                } else if (drilldownType === 'trials') {
-                  listToExport = filteredLeads.filter(l => {
-                    const status = l.customerStatus || l.status;
-                    return !!l.trialStartedAt || ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(status);
-                  });
-                } else if (drilldownType === 'signed') {
-                  listToExport = filteredLeads.filter(l => {
-                    const leadActs = activities.filter(a => a.leadId === l.id);
-                    return isRecentlySignedUp(l, leadActs, appliedFilters.dateRange, appliedFilters.dateFilterType);
-                  });
-                } else if (drilldownType === 'stage' && selectedStage) {
-                  listToExport = filteredLeads.filter(l => getPipelinePhase(l.customerStatus || l.status) === selectedStage);
+                let listToExport: Lead[] = activeDrilldownLeads;
+                if (drilldownStatusFilter) {
+                  listToExport = listToExport.filter(l => (l.customerStatus || l.status) === drilldownStatusFilter);
+                }
+                if (drilldownSearch.trim()) {
+                  const q = drilldownSearch.toLowerCase();
+                  listToExport = listToExport.filter(l => 
+                    l.companyName.toLowerCase().includes(q) ||
+                    (l.customerStatus || l.status || '').toLowerCase().includes(q) ||
+                    getLeadBucketLabel(l).toLowerCase().includes(q) ||
+                    getUserInCharge(l).toLowerCase().includes(q)
+                  );
+                }
+                if (drilldownType === 'mrr' || drilldownType === 'signed_mrr') {
+                  listToExport = [...listToExport].sort((a, b) => calculateMonthlyValue(b) - calculateMonthlyValue(a));
                 }
                 const filename = drilldownType === 'stage' && selectedStage 
                   ? `pipeline_stage_${selectedStage.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_report` 
@@ -2049,7 +2136,7 @@ export default function SalesSnapshotClient() {
 
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto max-h-[50vh] sm:max-h-[55vh] border rounded-md relative">
             <Table className="w-full min-w-[650px]">
-              <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-sm">
+              <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-xs">
                 <TableRow>
                   <TableHead className="text-xs font-semibold bg-slate-50">Company Name</TableHead>
                   <TableHead className="text-xs font-semibold bg-slate-50">Status</TableHead>
@@ -2062,40 +2149,21 @@ export default function SalesSnapshotClient() {
               </TableHeader>
               <TableBody>
                 {(() => {
-                  let filteredList = filteredLeads.filter(l => {
-                    const status = l.customerStatus || l.status;
-                    const isSigned = isSignedStatus(status);
+                  let filteredList = activeDrilldownLeads;
 
-                    if (drilldownType === 'mrr') return !isSigned && calculateMonthlyValue(l) > 0;
-                    if (drilldownType === 'signed_mrr') return isSigned && calculateMonthlyValue(l) > 0;
-                    if (drilldownType === 'appointments') return (metrics.leadApptCounts[l.id] || 0) > 0;
-                    if (drilldownType === 'quotes') {
-                      return status === 'Quote Sent';
-                    }
-                    if (drilldownType === 'scfs') {
-                      return !isSigned && (!!l.scfAcceptedAt || status === 'Quote Accepted' || (l.scfLinks && l.scfLinks.some(s => s.status === 'Accepted')));
-                    }
-                    if (drilldownType === 'trials') {
-                      return !!l.trialStartedAt || ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(status);
-                    }
-                    if (drilldownType === 'signed') {
-                      const leadActs = activities.filter(a => a.leadId === l.id);
-                      return isRecentlySignedUp(l, leadActs, appliedFilters.dateRange, appliedFilters.dateFilterType);
-                    }
-                    if (drilldownType === 'stage' && selectedStage) {
-                      return getPipelinePhase(l.customerStatus || l.status) === selectedStage;
-                    }
-                    return false;
-                  });
+                  if (drilldownStatusFilter) {
+                    filteredList = filteredList.filter(l => (l.customerStatus || l.status) === drilldownStatusFilter);
+                  }
 
                   if (drilldownType === 'mrr' || drilldownType === 'signed_mrr') {
-                    filteredList.sort((a, b) => calculateMonthlyValue(b) - calculateMonthlyValue(a));
+                    filteredList = [...filteredList].sort((a, b) => calculateMonthlyValue(b) - calculateMonthlyValue(a));
                   }
 
                   if (drilldownSearch.trim()) {
                     const q = drilldownSearch.toLowerCase();
                     filteredList = filteredList.filter(l => 
                       l.companyName.toLowerCase().includes(q) ||
+                      (l.customerStatus || l.status || '').toLowerCase().includes(q) ||
                       getLeadBucketLabel(l).toLowerCase().includes(q) ||
                       getUserInCharge(l).toLowerCase().includes(q)
                     );

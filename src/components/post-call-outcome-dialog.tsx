@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Lead, Activity, LeadStatus, Playbook } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
+import { encryptLeadId } from '@/lib/localmile-security'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { Label } from '@/components/ui/label'
@@ -528,7 +529,8 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
     const bookingLink = lead.bookingUrlId ? `https://prospectplus.com.au/book/${lead.bookingUrlId}` : '';
     const generalBookingLink = lead.generalBookingUrlId ? `https://prospectplus.com.au/book/${lead.generalBookingUrlId}` : '';
     const scfLink = lead.dynamicScfUrl || (lead.id ? `https://prospectplus.com.au/scf/${lead.id}` : '');
-    const sofLink = lead.standingOrderFormLink || (lead.id ? `https://prospectplus.com.au/sof/${lead.id}` : '');
+    const encryptedId = lead.id ? encryptLeadId(lead.id) : '';
+    const sofLink = lead.sofLink || (lead as any).standingOrderFormLink || (lead.id ? `https://prospectplus.com.au/sof/${encryptedId}` : '');
     const regLink = (lead as any).localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${lead.id}` : '');
     const actLink = primaryContact?.localMilePlusAuthLink || (lead as any).localMileActivationLink || '';
     const securityCode = primaryContact?.securityCode || (lead as any).securityCode || (lead as any).localMileSecurityCode || '';
@@ -568,6 +570,11 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
       .replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofLink)
       .replace(/\{\{Lead\.SOFLink\}\}/gi, sofLink)
       .replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofLink)
+      .replace(/\{\{StandingOrderFormLink\}\}/gi, sofLink)
+      .replace(/\{\{SOFLink\}\}/gi, sofLink)
+      .replace(/\{\{StandingOrderLink\}\}/gi, sofLink)
+      .replace(/\{\{sof_link\}\}/gi, sofLink)
+      .replace(/\{\{SOF_Link\}\}/gi, sofLink)
       .replace(/\{\{Schedule\.ServiceDate\}\}/gi, (lead as any).scheduledServiceDate || '')
       .replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, (lead as any).scheduledServiceDate || '');
 

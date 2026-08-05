@@ -143,7 +143,7 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Title</FormLabel>
+              <FormLabel>Job Title</FormLabel>
               <FormControl>
                 <Input placeholder="CEO" {...field} />
               </FormControl>

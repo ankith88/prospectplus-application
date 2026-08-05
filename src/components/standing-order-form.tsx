@@ -233,23 +233,49 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
     }
   }
 
+  // Helper function to clean undefined/null values
+  const clean = (val: any): string => {
+    if (!val) return ''
+    const str = String(val).trim()
+    return (str === 'undefined' || str === 'null') ? '' : str
+  }
+
   // Format Address strings for Premises and Postal addresses
-  const formattedSiteAddress = lead.address 
-    ? `${lead.address.street || ""}, ${lead.address.city || ""} ${lead.address.state || ""}`.trim()
-    : "N/A"
-  const postcodeSite = lead.address?.zip ?? ""
+  const unitSite = clean(lead.address?.address1) || clean((lead as any).address1)
+  const streetSite = clean(lead.address?.street) || clean((lead as any).street) || clean((lead as any).addressDetails?.street)
+  const citySite = clean(lead.address?.city) || clean(lead.city) || clean((lead as any).addressDetails?.suburb)
+  const stateSite = clean(lead.address?.state) || clean(lead.state) || clean((lead as any).addressDetails?.state)
+  const postcodeSite = clean(lead.address?.zip) || clean((lead as any).zip) || clean((lead as any).postcode) || clean((lead as any).addressDetails?.postcode)
+
+  let streetPart = streetSite
+  if (unitSite && streetSite) {
+    if (!streetSite.toLowerCase().includes(unitSite.toLowerCase())) {
+      streetPart = `${unitSite} ${streetSite}`
+    }
+  } else if (unitSite && !streetSite) {
+    streetPart = unitSite
+  }
+
+  const siteAddressParts = [streetPart, citySite, stateSite].filter(Boolean)
+  const formattedSiteAddress = siteAddressParts.length > 0 ? siteAddressParts.join(', ') : "N/A"
 
   let postalBoxText = "N/A";
   if (lead.postalAddress) {
-    const addr1 = lead.postalAddress.address1 || "";
-    const street = lead.postalAddress.street || "";
-    const match1 = addr1.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box)\s+([A-Za-z0-9\-]+)$/i);
-    if (match1) {
-      postalBoxText = match1[2];
-    } else {
-      const match2 = street.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box)\s+([A-Za-z0-9\-]+)(?:,\s*(.*))?$/i);
+    const addr1 = (lead.postalAddress.address1 || "").trim();
+    const street = (lead.postalAddress.street || "").trim();
+    if (addr1) {
+      const match1 = addr1.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box|Box)\s+([A-Za-z0-9\-]+)$/i);
+      if (match1) {
+        postalBoxText = match1[2];
+      } else {
+        postalBoxText = addr1;
+      }
+    } else if (street) {
+      const match2 = street.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box|Box)\s+([A-Za-z0-9\-]+)(?:,\s*(.*))?$/i);
       if (match2) {
         postalBoxText = match2[2];
+      } else {
+        postalBoxText = street;
       }
     }
   }

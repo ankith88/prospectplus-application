@@ -10,7 +10,21 @@ import { Loader } from '@/components/ui/loader';
 import { getLeadsFromFirebase, updateLeadStatus } from '@/services/firebase';
 import type { Lead, LeadStatus } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Calendar as CalendarIcon, RefreshCw, CheckCircle2, Users, Filter } from 'lucide-react';
+import { 
+  Search, 
+  Calendar as CalendarIcon, 
+  CheckCircle2, 
+  Users, 
+  Filter, 
+  ChevronLeft, 
+  ChevronRight, 
+  ChevronsLeft, 
+  ChevronsRight,
+  CheckSquare,
+  Square,
+  ListChecks,
+  X
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,10 +37,11 @@ import { cn, parseDateString } from '@/lib/utils';
 const LEAD_STATUSES: LeadStatus[] = [
   'New', 'Hot Lead', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch',
   'Trialing ShipMate', 'Reschedule', 'Qualified', 'Appointment Booked', 'Pre Qualified', 'Won', 'Lost',
-  'Lost Customer', 'LPO Review', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity',
+  'Lost Customer', 'LPO Review', 'LPO Opportunity', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity',
   'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity',
   'Priority Field Lead', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted',
-  'Out of Territory', 'Future Follow-up', 'LocalMile Trial Stopped', 'ShipMate Trial Stopped'
+  'Out of Territory', 'Future Follow-up', 'No Answer', 'Address Check', 'Address Confirmed',
+  'LocalMile Trial Stopped', 'ShipMate Trial Stopped'
 ];
 
 export function LeadStatusUpdater() {
@@ -42,10 +57,15 @@ export function LeadStatusUpdater() {
   const [dialerFilter, setDialerFilter] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
+
   // Bulk Operations State
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<string>('');
   const [updating, setUpdating] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<{ current: number; total: number } | null>(null);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const { toast } = useToast();
@@ -66,6 +86,11 @@ export function LeadStatusUpdater() {
   useEffect(() => {
     fetchLeads();
   }, []);
+
+  // Reset pagination to page 1 whenever filters or page size change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, sourceFilter, bucketFilter, statusFilter, amFilter, dialerFilter, dateRange, pageSize]);
 
   // Compute unique values for filters from items list
   const uniqueSources = useMemo(() => {
@@ -162,18 +187,50 @@ export function LeadStatusUpdater() {
     );
   }, [debouncedSearchTerm, sourceFilter, bucketFilter, statusFilter, amFilter, dialerFilter, dateRange]);
 
-  // Selections
+  // Pagination logic
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const startIndex = filteredItems.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredItems.length);
+
+  const displayedItems = useMemo(() => {
+    return filteredItems.slice(startIndex, endIndex);
+  }, [filteredItems, startIndex, endIndex]);
+
+  const displayedItemIds = useMemo(() => displayedItems.map(i => i.id), [displayedItems]);
+  const filteredItemIds = useMemo(() => filteredItems.map(i => i.id), [filteredItems]);
+
+  // Checkbox Selection States
+  const isAllCurrentPageSelected = displayedItemIds.length > 0 && displayedItemIds.every(id => selectedItems.includes(id));
+  const isSomeCurrentPageSelected = displayedItemIds.some(id => selectedItems.includes(id)) && !isAllCurrentPageSelected;
+  const isAllMatchingSelected = filteredItemIds.length > 0 && selectedItems.length === filteredItemIds.length;
+
   const handleSelectItem = (itemId: string, checked: boolean) => {
     setSelectedItems(prev =>
       checked ? [...prev, itemId] : prev.filter(id => id !== itemId)
     );
   };
 
-  const handleSelectAll = (checked: boolean) => {
-    setSelectedItems(checked ? filteredItems.slice(0, 100).map(i => i.id) : []);
+  const handleToggleSelectCurrentPage = (checked: boolean) => {
+    if (checked) {
+      setSelectedItems(prev => Array.from(new Set([...prev, ...displayedItemIds])));
+    } else {
+      setSelectedItems(prev => prev.filter(id => !displayedItemIds.includes(id)));
+    }
   };
 
-  const isAllSelected = filteredItems.length > 0 && selectedItems.length === Math.min(filteredItems.length, 100);
+  const handleSelectAllMatching = () => {
+    setSelectedItems(filteredItemIds);
+  };
+
+  const handleSelectCurrentPageOnly = () => {
+    setSelectedItems(displayedItemIds);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedItems([]);
+  };
 
   // Single Status Update
   const handleSingleStatusUpdate = async (leadId: string, newStatus: LeadStatus) => {
@@ -196,22 +253,38 @@ export function LeadStatusUpdater() {
     }
   };
 
-  // Bulk Status Update
+  // Chunked Bulk Status Update for unlimited/large selections
   const handleBulkStatusUpdate = async () => {
     if (selectedItems.length === 0 || !bulkStatus) return;
     setUpdating(true);
+    setUpdateProgress({ current: 0, total: selectedItems.length });
+
+    const CHUNK_SIZE = 50;
+    const targetStatus = bulkStatus as LeadStatus;
+    const selectedSet = new Set(selectedItems);
+    let completedCount = 0;
+
     try {
-      await Promise.all(
-        selectedItems.map(leadId => updateLeadStatus(leadId, bulkStatus as LeadStatus, 'Data Management bulk update', { source: 'data_management', isDataManagement: true }))
-      );
+      for (let i = 0; i < selectedItems.length; i += CHUNK_SIZE) {
+        const chunk = selectedItems.slice(i, i + CHUNK_SIZE);
+        await Promise.all(
+          chunk.map(leadId =>
+            updateLeadStatus(leadId, targetStatus, 'Data Management bulk update', { source: 'data_management', isDataManagement: true })
+          )
+        );
+        completedCount += chunk.length;
+        setUpdateProgress({ current: completedCount, total: selectedItems.length });
+      }
+
       setItems(prev =>
         prev.map(item =>
-          selectedItems.includes(item.id) ? { ...item, status: bulkStatus as LeadStatus } : item
+          selectedSet.has(item.id) ? { ...item, status: targetStatus } : item
         )
       );
+
       toast({
         title: 'Bulk Update Successful',
-        description: `Successfully updated ${selectedItems.length} leads to status: ${bulkStatus}.`,
+        description: `Successfully updated ${selectedItems.length.toLocaleString()} lead(s) to "${targetStatus}".`,
       });
       setSelectedItems([]);
       setBulkStatus('');
@@ -220,10 +293,11 @@ export function LeadStatusUpdater() {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to perform bulk status update.',
+        description: 'Failed to complete bulk status update for all selected leads.',
       });
     } finally {
       setUpdating(false);
+      setUpdateProgress(null);
     }
   };
 
@@ -362,38 +436,89 @@ export function LeadStatusUpdater() {
 
       {/* Bulk Status Update Card */}
       {selectedItems.length > 0 && (
-        <div className="p-4 bg-muted/40 rounded-lg border border-primary/20 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between transition-all duration-200">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-primary shrink-0 animate-bounce" />
-            <span className="font-medium text-sm">
-              {selectedItems.length} Lead(s) Selected
-            </span>
+        <div className="p-4 bg-muted/40 rounded-lg border border-primary/20 flex flex-col gap-3 transition-all duration-200">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0 animate-bounce" />
+                <span className="font-semibold text-sm">
+                  {selectedItems.length.toLocaleString()} Lead(s) Selected
+                </span>
+              </div>
+
+              {!isAllMatchingSelected && filteredItems.length > 0 && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleSelectAllMatching}
+                  className="h-8 text-xs bg-primary/10 border-primary/30 hover:bg-primary/20 text-primary font-medium"
+                >
+                  <ListChecks className="mr-1.5 h-3.5 w-3.5" />
+                  Select all {filteredItems.length.toLocaleString()} matching leads
+                </Button>
+              )}
+
+              {isAllMatchingSelected && (
+                <Badge variant="secondary" className="bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 font-medium">
+                  All {filteredItems.length.toLocaleString()} matching leads selected across all pages
+                </Badge>
+              )}
+
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleDeselectAll}
+                className="h-8 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <X className="mr-1 h-3.5 w-3.5" />
+                Clear Selection
+              </Button>
+            </div>
+
+            <div className="flex flex-1 sm:flex-initial items-center gap-2 w-full sm:w-auto">
+              <Select value={bulkStatus} onValueChange={setBulkStatus} disabled={updating}>
+                <SelectTrigger className="w-full sm:w-[220px] bg-background">
+                  <SelectValue placeholder="Select New Status" />
+                </SelectTrigger>
+                <SelectContent className="z-[70]">
+                  {LEAD_STATUSES.map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button 
+                onClick={handleBulkStatusUpdate} 
+                disabled={updating || !bulkStatus}
+                className="shrink-0 font-medium"
+              >
+                {updating ? (
+                  <div className="flex items-center gap-2">
+                    <Loader />
+                    <span>
+                      {updateProgress ? `${updateProgress.current}/${updateProgress.total}` : 'Updating...'}
+                    </span>
+                  </div>
+                ) : (
+                  `Apply Status (${selectedItems.length.toLocaleString()})`
+                )}
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-1 sm:flex-initial items-center gap-2 w-full sm:w-auto">
-            <Select value={bulkStatus} onValueChange={setBulkStatus}>
-              <SelectTrigger className="w-full sm:w-[220px] bg-background">
-                <SelectValue placeholder="Select New Status" />
-              </SelectTrigger>
-              <SelectContent className="z-[70]">
-                {LEAD_STATUSES.map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button 
-              onClick={handleBulkStatusUpdate} 
-              disabled={updating || !bulkStatus}
-              className="shrink-0"
-            >
-              {updating ? <Loader /> : 'Apply Status'}
-            </Button>
-          </div>
+
+          {updating && updateProgress && (
+            <div className="w-full bg-muted rounded-full h-2 overflow-hidden border border-border/50">
+              <div 
+                className="bg-primary h-full transition-all duration-200" 
+                style={{ width: `${Math.round((updateProgress.current / updateProgress.total) * 100)}%` }}
+              />
+            </div>
+          )}
         </div>
       )}
 
-      {/* Lead Count & Filter Summary Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 bg-muted/20 rounded-md border border-border/60">
-        <div className="flex items-center gap-2 flex-wrap text-sm">
+      {/* Lead Count, Selection Shortcuts & Filter Summary Bar */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 px-4 py-3 bg-muted/20 rounded-md border border-border/60">
+        <div className="flex items-center gap-3 flex-wrap text-sm">
           <div className="flex items-center gap-2 font-medium">
             <Users className="h-4 w-4 text-primary shrink-0" />
             <span>Matching Leads:</span>
@@ -401,41 +526,75 @@ export function LeadStatusUpdater() {
               {loading ? '...' : filteredItems.length.toLocaleString()}
             </Badge>
           </div>
+
           {hasActiveFilters && !loading && (
             <span className="text-xs text-muted-foreground">
               (Filtered from {items.length.toLocaleString()} total leads)
             </span>
           )}
+
           {!hasActiveFilters && !loading && (
             <span className="text-xs text-muted-foreground">
               (Total in system: {items.length.toLocaleString()})
             </span>
           )}
-          {filteredItems.length > 100 && (
-            <Badge variant="outline" className="text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800">
-              Showing first 100 in table
-            </Badge>
-          )}
         </div>
 
-        {hasActiveFilters && (
-          <div className="flex items-center gap-1.5 text-xs font-medium text-primary">
-            <Filter className="h-3.5 w-3.5" />
-            <span>Filters Active</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          {!loading && filteredItems.length > 0 && (
+            <div className="flex items-center gap-1.5 border-l border-border/60 pl-3">
+              <span className="text-muted-foreground font-medium">Select:</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSelectAllMatching}
+                disabled={isAllMatchingSelected}
+                className="h-7 text-xs px-2.5"
+              >
+                <CheckSquare className="mr-1 h-3 w-3" />
+                All Matching ({filteredItems.length.toLocaleString()})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSelectCurrentPageOnly}
+                disabled={isAllCurrentPageSelected && selectedItems.length === displayedItems.length}
+                className="h-7 text-xs px-2.5"
+              >
+                Current Page ({displayedItems.length})
+              </Button>
+              {selectedItems.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDeselectAll}
+                  className="h-7 text-xs px-2 text-muted-foreground"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          )}
+
+          {hasActiveFilters && (
+            <div className="flex items-center gap-1.5 font-medium text-primary ml-auto">
+              <Filter className="h-3.5 w-3.5" />
+              <span>Filters Active</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Leads Table */}
-      <div className="rounded-md border bg-background">
+      <div className="rounded-md border bg-background overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-12">
                 <Checkbox
-                  checked={isAllSelected}
-                  onCheckedChange={handleSelectAll}
-                  aria-label="Select all items on this page"
+                  checked={isAllCurrentPageSelected ? true : (isSomeCurrentPageSelected ? 'indeterminate' : false)}
+                  onCheckedChange={(checked) => handleToggleSelectCurrentPage(!!checked)}
+                  aria-label="Select all items on current page"
                 />
               </TableHead>
               <TableHead>Company Name</TableHead>
@@ -457,43 +616,46 @@ export function LeadStatusUpdater() {
                   </div>
                 </TableCell>
               </TableRow>
-            ) : filteredItems.length > 0 ? (
-              filteredItems.slice(0, 100).map((item) => (
-                <TableRow key={item.id} data-state={selectedItems.includes(item.id) && "selected"}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedItems.includes(item.id)}
-                      onCheckedChange={(checked) => handleSelectItem(item.id, !!checked)}
-                    />
-                  </TableCell>
-                  <TableCell className="font-semibold text-sm">
-                    <div className="flex flex-col">
-                      <span>{item.companyName}</span>
-                      <span className="text-xs text-muted-foreground font-mono">{item.id}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="capitalize text-sm">{item.bucket || 'N/A'}</TableCell>
-                  <TableCell className="text-sm">{item.customerSource || 'N/A'}</TableCell>
-                  <TableCell className="text-sm">{item.accountManagerAssigned || 'Unassigned'}</TableCell>
-                  <TableCell className="text-sm">{item.dialerAssigned || 'Unassigned'}</TableCell>
-                  <TableCell className="text-sm font-mono">{item.dateLeadEntered || '-'}</TableCell>
-                  <TableCell>
-                    <Select 
-                      value={item.status} 
-                      onValueChange={(val) => handleSingleStatusUpdate(item.id, val as LeadStatus)}
-                    >
-                      <SelectTrigger className="h-9 w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="z-[70]">
-                        {LEAD_STATUSES.map(s => (
-                          <SelectItem key={s} value={s}>{s}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                </TableRow>
-              ))
+            ) : displayedItems.length > 0 ? (
+              displayedItems.map((item) => {
+                const isSelected = selectedItems.includes(item.id);
+                return (
+                  <TableRow key={item.id} data-state={isSelected && "selected"}>
+                    <TableCell>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => handleSelectItem(item.id, !!checked)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-semibold text-sm">
+                      <div className="flex flex-col">
+                        <span>{item.companyName}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{item.id}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="capitalize text-sm">{item.bucket || 'N/A'}</TableCell>
+                    <TableCell className="text-sm">{item.customerSource || 'N/A'}</TableCell>
+                    <TableCell className="text-sm">{item.accountManagerAssigned || 'Unassigned'}</TableCell>
+                    <TableCell className="text-sm">{item.dialerAssigned || 'Unassigned'}</TableCell>
+                    <TableCell className="text-sm font-mono">{item.dateLeadEntered || '-'}</TableCell>
+                    <TableCell>
+                      <Select 
+                        value={item.status} 
+                        onValueChange={(val) => handleSingleStatusUpdate(item.id, val as LeadStatus)}
+                      >
+                        <SelectTrigger className="h-9 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="z-[70]">
+                          {LEAD_STATUSES.map(s => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
                 <TableCell colSpan={8} className="h-24 text-center text-muted-foreground text-sm">
@@ -503,10 +665,88 @@ export function LeadStatusUpdater() {
             )}
           </TableBody>
         </Table>
-        
-        {filteredItems.length > 100 && (
-          <div className="p-4 text-xs text-muted-foreground border-t bg-muted/10">
-            Showing first 100 results. Refine your search filters to narrow down the records list.
+
+        {/* Table Pagination Footer */}
+        {!loading && filteredItems.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t bg-muted/10 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>
+                Showing <strong className="font-medium text-foreground">{startIndex + 1}</strong> to{' '}
+                <strong className="font-medium text-foreground">{endIndex}</strong> of{' '}
+                <strong className="font-medium text-foreground">{filteredItems.length.toLocaleString()}</strong> results
+              </span>
+            </div>
+
+            <div className="flex items-center gap-6">
+              {/* Rows per page selector */}
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Per page:</span>
+                <Select 
+                  value={pageSize.toString()} 
+                  onValueChange={(val) => setPageSize(Number(val))}
+                >
+                  <SelectTrigger className="h-8 w-[75px] bg-background text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="z-[70]">
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                    <SelectItem value="250">250</SelectItem>
+                    <SelectItem value="500">500</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Page navigation controls */}
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={safeCurrentPage === 1}
+                  className="h-8 w-8 p-0"
+                  title="First Page"
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="h-8 w-8 p-0"
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <span className="font-medium text-foreground px-2">
+                  Page {safeCurrentPage} of {totalPages}
+                </span>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="h-8 w-8 p-0"
+                  title="Next Page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={safeCurrentPage === totalPages}
+                  className="h-8 w-8 p-0"
+                  title="Last Page"
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>

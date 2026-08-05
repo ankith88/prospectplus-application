@@ -126,7 +126,7 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Title</FormLabel>
+              <FormLabel>Job Title</FormLabel>
               <FormControl>
                 <Input placeholder="Manager" {...field} />
               </FormControl>

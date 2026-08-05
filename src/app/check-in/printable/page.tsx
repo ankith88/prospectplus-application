@@ -31,7 +31,7 @@ const TextInputLine = ({ label }: { label: string }) => (
 const ContactInputSet = () => (
     <div className="space-y-4 border-t-2 border-gray-200 pt-4 first:border-t-0 first:pt-0">
         <TextInputLine label="Name" />
-        <TextInputLine label="Title" />
+        <TextInputLine label="Job Title" />
         <TextInputLine label="Email" />
         <TextInputLine label="Phone" />
     </div>

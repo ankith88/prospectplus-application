@@ -16,6 +16,65 @@ interface SofClientProps {
   invalidReason: string;
 }
 
+function cleanField(val: any): string {
+  if (!val) return '';
+  const str = String(val).trim();
+  if (str === 'undefined' || str === 'null') return '';
+  return str;
+}
+
+function formatPremisesAddress(lead: Lead): string {
+  if (!lead) return 'N/A';
+
+  const addr: any = lead.address || {};
+  const addrDetails = (lead as any).addressDetails || {};
+
+  const unit = cleanField(addr.address1) || cleanField((lead as any).address1);
+  const street = cleanField(addr.street) || cleanField((lead as any).street) || cleanField(addrDetails.street);
+  const city = cleanField(addr.city) || cleanField(lead.city) || cleanField(addrDetails.suburb);
+  const state = cleanField(addr.state) || cleanField(lead.state) || cleanField(addrDetails.state);
+  const zip = cleanField(addr.zip) || cleanField((lead as any).zip) || cleanField((lead as any).postcode) || cleanField(addrDetails.postcode);
+
+  let streetPart = street;
+  if (unit && street) {
+    if (!street.toLowerCase().includes(unit.toLowerCase())) {
+      streetPart = `${unit} ${street}`;
+    }
+  } else if (unit && !street) {
+    streetPart = unit;
+  }
+
+  const parts = [streetPart, city, state, zip].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : 'N/A';
+}
+
+function formatPostalAddress(lead: Lead): string {
+  if (!lead) return 'N/A';
+
+  const p = lead.postalAddress;
+  const boxTypeNum = cleanField(p?.address1) || cleanField((lead as any).postalAddress1) || (cleanField((lead as any).boxNumber) ? `PO Box ${cleanField((lead as any).boxNumber)}` : '');
+  const street = cleanField(p?.street) || cleanField((lead as any).postalStreet);
+  const city = cleanField(p?.city) || cleanField((lead as any).postalCity) || cleanField(lead.city);
+  const state = cleanField(p?.state) || cleanField((lead as any).postalState) || cleanField(lead.state);
+  const zip = cleanField(p?.zip) || cleanField((lead as any).postalZip) || cleanField((lead as any).postalPostcode) || cleanField((lead as any).zip) || cleanField((lead as any).postcode);
+
+  const parts: string[] = [];
+  if (boxTypeNum) {
+    parts.push(boxTypeNum);
+  }
+  if (street) {
+    if (!boxTypeNum || !street.toLowerCase().includes(boxTypeNum.toLowerCase())) {
+      parts.push(street);
+    }
+  }
+  if (city) parts.push(city);
+  if (state) parts.push(state);
+  if (zip) parts.push(zip);
+
+  const cleaned = parts.filter(Boolean);
+  return cleaned.length > 0 ? cleaned.join(', ') : 'N/A';
+}
+
 export default function SofClient({ token, lead, isValidSof, invalidReason }: SofClientProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -161,8 +220,8 @@ export default function SofClient({ token, lead, isValidSof, invalidReason }: So
   };
 
   // Address helper strings
-  const streetAddr = [lead.address?.street || lead.address?.address1, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ');
-  const postalAddr = [lead.postalAddress?.street || lead.postalAddress?.address1, lead.postalAddress?.city, lead.postalAddress?.state, lead.postalAddress?.zip].filter(Boolean).join(', ');
+  const streetAddr = formatPremisesAddress(lead);
+  const postalAddr = formatPostalAddress(lead);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center py-8 px-4 font-sans">

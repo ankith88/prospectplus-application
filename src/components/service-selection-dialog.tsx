@@ -761,18 +761,15 @@ export function ServiceSelectionDialog({
     resolved = resolved.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
     resolved = resolved.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
 
-    const hasAmpoForSof = selectedServices.some(s => s.toLowerCase().includes('ampo')) || lead.services?.some((s: any) => {
-      const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
-      const n = String(name).toLowerCase();
-      return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
-    });
-    const hasPostalForSof = !!(lead.postalAddress?.street || lead.postalAddress?.address1 || lead.postalAddress?.city || lead.postalAddress?.zip);
-    const sofPublicLink = (hasAmpoForSof && hasPostalForSof)
-      ? (lead.sofLink || (lead.id ? `https://prospectplus.com.au/sof/${encryptLeadId(lead.id)}` : ''))
-      : '';
+    const sofPublicLink = lead.sofLink || (lead as any).standingOrderFormLink || (lead.id ? `https://prospectplus.com.au/sof/${encryptLeadId(lead.id)}` : '');
     resolved = resolved.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
     resolved = resolved.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
     resolved = resolved.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
+    resolved = resolved.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
+    resolved = resolved.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
+    resolved = resolved.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
+    resolved = resolved.replace(/\{\{sof_link\}\}/gi, sofPublicLink);
+    resolved = resolved.replace(/\{\{SOF_Link\}\}/gi, sofPublicLink);
 
     resolved = resolved.replace(/\{\{unsubscribe_link\}\}/gi, '#');
     resolved = resolved.replace(/\{\{unsubscribe_url\}\}/gi, '#');
@@ -1994,14 +1991,24 @@ export function ServiceSelectionDialog({
                        </Button>
 
                        <Button
-                         type="button"
-                         size="sm"
-                         variant="outline"
-                         className="h-8 text-xs"
-                         onClick={() => insertContent('{{Lead.LocalMileRegistrationLink}}')}
-                       >
-                         + LocalMile Link
-                       </Button>
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() => insertContent('{{Lead.LocalMileRegistrationLink}}')}
+                        >
+                          + LocalMile Link
+                        </Button>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() => insertContent('{{Lead.StandingOrderFormLink}}')}
+                        >
+                          + Standing Order Link
+                        </Button>
 
                        {selectedProducts.length > 0 && (
                          <Button
