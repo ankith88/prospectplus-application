@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { LeadStatusBadge } from '../lead-status-badge';
+import { StatusBreakdownBar } from '@/components/status-breakdown-bar';
 import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 
@@ -149,6 +150,7 @@ export default function AMReportsDashboard() {
         appointments: ExtendedAppointment[];
     } | null>(null);
     const [drillDownAppSearchQuery, setDrillDownAppSearchQuery] = useState<string>("");
+    const [drillDownAppStatusFilter, setDrillDownAppStatusFilter] = useState<string>("all");
 
     const handleExportAppointments = (appsToExport: ExtendedAppointment[], filename: string) => {
         if (appsToExport.length === 0) {
@@ -159,15 +161,12 @@ export default function AMReportsDashboard() {
             const primaryContact = app.lead?.contacts?.find(c => c.isPrimary) || app.lead?.contacts?.[0];
             return {
                 'Company Name': app.leadName || app.lead?.companyName || '',
-                'Prospect+ ID': app.prospectPlusId || app.lead?.prospectPlusId || app.leadId || '',
                 'Contact Name': primaryContact?.name || '',
-                'Phone': primaryContact?.phone || app.lead?.customerPhone || '',
-                'Email': primaryContact?.email || '',
-                'Lead Status': app.leadStatus || app.lead?.status || '',
-                'Appointment Status': app.appointmentStatus || 'Pending',
-                'Scheduled Date': app.duedate ? app.duedate.split('T')[0] : '',
-                'Scheduled Time': app.starttime || '',
-                'Assigned AM': app.assignedTo || app.amName || '',
+                'Lead Status': app.lead?.customerStatus || app.lead?.status || app.leadStatus || '',
+                'Appointment Status': app.appointmentStatus || '',
+                'Scheduled Date': app.duedate || '',
+                'Scheduled Time': app.duetime || '',
+                'Assigned AM': app.assignedTo || ''
             };
         });
         const headers = Object.keys(exportData[0]);
@@ -186,6 +185,9 @@ export default function AMReportsDashboard() {
     const filteredDrillDownAppointments = useMemo(() => {
         if (!drillDownAppointments) return [];
         let list = drillDownAppointments.appointments;
+        if (drillDownAppStatusFilter !== "all") {
+            list = list.filter(app => (app.lead?.customerStatus || app.lead?.status || app.leadStatus || 'New') === drillDownAppStatusFilter);
+        }
         if (drillDownAppSearchQuery.trim() !== "") {
             const queryVal = drillDownAppSearchQuery.toLowerCase();
             list = list.filter(app => {
@@ -196,7 +198,7 @@ export default function AMReportsDashboard() {
             });
         }
         return list;
-    }, [drillDownAppointments, drillDownAppSearchQuery]);
+    }, [drillDownAppointments, drillDownAppSearchQuery, drillDownAppStatusFilter]);
 
     const handleExportData = (leadsToExport: Lead[], filename: string) => {
         if (leadsToExport.length === 0) {
@@ -3677,6 +3679,14 @@ export default function AMReportsDashboard() {
                             </Button>
                         </div>
                         {drillDownData && drillDownData.leads.length > 0 && (
+                            <StatusBreakdownBar
+                                items={drillDownData.leads}
+                                selectedStatus={drillDownStatusFilter === 'all' ? null : drillDownStatusFilter}
+                                onSelectStatus={(status) => setDrillDownStatusFilter(status || 'all')}
+                                getStatus={(l) => l.customerStatus || l.status || 'New'}
+                            />
+                        )}
+                        {drillDownData && drillDownData.leads.length > 0 && (
                             <div className="flex items-center gap-4 mt-4">
                                 <div className="flex items-center gap-2 flex-1">
                                     <Search className="h-4 w-4 text-slate-400 shrink-0" />
@@ -3779,6 +3789,14 @@ export default function AMReportsDashboard() {
                                 <Download className="h-4 w-4 mr-2" /> Export List
                             </Button>
                         </div>
+                        {drillDownAppointments && drillDownAppointments.appointments.length > 0 && (
+                            <StatusBreakdownBar
+                                items={drillDownAppointments.appointments}
+                                selectedStatus={drillDownAppStatusFilter === 'all' ? null : drillDownAppStatusFilter}
+                                onSelectStatus={(status) => setDrillDownAppStatusFilter(status || 'all')}
+                                getStatus={(app) => app.lead?.customerStatus || app.lead?.status || app.leadStatus || 'New'}
+                            />
+                        )}
                         {drillDownAppointments && drillDownAppointments.appointments.length > 0 && (
                             <div className="flex items-center gap-4 mt-4">
                                 <div className="flex items-center gap-2 flex-1">

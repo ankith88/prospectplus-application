@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Franchisee, Operator } from '@/lib/types';
 import { getAllFranchisees, getOperatorsForFranchisee, updateFranchiseeCampaigns } from '@/services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -63,6 +64,7 @@ export default function FranchiseeDirectoryClient() {
   const { user, userProfile, isSuperAdmin } = useAuth();
   const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     async function loadData() {
@@ -553,7 +555,7 @@ export default function FranchiseeDirectoryClient() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setPresaleWizardFranchiseeId(franchisee.internalId);
+                          router.push(`/admin/franchisees/presales/${franchisee.internalId}`);
                         }}
                         className="h-7 text-[11px] px-2 gap-1 border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/10 font-semibold"
                         title="Mark Territory for Sale / Presales"
@@ -594,7 +596,7 @@ export default function FranchiseeDirectoryClient() {
                   </DialogDescription>
                 </DialogHeader>
                 <Button
-                  onClick={() => setPresaleWizardFranchiseeId(selectedFranchisee.internalId)}
+                  onClick={() => router.push(`/admin/franchisees/presales/${selectedFranchisee.internalId}`)}
                   className="bg-[#095c7b] hover:bg-[#07465e] text-white text-xs gap-1.5 font-semibold"
                 >
                   <Tag className="h-4 w-4 text-[#eaf143]" /> Mark Territory for Sale / Presales
@@ -943,16 +945,6 @@ export default function FranchiseeDirectoryClient() {
             </div>
           </DialogContent>
         </Dialog>
-      )}
-
-      {/* Territory Presale Wizard Modal */}
-      {presaleWizardFranchiseeId && (
-        <TerritoryPresaleWizard
-          open={!!presaleWizardFranchiseeId}
-          onOpenChange={(open) => !open && setPresaleWizardFranchiseeId(null)}
-          franchiseeId={presaleWizardFranchiseeId}
-          franchiseeName={franchisees.find((f) => String(f.internalId) === String(presaleWizardFranchiseeId))?.name || ''}
-        />
       )}
     </div>
   );

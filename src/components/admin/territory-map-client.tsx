@@ -3,12 +3,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Franchisee } from '@/lib/types';
 import { getAllFranchisees } from '@/services/firebase';
-import { GoogleMap, InfoWindowF, Autocomplete, CircleF } from '@react-google-maps/api';
+import { GoogleMap, InfoWindowF, Autocomplete, CircleF, MarkerF } from '@react-google-maps/api';
 import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { Loader } from '@/components/ui/loader';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { MapPin, User, Mail, Phone, CheckCircle2, AlertTriangle, X, Building2 } from 'lucide-react';
 
 const containerStyle = {
   width: '100%',
@@ -20,9 +23,6 @@ const defaultCenter = {
   lng: 133.7751,
 };
 
-// Cache to prevent duplicate Geocoding lookups for the same postcode/suburb
-const geocodeCache = new Map<string, google.maps.LatLngLiteral>();
-
 interface TerritoryOverlay {
   id: string;
   franchisee: Franchisee;
@@ -31,6 +31,29 @@ interface TerritoryOverlay {
   state: string;
   center: google.maps.LatLngLiteral;
 }
+
+// Helper to extract suburb, state, postcode from Google Place address components
+const getAddressComponents = (place: google.maps.places.PlaceResult) => {
+  let suburb = '';
+  let state = '';
+  let postcode = '';
+
+  if (place.address_components) {
+    for (const comp of place.address_components) {
+      if (comp.types.includes('locality') || comp.types.includes('sublocality') || comp.types.includes('sublocality_level_1')) {
+        if (!suburb) suburb = comp.long_name.trim();
+      }
+      if (comp.types.includes('administrative_area_level_1')) {
+        state = comp.short_name.trim();
+      }
+      if (comp.types.includes('postal_code')) {
+        postcode = comp.long_name.trim();
+      }
+    }
+  }
+
+  return { suburb, state, postcode };
+};
 
 // Generate a random pastel color for each franchisee for clear visual distinction
 const getFranchiseeColor = (internalId: string) => {
@@ -53,6 +76,7 @@ export default function TerritoryMapClient() {
   const [placeAutocomplete, setPlaceAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
   const [placeSearchQuery, setPlaceSearchQuery] = useState('');
   const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
+  const [showAddressInfoWindow, setShowAddressInfoWindow] = useState<boolean>(true);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [featureLayer, setFeatureLayer] = useState<google.maps.FeatureLayer | null>(null);
 
@@ -113,6 +137,58 @@ export default function TerritoryMapClient() {
     resolveTerritories();
   }, [isLoaded, loadingData, franchisees]);
 
+  // Address details for currently selected place
+  const selectedAddressInfo = useMemo(() => {
+    if (!selectedPlace) return null;
+
+    const { suburb, state, postcode } = getAddressComponents(selectedPlace);
+    const formattedAddress = selectedPlace.formatted_address || selectedPlace.name || placeSearchQuery;
+
+    return {
+      formattedAddress,
+      suburb,
+      state,
+      postcode,
+      location: selectedPlace.geometry?.location || null,
+    };
+  }, [selectedPlace, placeSearchQuery]);
+
+  // Franchisee(s) servicing the selected address
+  const servicingFranchisees = useMemo(() => {
+    if (!selectedPlace) return [];
+
+    const { suburb, postcode } = getAddressComponents(selectedPlace);
+    if (!suburb && !postcode) return [];
+
+    const subLower = suburb.toLowerCase();
+    const postLower = postcode.toLowerCase();
+
+    const matched = new Map<string, { franchisee: Franchisee; matchedSuburbs: string[] }>();
+
+    franchisees.forEach(f => {
+      const territories = f.territoryJson || [];
+      const matchingSuburbs: string[] = [];
+
+      territories.forEach(t => {
+        const tSub = (t.suburbs || '').trim().toLowerCase();
+        const tPost = String(t.post_code || '').trim().toLowerCase();
+
+        const isSubMatch = subLower && tSub && tSub === subLower;
+        const isPostMatch = postLower && tPost && tPost === postLower;
+
+        if (isSubMatch || isPostMatch) {
+          matchingSuburbs.push(`${t.suburbs}${t.post_code ? ` (${t.post_code})` : ''}`);
+        }
+      });
+
+      if (matchingSuburbs.length > 0) {
+        matched.set(f.internalId, { franchisee: f, matchedSuburbs: matchingSuburbs });
+      }
+    });
+
+    return Array.from(matched.values());
+  }, [selectedPlace, franchisees]);
+
   const filteredOverlays = useMemo(() => {
     return overlays.filter(overlay => {
       if (selectedFranchiseeId !== 'all' && overlay.franchisee.internalId !== selectedFranchiseeId) {
@@ -120,26 +196,11 @@ export default function TerritoryMapClient() {
       }
       
       if (selectedPlace && selectedPlace.address_components) {
-        const components = selectedPlace.address_components;
-        let placeSuburb = '';
-        let placeState = '';
-        let placePostcode = '';
+        const { suburb: placeSuburb, state: placeState, postcode: placePostcode } = getAddressComponents(selectedPlace);
         
-        for (const comp of components) {
-          if (comp.types.includes('locality')) {
-            placeSuburb = comp.long_name.toLowerCase();
-          }
-          if (comp.types.includes('administrative_area_level_1')) {
-            placeState = comp.short_name.toLowerCase();
-          }
-          if (comp.types.includes('postal_code')) {
-            placePostcode = comp.long_name.toLowerCase();
-          }
-        }
-        
-        if (placeSuburb && overlay.suburb.toLowerCase() !== placeSuburb) return false;
-        if (placeState && overlay.state.toLowerCase() !== placeState) return false;
-        if (placePostcode && overlay.postcode.toLowerCase() !== placePostcode) return false;
+        if (placeSuburb && overlay.suburb.toLowerCase() !== placeSuburb.toLowerCase()) return false;
+        if (placeState && overlay.state.toLowerCase() !== placeState.toLowerCase()) return false;
+        if (placePostcode && overlay.postcode.toLowerCase() !== placePostcode.toLowerCase()) return false;
       }
       
       return true;
@@ -150,14 +211,21 @@ export default function TerritoryMapClient() {
     if (placeAutocomplete) {
       const place = placeAutocomplete.getPlace();
       setSelectedPlace(place);
+      setShowAddressInfoWindow(true);
       if (place.name) {
         setPlaceSearchQuery(place.formatted_address || place.name);
       }
       if (place.geometry?.location && map) {
         map.panTo(place.geometry.location);
-        map.setZoom(12);
+        map.setZoom(13);
       }
     }
+  };
+
+  const handleClearLocation = () => {
+    setSelectedPlace(null);
+    setPlaceSearchQuery('');
+    setShowAddressInfoWindow(false);
   };
 
   // Auto-zoom to franchisee suburbs when a franchisee is selected
@@ -176,7 +244,7 @@ export default function TerritoryMapClient() {
 
     if (hasValidBounds) {
       // Adding padding to account for the UI panel on the left
-      map.fitBounds(bounds, { left: 350, right: 50, top: 50, bottom: 50 });
+      map.fitBounds(bounds, { left: 400, right: 50, top: 50, bottom: 50 });
     }
   }, [map, selectedFranchiseeId, filteredOverlays]);
 
@@ -184,7 +252,6 @@ export default function TerritoryMapClient() {
   useEffect(() => {
     if (!map || !hasDataDrivenStyling) return;
 
-    // We use the LOCALITY feature layer for suburbs
     let layer: google.maps.FeatureLayer;
     try {
       layer = map.getFeatureLayer(google.maps.FeatureType.LOCALITY);
@@ -194,15 +261,11 @@ export default function TerritoryMapClient() {
       return;
     }
 
-    // Create a map of lowercased suburb names to their overlay data for quick lookup
     const suburbMap = new Map<string, TerritoryOverlay>();
     filteredOverlays.forEach(overlay => {
-      // Use both suburb and postcode if available to improve accuracy, 
-      // but Feature displayName is usually just the suburb name.
       suburbMap.set(overlay.suburb.toLowerCase(), overlay);
     });
 
-    // Apply the styling
     layer.style = (options: google.maps.FeatureStyleFunctionOptions) => {
       const feature = options.feature as any;
       const displayName = feature.displayName?.toLowerCase();
@@ -222,7 +285,6 @@ export default function TerritoryMapClient() {
         };
       }
       
-      // Default style (transparent)
       return null;
     };
 
@@ -238,7 +300,6 @@ export default function TerritoryMapClient() {
       
       const overlay = filteredOverlays.find(o => o.suburb.toLowerCase() === displayName);
       if (overlay && e.latLng) {
-        // Set the active overlay, but override the center to where they clicked
         setActiveOverlay({
           ...overlay,
           center: { lat: e.latLng.lat(), lng: e.latLng.lng() }
@@ -274,11 +335,11 @@ export default function TerritoryMapClient() {
 
   return (
     <div className="relative w-full h-full">
-      <div className="absolute top-4 left-4 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4 rounded-md shadow-md w-80 space-y-4 border">
+      <div className="absolute top-4 left-4 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4 rounded-xl shadow-lg w-80 sm:w-96 space-y-4 border border-border max-h-[calc(100vh-6rem)] overflow-y-auto">
         <div>
           <label className="text-sm font-medium mb-1 block">Franchisee</label>
           <Select value={selectedFranchiseeId} onValueChange={setSelectedFranchiseeId}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full bg-background border-input">
               <SelectValue placeholder="All Franchisees" />
             </SelectTrigger>
             <SelectContent>
@@ -289,25 +350,136 @@ export default function TerritoryMapClient() {
             </SelectContent>
           </Select>
         </div>
+
         <div>
-          <label className="text-sm font-medium mb-1 block">Location</label>
+          <label className="text-sm font-medium mb-1 block">Check Address / Location</label>
           <Autocomplete
             onLoad={setPlaceAutocomplete}
             onPlaceChanged={onPlaceChanged}
             options={{ componentRestrictions: { country: 'au' } }}
           >
-            <Input 
-              placeholder="Search suburb, state, postcode..." 
-              value={placeSearchQuery}
-              onChange={(e) => {
-                setPlaceSearchQuery(e.target.value);
-                if (!e.target.value) {
-                  setSelectedPlace(null);
-                }
-              }}
-            />
+            <div className="relative">
+              <Input 
+                placeholder="Search suburb, address, postcode..." 
+                value={placeSearchQuery}
+                onChange={(e) => {
+                  setPlaceSearchQuery(e.target.value);
+                  if (!e.target.value) {
+                    setSelectedPlace(null);
+                  }
+                }}
+                className="pr-8"
+              />
+              {placeSearchQuery && (
+                <button
+                  onClick={handleClearLocation}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                  type="button"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </Autocomplete>
         </div>
+
+        {/* Servicing Franchisee Result Box */}
+        {selectedAddressInfo && (
+          <div className="p-3 bg-muted/40 rounded-lg border border-border space-y-3 text-xs">
+            <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2">
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex items-center gap-1.5 font-semibold text-foreground text-sm">
+                  <MapPin className="w-4 h-4 text-primary shrink-0" />
+                  <span className="truncate" title={selectedAddressInfo.formattedAddress}>
+                    {selectedAddressInfo.formattedAddress}
+                  </span>
+                </div>
+                {(selectedAddressInfo.suburb || selectedAddressInfo.postcode) && (
+                  <p className="text-muted-foreground text-xs pl-5 font-medium">
+                    {[selectedAddressInfo.suburb, selectedAddressInfo.state, selectedAddressInfo.postcode].filter(Boolean).join(', ')}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Coverage Status & Matched Franchisees */}
+            {servicingFranchisees.length > 0 ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 text-xs py-0.5 px-2 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Serviced ({servicingFranchisees.length})</span>
+                  </Badge>
+                  <span className="text-[11px] text-muted-foreground">Territory Match</span>
+                </div>
+
+                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                  {servicingFranchisees.map(({ franchisee, matchedSuburbs }) => (
+                    <div
+                      key={franchisee.internalId}
+                      className="p-3 rounded-lg bg-background border border-border shadow-xs space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="font-bold text-sm text-foreground truncate">
+                          {franchisee.name || franchisee.internalId}
+                        </h4>
+                        <Badge variant="outline" className="text-[10px] font-mono shrink-0">
+                          {franchisee.internalId}
+                        </Badge>
+                      </div>
+
+                      {franchisee.mainContact && (
+                        <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                          <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-medium text-foreground">{franchisee.mainContact}</span>
+                        </p>
+                      )}
+
+                      {franchisee.email && (
+                        <p className="text-muted-foreground flex items-center gap-1.5 text-xs truncate">
+                          <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <a href={`mailto:${franchisee.email}`} className="hover:underline text-primary truncate">
+                            {franchisee.email}
+                          </a>
+                        </p>
+                      )}
+
+                      {franchisee.mobile && (
+                        <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                          <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <a href={`tel:${franchisee.mobile}`} className="hover:underline">
+                            {franchisee.mobile}
+                          </a>
+                        </p>
+                      )}
+
+                      <div className="pt-1 flex items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-7 text-xs w-full bg-primary/10 hover:bg-primary/20 text-primary border-0 font-medium"
+                          onClick={() => setSelectedFranchiseeId(franchisee.internalId)}
+                        >
+                          Show Franchisee Territory
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-900 dark:text-amber-200 space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Unserviced Territory</span>
+                </div>
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  No franchisee currently services {[selectedAddressInfo.suburb, selectedAddressInfo.state, selectedAddressInfo.postcode].filter(Boolean).join(', ') || 'this location'}.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <GoogleMap
@@ -359,6 +531,47 @@ export default function TerritoryMapClient() {
           );
         })}
 
+        {/* Searched Address Pin & InfoWindow */}
+        {selectedAddressInfo?.location && (
+          <MarkerF
+            position={selectedAddressInfo.location}
+            onClick={() => setShowAddressInfoWindow(true)}
+          />
+        )}
+
+        {selectedAddressInfo?.location && showAddressInfoWindow && (
+          <InfoWindowF
+            position={selectedAddressInfo.location}
+            onCloseClick={() => setShowAddressInfoWindow(false)}
+          >
+            <div className="p-1 min-w-[220px] max-w-[280px] text-sm space-y-1.5">
+              <h3 className="font-bold text-sm border-b pb-1">
+                {selectedAddressInfo.formattedAddress}
+              </h3>
+              {servicingFranchisees.length > 0 ? (
+                <div className="space-y-1 mt-1">
+                  <p className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 inline text-emerald-600" /> Serviced Territory
+                  </p>
+                  {servicingFranchisees.map(({ franchisee }) => (
+                    <div key={franchisee.internalId} className="pt-1 border-t border-slate-100 text-xs">
+                      <p className="font-bold text-slate-800">{franchisee.name || franchisee.internalId}</p>
+                      {franchisee.mainContact && <p className="text-slate-600">Contact: {franchisee.mainContact}</p>}
+                      {franchisee.email && <p className="text-slate-600">{franchisee.email}</p>}
+                      {franchisee.mobile && <p className="text-slate-600">{franchisee.mobile}</p>}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-1 text-xs text-amber-800">
+                  <p className="font-semibold text-amber-700">Unserviced Territory</p>
+                  <p className="text-slate-500 mt-0.5">No franchisee assigned to this location.</p>
+                </div>
+              )}
+            </div>
+          </InfoWindowF>
+        )}
+
         {activeOverlay && (
           <InfoWindowF
             position={activeOverlay.center}
@@ -382,3 +595,4 @@ export default function TerritoryMapClient() {
     </div>
   );
 }
+

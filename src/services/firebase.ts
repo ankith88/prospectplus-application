@@ -1825,6 +1825,22 @@ async function deleteUserCompletely(uid: string, requestorUid: string): Promise<
     }
 }
 
+async function unlinkUserFromFranchiseeCompletely(uid: string, franchiseeId?: string, requestorUid?: string): Promise<void> {
+    const response = await fetch('/api/admin/users/unlink-franchisee', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uid, franchiseeId, requestorUid }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to unlink user from franchisee.');
+    }
+}
+
+
 
 async function addAdditionalAddress(leadId: string, address: Omit<TaggedAddress, 'id'>, isCompany: boolean): Promise<string> {
     const colName = isCompany ? 'companies' : 'leads';
@@ -2690,13 +2706,14 @@ async function getAllTasks(): Promise<Task[]> {
 async function getAllFranchisees(): Promise<import('@/lib/types').Franchisee[]> {
     try {
         const snapshot = await getDocs(collection(firestore, 'franchisees'));
-        return snapshot.docs.map(doc => {
+        const list = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 internalId: doc.id,
                 ...data
             } as import('@/lib/types').Franchisee;
         });
+        return list.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
     } catch (error) {
         console.error("Failed to fetch franchisees:", error);
         return [];
@@ -3218,6 +3235,7 @@ export {
     getAllUsers,
     updateUser,
     deleteUserCompletely,
+    unlinkUserFromFranchiseeCompletely,
     createNotification,
     markNotificationAsRead,
     markAllNotificationsAsRead,

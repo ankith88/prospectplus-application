@@ -11,7 +11,8 @@ import type { Contact } from '@/lib/types';
  */
 export async function deactivateLocalMileAccessForLead(
   leadId: string,
-  providedContacts?: Contact[]
+  providedContacts?: Contact[],
+  targetCollection: 'companies' | 'leads' = 'companies'
 ): Promise<{ success: boolean; emailsRevoked: string[] }> {
   try {
     const candidateEmails = new Set<string>();
@@ -23,12 +24,19 @@ export async function deactivateLocalMileAccessForLead(
       }
     };
 
-    // 1. Gather contacts from provided array and Firestore subcollection
+    // 1. Gather contacts from provided array and Firestore subcollection (companies first, then leads)
     const allContacts: Array<any> = providedContacts ? [...providedContacts] : [];
 
+    const primaryCol = targetCollection;
+    const secondaryCol = targetCollection === 'companies' ? 'leads' : 'companies';
+
     try {
-      const contactsRef = collection(firestore, 'leads', leadId, 'contacts');
-      const snap = await getDocs(contactsRef);
+      let contactsRef = collection(firestore, primaryCol, leadId, 'contacts');
+      let snap = await getDocs(contactsRef);
+      if (snap.empty) {
+        contactsRef = collection(firestore, secondaryCol, leadId, 'contacts');
+        snap = await getDocs(contactsRef);
+      }
       snap.docs.forEach(d => {
         allContacts.push({ id: d.id, ...d.data() });
       });
@@ -50,10 +58,13 @@ export async function deactivateLocalMileAccessForLead(
       allContacts.forEach(c => addEmail(c.email));
     }
 
-    // 4. Priority 3: If still no emails found, check the lead document itself
+    // 4. Priority 3: If still no emails found, check document itself (companies first then leads)
     if (candidateEmails.size === 0) {
       try {
-        const leadSnap = await getDoc(doc(firestore, 'leads', leadId));
+        let leadSnap = await getDoc(doc(firestore, primaryCol, leadId));
+        if (!leadSnap.exists()) {
+          leadSnap = await getDoc(doc(firestore, secondaryCol, leadId));
+        }
         if (leadSnap.exists()) {
           const leadData = leadSnap.data();
           addEmail(leadData.email);

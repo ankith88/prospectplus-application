@@ -218,35 +218,60 @@ export function DeedOfVariationDialog({
       y += 8;
     });
 
-    // Signature Box
+    // Signature Execution Boxes (Dual Signatures matching Deed spec)
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('EXECUTED AS A DEED:', 15, 186);
+    doc.text('EXECUTED AS A DEED:', 15, 178);
 
+    // Box 1: Mail Plus Pty Ltd / Chris Burgess Execution
     doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(15, 192, 180, 45, 2, 2, 'D');
-
-    doc.text('Signed for and on behalf of Franchisee:', 22, 202);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(15, 184, 88, 55, 2, 2, 'FD');
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Executed by Mail Plus Pty Ltd ACN 609 801 195', 18, 192);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Name: ${signerName || mainDetails.mainContact || '_______________________'}`, 22, 210);
-    doc.text(`Email: ${signerEmail || mainDetails.email || '_______________________'}`, 22, 216);
-    doc.text(`Date: ${deedOfVariation.signedAt ? new Date(deedOfVariation.signedAt).toLocaleDateString('en-AU') : new Date().toLocaleDateString('en-AU')}`, 22, 222);
+    doc.text('in accordance with s 127(1) Corporations Act 2001 (Cth):', 18, 197);
+    doc.text('...............................................................................', 18, 214);
+    doc.setFontSize(8);
+    doc.text('Signature of sole director & sole company secretary', 18, 219);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.text('Chris Burgess', 18, 228);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Name (please print)', 18, 233);
+
+    // Box 2: Franchisee / Sole Trader Execution
+    doc.roundedRect(107, 184, 88, 55, 2, 2, 'FD');
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Executed by ${mainDetails.tradingEntity || signerName || 'Franchisee'}`, 110, 192);
+    doc.setFont('helvetica', 'normal');
+    doc.text('in accordance with s 127(1) Corporations Act 2001 (Cth):', 110, 197);
 
     if (signatureDataUrl) {
       try {
-        doc.addImage(signatureDataUrl, 'PNG', 120, 195, 60, 25);
+        doc.addImage(signatureDataUrl, 'PNG', 112, 201, 45, 15);
       } catch (err) {
         console.error('Failed to embed signature image in PDF', err);
       }
     } else {
-      doc.setFont('helvetica', 'italic');
-      doc.text('[ Signature / Digital Stamp ]', 130, 212);
+      doc.text('...............................................................................', 110, 214);
     }
+    doc.setFontSize(8);
+    doc.text('Signature of sole trader / franchisee', 110, 219);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.text(signerName || mainDetails.mainContact || 'Franchisee Signatory', 110, 228);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Name (please print)', 110, 233);
 
     // Footer
     doc.setFontSize(8);
     doc.setTextColor(148, 163, 184);
-    doc.text('MailPlus Outbound Presales CRM | Deed of Variation - Exit Program Document', 15, 285);
+    doc.text(`MailPlus Outbound Presales CRM | Executed on ${deedOfVariation.signedAt ? new Date(deedOfVariation.signedAt).toLocaleDateString('en-AU') : new Date().toLocaleDateString('en-AU')}`, 15, 285);
 
     doc.save(`Deed_of_Variation_${(mainDetails.tradingEntity || 'Franchisee').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
   };
@@ -309,29 +334,54 @@ export function DeedOfVariationDialog({
               </CardContent>
             </Card>
 
+            {/* Execution Blocks Preview matching Screenshot */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div className="space-y-2 bg-white p-3.5 rounded-lg border border-slate-200 text-xs">
+                <p className="font-bold text-slate-900 leading-tight">
+                  Executed by Mail Plus Pty Ltd ACN 609 801 195 in accordance with section 127(1) of the Corporations Act 2001 (Cth):
+                </p>
+                <div className="border-b border-dashed border-slate-400 pt-6 pb-1 text-slate-500 italic text-[11px]">
+                  Signature of sole director and sole company secretary
+                </div>
+                <div className="font-bold text-slate-900 pt-1">Chris Burgess</div>
+                <div className="text-[10px] text-slate-400">Name (please print)</div>
+              </div>
+
+              <div className="space-y-2 bg-white p-3.5 rounded-lg border border-slate-200 text-xs">
+                <p className="font-bold text-slate-900 leading-tight">
+                  Executed by {mainDetails.tradingEntity || signerName || 'Franchisee'} in accordance with section 127(1) of the Corporations Act 2001 (Cth):
+                </p>
+                <div className="border-b border-dashed border-slate-400 pt-6 pb-1 text-slate-500 italic text-[11px]">
+                  Signature of sole trader / franchisee
+                </div>
+                <div className="font-bold text-slate-900 pt-1">{signerName || mainDetails.mainContact || 'Franchisee Name'}</div>
+                <div className="text-[10px] text-slate-400">Name (please print)</div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="signerName" className="text-xs font-semibold text-slate-700">
-                  Signer Full Legal Name *
+                  Franchisee Signer Full Legal Name *
                 </Label>
                 <Input
                   id="signerName"
                   value={signerName}
                   onChange={(e) => setSignerName(e.target.value)}
-                  placeholder="e.g. Saffat Riad"
+                  placeholder="e.g. Quan Trinh"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="signerEmail" className="text-xs font-semibold text-slate-700">
-                  Signer Email *
+                  Franchisee Signer Email *
                 </Label>
                 <Input
                   id="signerEmail"
                   type="email"
                   value={signerEmail}
                   onChange={(e) => setSignerEmail(e.target.value)}
-                  placeholder="e.g. saffat99@yahoo.com"
+                  placeholder="e.g. quan.trinh@mailplus.com.au"
                 />
               </div>
             </div>
@@ -340,7 +390,7 @@ export function DeedOfVariationDialog({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-slate-700">
-                  Digital Signature (Draw below)
+                  Franchisee Digital Signature (Draw below)
                 </Label>
                 <Button type="button" variant="ghost" size="sm" onClick={clearCanvas} className="h-7 text-xs gap-1 text-slate-600">
                   <Eraser className="h-3.5 w-3.5" /> Clear Signature

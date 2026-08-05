@@ -364,6 +364,7 @@ export interface UserProfile {
   franchisee?: string
   franchiseeId?: string
   franchiseeInternalId?: string
+  linkedFranchiseeIds?: string[]
   historicalFranchiseeIds?: string[]
   currentLocation?: { lat: number; lng: number }
   activeRoute?: string[] // IDs of active StorableRoutes
@@ -532,6 +533,10 @@ export interface Lead {
   additionalAddresses?: TaggedAddress[];
   bankLocationId?: string;
   bankLocationName?: string;
+  partnerLocationId?: string;
+  partnerLocationName?: string;
+  bankLocation?: any;
+  partnerLocation?: any;
   parentLeadId?: string;
   demoCompleted?: 'Yes';
   fieldSales?: boolean;
@@ -864,6 +869,23 @@ export interface Franchisee {
   }>;
 }
 
+export interface ProspectEmailLog {
+  id: string;
+  sentAt: string;
+  sentByUid: string;
+  sentByName: string;
+  subject: string;
+  recipient: string;
+  customMessage?: string;
+  attachments: Array<{
+    name: string;
+    url?: string;
+    size?: number;
+  }>;
+  status: 'Sent' | 'Failed';
+  error?: string;
+}
+
 export interface FranchiseProspect {
   id: string;
   firstName: string;
@@ -873,8 +895,15 @@ export interface FranchiseProspect {
   phone: string;
   preferredState?: string;
   preferredTerritory?: string;
+  interest?: string;
+  vehicle?: string;
+  experience?: string;
+  employment?: string;
   message?: string;
   status: 'New' | 'Contacted' | 'Under Review' | 'Converted' | 'Rejected' | 'Archived';
+  brochureSent?: boolean;
+  brochureSentAt?: string;
+  emailLogs?: ProspectEmailLog[];
   notes?: Array<{
     id: string;
     text: string;

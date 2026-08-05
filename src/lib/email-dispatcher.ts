@@ -132,10 +132,12 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
         }
       });
 
-      const smtpAttachments = (attachments || []).map(att => ({
-        filename: att.name,
-        path: att.url
-      }));
+      const smtpAttachments = (attachments || []).map(att => {
+        if (att.url.startsWith('file://')) {
+          return { filename: att.name, path: att.url.replace('file://', '') };
+        }
+        return { filename: att.name, path: att.url };
+      });
 
       await transporter.sendMail({
         from: `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`,
@@ -183,10 +185,24 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
       if (attachments && attachments.length > 0) {
         for (const att of attachments) {
           try {
-            const fetchRes = await fetch(att.url);
-            if (fetchRes.ok) {
-              const buffer = await fetchRes.arrayBuffer();
-              const base64Content = Buffer.from(buffer).toString('base64');
+            let base64Content = '';
+            if (att.url.startsWith('data:')) {
+              const parts = att.url.split(',');
+              base64Content = parts.length > 1 ? parts[1] : parts[0];
+            } else if (att.url.startsWith('/') || att.url.startsWith('file://')) {
+              const filePath = att.url.replace(/^file:\/\//, '');
+              const fs = await import('fs');
+              const buffer = fs.readFileSync(filePath);
+              base64Content = buffer.toString('base64');
+            } else {
+              const fetchRes = await fetch(att.url);
+              if (fetchRes.ok) {
+                const buffer = await fetchRes.arrayBuffer();
+                base64Content = Buffer.from(buffer).toString('base64');
+              }
+            }
+
+            if (base64Content) {
               graphAttachments.push({
                 '@odata.type': '#microsoft.graph.fileAttachment',
                 name: att.name,

@@ -306,19 +306,39 @@ export default function CSRequestsDashboard() {
           });
         } catch (e) { /* ignore if not found */ }
 
-        // Update lead services & status
-        await updateDoc(doc(firestore, 'leads', selectedRequest.leadId), {
+        // Update lead/company services & status in both collections if present
+        const saveCompRef = doc(firestore, 'companies', selectedRequest.leadId);
+        const saveLeadRef = doc(firestore, 'leads', selectedRequest.leadId);
+        const [saveCompSnap, saveLeadSnap] = await Promise.all([
+          getDoc(saveCompRef),
+          getDoc(saveLeadRef)
+        ]);
+
+        const saveUpdates = {
           services: editServices,
           cancellationRequested: false,
           customerStatus: 'Won'
-        });
+        };
 
-        await logActivity(selectedRequest.leadId, {
-          type: 'Update',
-          date: processedAt,
-          notes: `Customer Saved from Cancellation. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}`,
-          author: userDisplayName,
-        });
+        if (saveCompSnap.exists()) {
+          await updateDoc(saveCompRef, saveUpdates);
+          await logActivity(selectedRequest.leadId, {
+            type: 'Update',
+            date: processedAt,
+            notes: `Customer Saved from Cancellation. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}`,
+            author: userDisplayName,
+          }, 'companies');
+        }
+
+        if (saveLeadSnap.exists()) {
+          await updateDoc(saveLeadRef, saveUpdates);
+          await logActivity(selectedRequest.leadId, {
+            type: 'Update',
+            date: processedAt,
+            notes: `Customer Saved from Cancellation. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}`,
+            author: userDisplayName,
+          }, 'leads');
+        }
 
         toast({
           title: 'Customer Saved',
@@ -346,23 +366,44 @@ export default function CSRequestsDashboard() {
           });
         } catch (e) { /* ignore if not found */ }
 
-        // Update lead doc
-        await updateDoc(doc(firestore, 'leads', selectedRequest.leadId), {
-          customerStatus: 'Lost',
+        // Update lead/company doc in both collections if present
+        const cancelCompRef = doc(firestore, 'companies', selectedRequest.leadId);
+        const cancelLeadRef = doc(firestore, 'leads', selectedRequest.leadId);
+        const [cancelCompSnap, cancelLeadSnap] = await Promise.all([
+          getDoc(cancelCompRef),
+          getDoc(cancelLeadRef)
+        ]);
+
+        const cancelUpdates = {
+          customerStatus: 'Lost Customer',
+          status: 'Lost Customer',
           cancellationRequested: false,
           cancellationdate: trueCancellationDate,
           cancellationReason: cancelReason
-        });
+        };
+
+        if (cancelCompSnap.exists()) {
+          await updateDoc(cancelCompRef, cancelUpdates);
+          await logActivity(selectedRequest.leadId, {
+            type: 'Update',
+            date: processedAt,
+            notes: `True Service Cancellation processed. Stop Date: ${trueCancellationDate}. Reason: ${cancelReason}`,
+            author: userDisplayName,
+          }, 'companies');
+        }
+
+        if (cancelLeadSnap.exists()) {
+          await updateDoc(cancelLeadRef, cancelUpdates);
+          await logActivity(selectedRequest.leadId, {
+            type: 'Update',
+            date: processedAt,
+            notes: `True Service Cancellation processed. Stop Date: ${trueCancellationDate}. Reason: ${cancelReason}`,
+            author: userDisplayName,
+          }, 'leads');
+        }
 
         // Deactivate LocalMile access if applicable
-        await deactivateLocalMileAccessForLead(selectedRequest.leadId);
-
-        await logActivity(selectedRequest.leadId, {
-          type: 'Update',
-          date: processedAt,
-          notes: `True Service Cancellation processed. Stop Date: ${trueCancellationDate}. Reason: ${cancelReason}`,
-          author: userDisplayName,
-        });
+        await deactivateLocalMileAccessForLead(selectedRequest.leadId, undefined, cancelCompSnap.exists() ? 'companies' : 'leads');
 
         toast({
           title: 'Cancellation Finalized',

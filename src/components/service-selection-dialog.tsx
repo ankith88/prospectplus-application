@@ -171,22 +171,40 @@ export function ServiceSelectionDialog({
   const [h2hAddress, setH2hAddress] = useState<any | null>(null);
 
   useEffect(() => {
+    setLocalLead(lead);
+  }, [lead]);
+
+  useEffect(() => {
     if (!isOpen) return;
     async function fetchPartnerLocations() {
       try {
         const snap = await getDocs(collection(firestore, 'partner_locations'));
         const locs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setPartnerLocations(locs);
-        if (lead?.bankLocationId) {
-          const pre = locs.find(l => l.id === lead.bankLocationId || (l as any).internalId === lead.bankLocationId);
-          if (pre) setSelectedBank(pre);
+
+        const currentLead = localLead || lead;
+        const targetId = currentLead?.bankLocationId || (currentLead as any)?.partnerLocationId || (currentLead as any)?.bankLocation?.id || (currentLead as any)?.postalAddress?.partnerLocationId;
+        const targetName = currentLead?.bankLocationName || (currentLead as any)?.partnerLocationName;
+
+        if (targetId) {
+          const pre = locs.find(l => l.id === targetId || (l as any).internalId === targetId);
+          if (pre) {
+            setSelectedBank(pre);
+            setSelectedBankId(pre.id || (pre as any).internalId);
+          }
+        } else if (targetName) {
+          const pre = locs.find(l => (l as any).name?.toLowerCase() === targetName.toLowerCase() || (l as any).locationName?.toLowerCase() === targetName.toLowerCase());
+          if (pre) {
+            setSelectedBank(pre);
+            setSelectedBankId(pre.id || (pre as any).internalId);
+          }
         }
       } catch (err) {
         console.error('Error fetching partner locations:', err);
       }
     }
     fetchPartnerLocations();
-  }, [isOpen, lead]);
+  }, [isOpen, lead, localLead]);
 
   useEffect(() => {
     const resolveAmEmail = async () => {
@@ -367,11 +385,7 @@ export function ServiceSelectionDialog({
   useEffect(() => {
     if (isOpen && (selectionType === 'products' || selectionType === 'both')) {
       const currentServices = form.getValues('selectedServices') || [];
-      if (selectionType === 'products') {
-        if (currentServices.length !== 1 || currentServices[0] !== 'MP Parcel Pickup') {
-          form.setValue('selectedServices', ['MP Parcel Pickup']);
-        }
-      } else if (!currentServices.includes('MP Parcel Pickup')) {
+      if (!currentServices.includes('MP Parcel Pickup')) {
         form.setValue('selectedServices', [...currentServices, 'MP Parcel Pickup']);
       }
       const currentRates = form.getValues('rates') || {};
@@ -553,11 +567,7 @@ export function ServiceSelectionDialog({
       }
 
       const currentSelectionType = selectionType || (lead as any)?.lastSelectionType || null;
-      if (currentSelectionType === 'products') {
-         initialSelectedServices = ['MP Parcel Pickup'];
-         initialFrequencies['MP Parcel Pickup'] = initialFrequencies['MP Parcel Pickup'] || 'Adhoc';
-         initialRates['MP Parcel Pickup'] = initialRates['MP Parcel Pickup'] ?? 0;
-      } else if (currentSelectionType === 'both' && !initialSelectedServices.includes('MP Parcel Pickup')) {
+      if ((currentSelectionType === 'products' || currentSelectionType === 'both') && !initialSelectedServices.includes('MP Parcel Pickup')) {
          initialSelectedServices.push('MP Parcel Pickup');
          initialFrequencies['MP Parcel Pickup'] = initialFrequencies['MP Parcel Pickup'] || 'Adhoc';
          initialRates['MP Parcel Pickup'] = initialRates['MP Parcel Pickup'] ?? 0;
@@ -1122,8 +1132,10 @@ export function ServiceSelectionDialog({
     // Fallback for fields relying on selectedContactId
     values.selectedContactId = values.selectedContactIds[0];
 
-    if (selectionType === 'products') {
-      values.selectedServices = ['MP Parcel Pickup'];
+    if (selectionType === 'products' || selectionType === 'both') {
+      if (!values.selectedServices.includes('MP Parcel Pickup')) {
+        values.selectedServices.push('MP Parcel Pickup');
+      }
       if (values.rates?.['MP Parcel Pickup'] === undefined) {
         values.rates = { ...(values.rates || {}), 'MP Parcel Pickup': 0 };
       }
@@ -1557,6 +1569,45 @@ export function ServiceSelectionDialog({
 
            // 2. Update services AFTER NetSuite API calls complete
            await updateLeadServices(lead.id, serviceSelections);
+
+           if (selectedBank) {
+             const bankLocId = selectedBank.id || selectedBank.internalId || selectedBankId;
+             const bankLocName = selectedBank.name || selectedBank.locationName || '';
+             await saveOrUpdateTaggedAddress(lead.id, {
+               tag: 'EB/CB Bank',
+               address1: selectedBank.address1 || selectedBank.name,
+               street: selectedBank.address1 || selectedBank.name,
+               city: selectedBank.suburb || selectedBank.city,
+               suburb: selectedBank.suburb || selectedBank.city,
+               state: selectedBank.state,
+               zip: selectedBank.postCode || selectedBank.postcode,
+               lat: selectedBank.lat || selectedBank.latitude,
+               lng: selectedBank.lng || selectedBank.longitude
+             });
+             const locUpdates = {
+               bankLocationId: bankLocId,
+               bankLocationName: bankLocName,
+               partnerLocationId: bankLocId,
+               partnerLocationName: bankLocName,
+               bankLocation: {
+                 id: bankLocId,
+                 name: bankLocName,
+                 suburb: selectedBank.suburb || selectedBank.city || '',
+                 state: selectedBank.state || '',
+                 postCode: selectedBank.postCode || selectedBank.postcode || '',
+                 address1: selectedBank.address1 || selectedBank.name || ''
+               }
+             };
+             await updateLeadDetails(lead.id, lead, locUpdates);
+             setLocalLead(prev => prev ? ({ ...prev, ...locUpdates }) : prev);
+           }
+
+           if (h2hAddress) {
+             await saveOrUpdateTaggedAddress(lead.id, {
+               tag: 'H2H Address',
+               ...h2hAddress
+             });
+           }
            
             const selectedContacts = contacts.filter(c => values.selectedContactIds?.includes(c.id));
             const contactEmails = selectedContacts.map(c => c.email).filter(Boolean);
@@ -1635,6 +1686,8 @@ export function ServiceSelectionDialog({
       await updateLeadServices(lead.id, serviceSelections);
 
       if (selectedBank) {
+        const bankLocId = selectedBank.id || selectedBank.internalId || selectedBankId;
+        const bankLocName = selectedBank.name || selectedBank.locationName || '';
         await saveOrUpdateTaggedAddress(lead.id, {
           tag: 'EB/CB Bank',
           address1: selectedBank.address1 || selectedBank.name,
@@ -1646,10 +1699,22 @@ export function ServiceSelectionDialog({
           lat: selectedBank.lat || selectedBank.latitude,
           lng: selectedBank.lng || selectedBank.longitude
         });
-        await updateLeadDetails(lead.id, lead, {
-          bankLocationId: selectedBank.id || selectedBank.internalId,
-          bankLocationName: selectedBank.name
-        });
+        const locUpdates = {
+          bankLocationId: bankLocId,
+          bankLocationName: bankLocName,
+          partnerLocationId: bankLocId,
+          partnerLocationName: bankLocName,
+          bankLocation: {
+            id: bankLocId,
+            name: bankLocName,
+            suburb: selectedBank.suburb || selectedBank.city || '',
+            state: selectedBank.state || '',
+            postCode: selectedBank.postCode || selectedBank.postcode || '',
+            address1: selectedBank.address1 || selectedBank.name || ''
+          }
+        };
+        await updateLeadDetails(lead.id, lead, locUpdates);
+        setLocalLead(prev => prev ? ({ ...prev, ...locUpdates }) : prev);
       }
 
       if (h2hAddress) {
@@ -2119,13 +2184,7 @@ export function ServiceSelectionDialog({
                                     onClick={async () => {
                                       const newType = opt.id as 'both' | 'services' | 'products';
                                       setSelectionType(newType);
-                                      if (newType === 'products') {
-                                        form.setValue('selectedServices', ['MP Parcel Pickup']);
-                                        const currentRates = form.getValues('rates') || {};
-                                        form.setValue('rates', { ...currentRates, 'MP Parcel Pickup': currentRates['MP Parcel Pickup'] ?? 0 });
-                                        const currentFreqs = form.getValues('frequencies') || {};
-                                        form.setValue('frequencies', { ...currentFreqs, 'MP Parcel Pickup': currentFreqs['MP Parcel Pickup'] || 'Adhoc' });
-                                      } else if (newType === 'both') {
+                                      if (newType === 'products' || newType === 'both') {
                                         const currentServices = form.getValues('selectedServices') || [];
                                         if (!currentServices.includes('MP Parcel Pickup')) {
                                           form.setValue('selectedServices', [...currentServices, 'MP Parcel Pickup']);

@@ -315,11 +315,17 @@ export default function CancellationDashboard() {
       const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => w.id === selectedWhyId);
       const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => r.id === selectedReasonId);
 
-      // 1. Update Lead document to Lost Customer / Lost
+      // 1. Update document in both 'companies' and 'leads' collections if present
+      const compRef = doc(firestore, 'companies', selectedRequest.leadId);
       const leadRef = doc(firestore, 'leads', selectedRequest.leadId);
-      await updateDoc(leadRef, {
+      const [compSnap, leadSnap] = await Promise.all([
+        getDoc(compRef),
+        getDoc(leadRef)
+      ]);
+
+      const cancellationUpdates = {
         customerStatus: 'Lost Customer',
-        status: 'Lost',
+        status: 'Lost Customer',
         cancellationReason: selectedReasonObj?.name || cancelReason,
         cancellationReasonId: selectedReasonId,
         cancellationTheme: selectedThemeObj?.name || '',
@@ -328,7 +334,29 @@ export default function CancellationDashboard() {
         cancellationWhyId: selectedWhyId,
         cancellationdate: trueCancellationDate,
         cancellationRequested: false
-      });
+      };
+
+      if (compSnap.exists()) {
+        await updateDoc(compRef, cancellationUpdates);
+        await addDoc(collection(firestore, 'companies', selectedRequest.leadId, 'activity'), {
+          type: 'Update',
+          date: processedAt,
+          notes: `Customer Cancellation Completed. Reason: ${cancelReason}. True Stop Date: ${trueCancellationDate}. Notes: ${cancelNotes}`,
+          author: userDisplayName,
+          syncedWithNetSuite: false
+        });
+      }
+
+      if (leadSnap.exists()) {
+        await updateDoc(leadRef, cancellationUpdates);
+        await addDoc(collection(firestore, 'leads', selectedRequest.leadId, 'activity'), {
+          type: 'Update',
+          date: processedAt,
+          notes: `Customer Cancellation Completed. Reason: ${cancelReason}. True Stop Date: ${trueCancellationDate}. Notes: ${cancelNotes}`,
+          author: userDisplayName,
+          syncedWithNetSuite: false
+        });
+      }
 
       // 2. Update Cancellation Request document
       const cancelReqRef = doc(firestore, 'cancellations', selectedRequest.id);
@@ -345,20 +373,9 @@ export default function CancellationDashboard() {
         processedAt
       });
 
-      // 3. Log activity
-      const activityRef = collection(firestore, 'leads', selectedRequest.leadId, 'activity');
-      await addDoc(activityRef, {
-        type: 'Update',
-        date: processedAt,
-        notes: `Customer Cancellation Completed. Reason: ${cancelReason}. True Stop Date: ${trueCancellationDate}. Notes: ${cancelNotes}`,
-        author: userDisplayName,
-        syncedWithNetSuite: false
-      });
-
       // Call NetSuite outcome sync with Customer - Lost outcome
       try {
-        const leadSnap = await getDoc(doc(firestore, 'leads', selectedRequest.leadId));
-        const leadData = leadSnap.data();
+        const leadData = (compSnap.exists() ? compSnap.data() : leadSnap.data()) || {};
         await sendFieldSalesOutcomeToNetSuite({
           leadId: selectedRequest.leadId,
           outcome: "Customer - Lost",
@@ -375,7 +392,7 @@ export default function CancellationDashboard() {
       }
 
       // Call external LocalMile deactivation logic
-      deactivateLocalMileAccessForLead(selectedRequest.leadId).catch(err => {
+      deactivateLocalMileAccessForLead(selectedRequest.leadId, undefined, targetCollectionName).catch(err => {
         console.error("LocalMile deactivation api fail", err);
       });
 

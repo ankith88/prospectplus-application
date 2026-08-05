@@ -18,7 +18,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { logActivity } from '@/services/firebase';
 import { firestore } from '@/lib/firebase';
-import { collection, doc, updateDoc, addDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, updateDoc, addDoc, getDocs } from 'firebase/firestore';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
 import type { Lead } from '@/lib/types';
 
@@ -122,6 +122,28 @@ export function CancelCustomerDialog({
       const userEmail = userProfile?.email || user?.email || 'System';
       const nowIso = new Date().toISOString();
 
+      // Check both 'companies' and 'leads' collections so both stay in sync
+      const companyRef = doc(firestore, 'companies', lead.id);
+      const leadRef = doc(firestore, 'leads', lead.id);
+
+      const [companySnap, leadSnap] = await Promise.all([
+        getDoc(companyRef),
+        getDoc(leadRef),
+      ]);
+
+      const existsInCompany = companySnap.exists();
+      const existsInLead = leadSnap.exists();
+
+      if (!existsInCompany && !existsInLead) {
+        toast({
+          variant: 'destructive',
+          title: 'Cancellation Failed',
+          description: `Customer document with ID "${lead.id}" not found in companies or leads.`,
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
       if (isDirectCancel) {
         // Direct cancellation for Admin users
         const updates: any = {
@@ -138,7 +160,31 @@ export function CancelCustomerDialog({
           cancellationDate: cancellationDate,
         };
 
-        await updateDoc(doc(firestore, 'leads', lead.id), updates);
+        if (existsInCompany) {
+          await updateDoc(companyRef, updates);
+          await logActivity(
+            lead.id,
+            {
+              type: 'Update',
+              notes: `Direct customer cancellation completed by ${userDisplayName}. Effective Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
+              author: userDisplayName,
+            },
+            'companies'
+          );
+        }
+
+        if (existsInLead) {
+          await updateDoc(leadRef, updates);
+          await logActivity(
+            lead.id,
+            {
+              type: 'Update',
+              notes: `Direct customer cancellation completed by ${userDisplayName}. Effective Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
+              author: userDisplayName,
+            },
+            'leads'
+          );
+        }
 
         const leadAny = lead as any;
         await addDoc(collection(firestore, 'cancellations'), {
@@ -167,12 +213,6 @@ export function CancelCustomerDialog({
           callsCount: 0,
         });
 
-        await logActivity(lead.id, {
-          type: 'Update',
-          notes: `Direct customer cancellation completed by ${userDisplayName}. Effective Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
-          author: userDisplayName,
-        });
-
         // Trigger email notification to sarah.hart@mailplus.com.au & cc alexandra.bathman@mailplus.com.au
         fetch('/api/notifications/email', {
           method: 'POST',
@@ -198,7 +238,7 @@ export function CancelCustomerDialog({
         }).catch(err => console.error("Error triggering cancellation email notification:", err));
 
         // Deactivate LocalMile access if active
-        deactivateLocalMileAccessForLead(lead.id, lead.contacts).catch(err => {
+        deactivateLocalMileAccessForLead(lead.id, lead.contacts, existsInCompany ? 'companies' : 'leads').catch(err => {
           console.error("Failed to deactivate LocalMile access during direct cancellation:", err);
         });
 
@@ -224,7 +264,31 @@ export function CancelCustomerDialog({
           cancellationDate: cancellationDate,
         };
 
-        await updateDoc(doc(firestore, 'leads', lead.id), updates);
+        if (existsInCompany) {
+          await updateDoc(companyRef, updates);
+          await logActivity(
+            lead.id,
+            {
+              type: 'Update',
+              notes: `Cancellation request submitted by ${requestedBy}. Requested Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
+              author: userDisplayName,
+            },
+            'companies'
+          );
+        }
+
+        if (existsInLead) {
+          await updateDoc(leadRef, updates);
+          await logActivity(
+            lead.id,
+            {
+              type: 'Update',
+              notes: `Cancellation request submitted by ${requestedBy}. Requested Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
+              author: userDisplayName,
+            },
+            'leads'
+          );
+        }
 
         const leadAny = lead as any;
         await addDoc(collection(firestore, 'cancellations'), {
@@ -247,12 +311,6 @@ export function CancelCustomerDialog({
           createdBy: `${userDisplayName} (${userEmail})`,
           createdAt: nowIso,
           callsCount: 0,
-        });
-
-        await logActivity(lead.id, {
-          type: 'Update',
-          notes: `Cancellation request submitted by ${requestedBy}. Requested Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
-          author: userDisplayName,
         });
 
         // Trigger email notification to sarah.hart@mailplus.com.au & cc alexandra.bathman@mailplus.com.au

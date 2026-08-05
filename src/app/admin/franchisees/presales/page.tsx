@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Table,
   TableBody,
@@ -15,13 +16,13 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
 import { Search, Tag, FileCheck, Building2, Plus, Edit3, ShieldAlert } from 'lucide-react';
-import { TerritoryPresaleWizard } from '@/components/admin/territory-presale-wizard';
 import { PresaleRecord } from '@/lib/presale-types';
 import { getAllFranchisees } from '@/services/firebase';
 import { Franchisee } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function TerritoryPresalesPage() {
+  const router = useRouter();
   const [presales, setPresales] = useState<PresaleRecord[]>([]);
   const [franchisees, setFranchisees] = useState<Franchisee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,7 +30,6 @@ export default function TerritoryPresalesPage() {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const [selectedFranchiseeId, setSelectedFranchiseeId] = useState<string | null>(null);
-  const [wizardOpen, setWizardOpen] = useState(false);
 
   const { userProfile, isSuperAdmin } = useAuth();
   const isAdminOrOps =
@@ -46,9 +46,70 @@ export default function TerritoryPresalesPage() {
         getAllFranchisees(),
       ]);
 
-      if (pRes.success && Array.isArray(pRes.data)) {
-        setPresales(pRes.data);
-      }
+      const fetchedPresales: PresaleRecord[] = (pRes.success && Array.isArray(pRes.data)) ? pRes.data : [];
+      const franchiseesMap = new Map((franList || []).map((f) => [String(f.internalId), f]));
+
+      // Ensure all fetched presales have franchiseeName and mainDetails
+      const enrichedPresales = fetchedPresales.map((p) => {
+        const f = franchiseesMap.get(String(p.franchiseeId));
+        return {
+          ...p,
+          franchiseeName: p.franchiseeName || p.mainDetails?.tradingEntity || f?.name || String(p.franchiseeId),
+        };
+      });
+
+      // Include any franchisee marked for sale that hasn't created a presale doc yet
+      (franList || []).forEach((f: any) => {
+        if ((f.isForSale || f.presaleStatus) && !enrichedPresales.some((p) => String(p.franchiseeId) === String(f.internalId))) {
+          enrichedPresales.push({
+            id: String(f.internalId),
+            franchiseeId: String(f.internalId),
+            franchiseeName: f.name || String(f.internalId),
+            status: (f.presaleStatus as any) || 'Step 1: Main Details',
+            step1Status: 'Completed',
+            step2Status: 'Not Started',
+            step3Status: 'Not Started',
+            step4Status: 'Not Started',
+            mainDetails: {
+              tradingEntity: f.name || '',
+              mainContact: f.mainContact || '',
+              mobileNumber: f.mobile || '',
+              email: f.email || '',
+              abn: f.abn || '',
+              dateListedForSale: new Date().toISOString().split('T')[0],
+              address: typeof f.address === 'string' ? f.address : '',
+            },
+            deedOfVariation: { status: 'not_started' },
+            presalesDetails: {
+              commencementDate: '',
+              expiryDate: f.expiryDate || '',
+              ultimateExpiryDate: f.ultimateExpiryDate || '',
+              unlimitedTermOffer: f.unlimitedTermOffer || 'No',
+              unlimitedTermFee: 25000,
+              renewalTermsYears: 5,
+              termOnFranchiseeIM: 'Unlimited',
+              dateBusinessStarted: f.dateBusinessStarted || '',
+              totalDailyRunTime: '',
+              lowPrice: 0,
+              highPrice: 0,
+              serviceRevenue: 0,
+              serviceRevenueYear: '',
+              mpexCommission: 0,
+              mpexCommissionYear: '',
+              sendleCommission: 0,
+              sendleCommissionYear: '',
+              salesCommissionPercent: 10,
+              nabAccreditation: 'No',
+              nabAccreditationFee: 0,
+              salePrice: 0,
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      });
+
+      setPresales(enrichedPresales);
       setFranchisees(franList || []);
     } catch (err) {
       console.error('Failed to load presales data', err);
@@ -60,6 +121,10 @@ export default function TerritoryPresalesPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const sortedFranchisees = useMemo(() => {
+    return [...franchisees].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+  }, [franchisees]);
 
   const filteredPresales = useMemo(() => {
     return presales.filter((p) => {
@@ -78,8 +143,7 @@ export default function TerritoryPresalesPage() {
   }, [presales, searchQuery, statusFilter]);
 
   const handleOpenWizard = (id: string) => {
-    setSelectedFranchiseeId(id);
-    setWizardOpen(true);
+    router.push(`/admin/franchisees/presales/${id}`);
   };
 
   return (
@@ -102,26 +166,17 @@ export default function TerritoryPresalesPage() {
               if (val) handleOpenWizard(val);
             }}
           >
-            <SelectTrigger className="w-[260px] text-xs">
-              <SelectValue placeholder="Mark Territory for Sale..." />
+            <SelectTrigger className="w-[280px] text-xs">
+              <SelectValue placeholder="Select Territory to Mark for Sale..." />
             </SelectTrigger>
             <SelectContent>
-              {franchisees.map((f) => (
+              {sortedFranchisees.map((f) => (
                 <SelectItem key={f.internalId} value={String(f.internalId)}>
                   {f.name} ({f.internalId})
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-
-          {selectedFranchiseeId && (
-            <Button
-              onClick={() => setWizardOpen(true)}
-              className="bg-[#095c7b] hover:bg-[#07465e] text-white text-xs gap-1.5"
-            >
-              <Plus className="h-4 w-4" /> Open Presale Wizard
-            </Button>
-          )}
         </div>
       </div>
 
@@ -243,16 +298,6 @@ export default function TerritoryPresalesPage() {
         )}
       </div>
 
-      {/* Territory Presale Wizard Modal */}
-      {selectedFranchiseeId && (
-        <TerritoryPresaleWizard
-          open={wizardOpen}
-          onOpenChange={setWizardOpen}
-          franchiseeId={selectedFranchiseeId}
-          franchiseeName={franchisees.find((f) => String(f.internalId) === String(selectedFranchiseeId))?.name || ''}
-          onSuccess={loadData}
-        />
-      )}
     </div>
   );
 }

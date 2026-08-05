@@ -47,7 +47,8 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   historyAppointments: ['Marketing Admin', 'Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee
   historyCallsTranscripts: ['Marketing Admin', 'Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee/Field Sales Admin
   checkIns: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
-  franchisees: ['Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success', 'Customer Service', 'Sales Manager'],
+  franchisees: ['Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success', 'customer success', 'customer_success', 'Customer Service', 'customer service', 'customer_service', 'Sales Manager'],
+  territoryMap: ['superadmin', 'admin', 'Franchisee', 'franchisee', 'Executive', 'executive', 'Outbound Admin', 'outbound admin', 'Customer Service', 'customer service', 'customer_service', 'Customer Success', 'customer success', 'customer_success'],
   topBarcodesUsers: ['superadmin', 'Marketing Manager', 'Customer Service', 'Customer Success', 'Sales Manager', 'Account Managers', 'Account Manager'],
   lpoLeads: ['superadmin', 'operations', 'admin'],
   franchiseeVerification: ['admin', 'superadmin'],
@@ -97,6 +98,27 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
                     needsUpdate = true;
                 }
 
+                const currentTerritoryMap: string[] = currentFeatures.territoryMap || DEFAULT_ROLE_ACCESS.territoryMap;
+                if (!currentTerritoryMap.includes('Customer Service') || !currentTerritoryMap.includes('Customer Success')) {
+                    currentFeatures.territoryMap = Array.from(new Set([
+                        ...currentTerritoryMap,
+                        'Customer Service', 'customer service', 'customer_service',
+                        'Customer Success', 'customer success', 'customer_success',
+                        'Franchisee', 'franchisee', 'Executive', 'executive', 'Outbound Admin', 'outbound admin'
+                    ]));
+                    needsUpdate = true;
+                }
+
+                const currentFranchisees: string[] = currentFeatures.franchisees || DEFAULT_ROLE_ACCESS.franchisees;
+                if (!currentFranchisees.includes('Customer Service') || !currentFranchisees.includes('Customer Success')) {
+                    currentFeatures.franchisees = Array.from(new Set([
+                        ...currentFranchisees,
+                        'Customer Service', 'customer service', 'customer_service',
+                        'Customer Success', 'customer success', 'customer_success'
+                    ]));
+                    needsUpdate = true;
+                }
+
                 if (needsUpdate) {
                     await setDoc(matrixDocRef, { features: currentFeatures }, { merge: true });
                 }
@@ -132,7 +154,15 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
     }
 
     // Admin always has access to everything
-    if (userProfile.activeRole === 'admin') return true;
+    if (userProfile.activeRole === 'admin' || userProfile.activeRole?.toLowerCase() === 'admin' || userProfile.activeRole?.toLowerCase() === 'superadmin') return true;
+
+    // Territory map override
+    if (feature === 'territoryMap') {
+      const roleLower = userProfile.activeRole.toLowerCase();
+      if (['admin', 'superadmin', 'franchisee', 'executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success'].includes(roleLower)) {
+        return true;
+      }
+    }
 
     // Special case for ncyhwLtOG1W7TZ43PkYCcObeCAf2 and marketing
     if (feature === 'marketingGroup' && userProfile.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') return true;
@@ -165,7 +195,9 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
     const firestoreRoles = roleAccessMatrix[feature] || [];
     const defaultRoles = DEFAULT_ROLE_ACCESS[feature] || [];
     const allowedRoles = Array.from(new Set([...firestoreRoles, ...defaultRoles]));
-    return allowedRoles.includes(userProfile.activeRole);
+    
+    const userRoleNormalized = userProfile.activeRole.toLowerCase().replace(/_/g, ' ').trim();
+    return allowedRoles.some(r => r.toLowerCase().replace(/_/g, ' ').trim() === userRoleNormalized);
   };
 
   return (

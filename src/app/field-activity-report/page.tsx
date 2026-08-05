@@ -56,6 +56,7 @@ import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
+import { StatusBreakdownBar } from '@/components/status-breakdown-bar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn, isOutsideOfficeHours } from '@/lib/utils';
@@ -1906,9 +1907,15 @@ export default function FieldActivityReportPage() {
 
 function EfficiencyDrilldownDialog({ isOpen, onOpenChange, title, leads }: { isOpen: boolean, onOpenChange: (open: boolean) => void, title: string, leads: any[] }) {
     const { toast } = useToast();
-    
+    const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+
+    const filteredLeads = useMemo(() => {
+        if (!selectedStatus) return leads;
+        return leads.filter(l => (l.customerStatus || l.status || 'New') === selectedStatus);
+    }, [leads, selectedStatus]);
+
     return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <Dialog open={isOpen} onOpenChange={(open) => { onOpenChange(open); if (!open) setSelectedStatus(null); }}>
             <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
                 <DialogHeader className="flex-shrink-0">
                     <div className="flex justify-between items-center pr-8">
@@ -1917,12 +1924,12 @@ function EfficiencyDrilldownDialog({ isOpen, onOpenChange, title, leads }: { isO
                             <DialogDescription>Total records: {leads.length}</DialogDescription>
                         </div>
                         <Button variant="outline" size="sm" onClick={() => {
-                            if (leads.length === 0) {
+                            if (filteredLeads.length === 0) {
                                 toast({ title: 'No Data', description: 'List is empty.' });
                                 return;
                             }
                             const headers = ['Company', 'Field Rep', 'Visit Date', 'Status'];
-                            const csvContent = [headers.join(','), ...leads.map(l => [l.companyName, l.capturedBy, l.visitDate ? format(new Date(l.visitDate), 'PP') : 'N/A', l.status].join(','))].join('\n');
+                            const csvContent = [headers.join(','), ...filteredLeads.map(l => [l.companyName, l.capturedBy, l.visitDate ? format(new Date(l.visitDate), 'PP') : 'N/A', l.status].join(','))].join('\n');
                             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                             const link = document.createElement('a');
                             link.href = URL.createObjectURL(blob);
@@ -1935,6 +1942,16 @@ function EfficiencyDrilldownDialog({ isOpen, onOpenChange, title, leads }: { isO
                         </Button>
                     </div>
                 </DialogHeader>
+
+                {leads.length > 0 && (
+                    <StatusBreakdownBar
+                        items={leads}
+                        selectedStatus={selectedStatus}
+                        onSelectStatus={setSelectedStatus}
+                        getStatus={(l) => l.customerStatus || l.status || 'New'}
+                    />
+                )}
+
                 <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                     <ScrollArea className="h-full">
                         <Table>
@@ -1948,7 +1965,7 @@ function EfficiencyDrilldownDialog({ isOpen, onOpenChange, title, leads }: { isO
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {leads.length > 0 ? leads.map((lead, idx) => (
+                                {filteredLeads.length > 0 ? filteredLeads.map((lead, idx) => (
                                     <TableRow key={`${lead.id}-${idx}`}>
                                         <TableCell className="font-medium">{lead.companyName}</TableCell>
                                         <TableCell>{lead.capturedBy || 'N/A'}</TableCell>

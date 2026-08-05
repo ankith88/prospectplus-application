@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export interface PresaleMainDetails {
+  franchiseeName?: string;
   tradingEntity: string;
   mainContact: string;
   mobileNumber: string;
@@ -8,16 +9,39 @@ export interface PresaleMainDetails {
   abn: string;
   dateListedForSale: string;
   address: string;
+  streetNumberAndName?: string;
+  suburb?: string;
+  state?: string;
+  postcode?: string;
+  dateBusinessStarted?: string;
+  expiryDate?: string;
+  ultimateExpiryDate?: string;
+  unlimitedTermOffer?: string; // 'Yes' | 'No'
 }
 
+export type DeedOption = 'option_1' | 'option_2' | 'option_3';
+
 export interface PresaleDeedOfVariation {
-  status: 'not_started' | 'signed_online' | 'pdf_uploaded';
+  status: 'not_started' | 'sent' | 'option_selected' | 'signed_online' | 'pdf_uploaded';
+  selectedOption?: DeedOption;
+  party1Name?: string;
+  party1Address?: string;
+  party2Name?: string;
+  party2Address?: string;
+  party3Name?: string;
+  dateSent?: string;
+  sentAt?: string;
+  sentToEmail?: string;
   signedAt?: string;
   signerName?: string;
   signerEmail?: string;
   signatureDataUrl?: string;
+  directorSignerName?: string; // Chris Burgess
+  directorSignedAt?: string;
+  directorSignatureDataUrl?: string;
   pdfFileName?: string;
   pdfDataUrl?: string;
+  publicToken?: string;
 }
 
 export interface PresalesDetails {
@@ -44,11 +68,17 @@ export interface PresalesDetails {
   salePrice: number | string;
 }
 
+export type StepStatus = 'Not Started' | 'In Progress' | 'Pending Review' | 'Completed';
+
 export interface PresaleRecord {
-  id: string; // franchiseeId or custom doc id
+  id: string; // franchiseeId
   franchiseeId: string;
   franchiseeName: string;
-  status: 'Draft' | 'Deed Pending' | 'Deed Signed' | 'Active Presale' | 'Sold' | 'Cancelled';
+  status: 'Step 1: Main Details' | 'Step 2: Deed Pending' | 'Step 3: Verification Pending' | 'Step 4: Presales Details' | 'Active Presale' | 'Sold' | 'Cancelled';
+  step1Status: StepStatus;
+  step2Status: StepStatus;
+  step3Status: StepStatus;
+  step4Status: StepStatus;
   mainDetails: PresaleMainDetails;
   deedOfVariation: PresaleDeedOfVariation;
   presalesDetails: PresalesDetails;
@@ -59,50 +89,3 @@ export interface PresaleRecord {
   updatedByUid?: string;
   updatedByName?: string;
 }
-
-export const PresaleRecordSchema = z.object({
-  franchiseeId: z.string(),
-  franchiseeName: z.string().optional().default(''),
-  status: z.enum(['Draft', 'Deed Pending', 'Deed Signed', 'Active Presale', 'Sold', 'Cancelled']).default('Draft'),
-  mainDetails: z.object({
-    tradingEntity: z.string().default(''),
-    mainContact: z.string().default(''),
-    mobileNumber: z.string().default(''),
-    email: z.string().default(''),
-    abn: z.string().default(''),
-    dateListedForSale: z.string().default(''),
-    address: z.string().default(''),
-  }),
-  deedOfVariation: z.object({
-    status: z.enum(['not_started', 'signed_online', 'pdf_uploaded']).default('not_started'),
-    signedAt: z.string().optional(),
-    signerName: z.string().optional(),
-    signerEmail: z.string().optional(),
-    signatureDataUrl: z.string().optional(),
-    pdfFileName: z.string().optional(),
-    pdfDataUrl: z.string().optional(),
-  }),
-  presalesDetails: z.object({
-    commencementDate: z.string().default(''),
-    expiryDate: z.string().default(''),
-    ultimateExpiryDate: z.string().default(''),
-    unlimitedTermOffer: z.string().default('No'),
-    unlimitedTermFee: z.union([z.number(), z.string()]).default(0),
-    renewalTermsYears: z.union([z.number(), z.string()]).default(5),
-    termOnFranchiseeIM: z.string().default('Unlimited'),
-    dateBusinessStarted: z.string().default(''),
-    totalDailyRunTime: z.string().default('5 - 6 hrs'),
-    lowPrice: z.union([z.number(), z.string()]).default(0),
-    highPrice: z.union([z.number(), z.string()]).default(0),
-    serviceRevenue: z.union([z.number(), z.string()]).default(0),
-    serviceRevenueYear: z.string().default(''),
-    mpexCommission: z.union([z.number(), z.string()]).default(0),
-    mpexCommissionYear: z.string().default(''),
-    sendleCommission: z.union([z.number(), z.string()]).default(0),
-    sendleCommissionYear: z.string().default(''),
-    salesCommissionPercent: z.union([z.number(), z.string()]).default(10),
-    nabAccreditation: z.string().default('No'),
-    nabAccreditationFee: z.union([z.number(), z.string()]).default(0),
-    salePrice: z.union([z.number(), z.string()]).default(0),
-  }),
-});

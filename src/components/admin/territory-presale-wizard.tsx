@@ -58,7 +58,7 @@ export function TerritoryPresaleWizard({
 
   // Form states
   const [recordId, setRecordId] = useState(franchiseeId);
-  const [status, setStatus] = useState<PresaleRecord['status']>('Draft');
+  const [status, setStatus] = useState<PresaleRecord['status']>('Step 1: Main Details');
 
   const [mainDetails, setMainDetails] = useState<PresaleMainDetails>({
     tradingEntity: franchiseeName || '',
@@ -98,12 +98,27 @@ export function TerritoryPresaleWizard({
     salePrice: 82500,
   });
 
-  // Role permissions check for Step 4
   const isAdminOrOps =
     isSuperAdmin ||
     ['admin', 'operations', 'Operations', 'Operations Manager', 'Sales Manager'].includes(
       userProfile?.activeRole || userProfile?.role || ''
     );
+
+  const isDeedSigned =
+    deedOfVariation.status === 'signed_online' ||
+    deedOfVariation.status === 'pdf_uploaded';
+
+  const handleStepClick = (targetStep: 1 | 2 | 3 | 4) => {
+    if ((targetStep === 3 || targetStep === 4) && !isDeedSigned) {
+      toast({
+        title: 'Deed of Variation Required',
+        description: 'The Deed of Variation must be signed before proceeding to Step 3 or Step 4.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setActiveStep(targetStep);
+  };
 
   useEffect(() => {
     if (!open || !franchiseeId) return;
@@ -182,7 +197,7 @@ export function TerritoryPresaleWizard({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto bg-[#f4f7f8] p-6">
+        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto bg-background p-6">
           <DialogHeader className="bg-[#095c7b] text-white p-4 -m-6 mb-4 rounded-t-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -211,7 +226,7 @@ export function TerritoryPresaleWizard({
               <div className="grid grid-cols-4 gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
                 <button
                   type="button"
-                  onClick={() => setActiveStep(1)}
+                  onClick={() => handleStepClick(1)}
                   className={`flex flex-col items-center justify-center py-2.5 px-3 rounded-lg text-xs font-semibold transition-all ${
                     activeStep === 1
                       ? 'bg-[#095c7b] text-white shadow'
@@ -224,7 +239,7 @@ export function TerritoryPresaleWizard({
 
                 <button
                   type="button"
-                  onClick={() => setActiveStep(2)}
+                  onClick={() => handleStepClick(2)}
                   className={`flex flex-col items-center justify-center py-2.5 px-3 rounded-lg text-xs font-semibold transition-all ${
                     activeStep === 2
                       ? 'bg-[#095c7b] text-white shadow'
@@ -237,28 +252,34 @@ export function TerritoryPresaleWizard({
 
                 <button
                   type="button"
-                  onClick={() => setActiveStep(3)}
+                  onClick={() => handleStepClick(3)}
                   className={`flex flex-col items-center justify-center py-2.5 px-3 rounded-lg text-xs font-semibold transition-all ${
                     activeStep === 3
                       ? 'bg-[#095c7b] text-white shadow'
+                      : !isDeedSigned
+                      ? 'text-slate-400 bg-slate-50 cursor-not-allowed opacity-80'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <span className="font-bold">STEP 3</span>
+                  <span className="font-bold flex items-center gap-1">
+                    STEP 3 {!isDeedSigned && <Lock className="h-3 w-3 text-amber-500" />}
+                  </span>
                   <span>Signed Status</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setActiveStep(4)}
+                  onClick={() => handleStepClick(4)}
                   className={`flex flex-col items-center justify-center py-2.5 px-3 rounded-lg text-xs font-semibold transition-all ${
                     activeStep === 4
                       ? 'bg-[#095c7b] text-white shadow'
+                      : !isDeedSigned || !isAdminOrOps
+                      ? 'text-slate-400 bg-slate-50 cursor-not-allowed opacity-80'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   <span className="font-bold flex items-center gap-1">
-                    STEP 4 {!isAdminOrOps && <Lock className="h-3 w-3 text-amber-300" />}
+                    STEP 4 {(!isDeedSigned || !isAdminOrOps) && <Lock className="h-3 w-3 text-amber-500" />}
                   </span>
                   <span>Presales Details</span>
                 </button>

@@ -647,7 +647,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewFranchiseeVerification = (isSuperAdmin || userProfile?.activeRole === 'admin' || canView('franchiseeVerification')) && !isUserRole;
   const canViewHistoryAppointments = canView('historyAppointments');
   const canViewHistoryCallsTranscripts = canView('historyCallsTranscripts');
-  const canViewTerritoryMap = isSuperAdmin || (userProfile?.activeRole as string) === 'Franchisee' || (userProfile?.activeRole as string)?.toLowerCase() === 'franchisee' || (userProfile?.activeRole as string) === 'Executive' || (userProfile?.activeRole as string) === 'Outbound Admin';
+  const activeRoleLower = (userProfile?.activeRole as string)?.toLowerCase() || '';
+  const canViewTerritoryMap = isSuperAdmin || 
+    canView('territoryMap') || 
+    ['franchisee', 'executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success'].includes(activeRoleLower);
   const canViewFranchisees = canView('franchisees');
   const canViewAccountManagerPipeline = canView('accountManagerPipeline');
   const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
@@ -947,7 +950,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
 
               {/* Group 10: NETWORK */}
-              {canViewFranchisees && (
+              {(canViewFranchisees || canViewTerritoryMap) && (
                 <SidebarMenuItem>
                   <SidebarMenuButton 
                     tooltip="Network" 
@@ -1903,7 +1906,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
 
               {/* Group 10: NETWORK */}
-              {canViewFranchisees && (
+              {(canViewFranchisees || canViewTerritoryMap) && (
                 <SidebarGroup>
                   <SidebarGroupLabel 
                     onClick={() => toggleGroup('network-group')} 

@@ -40,28 +40,27 @@ export async function PATCH(
     const cancelledOn = serviceCancelledOnDate || new Date().toISOString().substring(0, 10);
     const cancelledBy = serviceCancelledBy || 'API';
 
-    // Try finding the document in 'companies' first, then 'leads'
-    let docRef = db.collection('companies').doc(companyId);
-    let docSnap = await docRef.get();
-    let collectionName = 'companies';
+    // Check both 'companies' and 'leads' collections
+    const companyRef = db.collection('companies').doc(companyId);
+    const leadRef = db.collection('leads').doc(companyId);
 
-    if (!docSnap.exists) {
-      docRef = db.collection('leads').doc(companyId);
-      docSnap = await docRef.get();
-      collectionName = 'leads';
-    }
+    const [companySnap, leadSnap] = await Promise.all([
+      companyRef.get(),
+      leadRef.get()
+    ]);
 
-    if (!docSnap.exists) {
+    if (!companySnap.exists && !leadSnap.exists) {
       return NextResponse.json({ error: 'Customer or Lead not found' }, { status: 404 });
     }
 
-    const currentData = docSnap.data() || {};
+    const primarySnap = companySnap.exists ? companySnap : leadSnap;
+    const currentData = primarySnap.data() || {};
     const companyName = currentData.companyName || 'Unknown Company';
 
     // Prepare update payload
     const updateData: any = {
       customerStatus: 'Lost Customer',
-      status: 'Lost',
+      status: 'Lost Customer',
       cancellationdate: cancellationDate,
       cancellationDate: cancellationDate,
       cancellationReason: cancellationReason || 'Other',
@@ -75,7 +74,27 @@ export async function PATCH(
       updatedAt: FieldValue.serverTimestamp()
     };
 
-    await docRef.update(updateData);
+    if (companySnap.exists) {
+      await companyRef.update(updateData);
+      await companyRef.collection('activity').add({
+        type: 'Update',
+        date: new Date().toISOString(),
+        notes: `Customer marked as Lost via API by ${cancelledBy}. Reason: ${cancellationReason || 'Other'}. Theme: ${cancellationTheme || 'None'}. Stop Date: ${cancellationDate}. Service Cancelled On: ${cancelledOn}.`,
+        author: cancelledBy,
+        syncedWithNetSuite: false
+      });
+    }
+
+    if (leadSnap.exists) {
+      await leadRef.update(updateData);
+      await leadRef.collection('activity').add({
+        type: 'Update',
+        date: new Date().toISOString(),
+        notes: `Customer marked as Lost via API by ${cancelledBy}. Reason: ${cancellationReason || 'Other'}. Theme: ${cancellationTheme || 'None'}. Stop Date: ${cancellationDate}. Service Cancelled On: ${cancelledOn}.`,
+        author: cancelledBy,
+        syncedWithNetSuite: false
+      });
+    }
 
     // Record the cancellation in the 'cancellations' collection
     const cancellationsRef = db.collection('cancellations');
@@ -102,16 +121,6 @@ export async function PATCH(
       processedBy: cancelledBy,
       processedAt: new Date().toISOString(),
       createdAt: FieldValue.serverTimestamp()
-    });
-
-    // Log an activity entry
-    const activityRef = db.collection(collectionName).doc(companyId).collection('activity');
-    await activityRef.add({
-      type: 'Update',
-      date: new Date().toISOString(),
-      notes: `Customer marked as Lost via API by ${cancelledBy}. Reason: ${cancellationReason || 'Other'}. Theme: ${cancellationTheme || 'None'}. Stop Date: ${cancellationDate}. Service Cancelled On: ${cancelledOn}.`,
-      author: cancelledBy,
-      syncedWithNetSuite: false
     });
 
     // Send cancellation notification email

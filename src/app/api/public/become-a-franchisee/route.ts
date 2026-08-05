@@ -27,6 +27,10 @@ export async function POST(req: Request) {
       phone = '',
       preferredState = '',
       preferredTerritory = '',
+      interest = '',
+      vehicle = '',
+      experience = '',
+      employment = '',
       message = '',
       sourceApp = 'mailplus-website',
     } = body;
@@ -50,11 +54,17 @@ export async function POST(req: Request) {
       phone: phone.trim(),
       preferredState: preferredState.trim(),
       preferredTerritory: preferredTerritory.trim(),
+      interest: interest.trim(),
+      vehicle: vehicle.trim(),
+      experience: experience.trim(),
+      employment: employment.trim(),
       message: message.trim(),
       status: 'New',
       submittedAt: new Date().toISOString(),
       sourceApp,
       notes: [],
+      emailLogs: [],
+      brochureSent: false,
     };
 
     const docRef = await db.collection('franchise_prospects').add(prospectData);

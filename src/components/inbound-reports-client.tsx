@@ -59,6 +59,7 @@ import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, getDocs, where, orderBy, collectionGroup, or, and } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
+import { StatusBreakdownBar } from './status-breakdown-bar';
 import { StatusOutcomeInfo, StatusChartTooltipContent } from './status-outcome-info';
 import { StatusOutcomeBanner } from './status-outcome-guide';
 import { cn, isManualActivity } from '@/lib/utils';
@@ -4054,6 +4055,14 @@ export default function InboundReportsClientPage({
                         <Download className="h-4 w-4 mr-2" /> Export List
                     </Button>
                 </div>
+                {drillDownData && drillDownData.leads.length > 0 && (
+                    <StatusBreakdownBar
+                        items={drillDownData.leads}
+                        selectedStatus={drillDownStatusFilter === 'all' ? null : drillDownStatusFilter}
+                        onSelectStatus={(status) => setDrillDownStatusFilter(status || 'all')}
+                        getStatus={(l) => l.customerStatus || l.status || 'New'}
+                    />
+                )}
                 {drillDownData && drillDownData.leads.length > 0 && (
                     <div className="flex items-center gap-4 mt-2">
                         <div className="flex-1 max-w-xs">

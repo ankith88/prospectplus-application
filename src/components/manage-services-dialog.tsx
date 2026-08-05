@@ -79,9 +79,22 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
         const snap = await getDocs(collection(firestore, 'partner_locations'));
         const locs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setPartnerLocations(locs);
-        if (lead.bankLocationId) {
-          const found = locs.find(l => l.id === lead.bankLocationId || (l as any).internalId === lead.bankLocationId);
-          if (found) setSelectedBank(found);
+
+        const targetId = lead.bankLocationId || (lead as any).partnerLocationId || (lead as any).bankLocation?.id || (lead as any).postalAddress?.partnerLocationId;
+        const targetName = lead.bankLocationName || (lead as any).partnerLocationName;
+
+        if (targetId) {
+          const found = locs.find(l => l.id === targetId || (l as any).internalId === targetId);
+          if (found) {
+            setSelectedBank(found);
+            setSelectedBankId(found.id || (found as any).internalId);
+          }
+        } else if (targetName) {
+          const found = locs.find(l => (l as any).name?.toLowerCase() === targetName.toLowerCase() || (l as any).locationName?.toLowerCase() === targetName.toLowerCase());
+          if (found) {
+            setSelectedBank(found);
+            setSelectedBankId(found.id || (found as any).internalId);
+          }
         }
       } catch (err) {
         console.error('Error fetching partner locations:', err);
@@ -191,6 +204,8 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
       await updateLeadServices(lead.id, configuredServices);
 
       if (selectedBank) {
+        const bankLocId = selectedBank.id || selectedBank.internalId || selectedBankId;
+        const bankLocName = selectedBank.name || selectedBank.locationName || '';
         await saveOrUpdateTaggedAddress(lead.id, {
           tag: 'EB/CB Bank',
           address1: selectedBank.address1 || selectedBank.name,
@@ -203,8 +218,18 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
           lng: selectedBank.lng || selectedBank.longitude,
         });
         await updateLeadDetails(lead.id, lead, {
-          bankLocationId: selectedBank.id || selectedBank.internalId,
-          bankLocationName: selectedBank.name,
+          bankLocationId: bankLocId,
+          bankLocationName: bankLocName,
+          partnerLocationId: bankLocId,
+          partnerLocationName: bankLocName,
+          bankLocation: {
+            id: bankLocId,
+            name: bankLocName,
+            suburb: selectedBank.suburb || selectedBank.city || '',
+            state: selectedBank.state || '',
+            postCode: selectedBank.postCode || selectedBank.postcode || '',
+            address1: selectedBank.address1 || selectedBank.name || ''
+          }
         });
       }
 

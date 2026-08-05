@@ -16,11 +16,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
-import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely } from '@/services/firebase';
+import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely, unlinkUserFromFranchiseeCompletely } from '@/services/firebase';
 import type { UserProfile, AdminApprovalRequest, Franchisee } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
-import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle, Trash2 } from 'lucide-react';
+import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle, Trash2, Unlink } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { CreateUserDialog } from './create-user-dialog';
@@ -82,9 +82,11 @@ export function UserManagementTable() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notificationTargetUsers, setNotificationTargetUsers] = useState<{ uid: string; displayName: string }[]>([]);
 
-  // Deletion State
+  // Deletion & Unlinking State
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+  const [isUnlinking, setIsUnlinking] = useState(false);
 
   // Search, Tab and Sort State
   const [activeTab, setActiveTab] = useState<'active' | 'disabled' | 'all'>('active');
@@ -231,6 +233,32 @@ export function UserManagementTable() {
       setUserToDelete(null);
     }
   };
+
+  const handleUnlinkFranchisee = async () => {
+    if (!userToEdit || !userProfile?.uid) return;
+
+    setIsUnlinking(true);
+    try {
+      await unlinkUserFromFranchiseeCompletely(userToEdit.uid, undefined, userProfile.uid);
+      toast({
+        title: 'User Unlinked Completely',
+        description: `User ${userToEdit.displayName || userToEdit.email} has been completely unlinked from all franchisee records.`,
+      });
+      setNewFranchiseeId('');
+      setNewFranchisee('');
+      setShowUnlinkConfirm(false);
+      setUserToEdit(null);
+      await fetchUsers();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Unlink Failed',
+        description: error.message || 'Could not unlink user from franchisee.',
+      });
+    } finally {
+      setIsUnlinking(false);
+    }
+  };
   
   const handleSendResetEmail = async (email: string) => {
     setIsSendingReset(email);
@@ -297,11 +325,18 @@ export function UserManagementTable() {
         mobileNumber: newMobileNumber, 
         aircallPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newAircallPhoneNumber 
       };
+      const isUnlinkingFranchisee = newFranchiseeId === 'none' || 
+        (!effectiveAssignedRoles.includes('Franchisee') && !!(userToEdit.franchiseeId || userToEdit.franchisee || userToEdit.linkedFranchiseeIds?.length));
+
+      if (isUnlinkingFranchisee) {
+        await unlinkUserFromFranchiseeCompletely(userToEdit.uid, undefined, userProfile?.uid);
+      }
+
       if (effectiveAssignedRoles.includes('Field Sales')) {
         updateData.linkedSalesRep = newLinkedSalesRep;
         updateData.linkedBDR = newLinkedBDR;
         updateData.franchisee = '';
-      } else if (effectiveAssignedRoles.includes('Franchisee')) {
+      } else if (effectiveAssignedRoles.includes('Franchisee') && !isUnlinkingFranchisee) {
         updateData.franchisee = newFranchisee;
         updateData.franchiseeId = newFranchiseeId || undefined;
         updateData.franchiseeInternalId = newFranchiseeId || undefined;
@@ -320,7 +355,7 @@ export function UserManagementTable() {
           accountNumber: newAccountNumber,
           accountName: newAccountName,
         };
-        if (newFranchiseeId) {
+        if (newFranchiseeId && newFranchiseeId !== 'none') {
           updateData.linkedFranchisees = [{
             franchiseeId: newFranchiseeId,
             franchiseeName: newFranchisee,
@@ -810,6 +845,35 @@ export function UserManagementTable() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={showUnlinkConfirm} onOpenChange={setShowUnlinkConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+              <Unlink className="h-5 w-5" /> Unlink User from Franchisee?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span>
+                Are you sure you want to completely remove the franchisee link for{' '}
+                <strong className="text-foreground">{userToEdit?.displayName || userToEdit?.email}</strong>?
+              </span>
+              <span className="block text-xs text-muted-foreground pt-1">
+                This will remove all franchisee association fields from the user document, update the franchisee records, and archive the link history.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUnlinking}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleUnlinkFranchisee}
+              disabled={isUnlinking}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+            >
+              {isUnlinking ? <Loader /> : 'Unlink User'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
        <AlertDialog open={!!userToToggle} onOpenChange={(open) => !open && setUserToToggle(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -908,17 +972,40 @@ export function UserManagementTable() {
                         </div>
                     </>
                 )}
+                {userToEdit && (userToEdit.franchiseeId || userToEdit.franchisee || (userToEdit.linkedFranchiseeIds && userToEdit.linkedFranchiseeIds.length > 0)) && (
+                    <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-900 text-xs">
+                        <div>
+                            <span className="font-semibold text-amber-900 dark:text-amber-200">Currently Linked Franchise: </span>
+                            <span className="text-amber-800 dark:text-amber-300 font-medium">{userToEdit.franchisee || userToEdit.franchiseeId || 'Linked'}</span>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200"
+                            onClick={() => setShowUnlinkConfirm(true)}
+                        >
+                            <Unlink className="mr-1.5 h-3.5 w-3.5 text-amber-600" />
+                            Unlink User Completely
+                        </Button>
+                    </div>
+                )}
                 {newAssignedRoles.includes('Franchisee') && (
                     <div className="space-y-4 border p-3.5 rounded-md bg-muted/30 text-sm">
                         <div className="space-y-2">
                             <Label className="text-xs font-semibold">Link Franchise Entity*</Label>
                             <Select 
-                                value={newFranchiseeId} 
+                                value={newFranchiseeId || 'none'} 
                                 onValueChange={(val) => {
-                                    setNewFranchiseeId(val);
-                                    const selectedFr = allFranchisees.find(f => String(f.internalId) === val);
-                                    if (selectedFr) {
-                                        setNewFranchisee(selectedFr.name);
+                                    if (val === 'none') {
+                                        setNewFranchiseeId('none');
+                                        setNewFranchisee('');
+                                    } else {
+                                        setNewFranchiseeId(val);
+                                        const selectedFr = allFranchisees.find(f => String(f.internalId) === val);
+                                        if (selectedFr) {
+                                            setNewFranchisee(selectedFr.name);
+                                        }
                                     }
                                 }}
                             >
@@ -926,6 +1013,9 @@ export function UserManagementTable() {
                                     <SelectValue placeholder="Select existing franchise..." />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-60">
+                                    <SelectItem value="none">
+                                        <span className="text-muted-foreground italic">(None - Unlinked)</span>
+                                    </SelectItem>
                                     {allFranchisees.map((fr) => (
                                         <SelectItem key={fr.internalId} value={String(fr.internalId)}>
                                             {fr.name || 'Unnamed'} ({fr.internalId})
@@ -933,7 +1023,7 @@ export function UserManagementTable() {
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <p className="text-[11px] text-muted-foreground">Select the official franchise entity to link with this user account.</p>
+                            <p className="text-[11px] text-muted-foreground">Select the official franchise entity to link with this user account or select (None - Unlinked) to disassociate.</p>
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-semibold">Franchisee Relationship / Type*</Label>

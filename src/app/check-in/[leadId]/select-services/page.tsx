@@ -89,6 +89,27 @@ function SelectServicesContent() {
     }
     fetchLocations();
   }, []);
+
+  useEffect(() => {
+    if (lead && partnerLocations.length > 0 && !selectedBankId) {
+      const targetId = lead.bankLocationId || (lead as any).partnerLocationId || (lead as any).bankLocation?.id || (lead as any).postalAddress?.partnerLocationId;
+      const targetName = lead.bankLocationName || (lead as any).partnerLocationName;
+
+      if (targetId) {
+        const found = partnerLocations.find(l => l.id === targetId || (l as any).internalId === targetId);
+        if (found) {
+          setSelectedBank(found);
+          setSelectedBankId(found.id || (found as any).internalId);
+        }
+      } else if (targetName) {
+        const found = partnerLocations.find(l => (l as any).name?.toLowerCase() === targetName.toLowerCase() || (l as any).locationName?.toLowerCase() === targetName.toLowerCase());
+        if (found) {
+          setSelectedBank(found);
+          setSelectedBankId(found.id || (found as any).internalId);
+        }
+      }
+    }
+  }, [lead, partnerLocations, selectedBankId]);
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
@@ -362,9 +383,21 @@ function SelectServicesContent() {
           lat: selectedBank.lat || selectedBank.latitude,
           lng: selectedBank.lng || selectedBank.longitude,
         });
+        const bankLocId = selectedBank.id || selectedBank.internalId || selectedBankId;
+        const bankLocName = selectedBank.name || selectedBank.locationName || '';
         await updateLeadDetails(lead.id, lead, {
-          bankLocationId: selectedBank.id || selectedBank.internalId,
-          bankLocationName: selectedBank.name,
+          bankLocationId: bankLocId,
+          bankLocationName: bankLocName,
+          partnerLocationId: bankLocId,
+          partnerLocationName: bankLocName,
+          bankLocation: {
+            id: bankLocId,
+            name: bankLocName,
+            suburb: selectedBank.suburb || selectedBank.city || '',
+            state: selectedBank.state || '',
+            postCode: selectedBank.postCode || selectedBank.postcode || '',
+            address1: selectedBank.address1 || selectedBank.name || ''
+          }
         });
       }
       if (h2hAddress) {

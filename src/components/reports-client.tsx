@@ -73,6 +73,7 @@ import { CallAttemptBadge } from './call-attempt-badge';
 import { StatusOutcomeInfo, StatusChartTooltipContent } from './status-outcome-info';
 import { StatusOutcomeBanner } from './status-outcome-guide';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { StatusBreakdownBar } from './status-breakdown-bar';
 import { cn, getQuickDateRange, isManualActivity } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -398,6 +399,16 @@ export default function ReportsClientPage({
   const [activeCustomerIndex, setActiveCustomerIndex] = useState<number | null>(null);
   const [trialDrilldown, setTrialDrilldown] = useState<{ title: string; leads: Lead[] } | null>(null);
   const [incentiveDrillDown, setIncentiveDrillDown] = useState<{ title: string; appts?: Appointment[]; leads?: Lead[] } | null>(null);
+
+  // Status breakdown filter states for drill-down dialogs
+  const [trialDrilldownStatusFilter, setTrialDrilldownStatusFilter] = useState<string | null>(null);
+  const [apptListStatusFilter, setApptListStatusFilter] = useState<string | null>(null);
+  const [engagementStatusFilter, setEngagementStatusFilter] = useState<string | null>(null);
+  const [wonStatusFilter, setWonStatusFilter] = useState<string | null>(null);
+  const [quotesStatusFilter, setQuotesStatusFilter] = useState<string | null>(null);
+  const [fieldSourcedStatusFilter, setFieldSourcedStatusFilter] = useState<string | null>(null);
+  const [apptOutcomeStatusFilter, setApptOutcomeStatusFilter] = useState<string | null>(null);
+  const [incentiveStatusFilter, setIncentiveStatusFilter] = useState<string | null>(null);
   const [dailyViewMode, setDailyViewMode] = useState<'chart' | 'table'>('chart');
   const [dailyMetricMode, setDailyMetricMode] = useState<'unique' | 'actions'>('unique');
   const [burnRateTimeframe, setBurnRateTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
@@ -4166,7 +4177,7 @@ export default function ReportsClientPage({
       )}
 
       {/* Drill-down Dialogs */}
-      <Dialog open={isApptListOpen} onOpenChange={setIsApptListOpen}>
+      <Dialog open={isApptListOpen} onOpenChange={(open) => { setIsApptListOpen(open); if(!open) setApptListStatusFilter(null); }}>
           <DialogContent className="max-w-5xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4184,6 +4195,14 @@ export default function ReportsClientPage({
                     </Button>
                   </div>
               </DialogHeader>
+
+              <StatusBreakdownBar 
+                items={filteredAppointments} 
+                selectedStatus={apptListStatusFilter} 
+                onSelectStatus={setApptListStatusFilter} 
+                getStatus={(a) => a.leadStatus || 'New'} 
+              />
+
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
@@ -4200,43 +4219,47 @@ export default function ReportsClientPage({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredAppointments.length > 0 ? filteredAppointments.map((appt) => {
-                                const leadStatus = appt.leadStatus || '';
-                                return (
-                                    <TableRow key={appt.id}>
-                                        <TableCell className="font-medium">{appt.leadName}</TableCell>
-                                        <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
-                                        <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
-                                        <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
-                                        <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline">{appt.appointmentStatus || 'Pending'}</Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            {leadStatus === 'Won' || (leadStatus as string) === 'Signed' ? (
-                                                <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1">
-                                                    <Trophy className="h-3 w-3" /> Signed Customer
-                                                </Badge>
-                                            ) : (leadStatus === 'Trialing ShipMate' || leadStatus === 'Trialing LocalMile' || leadStatus === 'Free Trial') ? (
-                                                <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-1">
-                                                    <Zap className="h-3 w-3" /> Trial Started
-                                                </Badge>
-                                            ) : (leadStatus === 'Quote Sent' || leadStatus === 'Quote Accepted' || leadStatus === 'Prospect Opportunity') ? (
-                                                <Badge className="bg-purple-600 hover:bg-purple-700 text-white font-semibold gap-1">
-                                                    <FileText className="h-3 w-3" /> Quote Sent
-                                                </Badge>
-                                            ) : (
-                                                <Badge variant="outline" className="text-muted-foreground font-normal">Pending</Badge>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" asChild>
-                                                <Link href={`/leads/${appt.leadId}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            }) : <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground italic">No appointments found.</TableCell></TableRow>}
+                            {filteredAppointments.length > 0 ? (
+                              filteredAppointments
+                                .filter((appt) => !apptListStatusFilter || (appt.leadStatus || 'New') === apptListStatusFilter)
+                                .map((appt) => {
+                                  const leadStatus = appt.leadStatus || '';
+                                  return (
+                                      <TableRow key={appt.id}>
+                                          <TableCell className="font-medium">{appt.leadName}</TableCell>
+                                          <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
+                                          <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                          <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
+                                          <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
+                                          <TableCell>
+                                              <Badge variant="outline">{appt.appointmentStatus || 'Pending'}</Badge>
+                                          </TableCell>
+                                          <TableCell>
+                                              {leadStatus === 'Won' || (leadStatus as string) === 'Signed' ? (
+                                                  <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1">
+                                                      <Trophy className="h-3 w-3" /> Signed Customer
+                                                  </Badge>
+                                              ) : (leadStatus === 'Trialing ShipMate' || leadStatus === 'Trialing LocalMile' || leadStatus === 'Free Trial') ? (
+                                                  <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-1">
+                                                      <Zap className="h-3 w-3" /> Trial Started
+                                                  </Badge>
+                                              ) : (leadStatus === 'Quote Sent' || leadStatus === 'Quote Accepted' || leadStatus === 'Prospect Opportunity') ? (
+                                                  <Badge className="bg-purple-600 hover:bg-purple-700 text-white font-semibold gap-1">
+                                                      <FileText className="h-3 w-3" /> Quote Sent
+                                                  </Badge>
+                                              ) : (
+                                                  <Badge variant="outline" className="text-muted-foreground font-normal">Pending</Badge>
+                                              )}
+                                          </TableCell>
+                                          <TableCell className="text-right">
+                                              <Button variant="ghost" size="sm" asChild>
+                                                  <Link href={`/leads/${appt.leadId}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                              </Button>
+                                          </TableCell>
+                                      </TableRow>
+                                  );
+                              })
+                            ) : <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground italic">No appointments found.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
@@ -4244,7 +4267,7 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={isEngagementListOpen} onOpenChange={setIsEngagementListOpen}>
+      <Dialog open={isEngagementListOpen} onOpenChange={(open) => { setIsEngagementListOpen(open); if(!open) setEngagementStatusFilter(null); }}>
           <DialogContent className="max-w-5xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4264,6 +4287,14 @@ export default function ReportsClientPage({
                     </Button>
                   </div>
               </DialogHeader>
+
+              <StatusBreakdownBar 
+                items={stats.engagementLeadsList} 
+                selectedStatus={engagementStatusFilter} 
+                onSelectStatus={setEngagementStatusFilter} 
+                getStatus={(l) => l.status || 'New'} 
+              />
+
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
@@ -4281,23 +4312,27 @@ export default function ReportsClientPage({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {stats.engagementLeadsList.length > 0 ? stats.engagementLeadsList.map((item) => (
-                                <TableRow key={item.leadId}>
-                                    <TableCell className="font-medium">{item.companyName}</TableCell>
-                                    <TableCell>{item.prospectPlusId}</TableCell>
-                                    <TableCell>{item.dialerAssigned}</TableCell>
-                                    <TableCell>{item.franchisee}</TableCell>
-                                    <TableCell><LeadStatusBadge status={item.status as LeadStatus} /></TableCell>
-                                    <TableCell className="text-center"><CallAttemptBadge attempts={item.uniqueCallCount} variant="table" /></TableCell>
-                                    <TableCell className="text-right font-bold text-blue-600">{item.uniqueCallCount}</TableCell>
-                                    <TableCell className="text-right">{item.totalInteractions}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/leads/${item.leadId}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            )) : <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground italic">No engaged customers found in this period.</TableCell></TableRow>}
+                            {stats.engagementLeadsList.length > 0 ? (
+                              stats.engagementLeadsList
+                                .filter((item) => !engagementStatusFilter || (item.status || 'New') === engagementStatusFilter)
+                                .map((item) => (
+                                  <TableRow key={item.leadId}>
+                                      <TableCell className="font-medium">{item.companyName}</TableCell>
+                                      <TableCell>{item.prospectPlusId}</TableCell>
+                                      <TableCell>{item.dialerAssigned}</TableCell>
+                                      <TableCell>{item.franchisee}</TableCell>
+                                      <TableCell><LeadStatusBadge status={item.status as LeadStatus} /></TableCell>
+                                      <TableCell className="text-center"><CallAttemptBadge attempts={item.uniqueCallCount} variant="table" /></TableCell>
+                                      <TableCell className="text-right font-bold text-blue-600">{item.uniqueCallCount}</TableCell>
+                                      <TableCell className="text-right">{item.totalInteractions}</TableCell>
+                                      <TableCell className="text-right">
+                                          <Button variant="ghost" size="sm" asChild>
+                                              <Link href={`/leads/${item.leadId}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                          </Button>
+                                      </TableCell>
+                                  </TableRow>
+                              ))
+                            ) : <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground italic">No engaged customers found in this period.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
@@ -4305,7 +4340,7 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={isWonListOpen} onOpenChange={setIsWonListOpen}>
+      <Dialog open={isWonListOpen} onOpenChange={(open) => { setIsWonListOpen(open); if(!open) setWonStatusFilter(null); }}>
           <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4323,6 +4358,14 @@ export default function ReportsClientPage({
                     </Button>
                   </div>
               </DialogHeader>
+
+              <StatusBreakdownBar 
+                items={stats.wonLeadsList} 
+                selectedStatus={wonStatusFilter} 
+                onSelectStatus={setWonStatusFilter} 
+                getStatus={(l) => l.status || 'Won'} 
+              />
+
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
@@ -4336,19 +4379,23 @@ export default function ReportsClientPage({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {stats.wonLeadsList.length > 0 ? stats.wonLeadsList.map((lead) => (
-                                <TableRow key={lead.id}>
-                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                    <TableCell>{lead.prospectPlusId || lead.id}</TableCell>
-                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
-                                    <TableCell>{lead.franchisee || 'N/A'}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No won leads found in this cohort.</TableCell></TableRow>}
+                            {stats.wonLeadsList.length > 0 ? (
+                              stats.wonLeadsList
+                                .filter((lead) => !wonStatusFilter || (lead.status || 'Won') === wonStatusFilter)
+                                .map((lead) => (
+                                  <TableRow key={lead.id}>
+                                      <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                      <TableCell>{lead.prospectPlusId || lead.id}</TableCell>
+                                      <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                      <TableCell>{lead.franchisee || 'N/A'}</TableCell>
+                                      <TableCell className="text-right">
+                                          <Button variant="ghost" size="sm" asChild>
+                                              <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                          </Button>
+                                      </TableCell>
+                                  </TableRow>
+                              ))
+                            ) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No won leads found in this cohort.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
@@ -4356,7 +4403,7 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={isQuotesListOpen} onOpenChange={setIsQuotesListOpen}>
+      <Dialog open={isQuotesListOpen} onOpenChange={(open) => { setIsQuotesListOpen(open); if(!open) setQuotesStatusFilter(null); }}>
           <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4374,6 +4421,14 @@ export default function ReportsClientPage({
                     </Button>
                   </div>
               </DialogHeader>
+
+              <StatusBreakdownBar 
+                items={stats.quoteLeadsList} 
+                selectedStatus={quotesStatusFilter} 
+                onSelectStatus={setQuotesStatusFilter} 
+                getStatus={(l) => l.status || 'New'} 
+              />
+
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
@@ -4388,20 +4443,24 @@ export default function ReportsClientPage({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {stats.quoteLeadsList.length > 0 ? stats.quoteLeadsList.map((lead) => (
-                                <TableRow key={lead.id}>
-                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                    <TableCell>{lead.prospectPlusId || lead.id}</TableCell>
-                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
-                                    <TableCell>{lead.franchisee || 'N/A'}</TableCell>
-                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No quotes found in this cohort.</TableCell></TableRow>}
+                            {stats.quoteLeadsList.length > 0 ? (
+                              stats.quoteLeadsList
+                                .filter((lead) => !quotesStatusFilter || (lead.status || 'New') === quotesStatusFilter)
+                                .map((lead) => (
+                                  <TableRow key={lead.id}>
+                                      <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                      <TableCell>{lead.prospectPlusId || lead.id}</TableCell>
+                                      <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                      <TableCell>{lead.franchisee || 'N/A'}</TableCell>
+                                      <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                      <TableCell className="text-right">
+                                          <Button variant="ghost" size="sm" asChild>
+                                              <Link href={`/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                          </Button>
+                                      </TableCell>
+                                  </TableRow>
+                              ))
+                            ) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No quotes found in this cohort.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
@@ -4411,7 +4470,7 @@ export default function ReportsClientPage({
 
 
 
-      <Dialog open={isFieldSourcedListOpen} onOpenChange={setIsFieldSourcedListOpen}>
+      <Dialog open={isFieldSourcedListOpen} onOpenChange={(open) => { setIsFieldSourcedListOpen(open); if(!open) setFieldSourcedStatusFilter(null); }}>
           <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4437,6 +4496,14 @@ export default function ReportsClientPage({
                     </Button>
                   </div>
               </DialogHeader>
+
+              <StatusBreakdownBar 
+                items={stats.fieldSourcedLeads} 
+                selectedStatus={fieldSourcedStatusFilter} 
+                onSelectStatus={setFieldSourcedStatusFilter} 
+                getStatus={(l) => l.status || 'New'} 
+              />
+
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
@@ -4452,37 +4519,41 @@ export default function ReportsClientPage({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {stats.fieldSourcedLeads.length > 0 ? stats.fieldSourcedLeads.map((lead) => (
-                                <TableRow key={lead.id}>
-                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            <User className="h-3 w-3 text-muted-foreground" />
-                                            <span>{lead.visitNote?.capturedBy || 'N/A'}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline" className="text-[10px]">{lead.visitNote?.outcome?.type || 'N/A'}</Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-col text-xs">
-                                            <span>{lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'PP') : 'N/A'}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            <Phone className="h-3 w-3 text-muted-foreground" />
-                                            <span>{lead.dialerAssigned || 'Unassigned'}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            )) : (
+                            {stats.fieldSourcedLeads.length > 0 ? (
+                              stats.fieldSourcedLeads
+                                .filter((lead) => !fieldSourcedStatusFilter || (lead.status || 'New') === fieldSourcedStatusFilter)
+                                .map((lead) => (
+                                  <TableRow key={lead.id}>
+                                      <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                      <TableCell>
+                                          <div className="flex items-center gap-2">
+                                              <User className="h-3 w-3 text-muted-foreground" />
+                                              <span>{lead.visitNote?.capturedBy || 'N/A'}</span>
+                                          </div>
+                                      </TableCell>
+                                      <TableCell>
+                                          <Badge variant="outline" className="text-[10px]">{lead.visitNote?.outcome?.type || 'N/A'}</Badge>
+                                      </TableCell>
+                                      <TableCell>
+                                          <div className="flex flex-col text-xs">
+                                              <span>{lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'PP') : 'N/A'}</span>
+                                          </div>
+                                      </TableCell>
+                                      <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                      <TableCell>
+                                          <div className="flex items-center gap-2">
+                                              <Phone className="h-3 w-3 text-muted-foreground" />
+                                              <span>{lead.dialerAssigned || 'Unassigned'}</span>
+                                          </div>
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                          <Button variant="ghost" size="sm" asChild>
+                                              <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                          </Button>
+                                      </TableCell>
+                                  </TableRow>
+                              ))
+                            ) : (
                                 <TableRow>
                                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">
                                         No field-sourced leads found in the current outbound pipeline.
@@ -4496,7 +4567,7 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={isApptOutcomeListOpen} onOpenChange={setIsApptOutcomeListOpen}>
+      <Dialog open={isApptOutcomeListOpen} onOpenChange={(open) => { setIsApptOutcomeListOpen(open); if(!open) setApptOutcomeStatusFilter(null); }}>
           <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4532,6 +4603,14 @@ export default function ReportsClientPage({
                     </div>
                   </div>
               </DialogHeader>
+
+              <StatusBreakdownBar 
+                items={filteredSourcedAppts} 
+                selectedStatus={apptOutcomeStatusFilter} 
+                onSelectStatus={setApptOutcomeStatusFilter} 
+                getStatus={(a) => a.leadStatus || 'New'} 
+              />
+
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
@@ -4547,33 +4626,37 @@ export default function ReportsClientPage({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredSourcedAppts.length > 0 ? filteredSourcedAppts.map((appt) => (
-                                <TableRow key={appt.id}>
-                                    <TableCell className="font-medium">{appt.leadName}</TableCell>
-                                    <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline" className={cn(
-                                            appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
-                                            appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
-                                            appt.appointmentStatus === 'No Show' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                            appt.appointmentStatus === 'Rescheduled' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                                            'bg-blue-50 text-blue-700 border-blue-200'
-                                        )}>
-                                            {appt.appointmentStatus || 'Pending'}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
-                                    <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
-                                    <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/leads/${appt.leadId}`} target="_blank">
-                                                View Record <ExternalLink className="ml-2 h-3 w-3" />
-                                            </Link>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            )) : (
+                            {filteredSourcedAppts.length > 0 ? (
+                              filteredSourcedAppts
+                                .filter((appt) => !apptOutcomeStatusFilter || (appt.leadStatus || 'New') === apptOutcomeStatusFilter)
+                                .map((appt) => (
+                                  <TableRow key={appt.id}>
+                                      <TableCell className="font-medium">{appt.leadName}</TableCell>
+                                      <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
+                                      <TableCell>
+                                          <Badge variant="outline" className={cn(
+                                              appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                              appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                              appt.appointmentStatus === 'No Show' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                              appt.appointmentStatus === 'Rescheduled' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                              'bg-blue-50 text-blue-700 border-blue-200'
+                                          )}>
+                                              {appt.appointmentStatus || 'Pending'}
+                                          </Badge>
+                                      </TableCell>
+                                      <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                      <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
+                                      <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
+                                      <TableCell className="text-right">
+                                          <Button variant="ghost" size="sm" asChild>
+                                              <Link href={`/leads/${appt.leadId}`} target="_blank">
+                                                  View Record <ExternalLink className="ml-2 h-3 w-3" />
+                                              </Link>
+                                          </Button>
+                                      </TableCell>
+                                  </TableRow>
+                              ))
+                            ) : (
                                 <TableRow>
                                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">
                                         No appointments found for this status.
@@ -4587,7 +4670,7 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={!!trialDrilldown} onOpenChange={(open) => !open && setTrialDrilldown(null)}>
+      <Dialog open={!!trialDrilldown} onOpenChange={(open) => { if (!open) { setTrialDrilldown(null); setTrialDrilldownStatusFilter(null); } }}>
           <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4605,6 +4688,16 @@ export default function ReportsClientPage({
                     </Button>
                   </div>
               </DialogHeader>
+
+              {trialDrilldown?.leads && (
+                <StatusBreakdownBar 
+                  items={trialDrilldown.leads} 
+                  selectedStatus={trialDrilldownStatusFilter} 
+                  onSelectStatus={setTrialDrilldownStatusFilter} 
+                  getStatus={(l) => l.customerStatus || l.status || 'New'} 
+                />
+              )}
+
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
@@ -4619,20 +4712,24 @@ export default function ReportsClientPage({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {trialDrilldown?.leads && trialDrilldown.leads.length > 0 ? trialDrilldown.leads.map((lead) => (
-                                <TableRow key={lead.id}>
-                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
-                                    <TableCell>{lead.franchisee || 'N/A'}</TableCell>
-                                    <TableCell>{lead.dateLeadEntered || 'N/A'}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No leads found in this cohort.</TableCell></TableRow>}
+                            {trialDrilldown?.leads && trialDrilldown.leads.length > 0 ? (
+                              trialDrilldown.leads
+                                .filter((l) => !trialDrilldownStatusFilter || (l.customerStatus || l.status || 'New') === trialDrilldownStatusFilter)
+                                .map((lead) => (
+                                  <TableRow key={lead.id}>
+                                      <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                      <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                      <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                      <TableCell>{lead.franchisee || 'N/A'}</TableCell>
+                                      <TableCell>{lead.dateLeadEntered || 'N/A'}</TableCell>
+                                      <TableCell className="text-right">
+                                          <Button variant="ghost" size="sm" asChild>
+                                              <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                          </Button>
+                                      </TableCell>
+                                  </TableRow>
+                              ))
+                            ) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No leads found in this cohort.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
@@ -4641,7 +4738,7 @@ export default function ReportsClientPage({
       </Dialog>
 
       {/* Incentive Tracker Pop-up Drill-down Dialog */}
-      <Dialog open={!!incentiveDrillDown} onOpenChange={(open) => !open && setIncentiveDrillDown(null)}>
+      <Dialog open={!!incentiveDrillDown} onOpenChange={(open) => { if(!open) { setIncentiveDrillDown(null); setIncentiveStatusFilter(null); } }}>
           <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4672,6 +4769,24 @@ export default function ReportsClientPage({
                     </Button>
                   </div>
               </DialogHeader>
+
+              {incentiveDrillDown?.appts && (
+                <StatusBreakdownBar 
+                  items={incentiveDrillDown.appts} 
+                  selectedStatus={incentiveStatusFilter} 
+                  onSelectStatus={setIncentiveStatusFilter} 
+                  getStatus={(a) => a.leadStatus || 'New'} 
+                />
+              )}
+              {incentiveDrillDown?.leads && (
+                <StatusBreakdownBar 
+                  items={incentiveDrillDown.leads} 
+                  selectedStatus={incentiveStatusFilter} 
+                  onSelectStatus={setIncentiveStatusFilter} 
+                  getStatus={(l) => l.customerStatus || l.status || 'New'} 
+                />
+              )}
+
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     {incentiveDrillDown?.appts ? (
@@ -4688,35 +4803,39 @@ export default function ReportsClientPage({
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {incentiveDrillDown.appts.length > 0 ? incentiveDrillDown.appts.map((apptItem) => {
-                                    const appt = apptItem as any;
-                                    return (
-                                    <TableRow key={appt.id}>
-                                        <TableCell className="font-medium">{appt.leadName || 'N/A'}</TableCell>
-                                        <TableCell><LeadStatusBadge status={appt.leadStatus || 'New'} /></TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline" className={cn(
-                                                appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
-                                                appt.appointmentStatus === 'No Show' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                appt.appointmentStatus === 'Rescheduled' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                                                'bg-blue-50 text-blue-700 border-blue-200'
-                                            )}>
-                                                {appt.appointmentStatus || 'Pending'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
-                                        <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
-                                        <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" asChild>
-                                                <Link href={`/leads/${appt.leadId}`} target="_blank">
-                                                    View Record <ExternalLink className="ml-2 h-3 w-3" />
-                                                </Link>
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                );}) : (
+                                {incentiveDrillDown.appts.length > 0 ? (
+                                  incentiveDrillDown.appts
+                                    .filter((a) => !incentiveStatusFilter || (a.leadStatus || 'New') === incentiveStatusFilter)
+                                    .map((apptItem) => {
+                                      const appt = apptItem as any;
+                                      return (
+                                      <TableRow key={appt.id}>
+                                          <TableCell className="font-medium">{appt.leadName || 'N/A'}</TableCell>
+                                          <TableCell><LeadStatusBadge status={appt.leadStatus || 'New'} /></TableCell>
+                                          <TableCell>
+                                              <Badge variant="outline" className={cn(
+                                                  appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                  appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                  appt.appointmentStatus === 'No Show' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                  appt.appointmentStatus === 'Rescheduled' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                  'bg-blue-50 text-blue-700 border-blue-200'
+                                              )}>
+                                                  {appt.appointmentStatus || 'Pending'}
+                                              </Badge>
+                                          </TableCell>
+                                          <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                          <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
+                                          <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
+                                          <TableCell className="text-right">
+                                              <Button variant="ghost" size="sm" asChild>
+                                                  <Link href={`/leads/${appt.leadId}`} target="_blank">
+                                                      View Record <ExternalLink className="ml-2 h-3 w-3" />
+                                                  </Link>
+                                              </Button>
+                                          </TableCell>
+                                      </TableRow>
+                                  );})
+                                ) : (
                                     <TableRow>
                                         <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">
                                             No appointments found for this cohort.
@@ -4738,24 +4857,28 @@ export default function ReportsClientPage({
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {incentiveDrillDown.leads.length > 0 ? incentiveDrillDown.leads.map((leadItem) => {
-                                    const lead = leadItem as any;
-                                    return (
-                                    <TableRow key={lead.id}>
-                                        <TableCell className="font-medium">{lead.companyName || lead.contactName || 'N/A'}</TableCell>
-                                        <TableCell><LeadStatusBadge status={lead.customerStatus || lead.status || 'New'} /></TableCell>
-                                        <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
-                                        <TableCell>{lead.accountManagerAssigned || 'N/A'}</TableCell>
-                                        <TableCell>{lead.dateLeadEntered || 'N/A'}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" asChild>
-                                                <Link href={`/leads/${lead.id}`} target="_blank">
-                                                    View Record <ExternalLink className="ml-2 h-3 w-3" />
-                                                </Link>
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                );}) : (
+                                {incentiveDrillDown.leads.length > 0 ? (
+                                  incentiveDrillDown.leads
+                                    .filter((l) => !incentiveStatusFilter || (l.customerStatus || l.status || 'New') === incentiveStatusFilter)
+                                    .map((leadItem) => {
+                                      const lead = leadItem as any;
+                                      return (
+                                      <TableRow key={lead.id}>
+                                          <TableCell className="font-medium">{lead.companyName || lead.contactName || 'N/A'}</TableCell>
+                                          <TableCell><LeadStatusBadge status={lead.customerStatus || lead.status || 'New'} /></TableCell>
+                                          <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                          <TableCell>{lead.accountManagerAssigned || 'N/A'}</TableCell>
+                                          <TableCell>{lead.dateLeadEntered || 'N/A'}</TableCell>
+                                          <TableCell className="text-right">
+                                              <Button variant="ghost" size="sm" asChild>
+                                                  <Link href={`/leads/${lead.id}`} target="_blank">
+                                                      View Record <ExternalLink className="ml-2 h-3 w-3" />
+                                                  </Link>
+                                              </Button>
+                                          </TableCell>
+                                      </TableRow>
+                                  );})
+                                ) : (
                                     <TableRow>
                                         <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
                                             No leads found for this cohort.
