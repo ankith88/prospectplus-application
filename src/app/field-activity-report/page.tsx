@@ -57,6 +57,7 @@ import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-c
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
 import { StatusBreakdownBar } from '@/components/status-breakdown-bar';
+import { BucketBreakdownBar } from '@/components/bucket-breakdown-bar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn, isOutsideOfficeHours } from '@/lib/utils';
@@ -1908,14 +1909,21 @@ export default function FieldActivityReportPage() {
 function EfficiencyDrilldownDialog({ isOpen, onOpenChange, title, leads }: { isOpen: boolean, onOpenChange: (open: boolean) => void, title: string, leads: any[] }) {
     const { toast } = useToast();
     const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+    const [selectedBucket, setSelectedBucket] = useState<string | null>(null);
 
     const filteredLeads = useMemo(() => {
-        if (!selectedStatus) return leads;
-        return leads.filter(l => (l.customerStatus || l.status || 'New') === selectedStatus);
-    }, [leads, selectedStatus]);
+        let res = leads;
+        if (selectedStatus) {
+            res = res.filter(l => (l.customerStatus || l.status || 'New') === selectedStatus);
+        }
+        if (selectedBucket) {
+            res = res.filter(l => (l.bucket || (l.fieldSales ? 'field_sales' : 'field_sales')) === selectedBucket);
+        }
+        return res;
+    }, [leads, selectedStatus, selectedBucket]);
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => { onOpenChange(open); if (!open) setSelectedStatus(null); }}>
+        <Dialog open={isOpen} onOpenChange={(open) => { onOpenChange(open); if (!open) { setSelectedStatus(null); setSelectedBucket(null); } }}>
             <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
                 <DialogHeader className="flex-shrink-0">
                     <div className="flex justify-between items-center pr-8">
@@ -1944,12 +1952,20 @@ function EfficiencyDrilldownDialog({ isOpen, onOpenChange, title, leads }: { isO
                 </DialogHeader>
 
                 {leads.length > 0 && (
-                    <StatusBreakdownBar
-                        items={leads}
-                        selectedStatus={selectedStatus}
-                        onSelectStatus={setSelectedStatus}
-                        getStatus={(l) => l.customerStatus || l.status || 'New'}
-                    />
+                    <div className="space-y-1">
+                        <StatusBreakdownBar
+                            items={leads}
+                            selectedStatus={selectedStatus}
+                            onSelectStatus={setSelectedStatus}
+                            getStatus={(l) => l.customerStatus || l.status || 'New'}
+                        />
+                        <BucketBreakdownBar
+                            items={leads}
+                            selectedBucket={selectedBucket}
+                            onSelectBucket={setSelectedBucket}
+                            getBucket={(l) => l.bucket || (l.fieldSales ? 'field_sales' : 'field_sales')}
+                        />
+                    </div>
                 )}
 
                 <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">

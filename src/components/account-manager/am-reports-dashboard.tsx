@@ -14,6 +14,7 @@ type ExtendedAppointment = Appointment & {
     dialerAssigned?: string; 
     discoveryData?: any;
     prospectPlusId?: string;
+    duetime?: string;
 };
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -35,8 +36,11 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { LeadStatusBadge } from '../lead-status-badge';
 import { StatusBreakdownBar } from '@/components/status-breakdown-bar';
+import { BucketBreakdownBar } from '@/components/bucket-breakdown-bar';
 import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
+import { calculatePrevMonthRealizationCohort, type ExtendedInvoice } from '@/lib/mrr-realization';
+import { PrevMonthCohortWidget } from '@/components/prev-month-cohort-widget';
 
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (
   <Popover>
@@ -135,6 +139,7 @@ export default function AMReportsDashboard() {
     const { userProfile, loading } = useAuth();
     
     const [leads, setLeads] = useState<Lead[]>([]);
+    const [invoices, setInvoices] = useState<ExtendedInvoice[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedAm, setSelectedAm] = useState<string>('all');
@@ -143,6 +148,7 @@ export default function AMReportsDashboard() {
     const { toast } = useToast();
     const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
     const [drillDownStatusFilter, setDrillDownStatusFilter] = useState<string>("all");
+    const [drillDownBucketFilter, setDrillDownBucketFilter] = useState<string>("all");
     const [drillDownSearchQuery, setDrillDownSearchQuery] = useState<string>("");
 
     const [drillDownAppointments, setDrillDownAppointments] = useState<{
@@ -151,6 +157,7 @@ export default function AMReportsDashboard() {
     } | null>(null);
     const [drillDownAppSearchQuery, setDrillDownAppSearchQuery] = useState<string>("");
     const [drillDownAppStatusFilter, setDrillDownAppStatusFilter] = useState<string>("all");
+    const [drillDownAppBucketFilter, setDrillDownAppBucketFilter] = useState<string>("all");
 
     const handleExportAppointments = (appsToExport: ExtendedAppointment[], filename: string) => {
         if (appsToExport.length === 0) {
@@ -165,7 +172,7 @@ export default function AMReportsDashboard() {
                 'Lead Status': app.lead?.customerStatus || app.lead?.status || app.leadStatus || '',
                 'Appointment Status': app.appointmentStatus || '',
                 'Scheduled Date': app.duedate || '',
-                'Scheduled Time': app.duetime || '',
+                'Scheduled Time': app.starttime || app.duetime || '',
                 'Assigned AM': app.assignedTo || ''
             };
         });
@@ -188,6 +195,12 @@ export default function AMReportsDashboard() {
         if (drillDownAppStatusFilter !== "all") {
             list = list.filter(app => (app.lead?.customerStatus || app.lead?.status || app.leadStatus || 'New') === drillDownAppStatusFilter);
         }
+        if (drillDownAppBucketFilter !== "all") {
+            list = list.filter(app => {
+                const b = app.lead?.bucket || (app as any).bucket || 'account_manager';
+                return b === drillDownAppBucketFilter;
+            });
+        }
         if (drillDownAppSearchQuery.trim() !== "") {
             const queryVal = drillDownAppSearchQuery.toLowerCase();
             list = list.filter(app => {
@@ -198,7 +211,7 @@ export default function AMReportsDashboard() {
             });
         }
         return list;
-    }, [drillDownAppointments, drillDownAppSearchQuery, drillDownAppStatusFilter]);
+    }, [drillDownAppointments, drillDownAppSearchQuery, drillDownAppStatusFilter, drillDownAppBucketFilter]);
 
     const handleExportData = (leadsToExport: Lead[], filename: string) => {
         if (leadsToExport.length === 0) {
@@ -240,6 +253,12 @@ export default function AMReportsDashboard() {
         if (drillDownStatusFilter !== "all") {
             list = list.filter(l => (l.customerStatus || l.status) === drillDownStatusFilter);
         }
+        if (drillDownBucketFilter !== "all") {
+            list = list.filter(l => {
+                const b = l.bucket || (l.fieldSales ? 'field_sales' : 'account_manager');
+                return b === drillDownBucketFilter;
+            });
+        }
         if (drillDownSearchQuery.trim() !== "") {
             const queryVal = drillDownSearchQuery.toLowerCase();
             list = list.filter(l => {
@@ -252,7 +271,7 @@ export default function AMReportsDashboard() {
             });
         }
         return list;
-    }, [drillDownData, drillDownStatusFilter, drillDownSearchQuery]);
+    }, [drillDownData, drillDownStatusFilter, drillDownBucketFilter, drillDownSearchQuery]);
 
     const drillDownAvailableStatuses = useMemo(() => {
         if (!drillDownData) return [];
@@ -446,12 +465,23 @@ export default function AMReportsDashboard() {
                 const fromDateStr = appliedActivityDateRange?.from ? startOfDay(appliedActivityDateRange.from).toISOString() : undefined;
                 const toDateStr = appliedActivityDateRange?.to ? endOfDay(appliedActivityDateRange.to).toISOString() : undefined;
 
-                const [snapLeads, snapCompanies, activitiesSnap, fetchedAppointments] = await Promise.all([
+                const [snapLeads, snapCompanies, activitiesSnap, fetchedAppointments, invoicesSnap] = await Promise.all([
                     getDocs(qLeads),
                     getDocs(qCompanies),
                     getDocs(activitiesQuery),
-                    getAllAppointments(fromDateStr, toDateStr)
+                    getAllAppointments(fromDateStr, toDateStr),
+                    getDocs(collectionGroup(firestore, 'invoices')).catch(err => {
+                        console.warn("Failed to fetch invoices for cohort realization:", err);
+                        return { docs: [] };
+                    })
                 ]);
+                
+                const fetchedInvoices: ExtendedInvoice[] = invoicesSnap.docs.map(doc => ({
+                    id: doc.id,
+                    parentId: doc.ref.parent?.parent?.id,
+                    ...doc.data()
+                } as ExtendedInvoice));
+                setInvoices(fetchedInvoices);
                 
                 const rawCompanies = snapCompanies.docs.map(doc => {
                     const data = doc.data();
@@ -661,6 +691,31 @@ export default function AMReportsDashboard() {
             return true;
         });
     }, [leads, appliedFranchisee, appliedBucket, appliedLeadType, appliedStatus, appliedLeadEnteredDateRange, appliedActivityDateRange, appliedAm, accountManagers]);
+
+    const amFilteredLeads = useMemo(() => {
+        return leads.filter(lead => {
+            if (appliedFranchisee.length > 0 && lead.franchisee && !appliedFranchisee.includes(lead.franchisee)) return false;
+            if (appliedBucket.length > 0 && lead.bucket && !appliedBucket.includes(lead.bucket)) return false;
+            if (appliedLeadType.length > 0 && (lead.leadType || 'Unknown') && !appliedLeadType.includes(lead.leadType || 'Unknown')) return false;
+            if (appliedCampaign !== 'all' && (lead.campaign || (lead as any).customerCampaign) !== appliedCampaign) return false;
+            
+            const status = isSignedLead(lead) ? 'Signed' : (lead.customerStatus || lead.status);
+            if (appliedStatus.length > 0 && status && !appliedStatus.includes(status)) return false;
+
+            if (appliedAm !== 'all') {
+                const rep = (lead as any).assignedUser || lead.accountManagerAssigned || (lead as any).amAssigned || (lead as any).userInCharge || lead.dialerAssigned || '';
+                const matchRep = rep.toLowerCase() === appliedAm.toLowerCase();
+                const matchAct = lead.activity?.some(act => (act.author || '').toLowerCase() === appliedAm.toLowerCase());
+                if (!matchRep && !matchAct) return false;
+            }
+
+            return true;
+        });
+    }, [leads, appliedFranchisee, appliedBucket, appliedLeadType, appliedCampaign, appliedStatus, appliedAm]);
+
+    const prevMonthSummary = useMemo(() => {
+        return calculatePrevMonthRealizationCohort(amFilteredLeads, invoices, appliedActivityDateRange || appliedLeadEnteredDateRange);
+    }, [amFilteredLeads, invoices, appliedActivityDateRange, appliedLeadEnteredDateRange]);
 
     const appointmentMetrics = useMemo(() => {
         const baseFilteredLeadIds = new Set(
@@ -1795,6 +1850,9 @@ export default function AMReportsDashboard() {
             </Card>
 
             
+            {/* Previous Month Realization Cohort Hero Widget */}
+            <PrevMonthCohortWidget summary={prevMonthSummary} className="mb-6" />
+
             {/* Top KPI Cards */}
             <div id="step-am-metrics" className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
                 <StatCard 
@@ -3679,12 +3737,20 @@ export default function AMReportsDashboard() {
                             </Button>
                         </div>
                         {drillDownData && drillDownData.leads.length > 0 && (
-                            <StatusBreakdownBar
-                                items={drillDownData.leads}
-                                selectedStatus={drillDownStatusFilter === 'all' ? null : drillDownStatusFilter}
-                                onSelectStatus={(status) => setDrillDownStatusFilter(status || 'all')}
-                                getStatus={(l) => l.customerStatus || l.status || 'New'}
-                            />
+                            <div className="space-y-1">
+                                <StatusBreakdownBar
+                                    items={drillDownData.leads}
+                                    selectedStatus={drillDownStatusFilter === 'all' ? null : drillDownStatusFilter}
+                                    onSelectStatus={(status) => setDrillDownStatusFilter(status || 'all')}
+                                    getStatus={(l) => l.customerStatus || l.status || 'New'}
+                                />
+                                <BucketBreakdownBar
+                                    items={drillDownData.leads}
+                                    selectedBucket={drillDownBucketFilter === 'all' ? null : drillDownBucketFilter}
+                                    onSelectBucket={(bucket) => setDrillDownBucketFilter(bucket || 'all')}
+                                    getBucket={(l) => l.bucket || (l.fieldSales ? 'field_sales' : 'account_manager')}
+                                />
+                            </div>
                         )}
                         {drillDownData && drillDownData.leads.length > 0 && (
                             <div className="flex items-center gap-4 mt-4">
@@ -3790,12 +3856,20 @@ export default function AMReportsDashboard() {
                             </Button>
                         </div>
                         {drillDownAppointments && drillDownAppointments.appointments.length > 0 && (
-                            <StatusBreakdownBar
-                                items={drillDownAppointments.appointments}
-                                selectedStatus={drillDownAppStatusFilter === 'all' ? null : drillDownAppStatusFilter}
-                                onSelectStatus={(status) => setDrillDownAppStatusFilter(status || 'all')}
-                                getStatus={(app) => app.lead?.customerStatus || app.lead?.status || app.leadStatus || 'New'}
-                            />
+                            <div className="space-y-1">
+                                <StatusBreakdownBar
+                                    items={drillDownAppointments.appointments}
+                                    selectedStatus={drillDownAppStatusFilter === 'all' ? null : drillDownAppStatusFilter}
+                                    onSelectStatus={(status) => setDrillDownAppStatusFilter(status || 'all')}
+                                    getStatus={(app) => app.lead?.customerStatus || app.lead?.status || app.leadStatus || 'New'}
+                                />
+                                <BucketBreakdownBar
+                                    items={drillDownAppointments.appointments}
+                                    selectedBucket={drillDownAppBucketFilter === 'all' ? null : drillDownAppBucketFilter}
+                                    onSelectBucket={(bucket) => setDrillDownAppBucketFilter(bucket || 'all')}
+                                    getBucket={(app) => app.lead?.bucket || (app as any).bucket || 'account_manager'}
+                                />
+                            </div>
                         )}
                         {drillDownAppointments && drillDownAppointments.appointments.length > 0 && (
                             <div className="flex items-center gap-4 mt-4">

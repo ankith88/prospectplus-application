@@ -6,6 +6,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { usePerformance } from '@/hooks/use-performance';
 import type { Lead, Activity, LeadStatus, Appointment, VisitNote, LeadBucket } from '@/lib/types';
 import { calculateMonthlyValue } from '@/lib/mrr';
+import { calculatePrevMonthRealizationCohort, type ExtendedInvoice } from '@/lib/mrr-realization';
+import { PrevMonthCohortWidget } from './prev-month-cohort-widget';
 import { LeadCampaign, getLeadCampaigns } from '@/services/lead-campaigns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
@@ -35,6 +37,7 @@ import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, getDocs, where, limit, documentId, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
+import { BucketBreakdownBar } from './bucket-breakdown-bar';
 import { StatusOutcomeBanner } from './status-outcome-guide';
 import { cn, getQuickDateRange, isManualActivity, parseDateString } from '@/lib/utils';
 import Link from 'next/link';
@@ -330,6 +333,7 @@ export default function SalesSnapshotClient() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [activities, setActivities] = useState<(Activity & { leadId: string })[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [invoices, setInvoices] = useState<ExtendedInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const { setLoadTime, setPageName, setIsCustom } = usePerformance();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -346,6 +350,7 @@ export default function SalesSnapshotClient() {
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [drilldownSearch, setDrilldownSearch] = useState('');
   const [drilldownStatusFilter, setDrilldownStatusFilter] = useState<string | null>(null);
+  const [drilldownBucketFilter, setDrilldownBucketFilter] = useState<string | null>(null);
   const [franchiseeLeadSearch, setFranchiseeLeadSearch] = useState('');
   const [pipelineValueGroupBy, setPipelineValueGroupBy] = useState<'leadType' | 'bucket'>('bucket');
   
@@ -462,10 +467,14 @@ export default function SalesSnapshotClient() {
             where('duedate', '<=', endISO)
         );
 
-        const [activitiesSnap, apptsSnap, usersSnap] = await Promise.all([
+        const [activitiesSnap, apptsSnap, usersSnap, invoicesSnap] = await Promise.all([
             getDocs(activityQuery),
             getDocs(apptQuery),
-            getDocs(collection(firestore, 'users'))
+            getDocs(collection(firestore, 'users')),
+            getDocs(collectionGroup(firestore, 'invoices')).catch(err => {
+                console.warn("Failed to fetch invoices for cohort realization:", err);
+                return { docs: [] };
+            })
         ]);
 
         const amUserIdentifiers = new Set<string>();
@@ -505,6 +514,13 @@ export default function SalesSnapshotClient() {
             const leadId = doc.ref.parent?.parent?.id || '';
             return { id: doc.id, leadId, ...doc.data() } as unknown as Appointment;
         });
+
+        const invoiceList: ExtendedInvoice[] = invoicesSnap.docs.map(doc => ({
+            id: doc.id,
+            parentId: doc.ref.parent?.parent?.id,
+            ...doc.data()
+        } as unknown as ExtendedInvoice));
+        setInvoices(invoiceList);
 
         const activeLeadIds = new Set<string>();
         actList.forEach(act => { if (act.leadId) activeLeadIds.add(act.leadId); });
@@ -1070,7 +1086,11 @@ export default function SalesSnapshotClient() {
         pipelineStagesData,
         franchiseeData
     };
-  }, [filteredLeads, filteredActivities, filteredAppointments, appliedFilters.dateFilterType]);
+  }, [filteredLeads, filteredActivities, filteredAppointments, appliedFilters.dateFilterType, appliedFilters.dateRange]);
+
+  const prevMonthSummary = useMemo(() => {
+    return calculatePrevMonthRealizationCohort(allLeads, invoices, appliedFilters.dateRange);
+  }, [allLeads, invoices, appliedFilters.dateRange]);
 
   const activeDrilldownLeads = useMemo(() => {
     if (!drilldownType) return [];
@@ -1385,6 +1405,9 @@ export default function SalesSnapshotClient() {
         ) : (
           <div className="space-y-6">
             
+            {/* Previous Month Realization Cohort Hero Widget */}
+            <PrevMonthCohortWidget summary={prevMonthSummary} />
+
             {/* Unified Management & Franchisee Pipeline Stage Breakdown with Embedded Milestones */}
             <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -2044,57 +2067,68 @@ export default function SalesSnapshotClient() {
           )}
 
           {drilldownType === 'stage' && selectedStage && (
-            <div className="bg-[#095c7b]/10 border border-[#095c7b]/30 text-[#095c7b] rounded-md p-3 my-1 flex items-center justify-between text-xs font-semibold shrink-0">
-              <span>Pipeline Stage Breakdown: <span className="font-extrabold text-sm">{selectedStage}</span></span>
+            <div className="text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-md px-3 py-1.5 shrink-0 flex items-center justify-between">
+              <span>Filter Stage: <strong className="text-[#095c7b]">{selectedStage}</strong></span>
               <span className="font-normal">{activeDrilldownLeads.length} lead(s) in this stage</span>
             </div>
           )}
 
-          {/* Lead Status Breakdown Summary Section */}
-          {statusBreakdown.length > 0 && (
-            <div className="bg-slate-50/90 border border-slate-200 rounded-lg p-3 my-1 shrink-0 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="h-3.5 w-3.5 text-[#095c7b]" />
-                  Status Breakdown ({activeDrilldownLeads.length} Lead{activeDrilldownLeads.length === 1 ? '' : 's'})
-                </span>
-                {drilldownStatusFilter && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDrilldownStatusFilter(null)}
-                    className="h-5 px-1.5 text-[10px] text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
-                  >
-                    Clear status filter
-                  </Button>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {statusBreakdown.map(({ status, count }) => {
-                  const isSelected = drilldownStatusFilter === status;
-                  const percentage = activeDrilldownLeads.length > 0 ? Math.round((count / activeDrilldownLeads.length) * 100) : 0;
-                  return (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => setDrilldownStatusFilter(isSelected ? null : status)}
-                      className={cn(
-                        "flex items-center gap-2 rounded-md px-2.5 py-1 text-xs border transition-all cursor-pointer shadow-2xs",
-                        isSelected 
-                          ? "bg-[#095c7b]/10 border-[#095c7b] ring-1 ring-[#095c7b]" 
-                          : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-100/70"
-                      )}
-                      title={`Click to filter list by status: ${status}`}
+          {/* Lead Status & Bucket Breakdown Summary Section */}
+          <div className="space-y-1">
+            {statusBreakdown.length > 0 && (
+              <div className="bg-slate-50/90 border border-slate-200 rounded-lg p-3 my-1 shrink-0 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5 text-[#095c7b]" />
+                    Status Breakdown ({activeDrilldownLeads.length} Lead{activeDrilldownLeads.length === 1 ? '' : 's'})
+                  </span>
+                  {drilldownStatusFilter && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDrilldownStatusFilter(null)}
+                      className="h-5 px-1.5 text-[10px] text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
                     >
-                      <LeadStatusBadge status={status as LeadStatus} />
-                      <span className="font-bold text-slate-800 text-xs">{count} lead{count === 1 ? '' : 's'}</span>
-                      <span className="text-[10px] text-slate-500 font-medium">({percentage}%)</span>
-                    </button>
-                  );
-                })}
+                      Clear status filter
+                    </Button>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {statusBreakdown.map(({ status, count }) => {
+                    const isSelected = drilldownStatusFilter === status;
+                    const percentage = activeDrilldownLeads.length > 0 ? Math.round((count / activeDrilldownLeads.length) * 100) : 0;
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => setDrilldownStatusFilter(isSelected ? null : status)}
+                        className={cn(
+                          "flex items-center gap-2 rounded-md px-2.5 py-1 text-xs border transition-all cursor-pointer shadow-2xs",
+                          isSelected 
+                            ? "bg-[#095c7b]/10 border-[#095c7b] ring-1 ring-[#095c7b]" 
+                            : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-100/70"
+                        )}
+                        title={`Click to filter list by status: ${status}`}
+                      >
+                        <LeadStatusBadge status={status as LeadStatus} />
+                        <span className="font-bold text-slate-800 text-xs">{count} lead{count === 1 ? '' : 's'}</span>
+                        <span className="text-[10px] text-slate-500 font-medium">({percentage}%)</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {activeDrilldownLeads.length > 0 && (
+              <BucketBreakdownBar
+                items={activeDrilldownLeads}
+                selectedBucket={drilldownBucketFilter}
+                onSelectBucket={setDrilldownBucketFilter}
+                getBucket={(l) => l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')}
+              />
+            )}
+          </div>
 
           <div className="flex items-center justify-between gap-4 my-2 shrink-0">
             <Input 
@@ -2111,6 +2145,9 @@ export default function SalesSnapshotClient() {
                 let listToExport: Lead[] = activeDrilldownLeads;
                 if (drilldownStatusFilter) {
                   listToExport = listToExport.filter(l => (l.customerStatus || l.status) === drilldownStatusFilter);
+                }
+                if (drilldownBucketFilter) {
+                  listToExport = listToExport.filter(l => (l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')) === drilldownBucketFilter);
                 }
                 if (drilldownSearch.trim()) {
                   const q = drilldownSearch.toLowerCase();
@@ -2153,6 +2190,10 @@ export default function SalesSnapshotClient() {
 
                   if (drilldownStatusFilter) {
                     filteredList = filteredList.filter(l => (l.customerStatus || l.status) === drilldownStatusFilter);
+                  }
+
+                  if (drilldownBucketFilter) {
+                    filteredList = filteredList.filter(l => (l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')) === drilldownBucketFilter);
                   }
 
                   if (drilldownType === 'mrr' || drilldownType === 'signed_mrr') {

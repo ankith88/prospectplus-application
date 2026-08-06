@@ -70,7 +70,6 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAllUsers } from "@/services/firebase";
 import { toast } from "sonner";
 import { VisualIframeEditor } from "@/components/ui/visual-iframe-editor";
-import { TicketCommentThread } from "@/components/tickets/ticket-comment-thread";
 
 const parseCommContent = (content: string) => {
   if (!content) return { subject: "", body: "" };
@@ -2170,22 +2169,101 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
               </CardContent>
             </Card>
 
-            {/* 6. Customer Communication Timeline & Ticket Activity Thread */}
-            <TicketCommentThread
-              ticketId={ticketId as string}
-              ticketNumber={ticket.ticketNumber}
-              currentStatus={ticket.currentStatus}
-              communications={communications}
-              recipientEmail={ticket.customerEmail || ticket.receiverEmail || ticket.enquirerEmail}
-              recipientName={ticket.customerContactName || ticket.customerName || ticket.receiverName}
-              onCommentAdded={() => {
-                // Communications onSnapshot will update automatically
-              }}
-              onStatusChange={async (newStatus) => {
-                setTicket((prev: any) => ({ ...prev, currentStatus: newStatus }));
-              }}
-            />
+            {/* 6. Customer Communication Timeline (Customer Update Hub) */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-4 px-6 flex justify-between items-center">
+                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-[#095c7b]" /> Customer Update Hub
+                </CardTitle>
+                <Button 
+                  onClick={() => {
+                    setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
+                    setIsEmailModalOpen(true);
+                  }}
+                  disabled={!!ticket.parentTicketId}
+                  className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-8 px-4 flex items-center gap-1.5 rounded-lg shadow-sm"
+                >
+                  <Send className="h-3.5 w-3.5" /> Send Email
+                </Button>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                {ticket.parentTicketId ? (
+                  <div className="bg-[#fffcf6] border border-[#ffe3b3] text-[#a06d28] p-4.5 rounded-2xl text-xs space-y-2.5">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <AlertCircle className="h-4.5 w-4.5 text-[#b7791f]" /> Customer Correspondence is Centralized
+                    </p>
+                    <p className="leading-relaxed">
+                      All messages, threads, and history for this package are routed through the Parent Master Case. Go to the master case to communicate with the client.
+                    </p>
+                    <Link href={`/admin/tickets/${ticket.parentTicketId}`} className="inline-block mt-1">
+                      <Button size="sm" variant="outline" className="text-xs border-[#ffe0b2] hover:bg-[#fff7ea] text-[#b7791f] font-bold rounded-lg">
+                        Go to Master Case
+                      </Button>
+                    </Link>
+                  </div>
+                ) : communications.length > 0 ? (
+                  <div className="space-y-4 max-h-[450px] overflow-y-auto pr-1">
+                    {communications.map((comm) => (
+                      <div key={comm.id} className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
+                        <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
+                          <Badge className={`rounded-full text-[10px] font-bold px-2 py-0.5 border ${
+                            comm.type === "SENT" 
+                              ? "bg-slate-100 text-slate-700 border-slate-200" 
+                              : "bg-emerald-50 text-emerald-800 border-emerald-250"
+                          }`}>
+                            {comm.type === "SENT" ? "OUTBOUND EMAIL" : "INCOMING MESSAGE"}
+                          </Badge>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            {comm.timestamp ? new Date(comm.timestamp).toLocaleString("en-AU", { timeZone: "Australia/Sydney" }) : ""}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-450">
+                          From: <span className="font-bold text-slate-655">{comm.from}</span> to <span className="font-bold text-slate-655">{comm.to}</span>
+                        </p>
+                        {(() => {
+                          const { subject, body } = parseCommContent(comm.content);
+                          const isHtml = /<[a-z][\s\S]*>/i.test(body);
 
+                          return (
+                            <div className="space-y-2 mt-3">
+                              {subject && (
+                                <p className="text-[11px] text-slate-500 font-semibold">
+                                  Subject: <span className="text-slate-700">{subject}</span>
+                                </p>
+                              )}
+                              {isHtml ? (
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-100 p-3.5 rounded-xl shadow-sm">
+                                  <div className="text-xs text-slate-400 font-medium italic flex items-center gap-1.5">
+                                    <Mail className="h-3.5 w-3.5 text-slate-400" />
+                                    Rich HTML Email
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedCommToPreview(comm);
+                                      setIsCommPreviewOpen(true);
+                                    }}
+                                    className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-7 px-3 flex items-center gap-1 rounded-md"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" /> View Sent Email
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="text-xs text-slate-700 font-medium whitespace-pre-wrap leading-relaxed bg-white border border-slate-100 p-3 rounded-xl">
+                                  {body}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-sm text-slate-450 italic">No correspondence records logged.</div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* 1. Customer Details Box (Placed directly at the top) */}
             <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">

@@ -169,15 +169,9 @@ export async function POST(request: Request) {
     const isAlreadyWrapped = html.trim().toLowerCase().startsWith('<!doctype') || html.trim().toLowerCase().startsWith('<html');
     const formattedHtml = isAlreadyWrapped ? html : (isTemplate ? wrapEmailHtmlTemplate(html) : wrapEmailHtml(html));
 
-    // Ensure subject includes ticket tag if ticketId is present
-    let finalSubject = subject;
-    if (ticketId && !finalSubject.includes('[Ticket #') && !finalSubject.includes('Ticket #')) {
-      finalSubject = `[Ticket #${ticketId}] ${finalSubject}`;
-    }
-
     const sendResult = await sendPhysicalEmail({
       to,
-      subject: finalSubject,
+      subject,
       html: formattedHtml,
       customFrom,
       cc,
@@ -185,7 +179,6 @@ export async function POST(request: Request) {
       attachments,
       ticketId
     });
-
 
     if (!sendResult.success) {
       return NextResponse.json(

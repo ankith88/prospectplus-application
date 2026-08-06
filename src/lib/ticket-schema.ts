@@ -117,25 +117,3 @@ export const TicketFormSchema = z.object({
 });
 
 export type TicketFormValues = z.infer<typeof TicketFormSchema>;
-
-export const TicketCommunicationSchema = z.object({
-  id: z.string().optional(),
-  timestamp: z.string(),
-  type: z.enum(['Email', 'SENT', 'RECEIVED', 'Comment', 'System', 'Note']).default('Comment'),
-  direction: z.enum(['Inbound', 'Outbound', 'Internal']).default('Inbound'),
-  visibility: z.enum(['Public', 'Internal']).default('Public'),
-  source: z.enum(['Web', 'Email', 'System']).default('Web'),
-  from: z.string().optional(),
-  to: z.string().optional(),
-  subject: z.string().optional(),
-  body: z.string().optional(),
-  content: z.string().optional(),
-  author: z.string().optional(),
-  attachments: z.array(z.object({
-    name: z.string(),
-    url: z.string()
-  })).optional().default([]),
-});
-
-export type TicketCommunication = z.infer<typeof TicketCommunicationSchema>;
-

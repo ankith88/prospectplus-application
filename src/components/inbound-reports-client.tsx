@@ -60,6 +60,7 @@ import { collection, query, getDocs, where, orderBy, collectionGroup, or, and } 
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { StatusBreakdownBar } from './status-breakdown-bar';
+import { BucketBreakdownBar } from './bucket-breakdown-bar';
 import { StatusOutcomeInfo, StatusChartTooltipContent } from './status-outcome-info';
 import { StatusOutcomeBanner } from './status-outcome-guide';
 import { cn, isManualActivity } from '@/lib/utils';
@@ -426,6 +427,7 @@ export default function InboundReportsClientPage({
   const [activeLeadTypeIndex, setActiveLeadTypeIndex] = useState<number | null>(null);
   const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
   const [drillDownStatusFilter, setDrillDownStatusFilter] = useState<string>("all");
+  const [drillDownBucketFilter, setDrillDownBucketFilter] = useState<string>("all");
   const [drillDownSlaFilter, setDrillDownSlaFilter] = useState<string>("all");
   const [drillDownSearchQuery, setDrillDownSearchQuery] = useState<string>("");
   const [showFranchiseeTable, setShowFranchiseeTable] = useState(false);
@@ -2011,6 +2013,12 @@ export default function InboundReportsClientPage({
             return status === drillDownStatusFilter;
         });
     }
+    if (drillDownBucketFilter !== "all") {
+        leads = leads.filter(l => {
+            const bucket = l.bucket || (l.fieldSales ? 'field_sales' : 'inbound');
+            return bucket === drillDownBucketFilter;
+        });
+    }
     if (drillDownData.title === 'Hot Leads' && drillDownSlaFilter !== "all") {
         leads = leads.filter(l => {
             const isOverdue = stats.overdueHotLeadsList.some(overdue => overdue.id === l.id);
@@ -2026,7 +2034,7 @@ export default function InboundReportsClientPage({
         );
     }
     return leads;
-  }, [drillDownData, drillDownStatusFilter, drillDownSlaFilter, drillDownSearchQuery, stats.overdueHotLeadsList]);
+  }, [drillDownData, drillDownStatusFilter, drillDownBucketFilter, drillDownSlaFilter, drillDownSearchQuery, stats.overdueHotLeadsList]);
 
   const handleExportData = (data: any[], filename: string) => {
     if (data.length === 0) {
@@ -4056,12 +4064,20 @@ export default function InboundReportsClientPage({
                     </Button>
                 </div>
                 {drillDownData && drillDownData.leads.length > 0 && (
-                    <StatusBreakdownBar
-                        items={drillDownData.leads}
-                        selectedStatus={drillDownStatusFilter === 'all' ? null : drillDownStatusFilter}
-                        onSelectStatus={(status) => setDrillDownStatusFilter(status || 'all')}
-                        getStatus={(l) => l.customerStatus || l.status || 'New'}
-                    />
+                    <div className="space-y-1">
+                        <StatusBreakdownBar
+                            items={drillDownData.leads}
+                            selectedStatus={drillDownStatusFilter === 'all' ? null : drillDownStatusFilter}
+                            onSelectStatus={(status) => setDrillDownStatusFilter(status || 'all')}
+                            getStatus={(l) => l.customerStatus || l.status || 'New'}
+                        />
+                        <BucketBreakdownBar
+                            items={drillDownData.leads}
+                            selectedBucket={drillDownBucketFilter === 'all' ? null : drillDownBucketFilter}
+                            onSelectBucket={(bucket) => setDrillDownBucketFilter(bucket || 'all')}
+                            getBucket={(l) => l.bucket || (l.fieldSales ? 'field_sales' : 'inbound')}
+                        />
+                    </div>
                 )}
                 {drillDownData && drillDownData.leads.length > 0 && (
                     <div className="flex items-center gap-4 mt-2">

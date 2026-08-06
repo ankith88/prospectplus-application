@@ -74,6 +74,7 @@ import { StatusOutcomeInfo, StatusChartTooltipContent } from './status-outcome-i
 import { StatusOutcomeBanner } from './status-outcome-guide';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBreakdownBar } from './status-breakdown-bar';
+import { BucketBreakdownBar } from './bucket-breakdown-bar';
 import { cn, getQuickDateRange, isManualActivity } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -409,9 +410,20 @@ export default function ReportsClientPage({
   const [fieldSourcedStatusFilter, setFieldSourcedStatusFilter] = useState<string | null>(null);
   const [apptOutcomeStatusFilter, setApptOutcomeStatusFilter] = useState<string | null>(null);
   const [incentiveStatusFilter, setIncentiveStatusFilter] = useState<string | null>(null);
+
+  // Bucket breakdown filter states for drill-down dialogs
+  const [trialDrilldownBucketFilter, setTrialDrilldownBucketFilter] = useState<string | null>(null);
+  const [apptListBucketFilter, setApptListBucketFilter] = useState<string | null>(null);
+  const [engagementBucketFilter, setEngagementBucketFilter] = useState<string | null>(null);
+  const [wonBucketFilter, setWonBucketFilter] = useState<string | null>(null);
+  const [quotesBucketFilter, setQuotesBucketFilter] = useState<string | null>(null);
+  const [fieldSourcedBucketFilter, setFieldSourcedBucketFilter] = useState<string | null>(null);
+  const [apptOutcomeBucketFilter, setApptOutcomeBucketFilter] = useState<string | null>(null);
+  const [incentiveBucketFilter, setIncentiveBucketFilter] = useState<string | null>(null);
   const [dailyViewMode, setDailyViewMode] = useState<'chart' | 'table'>('chart');
   const [dailyMetricMode, setDailyMetricMode] = useState<'unique' | 'actions'>('unique');
   const [burnRateTimeframe, setBurnRateTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [teamPerformanceTimeframe, setTeamPerformanceTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [staticData, setStaticData] = useState<{ leads: Lead[], dialers: string[], notes: VisitNote[] } | null>(null);
   const staticDataRef = useRef(staticData);
   useEffect(() => {
@@ -1382,8 +1394,33 @@ export default function ReportsClientPage({
         }
     });
 
+    // Outbound Dialer Team Performance Details Timeframe Filtering (Daily, Weekly, Monthly)
+    const perfNow = new Date();
+    let perfFromDate: Date;
+    let perfToDate: Date;
+    if (teamPerformanceTimeframe === 'daily') {
+      perfFromDate = startOfDay(perfNow);
+      perfToDate = endOfDay(perfNow);
+    } else if (teamPerformanceTimeframe === 'weekly') {
+      perfFromDate = startOfWeek(perfNow, { weekStartsOn: 1 });
+      perfToDate = endOfWeek(perfNow, { weekStartsOn: 1 });
+    } else { // monthly
+      perfFromDate = startOfMonth(perfNow);
+      perfToDate = endOfMonth(perfNow);
+    }
+
+    const perfFilteredCalls = filteredCalls.filter(c => {
+      const cDate = parseDateString(c.date);
+      return cDate ? (cDate >= perfFromDate && cDate <= perfToDate) : false;
+    });
+
+    const perfFilteredAppointments = filteredAppointments.filter(a => {
+      const aDate = parseDateString(a.appointmentDate || a.duedate || a.starttime || a.date || (a as any).createdAt);
+      return aDate ? (aDate >= perfFromDate && aDate <= perfToDate) : false;
+    });
+
     const teamPerformanceData = allDialers.map(dialer => {
-      const dialerCallsList = filteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+      const dialerCallsList = perfFilteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
       const dialerCalls = dialerCallsList.length;
       const dialerLeadsCalled = new Set(dialerCallsList.map(c => c.leadId)).size;
       const avgAttempts = dialerLeadsCalled > 0 ? dialerCalls / dialerLeadsCalled : 0;
@@ -1403,7 +1440,7 @@ export default function ReportsClientPage({
       const trialingLMCount = trialingLMLeads.length;
       const trialingLMCallRate = dialerCalls > 0 ? (trialingLMCount / dialerCalls) * 100 : 0;
 
-      const dialerAppointments = filteredAppointments.filter(a => a.dialerAssigned === dialer).length;
+      const dialerAppointments = perfFilteredAppointments.filter(a => a.dialerAssigned === dialer).length;
       const dialerQuotes = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent')).length;
       const dialerTrials = anyTrialLeads.filter(l => l.dialerAssigned === dialer).length;
       const dialerCallsListLeadIds = new Set(dialerCallsList.map(c => c.leadId));
@@ -1442,7 +1479,9 @@ export default function ReportsClientPage({
         'Trialing LocalMile': trialingLMCount,
         'Trialing LocalMile Rate': trialingLMCallRate,
         'ShipMate / LocalMile Trials': dialerTrials,
-        'Signed Customers': dialerWon
+        'Signed Customers': dialerWon,
+        perfCallsList: dialerCallsList,
+        perfAppointmentsList: perfFilteredAppointments.filter(a => a.dialerAssigned === dialer)
       };
     }).filter(d => d['Total Engagement'] > 0 || d['Total Assigned Leads'] > 0);
 
@@ -1456,7 +1495,7 @@ export default function ReportsClientPage({
     const totalLeadsProcessed = totalActivePipeline;
     const totalAvgAttempts = totalActivePipeline > 0 ? totalTeamCalls / totalActivePipeline : 0;
     const totalConnectedCalls = allDialers.reduce((acc, dialer) => {
-      const dialerCallsList = filteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+      const dialerCallsList = perfFilteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
       return acc + dialerCallsList.filter(c => connectedOutcomes.includes((c as any).outcome)).length;
     }, 0);
     const totalConnectRate = totalTeamCalls > 0 ? (totalConnectedCalls / totalTeamCalls) * 100 : 0;
@@ -1886,6 +1925,8 @@ export default function ReportsClientPage({
             dialerAssigned: lead?.dialerAssigned || 'Unassigned',
             franchisee: lead?.franchisee || 'N/A',
             status: lead?.status || 'New',
+            bucket: lead?.bucket || (lead?.fieldSales ? 'field_sales' : 'outbound'),
+            fieldSales: lead?.fieldSales,
             uniqueCallCount: uniqueCallIds.size,
             totalInteractions: leadCalls.length
         };
@@ -2178,6 +2219,7 @@ export default function ReportsClientPage({
       inProgressStatusDist,
       teamPerformanceData,
       teamPerformanceTotals,
+      perfFilteredCalls,
       callOutcomesData,
       appointmentOutcomeData,
       amPerformanceData,
@@ -2226,7 +2268,7 @@ export default function ReportsClientPage({
           lost: leadsAppointedCount > 0 ? (lostCount / leadsAppointedCount) * 100 : 0,
       }
     };
-  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile, allVisitNotes, allActivities, burnRateTimeframe]);
+  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile, allVisitNotes, allActivities, burnRateTimeframe, teamPerformanceTimeframe]);
 
   const handleExportChartData = (data: any[], filename: string) => {
     if (data.length === 0) {
@@ -2957,14 +2999,54 @@ export default function ReportsClientPage({
             {(!visibleSections || visibleSections.includes('team-performance')) && (
             <Card className="mt-6">
                 <CardHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <CardTitle className="flex items-center gap-1.5">
                             <span>Outbound Dialer Team Performance Details</span>
                             <SectionHelp content="Detailed cold calling performance report. 'Un-actioned Pipeline' (leads yet to be actioned), 'Active Pipeline' (in-process actioned leads), 'Lost Pipeline' (marked as lost), and 'Signed Customers' (converted to signed) sum to 100% of assigned dialer leads." />
                         </CardTitle>
-                        <Button variant="outline" size="sm" onClick={() => handleExportChartData([...stats.teamPerformanceData, stats.teamPerformanceTotals], 'dialer_performance_details')}>
-                            <Download className="h-4 w-4 mr-2" /> Export Table
-                        </Button>
+                        <div className="flex items-center gap-3">
+                            <div className="inline-flex items-center bg-[#eee8df] dark:bg-slate-800 p-1 rounded-full border border-[#e2d8ca] dark:border-slate-700 shadow-inner">
+                                <button
+                                    type="button"
+                                    onClick={() => setTeamPerformanceTimeframe('daily')}
+                                    className={cn(
+                                        "px-4 py-1 text-xs font-semibold rounded-full transition-all duration-150",
+                                        teamPerformanceTimeframe === 'daily'
+                                            ? "bg-[#aa6c38] text-white shadow-sm"
+                                            : "text-[#23423b] dark:text-slate-300 hover:text-black hover:bg-black/5"
+                                    )}
+                                >
+                                    Daily
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTeamPerformanceTimeframe('weekly')}
+                                    className={cn(
+                                        "px-4 py-1 text-xs font-semibold rounded-full transition-all duration-150",
+                                        teamPerformanceTimeframe === 'weekly'
+                                            ? "bg-[#aa6c38] text-white shadow-sm"
+                                            : "text-[#23423b] dark:text-slate-300 hover:text-black hover:bg-black/5"
+                                    )}
+                                >
+                                    Weekly
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTeamPerformanceTimeframe('monthly')}
+                                    className={cn(
+                                        "px-4 py-1 text-xs font-semibold rounded-full transition-all duration-150",
+                                        teamPerformanceTimeframe === 'monthly'
+                                            ? "bg-[#aa6c38] text-white shadow-sm"
+                                            : "text-[#23423b] dark:text-slate-300 hover:text-black hover:bg-black/5"
+                                    )}
+                                >
+                                    Monthly
+                                </button>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportChartData([...stats.teamPerformanceData, stats.teamPerformanceTotals], 'dialer_performance_details')}>
+                                <Download className="h-4 w-4 mr-2" /> Export Table
+                            </Button>
+                        </div>
                     </div>
                     <CardDescription>Comprehensive metrics breakdown for BDR and Dialer cold calling activity.</CardDescription>
                 </CardHeader>
@@ -3036,7 +3118,7 @@ export default function ReportsClientPage({
                                     <TableCell 
                                         className="text-right font-semibold text-foreground cursor-pointer hover:underline"
                                         onClick={() => {
-                                            const dialerCallsList = filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+                                            const dialerCallsList = dialer.perfCallsList || filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
                                             const calledLeadIds = new Set(dialerCallsList.map(c => c.leadId));
                                             setTrialDrilldown({ 
                                                 title: `${dialer.name} - Calls Made Leads`, 
@@ -3058,7 +3140,7 @@ export default function ReportsClientPage({
                                     <TableCell 
                                         className="text-right font-semibold text-blue-500 cursor-pointer hover:underline"
                                         onClick={() => {
-                                            const dialerCallsList = filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+                                            const dialerCallsList = dialer.perfCallsList || filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
                                             const callLeadIds = new Set(dialerCallsList.map(c => c.leadId));
                                             setTrialDrilldown({ 
                                                 title: `${dialer.name} - Un-actioned Pipeline Leads (Yet to be Actioned)`, 
@@ -3071,7 +3153,7 @@ export default function ReportsClientPage({
                                     <TableCell 
                                         className="text-right font-semibold text-emerald-600 cursor-pointer hover:underline"
                                         onClick={() => {
-                                            const dialerCallsList = filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+                                            const dialerCallsList = dialer.perfCallsList || filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
                                             const callLeadIds = new Set(dialerCallsList.map(c => c.leadId));
                                             setTrialDrilldown({ 
                                                 title: `${dialer.name} - Active Pipeline Leads (In Process & Actioned)`, 
@@ -3084,7 +3166,7 @@ export default function ReportsClientPage({
                                     <TableCell 
                                          className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
                                          onClick={() => {
-                                             const dialerCallsList = filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+                                             const dialerCallsList = dialer.perfCallsList || filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
                                              const callLeadIds = new Set(dialerCallsList.map(c => c.leadId));
                                              setTrialDrilldown({ 
                                                  title: `${dialer.name} - Lost Pipeline Leads (Archived Lost)`, 
@@ -3160,7 +3242,8 @@ export default function ReportsClientPage({
                                 <TableCell 
                                     className="text-right font-bold text-foreground cursor-pointer hover:underline"
                                     onClick={() => {
-                                        const allCallLeadIds = new Set(filteredCalls.map(c => c.leadId));
+                                        const targetCalls = stats.perfFilteredCalls || filteredCalls;
+                                        const allCallLeadIds = new Set(targetCalls.map((c: any) => c.leadId));
                                         setTrialDrilldown({ 
                                             title: "All Calls Made Leads", 
                                             leads: stats.baseFilteredLeads.filter(l => allCallLeadIds.has(l.id)) 
@@ -3181,7 +3264,8 @@ export default function ReportsClientPage({
                                 <TableCell 
                                     className="text-right font-bold text-blue-500 cursor-pointer hover:underline"
                                     onClick={() => {
-                                        const allCallLeadIds = new Set(filteredCalls.map(c => c.leadId));
+                                        const targetCalls = stats.perfFilteredCalls || filteredCalls;
+                                        const allCallLeadIds = new Set(targetCalls.map((c: any) => c.leadId));
                                         setTrialDrilldown({ 
                                             title: "All Un-actioned Pipeline Leads (Yet to be Actioned)", 
                                             leads: stats.baseFilteredLeads.filter(l => isActivePipelineLead(l, allCallLeadIds, false)) 
@@ -3193,7 +3277,8 @@ export default function ReportsClientPage({
                                 <TableCell 
                                     className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
                                     onClick={() => {
-                                        const allCallLeadIds = new Set(filteredCalls.map(c => c.leadId));
+                                        const targetCalls = stats.perfFilteredCalls || filteredCalls;
+                                        const allCallLeadIds = new Set(targetCalls.map((c: any) => c.leadId));
                                         setTrialDrilldown({ 
                                             title: "All Active Pipeline Leads (In Process & Actioned)", 
                                             leads: stats.baseFilteredLeads.filter(l => isActivePipelineLead(l, allCallLeadIds, true)) 
@@ -3205,7 +3290,8 @@ export default function ReportsClientPage({
                                 <TableCell 
                                     className="text-right font-bold text-slate-500 cursor-pointer hover:underline"
                                     onClick={() => {
-                                        const allCallLeadIds = new Set(filteredCalls.map(c => c.leadId));
+                                        const targetCalls = stats.perfFilteredCalls || filteredCalls;
+                                        const allCallLeadIds = new Set(targetCalls.map((c: any) => c.leadId));
                                         setTrialDrilldown({ 
                                             title: "All Lost Pipeline Leads (Archived Lost)", 
                                             leads: stats.baseFilteredLeads.filter(l => !isSignedLead(l) && allCallLeadIds.has(l.id) && isLostLead(l)) 
@@ -4177,7 +4263,7 @@ export default function ReportsClientPage({
       )}
 
       {/* Drill-down Dialogs */}
-      <Dialog open={isApptListOpen} onOpenChange={(open) => { setIsApptListOpen(open); if(!open) setApptListStatusFilter(null); }}>
+      <Dialog open={isApptListOpen} onOpenChange={(open) => { setIsApptListOpen(open); if(!open) { setApptListStatusFilter(null); setApptListBucketFilter(null); } }}>
           <DialogContent className="max-w-5xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4196,12 +4282,20 @@ export default function ReportsClientPage({
                   </div>
               </DialogHeader>
 
-              <StatusBreakdownBar 
-                items={filteredAppointments} 
-                selectedStatus={apptListStatusFilter} 
-                onSelectStatus={setApptListStatusFilter} 
-                getStatus={(a) => a.leadStatus || 'New'} 
-              />
+              <div className="space-y-1">
+                <StatusBreakdownBar 
+                  items={filteredAppointments} 
+                  selectedStatus={apptListStatusFilter} 
+                  onSelectStatus={setApptListStatusFilter} 
+                  getStatus={(a) => a.leadStatus || 'New'} 
+                />
+                <BucketBreakdownBar 
+                  items={filteredAppointments} 
+                  selectedBucket={apptListBucketFilter} 
+                  onSelectBucket={setApptListBucketFilter} 
+                  getBucket={(a) => (a as any).bucket || (a as any).leadBucket || (allLeads.find(l => l.id === a.leadId)?.bucket) || (allLeads.find(l => l.id === a.leadId)?.fieldSales ? 'field_sales' : 'outbound')} 
+                />
+              </div>
 
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
@@ -4221,7 +4315,14 @@ export default function ReportsClientPage({
                         <TableBody>
                             {filteredAppointments.length > 0 ? (
                               filteredAppointments
-                                .filter((appt) => !apptListStatusFilter || (appt.leadStatus || 'New') === apptListStatusFilter)
+                                .filter((appt) => {
+                                  if (apptListStatusFilter && (appt.leadStatus || 'New') !== apptListStatusFilter) return false;
+                                  if (apptListBucketFilter) {
+                                    const b = (appt as any).bucket || (appt as any).leadBucket || (allLeads.find(l => l.id === appt.leadId)?.bucket) || (allLeads.find(l => l.id === appt.leadId)?.fieldSales ? 'field_sales' : 'outbound');
+                                    if (b !== apptListBucketFilter) return false;
+                                  }
+                                  return true;
+                                })
                                 .map((appt) => {
                                   const leadStatus = appt.leadStatus || '';
                                   return (
@@ -4267,7 +4368,7 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={isEngagementListOpen} onOpenChange={(open) => { setIsEngagementListOpen(open); if(!open) setEngagementStatusFilter(null); }}>
+      <Dialog open={isEngagementListOpen} onOpenChange={(open) => { setIsEngagementListOpen(open); if(!open) { setEngagementStatusFilter(null); setEngagementBucketFilter(null); } }}>
           <DialogContent className="max-w-5xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4288,12 +4389,20 @@ export default function ReportsClientPage({
                   </div>
               </DialogHeader>
 
-              <StatusBreakdownBar 
-                items={stats.engagementLeadsList} 
-                selectedStatus={engagementStatusFilter} 
-                onSelectStatus={setEngagementStatusFilter} 
-                getStatus={(l) => l.status || 'New'} 
-              />
+              <div className="space-y-1">
+                <StatusBreakdownBar 
+                  items={stats.engagementLeadsList} 
+                  selectedStatus={engagementStatusFilter} 
+                  onSelectStatus={setEngagementStatusFilter} 
+                  getStatus={(l) => l.status || 'New'} 
+                />
+                <BucketBreakdownBar 
+                  items={stats.engagementLeadsList} 
+                  selectedBucket={engagementBucketFilter} 
+                  onSelectBucket={setEngagementBucketFilter} 
+                  getBucket={(l) => l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')} 
+                />
+              </div>
 
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
@@ -4314,7 +4423,14 @@ export default function ReportsClientPage({
                         <TableBody>
                             {stats.engagementLeadsList.length > 0 ? (
                               stats.engagementLeadsList
-                                .filter((item) => !engagementStatusFilter || (item.status || 'New') === engagementStatusFilter)
+                                .filter((item) => {
+                                  if (engagementStatusFilter && (item.status || 'New') !== engagementStatusFilter) return false;
+                                  if (engagementBucketFilter) {
+                                    const b = item.bucket || (item.fieldSales ? 'field_sales' : 'outbound');
+                                    if (b !== engagementBucketFilter) return false;
+                                  }
+                                  return true;
+                                })
                                 .map((item) => (
                                   <TableRow key={item.leadId}>
                                       <TableCell className="font-medium">{item.companyName}</TableCell>
@@ -4340,7 +4456,7 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={isWonListOpen} onOpenChange={(open) => { setIsWonListOpen(open); if(!open) setWonStatusFilter(null); }}>
+      <Dialog open={isWonListOpen} onOpenChange={(open) => { setIsWonListOpen(open); if(!open) { setWonStatusFilter(null); setWonBucketFilter(null); } }}>
           <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4359,12 +4475,20 @@ export default function ReportsClientPage({
                   </div>
               </DialogHeader>
 
-              <StatusBreakdownBar 
-                items={stats.wonLeadsList} 
-                selectedStatus={wonStatusFilter} 
-                onSelectStatus={setWonStatusFilter} 
-                getStatus={(l) => l.status || 'Won'} 
-              />
+              <div className="space-y-1">
+                <StatusBreakdownBar 
+                  items={stats.wonLeadsList} 
+                  selectedStatus={wonStatusFilter} 
+                  onSelectStatus={setWonStatusFilter} 
+                  getStatus={(l) => l.status || 'Won'} 
+                />
+                <BucketBreakdownBar 
+                  items={stats.wonLeadsList} 
+                  selectedBucket={wonBucketFilter} 
+                  onSelectBucket={setWonBucketFilter} 
+                  getBucket={(l) => l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')} 
+                />
+              </div>
 
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
@@ -4381,7 +4505,14 @@ export default function ReportsClientPage({
                         <TableBody>
                             {stats.wonLeadsList.length > 0 ? (
                               stats.wonLeadsList
-                                .filter((lead) => !wonStatusFilter || (lead.status || 'Won') === wonStatusFilter)
+                                .filter((lead) => {
+                                  if (wonStatusFilter && (lead.status || 'Won') !== wonStatusFilter) return false;
+                                  if (wonBucketFilter) {
+                                    const b = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+                                    if (b !== wonBucketFilter) return false;
+                                  }
+                                  return true;
+                                })
                                 .map((lead) => (
                                   <TableRow key={lead.id}>
                                       <TableCell className="font-medium">{lead.companyName}</TableCell>
@@ -4403,7 +4534,7 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={isQuotesListOpen} onOpenChange={(open) => { setIsQuotesListOpen(open); if(!open) setQuotesStatusFilter(null); }}>
+      <Dialog open={isQuotesListOpen} onOpenChange={(open) => { setIsQuotesListOpen(open); if(!open) { setQuotesStatusFilter(null); setQuotesBucketFilter(null); } }}>
           <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4422,12 +4553,20 @@ export default function ReportsClientPage({
                   </div>
               </DialogHeader>
 
-              <StatusBreakdownBar 
-                items={stats.quoteLeadsList} 
-                selectedStatus={quotesStatusFilter} 
-                onSelectStatus={setQuotesStatusFilter} 
-                getStatus={(l) => l.status || 'New'} 
-              />
+              <div className="space-y-1">
+                <StatusBreakdownBar 
+                  items={stats.quoteLeadsList} 
+                  selectedStatus={quotesStatusFilter} 
+                  onSelectStatus={setQuotesStatusFilter} 
+                  getStatus={(l) => l.status || 'New'} 
+                />
+                <BucketBreakdownBar 
+                  items={stats.quoteLeadsList} 
+                  selectedBucket={quotesBucketFilter} 
+                  onSelectBucket={setQuotesBucketFilter} 
+                  getBucket={(l) => l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')} 
+                />
+              </div>
 
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
@@ -4445,7 +4584,14 @@ export default function ReportsClientPage({
                         <TableBody>
                             {stats.quoteLeadsList.length > 0 ? (
                               stats.quoteLeadsList
-                                .filter((lead) => !quotesStatusFilter || (lead.status || 'New') === quotesStatusFilter)
+                                .filter((lead) => {
+                                  if (quotesStatusFilter && (lead.status || 'New') !== quotesStatusFilter) return false;
+                                  if (quotesBucketFilter) {
+                                    const b = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+                                    if (b !== quotesBucketFilter) return false;
+                                  }
+                                  return true;
+                                })
                                 .map((lead) => (
                                   <TableRow key={lead.id}>
                                       <TableCell className="font-medium">{lead.companyName}</TableCell>
@@ -4470,7 +4616,7 @@ export default function ReportsClientPage({
 
 
 
-      <Dialog open={isFieldSourcedListOpen} onOpenChange={(open) => { setIsFieldSourcedListOpen(open); if(!open) setFieldSourcedStatusFilter(null); }}>
+      <Dialog open={isFieldSourcedListOpen} onOpenChange={(open) => { setIsFieldSourcedListOpen(open); if(!open) { setFieldSourcedStatusFilter(null); setFieldSourcedBucketFilter(null); } }}>
           <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4497,12 +4643,20 @@ export default function ReportsClientPage({
                   </div>
               </DialogHeader>
 
-              <StatusBreakdownBar 
-                items={stats.fieldSourcedLeads} 
-                selectedStatus={fieldSourcedStatusFilter} 
-                onSelectStatus={setFieldSourcedStatusFilter} 
-                getStatus={(l) => l.status || 'New'} 
-              />
+              <div className="space-y-1">
+                <StatusBreakdownBar 
+                  items={stats.fieldSourcedLeads} 
+                  selectedStatus={fieldSourcedStatusFilter} 
+                  onSelectStatus={setFieldSourcedStatusFilter} 
+                  getStatus={(l) => l.status || 'New'} 
+                />
+                <BucketBreakdownBar 
+                  items={stats.fieldSourcedLeads} 
+                  selectedBucket={fieldSourcedBucketFilter} 
+                  onSelectBucket={setFieldSourcedBucketFilter} 
+                  getBucket={(l) => l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')} 
+                />
+              </div>
 
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
@@ -4521,7 +4675,14 @@ export default function ReportsClientPage({
                         <TableBody>
                             {stats.fieldSourcedLeads.length > 0 ? (
                               stats.fieldSourcedLeads
-                                .filter((lead) => !fieldSourcedStatusFilter || (lead.status || 'New') === fieldSourcedStatusFilter)
+                                .filter((lead) => {
+                                  if (fieldSourcedStatusFilter && (lead.status || 'New') !== fieldSourcedStatusFilter) return false;
+                                  if (fieldSourcedBucketFilter) {
+                                    const b = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+                                    if (b !== fieldSourcedBucketFilter) return false;
+                                  }
+                                  return true;
+                                })
                                 .map((lead) => (
                                   <TableRow key={lead.id}>
                                       <TableCell className="font-medium">{lead.companyName}</TableCell>
@@ -4567,7 +4728,7 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={isApptOutcomeListOpen} onOpenChange={(open) => { setIsApptOutcomeListOpen(open); if(!open) setApptOutcomeStatusFilter(null); }}>
+      <Dialog open={isApptOutcomeListOpen} onOpenChange={(open) => { setIsApptOutcomeListOpen(open); if(!open) { setApptOutcomeStatusFilter(null); setApptOutcomeBucketFilter(null); } }}>
           <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4604,12 +4765,20 @@ export default function ReportsClientPage({
                   </div>
               </DialogHeader>
 
-              <StatusBreakdownBar 
-                items={filteredSourcedAppts} 
-                selectedStatus={apptOutcomeStatusFilter} 
-                onSelectStatus={setApptOutcomeStatusFilter} 
-                getStatus={(a) => a.leadStatus || 'New'} 
-              />
+              <div className="space-y-1">
+                <StatusBreakdownBar 
+                  items={filteredSourcedAppts} 
+                  selectedStatus={apptOutcomeStatusFilter} 
+                  onSelectStatus={setApptOutcomeStatusFilter} 
+                  getStatus={(a) => a.leadStatus || 'New'} 
+                />
+                <BucketBreakdownBar 
+                  items={filteredSourcedAppts} 
+                  selectedBucket={apptOutcomeBucketFilter} 
+                  onSelectBucket={setApptOutcomeBucketFilter} 
+                  getBucket={(a) => (a as any).bucket || (a as any).leadBucket || (allLeads.find(l => l.id === a.leadId)?.bucket) || (allLeads.find(l => l.id === a.leadId)?.fieldSales ? 'field_sales' : 'outbound')} 
+                />
+              </div>
 
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
@@ -4628,7 +4797,14 @@ export default function ReportsClientPage({
                         <TableBody>
                             {filteredSourcedAppts.length > 0 ? (
                               filteredSourcedAppts
-                                .filter((appt) => !apptOutcomeStatusFilter || (appt.leadStatus || 'New') === apptOutcomeStatusFilter)
+                                .filter((appt) => {
+                                  if (apptOutcomeStatusFilter && (appt.leadStatus || 'New') !== apptOutcomeStatusFilter) return false;
+                                  if (apptOutcomeBucketFilter) {
+                                    const b = (appt as any).bucket || (appt as any).leadBucket || (allLeads.find(l => l.id === appt.leadId)?.bucket) || (allLeads.find(l => l.id === appt.leadId)?.fieldSales ? 'field_sales' : 'outbound');
+                                    if (b !== apptOutcomeBucketFilter) return false;
+                                  }
+                                  return true;
+                                })
                                 .map((appt) => (
                                   <TableRow key={appt.id}>
                                       <TableCell className="font-medium">{appt.leadName}</TableCell>
@@ -4670,7 +4846,7 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={!!trialDrilldown} onOpenChange={(open) => { if (!open) { setTrialDrilldown(null); setTrialDrilldownStatusFilter(null); } }}>
+      <Dialog open={!!trialDrilldown} onOpenChange={(open) => { if (!open) { setTrialDrilldown(null); setTrialDrilldownStatusFilter(null); setTrialDrilldownBucketFilter(null); } }}>
           <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4690,12 +4866,20 @@ export default function ReportsClientPage({
               </DialogHeader>
 
               {trialDrilldown?.leads && (
-                <StatusBreakdownBar 
-                  items={trialDrilldown.leads} 
-                  selectedStatus={trialDrilldownStatusFilter} 
-                  onSelectStatus={setTrialDrilldownStatusFilter} 
-                  getStatus={(l) => l.customerStatus || l.status || 'New'} 
-                />
+                <div className="space-y-1">
+                  <StatusBreakdownBar 
+                    items={trialDrilldown.leads} 
+                    selectedStatus={trialDrilldownStatusFilter} 
+                    onSelectStatus={setTrialDrilldownStatusFilter} 
+                    getStatus={(l) => l.customerStatus || l.status || 'New'} 
+                  />
+                  <BucketBreakdownBar 
+                    items={trialDrilldown.leads} 
+                    selectedBucket={trialDrilldownBucketFilter} 
+                    onSelectBucket={setTrialDrilldownBucketFilter} 
+                    getBucket={(l) => l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')} 
+                  />
+                </div>
               )}
 
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
@@ -4714,7 +4898,14 @@ export default function ReportsClientPage({
                         <TableBody>
                             {trialDrilldown?.leads && trialDrilldown.leads.length > 0 ? (
                               trialDrilldown.leads
-                                .filter((l) => !trialDrilldownStatusFilter || (l.customerStatus || l.status || 'New') === trialDrilldownStatusFilter)
+                                .filter((l) => {
+                                  if (trialDrilldownStatusFilter && (l.customerStatus || l.status || 'New') !== trialDrilldownStatusFilter) return false;
+                                  if (trialDrilldownBucketFilter) {
+                                    const b = l.bucket || (l.fieldSales ? 'field_sales' : 'outbound');
+                                    if (b !== trialDrilldownBucketFilter) return false;
+                                  }
+                                  return true;
+                                })
                                 .map((lead) => (
                                   <TableRow key={lead.id}>
                                       <TableCell className="font-medium">{lead.companyName}</TableCell>
@@ -4738,7 +4929,7 @@ export default function ReportsClientPage({
       </Dialog>
 
       {/* Incentive Tracker Pop-up Drill-down Dialog */}
-      <Dialog open={!!incentiveDrillDown} onOpenChange={(open) => { if(!open) { setIncentiveDrillDown(null); setIncentiveStatusFilter(null); } }}>
+      <Dialog open={!!incentiveDrillDown} onOpenChange={(open) => { if(!open) { setIncentiveDrillDown(null); setIncentiveStatusFilter(null); setIncentiveBucketFilter(null); } }}>
           <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -4771,20 +4962,36 @@ export default function ReportsClientPage({
               </DialogHeader>
 
               {incentiveDrillDown?.appts && (
-                <StatusBreakdownBar 
-                  items={incentiveDrillDown.appts} 
-                  selectedStatus={incentiveStatusFilter} 
-                  onSelectStatus={setIncentiveStatusFilter} 
-                  getStatus={(a) => a.leadStatus || 'New'} 
-                />
+                <div className="space-y-1">
+                  <StatusBreakdownBar 
+                    items={incentiveDrillDown.appts} 
+                    selectedStatus={incentiveStatusFilter} 
+                    onSelectStatus={setIncentiveStatusFilter} 
+                    getStatus={(a) => (a as any).leadStatus || 'New'} 
+                  />
+                  <BucketBreakdownBar 
+                    items={incentiveDrillDown.appts} 
+                    selectedBucket={incentiveBucketFilter} 
+                    onSelectBucket={setIncentiveBucketFilter} 
+                    getBucket={(a) => (a as any).bucket || (a as any).leadBucket || (allLeads.find(l => l.id === a.leadId)?.bucket) || (allLeads.find(l => l.id === a.leadId)?.fieldSales ? 'field_sales' : 'outbound')} 
+                  />
+                </div>
               )}
               {incentiveDrillDown?.leads && (
-                <StatusBreakdownBar 
-                  items={incentiveDrillDown.leads} 
-                  selectedStatus={incentiveStatusFilter} 
-                  onSelectStatus={setIncentiveStatusFilter} 
-                  getStatus={(l) => l.customerStatus || l.status || 'New'} 
-                />
+                <div className="space-y-1">
+                  <StatusBreakdownBar 
+                    items={incentiveDrillDown.leads} 
+                    selectedStatus={incentiveStatusFilter} 
+                    onSelectStatus={setIncentiveStatusFilter} 
+                    getStatus={(l) => l.customerStatus || l.status || 'New'} 
+                  />
+                  <BucketBreakdownBar 
+                    items={incentiveDrillDown.leads} 
+                    selectedBucket={incentiveBucketFilter} 
+                    onSelectBucket={setIncentiveBucketFilter} 
+                    getBucket={(l) => l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')} 
+                  />
+                </div>
               )}
 
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
@@ -4805,7 +5012,14 @@ export default function ReportsClientPage({
                             <TableBody>
                                 {incentiveDrillDown.appts.length > 0 ? (
                                   incentiveDrillDown.appts
-                                    .filter((a) => !incentiveStatusFilter || (a.leadStatus || 'New') === incentiveStatusFilter)
+                                    .filter((a) => {
+                                      if (incentiveStatusFilter && ((a as any).leadStatus || 'New') !== incentiveStatusFilter) return false;
+                                      if (incentiveBucketFilter) {
+                                        const b = (a as any).bucket || (a as any).leadBucket || (allLeads.find(l => l.id === a.leadId)?.bucket) || (allLeads.find(l => l.id === a.leadId)?.fieldSales ? 'field_sales' : 'outbound');
+                                        if (b !== incentiveBucketFilter) return false;
+                                      }
+                                      return true;
+                                    })
                                     .map((apptItem) => {
                                       const appt = apptItem as any;
                                       return (
@@ -4859,7 +5073,14 @@ export default function ReportsClientPage({
                             <TableBody>
                                 {incentiveDrillDown.leads.length > 0 ? (
                                   incentiveDrillDown.leads
-                                    .filter((l) => !incentiveStatusFilter || (l.customerStatus || l.status || 'New') === incentiveStatusFilter)
+                                    .filter((l) => {
+                                      if (incentiveStatusFilter && (l.customerStatus || l.status || 'New') !== incentiveStatusFilter) return false;
+                                      if (incentiveBucketFilter) {
+                                        const b = l.bucket || (l.fieldSales ? 'field_sales' : 'outbound');
+                                        if (b !== incentiveBucketFilter) return false;
+                                      }
+                                      return true;
+                                    })
                                     .map((leadItem) => {
                                       const lead = leadItem as any;
                                       return (
