@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { PresaleRecord } from '@/lib/presale-types';
+import { decodePresaleId } from '@/lib/presale-token';
 
 function formatToYYYYMMDD(val: any): string {
   if (!val) return '';
@@ -150,36 +151,36 @@ async function findFranchiseeDoc(db: any, franchiseeId: string) {
   // 1. Direct doc by ID
   try {
     const docRef = await db.collection('franchisees').doc(cleanId).get();
-    if (docRef.exists) return docRef.data();
+    if (docRef.exists) return { id: docRef.id, ...docRef.data() };
   } catch (e) {}
 
   // 2. By internalId (string or number)
   try {
     let snap = await db.collection('franchisees').where('internalId', '==', cleanId).limit(1).get();
-    if (!snap.empty) return snap.docs[0].data();
+    if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
     if (!isNaN(numId)) {
       snap = await db.collection('franchisees').where('internalId', '==', numId).limit(1).get();
-      if (!snap.empty) return snap.docs[0].data();
+      if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
     }
   } catch (e) {}
 
   // 3. By prospectPlusId (string or number)
   try {
     let snap = await db.collection('franchisees').where('prospectPlusId', '==', cleanId).limit(1).get();
-    if (!snap.empty) return snap.docs[0].data();
+    if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
     if (!isNaN(numId)) {
       snap = await db.collection('franchisees').where('prospectPlusId', '==', numId).limit(1).get();
-      if (!snap.empty) return snap.docs[0].data();
+      if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
     }
   } catch (e) {}
 
   // 4. By id field (string or number)
   try {
     let snap = await db.collection('franchisees').where('id', '==', cleanId).limit(1).get();
-    if (!snap.empty) return snap.docs[0].data();
+    if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
     if (!isNaN(numId)) {
       snap = await db.collection('franchisees').where('id', '==', numId).limit(1).get();
-      if (!snap.empty) return snap.docs[0].data();
+      if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
     }
   } catch (e) {}
 
@@ -268,7 +269,8 @@ async function resolveFranchiseeName(db: any, franchiseeId: string, email?: stri
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const franchiseeId = searchParams.get('franchiseeId');
+    const rawId = searchParams.get('franchiseeId');
+    const franchiseeId = decodePresaleId(rawId || '');
     const db = adminApp.firestore();
 
     if (franchiseeId) {
@@ -393,6 +395,26 @@ export async function GET(request: Request) {
         updatedAt: new Date().toISOString(),
       };
 
+      // Persist draft presale record so it appears on presales list right away
+      try {
+        const presaleRef = db.collection('franchisee_presales').doc(String(franchiseeId));
+        await presaleRef.set(defaultRecord, { merge: true });
+
+        const targetFranDoc = franData || (await findFranchiseeDoc(db, franchiseeId));
+        const franUpdate = {
+          isForSale: true,
+          presaleStatus: 'Step 1: Main Details',
+          presaleUpdatedAt: new Date().toISOString(),
+        };
+        if (targetFranDoc && targetFranDoc.id) {
+          await db.collection('franchisees').doc(String(targetFranDoc.id)).set(franUpdate, { merge: true });
+        } else {
+          await db.collection('franchisees').doc(String(franchiseeId)).set(franUpdate, { merge: true });
+        }
+      } catch (saveErr) {
+        console.error('Failed to auto-create draft presale doc:', saveErr);
+      }
+
       return NextResponse.json({
         success: true,
         data: defaultRecord,
@@ -409,7 +431,8 @@ export async function GET(request: Request) {
 
     const presales: PresaleRecord[] = [];
     snapshot.forEach(doc => {
-      presales.push({ id: doc.id, ...doc.data() } as PresaleRecord);
+      const dData = doc.data() || {};
+      presales.push({ id: doc.id, franchiseeId: dData.franchiseeId || doc.id, ...dData } as PresaleRecord);
     });
 
     return NextResponse.json({

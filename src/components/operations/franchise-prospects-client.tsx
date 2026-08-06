@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { AccessDenied } from '@/components/access-denied';
 import { CreateUserDialog } from '@/components/admin/create-user-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const TERRITORY_OPTIONS = [
   { group: 'NSW', items: ['Arncliffe, NSW', 'Hunter Valley, NSW', 'Macquarie Park, NSW', 'Mascot, NSW', 'Newcastle, NSW', 'Northern Beaches, NSW', 'Waterloo, NSW'] },
@@ -102,8 +103,37 @@ export default function FranchiseProspectsClient() {
     }
   };
 
+  // Presales state for territory dropdown & IM preview
+  const [presaleRecords, setPresaleRecords] = useState<any[]>([]);
+  const [presaleTerritories, setPresaleTerritories] = useState<Array<{ name: string; state?: string; id?: string }>>([]);
+
+  const fetchPresales = async () => {
+    try {
+      const res = await fetch('/api/franchisees/presales');
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        setPresaleRecords(json.data);
+        const list: Array<{ name: string; state?: string; id?: string }> = [];
+        json.data.forEach((p: any) => {
+          const tName = p.presalesDetails?.territoryName || p.mainDetails?.tradingEntity || p.franchiseeName;
+          const tState = p.mainDetails?.state || p.presalesDetails?.state || '';
+          if (tName && tName !== p.id) {
+            if (!list.some((item) => item.name.toLowerCase() === tName.toLowerCase())) {
+              list.push({ name: tName, state: tState, id: p.id });
+            }
+          }
+        });
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        setPresaleTerritories(list);
+      }
+    } catch (err) {
+      console.error('Failed to load presales for dropdown:', err);
+    }
+  };
+
   useEffect(() => {
     fetchProspects();
+    fetchPresales();
   }, []);
 
   const filteredProspects = useMemo(() => {
@@ -145,7 +175,12 @@ export default function FranchiseProspectsClient() {
 
     setSubmittingNewProspect(true);
     try {
-      const finalTerritory = addForm.preferredTerritory === 'OTHER' ? addForm.customTerritory.trim() : addForm.preferredTerritory;
+      const finalTerritory =
+        addForm.preferredTerritory === 'OTHER'
+          ? addForm.customTerritory.trim()
+          : addForm.preferredTerritory === 'NONE'
+          ? ''
+          : addForm.preferredTerritory;
 
       const payload = {
         firstName: addForm.firstName.trim(),
@@ -843,174 +878,251 @@ export default function FranchiseProspectsClient() {
 
       {/* Add Prospect Modal Dialog */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-[#095c7b]">Add Franchise Prospect</DialogTitle>
             <DialogDescription>
-              Manually enter a potential franchisee prospect using fields matching the website /become-a-franchisee form.
+              Enter candidate details to log a franchisee prospect. Previews of Greg Hart's brochure email and IM schedule update live as you fill out the form.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleCreateProspect} className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700">First Name <span className="text-red-500">*</span></label>
-                <Input
-                  required
-                  placeholder="e.g. John"
-                  value={addForm.firstName}
-                  onChange={(e) => setAddForm({ ...addForm, firstName: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700">Last Name <span className="text-red-500">*</span></label>
-                <Input
-                  required
-                  placeholder="e.g. Smith"
-                  value={addForm.lastName}
-                  onChange={(e) => setAddForm({ ...addForm, lastName: e.target.value })}
-                />
-              </div>
-            </div>
+          <form onSubmit={handleCreateProspect} className="pt-2">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Column: Form Fields */}
+              <div className="lg:col-span-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700">First Name <span className="text-red-500">*</span></label>
+                    <Input
+                      required
+                      placeholder="e.g. John"
+                      value={addForm.firstName}
+                      onChange={(e) => setAddForm({ ...addForm, firstName: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700">Last Name <span className="text-red-500">*</span></label>
+                    <Input
+                      required
+                      placeholder="e.g. Smith"
+                      value={addForm.lastName}
+                      onChange={(e) => setAddForm({ ...addForm, lastName: e.target.value })}
+                    />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700">Email Address <span className="text-red-500">*</span></label>
-                <Input
-                  type="email"
-                  placeholder="john.smith@example.com"
-                  value={addForm.email}
-                  onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700">Phone Number <span className="text-red-500">*</span></label>
-                <Input
-                  type="tel"
-                  placeholder="0412 345 678"
-                  value={addForm.phone}
-                  onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
-                />
-              </div>
-            </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700">Email Address <span className="text-red-500">*</span></label>
+                    <Input
+                      type="email"
+                      placeholder="john.smith@example.com"
+                      value={addForm.email}
+                      onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700">Phone Number <span className="text-red-500">*</span></label>
+                    <Input
+                      type="tel"
+                      placeholder="0412 345 678"
+                      value={addForm.phone}
+                      onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
+                    />
+                  </div>
+                </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Which franchise territory are they enquiring about?</label>
-              <Select
-                value={addForm.preferredTerritory}
-                onValueChange={(val) => setAddForm({ ...addForm, preferredTerritory: val })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select location or state..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">No specific location yet</SelectItem>
-                  {TERRITORY_OPTIONS.map((grp) => (
-                    <SelectGroup key={grp.group}>
-                      <SelectLabel className="font-bold text-[#095c7b]">{grp.group}</SelectLabel>
-                      {grp.items.map((loc) => (
-                        <SelectItem key={loc} value={loc}>
-                          {loc}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">Which franchise territory are they enquiring about?</label>
+                  <Select
+                    value={addForm.preferredTerritory}
+                    onValueChange={(val) => setAddForm({ ...addForm, preferredTerritory: val })}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Select presale territory..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">No specific location yet</SelectItem>
+                      {presaleTerritories.map((t) => (
+                        <SelectItem key={t.name} value={t.name}>
+                          {t.name} {t.state ? `(${t.state})` : ''}
                         </SelectItem>
                       ))}
-                    </SelectGroup>
-                  ))}
-                  <SelectItem value="OTHER">Other / Unlisted Location...</SelectItem>
-                </SelectContent>
-              </Select>
+                      <SelectItem value="OTHER">Other / Unlisted Location...</SelectItem>
+                    </SelectContent>
+                  </Select>
 
-              {addForm.preferredTerritory === 'OTHER' && (
-                <Input
-                  placeholder="Enter specific territory name (e.g. Parramatta, NSW)"
-                  value={addForm.customTerritory}
-                  onChange={(e) => setAddForm({ ...addForm, customTerritory: e.target.value })}
-                  className="mt-2 text-sm"
-                />
-              )}
-            </div>
+                  {addForm.preferredTerritory === 'OTHER' && (
+                    <Input
+                      placeholder="Enter specific territory name (e.g. Parramatta, NSW)"
+                      value={addForm.customTerritory}
+                      onChange={(e) => setAddForm({ ...addForm, customTerritory: e.target.value })}
+                      className="mt-2 text-sm"
+                    />
+                  )}
+                </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">What best describes you?</label>
-              <Select value={addForm.interest} onValueChange={(val) => setAddForm({ ...addForm, interest: val })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Please select…" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="I'm an investor">I'm an investor</SelectItem>
-                  <SelectItem value="I'd like to become an owner-operator">I'd like to become an owner-operator</SelectItem>
-                  <SelectItem value="I'm seeking employment">I'm seeking employment</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">What best describes you?</label>
+                  <Select value={addForm.interest} onValueChange={(val) => setAddForm({ ...addForm, interest: val })}>
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Please select…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="I'm an investor">I'm an investor</SelectItem>
+                      <SelectItem value="I'd like to become an owner-operator">I'd like to become an owner-operator</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700">Do you have a vehicle?</label>
-                <Select value={addForm.vehicle} onValueChange={(val) => setAddForm({ ...addForm, vehicle: val })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Please select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Yes">Yes</SelectItem>
-                    <SelectItem value="No">No</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700">Do you have a vehicle?</label>
+                    <Select value={addForm.vehicle} onValueChange={(val) => setAddForm({ ...addForm, vehicle: val })}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Please select…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Yes">Yes</SelectItem>
+                        <SelectItem value="No">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700">Years of experience?</label>
+                    <Select value={addForm.experience} onValueChange={(val) => setAddForm({ ...addForm, experience: val })}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Please select…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0–1 years">0–1 years</SelectItem>
+                        <SelectItem value="1–3 years">1–3 years</SelectItem>
+                        <SelectItem value="3–5 years">3–5 years</SelectItem>
+                        <SelectItem value="5+ years">5+ years</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">Additional Message / Background Notes</label>
+                  <Input
+                    placeholder="Optional notes or details about the applicant..."
+                    value={addForm.message}
+                    onChange={(e) => setAddForm({ ...addForm, message: e.target.value })}
+                  />
+                </div>
+
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-md flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-[#095c7b] block">Send Franchise Brochure (Step 1)</span>
+                    <span className="text-[11px] text-slate-600">Automatically emails the official Franchise Brochure PDF to applicant upon creation</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={addForm.sendBrochureImmediately}
+                    onChange={(e) => setAddForm({ ...addForm, sendBrochureImmediately: e.target.checked })}
+                    className="h-4 w-4 text-[#095c7b] rounded border-slate-300"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700">Years of experience?</label>
-                <Select value={addForm.experience} onValueChange={(val) => setAddForm({ ...addForm, experience: val })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Please select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0–1 years">0–1 years</SelectItem>
-                    <SelectItem value="1–3 years">1–3 years</SelectItem>
-                    <SelectItem value="3–5 years">3–5 years</SelectItem>
-                    <SelectItem value="5+ years">5+ years</SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Right Column: Live Email Preview */}
+              <div className="lg:col-span-6 space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                    <Mail className="h-4 w-4 text-[#095c7b]" /> Live Outbound Email Preview
+                  </h3>
+                  <Badge variant="outline" className="text-[10px] bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/20">
+                    Step 1 Brochure Email
+                  </Badge>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="bg-white rounded-lg border border-slate-200 p-3 text-xs space-y-1.5 shadow-sm">
+                    <div className="flex items-center gap-2 border-b pb-1.5 text-slate-600">
+                      <span className="font-semibold text-slate-900 w-12">From:</span>
+                      <span className="font-mono text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">
+                        greg.hart@mailplus.com.au
+                      </span>
+                      <span className="text-[10px] text-slate-500">(Greg Hart - Head of Franchise Sales)</span>
+                    </div>
+                    <div className="flex items-center gap-2 border-b pb-1.5 text-slate-600">
+                      <span className="font-semibold text-slate-900 w-12">CC:</span>
+                      <span className="font-mono text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">
+                        michael.mcdaid@mailplus.com.au
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 border-b pb-1.5 text-slate-600">
+                      <span className="font-semibold text-slate-900 w-12">To:</span>
+                      <span className="font-mono text-slate-800">
+                        {addForm.email ? addForm.email : <span className="text-slate-400 italic">applicant@example.com</span>}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 border-b pb-1.5 text-slate-600">
+                      <span className="font-semibold text-slate-900 w-12">Subject:</span>
+                      <span className="font-medium text-slate-800">
+                        MailPlus Franchise Opportunity - Information Brochure
+                        {addForm.preferredTerritory && addForm.preferredTerritory !== 'NONE'
+                          ? ` in ${addForm.preferredTerritory === 'OTHER' ? addForm.customTerritory || 'Unlisted Location' : addForm.preferredTerritory}`
+                          : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span className="font-semibold text-slate-900 w-12">Attach:</span>
+                      <span className="inline-flex items-center gap-1 bg-blue-50 text-[#095c7b] border border-blue-200 rounded px-2 py-0.5 font-medium text-[11px]">
+                        <Paperclip className="h-3 w-3" /> MailPlus Franchise Information Brochure.pdf
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Styled Email Body Box */}
+                  <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm text-xs">
+                    <div className="bg-[#095c7b] py-3 text-center">
+                      <img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" className="h-7 inline-block" />
+                    </div>
+                    <div className="p-4 space-y-3 text-slate-700 leading-relaxed">
+                      <p className="font-bold text-[#095c7b] text-sm">
+                        Hi {addForm.firstName ? addForm.firstName : 'Applicant'},
+                      </p>
+                      <p>
+                        Thank you for your enquiry regarding MailPlus franchise opportunities
+                        {addForm.preferredTerritory && addForm.preferredTerritory !== 'NONE'
+                          ? ` in ${addForm.preferredTerritory === 'OTHER' ? addForm.customTerritory || 'your territory' : addForm.preferredTerritory}`
+                          : ''}.
+                      </p>
+                      <p>
+                        As Step 1 of our franchise review process, please find attached our official <strong>MailPlus Franchise Information Brochure</strong> detailing our mobile B2B express logistics model, recurring revenue streams, and head office sales support.
+                      </p>
+                      <div className="bg-slate-50 border border-slate-200 rounded-md p-2.5 space-y-1.5 my-2">
+                        <div className="flex items-start gap-2">
+                          <span>🚚</span>
+                          <div><strong>Proven Mobile B2B Model:</strong> Recurring B2B customer pickup & delivery revenue.</div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span>📍</span>
+                          <div><strong>Exclusive Territory:</strong> Dedicated customer base with full head office operational backing.</div>
+                        </div>
+                      </div>
+                      <p>
+                        Our team will be in contact shortly to discuss your application. If you have immediate questions, feel free to call us on <strong>1300 65 65 95</strong>.
+                      </p>
+                      <div className="pt-2 border-t text-slate-600">
+                        <p>Kind regards,</p>
+                        <p className="font-bold text-[#095c7b]">Greg Hart</p>
+                        <p className="text-[11px] text-slate-500">Head of Franchise Sales | MailPlus</p>
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 border-t p-2.5 text-center text-[10px] text-slate-400">
+                      MailPlus Australia &copy; 2026 | Business logistics, made simple.
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Employment type</label>
-              <Select value={addForm.employment} onValueChange={(val) => setAddForm({ ...addForm, employment: val })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Please select…" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Full-time">Full-time</SelectItem>
-                  <SelectItem value="Part-time">Part-time</SelectItem>
-                  <SelectItem value="Contract">Contract</SelectItem>
-                  <SelectItem value="Casual">Casual</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Additional Message / Background Notes</label>
-              <Input
-                placeholder="Optional notes or details about the applicant..."
-                value={addForm.message}
-                onChange={(e) => setAddForm({ ...addForm, message: e.target.value })}
-              />
-            </div>
-
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-xs font-bold text-[#095c7b] block">Send Franchise Brochure (Step 1)</span>
-                <span className="text-[11px] text-slate-600">Automatically emails the official Franchise Brochure PDF to applicant upon creation</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={addForm.sendBrochureImmediately}
-                onChange={(e) => setAddForm({ ...addForm, sendBrochureImmediately: e.target.checked })}
-                className="h-4 w-4 text-[#095c7b] rounded border-slate-300"
-              />
-            </div>
-
-            <DialogFooter className="pt-2">
+            <DialogFooter className="pt-4 mt-4 border-t">
               <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
                 Cancel
               </Button>

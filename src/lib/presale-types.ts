@@ -6,6 +6,7 @@ export interface PresaleMainDetails {
   mainContact: string;
   mobileNumber: string;
   email: string;
+  personalEmail?: string;
   abn: string;
   dateListedForSale: string;
   address: string;
@@ -45,6 +46,7 @@ export interface PresaleDeedOfVariation {
 }
 
 export interface PresalesDetails {
+  // Contract & Term Details
   commencementDate: string;
   expiryDate: string;
   ultimateExpiryDate: string;
@@ -52,12 +54,26 @@ export interface PresalesDetails {
   unlimitedTermFee: number | string;
   renewalTermsYears: number | string;
   termOnFranchiseeIM: string;
+  
+  // Franchisee IM Profile & Schedule Fields
+  territoryName?: string;
   dateBusinessStarted: string;
-  totalDailyRunTime: string;
-  lowPrice: number | string;
-  highPrice: number | string;
+  numberOfOwners?: string;
+  reasonForSale?: string;
   serviceRevenue: number | string;
   serviceRevenueYear: string;
+  franchiseFeesOnServiceRevenue?: string;
+  marketingLevy?: string;
+  expressRevenue?: string;
+  salePrice: number | string;
+  lowPrice: number | string;
+  highPrice: number | string;
+  totalDailyRunTime: string;
+  currentMorningShift?: string;
+  currentAfternoonShift?: string;
+  franchiseTerm?: string;
+  
+  // Financial & Commissions
   mpexCommission: number | string;
   mpexCommissionYear: string;
   sendleCommission: number | string;
@@ -65,7 +81,17 @@ export interface PresalesDetails {
   salesCommissionPercent: number | string;
   nabAccreditation: string; // 'Yes' | 'No'
   nabAccreditationFee: number | string;
-  salePrice: number | string;
+
+  // Territory Map & E-Sign Confirmation
+  territoryMapUrl?: string;
+  imStatus?: 'not_started' | 'sent' | 'signed_online';
+  publicToken?: string;
+  sentAt?: string;
+  sentToEmail?: string;
+  signedAt?: string;
+  signerName?: string;
+  signerEmail?: string;
+  signatureDataUrl?: string;
 }
 
 export type StepStatus = 'Not Started' | 'In Progress' | 'Pending Review' | 'Completed';
@@ -74,7 +100,7 @@ export interface PresaleRecord {
   id: string; // franchiseeId
   franchiseeId: string;
   franchiseeName: string;
-  status: 'Step 1: Main Details' | 'Step 2: Deed Pending' | 'Step 3: Verification Pending' | 'Step 4: Presales Details' | 'Active Presale' | 'Sold' | 'Cancelled';
+  status: 'Step 1: Main Details' | 'Step 2: Deed Pending' | 'Step 3: Verification Pending' | 'Step 4: Presales Details' | 'Step 4: Franchisee IM Confirmation' | 'Active Presale' | 'Sold' | 'Cancelled';
   step1Status: StepStatus;
   step2Status: StepStatus;
   step3Status: StepStatus;
@@ -89,3 +115,4 @@ export interface PresaleRecord {
   updatedByUid?: string;
   updatedByName?: string;
 }
+

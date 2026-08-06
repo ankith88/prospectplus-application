@@ -52,7 +52,30 @@ export function DeedOfVariationDialog({
   // Canvas drawing functions
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     setIsDrawing(true);
-    draw(e);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    let clientX = 0;
+    let clientY = 0;
+    if ('touches' in e && e.touches[0]) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if ('clientX' in e) {
+      clientX = (e as React.MouseEvent<HTMLCanvasElement>).clientX;
+      clientY = (e as React.MouseEvent<HTMLCanvasElement>).clientY;
+    }
+
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
   };
 
   const stopDrawing = () => {
@@ -69,19 +92,22 @@ export function DeedOfVariationDialog({
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     let clientX = 0;
     let clientY = 0;
 
-    if ('touches' in e) {
+    if ('touches' in e && e.touches[0]) {
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
+    } else if ('clientX' in e) {
+      clientX = (e as React.MouseEvent<HTMLCanvasElement>).clientX;
+      clientY = (e as React.MouseEvent<HTMLCanvasElement>).clientY;
     }
 
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
 
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
@@ -334,86 +360,115 @@ export function DeedOfVariationDialog({
               </CardContent>
             </Card>
 
-            {/* Execution Blocks Preview matching Screenshot */}
+            {/* Execution Blocks Grid matching Public Page */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <div className="space-y-2 bg-white p-3.5 rounded-lg border border-slate-200 text-xs">
-                <p className="font-bold text-slate-900 leading-tight">
-                  Executed by Mail Plus Pty Ltd ACN 609 801 195 in accordance with section 127(1) of the Corporations Act 2001 (Cth):
-                </p>
-                <div className="border-b border-dashed border-slate-400 pt-6 pb-1 text-slate-500 italic text-[11px]">
-                  Signature of sole director and sole company secretary
+              {/* MailPlus Execution Block (Pre-signed by Franchisor) */}
+              <div className="space-y-3 bg-white p-4 rounded-lg border border-slate-200 shadow-xs flex flex-col justify-between text-xs">
+                <div className="space-y-2">
+                  <p className="font-bold text-slate-900 leading-tight">
+                    Executed by Mail Plus Pty Ltd ACN 609 801 195 in accordance with section 127(1) of the Corporations Act 2001 (Cth):
+                  </p>
+
+                  {/* Pre-signed Digital Signature Graphic for Chris Burgess */}
+                  <div className="my-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200/80 text-center space-y-1">
+                    <div className="font-serif italic text-xl text-[#095c7b] tracking-wider select-none py-0.5">
+                      Chris Burgess
+                    </div>
+                    <div className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Digitally Signed & Authorized by Franchisor
+                    </div>
+                  </div>
+
+                  <div className="border-t border-dashed border-slate-300 pt-1.5 text-[10px] text-slate-500 font-medium italic">
+                    Signature of sole director and sole company secretary
+                  </div>
                 </div>
-                <div className="font-bold text-slate-900 pt-1">Chris Burgess</div>
-                <div className="text-[10px] text-slate-400">Name (please print)</div>
-              </div>
 
-              <div className="space-y-2 bg-white p-3.5 rounded-lg border border-slate-200 text-xs">
-                <p className="font-bold text-slate-900 leading-tight">
-                  Executed by {mainDetails.tradingEntity || signerName || 'Franchisee'} in accordance with section 127(1) of the Corporations Act 2001 (Cth):
-                </p>
-                <div className="border-b border-dashed border-slate-400 pt-6 pb-1 text-slate-500 italic text-[11px]">
-                  Signature of sole trader / franchisee
+                <div className="pt-2 border-t text-[11px] space-y-0.5">
+                  <div className="font-bold text-slate-900">Chris Burgess</div>
+                  <div className="text-[10px] text-slate-500">Sole Director and Sole Company Secretary</div>
                 </div>
-                <div className="font-bold text-slate-900 pt-1">{signerName || mainDetails.mainContact || 'Franchisee Name'}</div>
-                <div className="text-[10px] text-slate-400">Name (please print)</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="signerName" className="text-xs font-semibold text-slate-700">
-                  Franchisee Signer Full Legal Name *
-                </Label>
-                <Input
-                  id="signerName"
-                  value={signerName}
-                  onChange={(e) => setSignerName(e.target.value)}
-                  placeholder="e.g. Quan Trinh"
-                />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="signerEmail" className="text-xs font-semibold text-slate-700">
-                  Franchisee Signer Email *
-                </Label>
-                <Input
-                  id="signerEmail"
-                  type="email"
-                  value={signerEmail}
-                  onChange={(e) => setSignerEmail(e.target.value)}
-                  placeholder="e.g. quan.trinh@mailplus.com.au"
-                />
-              </div>
-            </div>
+              {/* Franchisee Execution Block (Interactive Digital Signature Pad) */}
+              <div className="space-y-3 bg-white p-4 rounded-lg border-2 border-[#095c7b]/30 shadow-xs flex flex-col justify-between text-xs">
+                <div className="space-y-2.5">
+                  <p className="font-bold text-slate-900 leading-tight">
+                    Executed by {mainDetails.tradingEntity || signerName || 'Franchisee'} in accordance with section 127(1) of the Corporations Act 2001 (Cth):
+                  </p>
 
-            {/* Signature Canvas */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-slate-700">
-                  Franchisee Digital Signature (Draw below)
-                </Label>
-                <Button type="button" variant="ghost" size="sm" onClick={clearCanvas} className="h-7 text-xs gap-1 text-slate-600">
-                  <Eraser className="h-3.5 w-3.5" /> Clear Signature
-                </Button>
-              </div>
+                  {/* Interactive Canvas Pad embedded directly inside Franchisee execution block */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wide flex items-center gap-1">
+                        <PenTool className="h-3 w-3" /> Franchisee Signature *
+                      </Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearCanvas}
+                        className="h-5 text-[9px] gap-1 text-slate-500 hover:text-red-600 hover:bg-red-50 px-1.5"
+                      >
+                        <Eraser className="h-2.5 w-2.5" /> Clear Pad
+                      </Button>
+                    </div>
 
-              <div className="border-2 border-dashed border-slate-300 rounded-lg bg-white overflow-hidden p-1 text-center">
-                <canvas
-                  ref={canvasRef}
-                  width={600}
-                  height={130}
-                  className="w-full touch-none cursor-crosshair bg-white"
-                  onMouseDown={startDrawing}
-                  onMouseUp={stopDrawing}
-                  onMouseOut={stopDrawing}
-                  onMouseMove={draw}
-                  onTouchStart={startDrawing}
-                  onTouchEnd={stopDrawing}
-                  onTouchMove={draw}
-                />
-                <span className="text-[10px] text-slate-400 block pb-1">
-                  Draw your signature using mouse or touchscreen inside the box above
-                </span>
+                    <div className="border-2 border-dashed border-[#095c7b]/40 rounded-md bg-white overflow-hidden text-center relative group">
+                      <canvas
+                        ref={canvasRef}
+                        width={500}
+                        height={120}
+                        className="w-full touch-none cursor-crosshair bg-white"
+                        onMouseDown={startDrawing}
+                        onMouseUp={stopDrawing}
+                        onMouseOut={stopDrawing}
+                        onMouseMove={draw}
+                        onTouchStart={startDrawing}
+                        onTouchEnd={stopDrawing}
+                        onTouchMove={draw}
+                      />
+                      {!signatureDataUrl && (
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-slate-300 text-[11px] font-medium italic">
+                          Draw signature here (mouse, stylus, or touchscreen)
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-medium italic border-t border-dashed border-slate-300 pt-1">
+                      Signature of sole trader / franchisee
+                    </div>
+                  </div>
+
+                  {/* Signer inputs embedded into franchisee block */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <div>
+                      <Label htmlFor="signerName" className="text-[10px] font-semibold text-slate-600">Full Name *</Label>
+                      <Input
+                        id="signerName"
+                        value={signerName}
+                        onChange={(e) => setSignerName(e.target.value)}
+                        placeholder="Signer Legal Name"
+                        className="text-xs h-7 bg-slate-50/50"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="signerEmail" className="text-[10px] font-semibold text-slate-600">Email *</Label>
+                      <Input
+                        id="signerEmail"
+                        type="email"
+                        value={signerEmail}
+                        onChange={(e) => setSignerEmail(e.target.value)}
+                        placeholder="signer@example.com"
+                        className="text-xs h-7 bg-slate-50/50"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t text-[11px] space-y-0.5">
+                  <div className="font-bold text-slate-900">{signerName || mainDetails.mainContact || 'Franchisee Signatory'}</div>
+                  <div className="text-[10px] text-slate-500">Sole Trader / Franchisee</div>
+                </div>
               </div>
             </div>
           </TabsContent>

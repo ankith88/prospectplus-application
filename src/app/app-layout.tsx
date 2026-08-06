@@ -611,8 +611,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   if (isSigningOut) return <FullScreenLoader message="Signing out..." />;
   if (isSigningIn) return <FullScreenLoader message="Signing in..." />;
   
-  if (isAuthPage || pathname.startsWith('/customer-request/') || pathname.startsWith('/scf/') || pathname.startsWith('/sof/') || pathname.startsWith('/lpo-opportunity/') || pathname.startsWith('/hotel-leads') || pathname.startsWith('/book/') || pathname.startsWith('/localmile-registration/')) {
-    return <main className="flex min-h-svh flex-1 flex-col bg-background">{children}</main>;
+  if (isAuthPage || pathname.startsWith('/customer-request/') || pathname.startsWith('/scf/') || pathname.startsWith('/sof/') || pathname.startsWith('/lpo-opportunity/') || pathname.startsWith('/hotel-leads') || pathname.startsWith('/book/') || pathname.startsWith('/localmile-registration/') || pathname.startsWith('/deed-of-variation/')) {
+    return <main className="flex min-h-svh flex-1 flex-col bg-[#f4f7f8]">{children}</main>;
   }
 
   if (loading || isMobile === null) {
@@ -1751,14 +1751,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                     </Link>
                                   </SidebarMenuButton>
                                 </SidebarMenuItem>
-                                <SidebarMenuItem>
-                                  <SidebarMenuButton asChild isActive={isActive("/transcripts")} tooltip="All Transcripts">
-                                    <Link href="/transcripts">
-                                      <FileText />
-                                      <span>All Transcripts</span>
-                                    </Link>
-                                  </SidebarMenuButton>
-                                </SidebarMenuItem>
+                                {(userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') && (
+                                  <SidebarMenuItem>
+                                    <SidebarMenuButton asChild isActive={isActive("/transcripts")} tooltip="All Transcripts">
+                                      <Link href="/transcripts">
+                                        <FileText />
+                                        <span>All Transcripts</span>
+                                      </Link>
+                                    </SidebarMenuButton>
+                                  </SidebarMenuItem>
+                                )}
                               </>
                             )}
                             {canViewD2D && (

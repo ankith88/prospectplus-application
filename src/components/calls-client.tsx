@@ -566,23 +566,24 @@ export default function CallsClientPage() {
 
   const handleGetTranscriptForCall = async (call: CallActivity) => {
     if (!call.callId || !user?.displayName) return;
+    if (user?.uid !== 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' && userProfile?.uid !== 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') return;
     setFetchingTranscriptId(call.callId);
     try {
         const result = await getCallTranscriptByCallId({
-            callId: call.callId,
+            callId: String(call.callId),
             leadId: call.leadId,
             leadAuthor: user.displayName
         });
 
-        if (result.transcriptFound) {
+        if (result?.transcriptFound) {
             fetchCallsData();
             fetchInitialData(); // Refetch all data to get the new transcript
         } else {
-            toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
+            toast({ variant: "destructive", title: "Failed", description: result?.error || "Could not retrieve transcript." });
         }
     } catch (error: any) {
         console.error("Error fetching transcript:", error);
-        toast({ variant: "destructive", title: "Error", description: error.message });
+        toast({ variant: "destructive", title: "Error", description: error?.message || "An unexpected error occurred." });
     } finally {
         setFetchingTranscriptId(null);
     }
@@ -654,22 +655,11 @@ export default function CallsClientPage() {
                                 <span>Recording</span>
                             </DropdownMenuItem>
                         )}
-                        {call.callId && (
-                            transcript ? (
-                                <DropdownMenuItem onClick={() => { setSelectedTranscript(transcript); setIsViewerOpen(true); }} className="cursor-pointer flex items-center gap-2">
-                                    <FileText className="h-4 w-4" />
-                                    <span>Transcript</span>
-                                </DropdownMenuItem>
-                            ) : (
-                                <DropdownMenuItem 
-                                    onClick={() => handleGetTranscriptForCall(call)} 
-                                    disabled={fetchingTranscriptId === call.callId}
-                                    className="cursor-pointer flex items-center gap-2"
-                                >
-                                    {fetchingTranscriptId === call.callId ? <Loader className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-                                    <span>Fetch Transcript</span>
-                                </DropdownMenuItem>
-                            )
+                        {call.callId && transcript && (
+                            <DropdownMenuItem onClick={() => { setSelectedTranscript(transcript); setIsViewerOpen(true); }} className="cursor-pointer flex items-center gap-2">
+                                <FileText className="h-4 w-4" />
+                                <span>Transcript</span>
+                            </DropdownMenuItem>
                         )}
                         {call.review && (
                             <DropdownMenuItem onClick={() => setViewingReview(call.review!)} className="cursor-pointer flex items-center gap-2">

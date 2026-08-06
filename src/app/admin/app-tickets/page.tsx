@@ -54,6 +54,7 @@ import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { firestore as db, storage } from "@/lib/firebase";
 import { getAllUsers, createNotification } from "@/services/firebase";
+import { SUPER_ADMIN_UIDS } from "@/lib/constants";
 
 interface AppTicket {
   id: string;
@@ -138,15 +139,16 @@ export default function AdminAppTicketsPage() {
 
   const superAdminsList = useMemo(() => {
     return users.filter((u: any) => {
-      if (u.disabled === true || u.status === "disabled" || u.status === "inactive") return false;
+      const isExplicitSuperAdmin = SUPER_ADMIN_UIDS.includes(u.uid);
+      if (!isExplicitSuperAdmin && (u.disabled === true || u.status === "disabled" || u.status === "inactive")) return false;
       return (
+        isExplicitSuperAdmin ||
         u.role === "admin" ||
         u.role === "superadmin" ||
         u.activeRole === "admin" ||
         u.activeRole === "superadmin" ||
         u.isSuperAdmin === true ||
-        u.email?.toLowerCase() === "ankith.ravindran@mailplus.com.au" ||
-        u.uid === "ncyhwLtOG1W7TZ43PkYCcObeCAf2"
+        u.email?.toLowerCase() === "ankith.ravindran@mailplus.com.au"
       );
     });
   }, [users]);

@@ -1436,13 +1436,13 @@ export default function ReportsClientPage({
       const lmPendingCount = lmPendingLeads.length;
       const lmPendingCallRate = dialerCalls > 0 ? (lmPendingCount / dialerCalls) * 100 : 0;
 
-      const trialingLMLeads = localmileTrialLeads.filter(l => l.dialerAssigned === dialer);
+      const trialingLMLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && l.status === 'Trialing LocalMile');
       const trialingLMCount = trialingLMLeads.length;
       const trialingLMCallRate = dialerCalls > 0 ? (trialingLMCount / dialerCalls) * 100 : 0;
 
       const dialerAppointments = perfFilteredAppointments.filter(a => a.dialerAssigned === dialer).length;
       const dialerQuotes = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent')).length;
-      const dialerTrials = anyTrialLeads.filter(l => l.dialerAssigned === dialer).length;
+      const dialerShipmateTrials = shipmateTrialLeads.filter(l => l.dialerAssigned === dialer).length;
       const dialerCallsListLeadIds = new Set(dialerCallsList.map(c => c.leadId));
 
       const dialerLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
@@ -1478,7 +1478,7 @@ export default function ReportsClientPage({
         'LM Pending Rate': lmPendingCallRate,
         'Trialing LocalMile': trialingLMCount,
         'Trialing LocalMile Rate': trialingLMCallRate,
-        'ShipMate / LocalMile Trials': dialerTrials,
+        'ShipMate Trials': dialerShipmateTrials,
         'Signed Customers': dialerWon,
         perfCallsList: dialerCallsList,
         perfAppointmentsList: perfFilteredAppointments.filter(a => a.dialerAssigned === dialer)
@@ -1507,7 +1507,7 @@ export default function ReportsClientPage({
     const totalLMPendingRate = totalTeamCalls > 0 ? (totalLMPending / totalTeamCalls) * 100 : 0;
     const totalTrialingLM = teamPerformanceData.reduce((acc, d) => acc + d['Trialing LocalMile'], 0);
     const totalTrialingLMRate = totalTeamCalls > 0 ? (totalTrialingLM / totalTeamCalls) * 100 : 0;
-    const totalTrials = teamPerformanceData.reduce((acc, d) => acc + d['ShipMate / LocalMile Trials'], 0);
+    const totalShipmateTrials = teamPerformanceData.reduce((acc, d) => acc + d['ShipMate Trials'], 0);
 
     const teamPerformanceTotals = {
       name: 'Total',
@@ -1529,7 +1529,7 @@ export default function ReportsClientPage({
       'LM Pending Rate': totalLMPendingRate,
       'Trialing LocalMile': totalTrialingLM,
       'Trialing LocalMile Rate': totalTrialingLMRate,
-      'ShipMate / LocalMile Trials': totalTrials,
+      'ShipMate Trials': totalShipmateTrials,
       'Signed Customers': totalWon
     };
 
@@ -2197,6 +2197,7 @@ export default function ReportsClientPage({
       bucketProgressionData,
       totalOutboundCohort,
       journeyStats,
+      shipmateTrialLeads,
       shipmateJourney,
       localmileJourney,
       combinedJourney,
@@ -3108,7 +3109,7 @@ export default function ReportsClientPage({
                                 <TableHead className="text-right">LM Opportunity (Registration Sent)</TableHead>
                                 <TableHead className="text-right">LM Pending (T&C&apos;s Accepted)</TableHead>
                                 <TableHead className="text-right">Trialing LocalMile</TableHead>
-                                <TableHead className="text-right">ShipMate / LocalMile Trials</TableHead>
+                                <TableHead className="text-right">ShipMate Trials</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -3219,7 +3220,7 @@ export default function ReportsClientPage({
                                         className="text-right cursor-pointer hover:underline text-emerald-600 font-bold"
                                         onClick={() => setTrialDrilldown({ 
                                             title: `${dialer.name} - Trialing LocalMile Leads`, 
-                                            leads: stats.localmileJourney.leads.filter(l => l.dialerAssigned === dialer.name && isActiveLocalMileLead(l)) 
+                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && l.status === 'Trialing LocalMile') 
                                         })}
                                     >
                                         {dialer['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({dialer['Trialing LocalMile Rate'].toFixed(1)}%)</span>
@@ -3227,11 +3228,11 @@ export default function ReportsClientPage({
                                     <TableCell 
                                         className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
                                         onClick={() => setTrialDrilldown({ 
-                                            title: `${dialer.name} - ShipMate / LocalMile Trials`, 
-                                            leads: stats.combinedJourney.leads.filter(l => l.dialerAssigned === dialer.name) 
+                                            title: `${dialer.name} - ShipMate Trials`, 
+                                            leads: stats.shipmateTrialLeads.filter(l => l.dialerAssigned === dialer.name) 
                                         })}
                                     >
-                                        {dialer['ShipMate / LocalMile Trials']}
+                                        {dialer['ShipMate Trials']}
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -3343,7 +3344,7 @@ export default function ReportsClientPage({
                                     className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All Trialing LocalMile Leads", 
-                                        leads: stats.localmileJourney.leads.filter(isActiveLocalMileLead) 
+                                        leads: stats.baseFilteredLeads.filter(l => l.status === 'Trialing LocalMile') 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['Trialing LocalMile Rate'].toFixed(1)}%)</span>
@@ -3351,11 +3352,11 @@ export default function ReportsClientPage({
                                 <TableCell 
                                     className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
-                                        title: "All ShipMate / LocalMile Trials", 
-                                        leads: stats.combinedJourney.leads 
+                                        title: "All ShipMate Trials", 
+                                        leads: stats.shipmateTrialLeads 
                                     })}
                                 >
-                                    {stats.teamPerformanceTotals['ShipMate / LocalMile Trials']}
+                                    {stats.teamPerformanceTotals['ShipMate Trials']}
                                 </TableCell>
                             </TableRow>
                         </TableFooter>

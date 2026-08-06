@@ -28,7 +28,10 @@ import { useDialingSession } from '@/hooks/use-dialing-session'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, addLeadsToMarketingList } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles } from 'lucide-react'
+import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck } from 'lucide-react'
+import { EmailVerificationBadge } from '@/components/ui/email-verification-badge'
+import { verifyEmailsClient } from '@/lib/verify-email-client'
+import { EmailVerificationResult } from '@/lib/types'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { firestore } from '@/lib/firebase'
@@ -547,6 +550,48 @@ export default function LeadsClientPage({
     };
     resolveAmDetails();
   }, [selectedLeads, allLeads]);
+
+  const [isVerifyingBulkRecipients, setIsVerifyingBulkRecipients] = useState(false);
+  const [bulkEmailVerificationResults, setBulkEmailVerificationResults] = useState<Record<string, EmailVerificationResult>>({});
+
+  const handleVerifyBulkRecipients = async () => {
+    const targetEmails: string[] = [];
+    selectedLeads.forEach(leadId => {
+      const lead = allLeads.find(l => l.id === leadId);
+      if (lead) {
+        const email = lead.contacts?.find((c: any) => c.isPrimary)?.email || lead.contacts?.[0]?.email;
+        if (email && email.includes('@')) {
+          targetEmails.push(email);
+        }
+      }
+    });
+
+    if (targetEmails.length === 0) {
+      toast({ title: 'No Emails Found', description: 'Selected leads have no valid email addresses.' });
+      return;
+    }
+
+    setIsVerifyingBulkRecipients(true);
+    try {
+      const results = await verifyEmailsClient({ emails: targetEmails });
+      const resultMap: Record<string, EmailVerificationResult> = {};
+      results.forEach(r => {
+        resultMap[r.email.toLowerCase().trim()] = r;
+      });
+      setBulkEmailVerificationResults(prev => ({ ...prev, ...resultMap }));
+
+      const cachedCount = results.filter(r => r.cached).length;
+      const apiCount = results.length - cachedCount;
+      toast({
+        title: 'Recipients Verified',
+        description: `Verified ${results.length} email(s) (${apiCount} via Hunter.io API, ${cachedCount} from cache).`,
+      });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Verification Error', description: err.message || 'Failed to verify recipients.' });
+    } finally {
+      setIsVerifyingBulkRecipients(false);
+    }
+  };
 
   const bulkEmailPreviewBody = useMemo(() => {
     if (!selectedTemplateId) return '';
@@ -1757,7 +1802,41 @@ export default function LeadsClientPage({
                                {/* Simulated Email Header */}
                                <div className="border-b bg-slate-50 px-6 py-4 text-sm text-muted-foreground shrink-0 space-y-1 text-left">
                                   <div><span className="font-semibold text-slate-700 w-16 inline-block">From:</span> outbound@mailplus.com.au</div>
-                                  <div><span className="font-semibold text-slate-700 w-16 inline-block">To:</span> {selectedLeads.length === 1 ? (allLeads.find(l => l.id === selectedLeads[0])?.contacts?.[0]?.email || 'recipient@example.com') : `${selectedLeads.length} Selected Leads`}</div>
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <div>
+                                      <span className="font-semibold text-slate-700 w-16 inline-block">To:</span> 
+                                      {selectedLeads.length === 1 
+                                        ? (allLeads.find(l => l.id === selectedLeads[0])?.contacts?.[0]?.email || 'recipient@example.com') 
+                                        : `${selectedLeads.length} Selected Leads`}
+                                    </div>
+                                    {selectedLeads.length === 1 && (() => {
+                                        const email = allLeads.find(l => l.id === selectedLeads[0])?.contacts?.[0]?.email;
+                                        const vResult = email ? bulkEmailVerificationResults[email.toLowerCase().trim()] : null;
+                                        return (
+                                          <EmailVerificationBadge
+                                            status={vResult?.status || allLeads.find(l => l.id === selectedLeads[0])?.contacts?.[0]?.verificationStatus}
+                                            score={vResult?.score ?? allLeads.find(l => l.id === selectedLeads[0])?.contacts?.[0]?.verificationScore}
+                                            verifiedAt={vResult?.verifiedAt || allLeads.find(l => l.id === selectedLeads[0])?.contacts?.[0]?.verifiedAt}
+                                            onVerify={handleVerifyBulkRecipients}
+                                            loading={isVerifyingBulkRecipients}
+                                            size="sm"
+                                          />
+                                        );
+                                    })()}
+                                    {selectedLeads.length > 1 && (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={handleVerifyBulkRecipients}
+                                          disabled={isVerifyingBulkRecipients}
+                                          className="h-6 text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 font-semibold gap-1"
+                                        >
+                                          {isVerifyingBulkRecipients ? <RefreshCw className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3 text-emerald-600" />}
+                                          <span>Verify All {selectedLeads.length} Recipients</span>
+                                        </Button>
+                                    )}
+                                  </div>
                                   <div className="truncate"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {templates.find(t => t.id === selectedTemplateId)?.subject || '(No Subject)'}</div>
                                 </div>
                                 {/* Email Body Wrapper */}

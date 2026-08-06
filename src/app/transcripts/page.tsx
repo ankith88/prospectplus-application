@@ -63,22 +63,15 @@ export default function TranscriptsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers', 'Outbound Admin'].includes(userProfile.activeRole);
+  const isSuperAdminUid = user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const hasAccess = isSuperAdminUid;
 
   const fetchTranscripts = async () => {
-    if (!user) return;
+    if (!user || !isSuperAdminUid) return;
     try {
       setLoading(true);
       const fetchedTranscripts = await getAllTranscripts();
-
-      const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
-      if (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Outbound Admin' || isAm) {
-        setAllTranscripts(fetchedTranscripts);
-      } else {
-        const myTranscripts = fetchedTranscripts.filter(t => t.author === user.displayName);
-        setAllTranscripts(myTranscripts);
-      }
-
+      setAllTranscripts(fetchedTranscripts);
     } catch (error) {
       console.error("Failed to fetch transcripts:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch transcripts.' });
@@ -103,10 +96,15 @@ export default function TranscriptsPage() {
     }
     if (authLoading) return;
     
+    if (!isSuperAdminUid) {
+      router.replace('/');
+      return;
+    }
+    
     fetchTranscripts();
     fetchLeads();
 
-  }, [user, userProfile, authLoading, router, toast]);
+  }, [user, userProfile, authLoading, router, toast, isSuperAdminUid]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));

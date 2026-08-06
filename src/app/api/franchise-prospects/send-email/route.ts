@@ -143,7 +143,8 @@ export async function POST(req: Request) {
 
               <p style="margin: 24px 0 0; font-size: 15px; line-height: 1.6; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
                 Kind regards,<br />
-                <strong style="color: #095c7b;">MailPlus Franchise Team</strong>
+                <strong style="color: #095c7b;">Greg Hart</strong><br />
+                <span style="font-size: 13px; color: #718096;">Head of Franchise Sales | MailPlus</span>
               </p>
             </td>
           </tr>
@@ -174,6 +175,8 @@ export async function POST(req: Request) {
     // Dispatch email
     const sendResult = await sendPhysicalEmail({
       to: prospect.email,
+      customFrom: 'greg.hart@mailplus.com.au',
+      cc: 'michael.mcdaid@mailplus.com.au',
       subject: finalSubject,
       html: htmlContent,
       attachments: emailAttachments,

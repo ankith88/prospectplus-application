@@ -339,16 +339,20 @@ export function NewLeadForm() {
   const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
 
   const isAddressSelected = Boolean(
-    companyNameState?.trim() || 
     addressState?.street?.trim() || 
     addressState?.city?.trim() || 
+    addressState?.zip?.trim() || 
     searchParams?.get('fromVisitNote')
   );
 
+  const hasMultipleFranchisees = matchedFranchisees.length > 1 || showAllFranchisees;
+
+  const requiresFranchiseeConfirmation = isFranchiseeRole 
+    ? (franchiseeNotice?.status === 'out_of_territory')
+    : hasMultipleFranchisees;
+
   const canShowRemainingSections = isAddressSelected && (
-    !isFranchiseeRole || 
-    franchiseeNotice?.status !== 'out_of_territory' || 
-    isFranchiseeConfirmed
+    !requiresFranchiseeConfirmation || isFranchiseeConfirmed
   );
 
   useEffect(() => {
@@ -1252,44 +1256,49 @@ export function NewLeadForm() {
               )}
             </div>
 
-            {!isFranchiseeRole && matchedFranchisees.length > 0 && !isFranchiseeConfirmed && (
+            {!isFranchiseeRole && isAddressSelected && matchedFranchisees.length > 0 && (
                 <>
-                <hr/>
-                <div className="space-y-4 p-4 border rounded-md bg-muted/50">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                        <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Franchisee Match</h3>
-                        <div className="flex items-center gap-4">
-                            <Button 
-                                type="button" 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => {
-                                    setShowAllFranchisees(!showAllFranchisees);
-                                    if (!showAllFranchisees && sortedAllFranchisees.length > 0) {
-                                        setSelectedFranchiseeId(sortedAllFranchisees[0].internalId);
-                                        form.setValue('franchisee', sortedAllFranchisees[0].internalId);
-                                    } else if (showAllFranchisees && matchedFranchisees.length > 0) {
-                                        setSelectedFranchiseeId(matchedFranchisees[0].internalId);
-                                        form.setValue('franchisee', matchedFranchisees[0].internalId);
-                                    }
-                                }}
-                            >
-                                {showAllFranchisees ? "Use System Allocation" : "Override Allocation"}
-                            </Button>
-                            <a 
-                                href="https://www.google.com/maps/d/u/0/viewer?mid=1e_RgzePD6wt0nZk914tH_7EuUn5nDzc&ll=-27.839471796496163%2C136.78205268750003&z=5" 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-sm text-primary hover:underline flex items-center gap-1"
-                            >
-                                View Franchisee Map
-                            </a>
+                {(!isFranchiseeConfirmed && (matchedFranchisees.length > 1 || showAllFranchisees)) ? (
+                    <>
+                    <hr/>
+                    <div className="space-y-4 p-4 border rounded-md bg-muted/50">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                            <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Franchisee Match</h3>
+                            <div className="flex items-center gap-4">
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => {
+                                        setShowAllFranchisees(!showAllFranchisees);
+                                        if (!showAllFranchisees && sortedAllFranchisees.length > 0) {
+                                            setSelectedFranchiseeId(sortedAllFranchisees[0].internalId);
+                                            form.setValue('franchisee', sortedAllFranchisees[0].internalId);
+                                        } else if (showAllFranchisees && matchedFranchisees.length > 0) {
+                                            setSelectedFranchiseeId(matchedFranchisees[0].internalId);
+                                            form.setValue('franchisee', matchedFranchisees[0].internalId);
+                                        }
+                                    }}
+                                >
+                                    {showAllFranchisees ? "Use System Allocation" : "Override Allocation"}
+                                </Button>
+                                <a 
+                                    href="https://www.google.com/maps/d/u/0/viewer?mid=1e_RgzePD6wt0nZk914tH_7EuUn5nDzc&ll=-27.839471796496163%2C136.78205268750003&z=5" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-primary hover:underline flex items-center gap-1"
+                                >
+                                    View Franchisee Map
+                                </a>
+                            </div>
                         </div>
-                    </div>
 
-                    {showAllFranchisees ? (
                         <div className="space-y-3">
-                            <p className="text-sm text-muted-foreground">Select a franchisee from the alphabetical list:</p>
+                            <p className="text-sm text-muted-foreground">
+                                {showAllFranchisees 
+                                    ? "Select a franchisee from the alphabetical list:" 
+                                    : "Multiple franchisees cover this area. Please select one to confirm:"}
+                            </p>
                             <Select value={selectedFranchiseeId} onValueChange={(val) => {
                                 setSelectedFranchiseeId(val);
                                 form.setValue('franchisee', val);
@@ -1298,56 +1307,49 @@ export function NewLeadForm() {
                                     <SelectValue placeholder="Select Franchisee" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {sortedAllFranchisees.map(f => (
+                                    {(showAllFranchisees ? sortedAllFranchisees : matchedFranchisees).map(f => (
                                         <SelectItem key={f.internalId} value={f.internalId}>{f.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {selectedFranchiseeId && franchiseeMatchReasons[selectedFranchiseeId] && (
+                                <p className="text-xs text-muted-foreground bg-background p-2 rounded border block mt-1 w-fit">
+                                    Selected franchisee matched via:{' '}
+                                    {[
+                                        franchiseeMatchReasons[selectedFranchiseeId].inTerritory && 'Territory Fields',
+                                        franchiseeMatchReasons[selectedFranchiseeId].inAusPost && 'AusPost Suburbs (ausPostSuburbsJson)'
+                                    ].filter(Boolean).join(' & ')}
+                                </p>
+                            )}
                         </div>
-                    ) : matchedFranchisees.length === 1 ? (
-                         <div className="space-y-1">
-                             <p className="text-sm text-muted-foreground">
-                                 This lead will be assigned to the following Franchisee: <strong>{matchedFranchisees[0].name}</strong>.
-                             </p>
-                             {franchiseeMatchReasons[matchedFranchisees[0].internalId] && (
-                                 <p className="text-xs text-muted-foreground bg-background p-2 rounded border inline-block mt-1">
-                                     Matched via:{' '}
-                                     {[
-                                         franchiseeMatchReasons[matchedFranchisees[0].internalId].inTerritory && 'Territory Fields',
-                                         franchiseeMatchReasons[matchedFranchisees[0].internalId].inAusPost && 'AusPost Suburbs (ausPostSuburbsJson)'
-                                     ].filter(Boolean).join(' & ')}
-                                 </p>
-                             )}
-                         </div>
-                    ) : (
-                         <div className="space-y-3">
-                             <p className="text-sm text-muted-foreground">Multiple franchisees cover this area. Please select one:</p>
-                             <Select value={selectedFranchiseeId} onValueChange={(val) => {
-                                 setSelectedFranchiseeId(val);
-                                 form.setValue('franchisee', val);
-                             }}>
-                                 <SelectTrigger className="w-full max-w-sm bg-background">
-                                     <SelectValue placeholder="Select Franchisee" />
-                                 </SelectTrigger>
-                                 <SelectContent>
-                                     {matchedFranchisees.map(f => (
-                                         <SelectItem key={f.internalId} value={f.internalId}>{f.name}</SelectItem>
-                                     ))}
-                                 </SelectContent>
-                             </Select>
-                             {selectedFranchiseeId && franchiseeMatchReasons[selectedFranchiseeId] && (
-                                 <p className="text-xs text-muted-foreground bg-background p-2 rounded border block mt-1 w-fit">
-                                     Selected franchisee matched via:{' '}
-                                     {[
-                                         franchiseeMatchReasons[selectedFranchiseeId].inTerritory && 'Territory Fields',
-                                         franchiseeMatchReasons[selectedFranchiseeId].inAusPost && 'AusPost Suburbs (ausPostSuburbsJson)'
-                                     ].filter(Boolean).join(' & ')}
-                                 </p>
-                             )}
-                         </div>
-                    )}
-                    <Button type="button" onClick={() => setIsFranchiseeConfirmed(true)}>Confirm Franchisee & Continue</Button>
-                </div>
+                        <Button type="button" onClick={() => setIsFranchiseeConfirmed(true)}>Confirm Franchisee & Continue</Button>
+                    </div>
+                    </>
+                ) : (
+                    <>
+                    <hr/>
+                    <div className="p-3 border rounded-md bg-muted/40 flex items-center justify-between text-sm flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                            <Building className="w-4 h-4 text-primary shrink-0" />
+                            <span>
+                                Assigned Franchisee: <strong>{matchedFranchisees.find(f => f.internalId === selectedFranchiseeId)?.name || sortedAllFranchisees.find(f => f.internalId === selectedFranchiseeId)?.name || matchedFranchisees[0]?.name}</strong>
+                            </span>
+                        </div>
+                        <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs"
+                            onClick={() => {
+                                setIsFranchiseeConfirmed(false);
+                                setShowAllFranchisees(!showAllFranchisees);
+                            }}
+                        >
+                            {showAllFranchisees ? "Use System Allocation" : "Change / Override Franchisee"}
+                        </Button>
+                    </div>
+                    </>
+                )}
                 </>
             )}
 

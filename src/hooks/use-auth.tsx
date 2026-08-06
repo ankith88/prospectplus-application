@@ -244,7 +244,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             !pathname.startsWith('/lpo-opportunity/') && 
             !pathname.startsWith('/hotel-leads') && 
             !pathname.startsWith('/book/') && 
-            !pathname.startsWith('/localmile-registration/')
+            !pathname.startsWith('/localmile-registration/') &&
+            !pathname.startsWith('/deed-of-variation/')
         ) {
             router.push('/signin');
         }

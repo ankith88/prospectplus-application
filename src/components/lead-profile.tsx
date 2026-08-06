@@ -65,6 +65,7 @@ import {
   ChevronRight,
   GitMerge,
   CalendarCheck,
+  ShieldCheck,
 } from 'lucide-react'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
@@ -131,6 +132,8 @@ import { EditNoteDialog } from './edit-note-dialog'
 import { Badge } from '@/components/ui/badge'
 import { AddContactForm } from './add-contact-form'
 import { EditContactForm } from './edit-contact-form'
+import { EmailVerificationBadge } from '@/components/ui/email-verification-badge'
+import { verifyEmailsClient } from '@/lib/verify-email-client'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select'
 import {
@@ -423,24 +426,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const handleGetTranscriptForCall = async (call: Activity) => {
         if (!call.callId || !user?.displayName) return;
+        if (user?.uid !== 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' && userProfile?.uid !== 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') return;
         setFetchingTranscriptId(call.callId);
         try {
             const result = await getCallTranscriptByCallId({
-                callId: call.callId,
+                callId: String(call.callId),
                 leadId: lead.id,
                 leadAuthor: user.displayName
             });
 
-            if (result.transcriptFound) {
+            if (result?.transcriptFound) {
                 toast({ title: "Success", description: "Transcript fetched and will appear shortly." });
                 const updatedLead = await getLeadFromFirebase(lead.id, true);
                 if (updatedLead) setLead(updatedLead);
             } else {
-                toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
+                toast({ variant: "destructive", title: "Failed", description: result?.error || "Could not retrieve transcript." });
             }
         } catch (error: any) {
             console.error("Error fetching transcript:", error);
-            toast({ variant: "destructive", title: "Error", description: error.message });
+            toast({ variant: "destructive", title: "Error", description: error?.message || "An unexpected error occurred." });
         } finally {
             setFetchingTranscriptId(null);
         }
@@ -519,27 +523,29 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     useEffect(() => {
       const fetchFranchiseeData = async () => {
-        if (!lead.franchisee_id && !lead.franchisee) {
+        const effectiveFranchiseeId = lead.franchisee_id || (lead.franchisee && (!isNaN(Number(lead.franchisee)) || lead.franchisee === lead.franchisee_id) ? String(lead.franchisee) : null);
+
+        if (!effectiveFranchiseeId && !lead.franchisee) {
           setFranchiseeDetails(null);
           return;
         }
         setLoadingFranchisee(true);
         try {
-          let franchiseeDoc = null;
+          let franchiseeDoc: any = null;
           
-          // 1. Fetch by franchisee_id doc ID
-          if (lead.franchisee_id) {
-            const fDoc = await getDoc(doc(firestore, 'franchisees', String(lead.franchisee_id)));
+          // 1. Fetch by franchisee_id doc ID (or numeric franchisee matching doc ID in 'franchisees' collection)
+          if (effectiveFranchiseeId) {
+            const fDoc = await getDoc(doc(firestore, 'franchisees', String(effectiveFranchiseeId)));
             if (fDoc.exists()) {
               franchiseeDoc = { id: fDoc.id, ...fDoc.data() };
             } else {
               // 2. Fetch by internalId matching franchisee_id (string or number)
-              const q1 = query(collection(firestore, 'franchisees'), where('internalId', '==', String(lead.franchisee_id)));
+              const q1 = query(collection(firestore, 'franchisees'), where('internalId', '==', String(effectiveFranchiseeId)));
               const qSnap1 = await getDocs(q1);
               if (!qSnap1.empty) {
                 franchiseeDoc = { id: qSnap1.docs[0].id, ...qSnap1.docs[0].data() };
               } else {
-                const q2 = query(collection(firestore, 'franchisees'), where('internalId', '==', Number(lead.franchisee_id)));
+                const q2 = query(collection(firestore, 'franchisees'), where('internalId', '==', Number(effectiveFranchiseeId)));
                 const qSnap2 = await getDocs(q2);
                 if (!qSnap2.empty) {
                   franchiseeDoc = { id: qSnap2.docs[0].id, ...qSnap2.docs[0].data() };
@@ -548,8 +554,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             }
           }
           
-          // 3. Fallback: fetch by name matching lead.franchisee
-          if (!franchiseeDoc && lead.franchisee) {
+          // 3. Fallback: fetch by name matching lead.franchisee (if not numeric)
+          if (!franchiseeDoc && lead.franchisee && isNaN(Number(lead.franchisee))) {
             const q = query(collection(firestore, 'franchisees'), where('name', '==', lead.franchisee));
             const qSnap = await getDocs(q);
             if (!qSnap.empty) {
@@ -558,6 +564,32 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           }
 
           setFranchiseeDetails(franchiseeDoc);
+
+          // If franchisee and franchisee_id have the same value (or franchisee has a number instead of the name),
+          // update lead state & database with the actual franchisee name from franchiseeDoc.
+          if (franchiseeDoc && franchiseeDoc.name) {
+            const isSameValue = lead.franchisee && lead.franchisee_id && (String(lead.franchisee).trim() === String(lead.franchisee_id).trim());
+            const isNumericFranchisee = lead.franchisee && !isNaN(Number(lead.franchisee));
+            const isIdMatch = lead.franchisee === franchiseeDoc.id || String(lead.franchisee) === String(franchiseeDoc.internalId);
+
+            if (isSameValue || isNumericFranchisee || isIdMatch) {
+              if (lead.franchisee !== franchiseeDoc.name) {
+                const updatedFranchiseeId = lead.franchisee_id || franchiseeDoc.internalId || franchiseeDoc.id;
+                setLead(prev => ({ 
+                  ...prev, 
+                  franchisee: franchiseeDoc.name,
+                  franchisee_id: updatedFranchiseeId
+                }));
+                
+                if (lead.id) {
+                  updateLeadDetails(lead.id, lead, { 
+                    franchisee: franchiseeDoc.name, 
+                    franchisee_id: updatedFranchiseeId 
+                  }).catch(err => console.error("Failed to sync lead franchisee name:", err));
+                }
+              }
+            }
+          }
         } catch (error) {
           console.error("Error fetching franchisee details:", error);
         } finally {
@@ -927,6 +959,104 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [contactToEdit, setContactToEdit] = useState<Contact | null>(null);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const [isDeletingContact, setIsDeletingContact] = useState(false);
+  const [verifyingEmails, setVerifyingEmails] = useState<Record<string, boolean>>({});
+  const [isVerifyingAllEmails, setIsVerifyingAllEmails] = useState(false);
+
+  const handleVerifySingleEmail = async (contact: Partial<Contact>) => {
+    if (!contact.email) return;
+    const normEmail = contact.email.toLowerCase().trim();
+    setVerifyingEmails((prev) => ({ ...prev, [normEmail]: true }));
+
+    try {
+      const results = await verifyEmailsClient({
+        emails: [contact.email],
+        leadId: lead.id,
+        contactId: contact.id,
+      });
+
+      if (results.length > 0) {
+        const res = results[0];
+        setLead((prevLead) => {
+          const updatedContacts = (prevLead.contacts || []).map((c) => {
+            if (c.email && c.email.toLowerCase().trim() === normEmail) {
+              return {
+                ...c,
+                verificationStatus: res.status,
+                verificationScore: res.score,
+                verifiedAt: res.verifiedAt,
+              };
+            }
+            return c;
+          });
+          return { ...prevLead, contacts: updatedContacts };
+        });
+
+        toast({
+          title: res.cached ? 'Verification Result (Cached)' : 'Email Verified',
+          description: `${contact.email} is ${res.status.toUpperCase()} (${res.score}% deliverability score).`,
+        });
+      }
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Verification Failed',
+        description: err.message || 'Could not verify email',
+      });
+    } finally {
+      setVerifyingEmails((prev) => ({ ...prev, [normEmail]: false }));
+    }
+  };
+
+  const handleVerifyAllLeadEmails = async () => {
+    const validContacts = (lead.contacts || []).filter((c) => c.email && c.email.includes('@'));
+    if (validContacts.length === 0) {
+      toast({ title: 'No Emails to Verify', description: 'This lead has no valid contact email addresses.' });
+      return;
+    }
+
+    setIsVerifyingAllEmails(true);
+    try {
+      const emailList = validContacts.map((c) => c.email);
+      const results = await verifyEmailsClient({
+        emails: emailList,
+        leadId: lead.id,
+      });
+
+      setLead((prevLead) => {
+        const updatedContacts = (prevLead.contacts || []).map((c) => {
+          if (!c.email) return c;
+          const norm = c.email.toLowerCase().trim();
+          const match = results.find((r) => r.email.toLowerCase().trim() === norm);
+          if (match) {
+            return {
+              ...c,
+              verificationStatus: match.status,
+              verificationScore: match.score,
+              verifiedAt: match.verifiedAt,
+            };
+          }
+          return c;
+        });
+        return { ...prevLead, contacts: updatedContacts };
+      });
+
+      const cachedCount = results.filter((r) => r.cached).length;
+      const apiCount = results.length - cachedCount;
+
+      toast({
+        title: 'Emails Verification Complete',
+        description: `Verified ${results.length} email(s) (${apiCount} via Hunter.io API, ${cachedCount} from cache).`,
+      });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Bulk Verification Failed',
+        description: err.message || 'Error verifying lead emails.',
+      });
+    } finally {
+      setIsVerifyingAllEmails(false);
+    }
+  };
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
 
   // Invoices & Upsell state for Company profile
@@ -4114,7 +4244,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <DetailItem 
                                     icon={Tag} 
                                     label="Franchisee Name" 
-                                    value={lead.franchisee || '- Unassigned -'} 
+                                    value={franchiseeDetails?.name || (lead.franchisee && isNaN(Number(lead.franchisee)) ? lead.franchisee : null) || '- Unassigned -'} 
                                     actionIcon={userProfile?.activeRole === 'user' ? undefined : Search}
                                     onActionClick={userProfile?.activeRole === 'user' ? undefined : handleFranchiseeLookup}
                                     isActionLoading={isLookingUpFranchisee}
@@ -4967,9 +5097,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-muted-foreground" />Contacts</CardTitle>
-                        <Button variant="outline" size="sm" onClick={() => setIsAddingContact(true)}>
-                            <PlusCircle className="mr-2 h-4 w-4" /> Add
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={handleVerifyAllLeadEmails} 
+                                disabled={isVerifyingAllEmails}
+                                className="text-xs border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-800"
+                            >
+                                {isVerifyingAllEmails ? (
+                                    <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin text-emerald-600" />
+                                ) : (
+                                    <ShieldCheck className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                                )}
+                                Verify Emails
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setIsAddingContact(true)}>
+                                <PlusCircle className="mr-2 h-4 w-4" /> Add
+                            </Button>
+                        </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {contacts.filter(c => !isContactEmpty(c)).map(contact => (
@@ -5008,7 +5154,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                                 <p className="text-xs text-muted-foreground mb-2">{contact.title}</p>
                                 <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <Mail className="w-3 h-3 text-muted-foreground" />
                                         {contact.email ? (
                                             userProfile?.activeRole === 'user' ? (
@@ -5023,6 +5169,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             )
                                         ) : (
                                             <span className="text-muted-foreground">-</span>
+                                        )}
+                                        {contact.email && (
+                                            <EmailVerificationBadge
+                                                status={contact.verificationStatus}
+                                                score={contact.verificationScore}
+                                                verifiedAt={contact.verifiedAt}
+                                                onVerify={() => handleVerifySingleEmail(contact)}
+                                                loading={!!verifyingEmails[contact.email?.toLowerCase().trim()]}
+                                                size="sm"
+                                            />
                                         )}
                                     </div>
                                     <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="h-3 w-3" /></Button>{!isUserRole && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateSms(contact.phone, contact.name)}><MessageSquare className="h-3 w-3" /></Button>}</div>
@@ -5716,7 +5872,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                             <FileText className="mr-1.5 h-3.5 w-3.5" />
                                                             View Transcript
                                                         </Button>
-                                                    ) : (
+                                                    ) : (user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') ? (
                                                         <Button 
                                                             variant="outline" 
                                                             size="sm" 
@@ -5731,7 +5887,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                             )}
                                                             Fetch Transcript
                                                         </Button>
-                                                    )}
+                                                    ) : null}
                                                 </>
                                             );
                                         })()}
@@ -6869,8 +7025,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <Mail className="h-5 w-5 text-primary" />
                     <span>Send Dynamic Template Email</span>
                 </DialogTitle>
-                <DialogDescription className="text-xs">
-                    Choose a marketing template to email directly to <strong>{targetEmailAddress}</strong>.
+                <DialogDescription className="text-xs flex items-center justify-between gap-2 flex-wrap">
+                    <span>Choose a marketing template to email directly to <strong>{targetEmailAddress}</strong>.</span>
+                    {targetEmailAddress && (() => {
+                        const targetContact = contacts.find(c => c.email?.toLowerCase().trim() === targetEmailAddress.toLowerCase().trim());
+                        return (
+                            <EmailVerificationBadge
+                                status={targetContact?.verificationStatus}
+                                score={targetContact?.verificationScore}
+                                verifiedAt={targetContact?.verifiedAt}
+                                onVerify={() => handleVerifySingleEmail(targetContact || { email: targetEmailAddress })}
+                                loading={!!verifyingEmails[targetEmailAddress?.toLowerCase().trim()]}
+                                size="sm"
+                            />
+                        );
+                    })()}
                 </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4 border-y my-2">

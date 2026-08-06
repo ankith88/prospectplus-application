@@ -47,24 +47,39 @@ export default function TerritoryPresalesPage() {
       ]);
 
       const fetchedPresales: PresaleRecord[] = (pRes.success && Array.isArray(pRes.data)) ? pRes.data : [];
-      const franchiseesMap = new Map((franList || []).map((f) => [String(f.internalId), f]));
 
-      // Ensure all fetched presales have franchiseeName and mainDetails
+      // Build comprehensive franchisee lookup map supporting internalId, id, and prospectPlusId
+      const franchiseesMap = new Map<string, Franchisee>();
+      (franList || []).forEach((f) => {
+        if (f.internalId) franchiseesMap.set(String(f.internalId), f);
+        if (f.id) franchiseesMap.set(String(f.id), f);
+        if ((f as any).prospectPlusId) franchiseesMap.set(String((f as any).prospectPlusId), f);
+      });
+
+      // Ensure all fetched presales have franchiseeName, franchiseeId and mainDetails
       const enrichedPresales = fetchedPresales.map((p) => {
-        const f = franchiseesMap.get(String(p.franchiseeId));
+        const pId = String(p.franchiseeId || p.id || '');
+        const f = franchiseesMap.get(pId);
         return {
           ...p,
-          franchiseeName: p.franchiseeName || p.mainDetails?.tradingEntity || f?.name || String(p.franchiseeId),
+          franchiseeId: pId,
+          franchiseeName: (p.franchiseeName && p.franchiseeName !== pId) ? p.franchiseeName : p.mainDetails?.tradingEntity || f?.name || pId,
         };
       });
 
       // Include any franchisee marked for sale that hasn't created a presale doc yet
       (franList || []).forEach((f: any) => {
-        if ((f.isForSale || f.presaleStatus) && !enrichedPresales.some((p) => String(p.franchiseeId) === String(f.internalId))) {
+        const possibleIds = [String(f.internalId), String(f.id), String(f.prospectPlusId)].filter(Boolean);
+        const alreadyIncluded = enrichedPresales.some((p) =>
+          possibleIds.includes(String(p.franchiseeId)) || possibleIds.includes(String(p.id))
+        );
+
+        if ((f.isForSale || f.presaleStatus) && !alreadyIncluded) {
+          const mainId = String(f.internalId || f.id || f.prospectPlusId);
           enrichedPresales.push({
-            id: String(f.internalId),
-            franchiseeId: String(f.internalId),
-            franchiseeName: f.name || String(f.internalId),
+            id: mainId,
+            franchiseeId: mainId,
+            franchiseeName: f.name || mainId,
             status: (f.presaleStatus as any) || 'Step 1: Main Details',
             step1Status: 'Completed',
             step2Status: 'Not Started',
@@ -134,9 +149,24 @@ export default function TerritoryPresalesPage() {
         p.franchiseeName?.toLowerCase().includes(q) ||
         p.mainDetails?.tradingEntity?.toLowerCase().includes(q) ||
         p.mainDetails?.mainContact?.toLowerCase().includes(q) ||
-        p.mainDetails?.email?.toLowerCase().includes(q);
+        p.mainDetails?.email?.toLowerCase().includes(q) ||
+        p.franchiseeId?.toLowerCase().includes(q);
 
-      const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+      let matchesStatus = statusFilter === 'all';
+      if (!matchesStatus) {
+        const pStatus = p.status as string;
+        if (statusFilter === 'Draft' || statusFilter === 'Step 1: Main Details') {
+          matchesStatus = pStatus === 'Draft' || pStatus === 'Step 1: Main Details';
+        } else if (statusFilter === 'Deed Pending' || statusFilter === 'Step 2: Deed Pending') {
+          matchesStatus = pStatus === 'Deed Pending' || pStatus === 'Step 2: Deed Pending';
+        } else if (statusFilter === 'Deed Signed' || statusFilter === 'Step 3: Verification Pending') {
+          matchesStatus = pStatus === 'Deed Signed' || pStatus === 'Step 3: Verification Pending';
+        } else if (statusFilter === 'Step 4: Presales Details') {
+          matchesStatus = pStatus === 'Step 4: Presales Details';
+        } else {
+          matchesStatus = pStatus === statusFilter;
+        }
+      }
 
       return matchesText && matchesStatus;
     });
@@ -170,11 +200,14 @@ export default function TerritoryPresalesPage() {
               <SelectValue placeholder="Select Territory to Mark for Sale..." />
             </SelectTrigger>
             <SelectContent>
-              {sortedFranchisees.map((f) => (
-                <SelectItem key={f.internalId} value={String(f.internalId)}>
-                  {f.name} ({f.internalId})
-                </SelectItem>
-              ))}
+              {sortedFranchisees.map((f) => {
+                const idVal = f.internalId || (f as any).id;
+                return (
+                  <SelectItem key={idVal} value={String(idVal)}>
+                    {f.name} ({idVal})
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
@@ -193,14 +226,15 @@ export default function TerritoryPresalesPage() {
         </div>
 
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[200px] text-xs bg-white">
+          <SelectTrigger className="w-[240px] text-xs bg-white">
             <SelectValue placeholder="Filter by Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Presale Statuses</SelectItem>
-            <SelectItem value="Draft">Draft</SelectItem>
-            <SelectItem value="Deed Pending">Deed Pending</SelectItem>
-            <SelectItem value="Deed Signed">Deed Signed</SelectItem>
+            <SelectItem value="Step 1: Main Details">Step 1: Main Details (Draft)</SelectItem>
+            <SelectItem value="Step 2: Deed Pending">Step 2: Deed Pending</SelectItem>
+            <SelectItem value="Step 3: Verification Pending">Step 3: Verification / Deed Signed</SelectItem>
+            <SelectItem value="Step 4: Franchisee IM Confirmation">Step 4: Franchisee IM Confirmation</SelectItem>
             <SelectItem value="Active Presale">Active Presale</SelectItem>
             <SelectItem value="Sold">Sold</SelectItem>
             <SelectItem value="Cancelled">Cancelled</SelectItem>
@@ -232,7 +266,7 @@ export default function TerritoryPresalesPage() {
                 <TableHead className="text-xs font-bold uppercase text-slate-700">Date Listed</TableHead>
                 <TableHead className="text-xs font-bold uppercase text-slate-700">Deed of Variation</TableHead>
                 <TableHead className="text-xs font-bold uppercase text-slate-700">Sale Price ($)</TableHead>
-                <TableHead className="text-xs font-bold uppercase text-slate-700">Status</TableHead>
+                <TableHead className="text-xs font-bold uppercase text-slate-700">Presale Status</TableHead>
                 <TableHead className="text-xs font-bold uppercase text-slate-700 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -276,7 +310,15 @@ export default function TerritoryPresalesPage() {
                   </TableCell>
 
                   <TableCell className="text-xs">
-                    <Badge variant="outline" className="font-semibold text-[11px]">
+                    <Badge
+                      className={
+                        presale.status === 'Active Presale'
+                          ? 'bg-emerald-600 text-white font-bold text-[11px]'
+                          : presale.status === 'Step 4: Franchisee IM Confirmation'
+                          ? 'bg-blue-600 text-white font-bold text-[11px]'
+                          : 'bg-slate-100 text-slate-800 border-slate-300 font-semibold text-[11px]'
+                      }
+                    >
                       {presale.status}
                     </Badge>
                   </TableCell>

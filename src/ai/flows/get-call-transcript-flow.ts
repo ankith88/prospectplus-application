@@ -40,27 +40,68 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     }
 
     const url = `https://api.aircall.io/v1/calls/${callId}/transcription`;
+    const callUrl = `https://api.aircall.io/v1/calls/${callId}`;
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
+    const headers = { 'Authorization': `Basic ${credentials}` };
     
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const response = await fetch(url, {
-          headers: { 'Authorization': `Basic ${credentials}` }
-        });
+        let response = await fetch(url, { headers });
 
         if (response.status === 404) {
-            await sleep(5000);
+            if (attempt < 3) await sleep(3000);
             continue;
+        }
+
+        // If direct /transcription endpoint returns 403 or other error, try fallback to call details endpoint /v1/calls/{id}
+        if (!response.ok && (response.status === 403 || response.status === 404)) {
+            const fallbackResp = await fetch(callUrl, { headers });
+            if (fallbackResp.ok) {
+                const fallbackData = await fallbackResp.json() as any;
+                const fallbackUtterances = 
+                    fallbackData?.call?.transcription?.content?.utterances || 
+                    fallbackData?.call?.transcription?.utterances || 
+                    fallbackData?.call?.utterances;
+
+                if (fallbackUtterances?.length) {
+                    await logTranscriptActivityServer(leadId, 'leads', {
+                        content: JSON.stringify(fallbackUtterances),
+                        author: leadAuthor,
+                        callId: callId
+                    });
+                    return { transcriptFound: true };
+                }
+            }
         }
         
         if (!response.ok) {
             const errText = await response.text();
             console.error(`[AirCall API Error] status=${response.status} body=${errText}`);
-            return { transcriptFound: false, error: `AirCall API error: status ${response.status}.` };
+
+            if (response.status === 403) {
+                return { 
+                    transcriptFound: false, 
+                    error: 'AirCall AI / Transcriptions is not enabled on your AirCall account plan. Please contact your AirCall administrator to enable AirCall AI.' 
+                };
+            }
+            if (response.status === 401) {
+                return { 
+                    transcriptFound: false, 
+                    error: 'AirCall authentication failed (401). Please check your API ID and Token credentials.' 
+                };
+            }
+            if (response.status === 429) {
+                return { 
+                    transcriptFound: false, 
+                    error: 'AirCall API rate limit exceeded (429). Please try again in a few moments.' 
+                };
+            }
+
+            return { transcriptFound: false, error: `AirCall API error (status ${response.status}).` };
         }
 
         const data = await response.json() as any;
-        const utterances = data?.transcription?.content?.utterances;
+        const utterances = data?.transcription?.content?.utterances || data?.transcription?.utterances || data?.utterances;
         
         if (utterances?.length) {
             // Using the Server Service exclusively to prevent environment boundary errors
@@ -70,16 +111,34 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
                 callId: callId
             });
             return { transcriptFound: true };
+        } else {
+            return { transcriptFound: false, error: 'No transcript content found for this call in AirCall.' };
         }
       } catch (error: any) {
-        await sleep(5000);
+        if (attempt < 3) await sleep(3000);
       }
     }
     
-    return { transcriptFound: false, error: 'NO_TRANSCRIPT_AVAILABLE' };
+    return { transcriptFound: false, error: 'Transcript not available in AirCall.' };
   }
 );
 
+
 export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInput): Promise<GetTranscriptByCallIdOutput> {
-    return getCallTranscriptByCallIdFlow(input);
+    try {
+        const cleanInput = {
+            callId: String(input.callId || ''),
+            leadId: String(input.leadId || ''),
+            leadAuthor: String(input.leadAuthor || '')
+        };
+        const result = await getCallTranscriptByCallIdFlow(cleanInput);
+        return result ?? { transcriptFound: false, error: 'No response returned from server.' };
+    } catch (error: any) {
+        console.error("Error in getCallTranscriptByCallId Server Action:", error);
+        return {
+            transcriptFound: false,
+            error: error?.message || 'Failed to fetch transcript from AirCall.'
+        };
+    }
 }
+

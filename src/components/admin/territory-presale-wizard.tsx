@@ -194,6 +194,98 @@ export function TerritoryPresaleWizard({
     handleSave(updatedDeed);
   };
 
+  const [sendingImEmail, setSendingImEmail] = useState(false);
+  const [imRecipientEmail, setImRecipientEmail] = useState('');
+  const [imEmailDialogOpen, setImEmailDialogOpen] = useState(false);
+
+  const handleSendImEmail = async () => {
+    const targetEmail = imRecipientEmail || mainDetails.email;
+    if (!targetEmail) {
+      toast({
+        title: 'Email Required',
+        description: 'Please enter a valid recipient email address.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSendingImEmail(true);
+    try {
+      const res = await fetch('/api/franchisees/presales/send-im-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          franchiseeId,
+          recipientEmail: targetEmail,
+          recipientName: mainDetails.mainContact || mainDetails.tradingEntity,
+          presalesDetails: {
+            ...presalesDetails,
+            territoryName: presalesDetails.territoryName || mainDetails.tradingEntity || franchiseeName,
+          },
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast({
+          title: 'IM Email Sent',
+          description: `Franchisee IM confirmation email sent to ${targetEmail}.`,
+        });
+        setPresalesDetails((prev) => ({
+          ...prev,
+          imStatus: 'sent',
+          sentAt: json.dateSent,
+          sentToEmail: targetEmail,
+        }));
+        setStatus('Step 4: Franchisee IM Confirmation');
+        setImEmailDialogOpen(false);
+        if (onSuccess) onSuccess();
+      } else {
+        toast({
+          title: 'Failed to Send Email',
+          description: json.message || 'Error sending IM email.',
+          variant: 'destructive',
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err.message || 'Unexpected error occurred while sending email.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingImEmail(false);
+    }
+  };
+
+  const handleMapImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      toast({
+        title: 'File Too Large',
+        description: 'Territory map image should be less than 8MB.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setPresalesDetails((prev) => ({
+        ...prev,
+        territoryMapUrl: dataUrl,
+      }));
+      toast({
+        title: 'Territory Map Uploaded',
+        description: 'Territory map image attached successfully.',
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -281,11 +373,11 @@ export function TerritoryPresaleWizard({
                   <span className="font-bold flex items-center gap-1">
                     STEP 4 {(!isDeedSigned || !isAdminOrOps) && <Lock className="h-3 w-3 text-amber-500" />}
                   </span>
-                  <span>Presales Details</span>
+                  <span>Franchisee IM & Map</span>
                 </button>
               </div>
 
-              {/* STEP 1: MAIN DETAILS (Screenshot 1 Layout) */}
+              {/* STEP 1: MAIN DETAILS */}
               {activeStep === 1 && (
                 <div className="space-y-4">
                   <div className="bg-[#095c7b] text-white py-1.5 px-4 text-center text-xs font-bold tracking-widest uppercase rounded">
@@ -344,6 +436,20 @@ export function TerritoryPresaleWizard({
                           onChange={(e) => setMainDetails({ ...mainDetails, email: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
                           placeholder="saffat99@yahoo.com"
+                        />
+                      </div>
+
+                      {/* PERSONAL EMAIL */}
+                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
+                          PERSONAL EMAIL
+                        </span>
+                        <Input
+                          type="email"
+                          value={mainDetails.personalEmail || ''}
+                          onChange={(e) => setMainDetails({ ...mainDetails, personalEmail: e.target.value })}
+                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          placeholder="personal@gmail.com"
                         />
                       </div>
 
@@ -529,11 +635,11 @@ export function TerritoryPresaleWizard({
                 </div>
               )}
 
-              {/* STEP 4: PRESALES DETAILS (Screenshot 2 Layout - ONLY Operations / Admin Team) */}
+              {/* STEP 4: FRANCHISEE IM & TERRITORY MAP (Operations & Franchisee E-Sign Workflow) */}
               {activeStep === 4 && (
                 <div className="space-y-4">
                   <div className="bg-[#095c7b] text-white py-1.5 px-4 text-center text-xs font-bold tracking-widest uppercase rounded flex items-center justify-between">
-                    <span>PRESALES DETAILS</span>
+                    <span>FRANCHISEE INFORMATION MEMORANDUM & TERRITORY MAP</span>
                     {isAdminOrOps ? (
                       <Badge className="bg-emerald-500 text-white text-[10px] uppercase font-bold">
                         Operations / Admin Edit Mode
@@ -545,330 +651,285 @@ export function TerritoryPresaleWizard({
                     )}
                   </div>
 
-                  {!isAdminOrOps && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-3 text-xs text-amber-800">
-                      <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0" />
-                      <span>
-                        Notice: Presales contract and pricing details can ONLY be modified by the Operations or Admin team.
-                      </span>
+                  {/* E-SIGN STATUS ALERT CARD */}
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2.5 rounded-xl ${
+                        presalesDetails.imStatus === 'signed_online' || status === 'Active Presale'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : presalesDetails.imStatus === 'sent'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        <CheckCircle2 className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                          Franchisee IM Confirmation Status:
+                          <Badge className={
+                            presalesDetails.imStatus === 'signed_online' || status === 'Active Presale'
+                              ? 'bg-emerald-600 text-white font-bold text-xs'
+                              : presalesDetails.imStatus === 'sent'
+                              ? 'bg-blue-600 text-white font-bold text-xs'
+                              : 'bg-amber-500 text-white font-bold text-xs'
+                          }>
+                            {presalesDetails.imStatus === 'signed_online' || status === 'Active Presale'
+                              ? 'Signed & Confirmed (Active Presale)'
+                              : presalesDetails.imStatus === 'sent'
+                              ? 'Sent to Franchisee (Pending Signature)'
+                              : 'Not Sent Yet'}
+                          </Badge>
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {presalesDetails.imStatus === 'signed_online' || status === 'Active Presale'
+                            ? `Confirmed & E-signed by ${presalesDetails.signerName || 'Franchisee'} on ${presalesDetails.signedAt ? new Date(presalesDetails.signedAt).toLocaleString('en-AU') : 'N/A'}`
+                            : presalesDetails.imStatus === 'sent'
+                            ? `Email sent to ${presalesDetails.sentToEmail || mainDetails.email} on ${presalesDetails.sentAt ? new Date(presalesDetails.sentAt).toLocaleString('en-AU') : 'N/A'}`
+                            : 'Fill in all IM schedule fields below, upload territory map, and send confirmation email.'}
+                        </p>
+                      </div>
                     </div>
-                  )}
+
+                    {isAdminOrOps && (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const defaultTo = Array.from(new Set([mainDetails.email, mainDetails.personalEmail].map((e) => (e || '').trim()).filter(Boolean))).join(', ');
+                          setImRecipientEmail(defaultTo);
+                          setImEmailDialogOpen(true);
+                        }}
+                        className="bg-[#095c7b] hover:bg-[#07465e] text-white text-xs gap-2 shrink-0 font-bold"
+                      >
+                        <Send className="h-4 w-4" /> Send Confirmation Email
+                      </Button>
+                    )}
+                  </div>
 
                   <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200/60 space-y-4">
-                    {/* Top Contract Info Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {/* COMMENCEMENT DATE */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-2.5 py-2 border-r border-slate-300 whitespace-nowrap min-w-[130px]">
-                          COMMENCEMENT DATE *
-                        </span>
-                        <Input
-                          disabled={!isAdminOrOps}
-                          value={presalesDetails.commencementDate}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, commencementDate: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="01/02/2020"
-                        />
-                      </div>
+                    <h3 className="text-xs font-extrabold text-[#095c7b] uppercase tracking-wider">
+                      1. Proposed Territory Profile & Schedule (Docx Schedule Content)
+                    </h3>
 
-                      {/* EXPIRY DATE */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-2.5 py-2 border-r border-slate-300 whitespace-nowrap min-w-[130px]">
-                          EXPIRY DATE *
-                        </span>
-                        <Input
-                          disabled={!isAdminOrOps}
-                          value={presalesDetails.expiryDate}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, expiryDate: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="01/02/2025"
-                        />
-                      </div>
-
-                      {/* ULTIMATE EXPIRY DATE */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-2.5 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
-                          ULTIMATE EXPIRY DATE *
-                        </span>
-                        <Input
-                          disabled={!isAdminOrOps}
-                          value={presalesDetails.ultimateExpiryDate}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, ultimateExpiryDate: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="dd/mm/yyyy"
-                        />
-                      </div>
-
-                      {/* UNLIMITED TERM OFFER */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-2.5 py-2 border-r border-slate-300 whitespace-nowrap min-w-[130px]">
-                          UNLIMITED TERM OFFER *
-                        </span>
-                        <Select
-                          disabled={!isAdminOrOps}
-                          value={presalesDetails.unlimitedTermOffer}
-                          onValueChange={(val) => setPresalesDetails({ ...presalesDetails, unlimitedTermOffer: val })}
-                        >
-                          <SelectTrigger className="border-0 focus:ring-0 text-xs font-medium">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Yes">Yes</SelectItem>
-                            <SelectItem value="No">No</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* UNLIMITED TERM FEE ($) */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-2.5 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
-                          UNLIMITED TERM FEE ($) *
-                        </span>
-                        <Input
-                          disabled={!isAdminOrOps}
-                          type="number"
-                          value={presalesDetails.unlimitedTermFee}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, unlimitedTermFee: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="25000"
-                        />
-                      </div>
-
-                      {/* RENEWAL TERMS (YEARS) */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-2.5 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
-                          RENEWAL TERMS (YEARS) *
-                        </span>
-                        <Input
-                          disabled={!isAdminOrOps}
-                          type="number"
-                          value={presalesDetails.renewalTermsYears}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, renewalTermsYears: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="5"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Presales Details Grid (Screenshot 2) */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                      {/* TERM ON FRANCHISEE IM */}
+                    {/* Schedule Fields Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      
+                      {/* TERRITORY NAME */}
                       <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
-                          TERM ON FRANCHISEE IM *
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          TERRITORY NAME *
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.termOnFranchiseeIM}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, termOnFranchiseeIM: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="Unlimited"
+                          value={presalesDetails.territoryName || mainDetails.tradingEntity || franchiseeName}
+                          onChange={(e) => setPresalesDetails({ ...presalesDetails, territoryName: e.target.value })}
+                          className="border-0 focus-visible:ring-0 text-xs font-semibold"
+                          placeholder="MailPlus Waterloo Alexandria"
                         />
                       </div>
 
                       {/* DATE BUSINESS STARTED */}
                       <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
                           DATE BUSINESS STARTED *
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          type="date"
                           value={presalesDetails.dateBusinessStarted}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, dateBusinessStarted: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          placeholder="1/02/2022"
                         />
                       </div>
 
-                      {/* TOTAL DAILY RUN TIME */}
+                      {/* NUMBER OF OWNERS */}
                       <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
-                          TOTAL DAILY RUN TIME *
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          NUMBER OF OWNERS *
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.totalDailyRunTime}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, totalDailyRunTime: e.target.value })}
+                          value={presalesDetails.numberOfOwners || '1'}
+                          onChange={(e) => setPresalesDetails({ ...presalesDetails, numberOfOwners: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="5 - 6 hrs"
+                          placeholder="1"
                         />
                       </div>
 
-                      {/* LOW PRICE ($) */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
-                          LOW PRICE ($) *
+                      {/* REASON FOR SALE */}
+                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          REASON FOR SALE *
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          type="number"
-                          value={presalesDetails.lowPrice}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, lowPrice: e.target.value })}
+                          value={presalesDetails.reasonForSale || 'Moving'}
+                          onChange={(e) => setPresalesDetails({ ...presalesDetails, reasonForSale: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="50000"
+                          placeholder="Moving"
                         />
                       </div>
 
-                      {/* HIGH PRICE ($) */}
+                      {/* LAST 12 MONTHS SERVICE REVENUE (EX GST) */}
                       <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
-                          HIGH PRICE ($) *
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          LAST 12M SERVICE REVENUE *
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          type="number"
-                          value={presalesDetails.highPrice}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, highPrice: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="75000"
-                        />
-                      </div>
-
-                      {/* SERVICE REVENUE ($) + YEAR */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
-                          SERVICE REVENUE ($) *
-                        </span>
-                        <Input
-                          disabled={!isAdminOrOps}
-                          type="number"
                           value={presalesDetails.serviceRevenue}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, serviceRevenue: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="53301"
-                        />
-                      </div>
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[120px]">
-                          YEAR *
-                        </span>
-                        <Input
-                          disabled={!isAdminOrOps}
-                          value={presalesDetails.serviceRevenueYear}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, serviceRevenueYear: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="01/04/2021 - 31/03/2022"
+                          placeholder="$300,437.26 (+gst)"
                         />
                       </div>
 
-                      {/* MPEX COMMISSION ($) + YEAR */}
+                      {/* FRANCHISE FEES ON SERVICE REVENUE */}
                       <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
-                          MPEX COMMISSION ($) *
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          FRANCHISE FEES (%) *
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          type="number"
-                          value={presalesDetails.mpexCommission}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, mpexCommission: e.target.value })}
+                          value={presalesDetails.franchiseFeesOnServiceRevenue || '25%'}
+                          onChange={(e) => setPresalesDetails({ ...presalesDetails, franchiseFeesOnServiceRevenue: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="3"
-                        />
-                      </div>
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[120px]">
-                          YEAR *
-                        </span>
-                        <Input
-                          disabled={!isAdminOrOps}
-                          value={presalesDetails.mpexCommissionYear}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, mpexCommissionYear: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="01/04/2021 - 31/03/2022"
+                          placeholder="25%"
                         />
                       </div>
 
-                      {/* SENDLE COMMISSION ($) + YEAR */}
+                      {/* MARKETING LEVY */}
                       <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
-                          SENDLE COMMISSION ($) *
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          MARKETING LEVY (%) *
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          type="number"
-                          value={presalesDetails.sendleCommission}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, sendleCommission: e.target.value })}
+                          value={presalesDetails.marketingLevy || '5%'}
+                          onChange={(e) => setPresalesDetails({ ...presalesDetails, marketingLevy: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="0"
-                        />
-                      </div>
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[120px]">
-                          YEAR *
-                        </span>
-                        <Input
-                          disabled={!isAdminOrOps}
-                          value={presalesDetails.sendleCommissionYear}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, sendleCommissionYear: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="01/04/2021 - 31/03/2022"
+                          placeholder="5%"
                         />
                       </div>
 
-                      {/* SALES COMMISSION (%) */}
+                      {/* LAST 12M MAILPLUS EXPRESS REVENUE */}
                       <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
-                          SALES COMMISSION (%) *
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          LAST 12M EXPRESS REVENUE *
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          type="number"
-                          value={presalesDetails.salesCommissionPercent}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, salesCommissionPercent: e.target.value })}
+                          value={presalesDetails.expressRevenue || `Product Commission $${presalesDetails.mpexCommission || 856.60}`}
+                          onChange={(e) => setPresalesDetails({ ...presalesDetails, expressRevenue: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="10"
-                        />
-                      </div>
-
-                      {/* NAB ACCREDITATION & FEE */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
-                          NAB ACCREDITATION*
-                        </span>
-                        <Select
-                          disabled={!isAdminOrOps}
-                          value={presalesDetails.nabAccreditation}
-                          onValueChange={(val) => setPresalesDetails({ ...presalesDetails, nabAccreditation: val })}
-                        >
-                          <SelectTrigger className="border-0 focus:ring-0 text-xs font-medium">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Yes">Yes</SelectItem>
-                            <SelectItem value="No">No</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
-                          NAB ACCREDITATION FEE ($) *
-                        </span>
-                        <Input
-                          disabled={!isAdminOrOps}
-                          type="number"
-                          value={presalesDetails.nabAccreditationFee}
-                          onChange={(e) => setPresalesDetails({ ...presalesDetails, nabAccreditationFee: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="0"
+                          placeholder="Product Commission $856.60"
                         />
                       </div>
 
                       {/* SALE PRICE */}
                       <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[180px]">
-                          SALE PRICE*
+                        <span className="bg-[#095c7b] text-white text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          SALE PRICE ($) *
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          type="number"
                           value={presalesDetails.salePrice}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, salePrice: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-semibold text-[#095c7b] text-sm"
-                          placeholder="82500"
+                          className="border-0 focus-visible:ring-0 text-sm font-extrabold text-[#095c7b]"
+                          placeholder="$335,000.00 NEG"
                         />
                       </div>
+
+                      {/* TOTAL AVERAGE DAILY RUN TIME */}
+                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          AVG DAILY RUN TIME *
+                        </span>
+                        <Input
+                          disabled={!isAdminOrOps}
+                          value={presalesDetails.totalDailyRunTime || 'Between 8.5 to 9.5 hours per day'}
+                          onChange={(e) => setPresalesDetails({ ...presalesDetails, totalDailyRunTime: e.target.value })}
+                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          placeholder="Between 8.5 to 9.5 hours per day"
+                        />
+                      </div>
+
+                      {/* CURRENT MORNING SHIFT */}
+                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          CURRENT MORNING SHIFT *
+                        </span>
+                        <Input
+                          disabled={!isAdminOrOps}
+                          value={presalesDetails.currentMorningShift || '6:00am to 11:00am'}
+                          onChange={(e) => setPresalesDetails({ ...presalesDetails, currentMorningShift: e.target.value })}
+                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          placeholder="6:00am to 11:00am"
+                        />
+                      </div>
+
+                      {/* CURRENT AFTERNOON SHIFT */}
+                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          CURRENT AFTERNOON SHIFT *
+                        </span>
+                        <Input
+                          disabled={!isAdminOrOps}
+                          value={presalesDetails.currentAfternoonShift || '1:00pm to 4:00pm'}
+                          onChange={(e) => setPresalesDetails({ ...presalesDetails, currentAfternoonShift: e.target.value })}
+                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          placeholder="1:00pm to 4:00pm"
+                        />
+                      </div>
+
+                      {/* FRANCHISE TERM */}
+                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
+                          FRANCHISE TERM *
+                        </span>
+                        <Input
+                          disabled={!isAdminOrOps}
+                          value={presalesDetails.franchiseTerm || presalesDetails.termOnFranchiseeIM || 'Unlimited'}
+                          onChange={(e) => setPresalesDetails({ ...presalesDetails, franchiseTerm: e.target.value })}
+                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          placeholder="Unlimited"
+                        />
+                      </div>
+
                     </div>
+
+                    {/* TERRITORY MAP UPLOAD SECTION */}
+                    <div className="space-y-3 pt-4 border-t border-slate-200">
+                      <h3 className="text-xs font-extrabold text-[#095c7b] uppercase tracking-wider flex items-center justify-between">
+                        <span>2. Territory Map Attachment</span>
+                        {isAdminOrOps && (
+                          <label className="cursor-pointer bg-[#095c7b] hover:bg-[#07465e] text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-sm">
+                            Upload Territory Map Image
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleMapImageUpload}
+                            />
+                          </label>
+                        )}
+                      </h3>
+
+                      {presalesDetails.territoryMapUrl ? (
+                        <div className="bg-white border border-slate-300 rounded-xl p-3 text-center space-y-2">
+                          <img
+                            src={presalesDetails.territoryMapUrl}
+                            alt="Territory Map Preview"
+                            className="max-h-64 mx-auto rounded-lg object-contain border border-slate-200"
+                          />
+                          <p className="text-[11px] text-emerald-700 font-bold">Territory Map Attached Successfully</p>
+                        </div>
+                      ) : (
+                        <div className="bg-white border border-dashed border-slate-300 rounded-xl p-6 text-center space-y-2">
+                          <p className="text-xs text-slate-500">No territory map uploaded yet. Click above to upload a map image.</p>
+                        </div>
+                      )}
+                    </div>
+
                   </div>
                 </div>
               )}
@@ -916,6 +977,115 @@ export function TerritoryPresaleWizard({
         </DialogContent>
       </Dialog>
 
+      {/* EMAIL PREVIEW & DISPATCH DIALOG */}
+      <Dialog open={imEmailDialogOpen} onOpenChange={setImEmailDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto bg-white p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Send className="h-5 w-5 text-[#095c7b]" />
+              Preview Franchisee IM Confirmation Email
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600">
+              Please review the exact email content and recipients below before confirming email dispatch.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {/* EMAIL METADATA GRID */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between border-b pb-1.5">
+                <span className="font-bold text-slate-500 w-24">From:</span>
+                <span className="font-semibold text-slate-800">Greg Hart &lt;greg.hart@mailplus.com.au&gt;</span>
+              </div>
+              <div className="flex items-center justify-between border-b pb-1.5">
+                <span className="font-bold text-slate-500 w-24">CC:</span>
+                <span className="font-semibold text-slate-800">Michael McDaid &lt;michael.mcdaid@mailplus.com.au&gt;</span>
+              </div>
+              <div className="flex items-center justify-between border-b pb-1.5">
+                <span className="font-bold text-slate-500 w-24">To (Franchisee):</span>
+                <Input
+                  type="email"
+                  value={imRecipientEmail}
+                  onChange={(e) => setImRecipientEmail(e.target.value)}
+                  placeholder="franchisee@example.com"
+                  className="text-xs font-medium bg-white max-w-sm h-8"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-500 w-24">Subject:</span>
+                <span className="font-semibold text-[#095c7b]">
+                  Action Required: Confirm &amp; Sign Franchisee IM Schedule ({presalesDetails.territoryName || mainDetails.tradingEntity || franchiseeName})
+                </span>
+              </div>
+            </div>
+
+            {/* LIVE EMAIL CONTENT PREVIEW BOX */}
+            <div className="space-y-1.5">
+              <Label className="font-bold text-slate-700 uppercase tracking-wider text-[10px]">
+                Email Body HTML Content Preview
+              </Label>
+              <div className="border border-slate-300 rounded-xl p-5 bg-[#f4f7f8] space-y-4">
+                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden max-w-lg mx-auto shadow-sm">
+                  <div className="bg-[#095c7b] p-4 text-center">
+                    <img
+                      src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD"
+                      alt="MailPlus Logo"
+                      className="h-8 w-auto mx-auto"
+                    />
+                  </div>
+                  <div className="p-6 space-y-3 text-slate-700 leading-relaxed text-xs">
+                    <p className="font-bold text-[#095c7b] text-sm">
+                      Hi {mainDetails.mainContact || mainDetails.tradingEntity || 'Franchisee'},
+                    </p>
+                    <p>
+                      The Operations team has prepared the <strong>Franchisee Information Memorandum (IM) Schedule &amp; Territory Profile</strong> for your territory (<strong>{presalesDetails.territoryName || mainDetails.tradingEntity || franchiseeName}</strong>).
+                    </p>
+                    <p>
+                      Please click the button below to review all territory profile details, inspect the attached territory map, and digitally confirm/e-sign the document.
+                    </p>
+                    <div className="py-2 text-center">
+                      <span className="inline-block bg-[#095c7b] text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm">
+                        Review &amp; E-Sign Franchisee IM &rarr;
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Link URL: https://prospectplus.com.au/franchisee-im/dov_...
+                    </p>
+                    <div className="pt-2 border-t text-xs">
+                      <p className="font-bold text-slate-800">Greg Hart</p>
+                      <p className="text-slate-500 text-[11px]">MailPlus Operations &amp; Presales Team</p>
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 p-3 text-center border-t text-[10px] text-slate-400">
+                    &copy; 2026 MailPlus. All rights reserved.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setImEmailDialogOpen(false)}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSendImEmail}
+              disabled={sendingImEmail}
+              className="bg-[#095c7b] hover:bg-[#07465e] text-white text-xs font-bold gap-2"
+            >
+              {sendingImEmail ? <Loader className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              Confirm &amp; Send Email
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Deed of Variation Dialog */}
       <DeedOfVariationDialog
         open={deedDialogOpen}
@@ -927,3 +1097,4 @@ export function TerritoryPresaleWizard({
     </>
   );
 }
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { firestore as db, storage } from "@/lib/firebase";
 import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAllUsers } from "@/services/firebase";
+import { SUPER_ADMIN_UIDS } from "@/lib/constants";
 
 function CreateAppTicketForm() {
   const { user, userProfile, loading } = useAuth();
@@ -49,15 +50,16 @@ function CreateAppTicketForm() {
     getAllUsers()
       .then((allUsers) => {
         const activeAdmins = allUsers.filter((u: any) => {
-          if (u.disabled === true || u.status === "disabled" || u.status === "inactive") return false;
+          const isExplicitSuperAdmin = SUPER_ADMIN_UIDS.includes(u.uid);
+          if (!isExplicitSuperAdmin && (u.disabled === true || u.status === "disabled" || u.status === "inactive")) return false;
           return (
+            isExplicitSuperAdmin ||
             u.role === "admin" ||
             u.role === "superadmin" ||
             u.activeRole === "admin" ||
             u.activeRole === "superadmin" ||
             u.isSuperAdmin === true ||
-            u.email?.toLowerCase() === "ankith.ravindran@mailplus.com.au" ||
-            u.uid === "ncyhwLtOG1W7TZ43PkYCcObeCAf2"
+            u.email?.toLowerCase() === "ankith.ravindran@mailplus.com.au"
           );
         });
 

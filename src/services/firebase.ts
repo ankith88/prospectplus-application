@@ -2707,9 +2707,10 @@ async function getAllFranchisees(): Promise<import('@/lib/types').Franchisee[]> 
     try {
         const snapshot = await getDocs(collection(firestore, 'franchisees'));
         const list = snapshot.docs.map(doc => {
-            const data = doc.data();
+            const data = doc.data() || {};
             return {
-                internalId: doc.id,
+                id: doc.id,
+                internalId: data.internalId || data.prospectPlusId || data.id || doc.id,
                 ...data
             } as import('@/lib/types').Franchisee;
         });

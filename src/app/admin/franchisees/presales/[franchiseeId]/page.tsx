@@ -3,6 +3,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -32,6 +39,7 @@ import {
   Search,
 } from 'lucide-react';
 import { PresaleRecord, PresaleMainDetails, PresaleDeedOfVariation, PresalesDetails, StepStatus } from '@/lib/presale-types';
+import { encodePresaleId } from '@/lib/presale-token';
 
 function parseClientAddress(rawAddress: any): {
   streetNumberAndName: string;
@@ -458,7 +466,20 @@ export default function DedicatedTerritoryPresalePage() {
     }
   };
 
+  const [deedEmailDialogOpen, setDeedEmailDialogOpen] = useState(false);
+  const [deedRecipientEmail, setDeedRecipientEmail] = useState('');
+
   const handleSendDeedEmail = async () => {
+    const targetEmail = deedRecipientEmail || mainDetails.email;
+    if (!targetEmail) {
+      toast({
+        title: 'Email Required',
+        description: 'Please enter a recipient email address.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSendingEmail(true);
     try {
       const res = await fetch('/api/franchisees/presales/send-deed-email', {
@@ -466,7 +487,7 @@ export default function DedicatedTerritoryPresalePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           franchiseeId,
-          recipientEmail: mainDetails.email,
+          recipientEmail: targetEmail,
           recipientName: mainDetails.mainContact || mainDetails.tradingEntity,
         }),
       });
@@ -474,7 +495,7 @@ export default function DedicatedTerritoryPresalePage() {
       if (json.success) {
         toast({
           title: 'Deed Email Sent!',
-          description: `Deed of Variation email link sent to ${mainDetails.email || 'franchisee'}.`,
+          description: `Deed of Variation email link sent to ${targetEmail}.`,
         });
         if (json.dateSent) {
           setDeedOfVariation((prev) => ({
@@ -482,9 +503,11 @@ export default function DedicatedTerritoryPresalePage() {
             status: prev.status === 'not_started' ? 'sent' : prev.status,
             dateSent: json.dateSent,
             sentAt: json.dateSent,
+            sentToEmail: targetEmail,
           }));
           setStep2Status('In Progress');
         }
+        setDeedEmailDialogOpen(false);
       } else {
         toast({
           title: 'Failed to Send Email',
@@ -521,11 +544,12 @@ export default function DedicatedTerritoryPresalePage() {
   };
 
   const copyPublicLink = () => {
-    const url = `${window.location.origin}/deed-of-variation/${franchiseeId}`;
+    const token = encodePresaleId(franchiseeId);
+    const url = `${window.location.origin}/deed-of-variation/${token}`;
     navigator.clipboard.writeText(url);
     toast({
       title: 'Public Deed Link Copied!',
-      description: 'Public signing link copied to clipboard. You can send this link to the franchisee or signer.',
+      description: 'Encrypted public signing link copied to clipboard. You can send this link to the franchisee or signer.',
     });
   };
 
@@ -747,6 +771,20 @@ export default function DedicatedTerritoryPresalePage() {
                         type="email"
                         value={mainDetails.email || ''}
                         onChange={(e) => setMainDetails({ ...mainDetails, email: e.target.value })}
+                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                        placeholder=""
+                      />
+                    </div>
+
+                    {/* PERSONAL EMAIL */}
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
+                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
+                        PERSONAL EMAIL
+                      </span>
+                      <Input
+                        type="email"
+                        value={mainDetails.personalEmail || ''}
+                        onChange={(e) => setMainDetails({ ...mainDetails, personalEmail: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
                         placeholder=""
                       />
@@ -992,7 +1030,11 @@ export default function DedicatedTerritoryPresalePage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <Button
                         type="button"
-                        onClick={handleSendDeedEmail}
+                        onClick={() => {
+                          const defaultTo = Array.from(new Set([mainDetails.email, mainDetails.personalEmail].map((e) => (e || '').trim()).filter(Boolean))).join(', ');
+                          setDeedRecipientEmail(defaultTo);
+                          setDeedEmailDialogOpen(true);
+                        }}
                         disabled={sendingEmail}
                         className="bg-[#095c7b] hover:bg-[#07465e] text-white text-xs gap-1.5 font-semibold"
                       >
@@ -1010,7 +1052,7 @@ export default function DedicatedTerritoryPresalePage() {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => window.open(`/deed-of-variation/${franchiseeId}`, '_blank')}
+                        onClick={() => window.open(`/deed-of-variation/${encodePresaleId(franchiseeId)}`, '_blank')}
                         className="text-xs gap-1.5 border-slate-300 text-slate-700 bg-white"
                       >
                         <ExternalLink className="h-3.5 w-3.5" /> Open Link
@@ -1200,6 +1242,114 @@ export default function DedicatedTerritoryPresalePage() {
         deedOfVariation={deedOfVariation}
         onSaveDeed={handleDeedSaved}
       />
+
+      {/* DEED EMAIL PREVIEW & DISPATCH DIALOG */}
+      <Dialog open={deedEmailDialogOpen} onOpenChange={setDeedEmailDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto bg-white p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Mail className="h-5 w-5 text-[#095c7b]" />
+              Preview Deed of Variation Email
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600">
+              Please review the exact email content, sender, and recipients below before confirming email dispatch.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {/* EMAIL METADATA GRID */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between border-b pb-1.5">
+                <span className="font-bold text-slate-500 w-24">From:</span>
+                <span className="font-semibold text-slate-800">Greg Hart &lt;greg.hart@mailplus.com.au&gt;</span>
+              </div>
+              <div className="flex items-center justify-between border-b pb-1.5">
+                <span className="font-bold text-slate-500 w-24">CC:</span>
+                <span className="font-semibold text-slate-800">Michael McDaid &lt;michael.mcdaid@mailplus.com.au&gt;</span>
+              </div>
+              <div className="flex items-center justify-between border-b pb-1.5">
+                <span className="font-bold text-slate-500 w-24">To (Franchisee):</span>
+                <Input
+                  type="email"
+                  value={deedRecipientEmail}
+                  onChange={(e) => setDeedRecipientEmail(e.target.value)}
+                  placeholder="franchisee@example.com"
+                  className="text-xs font-medium bg-white max-w-sm h-8"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-500 w-24">Subject:</span>
+                <span className="font-semibold text-[#095c7b]">
+                  Deed of Variation - Exit Program Assistance Offer ({mainDetails.tradingEntity || franchiseeId})
+                </span>
+              </div>
+            </div>
+
+            {/* LIVE EMAIL CONTENT PREVIEW BOX */}
+            <div className="space-y-1.5">
+              <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px]">
+                Email Body HTML Content Preview
+              </span>
+              <div className="border border-slate-300 rounded-xl p-5 bg-[#f4f7f8] space-y-4">
+                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden max-w-lg mx-auto shadow-sm">
+                  <div className="bg-[#095c7b] p-4 text-center">
+                    <img
+                      src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD"
+                      alt="MailPlus Logo"
+                      className="h-8 w-auto mx-auto"
+                    />
+                  </div>
+                  <div className="p-6 space-y-3 text-slate-700 leading-relaxed text-xs">
+                    <p className="font-bold text-[#095c7b] text-sm">
+                      Hi {mainDetails.mainContact || mainDetails.tradingEntity || 'Franchisee'},
+                    </p>
+                    <p>
+                      Please find below the digital link to review and execute the <strong>Deed of Variation - Exit Program Assistance Offer</strong> for your territory (<strong>{mainDetails.tradingEntity || franchiseeId}</strong>).
+                    </p>
+                    <p>
+                      Executing this Deed of Variation allows MailPlus to officially process your territory presales valuation and list your territory under the Exit Program.
+                    </p>
+                    <div className="py-2 text-center">
+                      <span className="inline-block bg-[#095c7b] text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm">
+                        Review &amp; Sign Deed of Variation &rarr;
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Link URL: https://prospectplus.com.au/deed-of-variation/{encodePresaleId(franchiseeId)}
+                    </p>
+                    <div className="pt-2 border-t text-xs">
+                      <p className="font-bold text-slate-800">MailPlus Operations &amp; Presales Team</p>
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 p-3 text-center border-t text-[10px] text-slate-400">
+                    &copy; 2026 MailPlus. All rights reserved.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeedEmailDialogOpen(false)}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSendDeedEmail}
+              disabled={sendingEmail}
+              className="bg-[#095c7b] hover:bg-[#07465e] text-white text-xs font-bold gap-2"
+            >
+              {sendingEmail ? <Loader className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              Confirm &amp; Send Deed Email
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

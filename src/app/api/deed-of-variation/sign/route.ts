@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 import { DeedOption, PresaleRecord } from '@/lib/presale-types';
+import { decodePresaleId } from '@/lib/presale-token';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const {
-      presaleId,
+      presaleId: rawPresaleId,
       selectedOption,
       party1Name,
       party1Address,
@@ -17,6 +18,8 @@ export async function POST(request: Request) {
       signerEmail,
       signatureDataUrl,
     } = body;
+
+    const presaleId = decodePresaleId(rawPresaleId || '');
 
     if (!presaleId || !selectedOption || !signerName) {
       return NextResponse.json(

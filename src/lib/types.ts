@@ -164,6 +164,26 @@ export interface Transcript {
     phoneNumber?: string;
 }
 
+export type EmailVerificationStatus = 'deliverable' | 'risky' | 'undeliverable' | 'unknown';
+
+export interface EmailVerificationResult {
+  email: string;
+  status: EmailVerificationStatus;
+  score: number; // 0 - 100
+  reason?: string;
+  verifiedAt: string;
+  cached?: boolean;
+  details?: {
+    regexp?: boolean;
+    gibberish?: boolean;
+    disposable?: boolean;
+    webmail?: boolean;
+    mxRecords?: boolean;
+    smtpCheck?: boolean;
+    acceptAll?: boolean;
+  };
+}
+
 export interface Contact {
   id: string
   name: string
@@ -180,6 +200,9 @@ export interface Contact {
   securityCode?: string;
   isPrimary?: boolean;
   isAccountsPayable?: boolean;
+  verificationStatus?: EmailVerificationStatus;
+  verificationScore?: number;
+  verifiedAt?: string;
 }
 
 export interface Address {
@@ -804,7 +827,9 @@ export interface PartnerLocation {
 }
 
 export interface Franchisee {
+  id?: string;
   internalId: string;
+  prospectPlusId?: string;
   name: string;
   mainContact: string;
   email: string;

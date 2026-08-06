@@ -1529,13 +1529,13 @@ export default function InboundReportsClientPage({
       const lmPendingCount = lmPendingLeads.length;
       const lmPendingCallRate = dialerCalls > 0 ? (lmPendingCount / dialerCalls) * 100 : 0;
 
-      const trialingLMLeads = localmileTrialLeads.filter(l => getLeadAM(l) === dialer);
+      const trialingLMLeads = dialerInboundLeads.filter(l => l.customerStatus === 'Trialing LocalMile');
       const trialingLMCount = trialingLMLeads.length;
       const trialingLMCallRate = dialerCalls > 0 ? (trialingLMCount / dialerCalls) * 100 : 0;
 
       const dialerAppointments = filteredAppointments.filter(a => dialerInboundLeadIds.has(a.leadId) || a.dialerAssigned === dialer || a.amName === dialer || a.assignedTo === dialer).length;
       const dialerQuotes = dialerInboundLeads.filter(l => l.customerStatus === 'Prospect Opportunity' || l.customerStatus === 'Quote Sent').length;
-      const dialerTrials = anyTrialLeads.filter(l => getLeadAM(l) === dialer).length;
+      const dialerShipmateTrials = shipmateTrialLeads.filter(l => getLeadAM(l) === dialer).length;
       const dialerWon = dialerInboundLeads.filter(isSignedLead).length;
 
       const dialerActionedSet = amActionedLeadIdsMap.get(dialer) || new Set<string>();
@@ -1569,7 +1569,7 @@ export default function InboundReportsClientPage({
         'LM Pending Rate': lmPendingCallRate,
         'Trialing LocalMile': trialingLMCount,
         'Trialing LocalMile Rate': trialingLMCallRate,
-        'ShipMate / LocalMile Trials': dialerTrials,
+        'ShipMate Trials': dialerShipmateTrials,
         'Signed Customers': dialerWon
       };
     });
@@ -1596,7 +1596,7 @@ export default function InboundReportsClientPage({
     const totalLMPendingRate = totalTeamCalls > 0 ? (totalLMPending / totalTeamCalls) * 100 : 0;
     const totalTrialingLM = teamPerformanceData.reduce((acc, d) => acc + d['Trialing LocalMile'], 0);
     const totalTrialingLMRate = totalTeamCalls > 0 ? (totalTrialingLM / totalTeamCalls) * 100 : 0;
-    const totalTrials = teamPerformanceData.reduce((acc, d) => acc + d['ShipMate / LocalMile Trials'], 0);
+    const totalShipmateTrials = teamPerformanceData.reduce((acc, d) => acc + d['ShipMate Trials'], 0);
 
     const teamPerformanceTotals = {
       name: 'Total',
@@ -1618,7 +1618,7 @@ export default function InboundReportsClientPage({
       'LM Pending Rate': totalLMPendingRate,
       'Trialing LocalMile': totalTrialingLM,
       'Trialing LocalMile Rate': totalTrialingLMRate,
-      'ShipMate / LocalMile Trials': totalTrials,
+      'ShipMate Trials': totalShipmateTrials,
       'Signed Customers': totalWon
     };
 
@@ -1922,6 +1922,7 @@ export default function InboundReportsClientPage({
 
     return {
         inboundJourneyStats,
+        shipmateTrialLeads,
         shipmateJourney,
         localmileJourney,
         combinedJourney,
@@ -2821,7 +2822,7 @@ export default function InboundReportsClientPage({
                                 <TableHead className="text-right">LM Opportunity (Registration Sent)</TableHead>
                                 <TableHead className="text-right">LM Pending (T&C&apos;s Accepted)</TableHead>
                                 <TableHead className="text-right">Trialing LocalMile</TableHead>
-                                <TableHead className="text-right">ShipMate / LocalMile Trials</TableHead>
+                                <TableHead className="text-right">ShipMate Trials</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2924,10 +2925,9 @@ export default function InboundReportsClientPage({
                                     <TableCell 
                                         className="text-right font-semibold text-emerald-600 cursor-pointer hover:underline"
                                         onClick={() => {
-                                            const dialerLmSet = stats.repLocalmileLeadsMap.get(dialer.name) || new Set();
                                             setDrillDownData({ 
                                                 title: `${dialer.name} - Trialing LocalMile Leads`, 
-                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && dialerLmSet.has(l.id)) 
+                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && l.customerStatus === 'Trialing LocalMile') 
                                             });
                                         }}
                                     >
@@ -2936,15 +2936,14 @@ export default function InboundReportsClientPage({
                                     <TableCell 
                                         className="text-right font-semibold text-purple-600 cursor-pointer hover:underline"
                                         onClick={() => {
-                                            const dialerSmSet = stats.repShipmateLeadsMap.get(dialer.name) || new Set();
-                                            const dialerLmSet = stats.repLocalmileLeadsMap.get(dialer.name) || new Set();
+                                            const dialerSmSet = stats.repShipmateLeadsMap?.get(dialer.name) || new Set();
                                             setDrillDownData({ 
-                                                title: `${dialer.name} - ShipMate / LocalMile Trials`, 
-                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && (dialerSmSet.has(l.id) || dialerLmSet.has(l.id))) 
+                                                title: `${dialer.name} - ShipMate Trials`, 
+                                                leads: stats.shipmateTrialLeads.filter(l => dialerSmSet.has(l.id)) 
                                             });
                                         }}
                                     >
-                                        {dialer['ShipMate / LocalMile Trials']}
+                                        {dialer['ShipMate Trials']}
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -3043,7 +3042,7 @@ export default function InboundReportsClientPage({
                                     className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
                                     onClick={() => setDrillDownData({ 
                                         title: "All Trialing LocalMile Leads", 
-                                        leads: stats.localmileJourney.leads.filter(isActiveLocalMileLead) 
+                                        leads: filteredLeads.filter(l => l.customerStatus === 'Trialing LocalMile') 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['Trialing LocalMile Rate'].toFixed(1)}%)</span>
@@ -3051,11 +3050,11 @@ export default function InboundReportsClientPage({
                                 <TableCell 
                                     className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
                                     onClick={() => setDrillDownData({ 
-                                        title: "All ShipMate / LocalMile Trials", 
-                                        leads: stats.combinedJourney.leads 
+                                        title: "All ShipMate Trials", 
+                                        leads: stats.shipmateTrialLeads 
                                     })}
                                 >
-                                    {stats.teamPerformanceTotals['ShipMate / LocalMile Trials']}
+                                    {stats.teamPerformanceTotals['ShipMate Trials']}
                                 </TableCell>
                             </TableRow>
                         </TableFooter>
