@@ -80,7 +80,7 @@ export default function AllAppointmentsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers', 'Outbound Admin'].includes(userProfile.activeRole);
 
 
   const fetchAppointments = async () => {
@@ -252,8 +252,8 @@ export default function AllAppointmentsPage() {
         
         const leadNameMatch = filters.leadName ? appointment.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
         
-        const finalAppointmentUserMatch = (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') ? appointmentUserMatch : true;
-        const finalLeadUserMatch = (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') ? leadUserMatch : true;
+        const finalAppointmentUserMatch = (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin' || userProfile?.activeRole === 'Outbound Admin') ? appointmentUserMatch : true;
+        const finalLeadUserMatch = (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin' || userProfile?.activeRole === 'Outbound Admin') ? leadUserMatch : true;
 
         const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
         
@@ -437,7 +437,7 @@ export default function AllAppointmentsPage() {
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
                     </div>
-                    {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') && (
+                    {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin' || userProfile?.activeRole === 'Outbound Admin') && (
                        <>
                         <div className="space-y-2">
                             <Label htmlFor="leadAssignedTo">Assigned To (Lead)</Label>
@@ -641,7 +641,7 @@ export default function AllAppointmentsPage() {
                 <CardTitle>Appointment Schedule</CardTitle>
                 <Badge variant="secondary">{sortedAppointments.length} appointment(s)</Badge>
             </div>
-             {userProfile?.activeRole === 'admin' && (
+             {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Outbound Admin') && (
                 <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedAppointments.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export

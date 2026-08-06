@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { firestore as db, storage } from "@/lib/firebase";
 import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getAllUsers } from "@/services/firebase";
 
 function CreateAppTicketForm() {
   const { user, userProfile, loading } = useAuth();
@@ -29,6 +30,12 @@ function CreateAppTicketForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
 
+  // Super admin assignment state (Default: Ankith Ravindran)
+  const [superAdmins, setSuperAdmins] = useState<any[]>([]);
+  const [assignedToUid, setAssignedToUid] = useState<string>("ncyhwLtOG1W7TZ43PkYCcObeCAf2");
+  const [assignedToName, setAssignedToName] = useState<string>("Ankith Ravindran");
+  const [assignedToEmail, setAssignedToEmail] = useState<string>("ankith.ravindran@mailplus.com.au");
+
   // Pre-generate a ticket ID for uploading attachments
   const [generatedTicketId] = useState(() => {
     if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -36,6 +43,40 @@ function CreateAppTicketForm() {
     }
     return Math.random().toString(36).substring(2, 15);
   });
+
+  // Fetch active Super Admins for assignment
+  useEffect(() => {
+    getAllUsers()
+      .then((allUsers) => {
+        const activeAdmins = allUsers.filter((u: any) => {
+          if (u.disabled === true || u.status === "disabled" || u.status === "inactive") return false;
+          return (
+            u.role === "admin" ||
+            u.role === "superadmin" ||
+            u.activeRole === "admin" ||
+            u.activeRole === "superadmin" ||
+            u.isSuperAdmin === true ||
+            u.email?.toLowerCase() === "ankith.ravindran@mailplus.com.au" ||
+            u.uid === "ncyhwLtOG1W7TZ43PkYCcObeCAf2"
+          );
+        });
+
+        setSuperAdmins(activeAdmins);
+
+        // Ensure Ankith Ravindran is found or defaulted
+        const ankith = activeAdmins.find(
+          (a) =>
+            a.email?.toLowerCase().includes("ankith.ravindran") ||
+            a.displayName?.toLowerCase().includes("ankith")
+        );
+        if (ankith) {
+          setAssignedToUid(ankith.uid);
+          setAssignedToName(ankith.displayName || "Ankith Ravindran");
+          setAssignedToEmail(ankith.email || "ankith.ravindran@mailplus.com.au");
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   if (loading) return <Loader2 className="h-8 w-8 animate-spin mx-auto mt-20" />;
   if (!user || !userProfile) {
@@ -103,12 +144,64 @@ function CreateAppTicketForm() {
         createdBy: userProfile.uid,
         createdByName: userProfile.displayName || "Unknown User",
         createdByEmail: user.email || "No Email",
+        assignedToUid: assignedToUid || "ncyhwLtOG1W7TZ43PkYCcObeCAf2",
+        assignedToName: assignedToName || "Ankith Ravindran",
+        assignedToEmail: assignedToEmail || "ankith.ravindran@mailplus.com.au",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         adminNotes: ""
       };
 
       await setDoc(ticketRef, payload);
+
+      // Send assignment notification email to assigned Super Admin
+      if (assignedToEmail) {
+        try {
+          const origin = typeof window !== "undefined" ? window.location.origin : "https://prospectplus.mailplus.com.au";
+          const emailHtml = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+  <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">📌 New App Ticket Assigned to You</h2>
+  <p>Hi <strong>${assignedToName}</strong>,</p>
+  <p>A new App Ticket has been submitted and assigned to you by <strong>${userProfile.displayName || user.email}</strong>:</p>
+  
+  <div style="margin: 20px 0; padding: 16px; background-color: #f8fafc; border-left: 4px solid #095c7b; border-radius: 6px; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
+    <p style="margin: 0 0 8px 0; color: #095c7b; font-weight: bold; font-size: 16px;">${title.trim()}</p>
+    <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b;">
+      <strong>Type:</strong> ${type} &nbsp;|&nbsp; 
+      <strong>Platform:</strong> ${platform} &nbsp;|&nbsp; 
+      <strong>Submitted By:</strong> ${userProfile.displayName || "User"} (${user.email})
+    </p>
+    <p style="margin: 8px 0 0 0; color: #334155; font-size: 14px; white-space: pre-wrap;">${description.trim()}</p>
+  </div>
+
+  <p style="font-size: 14px; color: #475569;">Click the button below to view and manage this ticket on the App Tickets page:</p>
+  
+  <div style="text-align: center; margin: 25px 0;">
+    <a href="${origin}/admin/app-tickets?ticketId=${generatedTicketId}" 
+       style="background-color: #095c7b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(9, 92, 123, 0.1);">
+       View Ticket on App Tickets Page
+    </a>
+  </div>
+  
+  <p style="font-size: 11px; color: #94a3b8; margin-top: 35px; border-top: 1px solid #e2e8f0; padding-top: 15px; text-align: center;">
+    MailPlus Outbound Leads CRM &bull; App Tickets System
+  </p>
+</div>
+          `;
+
+          fetch("/api/campaigns/send-custom-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: assignedToEmail,
+              subject: `[App Ticket Assigned] ${title.trim()}`,
+              html: emailHtml
+            })
+          }).catch(err => console.error("Failed to dispatch assignment email:", err));
+        } catch (emailErr) {
+          console.error("Assignment email error:", emailErr);
+        }
+      }
       
       toast.success("Feedback submitted successfully! Thank you.");
       router.push("/app-tickets");
@@ -173,6 +266,39 @@ function CreateAppTicketForm() {
                 <option value="LocalMile.Plus">LocalMile.Plus</option>
                 <option value="LPO.Plus">LPO.Plus</option>
                 <option value="Website">Website</option>
+              </select>
+            </div>
+
+            {/* Assigned Super Admin */}
+            <div className="space-y-2">
+              <label htmlFor="assignedTo" className="text-sm font-semibold text-gray-700">
+                Assigned Super Admin *
+              </label>
+              <select
+                id="assignedTo"
+                value={assignedToUid}
+                onChange={(e) => {
+                  const uid = e.target.value;
+                  setAssignedToUid(uid);
+                  const selected = superAdmins.find((s) => s.uid === uid);
+                  if (selected) {
+                    setAssignedToName(selected.displayName || selected.email);
+                    setAssignedToEmail(selected.email || "");
+                  } else if (uid === "ncyhwLtOG1W7TZ43PkYCcObeCAf2") {
+                    setAssignedToName("Ankith Ravindran");
+                    setAssignedToEmail("ankith.ravindran@mailplus.com.au");
+                  }
+                }}
+                className="w-full text-sm rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b] font-medium"
+              >
+                <option value="ncyhwLtOG1W7TZ43PkYCcObeCAf2">Ankith Ravindran (Default)</option>
+                {superAdmins
+                  .filter((sa) => sa.uid !== "ncyhwLtOG1W7TZ43PkYCcObeCAf2")
+                  .map((admin) => (
+                    <option key={admin.uid} value={admin.uid}>
+                      {admin.displayName || admin.email} ({admin.email})
+                    </option>
+                  ))}
               </select>
             </div>
 

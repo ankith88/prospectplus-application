@@ -65,6 +65,9 @@ interface AppTicket {
   createdBy: string;
   createdByName: string;
   createdByEmail: string;
+  assignedToUid?: string;
+  assignedToName?: string;
+  assignedToEmail?: string;
   createdAt: any;
   updatedAt?: any;
   attachments?: { name: string; url: string }[];
@@ -77,7 +80,9 @@ interface AppTicket {
     note: string;
     updatedAt: string;
     updatedByName: string;
+    role?: "admin" | "user";
     emailSent?: boolean;
+    attachments?: { name: string; url: string }[];
   }[];
 }
 
@@ -97,6 +102,11 @@ export default function AdminAppTicketsPage() {
   const [emailNotesVal, setEmailNotesVal] = useState("");
   const [ccEmailVal, setCcEmailVal] = useState("ankith.ravindran@mailplus.com.au");
   const [users, setUsers] = useState<any[]>([]);
+
+  // Assigned Super Admin state
+  const [assignedToUidVal, setAssignedToUidVal] = useState("ncyhwLtOG1W7TZ43PkYCcObeCAf2");
+  const [assignedToNameVal, setAssignedToNameVal] = useState("Ankith Ravindran");
+  const [assignedToEmailVal, setAssignedToEmailVal] = useState("ankith.ravindran@mailplus.com.au");
 
   // Ticket detail editing states for admin
   const [editTitleVal, setEditTitleVal] = useState("");
@@ -125,6 +135,21 @@ export default function AdminAppTicketsPage() {
     setMounted(true);
     getAllUsers().then(setUsers).catch(console.error);
   }, []);
+
+  const superAdminsList = useMemo(() => {
+    return users.filter((u: any) => {
+      if (u.disabled === true || u.status === "disabled" || u.status === "inactive") return false;
+      return (
+        u.role === "admin" ||
+        u.role === "superadmin" ||
+        u.activeRole === "admin" ||
+        u.activeRole === "superadmin" ||
+        u.isSuperAdmin === true ||
+        u.email?.toLowerCase() === "ankith.ravindran@mailplus.com.au" ||
+        u.uid === "ncyhwLtOG1W7TZ43PkYCcObeCAf2"
+      );
+    });
+  }, [users]);
 
   useEffect(() => {
     if (loading) return;
@@ -164,6 +189,10 @@ export default function AdminAppTicketsPage() {
     setEmailNotesVal(ticket.adminNotes || "");
     setCcEmailVal("ankith.ravindran@mailplus.com.au");
     setUserSearchQuery("");
+
+    setAssignedToUidVal(ticket.assignedToUid || "ncyhwLtOG1W7TZ43PkYCcObeCAf2");
+    setAssignedToNameVal(ticket.assignedToName || "Ankith Ravindran");
+    setAssignedToEmailVal(ticket.assignedToEmail || "ankith.ravindran@mailplus.com.au");
 
     setEditTitleVal(ticket.title || "");
     setEditTypeVal(ticket.type || "feature");
@@ -221,10 +250,12 @@ export default function AdminAppTicketsPage() {
         note: adminNotesVal.trim(),
         updatedAt: new Date().toISOString(),
         updatedByName: userProfile?.displayName || userProfile?.email || "Admin",
+        role: "admin" as const,
         emailSent: sendEmailVal
       };
 
       const updatedHistory = selectedTicket.history ? [...selectedTicket.history, newHistoryItem] : [newHistoryItem];
+      const isReassigned = selectedTicket.assignedToUid !== assignedToUidVal;
 
       await updateDoc(ticketRef, {
         title: editTitleVal.trim(),
@@ -237,9 +268,60 @@ export default function AdminAppTicketsPage() {
         githubIssue: githubIssueVal.trim(),
         commitHash: commitHashVal.trim(),
         branchName: branchNameVal.trim(),
+        assignedToUid: assignedToUidVal,
+        assignedToName: assignedToNameVal,
+        assignedToEmail: assignedToEmailVal,
         updatedAt: serverTimestamp(),
         history: updatedHistory
       });
+
+      if (isReassigned && assignedToEmailVal) {
+        try {
+          const origin = typeof window !== "undefined" ? window.location.origin : "https://prospectplus.mailplus.com.au";
+          const emailHtml = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+  <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">📌 App Ticket Reassigned to You</h2>
+  <p>Hi <strong>${assignedToNameVal}</strong>,</p>
+  <p>App Ticket "<strong>${selectedTicket.title}</strong>" has been reassigned to you by <strong>${userProfile?.displayName || userProfile?.email || "Admin"}</strong>:</p>
+  
+  <div style="margin: 20px 0; padding: 16px; background-color: #f8fafc; border-left: 4px solid #095c7b; border-radius: 6px; border: 1px solid #e2e8f0;">
+    <p style="margin: 0 0 8px 0; color: #095c7b; font-weight: bold; font-size: 16px;">${selectedTicket.title}</p>
+    <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b;">
+      <strong>Type:</strong> ${selectedTicket.type} &nbsp;|&nbsp; 
+      <strong>Platform:</strong> ${selectedTicket.platform || "ProspectPlus"} &nbsp;|&nbsp; 
+      <strong>Submitted By:</strong> ${selectedTicket.createdByName} (${selectedTicket.createdByEmail})
+    </p>
+    <p style="margin: 8px 0 0 0; color: #334155; font-size: 14px; white-space: pre-wrap;">${selectedTicket.description}</p>
+  </div>
+
+  <p style="font-size: 14px; color: #475569;">Click the button below to view and manage this ticket on the App Tickets page:</p>
+  
+  <div style="text-align: center; margin: 25px 0;">
+    <a href="${origin}/admin/app-tickets?ticketId=${selectedTicket.id}" 
+       style="background-color: #095c7b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(9, 92, 123, 0.1);">
+       View Ticket on App Tickets Page
+    </a>
+  </div>
+  
+  <p style="font-size: 11px; color: #94a3b8; margin-top: 35px; border-top: 1px solid #e2e8f0; padding-top: 15px; text-align: center;">
+    MailPlus Outbound Leads CRM &bull; App Tickets System
+  </p>
+</div>
+          `;
+
+          fetch("/api/campaigns/send-custom-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: assignedToEmailVal,
+              subject: `[App Ticket Reassigned] ${selectedTicket.title}`,
+              html: emailHtml
+            })
+          }).catch(err => console.error("Failed to send reassignment email:", err));
+        } catch (emailErr) {
+          console.error("Reassignment email error:", emailErr);
+        }
+      }
 
       if (sendEmailVal || statusVal === "waiting_on_user") {
         const statusLabelMap: Record<string, string> = {
@@ -1072,7 +1154,7 @@ export default function AdminAppTicketsPage() {
           <CardTitle className="text-xl text-[#095c7b] flex items-center gap-2">
             Feedback & Bugs Listing
           </CardTitle>
-          <CardDescription>Click View/Edit on any ticket to update its status or add developer notes.</CardDescription>
+          <CardDescription>Click View/Edit on any ticket to update its status, assignee, or add developer notes.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {filteredTickets.length === 0 ? (
@@ -1088,6 +1170,7 @@ export default function AdminAppTicketsPage() {
                     <th className="px-6 py-4">Category</th>
                     <th className="px-6 py-4">Platform</th>
                     <th className="px-6 py-4">Submitted By</th>
+                    <th className="px-6 py-4">Assigned To</th>
                     <th className="px-6 py-4">Date</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
@@ -1096,7 +1179,7 @@ export default function AdminAppTicketsPage() {
                 <tbody className="divide-y divide-gray-100">
                   {filteredTickets.map((ticket) => (
                     <tr key={ticket.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-gray-900 max-w-[280px] truncate" title={ticket.title}>
+                      <td className="px-6 py-4 font-bold text-[#095c7b] max-w-[220px] truncate" title={ticket.title}>
                         {ticket.title}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1112,6 +1195,11 @@ export default function AdminAppTicketsPage() {
                           <span className="font-medium text-gray-800">{ticket.createdByName}</span>
                           <span className="text-xs text-muted-foreground">{ticket.createdByEmail}</span>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-800">
+                        <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border border-[#095c7b]/20 font-semibold">
+                          {ticket.assignedToName || "Ankith Ravindran"}
+                        </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-muted-foreground">
                         {ticket.createdAt ? new Date(ticket.createdAt.seconds * 1000).toLocaleDateString() : "Just now"}
@@ -1155,6 +1243,8 @@ export default function AdminAppTicketsPage() {
               </DialogTitle>
               <div className="text-xs text-muted-foreground flex flex-wrap gap-2 pt-1.5">
                 <span>Submitted by: <strong>{selectedTicket.createdByName}</strong> ({selectedTicket.createdByEmail})</span>
+                <span>•</span>
+                <span>Assigned To: <strong>{selectedTicket.assignedToName || "Ankith Ravindran"}</strong></span>
                 <span>•</span>
                 <span>Date: {selectedTicket.createdAt ? new Date(selectedTicket.createdAt.seconds * 1000).toLocaleString() : "N/A"}</span>
               </div>
@@ -1300,21 +1390,43 @@ export default function AdminAppTicketsPage() {
                     {selectedTicket.history.map((item, idx) => (
                       <div key={idx} className="bg-gray-50/70 border border-gray-100 rounded-lg p-3 text-xs space-y-1.5">
                         <div className="flex items-center justify-between flex-wrap gap-2 text-muted-foreground">
-                          <span className="font-semibold text-gray-700">{item.updatedByName}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-gray-700">{item.updatedByName}</span>
+                            {item.role === 'user' ? (
+                              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 py-0">User Reply</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 py-0">Admin Update</Badge>
+                            )}
+                          </div>
                           <span>{new Date(item.updatedAt).toLocaleString()}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] uppercase font-bold text-gray-500">Status changed to:</span>
+                          <span className="text-[10px] uppercase font-bold text-gray-500">Status:</span>
                           {getStatusBadge(item.status)}
                           {item.emailSent && (
                             <span className="bg-blue-50 text-blue-700 text-[10px] px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-1">
-                              ✉ Email Update Sent
+                              ✉ Email Sent
                             </span>
                           )}
                         </div>
                         {item.note && (
                           <div className="bg-white rounded border border-gray-100 p-2 text-sm text-gray-700 whitespace-pre-wrap">
                             {item.note}
+                          </div>
+                        )}
+                        {item.attachments && item.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {item.attachments.map((file, fileIdx) => (
+                              <a
+                                key={fileIdx}
+                                href={file.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-[#095c7b] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded font-medium transition-colors"
+                              >
+                                <Paperclip className="h-3 w-3" /> {file.name}
+                              </a>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -1327,8 +1439,8 @@ export default function AdminAppTicketsPage() {
               <div className="space-y-4 pt-4 border-t">
                 <h4 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider">Admin Actions</h4>
                 
-                {/* Status & Platform Dropdowns */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Status, Platform & Assignee Dropdowns */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700">Update Status</label>
                     <select
@@ -1344,23 +1456,6 @@ export default function AdminAppTicketsPage() {
                       <option value="completed">Completed</option>
                       <option value="declined">Declined</option>
                     </select>
-                    <div className="pt-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 font-bold text-xs flex items-center justify-center gap-1.5"
-                        onClick={() => {
-                          setStatusVal("waiting_on_user");
-                          setSendEmailVal(true);
-                          setAdminNotesVal(prev => prev || "Super Admin is awaiting your response/clarification to proceed with this request.");
-                          setEmailNotesVal(prev => prev || "Super Admin is awaiting your response/clarification to proceed with this request.");
-                        }}
-                      >
-                        <Clock className="h-3.5 w-3.5 text-amber-600" />
-                        Quick Action: Mark as 'Waiting on User' & Notify
-                      </Button>
-                    </div>
                   </div>
 
                   <div className="space-y-2">

@@ -65,6 +65,9 @@ interface AppTicket {
   createdBy: string;
   createdByName: string;
   createdByEmail: string;
+  assignedToUid?: string;
+  assignedToName?: string;
+  assignedToEmail?: string;
   createdAt: any;
   updatedAt?: any;
   attachments?: { name: string; url: string }[];
@@ -74,7 +77,9 @@ interface AppTicket {
     note: string;
     updatedAt: string;
     updatedByName: string;
+    role?: "admin" | "user";
     emailSent?: boolean;
+    attachments?: { name: string; url: string }[];
   }[];
 }
 
@@ -104,6 +109,135 @@ export default function AppTicketsPage() {
   const [editAttachments, setEditAttachments] = useState<{ name: string; url: string }[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isUploadingEditFiles, setIsUploadingEditFiles] = useState(false);
+
+  // User In-Ticket Reply states
+  const [replyText, setReplyText] = useState("");
+  const [replyAttachments, setReplyAttachments] = useState<{ name: string; url: string }[]>([]);
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+  const [isUploadingReplyFiles, setIsUploadingReplyFiles] = useState(false);
+
+  const handleReplyFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const targetTicket = selectedTicket || editingTicket;
+    if (!targetTicket) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploadingReplyFiles(true);
+    const newAttachments = [...replyAttachments];
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const storageRef = ref(storage, `app_tickets/reply_attachments/${targetTicket.id}/${file.name}`);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        newAttachments.push({ name: file.name, url });
+      }
+      setReplyAttachments(newAttachments);
+      toast.success("Attachment uploaded.");
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Error uploading attachment.");
+    } finally {
+      setIsUploadingReplyFiles(false);
+      if (event.target) event.target.value = "";
+    }
+  };
+
+  const removeReplyAttachment = (index: number) => {
+    const updated = [...replyAttachments];
+    updated.splice(index, 1);
+    setReplyAttachments(updated);
+  };
+
+  const handleSendReply = async () => {
+    const targetTicket = selectedTicket || editingTicket;
+    if (!targetTicket || !replyText.trim()) {
+      toast.error("Please enter a reply message.");
+      return;
+    }
+
+    setIsSubmittingReply(true);
+    try {
+      const ticketRef = doc(db, "app_tickets", targetTicket.id);
+
+      // Auto-transition 'waiting_on_user' back to 'open'
+      const newStatus: AppTicket["status"] = targetTicket.status === "waiting_on_user" ? "open" : targetTicket.status;
+
+      const newHistoryItem = {
+        status: newStatus,
+        note: replyText.trim(),
+        updatedAt: new Date().toISOString(),
+        updatedByName: userProfile?.displayName || userProfile?.email || "User",
+        role: "user" as const,
+        emailSent: true,
+        attachments: replyAttachments
+      };
+
+      const updatedHistory = targetTicket.history ? [...targetTicket.history, newHistoryItem] : [newHistoryItem];
+
+      await updateDoc(ticketRef, {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+        history: updatedHistory
+      });
+
+      // Send email to assigned super admin
+      const adminEmail = targetTicket.assignedToEmail || "ankith.ravindran@mailplus.com.au";
+      const origin = typeof window !== "undefined" ? window.location.origin : "https://prospectplus.mailplus.com.au";
+      
+      const emailHtml = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+  <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">💬 New User Reply on App Ticket</h2>
+  <p>Hi <strong>${targetTicket.assignedToName || "Admin"}</strong>,</p>
+  <p><strong>${userProfile?.displayName || "User"}</strong> has posted a response on ticket "<strong>${targetTicket.title}</strong>":</p>
+
+  <div style="margin: 20px 0; padding: 15px; background-color: #f8fafc; border-left: 4px solid #095c7b; border-radius: 4px; border: 1px solid #e2e8f0;">
+    <p style="margin: 0; color: #334155; font-size: 14px; white-space: pre-wrap;">${replyText.trim()}</p>
+  </div>
+
+  <p style="font-size: 14px; color: #475569;">Click the button below to view the ticket and response timeline:</p>
+
+  <div style="text-align: center; margin: 25px 0;">
+    <a href="${origin}/admin/app-tickets?ticketId=${targetTicket.id}" 
+       style="background-color: #095c7b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(9, 92, 123, 0.1);">
+       View Ticket & Respond
+    </a>
+  </div>
+
+  <p style="font-size: 11px; color: #94a3b8; margin-top: 35px; border-top: 1px solid #e2e8f0; padding-top: 15px; text-align: center;">
+    MailPlus Outbound Leads CRM &bull; App Tickets System
+  </p>
+</div>
+      `;
+
+      fetch("/api/campaigns/send-custom-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: adminEmail,
+          subject: `[App Ticket Reply] ${targetTicket.title}`,
+          html: emailHtml
+        })
+      }).catch(err => console.error("Failed to notify admin of reply:", err));
+
+      toast.success("Reply posted successfully!");
+      setReplyText("");
+      setReplyAttachments([]);
+
+      if (selectedTicket && selectedTicket.id === targetTicket.id) {
+        setSelectedTicket(prev => prev ? { ...prev, status: newStatus, history: updatedHistory } : null);
+      }
+      if (editingTicket && editingTicket.id === targetTicket.id) {
+        setEditingTicket(prev => prev ? { ...prev, status: newStatus, history: updatedHistory } : null);
+      }
+    } catch (error) {
+      console.error("Error posting reply:", error);
+      toast.error("Failed to post reply.");
+    } finally {
+      setIsSubmittingReply(false);
+    }
+  };
 
   const canEditTicket = (ticket: AppTicket) => {
     if (!userProfile) return false;
@@ -1014,6 +1148,8 @@ export default function AppTicketsPage() {
               <div className="text-sm text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 pt-1">
                 <span>Submitted by: <strong>{selectedTicket.createdByName}</strong> ({selectedTicket.createdByEmail})</span>
                 <span>•</span>
+                <span>Assigned To: <strong>{selectedTicket.assignedToName || "Ankith Ravindran"}</strong></span>
+                <span>•</span>
                 <span>Date: {selectedTicket.createdAt ? new Date(selectedTicket.createdAt.seconds * 1000).toLocaleString() : "N/A"}</span>
               </div>
             </DialogHeader>
@@ -1027,7 +1163,7 @@ export default function AppTicketsPage() {
                     Action Required: Super Admin is waiting on your response
                   </div>
                   <p className="text-xs text-amber-800/90 leading-relaxed pl-7">
-                    The admin team has requested additional details or clarification on this request before proceeding. Please review the admin commentary below or update the ticket details.
+                    The admin team has requested additional details or clarification on this request before proceeding. Please reply below or update the ticket details.
                   </p>
                 </div>
               )}
@@ -1079,7 +1215,7 @@ export default function AppTicketsPage() {
               {/* Superadmin Response Timeline & History */}
               <div className="space-y-4 pt-4 border-t">
                 <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-[#095c7b]" /> Admin Responses & Timeline
+                  <Clock className="h-4 w-4 text-[#095c7b]" /> Conversation Timeline & Updates
                 </h4>
                 
                 {selectedTicket.history && selectedTicket.history.length > 0 ? (
@@ -1087,10 +1223,19 @@ export default function AppTicketsPage() {
                     {selectedTicket.history.map((item, idx) => (
                       <div key={idx} className="relative pl-4 space-y-1.5 pb-2">
                         {/* Dot indicator */}
-                        <div className="absolute left-[-21px] top-1.5 bg-[#095c7b] h-2.5 w-2.5 rounded-full border-2 border-white shadow-xs" />
+                        <div className={`absolute left-[-21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white shadow-xs ${
+                          item.role === 'user' ? 'bg-blue-600' : 'bg-[#095c7b]'
+                        }`} />
                         
                         <div className="flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
-                          <span className="font-semibold text-gray-700">{item.updatedByName}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-gray-800">{item.updatedByName}</span>
+                            {item.role === 'user' ? (
+                              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 py-0">User Reply</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 py-0">Admin Response</Badge>
+                            )}
+                          </div>
                           <span>{new Date(item.updatedAt).toLocaleString()}</span>
                         </div>
                         
@@ -1100,8 +1245,26 @@ export default function AppTicketsPage() {
                         </div>
 
                         {item.note && (
-                          <div className="bg-amber-50/40 border border-amber-100/50 rounded-lg p-3 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed shadow-xs">
+                          <div className={`rounded-lg p-3 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed shadow-xs border ${
+                            item.role === 'user' ? 'bg-blue-50/50 border-blue-100' : 'bg-amber-50/40 border-amber-100/50'
+                          }`}>
                             {item.note}
+                          </div>
+                        )}
+
+                        {item.attachments && item.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {item.attachments.map((file, fileIdx) => (
+                              <a
+                                key={fileIdx}
+                                href={file.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-[#095c7b] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded font-medium transition-colors"
+                              >
+                                <Paperclip className="h-3 w-3" /> {file.name}
+                              </a>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -1113,9 +1276,70 @@ export default function AppTicketsPage() {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground italic">
-                    The superadmin has not reviewed or left commentary on this request yet.
+                    No comments or updates recorded yet.
                   </p>
                 )}
+              </div>
+
+              {/* In-Ticket Reply Box */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 mt-4">
+                <h4 className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4" /> Reply to Ticket
+                </h4>
+                
+                <Textarea
+                  placeholder="Type your response, clarification, or test results here..."
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  className="bg-white border-slate-200 text-sm min-h-[90px] focus-visible:ring-[#095c7b]"
+                />
+
+                {replyAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {replyAttachments.map((f, i) => (
+                      <div key={i} className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-md text-xs">
+                        <File className="h-3.5 w-3.5 text-[#095c7b]" />
+                        <span className="truncate max-w-[140px]">{f.name}</span>
+                        <button type="button" onClick={() => removeReplyAttachment(i)} className="text-rose-500 hover:text-rose-700">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-1">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs text-[#095c7b] hover:text-[#053647] font-semibold bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors">
+                    {isUploadingReplyFiles ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Paperclip className="h-3.5 w-3.5" />
+                    )}
+                    {isUploadingReplyFiles ? "Uploading..." : "Attach File/Screenshot"}
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={handleReplyFileUpload}
+                      disabled={isUploadingReplyFiles || isSubmittingReply}
+                    />
+                  </label>
+
+                  <Button
+                    onClick={handleSendReply}
+                    disabled={isSubmittingReply || isUploadingReplyFiles || !replyText.trim()}
+                    className="bg-[#095c7b] text-white hover:bg-[#053647] text-xs font-bold px-4 h-9 shadow-xs"
+                  >
+                    {isSubmittingReply ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        Posting Reply...
+                      </>
+                    ) : (
+                      "Post Reply"
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </DialogContent>
@@ -1288,6 +1512,136 @@ export default function AppTicketsPage() {
                     </span>
                     <span className="text-[10px] text-gray-400">PNG, JPG, PDF, GIF up to 10MB</span>
                   </div>
+                </div>
+              </div>
+
+              {/* Conversation Timeline & History */}
+              <div className="space-y-4 pt-4 border-t">
+                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-[#095c7b]" /> Conversation Timeline & Updates
+                </h4>
+                
+                {editingTicket.history && editingTicket.history.length > 0 ? (
+                  <div className="space-y-3 pl-2 border-l-2 border-[#095c7b]/20 ml-2">
+                    {editingTicket.history.map((item, idx) => (
+                      <div key={idx} className="relative pl-4 space-y-1.5 pb-2">
+                        <div className={`absolute left-[-21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white shadow-xs ${
+                          item.role === 'user' ? 'bg-blue-600' : 'bg-[#095c7b]'
+                        }`} />
+                        
+                        <div className="flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-gray-800">{item.updatedByName}</span>
+                            {item.role === 'user' ? (
+                              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 py-0">User Reply</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 py-0">Admin Response</Badge>
+                            )}
+                          </div>
+                          <span>{new Date(item.updatedAt).toLocaleString()}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase font-bold text-gray-500">Status:</span>
+                          {getStatusBadge(item.status)}
+                        </div>
+
+                        {item.note && (
+                          <div className={`rounded-lg p-3 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed shadow-xs border ${
+                            item.role === 'user' ? 'bg-blue-50/50 border-blue-100' : 'bg-amber-50/40 border-amber-100/50'
+                          }`}>
+                            {item.note}
+                          </div>
+                        )}
+
+                        {item.attachments && item.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {item.attachments.map((file, fileIdx) => (
+                              <a
+                                key={fileIdx}
+                                href={file.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-[#095c7b] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded font-medium transition-colors"
+                              >
+                                <Paperclip className="h-3 w-3" /> {file.name}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : editingTicket.adminNotes ? (
+                  <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-4 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                    {editingTicket.adminNotes}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    No comments or updates recorded yet.
+                  </p>
+                )}
+              </div>
+
+              {/* In-Ticket Reply Box */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 mt-4">
+                <h4 className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4" /> Reply to Ticket
+                </h4>
+                
+                <Textarea
+                  placeholder="Type your response, clarification, or test results here..."
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  className="bg-white border-slate-200 text-sm min-h-[90px] focus-visible:ring-[#095c7b]"
+                />
+
+                {replyAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {replyAttachments.map((f, i) => (
+                      <div key={i} className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-md text-xs">
+                        <File className="h-3.5 w-3.5 text-[#095c7b]" />
+                        <span className="truncate max-w-[140px]">{f.name}</span>
+                        <button type="button" onClick={() => removeReplyAttachment(i)} className="text-rose-500 hover:text-rose-700">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-1">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs text-[#095c7b] hover:text-[#053647] font-semibold bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors">
+                    {isUploadingReplyFiles ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Paperclip className="h-3.5 w-3.5" />
+                    )}
+                    {isUploadingReplyFiles ? "Uploading..." : "Attach File/Screenshot"}
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={handleReplyFileUpload}
+                      disabled={isUploadingReplyFiles || isSubmittingReply}
+                    />
+                  </label>
+
+                  <Button
+                    type="button"
+                    onClick={handleSendReply}
+                    disabled={isSubmittingReply || isUploadingReplyFiles || !replyText.trim()}
+                    className="bg-[#095c7b] text-white hover:bg-[#053647] text-xs font-bold px-4 h-9 shadow-xs"
+                  >
+                    {isSubmittingReply ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        Posting Reply...
+                      </>
+                    ) : (
+                      "Post Reply"
+                    )}
+                  </Button>
                 </div>
               </div>
 

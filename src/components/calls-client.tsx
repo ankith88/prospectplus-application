@@ -223,12 +223,13 @@ export default function CallsClientPage() {
     });
     
     const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
+    const isAdminRole = ['admin', 'Outbound Admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile?.activeRole || '');
     if (isAm && userProfile?.displayName) {
         callsToFilter = callsToFilter.filter(c => 
             c.author === userProfile.displayName || 
             c.accountManagerAssigned === userProfile.displayName
         );
-    } else if (userProfile?.activeRole !== 'admin' && userProfile?.displayName) {
+    } else if (!isAdminRole && userProfile?.displayName) {
         callsToFilter = callsToFilter.filter(c => 
             c.author === userProfile.displayName || 
             c.dialerAssigned === userProfile.displayName
@@ -269,7 +270,7 @@ export default function CallsClientPage() {
         const reviewedByMatch = appliedFilters.reviewedBy.length === 0 || (call.review?.reviewer && appliedFilters.reviewedBy.includes(call.review.reviewer));
         const reviewCategoryMatch = appliedFilters.reviewCategory.length === 0 || (call.review?.category && appliedFilters.reviewCategory.includes(call.review.category));
 
-        const finalUserMatch = userProfile?.activeRole === 'admin' ? userMatch : true;
+        const finalUserMatch = isAdminRole ? userMatch : true;
 
         return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && bucketMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch;
     });
@@ -676,7 +677,7 @@ export default function CallsClientPage() {
                                 <span>View Review</span>
                             </DropdownMenuItem>
                         )}
-                        {userProfile?.activeRole === 'admin' && activeCallTab !== 'initiated' && (
+                        {['admin', 'Outbound Admin'].includes(userProfile?.activeRole || '') && activeCallTab !== 'initiated' && (
                             <DropdownMenuItem 
                                 onClick={() => {
                                     setReviewingCall(call);
@@ -804,7 +805,7 @@ export default function CallsClientPage() {
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={pendingFilters.leadName} onChange={(e) => handlePendingFilterChange('leadName', e.target.value)} />
                     </div>
-                    {userProfile?.activeRole === 'admin' && (
+                    {['admin', 'Outbound Admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile?.activeRole || '') && (
                        <>
                         <div className="space-y-2">
                             <Label htmlFor="user">User</Label>
@@ -1118,7 +1119,7 @@ export default function CallsClientPage() {
                 <CardTitle>Call History</CardTitle>
                 <Badge variant="secondary">{tabFilteredCalls.length} call(s)</Badge>
             </div>
-            {userProfile?.activeRole === 'admin' && (
+            {['admin', 'Outbound Admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile?.activeRole || '') && (
                 <Button onClick={handleExport} variant="outline" size="sm" disabled={tabFilteredCalls.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export

@@ -119,6 +119,18 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
                     needsUpdate = true;
                 }
 
+                const currentHistoryAppointments: string[] = currentFeatures.historyAppointments || DEFAULT_ROLE_ACCESS.historyAppointments;
+                if (!currentHistoryAppointments.includes('Outbound Admin')) {
+                    currentFeatures.historyAppointments = Array.from(new Set([...currentHistoryAppointments, 'Outbound Admin']));
+                    needsUpdate = true;
+                }
+
+                const currentHistoryCallsTranscripts: string[] = currentFeatures.historyCallsTranscripts || DEFAULT_ROLE_ACCESS.historyCallsTranscripts;
+                if (!currentHistoryCallsTranscripts.includes('Outbound Admin')) {
+                    currentFeatures.historyCallsTranscripts = Array.from(new Set([...currentHistoryCallsTranscripts, 'Outbound Admin']));
+                    needsUpdate = true;
+                }
+
                 if (needsUpdate) {
                     await setDoc(matrixDocRef, { features: currentFeatures }, { merge: true });
                 }
@@ -182,8 +194,12 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
       return true;
     }
 
-    // Explicit override for user and Outbound Admin to access Outbound Reporting
+    // Explicit override for user and Outbound Admin to access Outbound Reporting and History pages
     if (feature === 'reporting' && ['user', 'Outbound Admin'].includes(userProfile.activeRole)) {
+      return true;
+    }
+
+    if (['historyAppointments', 'historyCallsTranscripts'].includes(feature) && ['Outbound Admin'].includes(userProfile.activeRole)) {
       return true;
     }
 

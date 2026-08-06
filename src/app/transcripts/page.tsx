@@ -63,7 +63,7 @@ export default function TranscriptsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers', 'Outbound Admin'].includes(userProfile.activeRole);
 
   const fetchTranscripts = async () => {
     if (!user) return;
@@ -72,7 +72,7 @@ export default function TranscriptsPage() {
       const fetchedTranscripts = await getAllTranscripts();
 
       const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
-      if (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || isAm) {
+      if (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Outbound Admin' || isAm) {
         setAllTranscripts(fetchedTranscripts);
       } else {
         const myTranscripts = fetchedTranscripts.filter(t => t.author === user.displayName);
@@ -243,7 +243,7 @@ export default function TranscriptsPage() {
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
             <h1 className="text-3xl font-bold tracking-tight">All Transcripts</h1>
-            <p className="text-muted-foreground">Review call transcripts. {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager') ? 'Showing all transcripts.' : (userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers') ? 'Showing transcripts for your assigned leads.' : 'Showing your transcripts.'}</p>
+            <p className="text-muted-foreground">Review call transcripts. {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Outbound Admin') ? 'Showing all transcripts.' : (userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers') ? 'Showing transcripts for your assigned leads.' : 'Showing your transcripts.'}</p>
         </div>
         <Button onClick={handleSyncTranscripts} disabled={isSyncing}>
             {isSyncing ? <Loader/> : <DownloadCloud className="mr-2 h-4 w-4" />}
@@ -339,7 +339,7 @@ export default function TranscriptsPage() {
               <CardTitle>Call History</CardTitle>
               <Badge variant="secondary">{filteredTranscripts.length} transcript(s)</Badge>
             </div>
-            {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager') && (
+            {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Outbound Admin') && (
                 <Button onClick={handleExport} variant="outline" size="sm" disabled={filteredTranscripts.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export

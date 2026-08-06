@@ -118,10 +118,29 @@ function SuggestedMatchesCell({
 }
 
 export default function UnassignedCallsPage() {
-  const { user } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [unassignedCalls, setUnassignedCalls] = useState<UnassignedCall[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers', 'Field Sales', 'Field Sales Admin'].includes(userProfile.activeRole);
+
+  if (authLoading || loading) {
+    return (
+      <div className="flex h-[60vh] w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#095c7b]" />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view this page. Please contact Ankith Ravindran if you need access.</p>
+      </div>
+    );
+  }
   
   // Search state per callId
   const [searchQueries, setSearchQueries] = useState<Record<string, string>>({});
