@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminApp } from '@/lib/firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
-import { Lead } from '@/lib/types';
-
-const db = getFirestore(adminApp);
+import { findLeadByIdOrInternalId } from '@/lib/lead-lookup';
 
 export async function GET(
   request: Request,
@@ -16,29 +12,14 @@ export async function GET(
       return NextResponse.json({ error: 'Company ID is required' }, { status: 400 });
     }
 
-    let existingLead: Lead | null = null;
-    let leadId = id;
+    const result = await findLeadByIdOrInternalId(id);
 
-    // 1. Try fetching directly by document ID
-    const leadSnap = await db.collection('leads').doc(id).get();
-    if (leadSnap.exists) {
-      existingLead = { id: leadSnap.id, ...leadSnap.data() } as Lead;
-      leadId = leadSnap.id;
-    }
-
-    // 2. Fallback: Search by netsuiteId if doc ID didn't match
-    if (!existingLead) {
-      const qNs = await db.collection('leads').where('netsuiteId', '==', id).limit(1).get();
-      if (!qNs.empty) {
-        const leadDoc = qNs.docs[0];
-        existingLead = { id: leadDoc.id, ...leadDoc.data() } as Lead;
-        leadId = leadDoc.id;
-      }
-    }
-
-    if (!existingLead) {
+    if (!result) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
+
+    const existingLead = result.lead;
+    const leadId = result.leadId;
 
     // Determine primary contact details
     const contacts = (existingLead.contacts || []) as any[];
@@ -48,7 +29,7 @@ export async function GET(
       id: leadId,
       prospectPlusId: (existingLead as any).prospectPlusId || (existingLead as any).prospectplusId || (existingLead as any).prospect_plus_id || leadId,
       companyName: existingLead.companyName || 'Valued Customer',
-      netsuiteId: (existingLead as any).netsuiteId || '',
+      netsuiteId: (existingLead as any).netsuiteId || (existingLead as any).internalid || (existingLead as any).internalId || '',
       contactName: primaryContact.name || (existingLead as any).contactName || '',
       contactEmail: primaryContact.email || existingLead.customerServiceEmail || '',
       contactPhone: primaryContact.phone || existingLead.customerPhone || '',

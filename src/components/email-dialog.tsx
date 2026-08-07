@@ -13,8 +13,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, Paperclip, X } from 'lucide-react';
+import { Loader2, Send, Paperclip, X, Bell } from 'lucide-react';
 import { storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -24,11 +25,13 @@ interface EmailDialogProps {
   toEmail: string;
   recipientName?: string;
   senderEmail?: string;
+  leadId?: string;
 }
 
-export function EmailDialog({ isOpen, onClose, toEmail, recipientName, senderEmail }: EmailDialogProps) {
+export function EmailDialog({ isOpen, onClose, toEmail, recipientName, senderEmail, leadId }: EmailDialogProps) {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [notifyOnOpen, setNotifyOnOpen] = useState(true);
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -78,7 +81,11 @@ export function EmailDialog({ isOpen, onClose, toEmail, recipientName, senderEma
           subject,
           html: message.replace(/\n/g, '<br/>'),
           customFrom: senderEmail,
-          attachments
+          attachments,
+          leadId,
+          notifyOnOpen,
+          notifyUserEmail: senderEmail,
+          trackingCategory: 'custom'
         })
       });
 
@@ -135,6 +142,27 @@ export function EmailDialog({ isOpen, onClose, toEmail, recipientName, senderEma
               onChange={(e) => setMessage(e.target.value)}
               className="min-h-[150px] resize-none"
             />
+          </div>
+
+          {/* Open Tracking Notification Checkbox */}
+          <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
+            <Checkbox 
+              id="notifyOnOpen" 
+              checked={notifyOnOpen} 
+              onCheckedChange={(checked) => setNotifyOnOpen(!!checked)}
+            />
+            <div className="grid gap-1 leading-none">
+              <label
+                htmlFor="notifyOnOpen"
+                className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
+              >
+                <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
+                Notify me (In-App & Email Alert) when recipient opens this email
+              </label>
+              <p className="text-[11px] text-slate-500">
+                You will receive a notification and inbox alert when this message is opened.
+              </p>
+            </div>
           </div>
 
           {/* Attachments List & Uploader */}

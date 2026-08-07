@@ -270,6 +270,72 @@ export async function POST(request: Request) {
             }
           }
 
+          if (currentNode.type === 'email_open_condition' || (currentNode.type === 'condition' && config.conditionType === 'email_opened')) {
+            const config = currentNode.config || {};
+            const timeoutHours = Number(config.timeoutHours) || 72; // default 3 days wait
+            
+            // Fetch deliveries for this lead and journey
+            const deliveriesSnap = await db.collection('campaign_deliveries')
+              .where('campaignId', '==', journeyId)
+              .where('leadId', '==', leadId)
+              .get();
+
+            let isOpened = false;
+            let firstSentTime: Date | null = null;
+
+            deliveriesSnap.forEach(dDoc => {
+              const dData = dDoc.data();
+              if (dData.openedAt && Array.isArray(dData.openedAt) && dData.openedAt.length > 0) {
+                isOpened = true;
+              }
+              if (dData.sentAt) {
+                const t = new Date(dData.sentAt);
+                if (!firstSentTime || t < firstSentTime) firstSentTime = t;
+              }
+            });
+
+            const elapsedHours = firstSentTime ? (now.getTime() - firstSentTime.getTime()) / (1000 * 60 * 60) : 0;
+
+            if (isOpened) {
+              const matchingEdge = journey.edges?.find((e: any) => 
+                e.source === currentNode!.id && 
+                (e.condition === 'opened' || e.condition === 'true' || e.condition === 'match')
+              );
+              if (matchingEdge) {
+                state.currentNodeId = matchingEdge.target;
+                state.executionHistory.push({
+                  nodeId: currentNode.id,
+                  nodeType: 'email_open_condition',
+                  executedAt: nowStr,
+                  actionResult: 'Recipient email open confirmed! Routed to Opened path.'
+                });
+                stateUpdated = true;
+                currentNode = journey.nodes?.find((n: any) => n.id === state.currentNodeId);
+                continue;
+              }
+            } else if (elapsedHours >= timeoutHours || forceExecute) {
+              const matchingEdge = journey.edges?.find((e: any) => 
+                e.source === currentNode!.id && 
+                (e.condition === 'unopened' || e.condition === 'false' || e.condition === 'no-match')
+              );
+              if (matchingEdge) {
+                state.currentNodeId = matchingEdge.target;
+                state.executionHistory.push({
+                  nodeId: currentNode.id,
+                  nodeType: 'email_open_condition',
+                  executedAt: nowStr,
+                  actionResult: `Email open timeout reached (${timeoutHours}h). Routed to Unopened path.`
+                });
+                stateUpdated = true;
+                currentNode = journey.nodes?.find((n: any) => n.id === state.currentNodeId);
+                continue;
+              }
+            } else {
+              // Still waiting for recipient to open or for timeout
+              break;
+            }
+          }
+
           if (currentNode.type === 'action') {
             const config = currentNode.config || {};
 
@@ -404,7 +470,11 @@ export async function POST(request: Request) {
                 to: recipientEmail,
                 subject,
                 html: bodyHtml,
-                customFrom: sender
+                customFrom: sender,
+                leadId,
+                notifyOnOpen: !!config.notifyOnOpen,
+                notifyUserEmail: config.notifyUserEmail,
+                trackingCategory: 'nurture'
               });
 
               // Log delivery record

@@ -37,13 +37,15 @@ import {
   Layers, 
   AlertTriangle, 
   CheckCircle2, 
-  Send,
-  Lock,
   ChevronLeft,
   ChevronRight,
-  ExternalLink
+  ExternalLink,
+  Zap,
+  Send,
+  Loader2,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
+import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 
 const BUCKET_LABELS: Record<string, string> = {
   in_review: 'In Review',
@@ -174,6 +176,31 @@ export function MasterAllLeadsClient() {
   const [filterDialer, setFilterDialer] = useState('ALL')
   const [filterAccountManager, setFilterAccountManager] = useState('ALL')
   const [filterExportStatus, setFilterExportStatus] = useState<'ALL' | 'UNEXPORTED' | 'EXPORTED'>('ALL')
+  const [filterNetSuiteSync, setFilterNetSuiteSync] = useState<'ALL' | 'UNSYNCED' | 'FAILED' | 'SYNCED'>('ALL')
+  const [isBulkSyncingNetSuite, setIsBulkSyncingNetSuite] = useState(false)
+
+  const handleBulkNetSuiteSync = async () => {
+    if (selectedLeads.length === 0) return
+    setIsBulkSyncingNetSuite(true)
+    let successCount = 0
+    try {
+      for (const leadId of selectedLeads) {
+        const res = await rekeyLeadToNetSuite(leadId)
+        if (res.success) successCount++
+      }
+      toast({
+        title: 'NetSuite Sync Complete',
+        description: `Successfully created and re-keyed ${successCount} of ${selectedLeads.length} leads in NetSuite.`
+      })
+      fetchData()
+      setSelectedLeads([])
+    } catch (err: any) {
+      console.error('Bulk NetSuite sync error:', err)
+      toast({ variant: 'destructive', title: 'Bulk Sync Error', description: err.message || 'Error syncing leads with NetSuite.' })
+    } finally {
+      setIsBulkSyncingNetSuite(false)
+    }
+  }
   
   const [dateCreatedFrom, setDateCreatedFrom] = useState('')
   const [dateCreatedTo, setDateCreatedTo] = useState('')
@@ -331,6 +358,17 @@ export function MasterAllLeadsClient() {
       }
       if (filterExportStatus === 'EXPORTED' && !lead.isExported) {
         return false
+      }
+
+      // 8. NetSuite Sync Status
+      if (filterNetSuiteSync === 'UNSYNCED') {
+        const isAlphanumeric = !/^\d+$/.test(lead.id)
+        if (!isAlphanumeric && lead.syncedWithNetSuite) return false
+      } else if (filterNetSuiteSync === 'FAILED') {
+        if ((lead as any).netSuiteSyncStatus !== 'failed') return false
+      } else if (filterNetSuiteSync === 'SYNCED') {
+        const isNumeric = /^\d+$/.test(lead.id)
+        if (!isNumeric || !lead.syncedWithNetSuite) return false
       }
 
       // 8. Date Created Range
@@ -1071,6 +1109,22 @@ export function MasterAllLeadsClient() {
               </Select>
             </div>
 
+            {/* 7b. NetSuite Sync Status */}
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">NetSuite Sync Status</Label>
+              <Select value={filterNetSuiteSync} onValueChange={(val: any) => setFilterNetSuiteSync(val)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="All NetSuite Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Leads</SelectItem>
+                  <SelectItem value="UNSYNCED">Unsynced / Alphanumeric Docs</SelectItem>
+                  <SelectItem value="FAILED">NetSuite Creation Failed</SelectItem>
+                  <SelectItem value="SYNCED">NetSuite Synced (Numeric IDs)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* 8. Date Created Range */}
             <div className="space-y-1 sm:col-span-2 lg:col-span-1">
               <Label className="text-xs font-medium">Date Created Range</Label>
@@ -1173,6 +1227,18 @@ export function MasterAllLeadsClient() {
             >
               <Shuffle className="w-3.5 h-3.5 text-purple-600" />
               Random Assign
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBulkNetSuiteSync}
+              disabled={selectedLeads.length === 0 || isBulkSyncingNetSuite}
+              title="Push selected leads to NetSuite and convert IDs to numeric NetSuite Internal IDs"
+              className="h-9 gap-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 font-semibold"
+            >
+              {isBulkSyncingNetSuite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5 text-amber-600" />}
+              Push Selected to NetSuite
             </Button>
           </div>
 

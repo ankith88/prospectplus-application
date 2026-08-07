@@ -36,7 +36,7 @@ import type { Address, CheckinQuestion, DiscoveryData, VisitNote, UserProfile } 
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { industryCategories, salesReps } from '@/lib/constants';
+import { industryCategories, salesReps, MULTISITE_ACCOUNT_MANAGER_UID, isMultisiteCampaign } from '@/lib/constants';
 import { extractContactsFromDiscoveryData } from '@/lib/contact-utils';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 import { addContactToLead, createNewLead, checkForDuplicateLead, updateVisitNote, logActivity, getAllUsers, getAllFranchisees } from '@/services/firebase';
@@ -111,7 +111,7 @@ const formSchema = z.object({
   }),
   franchisee: z.string().optional(),
   leadSource: z.string().optional(),
-  bucket: z.enum(['outbound', 'field_sales', 'inbound', 'account_manager', 'customer_success']).or(z.literal('')).optional(),
+  bucket: z.enum(['outbound', 'field_sales', 'inbound', 'account_manager', 'customer_success', 'multisite']).or(z.literal('')).optional(),
   droppedOffBrochures: z.boolean().optional(),
   hadConversationWithContact: z.boolean().optional(),
 }).superRefine((data, ctx) => {
@@ -884,6 +884,32 @@ export function NewLeadForm() {
         }
     }
 
+    const isMultisite = isMultisiteCampaign(finalValues.campaign);
+    if (isMultisite) {
+        finalValues.bucket = 'account_manager';
+    }
+
+    // Resolve Account Manager for UID AR2TfLJJCAQBUVf4IxHa6P3AKqG2
+    let targetAmForMultisite = values.accountManagerAssigned;
+    if (isMultisite || values.campaign === 'MultiSite' || values.campaign === 'Multisite') {
+        const foundAm = allUsers.find(u => u.id === MULTISITE_ACCOUNT_MANAGER_UID || (u as any).uid === MULTISITE_ACCOUNT_MANAGER_UID);
+        if (foundAm) {
+            targetAmForMultisite = foundAm.displayName || `${foundAm.firstName || ''} ${foundAm.lastName || ''}`.trim() || MULTISITE_ACCOUNT_MANAGER_UID;
+        } else {
+            try {
+                const amSnap = await getDoc(doc(firestore, 'users', MULTISITE_ACCOUNT_MANAGER_UID));
+                if (amSnap.exists()) {
+                    const amData = amSnap.data();
+                    targetAmForMultisite = amData.displayName || `${amData.firstName || ''} ${amData.lastName || ''}`.trim() || MULTISITE_ACCOUNT_MANAGER_UID;
+                } else {
+                    targetAmForMultisite = MULTISITE_ACCOUNT_MANAGER_UID;
+                }
+            } catch (e) {
+                targetAmForMultisite = MULTISITE_ACCOUNT_MANAGER_UID;
+            }
+        }
+    }
+
     // Check if dialerForLead is actually an active dialer
     const isUserActiveDialer = activeDialers.some(d => d.displayName === dialerForLead || d.email === dialerForLead);
     const validDefaultDialer = isUserActiveDialer ? dialerForLead : '';
@@ -896,11 +922,13 @@ export function NewLeadForm() {
     let finalSalesRep = undefined;
     if (finalValues.campaign === 'Outbound' || finalValues.campaign === 'Door-to-Door') {
         finalSalesRep = Math.random() < 0.5 ? "Lee Russell" : "Kerina Helliwell";
-    } else if (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite' || finalValues.campaign === 'Account Manager Generated') {
-        finalSalesRep = values.accountManagerAssigned;
+    } else if (isMultisite || finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite' || finalValues.campaign === 'Account Manager Generated') {
+        finalSalesRep = isMultisite ? targetAmForMultisite : (values.accountManagerAssigned || targetAmForMultisite);
     }
     
-    const finalAccountManager = (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite' || finalValues.campaign === 'Account Manager Generated') ? values.accountManagerAssigned : undefined;
+    const finalAccountManager = (isMultisite || finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite' || finalValues.campaign === 'Account Manager Generated') 
+        ? (isMultisite ? targetAmForMultisite : (values.accountManagerAssigned || targetAmForMultisite)) 
+        : undefined;
 
     const selectedFranchiseeObj = matchedFranchisees.find(f => f.internalId === values.franchisee) || franchisees.find(f => f.internalId === values.franchisee);
 
@@ -933,6 +961,12 @@ export function NewLeadForm() {
             isPriority,
         };
 
+        if (isMultisite) {
+            assignmentUpdates.bucket = 'account_manager';
+            assignmentUpdates.salesRepAssigned = finalSalesRep || targetAmForMultisite;
+            assignmentUpdates.accountManagerAssigned = finalAccountManager || targetAmForMultisite;
+        }
+
         if (isFranchiseeRole) {
             assignmentUpdates.customerSource = 'Franchisee Generated';
             assignmentUpdates.leadSource = 'Franchisee Generated';
@@ -940,7 +974,7 @@ export function NewLeadForm() {
                 assignmentUpdates.bucket = 'account_manager';
                 assignmentUpdates.isPriority = true;
                 assignmentUpdates.franchiseeReviewPending = false;
-            } else {
+            } else if (!isMultisite) {
                 assignmentUpdates.bucket = 'outbound';
                 assignmentUpdates.isPriority = false;
                 assignmentUpdates.dialerAssigned = 'Aleyna Harnett';
@@ -954,7 +988,12 @@ export function NewLeadForm() {
                 assignmentUpdates.bucket = finalValues.bucket;
             }
         }
-        if (finalValues.campaign === 'Outbound') {
+        if (isMultisite || finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite') {
+            assignmentUpdates.salesRepAssigned = finalSalesRep || targetAmForMultisite;
+            assignmentUpdates.accountManagerAssigned = finalAccountManager || targetAmForMultisite;
+            assignmentUpdates.campaign = finalValues.campaign || 'MultiSite';
+            assignmentUpdates.bucket = 'account_manager';
+        } else if (finalValues.campaign === 'Outbound') {
             if (!isFranchiseeRole || isPriority) {
                 assignmentUpdates.dialerAssigned = finalDialer || '';
             }
@@ -964,10 +1003,6 @@ export function NewLeadForm() {
             assignmentUpdates.salesRepAssigned = finalSalesRep || '';
             assignmentUpdates.fieldRepAssigned = values.fieldRepAssigned || '';
             assignmentUpdates.campaign = 'Door-to-Door';
-        } else if (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite') {
-            assignmentUpdates.salesRepAssigned = finalSalesRep || '';
-            assignmentUpdates.accountManagerAssigned = finalAccountManager || '';
-            assignmentUpdates.campaign = 'MultiSite';
         } else if (finalValues.campaign === 'Account Manager Generated') {
             assignmentUpdates.salesRepAssigned = finalSalesRep || '';
             assignmentUpdates.accountManagerAssigned = finalAccountManager || '';
@@ -1651,6 +1686,7 @@ export function NewLeadForm() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
+                            <SelectItem value="multisite">MultiSite</SelectItem>
                             <SelectItem value="outbound">Outbound</SelectItem>
                             <SelectItem value="field_sales">Field Sales</SelectItem>
                             <SelectItem value="inbound">Inbound</SelectItem>

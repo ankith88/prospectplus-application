@@ -77,43 +77,69 @@ export default function CSRequestsDashboard() {
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      // 1. Fetch from cs_requests
+      // Helper to identify public portal or company profile requests
+      const isPublicOrProfileRequest = (item: any) => {
+        if (!item) return false;
+        if (item.source === 'public_portal' || item.source === 'company_profile') return true;
+        if (item.cancellationTheme === 'Customer Portal Request' || item.cancellationTheme === 'Company Profile Request') return true;
+        if (item.processedBy === 'Customer Online Portal') return true;
+        // If it's a service change request from cs_requests, keep it
+        if (item.requestType === 'change_of_service') return true;
+        return false;
+      };
+
+      // 1. Fetch from cs_requests (public portal & company profile CS requests)
       const csSnap = await getDocs(collection(firestore, 'cs_requests'));
-      const csList = csSnap.docs.map(d => ({ id: d.id, ...d.data() } as CSRequest));
+      const csList = csSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as CSRequest))
+        .filter(isPublicOrProfileRequest);
 
-      // 2. Fetch legacy items from cancellations to ensure complete coverage
+      // 2. Fetch items from cancellations collection, filtering ONLY for public portal & company profile requests
       const cancelSnap = await getDocs(collection(firestore, 'cancellations'));
-      const legacyList = cancelSnap.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          requestType: 'cancellation' as const,
-          leadId: data.leadId,
-          netsuiteId: data.netsuiteId || '',
-          companyName: data.companyName || 'Unknown Company',
-          contactName: data.contactName,
-          contactEmail: data.contactEmail,
-          contactPhone: data.contactPhone,
-          requestedDate: data.requestedDate || new Date().toISOString(),
-          cancellationDate: data.cancellationDate,
-          cancellationReason: data.cancellationReason,
-          cancellationTheme: data.cancellationTheme,
-          cancellationWhy: data.cancellationWhy,
-          status: data.status || 'Pending',
-          notes: data.cancellationNotes || data.notes || '',
-          originalServices: data.originalServices || [],
-          processedBy: data.processedBy,
-          createdAt: data.createdAt,
-        } as CSRequest;
-      });
+      const legacyList = cancelSnap.docs
+        .map(d => {
+          const data = d.data();
+          return {
+            id: d.id,
+            source: data.source,
+            requestType: 'cancellation' as const,
+            leadId: data.leadId,
+            netsuiteId: data.netsuiteId || '',
+            companyName: data.companyName || 'Unknown Company',
+            contactName: data.contactName,
+            contactEmail: data.contactEmail,
+            contactPhone: data.contactPhone,
+            requestedDate: data.requestedDate || new Date().toISOString(),
+            cancellationDate: data.cancellationDate,
+            cancellationReason: data.cancellationReason,
+            cancellationTheme: data.cancellationTheme,
+            cancellationWhy: data.cancellationWhy,
+            status: data.status || 'Pending',
+            notes: data.cancellationNotes || data.notes || '',
+            originalServices: data.originalServices || [],
+            processedBy: data.processedBy,
+            createdAt: data.createdAt,
+          } as CSRequest;
+        })
+        .filter(isPublicOrProfileRequest);
 
-      // Merge and deduplicate by ID or leadId + requestedDate
+      // Deduplicate by leadId + requestType + requestedDate (or doc ID)
+      const existingKeys = new Set(
+        csList.map(item => {
+          const dateStr = item.requestedDate ? item.requestedDate.substring(0, 10) : '';
+          return `${item.leadId}_${item.requestType}_${dateStr}`;
+        })
+      );
       const existingIds = new Set(csList.map(item => item.id));
+
       const merged = [...csList];
 
       for (const leg of legacyList) {
-        if (!existingIds.has(leg.id)) {
+        const dateStr = leg.requestedDate ? leg.requestedDate.substring(0, 10) : '';
+        const key = `${leg.leadId}_${leg.requestType}_${dateStr}`;
+        if (!existingIds.has(leg.id) && !existingKeys.has(key)) {
           merged.push(leg);
+          existingKeys.add(key);
         }
       }
 

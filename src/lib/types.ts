@@ -1,4 +1,4 @@
-export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing' | 'lpo_plus' | 'in_review' | '' | 'blank' | 'unassigned' | (string & {});
+export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing' | 'lpo_plus' | 'in_review' | 'multisite' | '' | 'blank' | 'unassigned' | (string & {});
 
 export interface BucketHistory {
   id: string;
@@ -203,6 +203,10 @@ export interface Contact {
   verificationStatus?: EmailVerificationStatus;
   verificationScore?: number;
   verifiedAt?: string;
+  accountActivated?: boolean;
+  createPasswordEmailSent?: boolean;
+  shipmateStatus?: 'Activated' | 'Password Sent' | 'No Access';
+  shipmateCheckedAt?: string;
 }
 
 export interface Address {
@@ -571,6 +575,10 @@ export interface Lead {
   dateLeadEntered?: string;
   customerSource?: string;
   visitNoteID?: string;
+  syncedWithNetSuite?: boolean;
+  netSuiteSyncStatus?: 'synced' | 'failed' | 'pending' | string;
+  netSuiteSyncError?: string | null;
+  netSuiteSyncAttemptCount?: number;
   cancellationTheme?: string;
   cancellationThemeId?: string;
   cancellationCategory?: string;
@@ -756,7 +764,7 @@ export interface InteractionLog {
   metadata: Record<string, any>;
 }
 
-export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee' | 'customerServiceEmail' | 'customerPhone' | 'accountManagerAssigned'> & { isCompany: boolean; isProspect?: boolean };
+export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee' | 'customerServiceEmail' | 'customerPhone' | 'accountManagerAssigned' | 'services'> & { isCompany: boolean; isProspect?: boolean };
 
 export interface SuburbMapping {
   suburbs: string;       // Upper-case suburb text (e.g., "ACACIA RIDGE")

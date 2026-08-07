@@ -896,10 +896,13 @@ interface NewLeadData {
   isPriority?: boolean;
   isZeeCreated?: boolean;
   franchiseeReviewPending?: boolean;
+  parentLeadId?: string;
+  parentId?: string;
+  parentCustomer?: string;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees, selectedServiceOption } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees, selectedServiceOption, parentLeadId, parentId, parentCustomer } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -925,6 +928,14 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         custentity_primary_contact_phone: contact.phone || '',
     });
     
+    const effectiveParentId = parentId || parentLeadId || parentCustomer;
+    if (effectiveParentId) {
+        params.append('parent', effectiveParentId);
+        params.append('parent_id', effectiveParentId);
+        params.append('custentity_parent_id', effectiveParentId);
+        params.append('parentCustomer', effectiveParentId);
+    }
+
     if (address.address1) {
         params.append('billaddr2', address.address1);
     }

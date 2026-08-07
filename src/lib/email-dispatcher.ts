@@ -20,6 +20,11 @@ interface EmailDispatchOptions {
   prospectPlusId?: string;
   attachments?: EmailAttachment[];
   ticketId?: string;
+  notifyOnOpen?: boolean;
+  notifyUserId?: string;
+  notifyUserEmail?: string;
+  trackingCategory?: 'quote' | 'signup' | 'nurture' | 'custom' | 'system' | string;
+  skipTracking?: boolean;
 }
 
 function extractCleanEmail(toField: string): string {
@@ -43,7 +48,7 @@ function isInternalRecipient(toField: string): boolean {
   return true;
 }
 
-export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc, leadId, prospectPlusId, attachments, ticketId }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
+export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc, leadId, prospectPlusId, attachments, ticketId, notifyOnOpen, notifyUserId, notifyUserEmail, trackingCategory, skipTracking }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
   try {
     const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
     if (!configSnap.exists) {
@@ -100,13 +105,53 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
     }
 
     let updatedHtml = html;
+    let deliveryId: string | null = null;
+
+    if (!skipTracking && html && !isInternalRecipient(to)) {
+      try {
+        const deliveryRef = db.collection('campaign_deliveries').doc();
+        deliveryId = deliveryRef.id;
+
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://prospectplus.com.au';
+        const trackingPixel = `<img src="${baseUrl}/api/campaigns/track/open?id=${deliveryId}" width="1" height="1" border="0" alt="" style="display:block; width:1px; height:1px; border:0; outline:none; text-decoration:none;" />`;
+
+        if (updatedHtml.toLowerCase().includes('</body>')) {
+          const bodyCloseIndex = updatedHtml.toLowerCase().lastIndexOf('</body>');
+          updatedHtml = updatedHtml.slice(0, bodyCloseIndex) + trackingPixel + updatedHtml.slice(bodyCloseIndex);
+        } else if (updatedHtml.toLowerCase().includes('</td>')) {
+          const tdCloseIndex = updatedHtml.toLowerCase().lastIndexOf('</td>');
+          updatedHtml = updatedHtml.slice(0, tdCloseIndex) + trackingPixel + updatedHtml.slice(tdCloseIndex);
+        } else {
+          updatedHtml += trackingPixel;
+        }
+
+        await deliveryRef.set({
+          id: deliveryId,
+          leadId: leadId || null,
+          leadEmail: extractCleanEmail(to),
+          subject,
+          sentAt: new Date().toISOString(),
+          status: 'delivered',
+          openedAt: [],
+          clickedAt: [],
+          notifyOnOpen: !!notifyOnOpen,
+          notifyUserId: notifyUserId || null,
+          notifyUserEmail: notifyUserEmail || null,
+          trackingCategory: trackingCategory || 'custom',
+          customFrom: finalSender
+        });
+      } catch (trackErr) {
+        console.error('[Email Dispatcher] Error initializing tracking pixel:', trackErr);
+      }
+    }
+
     if (finalProspectPlusId && !isInternalRecipient(to)) {
       const idBadge = `<div class="prospectplus-id-badge" style="text-align: center; font-size: 10px; color: #a0aec0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 15px 0; user-select: all;">ID: ${finalProspectPlusId}</div>`;
-      const bodyCloseIndex = html.toLowerCase().lastIndexOf('</body>');
+      const bodyCloseIndex = updatedHtml.toLowerCase().lastIndexOf('</body>');
       if (bodyCloseIndex !== -1) {
-        updatedHtml = html.slice(0, bodyCloseIndex) + '\n' + idBadge + '\n' + html.slice(bodyCloseIndex);
+        updatedHtml = updatedHtml.slice(0, bodyCloseIndex) + '\n' + idBadge + '\n' + updatedHtml.slice(bodyCloseIndex);
       } else {
-        updatedHtml = html + '\n' + idBadge;
+        updatedHtml = updatedHtml + '\n' + idBadge;
       }
     }
 

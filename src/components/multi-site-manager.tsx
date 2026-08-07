@@ -7,13 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Address, Contact, Lead } from "@/lib/types";
-import { createChildSiteLead, updateLeadDetails, getSiblingLeads, getLeadFromFirebase, getCompanyFromFirebase } from "@/services/firebase";
-import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search } from "lucide-react";
+import { createChildSiteLead, updateLeadDetails, getSiblingLeads, getLeadFromFirebase, getCompanyFromFirebase, getLastInvoicesForCompanies } from "@/services/firebase";
+import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search, Receipt } from "lucide-react";
 import { GoogleAddressInput } from "@/components/google-address-input";
 import { useToast } from "@/hooks/use-toast";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
+import { InvoiceDetailsDialog } from "@/components/invoice-details-dialog";
+import type { Invoice } from "@/lib/types";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     Table,
@@ -41,6 +43,10 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     const [childLeads, setChildLeads] = useState<Lead[]>([]);
     const [parentLead, setParentLead] = useState<Lead | null>(null);
     const [loadingRelated, setLoadingRelated] = useState(false);
+    const [invoicesMap, setInvoicesMap] = useState<Record<string, Invoice | null>>({});
+    const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+    const [selectedInvoiceCompany, setSelectedInvoiceCompany] = useState<string>('');
+    const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
 
     // Form state for new location
     const [street, setStreet] = useState("");
@@ -67,23 +73,41 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
             if (!lead.id) return;
             setLoadingRelated(true);
             try {
+                let resolvedParent: Lead | null = null;
+                let resolvedChildren: Lead[] = [];
+
                 if (lead.parentLeadId) {
                     // This is a child lead. Fetch the parent lead first.
-                    let parent = await getLeadFromFirebase(lead.parentLeadId);
-                    if (!parent) {
-                        parent = await getCompanyFromFirebase(lead.parentLeadId);
+                    resolvedParent = await getLeadFromFirebase(lead.parentLeadId);
+                    if (!resolvedParent) {
+                        resolvedParent = await getCompanyFromFirebase(lead.parentLeadId);
                     }
-                    setParentLead(parent);
+                    setParentLead(resolvedParent);
 
                     // Fetch sibling leads (other children of the parent)
                     const siblings = await getSiblingLeads(lead.parentLeadId);
-                    // Filter out this child lead
-                    setChildLeads(siblings.filter(s => s.id !== lead.id));
+                    resolvedChildren = siblings.filter(s => s.id !== lead.id);
+                    setChildLeads(resolvedChildren);
                 } else {
                     // This is a parent lead. Fetch child leads.
                     setParentLead(null);
-                    const children = await getSiblingLeads(lead.id);
-                    setChildLeads(children);
+                    resolvedChildren = await getSiblingLeads(lead.id);
+                    setChildLeads(resolvedChildren);
+                }
+
+                // Fetch invoices for any signed customers in this family
+                const allFamily = [...resolvedChildren, resolvedParent || lead].filter(Boolean);
+                const signedIds = allFamily
+                    .filter(l => l && (l.customerStatus === 'Signed Customer' || (l as any).status === 'Signed' || l.status === 'Won'))
+                    .map(l => l!.id);
+
+                if (signedIds.length > 0) {
+                    try {
+                        const invs = await getLastInvoicesForCompanies(signedIds);
+                        setInvoicesMap(invs);
+                    } catch (e) {
+                        console.warn("Failed to fetch invoices for multi-site family:", e);
+                    }
                 }
             } catch (err) {
                 console.error("Failed to load multi-site related leads:", err);
@@ -708,74 +732,163 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                     <Table>
                                         <TableHeader>
                                             <TableRow className="bg-muted/50 hover:bg-muted/50">
-                                                <TableHead className="font-semibold text-foreground">Site Name</TableHead>
-                                                <TableHead className="font-semibold text-foreground">Address</TableHead>
-                                                <TableHead className="font-semibold text-foreground">Franchisee</TableHead>
-                                                <TableHead className="font-semibold text-foreground w-[120px]">Status</TableHead>
-                                                <TableHead className="w-[80px] text-right font-semibold text-foreground">Action</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {/* If we are on a child lead, display its own current status in the list too */}
-                                            {lead.parentLeadId && (
-                                                <TableRow className="bg-primary/5 hover:bg-primary/10">
-                                                    <TableCell className="font-semibold flex items-center gap-2">
-                                                        <MapPin className="w-4 h-4 text-primary shrink-0" />
-                                                        <span>{lead.companyName}</span>
-                                                        <Badge className="text-[10px] py-0 px-1.5 h-4 shrink-0 bg-primary text-primary-foreground">
-                                                            Current Site
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-xs text-muted-foreground">
-                                                        {lead.address?.street ? `${lead.address.street}, ` : ""}
-                                                        {lead.address?.city || ""}, {lead.address?.state || ""} {lead.address?.zip || ""}
-                                                    </TableCell>
-                                                    <TableCell className="text-xs font-medium">
-                                                        {lead.franchisee || "Unassigned"}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (lead.status as any)} />
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10" disabled>
-                                                            <ArrowRight className="h-4 w-4" />
-                                                        </Button>
-                                                    </TableCell>
-                                                </TableRow>
-                                            )}
+                                                 <TableHead className="font-semibold text-foreground">Site Name</TableHead>
+                                                 <TableHead className="font-semibold text-foreground">Address</TableHead>
+                                                 <TableHead className="font-semibold text-foreground">Franchisee</TableHead>
+                                                 <TableHead className="font-semibold text-foreground">Service &amp; Latest Invoice</TableHead>
+                                                 <TableHead className="font-semibold text-foreground w-[120px]">Status</TableHead>
+                                                 <TableHead className="w-[80px] text-right font-semibold text-foreground">Action</TableHead>
+                                             </TableRow>
+                                         </TableHeader>
+                                         <TableBody>
+                                             {/* If we are on a child lead, display its own current status in the list too */}
+                                             {lead.parentLeadId && (
+                                                 <TableRow className="bg-primary/5 hover:bg-primary/10">
+                                                     <TableCell className="font-semibold flex items-center gap-2">
+                                                         <MapPin className="w-4 h-4 text-primary shrink-0" />
+                                                         <span>{lead.companyName}</span>
+                                                         <Badge className="text-[10px] py-0 px-1.5 h-4 shrink-0 bg-primary text-primary-foreground">
+                                                             Current Site
+                                                         </Badge>
+                                                     </TableCell>
+                                                     <TableCell className="text-xs text-muted-foreground">
+                                                         {(() => {
+                                                             const addrObj = lead.address || (lead as any);
+                                                             const parts = [
+                                                                 (lead as any).address1 || addrObj?.address1,
+                                                                 (lead as any).street || addrObj?.street,
+                                                                 addrObj?.city || (lead as any).city,
+                                                                 addrObj?.state || (lead as any).state,
+                                                                 addrObj?.zip || (lead as any).zip
+                                                             ].filter(Boolean);
+                                                             return parts.length > 0 ? parts.join(', ') : '-';
+                                                         })()}
+                                                     </TableCell>
+                                                     <TableCell className="text-xs font-medium">
+                                                         {lead.franchisee || "Unassigned"}
+                                                     </TableCell>
+                                                     <TableCell className="text-xs">
+                                                         {(() => {
+                                                             const isSigned = lead.customerStatus === 'Signed Customer' || (lead as any).status === 'Signed' || lead.status === 'Won';
+                                                             const inv = invoicesMap[lead.id];
+                                                             const firstItem = inv?.items?.[0] as any;
+                                                             const serviceName = firstItem?.description || firstItem?.item || firstItem?.name || inv?.invoiceType || lead.leadType || (isSigned ? 'MailPlus Logistics' : '-');
+                                                             return (
+                                                                 <div className="flex flex-col gap-1">
+                                                                     <span className="text-xs font-semibold text-slate-800">{serviceName}</span>
+                                                                     {isSigned && (
+                                                                         inv ? (
+                                                                             <Button
+                                                                                 variant="outline"
+                                                                                 size="sm"
+                                                                                 onClick={() => {
+                                                                                     setSelectedInvoice(inv);
+                                                                                     setSelectedInvoiceCompany(lead.companyName);
+                                                                                     setIsInvoiceDialogOpen(true);
+                                                                                 }}
+                                                                                 className="h-6 px-2 text-[10px] bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 font-semibold gap-1 w-max"
+                                                                             >
+                                                                                 <Receipt className="h-3 w-3 text-emerald-600" />
+                                                                                 Invoice ${inv.invoiceTotal} ({inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString() : 'Paid'})
+                                                                             </Button>
+                                                                         ) : (
+                                                                             <span className="text-[10px] text-muted-foreground italic">No invoice on file</span>
+                                                                         )
+                                                                     )}
+                                                                 </div>
+                                                             );
+                                                         })()}
+                                                     </TableCell>
+                                                     <TableCell>
+                                                         <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (lead.status as any)} />
+                                                     </TableCell>
+                                                     <TableCell className="text-right">
+                                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10" disabled>
+                                                             <ArrowRight className="h-4 w-4" />
+                                                         </Button>
+                                                     </TableCell>
+                                                 </TableRow>
+                                             )}
 
-                                            {childLeads.map((child) => (
-                                                <TableRow key={child.id} className="hover:bg-muted/40 transition-colors">
-                                                    <TableCell className="font-semibold text-sm">
-                                                        {child.companyName}
-                                                    </TableCell>
-                                                    <TableCell className="text-xs text-muted-foreground">
-                                                        {child.address?.street ? `${child.address.street}, ` : ""}
-                                                        {child.address?.city || ""}, {child.address?.state || ""} {child.address?.zip || ""}
-                                                    </TableCell>
-                                                    <TableCell className="text-xs">
-                                                        {child.franchisee || "Unassigned"}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <LeadStatusBadge status={child.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (child.status as any)} />
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
-                                                            <a href={`/leads/${child.id}`}>
-                                                                <ArrowRight className="h-4 w-4" />
-                                                            </a>
-                                                        </Button>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    );
+                                             {childLeads.map((child) => (
+                                                 <TableRow key={child.id} className="hover:bg-muted/40 transition-colors">
+                                                     <TableCell className="font-semibold text-sm">
+                                                         {child.companyName}
+                                                     </TableCell>
+                                                     <TableCell className="text-xs text-muted-foreground">
+                                                         {(() => {
+                                                             const addrObj = child.address || (child as any);
+                                                             const parts = [
+                                                                 (child as any).address1 || addrObj?.address1,
+                                                                 (child as any).street || addrObj?.street,
+                                                                 addrObj?.city || (child as any).city,
+                                                                 addrObj?.state || (child as any).state,
+                                                                 addrObj?.zip || (child as any).zip
+                                                             ].filter(Boolean);
+                                                             return parts.length > 0 ? parts.join(', ') : '-';
+                                                         })()}
+                                                     </TableCell>
+                                                     <TableCell className="text-xs">
+                                                         {child.franchisee || "Unassigned"}
+                                                     </TableCell>
+                                                     <TableCell className="text-xs">
+                                                         {(() => {
+                                                             const isSigned = child.customerStatus === 'Signed Customer' || (child as any).status === 'Signed' || child.status === 'Won';
+                                                             const inv = invoicesMap[child.id];
+                                                             const firstItem = inv?.items?.[0] as any;
+                                                             const serviceName = firstItem?.description || firstItem?.item || firstItem?.name || inv?.invoiceType || child.leadType || (isSigned ? 'MailPlus Logistics' : '-');
+                                                             return (
+                                                                 <div className="flex flex-col gap-1">
+                                                                     <span className="text-xs font-semibold text-slate-800">{serviceName}</span>
+                                                                     {isSigned && (
+                                                                         inv ? (
+                                                                             <Button
+                                                                                 variant="outline"
+                                                                                 size="sm"
+                                                                                 onClick={() => {
+                                                                                     setSelectedInvoice(inv);
+                                                                                     setSelectedInvoiceCompany(child.companyName);
+                                                                                     setIsInvoiceDialogOpen(true);
+                                                                                 }}
+                                                                                 className="h-6 px-2 text-[10px] bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 font-semibold gap-1 w-max"
+                                                                             >
+                                                                                 <Receipt className="h-3 w-3 text-emerald-600" />
+                                                                                 Invoice ${inv.invoiceTotal} ({inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString() : 'Paid'})
+                                                                             </Button>
+                                                                         ) : (
+                                                                             <span className="text-[10px] text-muted-foreground italic">No invoice on file</span>
+                                                                         )
+                                                                     )}
+                                                                 </div>
+                                                             );
+                                                         })()}
+                                                     </TableCell>
+                                                     <TableCell>
+                                                         <LeadStatusBadge status={child.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (child.status as any)} />
+                                                     </TableCell>
+                                                     <TableCell className="text-right">
+                                                         <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
+                                                             <a href={`/leads/${child.id}`}>
+                                                                 <ArrowRight className="h-4 w-4" />
+                                                             </a>
+                                                         </Button>
+                                                     </TableCell>
+                                                 </TableRow>
+                                             ))}
+                                         </TableBody>
+                                     </Table>
+                                 </div>
+                             </div>
+                         )}
+                     </div>
+                 )}
+             </CardContent>
+             <InvoiceDetailsDialog
+                 isOpen={isInvoiceDialogOpen}
+                 onOpenChange={setIsInvoiceDialogOpen}
+                 invoice={selectedInvoice}
+                 companyName={selectedInvoiceCompany}
+             />
+         </Card>
+     );
 }

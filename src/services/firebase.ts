@@ -14,6 +14,7 @@ import { calculateCheckinScore } from '@/lib/checkin-scoring';
 import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
 import { deactivateLocalMileAccessForLead } from './localmile-deactivation';
 import { REVERSE_OUTCOME_TO_STATUS_MAP } from '@/lib/status-outcome-mapping';
+import { MULTISITE_ACCOUNT_MANAGER_UID, isMultisiteCampaign } from '@/lib/constants';
 
 /**
  * Sanitizes data retrieved from Firestore to ensure it can be passed from 
@@ -2803,6 +2804,18 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
         console.warn("Could not fetch parent lead data for NetSuite sync", e);
     }
 
+    // Resolve Account Manager for UID AR2TfLJJCAQBUVf4IxHa6P3AKqG2
+    let targetAmName = MULTISITE_ACCOUNT_MANAGER_UID;
+    try {
+        const amSnap = await getDoc(doc(firestore, 'users', MULTISITE_ACCOUNT_MANAGER_UID));
+        if (amSnap.exists()) {
+            const amData = amSnap.data();
+            targetAmName = amData.displayName || `${amData.firstName || ''} ${amData.lastName || ''}`.trim() || MULTISITE_ACCOUNT_MANAGER_UID;
+        }
+    } catch (e) {
+        console.warn("Could not fetch Account Manager user doc in createChildSiteLead", e);
+    }
+
     // 3. Push to NetSuite (NetSuite will create the lead in Firestore)
     const netSuitePayload = {
         companyName: companyName,
@@ -2822,6 +2835,9 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
         },
         franchiseeName: franchiseeName,
         dialerAssigned: parentLeadData.dialerAssigned || '',
+        bucket: 'multisite',
+        accountManagerUid: MULTISITE_ACCOUNT_MANAGER_UID,
+        assignedTo: MULTISITE_ACCOUNT_MANAGER_UID,
     };
     
     const nsResult = await sendNewLeadToNetSuite(netSuitePayload);
@@ -2837,7 +2853,12 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
         parentLeadId: parentLeadId,
         franchisee: franchiseeName || 'Unassigned',
         salesRecordInternalId: newLeadId,
-        address: siteAddress
+        address: siteAddress,
+        bucket: 'multisite',
+        accountManagerUid: MULTISITE_ACCOUNT_MANAGER_UID,
+        assignedTo: MULTISITE_ACCOUNT_MANAGER_UID,
+        accountManagerAssigned: targetAmName,
+        salesRepAssigned: targetAmName
     };
 
     if (siteAddress.lat !== undefined && siteAddress.lat !== null) {
@@ -3172,7 +3193,56 @@ async function bulkUpdateDialerAssignmentDate(leadIds: string[], newDate: string
     await batch.commit();
 }
 
+async function getLastInvoiceForCompany(companyId: string): Promise<Invoice | null> {
+    if (!companyId) return null;
+    try {
+        const invoicesRef = collection(firestore, 'companies', companyId, 'invoices');
+        const q = query(invoicesRef, orderBy('invoiceDate', 'desc'), limit(1));
+        const snap = await getDocs(q);
+        if (snap.empty) return null;
+        const docSnap = snap.docs[0];
+        const data = sanitizeData(docSnap.data() || {});
+        return {
+            id: docSnap.id,
+            documentId: docSnap.id,
+            invoiceDocumentID: data.invoiceDocumentID || docSnap.id,
+            invoiceInternalID: data.invoiceInternalID || '',
+            invoiceDate: data.invoiceDate || '',
+            invoiceTotal: data.invoiceTotal != null ? data.invoiceTotal : '0.00',
+            invoiceType: data.invoiceType || 'Service Invoice',
+            invoiceURL: data.invoiceURL || '',
+            invoiceStatus: data.invoiceStatus || data.status || 'Paid In Full',
+            syncedWithNetSuite: data.syncedWithNetSuite !== undefined ? Boolean(data.syncedWithNetSuite) : true,
+            items: Array.isArray(data.items) ? data.items : [],
+        } as Invoice;
+    } catch (error) {
+        console.error(`Failed to fetch last invoice for company ${companyId}:`, error);
+        return null;
+    }
+}
+
+async function getLastInvoicesForCompanies(companyIds: string[]): Promise<Record<string, Invoice | null>> {
+    if (!companyIds || companyIds.length === 0) return {};
+    const results: Record<string, Invoice | null> = {};
+    const BATCH_SIZE = 15;
+    for (let i = 0; i < companyIds.length; i += BATCH_SIZE) {
+        const batch = companyIds.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+            batch.map(async (companyId) => {
+                const inv = await getLastInvoiceForCompany(companyId);
+                return { companyId, inv };
+            })
+        );
+        batchResults.forEach(({ companyId, inv }) => {
+            results[companyId] = inv;
+        });
+    }
+    return results;
+}
+
 export { 
+    getLastInvoiceForCompany,
+    getLastInvoicesForCompanies,
     bulkUpdateDialerAssignmentDate,
     createMultiFranchiseeChildLead,
     setupMultiFranchiseeArchitecture,

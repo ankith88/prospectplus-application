@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { updateLeadDetails, logActivity } from "@/services/firebase"
-import { sendAddressUpdateToNetSuite } from "@/services/netsuite"
+import { sendAddressUpdateToNetSuite, sendCompanyCustomerUpdateToNetSuite } from "@/services/netsuite"
 import type { Lead, UserProfile, Address } from "@/lib/types"
 import { AddressAutocomplete } from "./address-autocomplete"
 import { firestore } from "@/lib/firebase"
@@ -253,6 +253,19 @@ export function EditAddressDialog({
         address: mergedSiteAddress,
         postalAddress: lead.postalAddress,
       });
+
+      const effectiveFranchiseeId = String(payload.franchisee_id || lead.franchisee_id || lead.franchisee || '');
+      if (effectiveFranchiseeId) {
+        await sendCompanyCustomerUpdateToNetSuite({
+          internalId: lead.id,
+          companyName: lead.companyName || '',
+          email: lead.customerServiceEmail || '',
+          phone: lead.customerPhone || '',
+          franchiseeId: effectiveFranchiseeId,
+          prospectPlusId: lead.id,
+          abn: (lead as any).abn || '',
+        });
+      }
 
       if (territoryCheckDone && matchedFranchisees.length === 0) {
         toast({

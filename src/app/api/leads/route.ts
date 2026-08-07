@@ -6,6 +6,7 @@ import * as crypto from 'crypto';
 import { canAssignToAm } from '@/lib/leave-utils';
 import { evaluateDuplicateScore, extractCoreBrandName } from '@/lib/duplicate-detector';
 import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
+import { MULTISITE_ACCOUNT_MANAGER_UID, isMultisiteCampaign } from '@/lib/constants';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
@@ -134,8 +135,10 @@ export async function POST(req: NextRequest) {
       routingNote = `No territory matched. Defaulted to MailPlus Pty Ltd (Out of Territory).`;
     }
 
-    // Assign Account Manager randomly (if not provided)
-    let assignedAccountManager = body.accountManagerAssigned || null;
+    const isMultisite = isMultisiteCampaign(body.campaign) || Boolean(body.parentLeadId) || Boolean(body.parentProspectPlusId);
+
+    // Assign Account Manager
+    let assignedAccountManager = isMultisite ? MULTISITE_ACCOUNT_MANAGER_UID : (body.accountManagerAssigned || null);
     let accountManagerName: string | null = null;
     let accountManagerCalendly: string | null = null;
     let accountManagerEmail: string | null = null;
@@ -211,8 +214,9 @@ export async function POST(req: NextRequest) {
       franchisee: assignedFranchisee,
       franchiseeName: assignedFranchiseeName,
       ...(potentialFranchisees && { potentialFranchisees }),
-      ...(assignedAccountManager && { accountManagerAssigned: assignedAccountManager }),
-      bucket: body.bucket || 'inbound',
+      accountManagerAssigned: isMultisite ? (accountManagerName || MULTISITE_ACCOUNT_MANAGER_UID) : (accountManagerName || assignedAccountManager || undefined),
+      salesRepAssigned: isMultisite ? (accountManagerName || MULTISITE_ACCOUNT_MANAGER_UID) : (body.salesRepAssigned || undefined),
+      bucket: isMultisite ? 'account_manager' : (body.bucket || 'inbound'),
       fieldSales: body.fieldSales === true || body.fieldSales === 'true',
       dateLeadEntered: new Date().toISOString(),
       createdAt: FieldValue.serverTimestamp(),

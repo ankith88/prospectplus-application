@@ -26,6 +26,9 @@ import type { Address } from '@/lib/types';
 import { createNewLead, checkForDuplicateLead, getAllFranchisees } from '@/services/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
+import { MULTISITE_ACCOUNT_MANAGER_UID, isMultisiteCampaign } from '@/lib/constants';
+import { firestore } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { PlusCircle, Camera } from 'lucide-react';
 import {
   AlertDialog,
@@ -348,6 +351,24 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
     }
 
     try {
+        const defaultCampaign = userProfile.activeRole?.includes('Field Sales') ? 'Door-to-Door' : (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee' ? 'Franchisee Generated' : 'Outbound');
+        const isMultisite = isMultisiteCampaign(defaultCampaign) || bucket === 'multisite';
+
+        let targetAmName: string | undefined = undefined;
+        if (isMultisite) {
+            try {
+                const amSnap = await getDoc(doc(firestore, 'users', MULTISITE_ACCOUNT_MANAGER_UID));
+                if (amSnap.exists()) {
+                    const amData = amSnap.data();
+                    targetAmName = amData.displayName || `${amData.firstName || ''} ${amData.lastName || ''}`.trim() || MULTISITE_ACCOUNT_MANAGER_UID;
+                } else {
+                    targetAmName = MULTISITE_ACCOUNT_MANAGER_UID;
+                }
+            } catch (e) {
+                targetAmName = MULTISITE_ACCOUNT_MANAGER_UID;
+            }
+        }
+
         const result = await createNewLead({
             companyName,
             websiteUrl,
@@ -362,9 +383,11 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                 phone: customerPhone
             },
             dialerAssigned: (userProfile.activeRole === 'Outbound Admin' || userProfile.activeRole === 'admin') ? '' : userProfile.displayName,
-            campaign: userProfile.activeRole?.includes('Field Sales') ? 'Door-to-Door' : (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee' ? 'Franchisee Generated' : 'Outbound'),
+            campaign: isMultisite ? 'MultiSite' : defaultCampaign,
             leadSource: (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee') ? '-4' : undefined,
-            bucket: (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee') ? '' : (userProfile.activeRole === 'Outbound Admin' ? 'outbound' : bucket),
+            bucket: isMultisite ? 'multisite' : ((userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee') ? '' : (userProfile.activeRole === 'Outbound Admin' ? 'outbound' : bucket)),
+            accountManagerAssigned: isMultisite ? targetAmName : undefined,
+            salesRepAssigned: isMultisite ? targetAmName : undefined,
             franchiseeInternalId,
             franchiseeName,
             isZeeCreated: userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee',
@@ -489,6 +512,7 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                                 <SelectValue placeholder="Select a bucket" />
                             </SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="multisite">MultiSite</SelectItem>
                                 <SelectItem value="outbound">Outbound</SelectItem>
                                 <SelectItem value="field_sales">Field Sales</SelectItem>
                                 <SelectItem value="inbound">Inbound</SelectItem>

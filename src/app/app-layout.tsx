@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -167,7 +167,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       return 'search-ai';
     }
     if (path === '/leads/map') return 'field-logistics';
-    if (path.startsWith('/leads') || path.startsWith('/inbound-leads') || path.startsWith('/franchisee-leads') || path.startsWith('/admin/marketing/import-leads') || path.startsWith('/franchisee-lead-verification') || path.startsWith('/admin/in-review-leads') || path.startsWith('/admin/all-leads') || path.startsWith('/admin/unassigned-leads') || path.startsWith('/account-manager/pipeline') || path.startsWith('/signed-customers') || path.startsWith('/lost-customers')) {
+    if (path.startsWith('/leads') || path.startsWith('/inbound-leads') || path.startsWith('/franchisee-leads') || path.startsWith('/admin/marketing/import-leads') || path.startsWith('/franchisee-lead-verification') || path.startsWith('/admin/in-review-leads') || path.startsWith('/admin/all-leads') || path.startsWith('/admin/unassigned-leads') || path.startsWith('/account-manager/pipeline') || path.startsWith('/multisites') || path.startsWith('/account-manager/multisites') || path.startsWith('/signed-customers') || path.startsWith('/lost-customers')) {
       return 'sales-crm';
     }
     if (path.startsWith('/customer-success') && !path.includes('/reporting')) {
@@ -299,6 +299,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/admin/unassigned-leads': { label: 'Unassigned Leads', category: 'Sales & CRM', icon: ListTodo, href: '/admin/unassigned-leads' },
     '/leads/archive': { label: 'Archived Leads', category: 'Sales & CRM', icon: Archive, href: '/leads/archive' },
     '/account-manager/pipeline': { label: 'AM Pipeline', category: 'Sales & CRM', icon: ListTodo, href: '/account-manager/pipeline' },
+    '/multisites': { label: 'MultiSites', category: 'Sales & CRM', icon: Network, href: '/multisites' },
+    '/account-manager/multisites': { label: 'MultiSites', category: 'Sales & CRM', icon: Network, href: '/account-manager/multisites' },
     '/signed-customers': { label: 'Signed Customers', category: 'Sales & CRM', icon: Star, href: '/signed-customers' },
     '/lost-customers': { label: 'Lost Customers', category: 'Sales & CRM', icon: UserX, href: '/lost-customers' },
 
@@ -1275,14 +1277,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           </SidebarMenuItem>
                         )}
                         {canViewAccountManagerPipeline && (
-                          <SidebarMenuItem>
-                            <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")} tooltip="AM Pipeline">
-                              <Link href="/account-manager/pipeline">
-                                <ListTodo />
-                                <span>AM Pipeline</span>
-                              </Link>
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
+                          <>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")} tooltip="AM Pipeline">
+                                <Link href="/account-manager/pipeline">
+                                  <ListTodo />
+                                  <span>AM Pipeline</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton asChild isActive={isActive("/multisites") || isActive("/account-manager/multisites")} tooltip="MultiSites">
+                                <Link href="/multisites">
+                                  <Network />
+                                  <span>MultiSites</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          </>
                         )}
                         {canViewCustomers && (
                           <>

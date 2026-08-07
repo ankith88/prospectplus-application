@@ -109,3 +109,12 @@ export const GOOGLE_MAPS_LIBRARIES: ('places' | 'drawing' | 'geometry' | 'visual
   'visualization',
 ];
 
+export const MULTISITE_ACCOUNT_MANAGER_UID = 'AR2TfLJJCAQBUVf4IxHa6P3AKqG2';
+
+export function isMultisiteCampaign(campaign?: string | null): boolean {
+  if (!campaign) return false;
+  const c = campaign.toLowerCase().replace(/[-_]/g, ' ').trim();
+  return c.includes('multi site') || c.includes('multisite') || c === 'multisite' || c === 'multi-site';
+}
+
+

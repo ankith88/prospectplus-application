@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { MULTISITE_ACCOUNT_MANAGER_UID } from '@/lib/constants';
 
 const db = getFirestore(adminApp);
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
@@ -93,6 +94,18 @@ export async function POST(req: NextRequest) {
     // Determine child company name
     const finalCompanyName = companyName || `${parentLeadData.companyName || 'Lead'} - ${address.city}`;
 
+    // Resolve Account Manager for UID AR2TfLJJCAQBUVf4IxHa6P3AKqG2
+    let targetAmName = MULTISITE_ACCOUNT_MANAGER_UID;
+    try {
+      const amDoc = await db.collection('users').doc(MULTISITE_ACCOUNT_MANAGER_UID).get();
+      if (amDoc.exists && amDoc.data()) {
+        const data = amDoc.data()!;
+        targetAmName = data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || MULTISITE_ACCOUNT_MANAGER_UID;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch account manager for child lead', e);
+    }
+
     // 3. Build child lead data based on parent and custom payload fields
     const childLeadData: any = {
       // Start with copied parent lead data
@@ -103,8 +116,6 @@ export async function POST(req: NextRequest) {
       industryCategory: parentLeadData.industryCategory || '',
       campaign: 'Multi-Site Child',
       dialerAssigned: parentLeadData.dialerAssigned || '',
-      accountManagerAssigned: parentLeadData.accountManagerAssigned || null,
-      bucket: parentLeadData.bucket || 'inbound',
       
       // Override with custom fields from body
       ...body,
@@ -112,6 +123,11 @@ export async function POST(req: NextRequest) {
       // Ensure key child-specific attributes
       companyName: finalCompanyName,
       parentLeadId: parentLeadId,
+      accountManagerAssigned: targetAmName,
+      salesRepAssigned: targetAmName,
+      accountManagerUid: MULTISITE_ACCOUNT_MANAGER_UID,
+      assignedTo: MULTISITE_ACCOUNT_MANAGER_UID,
+      bucket: 'multisite',
       address1: address.address1 || null,
       street: address.street || null,
       city: address.city,

@@ -187,8 +187,12 @@ export function CancelCustomerDialog({
         }
 
         const leadAny = lead as any;
-        await addDoc(collection(firestore, 'cancellations'), {
+        const cancelPayload = {
+          source: 'company_profile',
+          requestType: 'cancellation' as const,
           leadId: lead.id,
+          prospectPlusId: leadAny.prospectPlusId || leadAny.prospectplusId || lead.id,
+          netsuiteId: leadAny.netsuiteId || '',
           companyName: lead.companyName || `${leadAny.firstName || ''} ${leadAny.lastName || ''}`.trim(),
           contactName: lead.contacts?.[0]?.name || leadAny.contactName || '',
           contactEmail: lead.customerServiceEmail || leadAny.email || '',
@@ -198,7 +202,7 @@ export function CancelCustomerDialog({
           trueServiceCancellationDate: cancellationDate,
           cancellationReason: selectedReasonObj?.name || '',
           cancellationReasonId: selectedReasonId,
-          cancellationTheme: selectedThemeObj?.name || '',
+          cancellationTheme: selectedThemeObj?.name || 'Company Profile Request',
           cancellationThemeId: selectedThemeId,
           cancellationWhyId: selectedWhyId,
           cancellationCategory: selectedWhyObj?.name || '',
@@ -211,7 +215,10 @@ export function CancelCustomerDialog({
           createdBy: `${userDisplayName} (${userEmail})`,
           createdAt: nowIso,
           callsCount: 0,
-        });
+        };
+
+        await addDoc(collection(firestore, 'cancellations'), cancelPayload);
+        await addDoc(collection(firestore, 'cs_requests'), cancelPayload);
 
         // Trigger email notification to sarah.hart@mailplus.com.au & cc alexandra.bathman@mailplus.com.au
         fetch('/api/notifications/email', {
@@ -291,8 +298,12 @@ export function CancelCustomerDialog({
         }
 
         const leadAny = lead as any;
-        await addDoc(collection(firestore, 'cancellations'), {
+        const cancelReqPayload = {
+          source: 'company_profile',
+          requestType: 'cancellation' as const,
           leadId: lead.id,
+          prospectPlusId: leadAny.prospectPlusId || leadAny.prospectplusId || lead.id,
+          netsuiteId: leadAny.netsuiteId || '',
           companyName: lead.companyName || `${leadAny.firstName || ''} ${leadAny.lastName || ''}`.trim(),
           contactName: lead.contacts?.[0]?.name || leadAny.contactName || '',
           contactEmail: lead.customerServiceEmail || leadAny.email || '',
@@ -301,7 +312,7 @@ export function CancelCustomerDialog({
           cancellationDate,
           cancellationReason: selectedReasonObj?.name || '',
           cancellationReasonId: selectedReasonId,
-          cancellationTheme: selectedThemeObj?.name || '',
+          cancellationTheme: selectedThemeObj?.name || 'Company Profile Request',
           cancellationThemeId: selectedThemeId,
           cancellationWhyId: selectedWhyId,
           cancellationCategory: selectedWhyObj?.name || '',
@@ -311,7 +322,10 @@ export function CancelCustomerDialog({
           createdBy: `${userDisplayName} (${userEmail})`,
           createdAt: nowIso,
           callsCount: 0,
-        });
+        };
+
+        await addDoc(collection(firestore, 'cancellations'), cancelReqPayload);
+        await addDoc(collection(firestore, 'cs_requests'), cancelReqPayload);
 
         // Trigger email notification to sarah.hart@mailplus.com.au & cc alexandra.bathman@mailplus.com.au
         fetch('/api/notifications/email', {

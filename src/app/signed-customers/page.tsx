@@ -16,18 +16,21 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Lead, Address, MapLead, Contact, LeadStatus } from '@/lib/types'
+import type { Lead, Address, MapLead, Contact, LeadStatus, Invoice } from '@/lib/types'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { usePermissions } from '@/hooks/use-permissions'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, FileX, MoreHorizontal, CalendarCheck } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, FileX, MoreHorizontal, CalendarCheck, FileText, PackageCheck } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { CancelCustomerDialog } from '@/components/cancel-customer-dialog'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
-import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase'
+import { InvoiceDetailsDialog } from '@/components/invoice-details-dialog'
+import { EnterMultiSiteLeadDialog } from '@/components/enter-multisite-lead-dialog'
+import { DiscoverMultiSitesDialog } from '@/components/discover-multisites-dialog'
+import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails, getLastInvoicesForCompanies } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -65,7 +68,7 @@ type ProspectWithLeadInfo = {
     description?: string;
 };
 
-type SortableCompanyKeys = 'entityId' | 'companyName' | 'franchisee' | 'lastProspected';
+type SortableCompanyKeys = 'prospectPlusId' | 'entityId' | 'companyName' | 'franchisee' | 'lastProspected';
 
 const containerStyle = {
   width: '100%',
@@ -126,6 +129,18 @@ export default function SignedCustomersPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [companiesPerPage, setCompaniesPerPage] = useState(500);
+
+  const [invoicesMap, setInvoicesMap] = useState<Record<string, Invoice | null>>({});
+  const [loadingInvoicesMap, setLoadingInvoicesMap] = useState<Record<string, boolean>>({});
+  const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState<{ invoice: Invoice; companyName: string } | null>(null);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+
+  const [selectedMultiSiteCompany, setSelectedMultiSiteCompany] = useState<MapLead | null>(null);
+  const [isMultiSiteDialogOpen, setIsMultiSiteDialogOpen] = useState(false);
+  const [selectedPlaceForChildLead, setSelectedPlaceForChildLead] = useState<google.maps.places.PlaceResult | null>(null);
+
+  const [selectedDiscoverCompany, setSelectedDiscoverCompany] = useState<MapLead | null>(null);
+  const [isDiscoverDialogOpen, setIsDiscoverDialogOpen] = useState(false);
 
 
   const { isLoaded, loadError } = useGoogleMapsScript();
@@ -253,7 +268,10 @@ export default function SignedCustomersPage() {
         let aValue: string | number | undefined;
         let bValue: string | number | undefined;
 
-        if (sortConfig.key === 'lastProspected') {
+        if (sortConfig.key === 'prospectPlusId') {
+            aValue = (a as any).prospectPlusId || (a as any).customerEntityId || (a as any).entityId || '';
+            bValue = (b as any).prospectPlusId || (b as any).customerEntityId || (b as any).entityId || '';
+        } else if (sortConfig.key === 'lastProspected') {
             aValue = a.lastProspected ? new Date(a.lastProspected).getTime() : 0;
             bValue = b.lastProspected ? new Date(b.lastProspected).getTime() : 0;
         } else {
@@ -297,6 +315,135 @@ export default function SignedCustomersPage() {
     const startIndex = (currentPage - 1) * companiesPerPage;
     return sortedCompanies.slice(startIndex, startIndex + companiesPerPage);
   }, [sortedCompanies, currentPage, companiesPerPage]);
+
+  useEffect(() => {
+    if (paginatedCompanies.length === 0) return;
+
+    const missingIds = paginatedCompanies
+      .map(c => c.id)
+      .filter(id => invoicesMap[id] === undefined && !loadingInvoicesMap[id]);
+
+    if (missingIds.length === 0) return;
+
+    setLoadingInvoicesMap(prev => {
+      const next = { ...prev };
+      missingIds.forEach(id => { next[id] = true; });
+      return next;
+    });
+
+    getLastInvoicesForCompanies(missingIds).then(fetchedMap => {
+      setInvoicesMap(prev => ({ ...prev, ...fetchedMap }));
+      setLoadingInvoicesMap(prev => {
+        const next = { ...prev };
+        missingIds.forEach(id => { delete next[id]; });
+        return next;
+      });
+    }).catch(err => {
+      console.error("Failed to load last invoices for companies:", err);
+      setLoadingInvoicesMap(prev => {
+        const next = { ...prev };
+        missingIds.forEach(id => { delete next[id]; });
+        return next;
+      });
+    });
+  }, [paginatedCompanies, invoicesMap, loadingInvoicesMap]);
+
+  const renderServicesCell = (services?: any[]) => {
+    if (!services || services.length === 0) {
+      return <span className="text-xs text-muted-foreground">No services</span>;
+    }
+
+    const serviceNames = services.map(s => {
+      if (typeof s === 'string') return s;
+      return s.name || s.service || s.code || 'Service';
+    });
+
+    const visibleServices = serviceNames.slice(0, 2);
+    const remainingServices = serviceNames.slice(2);
+
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        {visibleServices.map((name, idx) => (
+          <Badge key={idx} variant="outline" className="text-[11px] bg-blue-50/80 text-blue-700 border-blue-200 font-medium">
+            {name}
+          </Badge>
+        ))}
+        {remainingServices.length > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Badge variant="outline" className="text-[11px] bg-slate-100 text-slate-700 border-slate-300 font-medium cursor-pointer hover:bg-slate-200">
+                +{remainingServices.length} more
+              </Badge>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3 text-xs space-y-1.5">
+              <div className="font-semibold text-slate-800 border-b pb-1">All Associated Services</div>
+              <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                {serviceNames.map((name, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 text-muted-foreground">
+                    <PackageCheck className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                    <span>{name}</span>
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+    );
+  };
+
+  const renderLastInvoiceCell = (companyId: string, companyName: string) => {
+    if (loadingInvoicesMap[companyId]) {
+      return (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader className="h-3.5 w-3.5 animate-spin" />
+          <span>Loading...</span>
+        </div>
+      );
+    }
+
+    const invoice = invoicesMap[companyId];
+    if (!invoice) {
+      return <span className="text-xs text-muted-foreground">No invoices</span>;
+    }
+
+    const statusStr = invoice.invoiceStatus || invoice.status || 'Paid';
+    const lowerStatus = statusStr.toLowerCase();
+    let badgeClass = 'bg-slate-50 text-slate-700 border-slate-200';
+    if (lowerStatus.includes('paid')) {
+      badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    } else if (lowerStatus.includes('overdue')) {
+      badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
+    } else if (lowerStatus.includes('open') || lowerStatus.includes('unpaid') || lowerStatus.includes('pending')) {
+      badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+    }
+
+    const totalNum = typeof invoice.invoiceTotal === 'number'
+      ? invoice.invoiceTotal
+      : parseFloat(String(invoice.invoiceTotal || '0'));
+
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 text-xs gap-1.5 px-2 bg-background hover:bg-muted font-normal border-slate-200"
+        onClick={() => {
+          setSelectedInvoiceForModal({ invoice, companyName });
+          setIsInvoiceModalOpen(true);
+        }}
+        title="Click to view full invoice details"
+      >
+        <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+        <span>
+          {invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : 'N/A'}
+        </span>
+        <span className="font-semibold text-foreground">${isNaN(totalNum) ? '0.00' : totalNum.toFixed(2)}</span>
+        <Badge variant="outline" className={`text-[10px] py-0 px-1 font-medium ${badgeClass}`}>
+          {statusStr}
+        </Badge>
+      </Button>
+    );
+  };
 
   const mapCompanies = useMemo(() => {
     return paginatedCompanies.filter(
@@ -558,9 +705,10 @@ export default function SignedCustomersPage() {
   const handleFindMultiSites = useCallback((group: MapLead[]) => {
     const selected = group[0];
     if (!selected) return;
-    findProspects({ lat: -25.2744, lng: 133.7751 }, selected.companyName, true);
+    setSelectedDiscoverCompany(selected);
+    setIsDiscoverDialogOpen(true);
     setSelectedGroup(null);
-  }, [findProspects]);
+  }, []);
 
     const escapeCsvCell = (cellData: any) => {
         if (cellData === null || cellData === undefined) {
@@ -608,17 +756,19 @@ export default function SignedCustomersPage() {
       return;
     }
 
-    const headers = ['ID', 'Prospect+ ID', 'Company Name', 'Franchisee', 'Address', 'Email', 'Phone', 'Last Prospected'];
+    const headers = ['ProspectPlus ID', 'Company Name', 'Franchisee', 'Address', 'Services', 'Last Invoice Date', 'Last Invoice Total', 'Last Invoice Status'];
     const rows = sortedCompanies.map(lead => {
+      const inv = invoicesMap[lead.id];
+      const servicesStr = ((lead as any).services || []).map((s: any) => typeof s === 'string' ? s : (s.name || s.service || '')).filter(Boolean).join('; ');
       return [
-        escapeCsvCell((lead as any).entityId || 'N/A'),
-        escapeCsvCell((lead as any).prospectPlusId || 'N/A'),
+        escapeCsvCell((lead as any).prospectPlusId || (lead as any).customerEntityId || (lead as any).entityId || 'N/A'),
         escapeCsvCell(lead.companyName),
         escapeCsvCell(lead.franchisee || 'N/A'),
         escapeCsvCell(formatAddress(lead.address as Address)),
-        escapeCsvCell(lead.customerServiceEmail || 'N/A'),
-        escapeCsvCell(lead.customerPhone || 'N/A'),
-        escapeCsvCell(lead.lastProspected ? new Date(lead.lastProspected).toLocaleDateString() : 'N/A'),
+        escapeCsvCell(servicesStr || 'None'),
+        escapeCsvCell(inv?.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString() : 'N/A'),
+        escapeCsvCell(inv?.invoiceTotal != null ? `$${Number(inv.invoiceTotal).toFixed(2)}` : 'N/A'),
+        escapeCsvCell(inv?.invoiceStatus || inv?.status || 'N/A'),
       ];
     });
 
@@ -1211,20 +1361,19 @@ export default function SignedCustomersPage() {
                         onCheckedChange={handleSelectAllTable}
                       />
                   </TableHead>
-                  <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">ID{getSortIndicator('entityId')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('prospectPlusId')} className="group -ml-4">ProspectPlus ID{getSortIndicator('prospectPlusId')}</Button></TableHead>
                   <TableHead className="max-w-xs"><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company Name{getSortIndicator('companyName')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead><Button variant="ghost" onClick={() => requestSort('lastProspected')} className="group -ml-4">Last Prospected{getSortIndicator('lastProspected')}</Button></TableHead>
-                  <TableHead className="hidden lg:table-cell">Email</TableHead>
-                  <TableHead className="hidden md:table-cell">Phone</TableHead>
+                  <TableHead>Services</TableHead>
+                  <TableHead>Last Invoice</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedCompanies.length > 0 ? (
                   paginatedCompanies.map((lead) => (
@@ -1235,7 +1384,7 @@ export default function SignedCustomersPage() {
                           onCheckedChange={(checked) => handleSelectTableCompany(lead.id, !!checked)}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{(lead as any).entityId || 'N/A'}</TableCell>
+                      <TableCell className="font-medium">{(lead as any).prospectPlusId || (lead as any).customerEntityId || (lead as any).entityId || 'N/A'}</TableCell>
                       <TableCell className="max-w-xs">
                          <Button variant="link" className="p-0 h-auto flex items-start gap-2 text-left whitespace-normal" onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
                             <Building className="h-4 w-4 mt-1 shrink-0" />
@@ -1251,26 +1400,12 @@ export default function SignedCustomersPage() {
                             <span>{formatAddress(lead.address as Address)}</span>
                         </div>
                       </TableCell>
-                       <TableCell>
-                         {lead.lastProspected ? (
-                           <div className="flex items-center gap-2 text-sm">
-                             <Sparkles className="h-4 w-4 text-amber-500" />
-                             {new Date(lead.lastProspected).toLocaleDateString()}
-                           </div>
-                         ) : 'N/A'}
-                       </TableCell>
-                       <TableCell className="hidden lg:table-cell">
-                        <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-muted-foreground" />
-                            <span>{lead.customerServiceEmail || 'N/A'}</span>
-                        </div>
-                       </TableCell>
-                       <TableCell className="hidden md:table-cell">
-                        <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                            <span>{lead.customerPhone || 'N/A'}</span>
-                        </div>
-                       </TableCell>
+                      <TableCell>
+                        {renderServicesCell((lead as any).services)}
+                      </TableCell>
+                      <TableCell>
+                        {renderLastInvoiceCell(lead.id, lead.companyName)}
+                      </TableCell>
                        <TableCell className="text-right">
                          <DropdownMenu>
                            <DropdownMenuTrigger asChild>
@@ -1283,6 +1418,27 @@ export default function SignedCustomersPage() {
                              <DropdownMenuItem onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
                                <Building className="mr-2 h-4 w-4" /> View Profile
                              </DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => {
+                               setSelectedDiscoverCompany(lead);
+                               setIsDiscoverDialogOpen(true);
+                             }}>
+                               <Search className="mr-2 h-4 w-4 text-blue-600" /> Discover Multi-sites
+                             </DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => {
+                               setSelectedMultiSiteCompany(lead);
+                               setSelectedPlaceForChildLead(null);
+                               setIsMultiSiteDialogOpen(true);
+                             }}>
+                               <Building className="mr-2 h-4 w-4 text-purple-600" /> Enter Multi-site Lead
+                             </DropdownMenuItem>
+                             {invoicesMap[lead.id] && (
+                               <DropdownMenuItem onClick={() => {
+                                 setSelectedInvoiceForModal({ invoice: invoicesMap[lead.id]!, companyName: lead.companyName });
+                                 setIsInvoiceModalOpen(true);
+                               }}>
+                                 <FileText className="mr-2 h-4 w-4 text-primary" /> View Last Invoice
+                               </DropdownMenuItem>
+                             )}
                              <DropdownMenuItem onClick={() => {
                                setSelectedOnboardingLead(lead as unknown as Lead);
                                setIsOnboardingDialogOpen(true);
@@ -1320,7 +1476,7 @@ export default function SignedCustomersPage() {
                   ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                           No signed customers found.
                       </TableCell>
                   </TableRow>
@@ -1568,6 +1724,33 @@ export default function SignedCustomersPage() {
           lead={selectedOnboardingLead}
           onSuccess={() => {
             toast({ title: 'Success', description: 'Onboarding request submitted successfully.' });
+          }}
+        />
+        <InvoiceDetailsDialog
+          isOpen={isInvoiceModalOpen}
+          onOpenChange={setIsInvoiceModalOpen}
+          invoice={selectedInvoiceForModal?.invoice || null}
+          companyName={selectedInvoiceForModal?.companyName}
+        />
+        <EnterMultiSiteLeadDialog
+          isOpen={isMultiSiteDialogOpen}
+          onOpenChange={(open) => {
+            setIsMultiSiteDialogOpen(open);
+            if (!open) setSelectedPlaceForChildLead(null);
+          }}
+          parentCompany={selectedMultiSiteCompany}
+          initialPlace={selectedPlaceForChildLead}
+        />
+        <DiscoverMultiSitesDialog
+          isOpen={isDiscoverDialogOpen}
+          onOpenChange={setIsDiscoverDialogOpen}
+          parentCompany={selectedDiscoverCompany}
+          allSystemRecords={allMapData}
+          map={map}
+          onAddMultiSiteLead={(place) => {
+            setSelectedMultiSiteCompany(selectedDiscoverCompany);
+            setSelectedPlaceForChildLead(place);
+            setIsMultiSiteDialogOpen(true);
           }}
         />
     </>

@@ -30,6 +30,8 @@ import {
   Trash2,
   Plus,
   CalendarCheck,
+  ShieldCheck,
+  Loader2,
 } from 'lucide-react'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { getOnboardingRequestByLeadId } from '@/services/onboarding-service'
@@ -164,6 +166,71 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [isOperatorsModalOpen, setIsOperatorsModalOpen] = useState(false);
   const [isSuburbsModalOpen, setIsSuburbsModalOpen] = useState(false);
   const [operatorMap, setOperatorMap] = useState<Record<string, string>>({});
+  const [checkingShipmateId, setCheckingShipmateId] = useState<string | null>(null);
+
+  const handleCheckShipmateStatus = async (contact: any) => {
+    if (!contact.email) return;
+    setCheckingShipmateId(contact.id);
+    try {
+      const res = await fetch('/api/contacts/check-shipmate-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parentId: company.id,
+          parentType: 'companies',
+          contactId: contact.id,
+          email: contact.email,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to check ShipMate status');
+      }
+
+      setCompany(prev => ({
+        ...prev,
+        contacts: prev.contacts?.map(c =>
+          c.id === contact.id
+            ? {
+                ...c,
+                accessToShipMate: data.accessToShipMate,
+                accountActivated: data.accountActivated,
+                createPasswordEmailSent: data.createPasswordEmailSent,
+                shipmateStatus: data.shipmateStatus,
+                shipmateCheckedAt: data.shipmateCheckedAt,
+              }
+            : c
+        ),
+      }));
+
+      if (data.accountActivated) {
+        toast({
+          title: 'ShipMate Portal Activated',
+          description: `${contact.name} (${contact.email}) has an active ShipMate portal account.`,
+        });
+      } else if (data.createPasswordEmailSent) {
+        toast({
+          title: 'Password Setup Email Sent',
+          description: `Password setup email was sent to ${contact.name} (${contact.email}). Account pending setup.`,
+        });
+      } else {
+        toast({
+          title: 'No Portal Activity',
+          description: `No ShipMate portal activity found for ${contact.email}.`,
+        });
+      }
+    } catch (err: any) {
+      console.error('Error checking ShipMate status:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Check Failed',
+        description: err.message || 'Could not verify ShipMate portal status.',
+      });
+    } finally {
+      setCheckingShipmateId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchOperators = async () => {
@@ -451,6 +518,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
               {(company.bucket === 'field_sales' || (!company.bucket && company.fieldSales)) && (
                   <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Field Sales</Badge>
               )}
+              {company.bucket === 'multisite' && (
+                  <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-300">MultiSite</Badge>
+              )}
               {company.bucket === 'account_manager' && (
                   <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Account Manager</Badge>
               )}
@@ -686,12 +756,46 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <CardHeader><CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-muted-foreground" />Contacts</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
                         {company.contacts?.map(contact => (
-                            <div key={contact.id} className="p-3 border rounded-md text-sm">
-                                <p className="font-semibold">{contact.name}</p>
-                                <p className="text-xs text-muted-foreground">{contact.title}</p>
-                                <div className="mt-2 space-y-1">
-                                    <div className="flex items-center gap-2"><Mail className="w-3 h-3" />{contact.email}</div>
-                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}><PhoneCall className="h-3 w-3" /></Button></div>
+                            <div key={contact.id} className="p-3 border rounded-md text-sm space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <p className="font-semibold">{contact.name}</p>
+                                        <p className="text-xs text-muted-foreground">{contact.title}</p>
+                                    </div>
+                                    {contact.email && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 px-2 shrink-0 flex items-center gap-1"
+                                            disabled={checkingShipmateId === contact.id}
+                                            onClick={() => handleCheckShipmateStatus(contact)}
+                                        >
+                                            {checkingShipmateId === contact.id ? (
+                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                            ) : (
+                                                <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
+                                            )}
+                                            Check ShipMate
+                                        </Button>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {contact.isPrimary && (
+                                        <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 py-0 h-4 font-bold">Primary</Badge>
+                                    )}
+                                    {contact.shipmateStatus === 'Activated' ? (
+                                        <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300 py-0 h-4 font-semibold">ShipMate Activated</Badge>
+                                    ) : contact.shipmateStatus === 'Password Sent' ? (
+                                        <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-300 py-0 h-4 font-semibold">ShipMate Setup Sent</Badge>
+                                    ) : contact.accessToShipMate === 'yes' ? (
+                                        <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 py-0 h-4">ShipMate Access</Badge>
+                                    ) : null}
+                                </div>
+
+                                <div className="space-y-1 pt-1 border-t text-xs">
+                                    <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-muted-foreground" />{contact.email}</div>
+                                    <div className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-muted-foreground" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => handleInitiateCall(contact.phone)}><PhoneCall className="h-3 w-3" /></Button></div>
                                 </div>
                             </div>
                         ))}

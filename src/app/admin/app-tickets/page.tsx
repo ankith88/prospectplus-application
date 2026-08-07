@@ -33,6 +33,7 @@ import {
   Pencil,
   UploadCloud,
   File,
+  Paperclip,
   X
 } from "lucide-react";
 import { 

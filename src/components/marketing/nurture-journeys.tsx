@@ -22,7 +22,7 @@ interface Template {
 
 interface JourneyNode {
   id: string;
-  type: 'trigger' | 'action' | 'wait' | 'condition' | 'action_button' | 'end_action';
+  type: 'trigger' | 'action' | 'wait' | 'condition' | 'email_open_condition' | 'action_button' | 'end_action';
   config: Record<string, any>;
 }
 
@@ -279,7 +279,7 @@ export function NurtureJourneys() {
     }
   };
 
-  const handleAddStep = (type: 'action' | 'wait' | 'condition' | 'action_button' | 'end_action', insertIndex?: number) => {
+  const handleAddStep = (type: 'action' | 'wait' | 'condition' | 'email_open_condition' | 'action_button' | 'end_action', insertIndex?: number) => {
     const nextId = `${type}_${Date.now()}`;
     const newConfig: Record<string, any> = {};
 
@@ -292,6 +292,9 @@ export function NurtureJourneys() {
     } else if (type === 'condition') {
       newConfig.field = 'bucket';
       newConfig.value = 'outbound';
+    } else if (type === 'email_open_condition') {
+      newConfig.timeoutHours = '72';
+      newConfig.label = 'Wait for Email Open (3 Days)';
     } else if (type === 'action_button') {
       newConfig.name = 'Book a Meeting';
       newConfig.redirectUrl = 'https://mailplus.com.au';
@@ -512,7 +515,10 @@ export function NurtureJourneys() {
                                   <FileText className="h-4 w-4 mr-2" /> Add Wait
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleAddStep('condition', index)}>
-                                  <Settings className="h-4 w-4 mr-2" /> Add Condition
+                                  <Settings className="h-4 w-4 mr-2" /> Add Field Condition
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleAddStep('email_open_condition', index)}>
+                                  <Mail className="h-4 w-4 mr-2 text-indigo-600" /> Add Email Open Trigger
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleAddStep('action_button', index)}>
                                   <CheckCircle className="h-4 w-4 mr-2" /> Add Button Link
@@ -801,6 +807,19 @@ export function NurtureJourneys() {
                                   </label>
                                 </div>
 
+                                {node.config.actionType === 'email' && (
+                                  <div className="col-span-2 flex items-center gap-2 mt-1">
+                                    <Checkbox 
+                                      id={`notify_${node.id}`} 
+                                      checked={!!node.config.notifyOnOpen} 
+                                      onCheckedChange={(checked) => handleUpdateNodeConfig(node.id, 'notifyOnOpen', !!checked)}
+                                    />
+                                    <label htmlFor={`notify_${node.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                                      Notify Account Manager (In-App & Email Alert) when recipient opens this email
+                                    </label>
+                                  </div>
+                                )}
+
                                 <div className="col-span-2 space-y-1 pt-1 border-t mt-2">
                                   <label className="text-[10px] font-bold text-slate-500 uppercase">Preferred Send Time (Sydney/Australia Time)</label>
                                   <Select 
@@ -882,6 +901,24 @@ export function NurtureJourneys() {
                                     onChange={(e) => handleUpdateNodeConfig(node.id, 'value', e.target.value)}
                                     placeholder="e.g. outbound"
                                   />
+                                </div>
+                              </div>
+                            )}
+
+                            {node.type === 'email_open_condition' && (
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Wait Timeout (Hours)</label>
+                                  <Input 
+                                    type="number"
+                                    min="1"
+                                    value={node.config.timeoutHours || '72'} 
+                                    onChange={(e) => handleUpdateNodeConfig(node.id, 'timeoutHours', e.target.value)}
+                                    placeholder="e.g. 72 (3 days)"
+                                  />
+                                </div>
+                                <div className="col-span-2 text-xs text-slate-500 bg-slate-50 p-2.5 rounded border border-slate-200">
+                                  💡 <strong>Branching Logic:</strong> If the recipient opens any previous email step within <strong>{node.config.timeoutHours || '72'} hours</strong>, the lead proceeds down the <strong>Opened (Yes)</strong> branch. If unanswered after timeout, the lead proceeds down the <strong>Unopened (No)</strong> branch.
                                 </div>
                               </div>
                             )}
@@ -1032,7 +1069,10 @@ export function NurtureJourneys() {
                       + Add Wait
                     </Button>
                     <Button type="button" size="sm" variant="outline" onClick={() => handleAddStep('condition')} className="text-xs">
-                      + Add Condition
+                      + Add Field Condition
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => handleAddStep('email_open_condition')} className="text-xs text-indigo-700 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100">
+                      + Add Email Open Trigger
                     </Button>
                     <Button type="button" size="sm" variant="outline" onClick={() => handleAddStep('action_button')} className="text-xs">
                       + Add Action Button Link

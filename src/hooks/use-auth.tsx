@@ -239,6 +239,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             !user && 
             pathname !== '/signup' && 
             pathname !== '/signin' && 
+            !pathname.startsWith('/customer-request/') &&
             !pathname.startsWith('/scf/') && 
             !pathname.startsWith('/sof/') && 
             !pathname.startsWith('/lpo-opportunity/') && 

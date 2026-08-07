@@ -4,6 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { Lead, ServiceSelection } from '@/lib/types';
 import { sendCSRequestNotificationEmail } from '@/lib/cancellation-email';
+import { findLeadByIdOrInternalId } from '@/lib/lead-lookup';
 
 const db = getFirestore(adminApp);
 
@@ -67,30 +68,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validated = CSRequestSchema.parse(body);
 
-    const lookupId = validated.leadId || validated.netsuiteId;
+    const lookupId = validated.leadId || validated.netsuiteId || validated.prospectPlusId;
     let leadId = lookupId || '';
     let existingLead: Lead | null = null;
 
-    // 1. Lookup by document ID
     if (lookupId) {
-      const leadSnap = await db.collection('leads').doc(lookupId).get();
-      if (leadSnap.exists) {
-        existingLead = { id: leadSnap.id, ...leadSnap.data() } as Lead;
-        leadId = leadSnap.id;
+      const result = await findLeadByIdOrInternalId(lookupId);
+      if (result) {
+        existingLead = result.lead;
+        leadId = result.leadId;
       }
     }
 
-    // 2. Lookup by netsuiteId
-    if (!existingLead && validated.netsuiteId) {
-      const qNs = await db.collection('leads').where('netsuiteId', '==', validated.netsuiteId).limit(1).get();
-      if (!qNs.empty) {
-        const leadDoc = qNs.docs[0];
-        existingLead = { id: leadDoc.id, ...leadDoc.data() } as Lead;
-        leadId = leadDoc.id;
-      }
-    }
-
-    // 3. Lookup by companyName
+    // Lookup by companyName as fallback if lookupId failed
     if (!existingLead && validated.companyName) {
       const companySnap = await db.collection('leads').where('companyName', '==', validated.companyName).limit(1).get();
       if (!companySnap.empty) {
@@ -144,6 +134,7 @@ export async function POST(request: Request) {
     // 5. Add document to cs_requests collection
     const csRequestsRef = db.collection('cs_requests');
     const csReqDoc = await csRequestsRef.add({
+      source: 'public_portal',
       requestType: validated.requestType,
       leadId,
       prospectPlusId,
@@ -180,6 +171,7 @@ export async function POST(request: Request) {
     if (isCancellation) {
       const cancelRef = db.collection('cancellations');
       const cancelDoc = await cancelRef.add({
+        source: 'public_portal',
         leadId,
         prospectPlusId,
         netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',

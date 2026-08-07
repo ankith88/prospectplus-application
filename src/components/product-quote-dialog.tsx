@@ -470,7 +470,10 @@ export function ProductQuoteDialog({
           html: message,
           customFrom: senderEmail,
           isTemplate: true,
-          leadId: lead.id
+          leadId: lead.id,
+          notifyOnOpen: true,
+          notifyUserEmail: senderEmail,
+          trackingCategory: 'quote'
         }),
       });
 

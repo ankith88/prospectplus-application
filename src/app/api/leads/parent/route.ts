@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { canAssignToAm } from '@/lib/leave-utils';
+import { MULTISITE_ACCOUNT_MANAGER_UID, isMultisiteCampaign } from '@/lib/constants';
 
 const db = getFirestore(adminApp);
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
@@ -121,8 +122,10 @@ export async function POST(req: NextRequest) {
       routingNote = `No territory matched. Defaulted to MailPlus Pty Ltd (Out of Territory).`;
     }
 
-    // Assign Account Manager randomly (if not provided)
-    let assignedAccountManager = body.accountManagerAssigned || null;
+    const isMultisite = isMultisiteCampaign(body.campaign) || Boolean(body.parentLeadId);
+
+    // Assign Account Manager
+    let assignedAccountManager = isMultisite ? MULTISITE_ACCOUNT_MANAGER_UID : (body.accountManagerAssigned || null);
     let accountManagerName: string | null = null;
     let accountManagerCalendly: string | null = null;
     let accountManagerEmail: string | null = null;
@@ -150,7 +153,7 @@ export async function POST(req: NextRequest) {
       } else {
         const amDoc = await db.collection('users').doc(assignedAccountManager).get();
         if (amDoc.exists) {
-          const data = amDoc.data();
+          const data = amDoc.data()!;
           accountManagerName = data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unknown';
           accountManagerCalendly = data.calendlyLink || data.calendly || null;
           accountManagerEmail = data.email || null;
@@ -193,8 +196,11 @@ export async function POST(req: NextRequest) {
       franchisee: assignedFranchisee,
       franchiseeName: assignedFranchiseeName,
       ...(potentialFranchisees && { potentialFranchisees }),
-      ...(assignedAccountManager && { accountManagerAssigned: assignedAccountManager }),
-      bucket: body.bucket || 'inbound',
+      accountManagerAssigned: isMultisite ? (accountManagerName || MULTISITE_ACCOUNT_MANAGER_UID) : (accountManagerName || assignedAccountManager || undefined),
+      salesRepAssigned: isMultisite ? (accountManagerName || MULTISITE_ACCOUNT_MANAGER_UID) : (body.salesRepAssigned || undefined),
+      accountManagerUid: isMultisite ? MULTISITE_ACCOUNT_MANAGER_UID : (assignedAccountManager || undefined),
+      assignedTo: isMultisite ? MULTISITE_ACCOUNT_MANAGER_UID : undefined,
+      bucket: isMultisite ? 'multisite' : (body.bucket || 'inbound'),
       dateLeadEntered: new Date().toISOString(),
       createdAt: FieldValue.serverTimestamp(),
       syncedWithNetSuite: false,
@@ -216,6 +222,29 @@ export async function POST(req: NextRequest) {
     // Save lead document with the provided ID
     await leadRef.set(leadData);
 
+    // Automatically convert/create Parent Signed Customer in 'companies' collection
+    const companyRef = db.collection('companies').doc(leadId);
+    await companyRef.set({
+      id: leadId,
+      companyName: companyName || 'Parent Corporate Account',
+      customerStatus: 'Signed Customer',
+      status: 'Signed Customer',
+      isParent: true,
+      accountType: 'parent',
+      prospectPlusId: leadId,
+      accountManagerAssigned: isMultisite ? (accountManagerName || MULTISITE_ACCOUNT_MANAGER_UID) : (accountManagerName || assignedAccountManager || 'MultiSite Account Manager'),
+      franchisee: assignedFranchisee || 'MailPlus Pty Ltd',
+      franchiseeName: assignedFranchiseeName || 'MailPlus Pty Ltd',
+      address: {
+        street: street || address1 || '',
+        city: city || '',
+        state: state || '',
+        zip: zip || ''
+      },
+      updatedAt: new Date().toISOString(),
+      createdAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+
     // Save contacts if provided
     if (contacts && Array.isArray(contacts)) {
       const contactsSubRef = db.collection('leads').doc(leadId).collection('contacts');
@@ -234,7 +263,7 @@ export async function POST(req: NextRequest) {
     await activityRef.add({
       type: 'Update',
       date: new Date().toISOString(),
-      notes: `Parent lead created via external API with ID '${leadId}'. ${routingNote}`,
+      notes: `Parent lead created via external API with ID '${leadId}' and automatically registered as Parent Signed Customer in companies collection. ${routingNote}`,
       author: 'System'
     });
 

@@ -25,6 +25,9 @@ import { collection, getDocs, getDoc, doc, writeBatch, serverTimestamp, query, w
 import { canAssignToAm } from '@/lib/leave-utils';
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName, cleanAbn } from '@/lib/duplicate-detector';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
+import { MULTISITE_ACCOUNT_MANAGER_UID, isMultisiteCampaign } from '@/lib/constants';
+import { rekeyLeadToNetSuite } from '@/services/rekey-lead';
+import { cn } from '@/lib/utils';
 
 const standardFields = [
   { key: 'companyName', label: 'Company Name', required: true, desc: 'Name of the business' },
@@ -151,6 +154,60 @@ export function ImportLeadsClient() {
   const [logFilter, setLogFilter] = useState<'all' | 'Created' | 'Updated' | 'Skipped' | 'Failed'>('all');
   const [logSearch, setLogSearch] = useState('');
 
+  // NetSuite Bulk Sync state
+  const [createdLeadIds, setCreatedLeadIds] = useState<string[]>([]);
+  const [isSyncingNetSuite, setIsSyncingNetSuite] = useState<boolean>(false);
+  const [netSuiteSyncProgress, setNetSuiteSyncProgress] = useState<number>(0);
+
+  const executeNetSuiteSync = async (targetId?: string) => {
+    const idsToSync = targetId ? [targetId] : createdLeadIds;
+    if (idsToSync.length === 0) return;
+
+    setIsSyncingNetSuite(true);
+    setNetSuiteSyncProgress(0);
+
+    let syncedCount = 0;
+    const updatedLogs = [...importLogRecords];
+
+    for (let i = 0; i < idsToSync.length; i++) {
+      const leadId = idsToSync[i];
+      try {
+        const res = await rekeyLeadToNetSuite(leadId);
+        if (res.success && res.newDocId) {
+          syncedCount++;
+          const logIndex = updatedLogs.findIndex((l) => l.internalId === leadId);
+          if (logIndex !== -1) {
+            updatedLogs[logIndex] = {
+              ...updatedLogs[logIndex],
+              internalId: res.newDocId,
+              status: 'Created',
+              details: `Synced & Re-keyed to NetSuite Numeric ID ${res.newDocId}`,
+            };
+          }
+        } else {
+          const logIndex = updatedLogs.findIndex((l) => l.internalId === leadId);
+          if (logIndex !== -1) {
+            updatedLogs[logIndex] = {
+              ...updatedLogs[logIndex],
+              status: 'Failed',
+              details: `Failed NetSuite Sync: ${res.error || 'NetSuite API error'}`,
+            };
+          }
+        }
+      } catch (err: any) {
+        console.error(`NetSuite sync error for ${leadId}:`, err);
+      }
+      setNetSuiteSyncProgress(Math.round(((i + 1) / idsToSync.length) * 100));
+    }
+
+    setImportLogRecords(updatedLogs);
+    setIsSyncingNetSuite(false);
+    toast({
+      title: 'NetSuite Sync Complete',
+      description: `Successfully created and re-keyed ${syncedCount} of ${idsToSync.length} leads in NetSuite.`,
+    });
+  };
+
   // Live import timer effect
   useEffect(() => {
     let interval: any = null;
@@ -208,20 +265,45 @@ export function ImportLeadsClient() {
         const parentAccMap = new Map<string, { id: string; companyName: string; prospectPlusId?: string }>();
         const pAccounts: Array<{ id: string; companyName: string; prospectPlusId?: string; abn?: string; type: 'company' | 'lead' }> = [];
 
+        const registerParentItem = (item: { id: string; companyName: string; prospectPlusId?: string; abn?: string }, data: any) => {
+          const addKey = (k?: string | number | null) => {
+            if (k === undefined || k === null) return;
+            const str = String(k).trim().toLowerCase();
+            if (!str) return;
+            if (!parentAccMap.has(str)) parentAccMap.set(str, item);
+            const numPart = str.replace(/^[a-zA-Z\-_]+/, '');
+            if (numPart && numPart !== str && !parentAccMap.has(numPart)) {
+              parentAccMap.set(numPart, item);
+            }
+          };
+
+          addKey(item.id);
+          addKey(item.prospectPlusId);
+          addKey(item.abn);
+          addKey(data.internalid);
+          addKey(data.internalId);
+          addKey(data.entityId);
+          addKey(data.customerEntityId);
+          addKey(data.netsuiteId);
+          addKey(data.customLeadId);
+
+          const normName = normalizeCompanyName(item.companyName);
+          if (normName && !parentAccMap.has(normName)) {
+            parentAccMap.set(normName, item);
+          }
+        };
+
         compSnap.docs.forEach(docSnap => {
           const data = docSnap.data();
           const name = data.companyName || docSnap.id;
-          const ppId = data.prospectPlusId || data.entityId || '';
+          const ppId = data.prospectPlusId || data.entityId || data.internalid || '';
           const abn = cleanAbn(data.abn);
           const normName = normalizeCompanyName(data.companyName);
 
           const item = { id: docSnap.id, companyName: name, prospectPlusId: ppId, abn, type: 'company' as const };
           pAccounts.push(item);
 
-          if (ppId) parentAccMap.set(ppId.toLowerCase().trim(), item);
-          parentAccMap.set(docSnap.id.toLowerCase().trim(), item);
-          if (abn) parentAccMap.set(abn, item);
-          if (normName) parentAccMap.set(normName, item);
+          registerParentItem(item, data);
 
           if (normName) compMap.set(normName, { id: docSnap.id, name });
           if (abn) compMap.set(abn, { id: docSnap.id, name });
@@ -231,19 +313,15 @@ export function ImportLeadsClient() {
           const data = docSnap.data();
           if (!data.parentLeadId) {
             const name = data.companyName || docSnap.id;
-            const ppId = data.prospectPlusId || data.id || '';
+            const ppId = data.prospectPlusId || data.internalid || data.id || '';
             const abn = cleanAbn(data.abn);
-            const normName = normalizeCompanyName(data.companyName);
 
             const item = { id: docSnap.id, companyName: name, prospectPlusId: ppId, abn, type: 'lead' as const };
             if (!parentAccMap.has(docSnap.id.toLowerCase().trim())) {
               pAccounts.push(item);
             }
 
-            if (ppId && !parentAccMap.has(ppId.toLowerCase().trim())) parentAccMap.set(ppId.toLowerCase().trim(), item);
-            if (!parentAccMap.has(docSnap.id.toLowerCase().trim())) parentAccMap.set(docSnap.id.toLowerCase().trim(), item);
-            if (abn && !parentAccMap.has(abn)) parentAccMap.set(abn, item);
-            if (normName && !parentAccMap.has(normName)) parentAccMap.set(normName, item);
+            registerParentItem(item, data);
           }
         });
 
@@ -406,7 +484,7 @@ export function ImportLeadsClient() {
             if (field.key === 'prospectPlusId' && (normalizedHeader === 'internalid' || normalizedHeader === 'prospectplusid' || normalizedHeader === 'prospectid' || normalizedHeader === 'leadid' || normalizedHeader === 'entityid' || normalizedHeader === 'netsuiteid' || normalizedHeader === 'netsuiteinternalid')) return true;
 
             // Aliases for Parent Linkage
-            if (field.key === 'parentProspectPlusId' && (normalizedHeader === 'parentprospectplusid' || normalizedHeader === 'parentprospectid' || normalizedHeader === 'parentid' || normalizedHeader === 'parentleadid' || normalizedHeader === 'parententityid' || normalizedHeader === 'parentaccountid')) return true;
+            if (field.key === 'parentProspectPlusId' && (normalizedHeader === 'parentprospectplusid' || normalizedHeader === 'parentprospectid' || normalizedHeader === 'parentid' || normalizedHeader === 'parentleadid' || normalizedHeader === 'parententityid' || normalizedHeader === 'parentaccountid' || normalizedHeader === 'parentprospectidleadid' || normalizedHeader === 'parentprospectplusidleadid')) return true;
             if (field.key === 'parentCompanyName' && (normalizedHeader === 'parentcompanyname' || normalizedHeader === 'parentcompany' || normalizedHeader === 'parentbusinessname' || normalizedHeader === 'parentaccount')) return true;
             if (field.key === 'parentAbn' && (normalizedHeader === 'parentabn' || normalizedHeader === 'parentabnnumber')) return true;
 
@@ -617,6 +695,118 @@ export function ImportLeadsClient() {
     return null;
   };
 
+  // Helper for async parent lookup with Firestore query fallback
+  const resolveParentAccountByAnyId = async (
+    rawPpId?: string,
+    rawAbn?: string,
+    rawName?: string
+  ): Promise<{ id: string; companyName: string; prospectPlusId?: string; source: 'row' | 'global' | 'auto' } | null> => {
+    const cleanPpId = rawPpId?.trim();
+    const cleanAbnVal = cleanAbn(rawAbn);
+    const cleanNameNorm = normalizeCompanyName(rawName);
+
+    // 1. In-memory lookup
+    if (cleanPpId) {
+      const k = cleanPpId.toLowerCase();
+      if (parentAccountsMap.has(k)) {
+        const found = parentAccountsMap.get(k)!;
+        return { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
+      }
+      const numPart = cleanPpId.replace(/^[a-zA-Z\-_]+/, '').toLowerCase();
+      if (numPart && parentAccountsMap.has(numPart)) {
+        const found = parentAccountsMap.get(numPart)!;
+        return { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
+      }
+    }
+    if (cleanAbnVal && parentAccountsMap.has(cleanAbnVal)) {
+      const found = parentAccountsMap.get(cleanAbnVal)!;
+      return { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
+    }
+    if (cleanNameNorm && parentAccountsMap.has(cleanNameNorm)) {
+      const found = parentAccountsMap.get(cleanNameNorm)!;
+      return { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
+    }
+
+    // 2. Direct Firestore search fallback
+    if (cleanPpId) {
+      const searchTerms: (string | number)[] = [cleanPpId];
+      const numPart = cleanPpId.replace(/^[a-zA-Z\-_]+/, '');
+      if (numPart && numPart !== cleanPpId) searchTerms.push(numPart);
+      if (numPart && !isNaN(Number(numPart))) searchTerms.push(Number(numPart));
+
+      const collections = ['companies', 'leads'];
+      const fields = ['prospectPlusId', 'internalid', 'internalId', 'customerEntityId', 'entityId', 'netsuiteId', 'prospect_plus_id'];
+
+      for (const col of collections) {
+        for (const term of searchTerms) {
+          try {
+            const docSnap = await getDoc(doc(firestore, col, String(term)));
+            if (docSnap.exists()) {
+              const dData = docSnap.data();
+              const item = {
+                id: docSnap.id,
+                companyName: dData.companyName || docSnap.id,
+                prospectPlusId: dData.prospectPlusId || dData.internalid || docSnap.id
+              };
+              parentAccountsMap.set(cleanPpId.toLowerCase(), item);
+              return { ...item, source: 'row' };
+            }
+          } catch (e) {}
+        }
+      }
+
+      for (const col of collections) {
+        for (const f of fields) {
+          for (const val of searchTerms) {
+            try {
+              const qSnap = await getDocs(query(collection(firestore, col), where(f, '==', val), limit(1)));
+              if (!qSnap.empty) {
+                const docItem = qSnap.docs[0];
+                const dData = docItem.data();
+                const item = {
+                  id: docItem.id,
+                  companyName: dData.companyName || docItem.id,
+                  prospectPlusId: dData.prospectPlusId || dData.internalid || docItem.id
+                };
+                parentAccountsMap.set(cleanPpId.toLowerCase(), item);
+                return { ...item, source: 'row' };
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    }
+
+    if (rawName && rawName.trim()) {
+      for (const col of ['companies', 'leads']) {
+        try {
+          const qSnap = await getDocs(query(collection(firestore, col), where('companyName', '==', rawName.trim()), limit(1)));
+          if (!qSnap.empty) {
+            const docItem = qSnap.docs[0];
+            const dData = docItem.data();
+            const item = {
+              id: docItem.id,
+              companyName: dData.companyName || docItem.id,
+              prospectPlusId: dData.prospectPlusId || dData.internalid || docItem.id
+            };
+            if (cleanNameNorm) parentAccountsMap.set(cleanNameNorm, item);
+            return { ...item, source: 'row' };
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 3. Global fallback
+    if (globalParentId && globalParentId !== 'none') {
+      const found = parentAccounts.find(p => p.id === globalParentId);
+      if (found) {
+        return { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'global' };
+      }
+    }
+
+    return null;
+  };
+
   // Run Preview Validation and Duplication checks
   const runValidationAndDuplicates = async (overrideMatchKey?: string) => {
     const activeMatchKey = overrideMatchKey || matchFieldKey;
@@ -665,29 +855,11 @@ export function ImportLeadsClient() {
       errors[idx] = rowErrors;
 
       // 1. Parent Account Resolution (Prospect+ ID, ABN, Company Name, or Global Default)
-      const rowParentPpId = getVal('parentProspectPlusId')?.toLowerCase().trim();
-      const rowParentAbn = cleanAbn(getVal('parentAbn'));
-      const rowParentNameNorm = normalizeCompanyName(getVal('parentCompanyName'));
-
-      let resolvedParent: { id: string; companyName: string; prospectPlusId?: string; source: 'row' | 'global' | 'auto' } | null = null;
-
-      if (rowParentPpId && parentAccountsMap.has(rowParentPpId)) {
-        const found = parentAccountsMap.get(rowParentPpId)!;
-        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
-      } else if (rowParentAbn && parentAccountsMap.has(rowParentAbn)) {
-        const found = parentAccountsMap.get(rowParentAbn)!;
-        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
-      } else if (rowParentNameNorm && parentAccountsMap.has(rowParentNameNorm)) {
-        const found = parentAccountsMap.get(rowParentNameNorm)!;
-        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
-      } else if (globalParentId && globalParentId !== 'none') {
-        const found = parentAccounts.find(p => p.id === globalParentId);
-        if (found) {
-          resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'global' };
-        }
-      }
-
-      pMatches[idx] = resolvedParent;
+      pMatches[idx] = await resolveParentAccountByAnyId(
+        getVal('parentProspectPlusId'),
+        getVal('parentAbn'),
+        getVal('parentCompanyName')
+      );
 
       // 2. Existing Active Customer Check (Instant Cache Lookup)
       if (abnVal && existingCompaniesCache.has(abnVal)) {
@@ -743,29 +915,11 @@ export function ImportLeadsClient() {
       const normName = normalizeCompanyName(compName);
 
       // Parent Account resolution logic
-      const rowParentPpId = getVal('parentProspectPlusId')?.toLowerCase().trim();
-      const rowParentAbn = cleanAbn(getVal('parentAbn'));
-      const rowParentNameNorm = normalizeCompanyName(getVal('parentCompanyName'));
-
-      let resolvedParent: { id: string; companyName: string; prospectPlusId?: string; source: 'row' | 'global' | 'auto' } | null = null;
-
-      if (rowParentPpId && parentAccountsMap.has(rowParentPpId)) {
-        const found = parentAccountsMap.get(rowParentPpId)!;
-        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
-      } else if (rowParentAbn && parentAccountsMap.has(rowParentAbn)) {
-        const found = parentAccountsMap.get(rowParentAbn)!;
-        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
-      } else if (rowParentNameNorm && parentAccountsMap.has(rowParentNameNorm)) {
-        const found = parentAccountsMap.get(rowParentNameNorm)!;
-        resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'row' };
-      } else if (globalParentId && globalParentId !== 'none') {
-        const found = parentAccounts.find(p => p.id === globalParentId);
-        if (found) {
-          resolvedParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId, source: 'global' };
-        }
-      }
-
-      pMatches[actualIdx] = resolvedParent;
+      pMatches[actualIdx] = await resolveParentAccountByAnyId(
+        getVal('parentProspectPlusId'),
+        getVal('parentAbn'),
+        getVal('parentCompanyName')
+      );
 
       if (abnVal && existingCompaniesCache.has(abnVal)) {
         compMatches[actualIdx] = existingCompaniesCache.get(abnVal)!;
@@ -800,6 +954,7 @@ export function ImportLeadsClient() {
     let updatedCount = 0;
     let skippedCount = 0;
     let failedCount = 0;
+    const newCreatedLeadIds: string[] = [];
     
     const importLogs: Array<{
       rowNum: number;
@@ -984,28 +1139,14 @@ export function ImportLeadsClient() {
         }
 
         // Parent Linkage resolution for row
-        const rowParentPpId = getVal('parentProspectPlusId')?.toLowerCase().trim();
-        const rowParentAbn = cleanAbn(getVal('parentAbn'));
-        const rowParentNameNorm = normalizeCompanyName(getVal('parentCompanyName'));
-
         let effectiveParent: { id: string; companyName: string; prospectPlusId?: string } | null = parentMatches[rowIdx] || null;
 
         if (!effectiveParent) {
-          if (rowParentPpId && parentAccountsMap.has(rowParentPpId)) {
-            const found = parentAccountsMap.get(rowParentPpId)!;
-            effectiveParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId };
-          } else if (rowParentAbn && parentAccountsMap.has(rowParentAbn)) {
-            const found = parentAccountsMap.get(rowParentAbn)!;
-            effectiveParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId };
-          } else if (rowParentNameNorm && parentAccountsMap.has(rowParentNameNorm)) {
-            const found = parentAccountsMap.get(rowParentNameNorm)!;
-            effectiveParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId };
-          } else if (globalParentId && globalParentId !== 'none') {
-            const found = parentAccounts.find(p => p.id === globalParentId);
-            if (found) {
-              effectiveParent = { id: found.id, companyName: found.companyName, prospectPlusId: found.prospectPlusId };
-            }
-          }
+          effectiveParent = await resolveParentAccountByAnyId(
+            getVal('parentProspectPlusId'),
+            getVal('parentAbn'),
+            getVal('parentCompanyName')
+          );
         }
 
         if (effectiveParent) {
@@ -1013,9 +1154,18 @@ export function ImportLeadsClient() {
         }
 
         const effectiveCampaign = getVal('campaign') || campaignName;
+        const isMultisite = isMultisiteCampaign(effectiveCampaign) || Boolean(effectiveParent);
 
-        // Bucket specific fields
-        if (selectedBucket === 'outbound') {
+        if (isMultisite || selectedBucket === 'multisite') {
+          leadData.bucket = 'multisite';
+          leadData.accountManagerUid = MULTISITE_ACCOUNT_MANAGER_UID;
+          leadData.assignedTo = MULTISITE_ACCOUNT_MANAGER_UID;
+          const foundAm = allUsers.find(u => (u as any).id === MULTISITE_ACCOUNT_MANAGER_UID || u.uid === MULTISITE_ACCOUNT_MANAGER_UID);
+          const targetAmName = foundAm ? (foundAm.displayName || `${foundAm.firstName || ''} ${foundAm.lastName || ''}`.trim() || MULTISITE_ACCOUNT_MANAGER_UID) : MULTISITE_ACCOUNT_MANAGER_UID;
+          leadData.accountManagerAssigned = targetAmName;
+          leadData.salesRepAssigned = targetAmName;
+          leadData.campaign = effectiveCampaign || 'MultiSite';
+        } else if (selectedBucket === 'outbound') {
           leadData.campaign = effectiveCampaign || 'Bulk Import';
           if (dialerAssigned) leadData.dialerAssigned = dialerAssigned;
           if (salesRepAssigned) leadData.salesRepAssigned = salesRepAssigned;
@@ -1176,6 +1326,7 @@ export function ImportLeadsClient() {
           });
         } else {
           successCount++;
+          newCreatedLeadIds.push(leadRef.id);
           importLogs.push({
             rowNum: rowIdx + 1,
             companyName: companyName || `Row ${rowIdx + 1}`,
@@ -1206,6 +1357,7 @@ export function ImportLeadsClient() {
       });
     }
 
+    setCreatedLeadIds(newCreatedLeadIds);
     setImportLogRecords(importLogs);
     setIsImporting(false);
     setStep(5);
@@ -1360,6 +1512,7 @@ export function ImportLeadsClient() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="in_review">In Review (Review & Verification Queue)</SelectItem>
+                    <SelectItem value="multisite">MultiSite (MultiSite Leads & Accounts)</SelectItem>
                     <SelectItem value="outbound">Outbound (Default Dialer Queue)</SelectItem>
                     <SelectItem value="field_sales">Field Sales (Door-to-door reps)</SelectItem>
                     <SelectItem value="inbound">Inbound (Forms/API)</SelectItem>
@@ -1551,7 +1704,7 @@ export function ImportLeadsClient() {
                     </div>
                   )}
 
-                  {selectedBucket === 'account_manager' && (
+                  {(selectedBucket === 'account_manager' || selectedBucket === 'multisite') && (
                     <div className="space-y-2">
                       <Label htmlFor="am-assigned" className="font-semibold text-slate-700">Account Manager Assigned</Label>
                       <Select value={accountManagerAssigned || "none"} onValueChange={(val) => setAccountManagerAssigned(val === 'none' ? '' : val)}>
@@ -2142,6 +2295,34 @@ export function ImportLeadsClient() {
                   </div>
                 </div>
 
+                {/* NetSuite Bulk Sync Banner */}
+                {createdLeadIds.length > 0 && (
+                  <div className="mt-6 border border-amber-300 bg-amber-50/90 rounded-xl p-5 text-left flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-amber-100 rounded-lg shrink-0">
+                        <Zap className="h-6 w-6 text-amber-700" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-amber-950 text-base flex items-center gap-2">
+                          NetSuite Creation & Doc ID Re-Keying Queue ({createdLeadIds.length} Alphanumeric Leads)
+                        </h4>
+                        <p className="text-xs text-slate-700 mt-1 leading-relaxed">
+                          Newly created leads currently have temporary alphanumeric document IDs. Click below to push all created leads to NetSuite, receive official numeric NetSuite Internal IDs, and automatically re-key their Firestore document IDs.
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={() => executeNetSuiteSync()}
+                      disabled={isSyncingNetSuite}
+                      className="bg-[#095c7b] hover:bg-[#084c66] text-white font-semibold shrink-0 px-5 py-2.5 shadow-sm flex items-center gap-2"
+                    >
+                      {isSyncingNetSuite ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                      {isSyncingNetSuite ? `Syncing (${netSuiteSyncProgress}%)...` : `⚡ Push All (${createdLeadIds.length}) to NetSuite`}
+                    </Button>
+                  </div>
+                )}
+
                 {/* Detailed Import Results Summary Log Table */}
                 {importLogRecords.length > 0 && (
                   <div className="mt-6 border rounded-lg overflow-hidden text-left bg-white shadow-sm">
@@ -2218,33 +2399,56 @@ export function ImportLeadsClient() {
                             <TableHead className="font-bold text-slate-700 text-xs">Status</TableHead>
                             <TableHead className="font-bold text-slate-700 text-xs">Lead / Internal ID</TableHead>
                             <TableHead className="font-bold text-slate-700 text-xs">Action Details</TableHead>
+                            <TableHead className="font-bold text-slate-700 text-xs text-right">NetSuite Action</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {importLogRecords
                             .filter(r => logFilter === 'all' || r.status === logFilter)
                             .filter(r => !logSearch || r.companyName.toLowerCase().includes(logSearch.toLowerCase()) || (r.internalId && r.internalId.toLowerCase().includes(logSearch.toLowerCase())))
-                            .map((rec, i) => (
-                              <TableRow key={i} className="hover:bg-slate-50">
-                                <TableCell className="font-semibold text-slate-500 text-xs">{rec.rowNum}</TableCell>
-                                <TableCell className="font-semibold text-slate-800 text-xs">{rec.companyName}</TableCell>
-                                <TableCell>
-                                  <Badge 
-                                    variant="outline" 
-                                    className={`text-[10px] font-bold px-2 py-0.5 ${
-                                      rec.status === 'Created' ? 'bg-green-100 text-green-800 border-green-300' :
-                                      rec.status === 'Updated' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                                      rec.status === 'Skipped' ? 'bg-amber-100 text-amber-800 border-amber-300' :
-                                      'bg-red-100 text-red-800 border-red-300'
-                                    }`}
-                                  >
-                                    {rec.status}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="font-mono text-xs text-slate-600">{rec.internalId || '-'}</TableCell>
-                                <TableCell className="text-xs text-slate-600">{rec.details}</TableCell>
-                              </TableRow>
-                            ))}
+                            .map((rec, i) => {
+                              const isAlphanumeric = rec.internalId && !/^\d+$/.test(rec.internalId);
+                              return (
+                                <TableRow key={i} className="hover:bg-slate-50">
+                                  <TableCell className="font-semibold text-slate-500 text-xs">{rec.rowNum}</TableCell>
+                                  <TableCell className="font-semibold text-slate-800 text-xs">{rec.companyName}</TableCell>
+                                  <TableCell>
+                                    <Badge 
+                                      variant="outline" 
+                                      className={`text-[10px] font-bold px-2 py-0.5 ${
+                                        rec.status === 'Created' ? 'bg-green-100 text-green-800 border-green-300' :
+                                        rec.status === 'Updated' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                                        rec.status === 'Skipped' ? 'bg-amber-100 text-amber-800 border-amber-300' :
+                                        'bg-red-100 text-red-800 border-red-300'
+                                      }`}
+                                    >
+                                      {rec.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="font-mono text-xs text-slate-600">
+                                    <span className={cn(isAlphanumeric && "text-amber-800 font-bold")}>{rec.internalId || '-'}</span>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-slate-600">{rec.details}</TableCell>
+                                  <TableCell className="text-right">
+                                    {rec.internalId && isAlphanumeric ? (
+                                      <Button
+                                        size="xs"
+                                        variant="outline"
+                                        onClick={() => executeNetSuiteSync(rec.internalId)}
+                                        disabled={isSyncingNetSuite}
+                                        className="h-6 text-[10px] bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900 font-bold px-2"
+                                      >
+                                        Push to NetSuite
+                                      </Button>
+                                    ) : rec.internalId && /^\d+$/.test(rec.internalId) ? (
+                                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 text-[10px]">
+                                        Numeric NetSuite ID
+                                      </Badge>
+                                    ) : null}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                         </TableBody>
                       </Table>
                     </div>

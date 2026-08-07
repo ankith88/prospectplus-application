@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Building,
   Calendar as CalendarIcon,
+  CalendarCheck,
   Clipboard,
   Edit,
   Link as LinkIcon,
@@ -57,6 +58,7 @@ import {
   ArrowRight,
   Share2,
   Shield,
+  ShieldCheck,
   Download,
   Upload,
   FileAudio,
@@ -64,9 +66,9 @@ import {
   ChevronDown,
   ChevronRight,
   GitMerge,
-  CalendarCheck,
-  ShieldCheck,
+  Zap,
 } from 'lucide-react'
+import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
 import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser } from '@/lib/lead-permissions'
@@ -123,7 +125,7 @@ import { format, isValid } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn, formatInTimezone, parseDateString, safeFormatDate, validateABN } from '@/lib/utils'
-import { sendLeadUpdateToNetSuite } from '@/services/netsuite'
+import { sendLeadUpdateToNetSuite, sendCompanyCustomerUpdateToNetSuite } from '@/services/netsuite'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ScrollArea } from './ui/scroll-area'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
@@ -585,6 +587,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   updateLeadDetails(lead.id, lead, { 
                     franchisee: franchiseeDoc.name, 
                     franchisee_id: updatedFranchiseeId 
+                  }).then(() => {
+                    sendCompanyCustomerUpdateToNetSuite({
+                      internalId: lead.id,
+                      companyName: lead.companyName || '',
+                      email: lead.customerServiceEmail || '',
+                      phone: lead.customerPhone || '',
+                      franchiseeId: String(updatedFranchiseeId),
+                      prospectPlusId: lead.id,
+                      abn: (lead as any).abn || '',
+                    });
                   }).catch(err => console.error("Failed to sync lead franchisee name:", err));
                 }
               }
@@ -929,6 +941,45 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [newTaskDueDate, setnewTaskDueDate] = useState<Date | undefined>();
   const [loadingNextLead, setLoadingNextLead] = useState(false);
   const [loadingBack, setLoadingBack] = useState(false);
+  const [isRekeying, setIsRekeying] = useState(false);
+  const [rekeyError, setRekeyError] = useState<string | null>(null);
+
+  const handleRekeyToNetSuite = async () => {
+    if (!lead?.id) return;
+    setIsRekeying(true);
+    setRekeyError(null);
+    try {
+      const res = await rekeyLeadToNetSuite(lead.id);
+      if (res.success && res.newDocId) {
+        toast({
+          title: 'NetSuite Synced!',
+          description: `Lead created in NetSuite (ID: ${res.newDocId}) and document ID re-keyed successfully.`
+        });
+        const targetUrl = isCompanyProfile ? `/companies/${res.newDocId}` : `/leads/${res.newDocId}`;
+        window.location.href = targetUrl;
+      } else {
+        const errorMsg = res.error || 'Failed to sync lead with NetSuite.';
+        setRekeyError(errorMsg);
+        toast({
+          variant: 'destructive',
+          title: 'NetSuite Sync Failed',
+          description: errorMsg
+        });
+        refreshLeadData();
+      }
+    } catch (err: any) {
+      console.error('Re-key error:', err);
+      const msg = err?.message || 'An unexpected error occurred.';
+      setRekeyError(msg);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: msg
+      });
+    } finally {
+      setIsRekeying(false);
+    }
+  };
 
   const [isMoveToNurtureDialogOpen, setIsMoveToNurtureDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
@@ -961,6 +1012,72 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isDeletingContact, setIsDeletingContact] = useState(false);
   const [verifyingEmails, setVerifyingEmails] = useState<Record<string, boolean>>({});
   const [isVerifyingAllEmails, setIsVerifyingAllEmails] = useState(false);
+  const [checkingShipmateId, setCheckingShipmateId] = useState<string | null>(null);
+
+  const handleCheckShipmateStatus = async (contact: Contact) => {
+    if (!contact.email) return;
+    setCheckingShipmateId(contact.id);
+    try {
+      const parentType = isCompanyProfile ? 'companies' : 'leads';
+      const res = await fetch('/api/contacts/check-shipmate-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parentId: lead.id,
+          parentType,
+          contactId: contact.id,
+          email: contact.email,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to check ShipMate status');
+      }
+
+      setLead(prev => ({
+        ...prev,
+        contacts: prev.contacts?.map(c =>
+          c.id === contact.id
+            ? {
+                ...c,
+                accessToShipMate: data.accessToShipMate,
+                accountActivated: data.accountActivated,
+                createPasswordEmailSent: data.createPasswordEmailSent,
+                shipmateStatus: data.shipmateStatus,
+                shipmateCheckedAt: data.shipmateCheckedAt,
+              }
+            : c
+        ),
+      }));
+
+      if (data.accountActivated) {
+        toast({
+          title: 'ShipMate Portal Activated',
+          description: `${contact.name} (${contact.email}) has an active ShipMate portal account.`,
+        });
+      } else if (data.createPasswordEmailSent) {
+        toast({
+          title: 'Password Setup Email Sent',
+          description: `Password setup email was sent to ${contact.name} (${contact.email}). Account pending setup.`,
+        });
+      } else {
+        toast({
+          title: 'No Portal Activity',
+          description: `No ShipMate portal activity found for ${contact.email}.`,
+        });
+      }
+    } catch (err: any) {
+      console.error('Error checking ShipMate status:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Check Failed',
+        description: err.message || 'Could not verify ShipMate portal status.',
+      });
+    } finally {
+      setCheckingShipmateId(null);
+    }
+  };
 
   const handleVerifySingleEmail = async (contact: Partial<Contact>) => {
     if (!contact.email) return;
@@ -1611,10 +1728,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           return;
       }
       try {
-          const franchiseeId = franchisee.internalId || franchisee.id;
+          const franchiseeId = String(franchisee.internalId || franchisee.id);
           await updateLeadDetails(lead.id, lead, { franchisee: franchisee.name, franchisee_id: franchiseeId });
           setLead(prev => ({ ...prev, franchisee: franchisee.name, franchisee_id: franchiseeId }));
-          toast({ title: 'Franchisee Updated', description: `Lead mapped to ${franchisee.name}.` });
+          
+          // Sync updated franchisee with NetSuite Customer API (Script 1900)
+          await sendCompanyCustomerUpdateToNetSuite({
+              internalId: lead.id,
+              companyName: lead.companyName || '',
+              email: lead.customerServiceEmail || '',
+              phone: lead.customerPhone || '',
+              franchiseeId: franchiseeId,
+              prospectPlusId: lead.id,
+              abn: (lead as any).abn || '',
+          });
+
+          toast({ title: 'Franchisee Updated', description: `Lead mapped to ${franchisee.name} and synced with NetSuite.` });
           setIsFranchiseeLookupOpen(false);
       } catch (error) {
           toast({ variant: 'destructive', title: 'Update Error', description: 'Failed to update lead franchisee.' });
@@ -3585,6 +3714,50 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </AlertDialogContent>
     </AlertDialog>
     <div className="flex flex-col gap-6">
+      {(() => {
+        const isAlphanumericId = !/^\d+$/.test(lead.id);
+        const isSyncFailed = lead.netSuiteSyncStatus === 'failed';
+        const showBanner = isAlphanumericId || isSyncFailed;
+
+        if (!showBanner) return null;
+
+        return (
+          <Alert variant={isSyncFailed ? "destructive" : "default"} className={cn("p-4 border shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4", isSyncFailed ? "bg-red-50 border-red-300 text-red-900" : "bg-amber-50/90 border-amber-300 text-amber-950")}>
+            <div className="flex items-start gap-3">
+              {isSyncFailed ? (
+                <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              )}
+              <div>
+                <AlertTitle className="text-sm font-bold flex items-center gap-2">
+                  {isSyncFailed ? (
+                    <span>NetSuite Creation Failed: {lead.netSuiteSyncError || rekeyError || 'API Error'}</span>
+                  ) : (
+                    <span>Temporary Alphanumeric Lead ID ({lead.id})</span>
+                  )}
+                  <Badge variant="outline" className={cn("text-[10px] uppercase tracking-wider font-semibold", isSyncFailed ? "bg-red-100 text-red-800 border-red-300" : "bg-amber-100 text-amber-800 border-amber-300")}>
+                    {isSyncFailed ? `Attempt ${lead.netSuiteSyncAttemptCount || 1}` : 'Unsynced to NetSuite'}
+                  </Badge>
+                </AlertTitle>
+                <AlertDescription className="text-xs mt-1 text-slate-700 leading-relaxed">
+                  {isSyncFailed
+                    ? `NetSuite creation encountered an issue. Click below to retry creating this lead in NetSuite and re-keying its document ID to the official numeric NetSuite Internal ID.`
+                    : `This lead was created locally with temporary document ID "${lead.id}". Click below to create it in NetSuite and re-key its document ID to an official numeric NetSuite Internal ID.`}
+                </AlertDescription>
+              </div>
+            </div>
+            <Button
+              onClick={handleRekeyToNetSuite}
+              disabled={isRekeying}
+              className={cn("shrink-0 font-semibold shadow-sm transition-all flex items-center gap-2", isSyncFailed ? "bg-red-600 hover:bg-red-700 text-white" : "bg-amber-600 hover:bg-amber-700 text-white")}
+            >
+              {isRekeying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              {isSyncFailed ? 'Retry NetSuite Creation' : 'Create in NetSuite & Convert to Numeric ID'}
+            </Button>
+          </Alert>
+        );
+      })()}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
@@ -3762,6 +3935,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <Badge variant="outline" className="bg-[#095c7b]/5 text-[#095c7b] border-[#095c7b]/20 font-semibold shadow-sm text-xs">
                         {(() => {
                             const b = lead.bucket?.toLowerCase().replace(/ /g, '_');
+                            if (b === 'multisite') {
+                                return `MultiSite • AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
+                            }
                             if (b === 'inbound') {
                                 return `Inbound • AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
                             }
@@ -5148,9 +5324,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     {contact.accessToLocalMile === 'yes' && (
                                         <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 py-0 h-4">LocalMile Access</Badge>
                                     )}
-                                    {contact.accessToShipMate === 'yes' && (
+                                    {contact.shipmateStatus === 'Activated' ? (
+                                        <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300 py-0 h-4 font-semibold">ShipMate Activated</Badge>
+                                    ) : contact.shipmateStatus === 'Password Sent' ? (
+                                        <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-300 py-0 h-4 font-semibold">ShipMate Setup Sent</Badge>
+                                    ) : contact.accessToShipMate === 'yes' ? (
                                         <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 py-0 h-4">ShipMate Access</Badge>
-                                    )}
+                                    ) : null}
                                 </div>
                                 <p className="text-xs text-muted-foreground mb-2">{contact.title}</p>
                                 <div className="space-y-1">
@@ -5171,14 +5351,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             <span className="text-muted-foreground">-</span>
                                         )}
                                         {contact.email && (
-                                            <EmailVerificationBadge
-                                                status={contact.verificationStatus}
-                                                score={contact.verificationScore}
-                                                verifiedAt={contact.verifiedAt}
-                                                onVerify={() => handleVerifySingleEmail(contact)}
-                                                loading={!!verifyingEmails[contact.email?.toLowerCase().trim()]}
-                                                size="sm"
-                                            />
+                                            <>
+                                                <EmailVerificationBadge
+                                                    status={contact.verificationStatus}
+                                                    score={contact.verificationScore}
+                                                    verifiedAt={contact.verifiedAt}
+                                                    onVerify={() => handleVerifySingleEmail(contact)}
+                                                    loading={!!verifyingEmails[contact.email?.toLowerCase().trim()]}
+                                                    size="sm"
+                                                />
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-6 text-[11px] px-2 text-blue-600 border-blue-200 hover:bg-blue-50 flex items-center gap-1 ml-1"
+                                                    disabled={checkingShipmateId === contact.id}
+                                                    onClick={() => handleCheckShipmateStatus(contact)}
+                                                >
+                                                    {checkingShipmateId === contact.id ? (
+                                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                                    ) : (
+                                                        <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
+                                                    )}
+                                                    Check ShipMate
+                                                </Button>
+                                            </>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="h-3 w-3" /></Button>{!isUserRole && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateSms(contact.phone, contact.name)}><MessageSquare className="h-3 w-3" /></Button>}</div>
@@ -6544,21 +6740,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 }
                             </span>
                             <span className="text-xs text-muted-foreground font-medium">
-                                {lead.bucket === 'inbound' 
-                                    ? 'This lead came through an inbound channel and is awaiting processing.' 
-                                    : lead.bucket === 'account_manager'
-                                        ? 'This lead is managed by an Account Manager.'
-                                        : lead.bucket === 'customer_success'
-                                            ? 'This lead is managed by the Customer Success team.'
-                                            : lead.bucket === 'nurture'
-                                                ? 'This lead is in the nurture campaign.'
-                                                : lead.bucket === 'marketing'
-                                                    ? 'This lead is in the marketing campaign.'
-                                                    : lead.bucket === 'lpo_plus'
-                                                        ? 'This lead is in the LPO.Plus bucket.'
-                                                        : lead.fieldSales 
-                                                            ? 'This lead is currently routed to the field sales team.' 
-                                                            : 'This lead is currently routed to the outbound dialing team.'}
+                                {lead.bucket === 'multisite'
+                                    ? 'This lead is managed in the MultiSite bucket.'
+                                    : lead.bucket === 'inbound' 
+                                        ? 'This lead came through an inbound channel and is awaiting processing.' 
+                                        : lead.bucket === 'account_manager'
+                                            ? 'This lead is managed by an Account Manager.'
+                                            : lead.bucket === 'customer_success'
+                                                ? 'This lead is managed by the Customer Success team.'
+                                                : lead.bucket === 'nurture'
+                                                    ? 'This lead is in the nurture campaign.'
+                                                    : lead.bucket === 'marketing'
+                                                        ? 'This lead is in the marketing campaign.'
+                                                        : lead.bucket === 'lpo_plus'
+                                                            ? 'This lead is in the LPO.Plus bucket.'
+                                                            : lead.fieldSales 
+                                                                ? 'This lead is currently routed to the field sales team.' 
+                                                                : 'This lead is currently routed to the outbound dialing team.'}
                             </span>
                         </div>
                         {canChangeBucket(userProfile, isSuperAdmin) ? (
@@ -6568,6 +6766,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="in_review">In Review</SelectItem>
+                                    <SelectItem value="multisite">MultiSite</SelectItem>
                                     <SelectItem value="inbound">Inbound</SelectItem>
                                     <SelectItem value="outbound">Outbound</SelectItem>
                                     <SelectItem value="field_sales">Field Sales</SelectItem>
@@ -6580,12 +6779,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </Select>
                         ) : (
                             <Badge variant="secondary" className="w-max bg-primary/10 text-primary">
-                                {lead.bucket === 'in_review' ? 'In Review Bucket' : lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.bucket === 'lpo_plus' ? 'LPO.Plus Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                                {lead.bucket === 'multisite' ? 'MultiSite Bucket' : lead.bucket === 'in_review' ? 'In Review Bucket' : lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.bucket === 'lpo_plus' ? 'LPO.Plus Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
                             </Badge>
                         )}
                     </div>
                     
-                    {(lead.bucket === 'account_manager' || lead.bucket === 'inbound') && (
+                    {(lead.bucket === 'account_manager' || lead.bucket === 'inbound' || lead.bucket === 'multisite') && (
                         <div className="flex flex-col gap-3 pt-3 border-t border-primary/10">
                             <div className="flex flex-col gap-1">
                                 <span className="text-sm font-bold text-foreground">
