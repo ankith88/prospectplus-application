@@ -24,6 +24,7 @@ import { getLeadsFromFirebase, getAllUsers, bulkReassignLeads, markLeadsAsExport
 import type { Lead, UserProfile, LeadBucket, Contact } from '@/lib/types'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
+import { getLeadDisplayDateValue } from '@/lib/utils'
 import { Loader } from '@/components/ui/loader'
 import { 
   Search, 
@@ -43,6 +44,7 @@ import {
   Zap,
   Send,
   Loader2,
+  Lock,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
@@ -801,7 +803,7 @@ export function MasterAllLeadsClient() {
           escapeCsv(contacts.length),
           escapeCsv(contactsDetails),
           escapeCsv(safeFormatDate((l as any).dateCreated || l.dateLeadEntered || (l as any).createdAt, 'yyyy-MM-dd HH:mm:ss')),
-          escapeCsv(safeFormatDate(l.dateLeadEntered || l.assignedToDialerAt, 'yyyy-MM-dd HH:mm:ss')),
+          escapeCsv(safeFormatDate(getLeadDisplayDateValue(l) || l.assignedToDialerAt, 'yyyy-MM-dd HH:mm:ss')),
           escapeCsv(l.dialerAssigned || ''),
           escapeCsv(l.accountManagerAssigned || ''),
           escapeCsv(l.isExported ? 'Yes' : 'No'),
@@ -1295,7 +1297,7 @@ export function MasterAllLeadsClient() {
                   paginatedLeads.map((lead) => {
                     const isSelected = selectedLeads.includes(lead.id)
                     const dateCreatedStr = (lead as any).dateCreated || lead.dateLeadEntered || (lead as any).createdAt
-                    const dateEnteredStr = lead.dateLeadEntered || lead.assignedToDialerAt
+                    const dateEnteredStr = getLeadDisplayDateValue(lead) || lead.assignedToDialerAt
                     const leadUrl = lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed' || (lead as any).isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`
 
                     return (

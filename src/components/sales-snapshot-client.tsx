@@ -39,7 +39,7 @@ import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { BucketBreakdownBar } from './bucket-breakdown-bar';
 import { StatusOutcomeBanner } from './status-outcome-guide';
-import { cn, getQuickDateRange, isManualActivity, parseDateString } from '@/lib/utils';
+import { cn, getQuickDateRange, isManualActivity, parseDateString, getLeadDisplayDateValue, getLeadDisplayDateLabel } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -229,6 +229,7 @@ const BUCKET_DISPLAY_NAMES: Record<string, string> = {
   nurture: 'Nurture',
   marketing: 'Marketing',
   lpo_plus: 'LPO Plus',
+  multisite: 'Multisite',
   unassigned: 'Unassigned'
 };
 
@@ -652,7 +653,7 @@ export default function SalesSnapshotClient() {
   // Client Side Filtering & Aggregation
   const filteredLeads = useMemo(() => {
     return allLeads.filter(lead => {
-        if (lead.isDuplicate) return false;
+        if (lead.isDuplicate && !lead.parentLeadId && lead.bucket !== 'multisite') return false;
 
         // Franchisee role override
         if ((userProfile?.activeRole === 'Franchisee' || userProfile?.role?.toLowerCase() === 'franchisee') && userProfile.franchisee) {
@@ -765,6 +766,7 @@ export default function SalesSnapshotClient() {
       customer_success: {},
       nurture: {},
       marketing: {},
+      multisite: {},
     };
 
     // 3. Leads Volume Over Time
@@ -1089,8 +1091,8 @@ export default function SalesSnapshotClient() {
   }, [filteredLeads, filteredActivities, filteredAppointments, appliedFilters.dateFilterType, appliedFilters.dateRange]);
 
   const prevMonthSummary = useMemo(() => {
-    return calculatePrevMonthRealizationCohort(allLeads, invoices, appliedFilters.dateRange);
-  }, [allLeads, invoices, appliedFilters.dateRange]);
+    return calculatePrevMonthRealizationCohort(filteredLeads, invoices, appliedFilters.dateRange);
+  }, [filteredLeads, invoices, appliedFilters.dateRange]);
 
   const activeDrilldownLeads = useMemo(() => {
     if (!drilldownType) return [];
@@ -1167,7 +1169,8 @@ export default function SalesSnapshotClient() {
     { value: 'inbound', label: 'Inbound' },
     { value: 'outbound', label: 'Outbound' },
     { value: 'field_sales', label: 'Field Sales' },
-    { value: 'account_manager', label: 'Account Manager' }
+    { value: 'account_manager', label: 'Account Manager' },
+    { value: 'multisite', label: 'Multisite' }
   ];
 
   // Export drilldown table to CSV helper
@@ -1608,7 +1611,7 @@ export default function SalesSnapshotClient() {
                           <TableHead className="font-semibold text-xs">Company / Business</TableHead>
                           <TableHead className="font-semibold text-xs">Status &amp; Progress</TableHead>
                           <TableHead className="font-semibold text-xs">Pipeline Stage</TableHead>
-                          <TableHead className="font-semibold text-xs">Date Entered</TableHead>
+                          <TableHead className="font-semibold text-xs">{franchiseeStatusFilter === 'LocalMile Opportunity' ? 'Date Registration Sent' : franchiseeStatusFilter === 'LocalMile Pending' ? 'Date LocalMile Accepted' : 'Date Entered'}</TableHead>
                           <TableHead className="font-semibold text-xs">User / Rep in Charge</TableHead>
                           <TableHead className="text-right font-semibold text-xs">MRR Value</TableHead>
                           <TableHead className="text-right font-semibold text-xs">Action</TableHead>
@@ -1620,8 +1623,9 @@ export default function SalesSnapshotClient() {
                             const currentStatus = (lead.customerStatus || lead.status || 'New') as LeadStatus;
                             const phase = getPipelinePhase(currentStatus);
                             const mrr = calculateMonthlyValue(lead);
-                            const parsedDate = parseDateString(lead.dateLeadEntered);
-                            const formattedDate = parsedDate ? format(parsedDate, 'dd MMM yyyy') : '-';
+                            const dateVal = getLeadDisplayDateValue(lead);
+                            const parsedDate = dateVal ? parseDateString(dateVal) : null;
+                            const formattedDate = parsedDate ? format(parsedDate, 'dd MMM yyyy') : (dateVal || '-');
                             const repInCharge = getUserInCharge(lead);
 
                             return (
@@ -1943,7 +1947,10 @@ export default function SalesSnapshotClient() {
                                           bucket === 'field_sales' ? 'Field Sales' :
                                           bucket === 'account_manager' ? 'Account Manager' :
                                           bucket === 'customer_success' ? 'Customer Success' :
-                                          bucket === 'nurture' ? 'Nurture' : 'Marketing';
+                                          bucket === 'nurture' ? 'Nurture' :
+                                          bucket === 'multisite' ? 'Multisite' :
+                                          bucket === 'marketing' ? 'Marketing' :
+                                          (BUCKET_DISPLAY_NAMES[bucket] || bucket.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
                       return (
                         <div key={bucket} className="border rounded-lg p-3 bg-slate-50/50 flex flex-col justify-between min-h-[180px] min-w-0 max-w-full overflow-hidden">
                           <div>

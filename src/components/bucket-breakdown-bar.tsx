@@ -50,6 +50,10 @@ export function LeadBucketBadge({ bucket, className }: { bucket?: string | null;
       label = 'In Review';
       badgeStyle = 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-300 dark:border-violet-800';
       break;
+    case 'multisite':
+      label = 'Multisite';
+      badgeStyle = 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-300 dark:border-cyan-800';
+      break;
     case 'blank':
     case 'unassigned':
     case '':

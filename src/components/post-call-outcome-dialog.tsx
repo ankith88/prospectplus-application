@@ -1030,12 +1030,15 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                 }
 
                 const isOutbound = lead.bucket === 'outbound';
+                const nowIso = new Date().toISOString();
                 postTrialPromises.push(
                     updateLeadDetails(lead.id, lead, {
                         status: 'LocalMile Opportunity',
                         customerStatus: 'LocalMile Opportunity',
                         serviceType: registerServiceType,
                         rate: numericRate,
+                        dateRegistrationSent: nowIso,
+                        registrationSentAt: nowIso,
                         ...(!isOutbound ? {
                             bucket: 'customer_success',
                             customerSuccessAssigned: 'Belinda Urbani'

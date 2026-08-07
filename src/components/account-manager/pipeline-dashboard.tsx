@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { parseDateString } from '@/lib/utils';
+import { parseDateString, getLeadDisplayDateValue, getLeadDisplayDateLabel } from '@/lib/utils';
 import { AmQueueView } from './am-queue-view';
 import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
 
@@ -1283,7 +1283,7 @@ function LeadGrid({
             <Table>
                 <TableHeader className="bg-slate-50">
                     <TableRow>
-                        <TableHead className="font-bold text-[#095c7b]">Date Entered</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">{statusFilter === 'LocalMile Opportunity' ? 'Date Registration Sent' : statusFilter === 'LocalMile Pending' ? 'Date LocalMile Accepted' : 'Date Entered'}</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Company & Status</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Assigned AM</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Franchisee</TableHead>
@@ -1408,10 +1408,11 @@ function LeadGrid({
                         return (
                             <TableRow key={lead.id} className={rowBgClass}>
                                 <TableCell className="text-xs text-slate-600 font-medium">
-                                    {lead.dateLeadEntered ? (() => {
-                                        const parsed = parseDateString(lead.dateLeadEntered);
-                                        return parsed ? format(parsed, 'MMM d, yyyy') : '-';
-                                    })() : '-'}
+                                    {(() => {
+                                        const dateVal = getLeadDisplayDateValue(lead);
+                                        const parsed = dateVal ? parseDateString(dateVal) : null;
+                                        return parsed ? format(parsed, 'MMM d, yyyy') : (dateVal || '-');
+                                    })()}
                                 </TableCell>
                                 <TableCell className="font-medium">
                                     <div className="flex flex-col gap-1">

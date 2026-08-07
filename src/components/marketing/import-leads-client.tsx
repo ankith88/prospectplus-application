@@ -512,19 +512,28 @@ export function ImportLeadsClient() {
     const cleanState = state?.trim().toUpperCase();
     const cleanZip = zip?.trim();
 
+    const mailPlusObj = franchisees.find(f => f.internalId === '435' || f.name?.toLowerCase().includes('mailplus')) || { internalId: '435', name: 'MailPlus Pty Ltd' };
+
     if (cleanCity && cleanState && cleanZip) {
+      const matches: Franchisee[] = [];
       for (const f of franchisees) {
-        const match = f.territoryJson?.find((t: any) => 
+        const match = f.territoryJson?.some((t: any) => 
           t.suburbs?.toUpperCase() === cleanCity && 
           t.state?.toUpperCase() === cleanState && 
           String(t.post_code) === String(cleanZip)
         );
         if (match) {
-          return { internalId: f.internalId, name: f.name };
+          matches.push(f);
         }
       }
+
+      // If exactly 1 franchisee covers the area, assign that franchisee.
+      // If multiple franchisees can service or none match, default to MailPlus Pty Ltd (ID 435).
+      if (matches.length === 1) {
+        return { internalId: matches[0].internalId || matches[0].id || '435', name: matches[0].name || 'MailPlus Pty Ltd' };
+      }
     }
-    return { internalId: 'MailPlus Pty Ltd', name: 'MailPlus Pty Ltd' };
+    return { internalId: mailPlusObj.internalId || '435', name: mailPlusObj.name || 'MailPlus Pty Ltd' };
   };
 
   // Helper to query matching leads based on user-selected matchFieldKey
@@ -1053,11 +1062,15 @@ export function ImportLeadsClient() {
 
         // Franchisee Assignment
         let assignedFranchisee = 'MailPlus Pty Ltd';
+        let assignedFranchiseeId = '435';
         if (defaultFranchiseeId === 'Auto-resolve') {
           const resolved = resolveLeadFranchisee(address.city, address.state, address.zip);
-          assignedFranchisee = resolved.internalId;
+          assignedFranchisee = resolved.name || 'MailPlus Pty Ltd';
+          assignedFranchiseeId = resolved.internalId || '435';
         } else if (defaultFranchiseeId) {
-          assignedFranchisee = defaultFranchiseeId;
+          const fObj = franchisees.find(f => f.internalId === defaultFranchiseeId || f.name === defaultFranchiseeId);
+          assignedFranchisee = fObj?.name || defaultFranchiseeId;
+          assignedFranchiseeId = fObj?.internalId || defaultFranchiseeId;
         }
 
         // Postal Address resolution
@@ -1165,6 +1178,13 @@ export function ImportLeadsClient() {
           leadData.accountManagerAssigned = targetAmName;
           leadData.salesRepAssigned = targetAmName;
           leadData.campaign = effectiveCampaign || 'MultiSite';
+          // Multisite child leads matching their parent ABN should not be flagged as duplicates
+          if (effectiveParent || isDuplicateMatch?.id === effectiveParent?.id) {
+            leadData.isDuplicate = false;
+            leadData.similarLeads = [];
+            leadData.duplicateConfidence = undefined;
+            leadData.duplicateMatchReasons = undefined;
+          }
         } else if (selectedBucket === 'outbound') {
           leadData.campaign = effectiveCampaign || 'Bulk Import';
           if (dialerAssigned) leadData.dialerAssigned = dialerAssigned;
@@ -1196,6 +1216,9 @@ export function ImportLeadsClient() {
 
         if (assignedFranchisee) {
           leadData.franchisee = assignedFranchisee;
+          leadData.franchisee_id = assignedFranchiseeId;
+          leadData.franchiseeInternalId = assignedFranchiseeId;
+          leadData.franchiseeName = assignedFranchisee;
         }
 
         // 1. Generate or reference document for Lead

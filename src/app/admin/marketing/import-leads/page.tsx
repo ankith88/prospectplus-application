@@ -6,23 +6,19 @@ import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 import { ImportLeadsClient } from '@/components/marketing/import-leads-client';
 
-import { usePermissions } from '@/hooks/use-permissions';
-
 export default function ImportLeadsPage() {
   const { userProfile, loading, isSuperAdmin } = useAuth();
-  const { canView, loadingPermissions } = usePermissions();
   const router = useRouter();
 
-  const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
-  const isAllowed = !isUserRole && (isSuperAdmin || canView('importLeads') || (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Outbound Admin'].includes(userProfile.activeRole)));
+  const isAllowed = Boolean(isSuperAdmin);
 
   useEffect(() => {
-    if (!loading && !loadingPermissions && !isAllowed) {
+    if (!loading && !isAllowed) {
       router.replace('/leads');
     }
-  }, [userProfile, loading, loadingPermissions, router, isAllowed]);
+  }, [userProfile, loading, router, isAllowed]);
 
-  if (loading || loadingPermissions || !isAllowed) {
+  if (loading || !isAllowed) {
     return (
       <div className="flex h-full items-center justify-center min-h-[400px]">
         <Loader />
@@ -32,3 +28,4 @@ export default function ImportLeadsPage() {
 
   return <ImportLeadsClient />;
 }
+

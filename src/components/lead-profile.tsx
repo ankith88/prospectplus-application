@@ -124,7 +124,7 @@ import { Calendar as CalendarPicker } from './ui/calendar'
 import { format, isValid } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { cn, formatInTimezone, parseDateString, safeFormatDate, validateABN } from '@/lib/utils'
+import { cn, formatInTimezone, parseDateString, safeFormatDate, validateABN, getLeadDisplayDateValue, getLeadDisplayDateLabel } from '@/lib/utils'
 import { sendLeadUpdateToNetSuite, sendCompanyCustomerUpdateToNetSuite } from '@/services/netsuite'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ScrollArea } from './ui/scroll-area'
@@ -322,7 +322,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }, []);
     const [duplicateLeads, setDuplicateLeads] = useState<Lead[]>([]);
     const [customerMatches, setCustomerMatches] = useState<any[]>([]);
-    const [isDismissed, setIsDismissed] = useState<boolean>(false);
+    const [isDismissed, setIsDismissed] = useState<boolean>(Boolean(initialLead?.ignoreDuplicateWarning));
     const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
     const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
     const [isOnboardingDialogOpen, setIsOnboardingDialogOpen] = useState(false);
@@ -337,6 +337,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             toast({ title: "Dismissed", description: "Duplicate warning dismissed for this record." });
         } catch (err) {
             console.error("Failed to dismiss duplicate warning:", err);
+            toast({ variant: "destructive", title: "Error", description: "Failed to dismiss duplicate warning." });
         }
     };
     const [subAppointments, setSubAppointments] = useState<any[]>([]);
@@ -703,7 +704,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }, [lead.id, lead.parentLeadId, lead.franchisee_id, lead.potentialFranchisees]);
 
     useEffect(() => {
-        if (!lead || !lead.companyName || lead.ignoreDuplicateWarning || isDismissed) return;
+        if (!lead || !lead.companyName || lead.ignoreDuplicateWarning || isDismissed) {
+            setDuplicateLeads([]);
+            setCustomerMatches([]);
+            return;
+        }
         
         const checkDuplicates = async () => {
             setIsCheckingDuplicates(true);
@@ -2138,6 +2143,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   useEffect(() => {
     setLead(initialLead);
+    setIsDismissed(Boolean(initialLead.ignoreDuplicateWarning));
     setCompanyInsights(initialLead.companyInsights || []);
     const visitNoteId = initialLead.visitNoteID;
     if (visitNoteId) {
@@ -2789,11 +2795,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             }
 
             const isOutbound = lead.bucket === 'outbound';
+            const nowIso = new Date().toISOString();
             await updateLeadDetails(lead.id, lead, { 
                 status: 'LocalMile Opportunity',
                 customerStatus: 'LocalMile Opportunity', 
                 serviceType, 
                 rate, 
+                dateRegistrationSent: nowIso,
+                registrationSentAt: nowIso,
                 ...(!isOutbound ? { 
                     bucket: 'customer_success', 
                     customerSuccessAssigned: 'Belinda Urbani' 
@@ -2804,8 +2813,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             setLead(prev => ({ 
                 ...prev, 
                 status: 'LocalMile Opportunity', 
+                customerStatus: 'LocalMile Opportunity',
                 serviceType, 
                 rate,
+                dateRegistrationSent: nowIso,
+                registrationSentAt: nowIso,
                 ...(!isOutbound ? { 
                     customerSuccessAssigned: 'Belinda Urbani' 
                 } : {}),
@@ -2829,8 +2841,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }
     } catch (error: any) {
         // Fallback to local Firestore save if NetSuite fails
-        await updateLeadDetails(lead.id, lead, { customerStatus: 'LocalMile Opportunity', serviceType, rate });
-        setLead(prev => ({ ...prev, status: 'LocalMile Opportunity', serviceType, rate }));
+        const nowIsoFallback = new Date().toISOString();
+        await updateLeadDetails(lead.id, lead, { customerStatus: 'LocalMile Opportunity', status: 'LocalMile Opportunity', serviceType, rate, dateRegistrationSent: nowIsoFallback, registrationSentAt: nowIsoFallback });
+        setLead(prev => ({ ...prev, status: 'LocalMile Opportunity', customerStatus: 'LocalMile Opportunity', serviceType, rate, dateRegistrationSent: nowIsoFallback, registrationSentAt: nowIsoFallback }));
         await refreshLeadData();
         toast({ 
             variant: 'destructive', 
@@ -4272,9 +4285,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <Building className="w-5 h-5 text-muted-foreground" />
                     Company Details
                     <span className="font-sans text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 px-2 py-0.5 rounded ml-2">
-                        Entered: {(() => {
-                            const parsed = parseDateString(lead.dateLeadEntered);
-                            return parsed && isValid(parsed) ? format(parsed, 'MMM d, yyyy') : '-';
+                        {getLeadDisplayDateLabel(lead)}: {(() => {
+                            const dateVal = getLeadDisplayDateValue(lead);
+                            const parsed = parseDateString(dateVal);
+                            return parsed && isValid(parsed) ? format(parsed, 'MMM d, yyyy') : (dateVal || '-');
                         })()}
                     </span>
                 </CardTitle>

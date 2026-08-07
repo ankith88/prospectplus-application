@@ -67,7 +67,7 @@ import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { logActivity, getAllUsers, getCompanyFromFirebase, deleteAdditionalAddress, getOperatorsForFranchisee } from '@/services/firebase'
-import { formatInTimezone, parseDateString, safeFormatDate } from '@/lib/utils'
+import { formatInTimezone, parseDateString, safeFormatDate, getLeadDisplayDateValue, getLeadDisplayDateLabel } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
@@ -606,7 +606,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={company.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={(company as any).internalid || company.salesRecordInternalId} copyable />
-                        <DetailItem icon={CalendarIcon} label="Date Entered" value={formatDate(company.dateLeadEntered)} />
+                        <DetailItem icon={CalendarIcon} label={getLeadDisplayDateLabel(company)} value={formatDate(getLeadDisplayDateValue(company))} />
                         <DetailItem icon={Globe} label="Website" value={company.websiteUrl} isWebsite />
                         <DetailItem icon={Hash} label="ABN" value={company.abn || '- None -'} copyable />
                         <DetailItem icon={Tag} label="Industry" value={company.industryCategory} />

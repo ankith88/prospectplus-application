@@ -12,15 +12,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Loader } from '@/components/ui/loader';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, MapLead, Address } from '@/lib/types';
-import { createNewLead, getAllFranchisees } from '@/services/firebase';
+import { createNewLead, getAllFranchisees, logNoteActivity } from '@/services/firebase';
 import { MULTISITE_ACCOUNT_MANAGER_UID } from '@/lib/constants';
 import { firestore } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { Building, User, Mail, Phone } from 'lucide-react';
+import { Building, User, Mail, Phone, FileText, Briefcase } from 'lucide-react';
 import { GoogleAddressInput } from '@/components/google-address-input';
 
 interface EnterMultiSiteLeadDialogProps {
@@ -65,30 +66,44 @@ export function EnterMultiSiteLeadDialog({
   const { userProfile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [siteName, setSiteName] = useState('');
+  const [companyEmail, setCompanyEmail] = useState('');
+  const [companyPhone, setCompanyPhone] = useState('');
   const [contactName, setContactName] = useState('');
+  const [contactTitle, setContactTitle] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [notes, setNotes] = useState('');
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
 
   useEffect(() => {
     if (parentCompany && isOpen) {
+      setNotes('');
+      setContactName('');
+      setContactTitle('');
+      setContactEmail('');
+      setContactPhone('');
       if (initialPlace) {
         setSiteName(initialPlace.name || `${parentCompany.companyName} - `);
-        setContactName('');
-        setContactEmail(parentCompany.customerServiceEmail || '');
-        setContactPhone(initialPlace.formatted_phone_number || parentCompany.customerPhone || '');
+        setCompanyEmail(parentCompany.customerServiceEmail || '');
+        setCompanyPhone(initialPlace.formatted_phone_number || parentCompany.customerPhone || '');
         setSelectedAddress(parsePlaceAddress(initialPlace));
       } else {
         setSiteName(`${parentCompany.companyName} - `);
-        setContactName('');
-        setContactEmail(parentCompany.customerServiceEmail || '');
-        setContactPhone(parentCompany.customerPhone || '');
+        setCompanyEmail(parentCompany.customerServiceEmail || '');
+        setCompanyPhone(parentCompany.customerPhone || '');
         setSelectedAddress(null);
       }
     }
   }, [parentCompany, initialPlace, isOpen]);
 
   if (!parentCompany) return null;
+
+  const handleAddressSelect = (addr: Address) => {
+    setSelectedAddress(addr);
+    if (addr.city && (!siteName || siteName === `${parentCompany.companyName} - `)) {
+      setSiteName(`${parentCompany.companyName} - ${addr.city}`);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!siteName.trim()) {
@@ -150,19 +165,22 @@ export function EnterMultiSiteLeadDialog({
       const firstName = nameParts[0] || 'Info';
       const lastName = nameParts.slice(1).join(' ') || siteName.trim();
 
+      const resolvedPhone = companyPhone.trim() || contactPhone.trim() || parentCompany.customerPhone || '';
+      const resolvedEmail = companyEmail.trim() || contactEmail.trim() || parentCompany.customerServiceEmail || '';
+
       const newLeadPayload = {
         companyName: siteName.trim(),
         parentLeadId: parentCompany.id,
         websiteUrl: parentCompany.websiteUrl || '',
-        customerPhone: contactPhone || parentCompany.customerPhone || '',
-        customerServiceEmail: contactEmail || parentCompany.customerServiceEmail || '',
+        customerPhone: resolvedPhone,
+        customerServiceEmail: resolvedEmail,
         address: selectedAddress,
         contact: {
           firstName,
           lastName,
-          title: 'Site Contact',
-          email: contactEmail,
-          phone: contactPhone,
+          title: contactTitle.trim() || 'Local Site Contact',
+          email: contactEmail.trim() || companyEmail.trim(),
+          phone: contactPhone.trim() || companyPhone.trim(),
         },
         dialerAssigned: userProfile.displayName || '',
         campaign: 'MultiSite',
@@ -178,10 +196,25 @@ export function EnterMultiSiteLeadDialog({
 
       const result = await createNewLead(newLeadPayload);
 
-      if (result && result.success) {
+      if (result && result.success && result.leadId) {
+        const createdLeadId = String(result.leadId);
+        
+        // Log note if user added initial notes
+        if (notes.trim()) {
+          try {
+            await logNoteActivity(createdLeadId, {
+              content: notes.trim(),
+              author: userProfile.displayName || userProfile.email || 'User',
+              date: new Date().toISOString(),
+            });
+          } catch (noteErr) {
+            console.warn('Failed to log initial notes on multi-site lead:', noteErr);
+          }
+        }
+
         toast({
           title: 'Multi-site Lead Created!',
-          description: `${siteName.trim()} has been created and allocated to the Account Manager bucket (${targetAmName}).`,
+          description: `${siteName.trim()} has been created as a child location of ${parentCompany.companyName} and allocated to Account Manager (${targetAmName}).`,
         });
         onOpenChange(false);
         if (onSuccess) onSuccess();
@@ -206,40 +239,91 @@ export function EnterMultiSiteLeadDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg w-[95vw] md:w-full">
+      <DialogContent className="max-w-lg w-[95vw] md:w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Building className="h-5 w-5 text-primary" />
             Enter Multi-site Lead
           </DialogTitle>
           <DialogDescription>
-            Add a new site location for <span className="font-semibold text-foreground">{parentCompany.companyName}</span>. This lead will follow the multi-site process and be allocated to the Account Manager bucket.
+            Add a new site location for <span className="font-semibold text-foreground">{parentCompany.companyName}</span>.
           </DialogDescription>
         </DialogHeader>
 
+        {/* Parent Customer Connection Notice */}
+        <div className="p-3 bg-blue-50/80 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-900 rounded-lg text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2.5">
+          <Building className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold text-blue-950 dark:text-blue-100">
+              Parent Customer: {parentCompany.companyName}
+            </p>
+            <p className="text-blue-700 dark:text-blue-300 mt-0.5">
+              Creating this multi-site location will automatically link <strong>{parentCompany.companyName}</strong> as its parent customer.
+            </p>
+          </div>
+        </div>
+
         <div className="space-y-4 py-2 text-sm">
           <div className="space-y-2">
-            <Label htmlFor="site-name">Child Site / Branch Name *</Label>
+            <Label htmlFor="site-name" className="text-xs font-semibold">
+              Child Site / Company Name Created *
+            </Label>
             <Input
               id="site-name"
               placeholder="e.g. Genea Limited - Parramatta"
               value={siteName}
               onChange={(e) => setSiteName(e.target.value)}
             />
+            {siteName && (
+              <p className="text-[11px] text-muted-foreground">
+                Company Name Created: <strong className="text-foreground">{siteName}</strong>
+              </p>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label>Site Address (Google Places Search) *</Label>
+          <div className="border-t pt-3 space-y-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Building className="h-3.5 w-3.5 text-primary" /> Company Contact Info (Optional)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="company-email" className="flex items-center gap-1 text-xs">
+                  <Mail className="h-3.5 w-3.5" /> Company Email
+                </Label>
+                <Input
+                  id="company-email"
+                  placeholder="company@domain.com"
+                  type="email"
+                  value={companyEmail}
+                  onChange={(e) => setCompanyEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="company-phone" className="flex items-center gap-1 text-xs">
+                  <Phone className="h-3.5 w-3.5" /> Company Phone
+                </Label>
+                <Input
+                  id="company-phone"
+                  placeholder="1300 000 000"
+                  value={companyPhone}
+                  onChange={(e) => setCompanyPhone(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-3 space-y-2">
+            <Label className="text-xs font-semibold">Site Address (Google Places Search) *</Label>
             <GoogleAddressInput
               placeholder="Start typing site address..."
-              onAddressSelect={(addr) => setSelectedAddress(addr)}
+              onAddressSelect={handleAddressSelect}
               showSelectedBadge={true}
             />
           </div>
 
           <div className="border-t pt-3 space-y-3">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Local Contact Details (Optional)
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5 text-primary" /> Local Site Contact Details
             </h4>
             <div className="space-y-2">
               <Label htmlFor="contact-name" className="flex items-center gap-1 text-xs">
@@ -252,6 +336,17 @@ export function EnterMultiSiteLeadDialog({
                 onChange={(e) => setContactName(e.target.value)}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="contact-title" className="flex items-center gap-1 text-xs">
+                <Briefcase className="h-3.5 w-3.5" /> Contact Job Title
+              </Label>
+              <Input
+                id="contact-title"
+                placeholder="e.g. Site Manager / Branch Lead"
+                value={contactTitle}
+                onChange={(e) => setContactTitle(e.target.value)}
+              />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label htmlFor="contact-email" className="flex items-center gap-1 text-xs">
@@ -260,6 +355,7 @@ export function EnterMultiSiteLeadDialog({
                 <Input
                   id="contact-email"
                   placeholder="jane@company.com"
+                  type="email"
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                 />
@@ -277,6 +373,20 @@ export function EnterMultiSiteLeadDialog({
               </div>
             </div>
           </div>
+
+          <div className="border-t pt-3 space-y-2">
+            <Label htmlFor="site-notes" className="flex items-center gap-1 text-xs font-semibold">
+              <FileText className="h-3.5 w-3.5" /> Notes / Special Instructions (Optional)
+            </Label>
+            <Textarea
+              id="site-notes"
+              placeholder="Add notes or specific requirements for this location..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              className="text-xs resize-none"
+            />
+          </div>
         </div>
 
         <DialogFooter className="flex flex-col sm:flex-row gap-2 border-t pt-4">
@@ -291,3 +401,4 @@ export function EnterMultiSiteLeadDialog({
     </Dialog>
   );
 }
+

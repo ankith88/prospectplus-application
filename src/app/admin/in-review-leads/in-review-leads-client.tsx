@@ -44,8 +44,8 @@ import {
   SlidersHorizontal,
   Building,
   Briefcase,
-  RefreshCw
 } from 'lucide-react'
+import { safeFormatDate, getLeadDisplayDateValue } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 
@@ -846,7 +846,7 @@ export function InReviewLeadsClient() {
                           {lead.customerSource || '-'}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {safeFormatDate(lead.dateLeadEntered || lead.assignedToDialerAt || (lead as any).createdAt)}
+                          {safeFormatDate(getLeadDisplayDateValue(lead) || lead.assignedToDialerAt || (lead as any).createdAt)}
                         </TableCell>
                         <TableCell className="text-xs font-medium">
                           {assignedRep}

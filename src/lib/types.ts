@@ -573,6 +573,11 @@ export interface Lead {
   initialNotes?: string;
   lastProspected?: string;
   dateLeadEntered?: string;
+  dateRegistrationSent?: string;
+  registrationSentAt?: string;
+  localMileRegistrationSentAt?: string;
+  dateLocalmileAccepted?: string;
+  localMileAcceptedAt?: string;
   customerSource?: string;
   visitNoteID?: string;
   syncedWithNetSuite?: boolean;

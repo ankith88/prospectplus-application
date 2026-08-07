@@ -29,7 +29,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
-import { cn, parseDateString, isManualActivity } from '@/lib/utils';
+import { cn, parseDateString, isManualActivity, getLeadDisplayDateValue, getLeadDisplayDateLabel, safeFormatDate } from '@/lib/utils';
 import { getAllAppointments, getAllActivities } from '@/services/firebase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -228,7 +228,7 @@ export default function AMReportsDashboard() {
                 'Franchisee': l.franchisee || '',
                 'Lead Type': l.leadType || '',
                 'Bucket': l.bucket || '',
-                'Date Entered': l.dateLeadEntered || '',
+                [getLeadDisplayDateLabel(l)]: getLeadDisplayDateValue(l) || '',
                 'Contact Name': primaryContact?.name || '',
                 'Email': primaryContact?.email || '',
                 'Phone': primaryContact?.phone || l.customerPhone || ''
@@ -431,7 +431,7 @@ export default function AMReportsDashboard() {
             try {
                 const leadsRef = collection(firestore, 'leads');
                 const companiesRef = collection(firestore, 'companies');
-                const buckets = ['account_manager', 'inbound', 'customer_success', 'marketing', 'nurture'];
+                const buckets = ['account_manager', 'inbound', 'customer_success', 'marketing', 'nurture', 'multisite'];
                 
                 const qLeads = query(leadsRef, where('bucket', 'in', buckets));
                 const qCompanies = query(companiesRef);
@@ -530,8 +530,8 @@ export default function AMReportsDashboard() {
                 const amNames = accountManagers.map(am => getAmName(am));
                 
                 const filteredLeads = leadsWithActivities.filter(l => {
-                    const isDirectlyAm = l.bucket === 'account_manager' || l.bucket === 'inbound';
-                    const wasInAm = l.bucketHistory?.some(bh => bh.oldBucket === 'account_manager' || bh.oldBucket === 'inbound');
+                    const isDirectlyAm = l.bucket === 'account_manager' || l.bucket === 'inbound' || l.bucket === 'multisite';
+                    const wasInAm = l.bucketHistory?.some(bh => bh.oldBucket === 'account_manager' || bh.oldBucket === 'inbound' || bh.oldBucket === 'multisite');
                     const hasAnyAmActivity = l.activity?.some(act => amNames.includes(act.author || ''));
                     
                     const qualifiesForAmReport = isDirectlyAm || wasInAm || hasAnyAmActivity;
@@ -651,7 +651,8 @@ export default function AMReportsDashboard() {
     };
 
     const uniqueFranchisees = useMemo(() => Array.from(new Set(leads.map(l => l.franchisee).filter(Boolean))), [leads]);
-    const uniqueBuckets = useMemo(() => Array.from(new Set(leads.map(l => l.bucket).filter(Boolean))), [leads]);
+    const STANDARD_AM_BUCKETS = ['account_manager', 'inbound', 'multisite', 'customer_success', 'marketing', 'nurture'];
+    const uniqueBuckets = useMemo(() => Array.from(new Set([...STANDARD_AM_BUCKETS, ...leads.map(l => l.bucket).filter(Boolean)])), [leads]);
     const uniqueLeadTypes = useMemo(() => Array.from(new Set(leads.map(l => l.leadType || 'Unknown'))), [leads]);
     const uniqueStatuses = useMemo(() => Array.from(new Set(leads.map(l => l.customerStatus || l.status).filter(Boolean))), [leads]);
 
@@ -1645,7 +1646,10 @@ export default function AMReportsDashboard() {
 
     
     const franchiseeOptions: Option[] = useMemo(() => uniqueFranchisees.map(f => ({ value: f as string, label: f as string })), [uniqueFranchisees]);
-    const bucketOptions: Option[] = useMemo(() => uniqueBuckets.map(b => ({ value: b as string, label: String(b).replace('_', ' ') })), [uniqueBuckets]);
+    const bucketOptions: Option[] = useMemo(() => uniqueBuckets.map(b => ({
+        value: b as string,
+        label: b === 'multisite' ? 'Multisite' : String(b).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    })), [uniqueBuckets]);
     const leadTypeOptions: Option[] = useMemo(() => uniqueLeadTypes.map(t => ({ value: t as string, label: t as string })), [uniqueLeadTypes]);
     const statusOptions: Option[] = useMemo(() => uniqueStatuses.map(s => ({ value: s as string, label: s as string })), [uniqueStatuses]);
     const clearFilters = () => {
@@ -3789,7 +3793,7 @@ export default function AMReportsDashboard() {
                                     <TableHead>Account Manager</TableHead>
                                     <TableHead>Franchisee</TableHead>
                                     <TableHead>Lead Type</TableHead>
-                                    <TableHead>Date Entered</TableHead>
+                                    <TableHead>{getLeadDisplayDateLabel(drillDownData?.title, drillDownStatusFilter)}</TableHead>
                                     <TableHead className="text-right">MRR</TableHead>
                                     <TableHead className="text-right">Action</TableHead>
                                 </TableRow>
@@ -3811,7 +3815,7 @@ export default function AMReportsDashboard() {
                                                     <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 text-[10px]">{lead.leadType}</Badge>
                                                 ) : '-'}
                                             </TableCell>
-                                            <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
+                                            <TableCell className="text-sm">{(() => { const dateVal = getLeadDisplayDateValue(lead); return dateVal ? safeFormatDate(dateVal, 'dd/MM/yyyy') : '-'; })()}</TableCell>
                                             <TableCell className="text-right font-semibold text-emerald-600 text-sm">
                                                 {mrrVal > 0 ? `$${mrrVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
                                             </TableCell>

@@ -644,7 +644,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewLeadManagementOutbound = canView('outboundLeads');
   const canViewLeadManagementArchive = userProfile?.activeRole && !userProfile.activeRole.includes('Lead Gen') && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Dashback' && userProfile.activeRole !== 'Franchisee';
   const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
-  const canImportLeads = (isSuperAdmin || canView('importLeads')) && !isUserRole;
+  const canImportLeads = Boolean(isSuperAdmin);
   const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
   const canViewFranchiseeVerification = (isSuperAdmin || userProfile?.activeRole === 'admin' || canView('franchiseeVerification')) && !isUserRole;
   const canViewHistoryAppointments = canView('historyAppointments');

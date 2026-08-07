@@ -3,63 +3,99 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { usePerformance } from '@/hooks/use-performance';
-import { collection, query, where, getDocs, doc, getDoc, documentId, collectionGroup } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { Lead, UserProfile, Contact } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Lead, UserProfile, Task } from '@/lib/types';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
 import { 
-  Building, Network, Building2, MapPin, Search, Filter, PlusCircle, 
-  ExternalLink, ChevronRight, ChevronDown, CheckCircle2, ListTodo, 
-  Mail, FileText, Layers, RefreshCw, User, Phone, Store, ArrowUpDown, X,
-  ShieldCheck, AlertCircle, HelpCircle, Table as TableIcon, ListChecks,
-  Sparkles, Link2
+  Network, Building2, MapPin, Search, 
+  ExternalLink, ChevronRight, ChevronDown, CheckCircle2, 
+  Mail, FileText, RefreshCw, User, Store,
+  ShieldCheck, Sparkles, Link2, Calendar, ListTodo, CheckSquare, Plus,
+  AlertCircle
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { updateLeadDetails, logActivity } from '@/services/firebase';
+import { getAllFranchisees, updateTaskCompletion, logActivity } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { MULTISITE_ACCOUNT_MANAGER_UID, isMultisiteCampaign } from '@/lib/constants';
+import { MULTISITE_ACCOUNT_MANAGER_UID } from '@/lib/constants';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { LeadEmailDialog } from './lead-email-dialog';
 import { LeadNotesDialog } from './lead-notes-dialog';
-import { QuickAddLeadDialog } from '@/components/quick-add-lead-dialog';
-import { AmQueueView } from './am-queue-view';
+import { EnterMultiSiteLeadDialog } from '@/components/enter-multisite-lead-dialog';
 import { convertParentLeadToSignedCustomer } from '@/services/parent-lead-conversion';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
+import { startOfDay } from 'date-fns';
+
+const AUSTRALIAN_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'];
+
+export const parseApptDate = (app: any): Date | null => {
+    const raw = app?.date || app?.appointmentDate || app?.duedate;
+    if (!raw) return null;
+    if (raw instanceof Date) return raw;
+    if (typeof raw === 'object' && typeof raw.toDate === 'function') return raw.toDate();
+    if (typeof raw === 'object' && 'seconds' in raw) return new Date(raw.seconds * 1000 + (raw.nanoseconds || 0) / 1000000);
+    try {
+        const parsed = new Date(raw);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    } catch {
+        return null;
+    }
+};
+
+export const parseTaskDate = (task: any): Date | null => {
+    const raw = task?.dueDate || task?.duedate || task?.createdAt;
+    if (!raw) return null;
+    if (raw instanceof Date) return raw;
+    if (typeof raw === 'object' && typeof raw.toDate === 'function') return raw.toDate();
+    if (typeof raw === 'object' && 'seconds' in raw) return new Date(raw.seconds * 1000 + (raw.nanoseconds || 0) / 1000000);
+    try {
+        const parsed = new Date(raw);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    } catch {
+        return null;
+    }
+};
 
 export function MultiSitesDashboard() {
     const { userProfile, loading, isSuperAdmin } = useAuth();
     const { toast } = useToast();
-    const { setLoadTime, setPageName, setIsCustom } = usePerformance();
+    const { setPageName, setIsCustom } = usePerformance();
 
     const [leads, setLeads] = useState<Lead[]>([]);
     const [appointments, setAppointments] = useState<any[]>([]);
+    const [franchiseesList, setFranchiseesList] = useState<string[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedAm, setSelectedAm] = useState<string>(MULTISITE_ACCOUNT_MANAGER_UID);
     const [targetAmDisplayName, setTargetAmDisplayName] = useState<string>('');
 
-    const [viewTab, setViewTab] = useState<string>('hierarchy');
+    // Tab view starts with Appointments as 1st tab
+    const [viewTab, setViewTab] = useState<string>('appointments');
     const [searchQuery, setSearchQuery] = useState('');
     
     // Filters
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [stateFilter, setStateFilter] = useState<string>('all');
+    const [franchiseeFilter, setFranchiseeFilter] = useState<string>('all');
     const [typeFilter, setTypeFilter] = useState<'all' | 'parent' | 'child'>('all');
 
     // Dialog state
     const [emailDialogOpen, setEmailDialogOpen] = useState(false);
     const [notesDialogOpen, setNotesDialogOpen] = useState(false);
-    const [quickAddOpen, setQuickAddOpen] = useState(false);
     const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
+
+    // Child lead creation dialog state (triggered from parent rows)
+    const [enterChildLeadOpen, setEnterChildLeadOpen] = useState(false);
+    const [selectedParentForChild, setSelectedParentForChild] = useState<Lead | null>(null);
 
     // Promote parent dialog state
     const [selectedParentLeadId, setSelectedParentLeadId] = useState('');
@@ -76,7 +112,7 @@ export function MultiSitesDashboard() {
 
     const canSeeAll = isSuperAdmin || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
 
-    // Default AM selection based on role: Admins/Sales Managers see 'all', AMs see their own assigned leads
+    // Default AM selection based on role
     useEffect(() => {
         if (loading || !userProfile) return;
         if (canSeeAll) {
@@ -96,7 +132,6 @@ export function MultiSitesDashboard() {
                 const ams = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
                 setAccountManagers(ams);
 
-                // Target AM lookup
                 const targetAm = ams.find(u => u.uid === MULTISITE_ACCOUNT_MANAGER_UID || (u as any).id === MULTISITE_ACCOUNT_MANAGER_UID);
                 if (targetAm) {
                     const resolvedName = targetAm.displayName || `${targetAm.firstName || ''} ${targetAm.lastName || ''}`.trim();
@@ -118,7 +153,7 @@ export function MultiSitesDashboard() {
         loadAMs();
     }, []);
 
-    // Load MultiSite Leads & Appointments
+    // Load MultiSite Leads, Appointments, and Franchisees
     const fetchMultiSiteData = async () => {
         setIsLoadingData(true);
         try {
@@ -140,14 +175,6 @@ export function MultiSitesDashboard() {
                 }
             });
 
-            // Identify parent IDs that exist in the system
-            const parentIdsWithChildren = new Set<string>();
-            mergedLeads.forEach(l => {
-                if (l.parentLeadId) {
-                    parentIdsWithChildren.add(l.parentLeadId);
-                }
-            });
-
             // Identify explicit MultiSite lead IDs strictly where bucket === 'multisite'
             const explicitMultisiteIds = new Set<string>();
             mergedLeads.forEach(l => {
@@ -166,19 +193,54 @@ export function MultiSitesDashboard() {
                 }
             });
 
-            // Filter mergedLeads strictly to MultiSite bucket program records
-            const multisiteLeads = mergedLeads.filter(l => explicitMultisiteIds.has(l.id));
-
-            setLeads(multisiteLeads);
-
             // Fetch appointments subcollection
+            let fetchedAppts: any[] = [];
             try {
                 const apptQuery = query(collectionGroup(firestore, 'appointments'));
                 const apptSnap = await getDocs(apptQuery);
-                const fetchedAppts = apptSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                fetchedAppts = apptSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setAppointments(fetchedAppts);
             } catch (err) {
                 console.error("Failed to fetch appointments:", err);
+            }
+
+            // Map appointments by leadId
+            const apptsByLead: Record<string, any[]> = {};
+            fetchedAppts.forEach(a => {
+                if (a.leadId) {
+                    if (!apptsByLead[a.leadId]) apptsByLead[a.leadId] = [];
+                    apptsByLead[a.leadId].push(a);
+                }
+            });
+
+            // Filter mergedLeads strictly to MultiSite bucket program records and attach appointments
+            const multisiteLeads = mergedLeads
+                .filter(l => explicitMultisiteIds.has(l.id))
+                .map(l => {
+                    const appts = apptsByLead[l.id] || [];
+                    const existingAppts = l.appointments || [];
+                    const combinedAppts = [...existingAppts];
+                    appts.forEach(a => {
+                        if (!combinedAppts.some(ex => ex.id === a.id)) {
+                            combinedAppts.push(a);
+                        }
+                    });
+                    return { ...l, appointments: combinedAppts };
+                });
+
+            setLeads(multisiteLeads);
+
+            // Fetch franchisees for filter dropdown
+            try {
+                const frDocs = await getAllFranchisees();
+                const frNames = new Set<string>(frDocs.map(f => f.name).filter(Boolean));
+                multisiteLeads.forEach(l => {
+                    const fName = (l as any).franchiseeName || l.franchisee || (l as any).franchiseeId;
+                    if (fName) frNames.add(fName);
+                });
+                setFranchiseesList(Array.from(frNames).sort());
+            } catch (err) {
+                console.error("Failed to load franchisees list:", err);
             }
 
             // Default open top 5 parent cards
@@ -205,7 +267,20 @@ export function MultiSitesDashboard() {
         fetchMultiSiteData();
     }, []);
 
-    // Filtered Leads (including Signed Customers for Hierarchy Tree view)
+    // Format full address from address1, street, city, state, zip fields
+    const formatFullAddress = (l: Lead) => {
+        const addr = l.address || {} as any;
+        const address1 = (l as any).address1 || addr.address1 || '';
+        const street = (l as any).street || addr.street || '';
+        const city = (l as any).city || addr.city || '';
+        const state = (l as any).state || addr.state || '';
+        const zip = (l as any).zip || (l as any).postcode || addr.zip || '';
+
+        const parts = [address1, street, city, state, zip].map(p => (p || '').toString().trim()).filter(Boolean);
+        return parts.length > 0 ? parts.join(', ') : 'No address recorded';
+    };
+
+    // Filtered Leads
     const filteredLeads = useMemo(() => {
         let targetAmLeadIds: Set<string> | null = null;
         let targetParentIds: Set<string> | null = null;
@@ -275,10 +350,16 @@ export function MultiSitesDashboard() {
                 if (statusFilter === 'Future Follow-up' && currentStatus !== 'Future Follow-up') return false;
             }
 
+            // Franchisee Filter
+            if (franchiseeFilter !== 'all') {
+                const leadFranchisee = ((l as any).franchiseeName || l.franchisee || (l as any).franchiseeId || '').toString().toLowerCase();
+                if (leadFranchisee !== franchiseeFilter.toLowerCase()) return false;
+            }
+
             // State Filter
             if (stateFilter !== 'all') {
-                const leadState = l.address?.state || (l as any).state || '';
-                if (leadState.toUpperCase() !== stateFilter.toUpperCase()) return false;
+                const leadState = (l.address?.state || (l as any).state || '').toString().toUpperCase();
+                if (leadState !== stateFilter.toUpperCase()) return false;
             }
 
             // Search Query
@@ -288,20 +369,18 @@ export function MultiSitesDashboard() {
                 const id = (l.id || '').toLowerCase();
                 const ppId = (l.prospectPlusId || '').toLowerCase();
                 const parentId = (l.parentLeadId || '').toLowerCase();
-                const city = (l.address?.city || (l as any).city || '').toLowerCase();
-                const state = (l.address?.state || (l as any).state || '').toLowerCase();
-                const zip = (l.address?.zip || (l as any).zip || '').toLowerCase();
+                const fullAddr = formatFullAddress(l).toLowerCase();
                 const am = (l.accountManagerAssigned || '').toLowerCase();
                 const franchisee = ((l as any).franchiseeName || l.franchisee || '').toLowerCase();
 
                 const matches = name.includes(q) || id.includes(q) || ppId.includes(q) || parentId.includes(q) ||
-                                city.includes(q) || state.includes(q) || zip.includes(q) || am.includes(q) || franchisee.includes(q);
+                                fullAddr.includes(q) || am.includes(q) || franchisee.includes(q);
                 if (!matches) return false;
             }
 
             return true;
         });
-    }, [leads, selectedAm, typeFilter, statusFilter, stateFilter, searchQuery, targetAmDisplayName]);
+    }, [leads, selectedAm, typeFilter, statusFilter, franchiseeFilter, stateFilter, searchQuery, targetAmDisplayName]);
 
     // Pipeline Leads ONLY (excludes Signed Customers and Won accounts for stage tabs & queue)
     const pipelineLeads = useMemo(() => {
@@ -311,9 +390,111 @@ export function MultiSitesDashboard() {
         });
     }, [filteredLeads]);
 
-    // Stage Buckets for Tab Bar (using pipelineLeads)
+    // Priority Queue Leads: Status strictly 'Hot Lead', 'Priority Lead', or 'Priority Field Lead'
+    const priorityQueueLeads = useMemo(() => {
+        return pipelineLeads.filter(l => {
+            const st = l.customerStatus || l.status || (l as any).leadType || '';
+            return ['Hot Lead', 'Priority Lead', 'Priority Field Lead'].includes(st);
+        });
+    }, [pipelineLeads]);
+
+    // AM Pipeline Page Categorization for Appointments
+    const pastPendingAppointmentsLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.appointments?.some(app => {
+                const apptDate = parseApptDate(app);
+                if (!apptDate) return false;
+                const apptStatus = app.appointmentStatus || 'Pending';
+                return startOfDay(apptDate).getTime() < today && apptStatus === 'Pending';
+            });
+        });
+    }, [filteredLeads]);
+
+    const todayAppointmentsLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.appointments?.some(app => {
+                const apptDate = parseApptDate(app);
+                if (!apptDate) return false;
+                const apptStatus = app.appointmentStatus || 'Pending';
+                return startOfDay(apptDate).getTime() === today && apptStatus === 'Pending';
+            });
+        });
+    }, [filteredLeads]);
+
+    const futureAppointmentsLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.appointments?.some(app => {
+                const apptDate = parseApptDate(app);
+                if (!apptDate) return false;
+                const apptStatus = app.appointmentStatus || 'Pending';
+                return startOfDay(apptDate).getTime() > today && apptStatus === 'Pending';
+            });
+        });
+    }, [filteredLeads]);
+
+    const noShowAppointmentsLeads = useMemo(() => {
+        return filteredLeads.filter(lead => {
+            return lead.appointments?.some(app => {
+                const apptStatus = app.appointmentStatus;
+                return apptStatus === 'No Show';
+            });
+        });
+    }, [filteredLeads]);
+
+    // AM Pipeline Page Categorization for Tasks & Reminders
+    const pastPendingTasksLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.tasks?.some(t => {
+                if (t.isCompleted) return false;
+                const taskDate = parseTaskDate(t);
+                if (!taskDate) return false;
+                return startOfDay(taskDate).getTime() < today;
+            });
+        });
+    }, [filteredLeads]);
+
+    const todayTasksLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.tasks?.some(t => {
+                if (t.isCompleted) return false;
+                const taskDate = parseTaskDate(t);
+                if (!taskDate) return false;
+                return startOfDay(taskDate).getTime() === today;
+            });
+        });
+    }, [filteredLeads]);
+
+    const futureTasksLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.tasks?.some(t => {
+                if (t.isCompleted) return false;
+                const taskDate = parseTaskDate(t);
+                if (!taskDate) return false;
+                return startOfDay(taskDate).getTime() > today;
+            });
+        });
+    }, [filteredLeads]);
+
+    const completedTasksLeads = useMemo(() => {
+        return filteredLeads.filter(lead => {
+            return lead.tasks?.some(t => t.isCompleted);
+        });
+    }, [filteredLeads]);
+
+    // Combined counts for Appointments and Tasks tabs
+    const totalAppointmentsCount = pastPendingAppointmentsLeads.length + todayAppointmentsLeads.length + futureAppointmentsLeads.length + noShowAppointmentsLeads.length;
+    const totalTasksCount = pastPendingTasksLeads.length + todayTasksLeads.length + futureTasksLeads.length + completedTasksLeads.length;
+
+    // Stage Buckets for Tab Bar
     const stageCounts = useMemo(() => {
         const counts = {
+            queue: priorityQueueLeads.length,
             new: 0,
             wip: 0,
             quotesOut: 0,
@@ -336,10 +517,11 @@ export function MultiSitesDashboard() {
         });
 
         return counts;
-    }, [pipelineLeads]);
+    }, [pipelineLeads, priorityQueueLeads]);
 
     // Stage Tab Specific Filtered Lead List
     const activeStageLeads = useMemo(() => {
+        if (viewTab === 'queue') return priorityQueueLeads;
         if (viewTab === 'new') return pipelineLeads.filter(l => (l.customerStatus || l.status || 'New') === 'New');
         if (viewTab === 'wip') return pipelineLeads.filter(l => ['In Progress', 'Contacted', 'Contact Attempted'].includes(l.customerStatus || l.status || ''));
         if (viewTab === 'quotes-out') return pipelineLeads.filter(l => ['Quote Out', 'Proposal Sent', 'Quotes Out'].includes(l.customerStatus || l.status || ''));
@@ -348,45 +530,9 @@ export function MultiSitesDashboard() {
         if (viewTab === 'localmile') return pipelineLeads.filter(l => (l.customerStatus || l.status || '').toLowerCase().includes('localmile') || (l.customerStatus || l.status || '').toLowerCase().includes('trial'));
         if (viewTab === 'future-follow-up') return pipelineLeads.filter(l => (l.customerStatus || l.status) === 'Future Follow-up');
         return pipelineLeads;
-    }, [pipelineLeads, viewTab]);
+    }, [pipelineLeads, priorityQueueLeads, viewTab]);
 
-    // Parent Accounts vs Child Locations Grouping for Hierarchy View
-    const { parentLeadGroups, orphanChildren } = useMemo(() => {
-        const parentMap = new Map<string, { parent: Lead | null; children: Lead[]; parentName: string }>();
-
-        // Find all parent accounts in filteredLeads (includes signed/won customers)
-        const parents = filteredLeads.filter(l => !l.parentLeadId);
-        parents.forEach(p => {
-            parentMap.set(p.id, { parent: p, children: [], parentName: p.companyName });
-        });
-
-        const orphans: Lead[] = [];
-
-        // Assign children to parent groups
-        filteredLeads.filter(l => l.parentLeadId).forEach(c => {
-            if (parentMap.has(c.parentLeadId!)) {
-                parentMap.get(c.parentLeadId!)!.children.push(c);
-            } else {
-                const fullParent = leads.find(p => p.id === c.parentLeadId);
-                if (fullParent) {
-                    if (!parentMap.has(fullParent.id)) {
-                        parentMap.set(fullParent.id, { parent: fullParent, children: [c], parentName: fullParent.companyName });
-                    } else {
-                        parentMap.get(fullParent.id)!.children.push(c);
-                    }
-                } else {
-                    orphans.push(c);
-                }
-            }
-        });
-
-        return {
-            parentLeadGroups: Array.from(parentMap.values()),
-            orphanChildren: orphans
-        };
-    }, [filteredLeads, leads]);
-
-    // Metric Calculations over pipelineLeads (active leads only)
+    // Metric Calculations
     const metrics = useMemo(() => {
         const totalMultiSites = pipelineLeads.length;
         const totalParents = pipelineLeads.filter(l => !l.parentLeadId).length;
@@ -406,14 +552,27 @@ export function MultiSitesDashboard() {
         setOpenParents(prev => ({ ...prev, [parentId]: !prev[parentId] }));
     };
 
-    const handleCall = (leadId: string, phone: string) => {
-        if (phone) {
-            window.location.href = `tel:${phone}`;
-        } else {
-            toast({
-                title: 'No Phone Number',
-                description: 'This lead does not have a recorded phone number.'
+    const handleCompleteTask = async (lead: Lead, taskId: string, taskTitle: string) => {
+        setLeads(prev => prev.map(l => {
+            if (l.id === lead.id && l.tasks) {
+                return {
+                    ...l,
+                    tasks: l.tasks.map(t => t.id === taskId ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t)
+                };
+            }
+            return l;
+        }));
+        toast({ title: 'Task Completed', description: `Completed "${taskTitle}"` });
+
+        try {
+            await updateTaskCompletion(lead.id, taskId, true);
+            await logActivity(lead.id, {
+                type: 'Update',
+                notes: `Completed task: "${taskTitle}"`
             });
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update task completion.' });
+            fetchMultiSiteData();
         }
     };
 
@@ -457,6 +616,497 @@ export function MultiSitesDashboard() {
         }
     };
 
+    // Helper component to render leads grouped by parent account hierarchy
+    const renderHierarchyGroups = (targetLeads: Lead[], mode: 'leads' | 'appointments' | 'tasks' = 'leads') => {
+        // Group targetLeads by parent account
+        const parentMap = new Map<string, { parent: Lead | null; children: Lead[]; parentName: string }>();
+
+        // 1. All parents in targetLeads
+        targetLeads.filter(l => !l.parentLeadId).forEach(p => {
+            parentMap.set(p.id, { parent: p, children: [], parentName: p.companyName });
+        });
+
+        const orphanChildren: Lead[] = [];
+
+        // 2. Assign target child leads to their parent groups
+        targetLeads.filter(l => l.parentLeadId).forEach(c => {
+            if (parentMap.has(c.parentLeadId!)) {
+                parentMap.get(c.parentLeadId!)!.children.push(c);
+            } else {
+                const fullParent = leads.find(p => p.id === c.parentLeadId);
+                if (fullParent) {
+                    if (!parentMap.has(fullParent.id)) {
+                        parentMap.set(fullParent.id, { parent: fullParent, children: [c], parentName: fullParent.companyName });
+                    } else {
+                        parentMap.get(fullParent.id)!.children.push(c);
+                    }
+                } else {
+                    orphanChildren.push(c);
+                }
+            }
+        });
+
+        const groups = Array.from(parentMap.values());
+
+        if (groups.length === 0 && orphanChildren.length === 0) {
+            return (
+                <Card className="p-8 text-center bg-white border border-slate-200">
+                    <Network className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                    <h3 className="text-lg font-semibold text-slate-700">No Records Found</h3>
+                    <p className="text-sm text-slate-500 mt-1">There are no multi-site accounts matching the current tab and filter selection.</p>
+                </Card>
+            );
+        }
+
+        return (
+            <div className="space-y-4">
+                {groups.map(({ parent, children, parentName }) => {
+                    const parentId = parent?.id || children[0]?.parentLeadId || 'unknown';
+                    const isOpen = !!openParents[parentId];
+
+                    return (
+                        <Card key={parentId} className="border border-slate-200 shadow-sm bg-white overflow-hidden">
+                            <div className="p-4 bg-slate-50/70 border-b flex flex-col md:flex-row justify-between md:items-center gap-3">
+                                <div className="flex items-center gap-3">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="p-1 h-8 w-8 text-slate-500 hover:text-slate-800"
+                                        onClick={() => toggleParentOpen(parentId)}
+                                    >
+                                        {isOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                                    </Button>
+
+                                    <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="font-bold text-lg text-slate-900">{parentName}</span>
+                                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                                Parent Account
+                                            </Badge>
+                                            {parent?.customerStatus && (
+                                                <LeadStatusBadge status={parent.customerStatus as any} />
+                                            )}
+                                            {parent?.prospectPlusId && (
+                                                <Badge variant="secondary" className="text-xs">
+                                                    ID: {parent.prospectPlusId}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
+                                            {parent && (
+                                                <span className="flex items-center gap-1 font-medium text-slate-700">
+                                                    <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                    {formatFullAddress(parent)}
+                                                </span>
+                                            )}
+                                            {(parent as any)?.franchiseeName || parent?.franchisee ? (
+                                                <span className="flex items-center gap-1">
+                                                    <Store className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                    {(parent as any)?.franchiseeName || parent?.franchisee}
+                                                </span>
+                                            ) : null}
+                                            <span className="flex items-center gap-1">
+                                                <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                AM: <strong className="text-slate-700">{parent?.accountManagerAssigned || 'Unassigned'}</strong>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 self-end md:self-auto flex-wrap">
+                                    <Badge className="bg-[#095c7b] text-white">
+                                        {children.length} Child Site{children.length !== 1 ? 's' : ''}
+                                    </Badge>
+
+                                    {parent && (
+                                        <>
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                onClick={() => {
+                                                    setSelectedParentForChild(parent);
+                                                    setEnterChildLeadOpen(true);
+                                                }}
+                                                className="h-8 text-xs gap-1 bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 font-semibold"
+                                            >
+                                                <Plus className="h-3.5 w-3.5 text-emerald-600" /> Add Child Site
+                                            </Button>
+
+                                            <Button variant="outline" size="sm" asChild className="h-8 text-xs gap-1 bg-white">
+                                                <Link href={`/leads/${parent.id}`}>
+                                                    <ExternalLink className="h-3.5 w-3.5" /> View Profile
+                                                </Link>
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Collapsible Content */}
+                            {isOpen && (
+                                <div className="p-4 bg-white">
+                                    {mode === 'leads' && (
+                                        children.length === 0 ? (
+                                            <p className="text-xs text-slate-400 italic py-2">
+                                                No linked child locations matching the current criteria.
+                                            </p>
+                                        ) : (
+                                            <Table>
+                                                <TableHeader className="bg-slate-50">
+                                                    <TableRow>
+                                                        <TableHead className="text-xs font-semibold">Child Site Name</TableHead>
+                                                        <TableHead className="text-xs font-semibold">Full Address</TableHead>
+                                                        <TableHead className="text-xs font-semibold">Local Contact</TableHead>
+                                                        <TableHead className="text-xs font-semibold">Servicing Franchisee</TableHead>
+                                                        <TableHead className="text-xs font-semibold">Status</TableHead>
+                                                        <TableHead className="text-xs font-semibold text-right">Actions</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {children.map(child => (
+                                                        <TableRow key={child.id} className="hover:bg-slate-50/80">
+                                                            <TableCell className="font-medium text-sm text-slate-800">
+                                                                <div className="flex flex-col">
+                                                                    <div className="flex items-center gap-1.5 font-semibold text-slate-900">
+                                                                        <Store className="h-3.5 w-3.5 text-indigo-500" />
+                                                                        {child.companyName}
+                                                                    </div>
+                                                                    {child.prospectPlusId && (
+                                                                        <span className="text-[10px] text-slate-400 font-mono">ID: {child.prospectPlusId}</span>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-xs text-slate-600 max-w-[280px]">
+                                                                {formatFullAddress(child)}
+                                                            </TableCell>
+                                                            <TableCell className="text-xs text-slate-600">
+                                                                {child.customerServiceEmail || child.customerPhone || child.contacts?.[0]?.name ? (
+                                                                    <div className="flex flex-col">
+                                                                        <span className="font-medium text-slate-800">{child.contacts?.[0]?.name || child.customerServiceEmail || '-'}</span>
+                                                                        <span className="text-[11px] text-slate-400">{child.customerPhone || ''}</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-slate-400 italic">Not set</span>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="text-xs text-slate-600">
+                                                                <Badge variant="outline" className="bg-slate-50 border-slate-300">
+                                                                    {(child as any).franchiseeName || child.franchisee || 'MailPlus Pty Ltd'}
+                                                                </Badge>
+                                                            </TableCell>
+                                                            <TableCell className="text-xs">
+                                                                <LeadStatusBadge status={(child.customerStatus || child.status || 'New') as any} />
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end gap-1.5">
+                                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setActiveLead(child); setNotesDialogOpen(true); }}>
+                                                                        <FileText className="h-3.5 w-3.5 text-slate-600" />
+                                                                    </Button>
+                                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setActiveLead(child); setEmailDialogOpen(true); }}>
+                                                                        <Mail className="h-3.5 w-3.5 text-slate-600" />
+                                                                    </Button>
+                                                                    <Button variant="outline" size="sm" asChild className="h-7 text-[11px] px-2">
+                                                                        <Link href={`/leads/${child.id}`}>
+                                                                            Open
+                                                                        </Link>
+                                                                    </Button>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        )
+                                    )}
+
+                                    {mode === 'appointments' && (
+                                        <div className="space-y-3">
+                                            {/* Parent appointments */}
+                                            {parent && (
+                                                <div className="border rounded-md p-3 bg-slate-50/50 mb-2">
+                                                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
+                                                        Parent Account Appointments ({parent.companyName})
+                                                    </span>
+                                                    {parent.appointments && parent.appointments.length > 0 ? (
+                                                        <Table>
+                                                            <TableHeader>
+                                                                <TableRow>
+                                                                    <TableHead className="text-xs">Date / Time</TableHead>
+                                                                    <TableHead className="text-xs">Type / Status</TableHead>
+                                                                    <TableHead className="text-xs">Assigned Rep</TableHead>
+                                                                    <TableHead className="text-xs">Notes / Details</TableHead>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {parent.appointments.map(appt => (
+                                                                    <TableRow key={appt.id}>
+                                                                        <TableCell className="text-xs font-semibold text-slate-800">
+                                                                            {appt.duedate || appt.appointmentDate || appt.date || '-'} {appt.starttime ? `@ ${appt.starttime}` : ''}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-xs">
+                                                                            <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-300">
+                                                                                {appt.type || appt.appointmentStatus || 'Appointment'}
+                                                                            </Badge>
+                                                                        </TableCell>
+                                                                        <TableCell className="text-xs text-slate-600">
+                                                                            {appt.amName || appt.assignedTo || parent.accountManagerAssigned || 'Unassigned'}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-xs text-slate-500">
+                                                                            {(appt as any).notes || (appt as any).description || 'No appointment notes'}
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                ))}
+                                                            </TableBody>
+                                                        </Table>
+                                                    ) : (
+                                                        <p className="text-xs text-slate-400 italic">No appointments scheduled for parent account.</p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Child site appointments */}
+                                            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block mt-2">
+                                                Child Sites Appointments ({children.length} locations)
+                                            </span>
+                                            {children.length === 0 ? (
+                                                <p className="text-xs text-slate-400 italic">No child locations found.</p>
+                                            ) : (
+                                                <Table>
+                                                    <TableHeader className="bg-slate-50">
+                                                        <TableRow>
+                                                            <TableHead className="text-xs">Child Site Name</TableHead>
+                                                            <TableHead className="text-xs">Full Address</TableHead>
+                                                            <TableHead className="text-xs">Appointment Schedule</TableHead>
+                                                            <TableHead className="text-xs">Status / Rep</TableHead>
+                                                            <TableHead className="text-xs text-right">Actions</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {children.map(child => {
+                                                            const childAppts = child.appointments || [];
+                                                            return (
+                                                                <TableRow key={child.id}>
+                                                                    <TableCell className="text-xs font-semibold text-slate-900">
+                                                                        {child.companyName}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs text-slate-600">
+                                                                        {formatFullAddress(child)}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs text-slate-700">
+                                                                        {childAppts.length > 0 ? (
+                                                                            childAppts.map(a => (
+                                                                                <div key={a.id} className="font-medium text-indigo-700">
+                                                                                    📅 {a.duedate || a.appointmentDate || a.date} {a.starttime ? `@ ${a.starttime}` : ''}
+                                                                                </div>
+                                                                            ))
+                                                                        ) : (child as any).nextAppointmentDate ? (
+                                                                            <span className="text-indigo-600 font-medium">📅 {(child as any).nextAppointmentDate}</span>
+                                                                        ) : (
+                                                                            <span className="text-slate-400 italic">None scheduled</span>
+                                                                        )}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs">
+                                                                        <Badge variant="outline" className="bg-slate-100 text-slate-800">
+                                                                            {childAppts[0]?.appointmentStatus || child.customerStatus || child.status || 'Scheduled'}
+                                                                        </Badge>
+                                                                    </TableCell>
+                                                                    <TableCell className="text-right">
+                                                                        <Button variant="outline" size="sm" asChild className="h-7 text-[11px] px-2">
+                                                                            <Link href={`/leads/${child.id}`}>Open</Link>
+                                                                        </Button>
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            );
+                                                        })}
+                                                    </TableBody>
+                                                </Table>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {mode === 'tasks' && (
+                                        <div className="space-y-3">
+                                            {/* Parent tasks */}
+                                            {parent && parent.tasks && parent.tasks.length > 0 && (
+                                                <div className="border rounded-md p-3 bg-amber-50/30 mb-2">
+                                                    <span className="text-xs font-bold text-amber-900 uppercase tracking-wider block mb-2">
+                                                        Parent Account Tasks ({parent.companyName})
+                                                    </span>
+                                                    <Table>
+                                                        <TableHeader>
+                                                            <TableRow>
+                                                                <TableHead className="text-xs">Task Title</TableHead>
+                                                                <TableHead className="text-xs">Due Date</TableHead>
+                                                                <TableHead className="text-xs">Status</TableHead>
+                                                                <TableHead className="text-xs text-right">Action</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {parent.tasks.map((task: Task) => (
+                                                                <TableRow key={task.id}>
+                                                                    <TableCell className="text-xs font-semibold text-slate-800">
+                                                                        {task.title}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs text-slate-600">
+                                                                        {task.dueDate || 'No due date'}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs">
+                                                                        {task.isCompleted ? (
+                                                                            <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300">Completed</Badge>
+                                                                        ) : (
+                                                                            <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300">Pending</Badge>
+                                                                        )}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-right">
+                                                                        {!task.isCompleted && (
+                                                                            <Button 
+                                                                                variant="outline" 
+                                                                                size="sm" 
+                                                                                onClick={() => handleCompleteTask(parent, task.id, task.title)}
+                                                                                className="h-6 text-[11px] bg-white gap-1 text-emerald-700 border-emerald-300"
+                                                                            >
+                                                                                <CheckSquare className="h-3 w-3" /> Complete
+                                                                            </Button>
+                                                                        )}
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            ))}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
+                                            )}
+
+                                            {/* Child site tasks */}
+                                            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block mt-2">
+                                                Child Sites Tasks ({children.length} locations)
+                                            </span>
+                                            {children.length === 0 ? (
+                                                <p className="text-xs text-slate-400 italic">No child locations found.</p>
+                                            ) : (
+                                                <Table>
+                                                    <TableHeader className="bg-slate-50">
+                                                        <TableRow>
+                                                            <TableHead className="text-xs">Child Site Name</TableHead>
+                                                            <TableHead className="text-xs">Full Address</TableHead>
+                                                            <TableHead className="text-xs">Task Description</TableHead>
+                                                            <TableHead className="text-xs">Due Date</TableHead>
+                                                            <TableHead className="text-xs">Status</TableHead>
+                                                            <TableHead className="text-xs text-right">Actions</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {children.map(child => {
+                                                            const childTasks = child.tasks || [];
+                                                            return (
+                                                                <React.Fragment key={child.id}>
+                                                                    {childTasks.length === 0 ? (
+                                                                        <TableRow>
+                                                                            <TableCell className="text-xs font-semibold text-slate-800">{child.companyName}</TableCell>
+                                                                            <TableCell className="text-xs text-slate-600">{formatFullAddress(child)}</TableCell>
+                                                                            <TableCell colSpan={3} className="text-xs text-slate-400 italic">No pending tasks</TableCell>
+                                                                            <TableCell className="text-right">
+                                                                                <Button variant="outline" size="sm" asChild className="h-7 text-[11px]">
+                                                                                    <Link href={`/leads/${child.id}`}>Open</Link>
+                                                                                </Button>
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    ) : (
+                                                                        childTasks.map((task: Task, tIdx: number) => (
+                                                                            <TableRow key={`${child.id}-task-${task.id || tIdx}`}>
+                                                                                <TableCell className="text-xs font-semibold text-slate-900">
+                                                                                    {tIdx === 0 ? child.companyName : ''}
+                                                                                </TableCell>
+                                                                                <TableCell className="text-xs text-slate-600">
+                                                                                    {tIdx === 0 ? formatFullAddress(child) : ''}
+                                                                                </TableCell>
+                                                                                <TableCell className="text-xs text-slate-800 font-medium">
+                                                                                    {task.title}
+                                                                                </TableCell>
+                                                                                <TableCell className="text-xs text-slate-600">
+                                                                                    {task.dueDate || '-'}
+                                                                                </TableCell>
+                                                                                <TableCell className="text-xs">
+                                                                                    {task.isCompleted ? (
+                                                                                        <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300">Completed</Badge>
+                                                                                    ) : (
+                                                                                        <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300">Pending</Badge>
+                                                                                    )}
+                                                                                </TableCell>
+                                                                                <TableCell className="text-right">
+                                                                                    <div className="flex items-center justify-end gap-1">
+                                                                                        {!task.isCompleted && (
+                                                                                            <Button 
+                                                                                                variant="outline" 
+                                                                                                size="sm" 
+                                                                                                onClick={() => handleCompleteTask(child, task.id, task.title)}
+                                                                                                className="h-6 text-[11px] bg-white text-emerald-700 border-emerald-300 gap-1"
+                                                                                            >
+                                                                                                <CheckSquare className="h-3 w-3" /> Complete
+                                                                                            </Button>
+                                                                                        )}
+                                                                                        <Button variant="outline" size="sm" asChild className="h-6 text-[11px] px-2">
+                                                                                            <Link href={`/leads/${child.id}`}>Open</Link>
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </TableCell>
+                                                                            </TableRow>
+                                                                        ))
+                                                                    )}
+                                                                </React.Fragment>
+                                                            );
+                                                        })}
+                                                    </TableBody>
+                                                </Table>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </Card>
+                    );
+                })}
+
+                {/* Orphan Child Sites without Parent loaded */}
+                {orphanChildren.length > 0 && (
+                    <Card className="border border-slate-200 shadow-sm bg-white overflow-hidden mt-4">
+                        <div className="p-4 bg-slate-100 border-b flex justify-between items-center">
+                            <span className="font-bold text-slate-800">Standalone / Unlinked Child Locations</span>
+                            <Badge variant="outline">{orphanChildren.length} Sites</Badge>
+                        </div>
+                        <div className="p-4">
+                            <Table>
+                                <TableHeader className="bg-slate-50">
+                                    <TableRow>
+                                        <TableHead className="text-xs font-semibold">Child Site Name</TableHead>
+                                        <TableHead className="text-xs font-semibold">Full Address</TableHead>
+                                        <TableHead className="text-xs font-semibold">Franchisee</TableHead>
+                                        <TableHead className="text-xs font-semibold">Status</TableHead>
+                                        <TableHead className="text-xs text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {orphanChildren.map(child => (
+                                        <TableRow key={child.id}>
+                                            <TableCell className="font-medium text-xs text-slate-800">{child.companyName}</TableCell>
+                                            <TableCell className="text-xs text-slate-600">{formatFullAddress(child)}</TableCell>
+                                            <TableCell className="text-xs text-slate-600">{(child as any).franchiseeName || child.franchisee || '-'}</TableCell>
+                                            <TableCell className="text-xs"><LeadStatusBadge status={(child.customerStatus || child.status || 'New') as any} /></TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="outline" size="sm" asChild className="h-7 text-xs">
+                                                    <Link href={`/leads/${child.id}`}>Open Profile</Link>
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </Card>
+                )}
+            </div>
+        );
+    };
+
     return (
         <div className="flex flex-col gap-6 p-4 md:p-6 max-w-[1600px] mx-auto min-h-screen">
             {/* Header */}
@@ -466,7 +1116,7 @@ export function MultiSitesDashboard() {
                         <Network className="h-8 w-8 text-[#095c7b]" /> MultiSite Leads & Accounts
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Centralized dashboard for multi-site parent accounts, child site locations, stage pipeline tracking, and AM priority queue.
+                        Centralized dashboard for multi-site parent accounts, child site locations, stage pipeline tracking, appointments, and tasks.
                     </p>
                 </div>
 
@@ -476,14 +1126,6 @@ export function MultiSitesDashboard() {
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => setPromoteDialogOpen(true)} className="gap-2 bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100">
                         <Sparkles className="h-4 w-4 text-indigo-600" /> Promote MultiSite Parent
-                    </Button>
-                    <Button variant="outline" size="sm" asChild className="gap-2 border-slate-300">
-                        <Link href="/admin/marketing/import-leads">
-                            <Layers className="h-4 w-4 text-[#095c7b]" /> Import MultiSites CSV
-                        </Link>
-                    </Button>
-                    <Button size="sm" onClick={() => setQuickAddOpen(true)} className="bg-[#095c7b] hover:bg-[#07465e] text-white gap-2 shadow-sm">
-                        <PlusCircle className="h-4 w-4" /> Add MultiSite Lead
                     </Button>
                 </div>
             </header>
@@ -548,16 +1190,16 @@ export function MultiSitesDashboard() {
                 </Card>
             </div>
 
-            {/* Filters Bar */}
+            {/* Comprehensive Filters Bar */}
             <Card className="shadow-sm border border-slate-200">
                 <CardContent className="p-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-center">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 items-center">
                         
                         {/* Search Input */}
                         <div className="relative md:col-span-2">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                             <Input
-                                placeholder="Search by Company, Suburb, Postcode, AM, Prospect+ ID..."
+                                placeholder="Search Company, Address, AM, Suburb..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="pl-9 bg-white text-sm"
@@ -587,16 +1229,32 @@ export function MultiSitesDashboard() {
                             </Select>
                         </div>
 
-                        {/* Record Type Filter */}
+                        {/* Franchisee Filter */}
                         <div>
-                            <Select value={typeFilter} onValueChange={(val: any) => setTypeFilter(val)}>
+                            <Select value={franchiseeFilter} onValueChange={setFranchiseeFilter}>
                                 <SelectTrigger className="bg-white text-xs md:text-sm">
-                                    <SelectValue placeholder="All Record Types" />
+                                    <SelectValue placeholder="All Franchisees" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Record Types</SelectItem>
-                                    <SelectItem value="parent">Parent Accounts Only</SelectItem>
-                                    <SelectItem value="child">Child Sites Only</SelectItem>
+                                    <SelectItem value="all">All Franchisees</SelectItem>
+                                    {franchiseesList.map(fr => (
+                                        <SelectItem key={fr} value={fr}>{fr}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* State Filter */}
+                        <div>
+                            <Select value={stateFilter} onValueChange={setStateFilter}>
+                                <SelectTrigger className="bg-white text-xs md:text-sm">
+                                    <SelectValue placeholder="All States" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All States</SelectItem>
+                                    {AUSTRALIAN_STATES.map(st => (
+                                        <SelectItem key={st} value={st}>{st}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -623,16 +1281,23 @@ export function MultiSitesDashboard() {
                 </CardContent>
             </Card>
 
-            {/* Main Tabs Styled Matching AM Pipeline Page */}
+            {/* Main Tabs (Appointments and Tasks are 1st two tabs, matching AM Pipeline style) */}
             <Tabs value={viewTab} onValueChange={setViewTab} className="space-y-4">
                 <div className="bg-white/80 p-1.5 rounded-t-xl border border-slate-200 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
                     <TabsList className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start shrink-0 gap-1.5 p-0">
-                        <TabsTrigger value="hierarchy" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white rounded-lg px-3 py-1.5 text-xs font-medium transition-all">
-                            Hierarchy Tree <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b] font-bold">{parentLeadGroups.length} Groups</Badge>
+                        {/* 1st Tab: Appointments */}
+                        <TabsTrigger value="appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white rounded-lg px-3 py-1.5 text-xs font-medium transition-all">
+                            Appointments <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b] font-bold">{totalAppointmentsCount}</Badge>
                         </TabsTrigger>
+                        {/* 2nd Tab: Tasks & Reminders */}
+                        <TabsTrigger value="tasks" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white rounded-lg px-3 py-1.5 text-xs font-medium transition-all">
+                            Tasks & Reminders <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b] font-bold">{totalTasksCount}</Badge>
+                        </TabsTrigger>
+                        {/* 3rd Tab: Priority Queue */}
                         <TabsTrigger value="queue" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white rounded-lg px-3 py-1.5 text-xs font-medium transition-all">
-                            Priority Queue <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{pipelineLeads.length}</Badge>
+                            Priority Queue <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800 font-bold">{priorityQueueLeads.length}</Badge>
                         </TabsTrigger>
+                        {/* Pipeline Stage Tabs */}
                         <TabsTrigger value="new" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white rounded-lg px-3 py-1.5 text-xs font-medium transition-all">
                             New <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{stageCounts.new}</Badge>
                         </TabsTrigger>
@@ -657,286 +1322,172 @@ export function MultiSitesDashboard() {
                     </TabsList>
                 </div>
 
-                {/* PRIORITY ACTION QUEUE VIEW */}
-                <TabsContent value="queue" className="space-y-4">
-                    <Card className="border border-slate-200 shadow-sm bg-white p-4">
-                        <AmQueueView 
-                            leads={pipelineLeads}
-                            appointments={appointments}
-                            onCall={handleCall}
-                            onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }}
-                            onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }}
-                            onClickLead={(id) => window.open(`/leads/${id}`, '_blank')}
-                            setLeads={setLeads}
-                        />
-                    </Card>
-                </TabsContent>
-
-                {/* HIERARCHY / TREE VIEW (Shows full parent & child tree including signed customers) */}
-                <TabsContent value="hierarchy" className="space-y-4">
+                {/* 1st TAB: APPOINTMENTS (Sub-sections matching AM Pipeline UI style) */}
+                <TabsContent value="appointments" className="space-y-6">
                     {isLoadingData ? (
                         <div className="flex flex-col items-center justify-center p-12 bg-white rounded-lg border">
                             <Loader />
-                            <p className="text-sm text-slate-500 mt-2">Loading MultiSite Account Hierarchy...</p>
+                            <p className="text-sm text-slate-500 mt-2">Loading MultiSite Appointments...</p>
                         </div>
-                    ) : parentLeadGroups.length === 0 && orphanChildren.length === 0 ? (
-                        <Card className="p-8 text-center bg-white border">
-                            <Network className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-                            <h3 className="text-lg font-semibold text-slate-700">No MultiSite Records Found</h3>
-                            <p className="text-sm text-slate-500 mt-1">Try resetting your filters or promote a new parent account.</p>
-                        </Card>
                     ) : (
-                        <div className="space-y-4">
-                            {parentLeadGroups.map(({ parent, children, parentName }) => {
-                                const parentId = parent?.id || children[0]?.parentLeadId || 'unknown';
-                                const isOpen = !!openParents[parentId];
+                        <>
+                            {/* Past Pending Appointments */}
+                            {pastPendingAppointmentsLeads.length > 0 && (
+                                <div className="space-y-3 pb-4 border-b border-rose-200/80">
+                                    <div className="flex items-center gap-2 px-1">
+                                        <AlertCircle className="h-4 w-4 text-rose-600" />
+                                        <h3 className="text-sm font-bold text-rose-700 uppercase tracking-wider">Past Pending Appointments (Action Required)</h3>
+                                        <Badge variant="secondary" className="bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs">
+                                            {pastPendingAppointmentsLeads.length}
+                                        </Badge>
+                                    </div>
+                                    {renderHierarchyGroups(pastPendingAppointmentsLeads, 'appointments')}
+                                </div>
+                            )}
 
-                                return (
-                                    <Card key={parentId} className="border border-slate-200 shadow-sm bg-white overflow-hidden">
-                                        <div className="p-4 bg-slate-50/70 border-b flex flex-col md:flex-row justify-between md:items-center gap-3">
-                                            <div className="flex items-center gap-3">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="p-1 h-8 w-8 text-slate-500 hover:text-slate-800"
-                                                    onClick={() => toggleParentOpen(parentId)}
-                                                >
-                                                    {isOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                                                </Button>
+                            {/* Today's Appointments */}
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 px-1">
+                                    <Calendar className="h-4 w-4 text-[#095c7b]" />
+                                    <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider">Today's Appointments</h3>
+                                    <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none font-bold text-xs">
+                                        {todayAppointmentsLeads.length}
+                                    </Badge>
+                                </div>
+                                {renderHierarchyGroups(todayAppointmentsLeads, 'appointments')}
+                            </div>
 
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-bold text-lg text-slate-900">{parentName}</span>
-                                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                                            Parent Account
-                                                        </Badge>
-                                                        {parent?.prospectPlusId && (
-                                                            <Badge variant="secondary" className="text-xs">
-                                                                ID: {parent.prospectPlusId}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
-                                                        {parent?.address?.city && (
-                                                            <span className="flex items-center gap-1">
-                                                                <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                                                                {parent.address.city}, {parent.address.state} {parent.address.zip}
-                                                            </span>
-                                                        )}
-                                                        {(parent as any)?.franchiseeName && (
-                                                            <span className="flex items-center gap-1">
-                                                                <Store className="h-3.5 w-3.5 text-slate-400" />
-                                                                {(parent as any).franchiseeName}
-                                                            </span>
-                                                        )}
-                                                        <span className="flex items-center gap-1">
-                                                            <User className="h-3.5 w-3.5 text-slate-400" />
-                                                            AM: <strong className="text-slate-700">{parent?.accountManagerAssigned || 'Unassigned'}</strong>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                            {/* Future Appointments */}
+                            <div className="space-y-3 pt-4 border-t border-slate-200/80">
+                                <div className="flex items-center gap-2 px-1">
+                                    <Calendar className="h-4 w-4 text-[#095c7b]" />
+                                    <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider">Future Appointments</h3>
+                                    <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none font-bold text-xs">
+                                        {futureAppointmentsLeads.length}
+                                    </Badge>
+                                </div>
+                                {renderHierarchyGroups(futureAppointmentsLeads, 'appointments')}
+                            </div>
 
-                                            <div className="flex items-center gap-2 self-end md:self-auto">
-                                                <Badge className="bg-[#095c7b] text-white">
-                                                    {children.length} Child Site{children.length !== 1 ? 's' : ''}
-                                                </Badge>
-
-                                                {parent && (
-                                                    <Button variant="outline" size="sm" asChild className="h-8 text-xs gap-1 bg-white">
-                                                        <Link href={`/leads/${parent.id}`}>
-                                                            <ExternalLink className="h-3.5 w-3.5" /> View Profile
-                                                        </Link>
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Collapsible Child Sites Table */}
-                                        {isOpen && (
-                                            <div className="p-4 bg-white">
-                                                {children.length === 0 ? (
-                                                    <p className="text-xs text-slate-400 italic py-2">
-                                                        No linked child locations found under this parent account.
-                                                    </p>
-                                                ) : (
-                                                    <Table>
-                                                        <TableHeader className="bg-slate-50">
-                                                            <TableRow>
-                                                                <TableHead className="text-xs font-semibold">Child Site Name</TableHead>
-                                                                <TableHead className="text-xs font-semibold">Address / Location</TableHead>
-                                                                <TableHead className="text-xs font-semibold">Local Site Manager</TableHead>
-                                                                <TableHead className="text-xs font-semibold">Servicing Franchisee</TableHead>
-                                                                <TableHead className="text-xs font-semibold">Status</TableHead>
-                                                                <TableHead className="text-xs font-semibold text-right">Actions</TableHead>
-                                                            </TableRow>
-                                                        </TableHeader>
-                                                        <TableBody>
-                                                            {children.map(child => {
-                                                                const childAddr = child.address || {} as any;
-                                                                const fullAddrParts = [
-                                                                    (child as any).address1 || childAddr.address1,
-                                                                    (child as any).street || childAddr.street,
-                                                                    childAddr.city || (child as any).city,
-                                                                    childAddr.state || (child as any).state,
-                                                                    childAddr.zip || (child as any).zip
-                                                                ].filter(Boolean);
-                                                                const fullAddrStr = fullAddrParts.length > 0 ? fullAddrParts.join(', ') : '-';
-
-                                                                return (
-                                                                    <TableRow key={child.id} className="hover:bg-slate-50/80">
-                                                                        <TableCell className="font-medium text-sm text-slate-800">
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                <Store className="h-3.5 w-3.5 text-indigo-500" />
-                                                                                {child.companyName}
-                                                                            </div>
-                                                                        </TableCell>
-                                                                        <TableCell className="text-xs text-slate-600">
-                                                                            {fullAddrStr}
-                                                                        </TableCell>
-                                                                        <TableCell className="text-xs text-slate-600">
-                                                                            {child.customerServiceEmail || child.customerPhone ? (
-                                                                                <div className="flex flex-col">
-                                                                                    <span className="font-medium">{child.customerServiceEmail || '-'}</span>
-                                                                                    <span className="text-[11px] text-slate-400">{child.customerPhone || ''}</span>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <span className="text-slate-400 italic">Not set</span>
-                                                                            )}
-                                                                        </TableCell>
-                                                                        <TableCell className="text-xs text-slate-600">
-                                                                            <Badge variant="outline" className="bg-slate-50 border-slate-300">
-                                                                                {(child as any).franchiseeName || child.franchisee || 'MailPlus Pty Ltd'}
-                                                                            </Badge>
-                                                                        </TableCell>
-                                                                        <TableCell className="text-xs">
-                                                                            <LeadStatusBadge status={(child.customerStatus || child.status || 'New') as any} />
-                                                                        </TableCell>
-                                                                        <TableCell className="text-right">
-                                                                            <div className="flex items-center justify-end gap-1.5">
-                                                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setActiveLead(child); setNotesDialogOpen(true); }}>
-                                                                                    <FileText className="h-3.5 w-3.5 text-slate-600" />
-                                                                                </Button>
-                                                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setActiveLead(child); setEmailDialogOpen(true); }}>
-                                                                                    <Mail className="h-3.5 w-3.5 text-slate-600" />
-                                                                                </Button>
-                                                                                <Button variant="outline" size="sm" asChild className="h-7 text-[11px] px-2">
-                                                                                    <Link href={`/leads/${child.id}`}>
-                                                                                        Open
-                                                                                    </Link>
-                                                                                </Button>
-                                                                            </div>
-                                                                        </TableCell>
-                                                                    </TableRow>
-                                                                );
-                                                            })}
-                                                        </TableBody>
-                                                    </Table>
-                                                )}
-                                            </div>
-                                        )}
-                                    </Card>
-                                );
-                            })}
-                        </div>
+                            {/* No Show Appointments */}
+                            {noShowAppointmentsLeads.length > 0 && (
+                                <div className="space-y-3 pt-4 border-t border-amber-200/80">
+                                    <div className="flex items-center gap-2 px-1">
+                                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                                        <h3 className="text-sm font-bold text-amber-700 uppercase tracking-wider">No Show Appointments</h3>
+                                        <Badge variant="secondary" className="bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs">
+                                            {noShowAppointmentsLeads.length}
+                                        </Badge>
+                                    </div>
+                                    {renderHierarchyGroups(noShowAppointmentsLeads, 'appointments')}
+                                </div>
+                            )}
+                        </>
                     )}
                 </TabsContent>
 
-                {/* STAGE TAB CONTENT (Clean Lead Table for New, WIP, Quotes Out, Quotes Accepted, Product Pending, LocalMile, Future Follow-up) */}
-                {viewTab !== 'hierarchy' && viewTab !== 'queue' && (
-                    <TabsContent value={viewTab}>
-                        <Card className="border border-slate-200 shadow-sm bg-white overflow-hidden">
-                            <Table>
-                                <TableHeader className="bg-slate-50">
-                                    <TableRow>
-                                        <TableHead className="font-semibold text-xs">Company Name</TableHead>
-                                        <TableHead className="font-semibold text-xs">Type</TableHead>
-                                        <TableHead className="font-semibold text-xs">Parent Account Link</TableHead>
-                                        <TableHead className="font-semibold text-xs">Suburb / State / Postcode</TableHead>
-                                        <TableHead className="font-semibold text-xs">Servicing Franchisee</TableHead>
-                                        <TableHead className="font-semibold text-xs">Account Manager</TableHead>
-                                        <TableHead className="font-semibold text-xs">Status</TableHead>
-                                        <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {isLoadingData ? (
-                                        <TableRow>
-                                            <TableCell colSpan={8} className="text-center py-8">
-                                                <Loader />
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : activeStageLeads.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={8} className="text-center py-8 text-slate-500 text-sm">
-                                                No lead records currently in this stage tab.
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        activeStageLeads.map(l => {
-                                            const isChild = Boolean(l.parentLeadId);
-                                            const addr = l.address || {} as any;
-                                            return (
-                                                <TableRow key={l.id} className="hover:bg-slate-50/80">
-                                                    <TableCell className="font-medium text-slate-800">
-                                                        <div className="flex flex-col">
-                                                            <span className="font-semibold">{l.companyName}</span>
-                                                            {l.prospectPlusId && <span className="text-[11px] text-slate-400">ID: {l.prospectPlusId}</span>}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Badge variant="outline" className={isChild ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-blue-50 text-blue-700 border-blue-200"}>
-                                                            {isChild ? "Child Site" : "Parent Account"}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-xs text-slate-600">
-                                                        {l.parentLeadId ? (
-                                                            <span className="truncate max-w-[140px] inline-block font-mono text-[11px]">
-                                                                {l.parentLeadId}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-slate-400 italic">Self (Parent)</span>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="text-xs text-slate-600">
-                                                        {addr.city ? `${addr.city}, ${addr.state} ${addr.zip}` : '-'}
-                                                    </TableCell>
-                                                    <TableCell className="text-xs text-slate-600">
-                                                        {(l as any).franchiseeName || l.franchisee || 'MailPlus Pty Ltd'}
-                                                    </TableCell>
-                                                    <TableCell className="text-xs font-semibold text-slate-700">
-                                                        {l.accountManagerAssigned || 'Unassigned'}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Badge className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/20 font-medium">
-                                                            {l.customerStatus || l.status || 'New'}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex items-center justify-end gap-1.5">
-                                                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setActiveLead(l); setNotesDialogOpen(true); }}>
-                                                                <FileText className="h-3.5 w-3.5 text-slate-600" />
-                                                            </Button>
-                                                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setActiveLead(l); setEmailDialogOpen(true); }}>
-                                                                <Mail className="h-3.5 w-3.5 text-slate-600" />
-                                                            </Button>
-                                                            <Button variant="outline" size="sm" asChild className="h-7 text-xs bg-white">
-                                                                <Link href={`/leads/${l.id}`}>
-                                                                    <ExternalLink className="h-3.5 w-3.5 mr-1" /> Profile
-                                                                </Link>
-                                                            </Button>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </Card>
+                {/* 2nd TAB: TASKS & REMINDERS (Sub-sections matching AM Pipeline UI style) */}
+                <TabsContent value="tasks" className="space-y-6">
+                    {isLoadingData ? (
+                        <div className="flex flex-col items-center justify-center p-12 bg-white rounded-lg border">
+                            <Loader />
+                            <p className="text-sm text-slate-500 mt-2">Loading MultiSite Tasks...</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Overdue Tasks */}
+                            {pastPendingTasksLeads.length > 0 && (
+                                <div className="space-y-3 pb-4 border-b border-rose-200/80">
+                                    <div className="flex items-center gap-2 px-1">
+                                        <AlertCircle className="h-4 w-4 text-rose-600" />
+                                        <h3 className="text-sm font-bold text-rose-700 uppercase tracking-wider">Overdue Tasks & Reminders (Action Required)</h3>
+                                        <Badge variant="secondary" className="bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs">
+                                            {pastPendingTasksLeads.length}
+                                        </Badge>
+                                    </div>
+                                    {renderHierarchyGroups(pastPendingTasksLeads, 'tasks')}
+                                </div>
+                            )}
+
+                            {/* Today's Tasks */}
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 px-1">
+                                    <ListTodo className="h-4 w-4 text-[#095c7b]" />
+                                    <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider">Today's Tasks & Reminders</h3>
+                                    <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none font-bold text-xs">
+                                        {todayTasksLeads.length}
+                                    </Badge>
+                                </div>
+                                {renderHierarchyGroups(todayTasksLeads, 'tasks')}
+                            </div>
+
+                            {/* Future Tasks */}
+                            <div className="space-y-3 pt-4 border-t border-slate-200/80">
+                                <div className="flex items-center gap-2 px-1">
+                                    <ListTodo className="h-4 w-4 text-[#095c7b]" />
+                                    <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider">Future Tasks & Reminders</h3>
+                                    <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none font-bold text-xs">
+                                        {futureTasksLeads.length}
+                                    </Badge>
+                                </div>
+                                {renderHierarchyGroups(futureTasksLeads, 'tasks')}
+                            </div>
+
+                            {/* Completed Tasks */}
+                            {completedTasksLeads.length > 0 && (
+                                <div className="space-y-3 pt-4 border-t border-emerald-200/80">
+                                    <div className="flex items-center gap-2 px-1">
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                        <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wider">Completed Tasks & Reminders</h3>
+                                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs">
+                                            {completedTasksLeads.length}
+                                        </Badge>
+                                    </div>
+                                    {renderHierarchyGroups(completedTasksLeads, 'tasks')}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </TabsContent>
+
+                {/* 3rd TAB: PRIORITY QUEUE */}
+                <TabsContent value="queue" className="space-y-4">
+                    {isLoadingData ? (
+                        <div className="flex flex-col items-center justify-center p-12 bg-white rounded-lg border">
+                            <Loader />
+                            <p className="text-sm text-slate-500 mt-2">Loading Priority Queue MultiSites...</p>
+                        </div>
+                    ) : (
+                        renderHierarchyGroups(priorityQueueLeads, 'leads')
+                    )}
+                </TabsContent>
+
+                {/* STAGE TABS (New, WIP, Quotes Out, Quotes Accepted, Product Pending, LocalMile, Future Follow-up) */}
+                {['new', 'wip', 'quotes-out', 'quotes-accepted', 'product-pending', 'localmile', 'future-follow-up'].map(tabKey => (
+                    <TabsContent key={tabKey} value={tabKey} className="space-y-4">
+                        {isLoadingData ? (
+                            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-lg border">
+                                <Loader />
+                                <p className="text-sm text-slate-500 mt-2">Loading MultiSite Accounts...</p>
+                            </div>
+                        ) : (
+                            renderHierarchyGroups(activeStageLeads, 'leads')
+                        )}
                     </TabsContent>
-                )}
+                ))}
             </Tabs>
+
+            {/* ADD CHILD SITE DIALOG (PRE-LINKED TO PARENT) */}
+            {selectedParentForChild && enterChildLeadOpen && (
+                <EnterMultiSiteLeadDialog
+                    isOpen={enterChildLeadOpen}
+                    onOpenChange={setEnterChildLeadOpen}
+                    parentCompany={selectedParentForChild}
+                    onSuccess={() => {
+                        fetchMultiSiteData();
+                    }}
+                />
+            )}
 
             {/* PROMOTE TO MULTISITE PARENT DIALOG */}
             <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
@@ -1019,13 +1570,6 @@ export function MultiSitesDashboard() {
                     lead={activeLead}
                     isOpen={notesDialogOpen}
                     onClose={() => setNotesDialogOpen(false)}
-                />
-            )}
-
-            {quickAddOpen && (
-                <QuickAddLeadDialog
-                    isOpen={quickAddOpen}
-                    onOpenChange={setQuickAddOpen}
                 />
             )}
         </div>

@@ -284,12 +284,15 @@ export async function POST(
     }
 
     const isOutbound = leadData.bucket === 'outbound';
+    const nowIso = new Date().toISOString();
     await leadRef.update({
       status: 'LocalMile Opportunity',
       customerStatus: 'LocalMile Opportunity',
       serviceType: 'Adhoc',
       rate: 15,
       localMileTrialsRemaining: 5,
+      dateRegistrationSent: nowIso,
+      registrationSentAt: nowIso,
       ...(!isOutbound ? {
         bucket: 'customer_success',
         customerSuccessAssigned: 'Belinda Urbani'

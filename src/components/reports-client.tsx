@@ -75,7 +75,7 @@ import { StatusOutcomeBanner } from './status-outcome-guide';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBreakdownBar } from './status-breakdown-bar';
 import { BucketBreakdownBar } from './bucket-breakdown-bar';
-import { cn, getQuickDateRange, isManualActivity } from '@/lib/utils';
+import { cn, getQuickDateRange, isManualActivity, getLeadDisplayDateValue, getLeadDisplayDateLabel, safeFormatDate } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
@@ -1395,7 +1395,7 @@ export default function ReportsClientPage({
     });
 
     // Outbound Dialer Team Performance Details Timeframe Filtering (Daily, Weekly, Monthly)
-    const perfNow = new Date();
+    const perfNow = appliedFilters.activityDate?.to || appliedFilters.activityDate?.from || new Date();
     let perfFromDate: Date;
     let perfToDate: Date;
     if (teamPerformanceTimeframe === 'daily') {
@@ -1409,14 +1409,63 @@ export default function ReportsClientPage({
       perfToDate = endOfMonth(perfNow);
     }
 
-    const perfFilteredCalls = filteredCalls.filter(c => {
-      const cDate = parseDateString(c.date);
-      return cDate ? (cDate >= perfFromDate && cDate <= perfToDate) : false;
+    const perfFilteredCalls = allCalls.filter(call => {
+      const lead = allLeads.find(l => l.id === call.leadId);
+      if (!lead) return false;
+      if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
+        if (lead.franchisee !== userProfile.franchisee) return false;
+      }
+      if (userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user') {
+        const isUserMatch = isAssignedToCurrentDialer(lead.dialerAssigned) || isAssignedToCurrentDialer(call.dialerAssigned);
+        if (!isUserMatch) return false;
+      } else if (isUserOnlyRole) {
+        const isUserMatch = currentUserIdentifiers.some(id => 
+          call.dialerAssigned === id || 
+          call.author === id || 
+          lead.dialerAssigned === id || 
+          lead.salesRepAssigned === id
+        );
+        if (!isUserMatch) return false;
+      }
+      const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (call.dialerAssigned && appliedFilters.dialerAssigned.includes(call.dialerAssigned));
+      const franchiseeMatch = appliedFilters.franchisee.length === 0 || (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
+      const campaignMatch = appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
+
+      const cDate = parseDateString(call.date);
+      return dialerMatch && franchiseeMatch && campaignMatch && (cDate ? (cDate >= perfFromDate && cDate <= perfToDate) : false);
     });
 
-    const perfFilteredAppointments = filteredAppointments.filter(a => {
-      const aDate = parseDateString(a.appointmentDate || a.duedate || a.starttime || a.date || (a as any).createdAt);
-      return aDate ? (aDate >= perfFromDate && aDate <= perfToDate) : false;
+    const perfFilteredAppointments = allAppointments.filter(appointment => {
+      if (appointment.leadName === 'Unknown Lead') return false;
+      const lead = allLeads.find(l => l.id === appointment.leadId);
+      if (!lead) return false;
+      const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (appointment.dialerAssigned && appliedFilters.dialerAssigned.includes(appointment.dialerAssigned));
+      const franchiseeMatch = appliedFilters.franchisee.length === 0 || (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
+      const campaignMatch = appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
+
+      const aDate = parseDateString(appointment.appointmentDate || appointment.duedate || appointment.starttime || appointment.date || (appointment as any).createdAt);
+      return dialerMatch && franchiseeMatch && campaignMatch && (aDate ? (aDate >= perfFromDate && aDate <= perfToDate) : false);
+    });
+
+    // Build actioned leads map per dialer within timeframe
+    const perfActionedLeadIdsMap = new Map<string, Set<string>>();
+    allDialers.forEach(d => perfActionedLeadIdsMap.set(d, new Set<string>()));
+    perfFilteredCalls.forEach(c => {
+      let author = (c.author || c.dialerAssigned || '').trim();
+      let matchedDialer = allDialers.find(d => d.toLowerCase() === author.toLowerCase()) || c.dialerAssigned;
+      if (matchedDialer && c.leadId) {
+        perfActionedLeadIdsMap.get(matchedDialer)?.add(c.leadId);
+      }
+    });
+    allActivities.forEach(act => {
+      const actDate = parseDateString(act.date);
+      if (actDate && actDate >= perfFromDate && actDate <= perfToDate && act.leadId) {
+        let author = (act.author || (act as any).user || '').trim();
+        let matchedDialer = allDialers.find(d => d.toLowerCase() === author.toLowerCase());
+        if (matchedDialer) {
+          perfActionedLeadIdsMap.get(matchedDialer)?.add(act.leadId);
+        }
+      }
     });
 
     const teamPerformanceData = allDialers.map(dialer => {
@@ -1428,35 +1477,51 @@ export default function ReportsClientPage({
       const dialerConnectedCalls = dialerCallsList.filter(c => connectedOutcomes.includes((c as any).outcome)).length;
       const connectRate = dialerCalls > 0 ? (dialerConnectedCalls / dialerCalls) * 100 : 0;
 
-      const lmOppLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && l.status === 'LocalMile Opportunity');
+      const dialerActionedLeadIds = perfActionedLeadIdsMap.get(dialer) || new Set<string>();
+
+      const dialerBaseLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
+
+      const isDateInTimeframe = (dateVal?: any) => {
+        if (!dateVal) return false;
+        const d = parseDateString(dateVal);
+        return d ? (d >= perfFromDate && d <= perfToDate) : false;
+      };
+
+      const isDateBeforeOrInTimeframe = (dateVal?: any) => {
+        if (!dateVal) return true;
+        const d = parseDateString(dateVal);
+        return d ? (d <= perfToDate) : true;
+      };
+
+      const lmOppLeads = dialerBaseLeads.filter(l => l.status === 'LocalMile Opportunity' && (isDateInTimeframe(l.dateRegistrationSent || (l as any).registrationSentAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
       const lmOppCount = lmOppLeads.length;
       const lmOppCallRate = dialerCalls > 0 ? (lmOppCount / dialerCalls) * 100 : 0;
 
-      const lmPendingLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && l.status === 'LocalMile Pending');
+      const lmPendingLeads = dialerBaseLeads.filter(l => l.status === 'LocalMile Pending' && (isDateInTimeframe(l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
       const lmPendingCount = lmPendingLeads.length;
       const lmPendingCallRate = dialerCalls > 0 ? (lmPendingCount / dialerCalls) * 100 : 0;
 
-      const trialingLMLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && l.status === 'Trialing LocalMile');
+      const trialingLMLeads = dialerBaseLeads.filter(l => l.status === 'Trialing LocalMile' && (isDateInTimeframe(l.firstJobCreatedAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
       const trialingLMCount = trialingLMLeads.length;
       const trialingLMCallRate = dialerCalls > 0 ? (trialingLMCount / dialerCalls) * 100 : 0;
 
-      const dialerAppointments = perfFilteredAppointments.filter(a => a.dialerAssigned === dialer).length;
-      const dialerQuotes = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent')).length;
-      const dialerShipmateTrials = shipmateTrialLeads.filter(l => l.dialerAssigned === dialer).length;
-      const dialerCallsListLeadIds = new Set(dialerCallsList.map(c => c.leadId));
+      const dialerAppointments = perfFilteredAppointments.filter(a => a.dialerAssigned === dialer || a.assignedTo === dialer).length;
+      const dialerQuotes = dialerBaseLeads.filter(l => (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent') && (isDateInTimeframe(l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
+      const dialerShipmateTrials = shipmateTrialLeads.filter(l => l.dialerAssigned === dialer && (isDateInTimeframe(l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id))).length;
 
-      const dialerLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
-      const dialerWonLeads = dialerLeads.filter(isSignedLead);
+      const dialerWonLeads = dialerBaseLeads.filter(l => isSignedLead(l) && (isDateInTimeframe((l as any).dateSigned || (l as any).signedAt || (l as any).wonAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
       const dialerWon = dialerWonLeads.length;
 
-      const dialerLostPipelineLeads = dialerLeads.filter(l => !isSignedLead(l) && dialerCallsListLeadIds.has(l.id) && isLostLead(l));
+      const dialerLostPipelineLeads = dialerBaseLeads.filter(l => !isSignedLead(l) && isLostLead(l) && (isDateInTimeframe((l as any).lostAt || (l as any).archivedAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
       const dialerLostPipeline = dialerLostPipelineLeads.length;
 
-      const dialerActivePipelineLeads = dialerLeads.filter(l => isActivePipelineLead(l, dialerCallsListLeadIds, true));
+      const dialerActivePipelineLeads = dialerBaseLeads.filter(l => !isSignedLead(l) && !isLostLead(l) && dialerActionedLeadIds.has(l.id));
       const dialerActivePipeline = dialerActivePipelineLeads.length;
 
-      const dialerUnactionedPipelineLeads = dialerLeads.filter(l => isActivePipelineLead(l, dialerCallsListLeadIds, false));
+      const dialerUnactionedPipelineLeads = dialerBaseLeads.filter(l => !isSignedLead(l) && !isLostLead(l) && !dialerActionedLeadIds.has(l.id) && isDateBeforeOrInTimeframe(l.assignedToDialerAt || l.dateLeadEntered || (l as any).createdAt));
       const dialerUnactionedPipeline = dialerUnactionedPipelineLeads.length;
+
+      const dialerLeads = [...dialerUnactionedPipelineLeads, ...dialerActivePipelineLeads, ...dialerLostPipelineLeads, ...dialerWonLeads];
 
       return { 
         name: dialer, 
@@ -1471,7 +1536,7 @@ export default function ReportsClientPage({
         'Avg Attempts': avgAttempts,
         'Connect Rate': connectRate,
         'Appointments': dialerAppointments,
-        'Quotes Sent': dialerQuotes,
+        'Quotes Sent': dialerQuotes.length,
         'LM Opportunity': lmOppCount,
         'LM Opportunity Rate': lmOppCallRate,
         'LM Pending': lmPendingCount,
@@ -1481,7 +1546,16 @@ export default function ReportsClientPage({
         'ShipMate Trials': dialerShipmateTrials,
         'Signed Customers': dialerWon,
         perfCallsList: dialerCallsList,
-        perfAppointmentsList: perfFilteredAppointments.filter(a => a.dialerAssigned === dialer)
+        perfAppointmentsList: perfFilteredAppointments.filter(a => a.dialerAssigned === dialer || a.assignedTo === dialer),
+        perfActiveLeadsList: dialerActivePipelineLeads,
+        perfUnactionedLeadsList: dialerUnactionedPipelineLeads,
+        perfLostLeadsList: dialerLostPipelineLeads,
+        perfWonLeadsList: dialerWonLeads,
+        perfLeadsList: dialerLeads,
+        perfQuotesLeadsList: dialerQuotes,
+        perfLmOppLeadsList: lmOppLeads,
+        perfLmPendingLeadsList: lmPendingLeads,
+        perfTrialingLmLeadsList: trialingLMLeads
       };
     }).filter(d => d['Total Engagement'] > 0 || d['Total Assigned Leads'] > 0);
 
@@ -1586,21 +1660,70 @@ export default function ReportsClientPage({
 
     const allLeadsMap = new Map(allLeads.map(l => [l.id, l]));
 
-    // Lead Burn Rate & Capacity Leaderboard Data
+    // Lead Burn Rate & Capacity Leaderboard Data Timeframe Filtering
+    const burnNow = appliedFilters.activityDate?.to || appliedFilters.activityDate?.from || new Date();
+    let burnFromDate: Date;
+    let burnToDate: Date;
+    let burnWorkingDays: number;
+    if (burnRateTimeframe === 'daily') {
+      burnFromDate = startOfDay(burnNow);
+      burnToDate = endOfDay(burnNow);
+      burnWorkingDays = 1;
+    } else if (burnRateTimeframe === 'weekly') {
+      burnFromDate = startOfWeek(burnNow, { weekStartsOn: 1 });
+      burnToDate = endOfWeek(burnNow, { weekStartsOn: 1 });
+      burnWorkingDays = 5;
+    } else { // monthly
+      burnFromDate = startOfMonth(burnNow);
+      burnToDate = endOfMonth(burnNow);
+      burnWorkingDays = 21.67;
+    }
+
+    const burnFilteredCalls = allCalls.filter(call => {
+      const lead = allLeads.find(l => l.id === call.leadId);
+      if (!lead) return false;
+      if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
+        if (lead.franchisee !== userProfile.franchisee) return false;
+      }
+      if (userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user') {
+        const isUserMatch = isAssignedToCurrentDialer(lead.dialerAssigned) || isAssignedToCurrentDialer(call.dialerAssigned);
+        if (!isUserMatch) return false;
+      } else if (isUserOnlyRole) {
+        const isUserMatch = currentUserIdentifiers.some(id => 
+          call.dialerAssigned === id || 
+          call.author === id || 
+          lead.dialerAssigned === id || 
+          lead.salesRepAssigned === id
+        );
+        if (!isUserMatch) return false;
+      }
+      const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (call.dialerAssigned && appliedFilters.dialerAssigned.includes(call.dialerAssigned));
+      const franchiseeMatch = appliedFilters.franchisee.length === 0 || (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
+      const campaignMatch = appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
+
+      const cDate = parseDateString(call.date);
+      return dialerMatch && franchiseeMatch && campaignMatch && (cDate ? (cDate >= burnFromDate && cDate <= burnToDate) : false);
+    });
+
     const burnRateLeaderboard = allDialers.map(dialer => {
-        const dialerCallsList = filteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+        const dialerCallsList = burnFilteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
         const dialerCallsListLeadIds = new Set(dialerCallsList.map(c => c.leadId));
         const dialerLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
         
-        // Strictly count leads that have had at least one call / call initiated by this dialer in the date range
+        // Strictly count leads that have had at least one call / call initiated by this dialer in the timeframe
         const processedLeadsList = dialerLeads.filter(l => dialerCallsListLeadIds.has(l.id));
         const processedInPeriod = processedLeadsList.length;
 
-        // Un-actioned pool: assigned leads that have NOT been called yet by the dialer (excluding Signed)
-        const unactionedLeadsList = dialerLeads.filter(l => !dialerCallsListLeadIds.has(l.id) && !isSignedLead(l));
+        // Un-actioned pool: assigned leads created/assigned on or before timeframe end that have NOT been called yet by the dialer in timeframe (excluding Signed & Lost)
+        const unactionedLeadsList = dialerLeads.filter(l => {
+          if (isSignedLead(l) || isLostLead(l)) return false;
+          if (dialerCallsListLeadIds.has(l.id)) return false;
+          const leadDate = parseDateString(l.assignedToDialerAt || l.dateLeadEntered || (l as any).createdAt);
+          return leadDate ? leadDate <= burnToDate : true;
+        });
         const unactionedPool = unactionedLeadsList.length;
 
-        const dailyBurnRate = workingDaysInRange > 0 ? (processedInPeriod / workingDaysInRange) : 0;
+        const dailyBurnRate = burnWorkingDays > 0 ? (processedInPeriod / burnWorkingDays) : 0;
         const weeklyBurnRate = dailyBurnRate * 5;
         const monthlyBurnRate = dailyBurnRate * 21.67;
 
@@ -3128,12 +3251,11 @@ export default function ReportsClientPage({
                                         }}
                                     >
                                         {dialer['Total Engagement']}
-                                    </TableCell>
-                                    <TableCell 
+                                    </TableCell>                                     <TableCell 
                                         className="text-right font-semibold text-foreground cursor-pointer hover:underline"
                                         onClick={() => setTrialDrilldown({ 
                                             title: `${dialer.name} - Total Assigned Leads`, 
-                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name) 
+                                            leads: dialer.perfLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name) 
                                         })}
                                     >
                                         {dialer['Total Assigned Leads']}
@@ -3141,11 +3263,10 @@ export default function ReportsClientPage({
                                     <TableCell 
                                         className="text-right font-semibold text-blue-500 cursor-pointer hover:underline"
                                         onClick={() => {
-                                            const dialerCallsList = dialer.perfCallsList || filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
-                                            const callLeadIds = new Set(dialerCallsList.map(c => c.leadId));
+                                            const list = dialer.perfUnactionedLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && isActivePipelineLead(l, undefined, false));
                                             setTrialDrilldown({ 
                                                 title: `${dialer.name} - Un-actioned Pipeline Leads (Yet to be Actioned)`, 
-                                                leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && isActivePipelineLead(l, callLeadIds, false)) 
+                                                leads: list
                                             });
                                         }}
                                     >
@@ -3154,11 +3275,10 @@ export default function ReportsClientPage({
                                     <TableCell 
                                         className="text-right font-semibold text-emerald-600 cursor-pointer hover:underline"
                                         onClick={() => {
-                                            const dialerCallsList = dialer.perfCallsList || filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
-                                            const callLeadIds = new Set(dialerCallsList.map(c => c.leadId));
+                                            const list = dialer.perfActiveLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && isActivePipelineLead(l, undefined, true));
                                             setTrialDrilldown({ 
                                                 title: `${dialer.name} - Active Pipeline Leads (In Process & Actioned)`, 
-                                                leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && isActivePipelineLead(l, callLeadIds, true)) 
+                                                leads: list
                                             });
                                         }}
                                     >
@@ -3167,11 +3287,10 @@ export default function ReportsClientPage({
                                     <TableCell 
                                          className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
                                          onClick={() => {
-                                             const dialerCallsList = dialer.perfCallsList || filteredCalls.filter(c => c.author === dialer.name || (c.dialerAssigned === dialer.name && (!c.author || c.author === 'System' || c.author === 'Unknown')));
-                                             const callLeadIds = new Set(dialerCallsList.map(c => c.leadId));
+                                             const list = dialer.perfLostLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && isLostLead(l));
                                              setTrialDrilldown({ 
                                                  title: `${dialer.name} - Lost Pipeline Leads (Archived Lost)`, 
-                                                 leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && !isSignedLead(l) && callLeadIds.has(l.id) && isLostLead(l)) 
+                                                 leads: list
                                              });
                                          }}
                                     >
@@ -3181,7 +3300,7 @@ export default function ReportsClientPage({
                                         className="text-right font-bold text-green-600 cursor-pointer hover:underline"
                                         onClick={() => setTrialDrilldown({ 
                                             title: `${dialer.name} - Signed Customers`, 
-                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && isSignedLead(l)) 
+                                            leads: dialer.perfWonLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && isSignedLead(l)) 
                                         })}
                                     >
                                         {dialer['Signed Customers']}
@@ -3193,7 +3312,7 @@ export default function ReportsClientPage({
                                         className="text-right font-semibold text-orange-600 cursor-pointer hover:underline"
                                         onClick={() => setTrialDrilldown({ 
                                             title: `${dialer.name} - Quotes Sent Leads`, 
-                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent')) 
+                                            leads: dialer.perfQuotesLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent')) 
                                         })}
                                     >
                                         {dialer['Quotes Sent']}
@@ -3202,7 +3321,7 @@ export default function ReportsClientPage({
                                         className="text-right cursor-pointer hover:underline text-indigo-600 font-medium"
                                         onClick={() => setTrialDrilldown({ 
                                             title: `${dialer.name} - LocalMile Opportunity Leads`, 
-                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && l.status === 'LocalMile Opportunity') 
+                                            leads: dialer.perfLmOppLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && l.status === 'LocalMile Opportunity') 
                                         })}
                                     >
                                         {dialer['LM Opportunity']} <span className="text-xs text-muted-foreground font-normal">({dialer['LM Opportunity Rate'].toFixed(1)}%)</span>
@@ -3211,7 +3330,7 @@ export default function ReportsClientPage({
                                         className="text-right cursor-pointer hover:underline text-amber-600 font-medium"
                                         onClick={() => setTrialDrilldown({ 
                                             title: `${dialer.name} - LocalMile Pending Leads`, 
-                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && l.status === 'LocalMile Pending') 
+                                            leads: dialer.perfLmPendingLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && l.status === 'LocalMile Pending') 
                                         })}
                                     >
                                         {dialer['LM Pending']} <span className="text-xs text-muted-foreground font-normal">({dialer['LM Pending Rate'].toFixed(1)}%)</span>
@@ -3220,7 +3339,7 @@ export default function ReportsClientPage({
                                         className="text-right cursor-pointer hover:underline text-emerald-600 font-bold"
                                         onClick={() => setTrialDrilldown({ 
                                             title: `${dialer.name} - Trialing LocalMile Leads`, 
-                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && l.status === 'Trialing LocalMile') 
+                                            leads: dialer.perfTrialingLmLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && l.status === 'Trialing LocalMile') 
                                         })}
                                     >
                                         {dialer['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({dialer['Trialing LocalMile Rate'].toFixed(1)}%)</span>
@@ -4857,9 +4976,9 @@ export default function ReportsClientPage({
                     </div>
                     <Button variant="outline" size="sm" onClick={() => trialDrilldown && handleExportList(
                         trialDrilldown.leads,
-                        ['Company Name', 'Prospect+ ID', 'Status', 'Dialer', 'Franchisee', 'Date Entered'],
+                        ['Company Name', 'Prospect+ ID', 'Status', 'Dialer', 'Franchisee', getLeadDisplayDateLabel(trialDrilldownStatusFilter || trialDrilldown.title)],
                         trialDrilldown.title.toLowerCase().replace(/\s+/g, '_'),
-                        (l) => [l.companyName, l.prospectPlusId || l.id || 'N/A', l.status, l.dialerAssigned || 'N/A', l.franchisee || 'N/A', l.dateLeadEntered || 'N/A']
+                        (l) => [l.companyName, l.prospectPlusId || l.id || 'N/A', l.status, l.dialerAssigned || 'N/A', l.franchisee || 'N/A', safeFormatDate(getLeadDisplayDateValue(l))]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -4892,7 +5011,7 @@ export default function ReportsClientPage({
                                 <TableHead>Status</TableHead>
                                 <TableHead>Dialer</TableHead>
                                 <TableHead>Franchisee</TableHead>
-                                <TableHead>Date Entered</TableHead>
+                                <TableHead>{getLeadDisplayDateLabel(trialDrilldownStatusFilter || trialDrilldown?.title)}</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -4913,7 +5032,7 @@ export default function ReportsClientPage({
                                       <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
                                       <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
                                       <TableCell>{lead.franchisee || 'N/A'}</TableCell>
-                                      <TableCell>{lead.dateLeadEntered || 'N/A'}</TableCell>
+                                      <TableCell>{safeFormatDate(getLeadDisplayDateValue(lead))}</TableCell>
                                       <TableCell className="text-right">
                                           <Button variant="ghost" size="sm" asChild>
                                               <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
@@ -4951,9 +5070,9 @@ export default function ReportsClientPage({
                         } else if (incentiveDrillDown?.leads) {
                             handleExportList(
                                 incentiveDrillDown.leads,
-                                ['Company Name', 'Prospect+ ID', 'Customer Status', 'Dialer', 'Account Manager', 'Date Entered'],
+                                ['Company Name', 'Prospect+ ID', 'Customer Status', 'Dialer', 'Account Manager', getLeadDisplayDateLabel(incentiveStatusFilter || incentiveDrillDown.title)],
                                 'incentive_drilldown_leads',
-                                (l) => [l.companyName || l.contactName || 'N/A', l.prospectPlusId || l.id || 'N/A', l.customerStatus || 'N/A', l.dialerAssigned || 'N/A', l.accountManagerAssigned || 'N/A', l.dateLeadEntered || 'N/A']
+                                (l) => [l.companyName || l.contactName || 'N/A', l.prospectPlusId || l.id || 'N/A', l.customerStatus || 'N/A', l.dialerAssigned || 'N/A', l.accountManagerAssigned || 'N/A', safeFormatDate(getLeadDisplayDateValue(l))]
                             );
                         }
                     }}>
@@ -5067,7 +5186,7 @@ export default function ReportsClientPage({
                                     <TableHead>Status</TableHead>
                                     <TableHead>Dialer</TableHead>
                                     <TableHead>Account Manager</TableHead>
-                                    <TableHead>Date Entered</TableHead>
+                                    <TableHead>{getLeadDisplayDateLabel(incentiveStatusFilter || incentiveDrillDown?.title)}</TableHead>
                                     <TableHead className="text-right">Action</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -5090,7 +5209,7 @@ export default function ReportsClientPage({
                                           <TableCell><LeadStatusBadge status={lead.customerStatus || lead.status || 'New'} /></TableCell>
                                           <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
                                           <TableCell>{lead.accountManagerAssigned || 'N/A'}</TableCell>
-                                          <TableCell>{lead.dateLeadEntered || 'N/A'}</TableCell>
+                                          <TableCell>{safeFormatDate(getLeadDisplayDateValue(lead))}</TableCell>
                                           <TableCell className="text-right">
                                               <Button variant="ghost" size="sm" asChild>
                                                   <Link href={`/leads/${lead.id}`} target="_blank">

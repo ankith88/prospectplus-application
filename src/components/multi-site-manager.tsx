@@ -4,11 +4,12 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Address, Contact, Lead } from "@/lib/types";
 import { createChildSiteLead, updateLeadDetails, getSiblingLeads, getLeadFromFirebase, getCompanyFromFirebase, getLastInvoicesForCompanies } from "@/services/firebase";
-import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search, Receipt } from "lucide-react";
+import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search, Receipt, FileText } from "lucide-react";
 import { GoogleAddressInput } from "@/components/google-address-input";
 import { useToast } from "@/hooks/use-toast";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
@@ -49,6 +50,10 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
 
     // Form state for new location
+    const [customSiteName, setCustomSiteName] = useState("");
+    const [companyEmail, setCompanyEmail] = useState("");
+    const [companyPhone, setCompanyPhone] = useState("");
+    const [notes, setNotes] = useState("");
     const [street, setStreet] = useState("");
     const [city, setCity] = useState("");
     const [state, setState] = useState("");
@@ -56,8 +61,9 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     const [lat, setLat] = useState<number | undefined>(undefined);
     const [lng, setLng] = useState<number | undefined>(undefined);
     
-    // Form state for local manager
+    // Form state for local contact details
     const [managerName, setManagerName] = useState("");
+    const [managerTitle, setManagerTitle] = useState("");
     const [managerEmail, setManagerEmail] = useState("");
     const [managerPhone, setManagerPhone] = useState("");
 
@@ -357,7 +363,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
         }
 
         if (!managerName) {
-            toast({ title: "Validation Error", description: "Local site manager name is required.", variant: "destructive" });
+            toast({ title: "Validation Error", description: "Local site contact name is required.", variant: "destructive" });
             return;
         }
 
@@ -386,16 +392,22 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                 name: managerName,
                 email: managerEmail,
                 phone: managerPhone,
-                title: "Local Site Manager"
+                title: managerTitle.trim() || "Local Site Contact"
             };
+
+            const finalCompanyName = customSiteName.trim() || `${targetParentLead.companyName} - ${city.trim()}`;
 
             // Create child lead with franchisee mapping under the resolved parent lead ID
             const childLeadId = await createChildSiteLead(
                 targetParentId,
-                `${targetParentLead.companyName} - ${city}`,
+                finalCompanyName,
                 newAddress,
                 localManager,
-                contacts // pass all parent contacts so they are copied to child
+                contacts, // pass all parent contacts so they are copied to child
+                notes,
+                userProfile?.displayName || userProfile?.email || 'User',
+                companyEmail.trim(),
+                companyPhone.trim()
             );
 
             // Update parent lead with the new location
@@ -406,10 +418,14 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
 
             toast({
                 title: "Child Lead Created",
-                description: `Successfully created child lead for ${city} and assigned to respective franchisee.`,
+                description: `Successfully created child lead "${finalCompanyName}" for ${city} and assigned to respective franchisee.`,
             });
 
             // Reset form
+            setCustomSiteName("");
+            setCompanyEmail("");
+            setCompanyPhone("");
+            setNotes("");
             setStreet("");
             setCity("");
             setState("");
@@ -417,6 +433,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
             setLat(undefined);
             setLng(undefined);
             setManagerName("");
+            setManagerTitle("");
             setManagerEmail("");
             setManagerPhone("");
             
@@ -608,17 +625,60 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                 </Button>
                             </DialogTrigger>
                         )}
-                        <DialogContent className="max-w-md">
+                        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
-                                <DialogTitle>Add Multi-Site Location</DialogTitle>
+                                <DialogTitle className="flex items-center gap-2">
+                                    <Building className="h-5 w-5 text-primary" />
+                                    Add Multi-Site Location
+                                </DialogTitle>
                                 <DialogDescription>
-                                    This will automatically generate a child lead for this location, assign it to the correct local franchisee, and copy over the parent contacts.
+                                    Generate a child lead for this location, assign it to the local franchisee, and copy parent contacts.
                                 </DialogDescription>
                             </DialogHeader>
+
+                            {/* Parent Customer Connection Notice */}
+                            <div className="p-3 bg-amber-50/80 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/50 rounded-lg text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+                                <Building className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="font-semibold text-amber-950 dark:text-amber-100">
+                                        Parent Customer: {(parentLead || lead).companyName}
+                                    </p>
+                                    <p className="text-amber-800 dark:text-amber-300 mt-0.5">
+                                        This multi-site location will automatically be linked under <strong>{(parentLead || lead).companyName}</strong> as its parent customer.
+                                    </p>
+                                </div>
+                            </div>
                             
-                            <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                    <h4 className="font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Site Address</h4>
+                            <div className="space-y-4 py-2 text-sm">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="custom-site-name" className="text-xs font-semibold">
+                                        Child Site / Company Name Created *
+                                    </Label>
+                                    <Input
+                                        id="custom-site-name"
+                                        placeholder={`e.g. ${(parentLead || lead).companyName} - ${city || 'Suburb'}`}
+                                        value={customSiteName}
+                                        onChange={(e) => setCustomSiteName(e.target.value)}
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Company Name Created: <strong className="text-foreground">{customSiteName.trim() || `${(parentLead || lead).companyName} - ${city.trim() || '[Suburb]'}`}</strong>
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2 border-t pt-3">
+                                    <h4 className="font-semibold flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                                        <Building className="w-4 h-4 text-primary" /> Company Contact Info (Optional)
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Input placeholder="Company Email (optional)" type="email" value={companyEmail} onChange={e => setCompanyEmail(e.target.value)} />
+                                        <Input placeholder="Company Phone (optional)" value={companyPhone} onChange={e => setCompanyPhone(e.target.value)} />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 border-t pt-3">
+                                    <h4 className="font-semibold flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                                        <MapPin className="w-4 h-4 text-primary" /> Site Address *
+                                    </h4>
                                     <div className="grid grid-cols-1 gap-2">
                                         <GoogleAddressInput
                                             label=""
@@ -626,34 +686,64 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                             value={street}
                                             onChange={(val) => setStreet(val)}
                                             onAddressSelect={(parsedAddress) => {
-                                                setStreet(parsedAddress.street || parsedAddress.address1 || "");
-                                                setCity(parsedAddress.city || "");
+                                                const streetVal = parsedAddress.street || parsedAddress.address1 || "";
+                                                const cityVal = parsedAddress.city || "";
+                                                setStreet(streetVal);
+                                                setCity(cityVal);
                                                 setState(parsedAddress.state || "");
                                                 setZip(parsedAddress.zip || "");
                                                 setLat(parsedAddress.lat);
                                                 setLng(parsedAddress.lng);
+                                                if (cityVal && !customSiteName) {
+                                                    setCustomSiteName(`${(parentLead || lead).companyName} - ${cityVal}`);
+                                                }
                                             }}
                                             showSelectedBadge={false}
                                         />
                                         <div className="grid grid-cols-2 gap-2">
-                                            <Input placeholder="Suburb / City" value={city} onChange={e => setCity(e.target.value)} />
+                                            <Input placeholder="Suburb / City" value={city} onChange={e => {
+                                                const cityVal = e.target.value;
+                                                setCity(cityVal);
+                                                if (cityVal && !customSiteName) {
+                                                    setCustomSiteName(`${(parentLead || lead).companyName} - ${cityVal}`);
+                                                }
+                                            }} />
                                             <Input placeholder="State" value={state} onChange={e => setState(e.target.value)} />
                                         </div>
                                         <Input placeholder="Postcode" value={zip} onChange={e => setZip(e.target.value)} />
                                     </div>
                                 </div>
                                 
-                                <div className="space-y-2 pt-4 border-t">
-                                    <h4 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Local Site Manager</h4>
+                                <div className="space-y-2 pt-3 border-t">
+                                    <h4 className="font-semibold flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                                        <Users className="w-4 h-4 text-primary" /> Local Site Contact Details
+                                    </h4>
                                     <div className="grid grid-cols-1 gap-2">
-                                        <Input placeholder="Manager Name" value={managerName} onChange={e => setManagerName(e.target.value)} />
-                                        <Input placeholder="Email (optional)" type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} />
-                                        <Input placeholder="Phone (optional)" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} />
+                                        <Input placeholder="Contact Name *" value={managerName} onChange={e => setManagerName(e.target.value)} />
+                                        <Input placeholder="Job Title (optional)" value={managerTitle} onChange={e => setManagerTitle(e.target.value)} />
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Input placeholder="Email (optional)" type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} />
+                                            <Input placeholder="Phone (optional)" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} />
+                                        </div>
                                     </div>
+                                </div>
+
+                                <div className="space-y-1.5 pt-3 border-t">
+                                    <Label htmlFor="location-notes" className="flex items-center gap-1 text-xs font-semibold">
+                                        <FileText className="h-3.5 w-3.5" /> Notes / Special Instructions (Optional)
+                                    </Label>
+                                    <Textarea
+                                        id="location-notes"
+                                        placeholder="Add notes or specific requirements for this site location..."
+                                        value={notes}
+                                        onChange={(e) => setNotes(e.target.value)}
+                                        rows={3}
+                                        className="text-xs resize-none"
+                                    />
                                 </div>
                             </div>
                             
-                            <div className="flex justify-end gap-2">
+                            <div className="flex justify-end gap-2 border-t pt-3">
                                 <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
                                 <Button onClick={handleAddLocation} disabled={isCreating}>
                                     {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

@@ -110,8 +110,8 @@ export async function POST(req: NextRequest) {
     const childLeadData: any = {
       // Start with copied parent lead data
       websiteUrl: parentLeadData.websiteUrl || '',
-      customerPhone: localManager?.phone || parentLeadData.customerPhone || '',
-      customerServiceEmail: localManager?.email || parentLeadData.customerServiceEmail || '',
+      customerPhone: body.customerPhone || body.companyPhone || localManager?.phone || parentLeadData.customerPhone || '',
+      customerServiceEmail: body.customerServiceEmail || body.companyEmail || localManager?.email || parentLeadData.customerServiceEmail || '',
       abn: parentLeadData.abn || '',
       industryCategory: parentLeadData.industryCategory || '',
       campaign: 'Multi-Site Child',

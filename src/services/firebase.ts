@@ -261,6 +261,11 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           services: data.services || [],
           lastProspected: data.lastProspected,
           dateLeadEntered: data.dateLeadEntered,
+          dateRegistrationSent: data.dateRegistrationSent,
+          registrationSentAt: data.registrationSentAt,
+          localMileRegistrationSentAt: data.localMileRegistrationSentAt,
+          dateLocalmileAccepted: data.dateLocalmileAccepted,
+          localMileAcceptedAt: data.localMileAcceptedAt,
           customerSource: data.customerSource || data.source || data.leadSource,
           visitNoteID: data.visitNoteID,
           cancellationTheme: data.cancellationTheme,
@@ -423,6 +428,11 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           services: data.services || [],
           lastProspected: data.lastProspected,
           dateLeadEntered: data.dateLeadEntered,
+          dateRegistrationSent: data.dateRegistrationSent,
+          registrationSentAt: data.registrationSentAt,
+          localMileRegistrationSentAt: data.localMileRegistrationSentAt,
+          dateLocalmileAccepted: data.dateLocalmileAccepted,
+          localMileAcceptedAt: data.localMileAcceptedAt,
           customerSource: data.customerSource || data.source || data.leadSource,
           visitNoteID: data.visitNoteID,
           cancellationTheme: data.cancellationTheme,
@@ -602,6 +612,11 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           services: data.services || [],
           lastProspected: data.lastProspected,
           dateLeadEntered: data.dateLeadEntered,
+          dateRegistrationSent: data.dateRegistrationSent,
+          registrationSentAt: data.registrationSentAt,
+          localMileRegistrationSentAt: data.localMileRegistrationSentAt,
+          dateLocalmileAccepted: data.dateLocalmileAccepted,
+          localMileAcceptedAt: data.localMileAcceptedAt,
           customerSource: data.customerSource || data.source || data.leadSource,
           visitNoteID: data.visitNoteID,
           netsuiteLeadStatus: data.netsuiteLeadStatus,
@@ -740,6 +755,11 @@ function subscribeLeadsFromFirebase(
           services: data.services || [],
           lastProspected: data.lastProspected,
           dateLeadEntered: data.dateLeadEntered,
+          dateRegistrationSent: data.dateRegistrationSent,
+          registrationSentAt: data.registrationSentAt,
+          localMileRegistrationSentAt: data.localMileRegistrationSentAt,
+          dateLocalmileAccepted: data.dateLocalmileAccepted,
+          localMileAcceptedAt: data.localMileAcceptedAt,
           customerSource: data.customerSource || data.source,
           visitNoteID: data.visitNoteID,
           netsuiteLeadStatus: data.netsuiteLeadStatus,
@@ -841,6 +861,11 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     services: data.services || [],
                     lastProspected: data.lastProspected,
                     dateLeadEntered: data.dateLeadEntered,
+                    dateRegistrationSent: data.dateRegistrationSent,
+                    registrationSentAt: data.registrationSentAt,
+                    localMileRegistrationSentAt: data.localMileRegistrationSentAt,
+                    dateLocalmileAccepted: data.dateLocalmileAccepted,
+                    localMileAcceptedAt: data.localMileAcceptedAt,
                     customerSource: data.customerSource || data.source || data.leadSource,
                     visitNoteID: data.visitNoteID,
                     netsuiteLeadStatus: data.netsuiteLeadStatus,
@@ -911,6 +936,11 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                 services: data.services || [],
                 lastProspected: data.lastProspected,
                 dateLeadEntered: data.dateLeadEntered,
+                dateRegistrationSent: data.dateRegistrationSent,
+                registrationSentAt: data.registrationSentAt,
+                localMileRegistrationSentAt: data.localMileRegistrationSentAt,
+                dateLocalmileAccepted: data.dateLocalmileAccepted,
+                localMileAcceptedAt: data.localMileAcceptedAt,
                 customerSource: data.customerSource || data.source,
                 visitNoteID: data.visitNoteID,
                 bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
@@ -972,6 +1002,11 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 activity: [],
                 lastProspected: data.lastProspected,
                 dateLeadEntered: data.dateLeadEntered,
+                dateRegistrationSent: data.dateRegistrationSent,
+                registrationSentAt: data.registrationSentAt,
+                localMileRegistrationSentAt: data.localMileRegistrationSentAt,
+                dateLocalmileAccepted: data.dateLocalmileAccepted,
+                localMileAcceptedAt: data.localMileAcceptedAt,
                 customerSource: data.customerSource || data.source,
                 visitNoteID: data.visitNoteID,
                 netsuiteLeadStatus: data.netsuiteLeadStatus,
@@ -1737,9 +1772,15 @@ async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLea
             dataToSave.signedUpAt = now;
         } else if (['Trialing ShipMate', 'Trialing LocalMile', 'LocalMile Opportunity', 'Free Trial'].includes(statusVal)) {
             dataToSave.trialStartedAt = now;
+            if (statusVal === 'LocalMile Opportunity') {
+                if (!dataToSave.dateRegistrationSent) dataToSave.dateRegistrationSent = now;
+                if (!dataToSave.registrationSentAt) dataToSave.registrationSentAt = now;
+            }
         } else if (statusVal === 'LocalMile Pending') {
             dataToSave.bucket = 'customer_success';
             dataToSave.customerSuccessAssigned = 'Belinda Urbani';
+            if (!dataToSave.dateLocalmileAccepted) dataToSave.dateLocalmileAccepted = now;
+            if (!dataToSave.localMileAcceptedAt) dataToSave.localMileAcceptedAt = now;
         }
     }
     if (newLeadData.dialerAssigned !== undefined && newLeadData.dialerAssigned !== (oldLead as any).dialerAssigned) {
@@ -2772,9 +2813,9 @@ async function findFranchiseeForAddress(city: string, state: string, zip: string
         const leadState = state?.toLowerCase().trim();
         const leadZip = zip?.toLowerCase().trim();
         
-        if (!leadCity || !leadState || !leadZip) return undefined;
+        if (!leadCity || !leadState || !leadZip) return 'MailPlus Pty Ltd';
 
-        const match = franchisees.find(f => {
+        const matches = franchisees.filter(f => {
             if (!f.territoryJson) return false;
             return f.territoryJson.some((t: any) => 
                 t.suburbs?.toLowerCase().trim() === leadCity &&
@@ -2782,14 +2823,28 @@ async function findFranchiseeForAddress(city: string, state: string, zip: string
                 t.post_code?.toLowerCase().trim() === leadZip
             );
         });
-        return match?.name;
+
+        if (matches.length === 1) {
+            return matches[0].name || 'MailPlus Pty Ltd';
+        }
+        return 'MailPlus Pty Ltd';
     } catch (error) {
         console.error("Failed to find franchisee for address:", error);
-        return undefined;
+        return 'MailPlus Pty Ltd';
     }
 }
 
-async function createChildSiteLead(parentLeadId: string, companyName: string, siteAddress: Address, localManager: Contact, copiedContacts: Contact[]): Promise<string> {
+async function createChildSiteLead(
+    parentLeadId: string,
+    companyName: string,
+    siteAddress: Address,
+    localManager: Contact,
+    copiedContacts: Contact[],
+    notes?: string,
+    authorName?: string,
+    companyEmail?: string,
+    companyPhone?: string
+): Promise<string> {
     // 1. Find Franchisee
     const franchiseeName = await findFranchiseeForAddress(siteAddress.city, siteAddress.state, siteAddress.zip);
     
@@ -2816,12 +2871,15 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
         console.warn("Could not fetch Account Manager user doc in createChildSiteLead", e);
     }
 
+    const resolvedCustomerPhone = companyPhone || localManager.phone || parentLeadData.customerPhone || '';
+    const resolvedCustomerEmail = companyEmail || localManager.email || parentLeadData.customerServiceEmail || '';
+
     // 3. Push to NetSuite (NetSuite will create the lead in Firestore)
     const netSuitePayload = {
         companyName: companyName,
         websiteUrl: parentLeadData.websiteUrl || '',
-        customerPhone: localManager.phone || parentLeadData.customerPhone || '',
-        customerServiceEmail: localManager.email || parentLeadData.customerServiceEmail || '',
+        customerPhone: resolvedCustomerPhone,
+        customerServiceEmail: resolvedCustomerEmail,
         abn: parentLeadData.abn || '',
         industryCategory: parentLeadData.industryCategory || '',
         campaign: parentLeadData.campaign || 'Multi-Site Child',
@@ -2829,7 +2887,7 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
         contact: {
             firstName: localManager.name?.split(' ')[0] || '',
             lastName: localManager.name?.split(' ').slice(1).join(' ') || '',
-            title: localManager.title || 'Local Site Manager',
+            title: localManager.title || 'Local Site Contact',
             email: localManager.email || '',
             phone: localManager.phone || ''
         },
@@ -2858,7 +2916,9 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
         accountManagerUid: MULTISITE_ACCOUNT_MANAGER_UID,
         assignedTo: MULTISITE_ACCOUNT_MANAGER_UID,
         accountManagerAssigned: targetAmName,
-        salesRepAssigned: targetAmName
+        salesRepAssigned: targetAmName,
+        customerServiceEmail: resolvedCustomerEmail,
+        customerPhone: resolvedCustomerPhone
     };
 
     if (siteAddress.lat !== undefined && siteAddress.lat !== null) {
@@ -2896,8 +2956,21 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
       type: 'Update',
       date: new Date().toISOString(),
       notes: `Lead created as a multi-site child from parent lead ${parentLeadId}.`,
-      author: 'System'
+      author: authorName || 'System'
     }));
+
+    // 8. Log initial notes if provided
+    if (notes && notes.trim()) {
+        try {
+            await logNoteActivity(newLeadId, {
+                content: notes.trim(),
+                author: authorName || 'System',
+                date: new Date().toISOString()
+            });
+        } catch (e) {
+            console.warn("Failed to log initial notes on child site lead:", e);
+        }
+    }
 
     return newLeadId;
 }
@@ -3407,23 +3480,57 @@ async function getCompanyInsights(leadId: string): Promise<CompanyInsight[]> {
 
 async function dismissDuplicateWarning(leadId: string): Promise<void> {
   try {
+    let updated = false;
+
+    // Check leads collection
     const leadRef = doc(firestore, 'leads', leadId);
-    await updateDoc(leadRef, {
-      ignoreDuplicateWarning: true,
-      isDuplicate: false,
-      similarLeads: []
-    });
-    const activityRef = doc(firestore, 'leads', leadId, 'activity', `dismiss-dup-${Date.now()}`);
-    await setDoc(activityRef, prepareForFirestore({
-      type: 'Update',
-      notes: 'User marked record as Not a Duplicate (dismissed duplicate warning).',
-      date: new Date().toISOString()
-    }));
+    const leadSnap = await getDoc(leadRef);
+    if (leadSnap.exists()) {
+      await updateDoc(leadRef, {
+        ignoreDuplicateWarning: true,
+        isDuplicate: false,
+        similarLeads: []
+      });
+      const activityRef = doc(firestore, 'leads', leadId, 'activity', `dismiss-dup-${Date.now()}`);
+      await setDoc(activityRef, prepareForFirestore({
+        type: 'Update',
+        notes: 'User marked record as Not a Duplicate (dismissed duplicate warning).',
+        date: new Date().toISOString()
+      }));
+      updated = true;
+    }
+
+    // Check companies collection
+    const companyRef = doc(firestore, 'companies', leadId);
+    const companySnap = await getDoc(companyRef);
+    if (companySnap.exists()) {
+      await updateDoc(companyRef, {
+        ignoreDuplicateWarning: true,
+        isDuplicate: false,
+        similarLeads: []
+      });
+      const activityRef = doc(firestore, 'companies', leadId, 'activity', `dismiss-dup-${Date.now()}`);
+      await setDoc(activityRef, prepareForFirestore({
+        type: 'Update',
+        notes: 'User marked record as Not a Duplicate (dismissed duplicate warning).',
+        date: new Date().toISOString()
+      }));
+      updated = true;
+    }
+
+    if (!updated) {
+      await updateDoc(leadRef, {
+        ignoreDuplicateWarning: true,
+        isDuplicate: false,
+        similarLeads: []
+      });
+    }
   } catch (error) {
     console.error("Failed to dismiss duplicate warning:", error);
     throw error;
   }
 }
+
 
 async function updateFranchiseeCampaigns(franchiseeId: string, campaignPriorities: { campaign: string; priority: 'High' | 'Medium' | 'Low' }[]): Promise<void> {
   try {

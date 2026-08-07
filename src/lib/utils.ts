@@ -548,6 +548,46 @@ export function calculateBusinessHoursSydney(start: Date, end: Date): number {
   return totalMs / (1000 * 60 * 60);
 }
 
+export function getLeadDisplayDateValue(lead: any): string | undefined {
+  if (!lead) return undefined;
+  const status = typeof lead === 'string' ? lead : (lead.customerStatus || lead.status || '');
+  if (status === 'LocalMile Opportunity' || (typeof lead === 'string' && lead.includes('LocalMile Opportunity'))) {
+    return (
+      lead.dateRegistrationSent ||
+      lead.registrationSentAt ||
+      lead.localMileRegistrationSentAt ||
+      lead.localMileOpportunityAt ||
+      lead.trialStartedAt ||
+      lead.assignedToDialerAt ||
+      lead.dateLeadEntered
+    );
+  }
+  if (status === 'LocalMile Pending' || (typeof lead === 'string' && lead.includes('LocalMile Pending'))) {
+    return (
+      lead.localMileTermsAcceptedAt ||
+      lead.localMileTnCAcceptedAt ||
+      lead.dateLocalmileAccepted ||
+      lead.localMileAcceptedAt ||
+      lead.trialStartedAt ||
+      lead.dateLeadEntered
+    );
+  }
+  return typeof lead === 'string' ? undefined : lead.dateLeadEntered;
+}
+
+export function getLeadDisplayDateLabel(lead: any): string {
+  if (!lead) return 'Date Lead Entered';
+  const status = typeof lead === 'string' ? lead : (lead.customerStatus || lead.status || '');
+  if (status === 'LocalMile Opportunity' || status.includes('LocalMile Opportunity')) {
+    return 'Date Registration Sent';
+  }
+  if (status === 'LocalMile Pending' || status.includes('LocalMile Pending')) {
+    return 'Date LocalMile Accepted';
+  }
+  return 'Date Lead Entered';
+}
+
+
 
 
 

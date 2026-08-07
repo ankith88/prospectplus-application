@@ -5,6 +5,7 @@ import { doc, onSnapshot, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { UserRole } from '@/lib/types';
+import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 
 interface PermissionsContextType {
   roleAccessMatrix: Record<string, string[]>;
@@ -31,7 +32,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   newLead: ['Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager', 'Customer Service', 'Outbound Admin', 'Franchisee'],
   outboundLeads: ['user', 'Outbound Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Sales Manager'],
   inboundLeads: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'Franchisee'],
-  importLeads: ['Marketing Admin', 'Marketing Manager', 'Outbound Admin'],
+  importLeads: ['superadmin'],
   inReviewLeads: ['admin', 'superadmin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Sales Manager', 'Outbound Admin', 'user', 'Dialer', 'dialers', 'Account Managers', 'Account Manager'],
   unassignedLeads: ['Lead Gen Admin'],
   accountManagerPipeline: ['Sales Manager', 'Account Managers', 'Account Manager'],
@@ -87,8 +88,8 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
                 }
 
                 const currentImportLeads: string[] = currentFeatures.importLeads || DEFAULT_ROLE_ACCESS.importLeads;
-                if (!currentImportLeads.includes('Outbound Admin')) {
-                    currentFeatures.importLeads = Array.from(new Set([...currentImportLeads, 'Outbound Admin']));
+                if (currentImportLeads.some(r => r !== 'superadmin')) {
+                    currentFeatures.importLeads = ['superadmin'];
                     needsUpdate = true;
                 }
 
@@ -158,7 +159,14 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
   }, []);
 
   const canView = (feature: string): boolean => {
-    if (!userProfile?.activeRole) return false;
+    if (!userProfile) return false;
+
+    // Explicitly restrict importLeads to superadmins only
+    if (feature === 'importLeads') {
+      return Boolean(userProfile.uid && (SUPER_ADMIN_UIDS.includes(userProfile.uid) || userProfile.activeRole?.toLowerCase() === 'superadmin'));
+    }
+
+    if (!userProfile.activeRole) return false;
     
     // Explicitly restrict Franchisee role from reporting, field sales, visit notes, and capture visit
     if (userProfile.activeRole?.toLowerCase() === 'franchisee' && ['reporting', 'inboundReporting', 'fieldActivityReport', 'fieldSalesD2D', 'visitNotes', 'captureVisit'].includes(feature)) {
