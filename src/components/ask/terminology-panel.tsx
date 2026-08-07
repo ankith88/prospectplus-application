@@ -11,6 +11,10 @@ export const GLOSSARY = [
     items: [
       { term: "Lead", definition: "The central record tracking prospects from initial contact to won customers. (collection: leads)", field: "leads" },
       { term: "Company", definition: "Organisations linked to one or more leads. (collection: companies)", field: "companies" },
+      { term: "Invoice", definition: "Billing invoice records linked to accounts. (collection: invoices)", field: "invoices" },
+      { term: "Service", definition: "Active MailPlus service catalog offerings. (collection: services)", field: "services" },
+      { term: "Product", definition: "Parcel shipping product catalog items. (collection: products)", field: "products" },
+      { term: "Bucket History", definition: "Audit logs of pipeline bucket handoffs and movements. (collection: buckethistory)", field: "buckethistory" },
       { term: "User", definition: "A registered representative or staff member account. (collection: users)", field: "users" },
       { term: "Franchisee", definition: "MailPlus franchise operator with a designated territory. (collection: franchisees)", field: "franchisees" },
       { term: "Ticket", definition: "Customer Service tracking cases representing issues, enquiries, and followups. (collection: tickets)", field: "tickets" }
@@ -20,7 +24,16 @@ export const GLOSSARY = [
     category: "Pipeline",
     items: [
       { term: "Bucket", definition: "Top-level grouping: outbound, inbound, field_sales, account_manager, customer_success, nurture, marketing.", field: "bucket" },
-      { term: "Status", definition: "The exact pipeline stage. (e.g. New, Hot Lead, Qualified, Pre Qualified, Quote Sent, Won, Lost, etc.)", field: "customerStatus" }
+      { term: "Status", definition: "The exact pipeline stage. (e.g. New, Hot Lead, Qualified, Pre Qualified, Quote Sent, Won, Lost, etc.)", field: "customerStatus" },
+      { term: "Bucket History", definition: "Track when and who moved leads between pipeline buckets.", field: "oldBucket / newBucket / date" }
+    ]
+  },
+  {
+    category: "Invoices & Billing",
+    items: [
+      { term: "Invoice Date", definition: "Date the invoice was issued or generated.", field: "invoiceDate" },
+      { term: "Invoice Total", definition: "Dollar value of the issued invoice.", field: "invoiceTotal" },
+      { term: "Invoice Status", definition: "Payment status (e.g. Paid In Full, Pending, Overdue).", field: "invoiceStatus" }
     ]
   },
   {
@@ -56,6 +69,31 @@ export const EXAMPLES = [
       "Leads with a follow-up due this week",
       "Quotes sent this week that aren't won yet",
       "Show website leads this week"
+    ]
+  },
+  {
+    title: "Invoices & Billing",
+    questions: [
+      "Show invoices from last month",
+      "Count invoices by status",
+      "Total invoices issued this month",
+      "Invoices paid last month"
+    ]
+  },
+  {
+    title: "Services & Products Catalog",
+    questions: [
+      "Show active services",
+      "Show products with premium price plan",
+      "List all active parcel products"
+    ]
+  },
+  {
+    title: "Bucket & Lead History",
+    questions: [
+      "Show bucket history this week",
+      "Leads moved to account manager last month",
+      "Who moved leads yesterday"
     ]
   },
   {

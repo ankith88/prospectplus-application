@@ -32,24 +32,41 @@ interface EnterMultiSiteLeadDialogProps {
   onSuccess?: () => void;
 }
 
-const parsePlaceAddress = (place: google.maps.places.PlaceResult): Address => {
+const parsePlaceAddress = (place: any): Address => {
   const address: Partial<Address> = { country: 'Australia' };
-  const get = (type: string, useShort = false) => {
-    const comp = place.address_components?.find((c) => c.types.includes(type));
-    return (useShort ? comp?.short_name : comp?.long_name) || '';
-  };
-
-  const streetNumber = get('street_number');
-  const route = get('route');
-  const streetPart = `${streetNumber} ${route}`.trim();
   
-  address.street = streetPart || place.vicinity || '';
-  address.city = get('locality') || get('postal_town') || get('sublocality') || '';
-  address.state = get('administrative_area_level_1', true) || '';
-  address.zip = get('postal_code') || '';
-  if (place.geometry?.location) {
-    address.lat = place.geometry.location.lat();
-    address.lng = place.geometry.location.lng();
+  if (place.address_components) {
+    const get = (type: string, useShort = false) => {
+      const comp = place.address_components?.find((c: any) => c.types.includes(type));
+      return (useShort ? comp?.short_name : comp?.long_name) || '';
+    };
+
+    const streetNumber = get('street_number');
+    const route = get('route');
+    const streetPart = `${streetNumber} ${route}`.trim();
+    
+    address.street = streetPart || place.vicinity || place.formatted_address || '';
+    address.city = get('locality') || get('postal_town') || get('sublocality') || '';
+    address.state = get('administrative_area_level_1', true) || '';
+    address.zip = get('postal_code') || '';
+    if (place.geometry?.location) {
+      if (typeof place.geometry.location.lat === 'function') {
+        address.lat = place.geometry.location.lat();
+        address.lng = place.geometry.location.lng();
+      } else {
+        address.lat = Number(place.geometry.location.lat);
+        address.lng = Number(place.geometry.location.lng);
+      }
+    }
+  } else {
+    address.street = place.street || place.address || place.formattedAddress || place.vicinity || '';
+    address.city = place.suburb || place.city || '';
+    address.state = place.state || '';
+    address.zip = place.postcode || place.zip || '';
+    if (place.lat != null && place.lng != null) {
+      address.lat = Number(place.lat);
+      address.lng = Number(place.lng);
+    }
   }
 
   return address as Address;

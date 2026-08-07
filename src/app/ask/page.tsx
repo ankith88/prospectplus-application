@@ -2,8 +2,8 @@
 
 import { useAuth } from '@/hooks/use-auth';
 import { AskClient } from './ask-client';
-import { Sparkles, Hammer } from 'lucide-react';
-import { Loader2 } from 'lucide-react';
+import { Sparkles, Hammer, Loader2 } from 'lucide-react';
+import { ALLOWED_ASK_UIDS } from '@/lib/constants';
 
 export default function AskPage() {
   const { user, loading } = useAuth();
@@ -16,9 +16,7 @@ export default function AskPage() {
     );
   }
 
-  const allowedUid = "ncyhwLtOG1W7TZ43PkYCcObeCAf2";
-
-  if (!user || user.uid !== allowedUid) {
+  if (!user || !ALLOWED_ASK_UIDS.includes(user.uid)) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[calc(100vh-65px)] bg-background text-foreground p-6">
         <div className="max-w-md w-full bg-white border border-border rounded-2xl p-8 shadow-sm text-center flex flex-col items-center gap-5">

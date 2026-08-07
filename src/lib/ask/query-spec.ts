@@ -3,7 +3,8 @@ import { z } from 'zod';
 export const ALLOWED_COLLECTIONS = [
   'leads', 'companies', 'users', 'franchisees', 'tickets', 'packages',
   'appointments', 'activity', 'tasks', 'visitnotes', 'contacts',
-  'cancellations', 'routes', 'scfs', 'campaigns', 'checkins'
+  'cancellations', 'routes', 'scfs', 'campaigns', 'checkins',
+  'invoices', 'services', 'products', 'buckethistory', 'leadhistory'
 ] as const;
 
 export const COLLECTION_FIELDS = {
@@ -71,6 +72,22 @@ export const COLLECTION_FIELDS = {
   ],
   checkins: [
     'leadId', 'userId', 'timestamp', 'eventType', 'companyName', 'repName'
+  ],
+  invoices: [
+    'invoiceDate', 'invoiceTotal', 'invoiceType', 'invoiceStatus', 'status', 'companyName',
+    'leadId', 'companyId', 'franchisee', 'documentId', 'invoiceDocumentID', 'syncedWithNetSuite'
+  ],
+  services: [
+    'name', 'code', 'isActive', 'rate', 'category', 'description', 'type'
+  ],
+  products: [
+    'name', 'code', 'pricePlan', 'deliverySpeed', 'isActive', 'rate', 'category', 'type'
+  ],
+  buckethistory: [
+    'oldBucket', 'newBucket', 'date', 'author', 'leadId', 'companyName', 'reason', 'franchisee'
+  ],
+  leadhistory: [
+    'oldBucket', 'newBucket', 'date', 'author', 'leadId', 'companyName', 'reason', 'franchisee'
   ]
 } as const;
 

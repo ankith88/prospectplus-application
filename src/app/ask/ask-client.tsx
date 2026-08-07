@@ -171,6 +171,27 @@ export function AskClient() {
             </Button>
           </div>
 
+          {/* Quick Starter Query Chips */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className="text-[11px] font-semibold text-slate-400 mr-1">Quick Starters:</span>
+            {[
+              { label: "🔥 Hot Leads", query: "Show my hot leads" },
+              { label: "🧾 Invoices Last Month", query: "Show invoices from last month" },
+              { label: "📦 Active Services", query: "Show active services" },
+              { label: "🏷️ Products Catalog", query: "Show products with premium price plan" },
+              { label: "🔄 Bucket History", query: "Show bucket history this week" },
+              { label: "📊 Leads by Status", query: "Count leads by status" }
+            ].map((chip, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSelectExample(chip.query)}
+                className="text-xs bg-slate-50 hover:bg-[#095c7b]/10 text-slate-700 hover:text-[#095c7b] border border-border px-2.5 py-1 rounded-full font-medium transition flex items-center gap-1 shadow-2xs"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
           {/* Listening Interim State */}
           {isListening && (
             <div className="text-xs text-rose-500 flex items-center gap-2 animate-pulse pl-1 font-semibold">

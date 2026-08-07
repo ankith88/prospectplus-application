@@ -182,11 +182,40 @@ export function ResultsView({ collection, intent, rows, columns, value, humanSum
 
   // Render Aggregate Grouped View
   if (intent === "aggregate" && typeof value === "object" && value !== null) {
+    const aggRows = Object.entries(value).map(([group, count]) => ({
+      Group: group,
+      Count: count
+    }));
+
+    const handleExportAggCSV = () => {
+      const csv = Papa.unparse(aggRows);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `${collection}_aggregate_report_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
     return (
       <div className="flex flex-col gap-4">
-        <div className="text-sm font-medium text-muted-foreground">{humanSummary}</div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="text-sm font-medium text-muted-foreground">{humanSummary}</div>
+          <Button
+            onClick={handleExportAggCSV}
+            size="sm"
+            className="bg-[#095c7b] hover:bg-[#07475f] text-white flex items-center gap-2 self-start"
+          >
+            <Download className="h-4 w-4" />
+            Export Report CSV
+          </Button>
+        </div>
         {renderBreakdown()}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        
+        {/* Stat Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {Object.entries(value).map(([key, val]: [string, any]) => (
             <Card key={key} className="bg-white border-border text-foreground">
               <CardHeader className="pb-2 border-b border-border/40">
@@ -197,6 +226,29 @@ export function ResultsView({ collection, intent, rows, columns, value, humanSum
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        {/* Aggregated Table */}
+        <div className="border border-border rounded-lg overflow-hidden bg-white mt-2">
+          <div className="bg-slate-50 px-4 py-2.5 border-b border-border font-semibold text-xs text-slate-700 uppercase tracking-wider">
+            Report Data Table
+          </div>
+          <Table>
+            <TableHeader className="bg-slate-50/50">
+              <TableRow>
+                <TableHead className="text-slate-700 font-semibold capitalize">{spec?.groupBy || 'Category'}</TableHead>
+                <TableHead className="text-slate-700 font-semibold text-right">Count / Volume</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {aggRows.map((row, idx) => (
+                <TableRow key={idx} className="border-border hover:bg-slate-50/50">
+                  <TableCell className="font-medium text-slate-800">{String(row.Group)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold text-[#095c7b]">{String(row.Count)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       </div>
     );
@@ -388,10 +440,50 @@ export function ResultsView({ collection, intent, rows, columns, value, humanSum
   }
 
   const priorityCols = [
-    "companyName", "status", "customerStatus", "bucket", "franchisee", "email", "activeRole", "displayName", "dateLeadEntered",
-    "ticketNumber", "trackingIdentifier", "connoteNumber", "customerCompany", "enquiryType", "priority", "assignee"
+    // Leads & Companies
+    "companyName", "name", "status", "customerStatus", "bucket", "franchisee", "email", "activeRole", "displayName", "dateLeadEntered",
+    // Tickets & Packages
+    "ticketNumber", "trackingIdentifier", "connoteNumber", "customerCompany", "enquiryType", "priority", "assignee",
+    // Invoices
+    "invoiceDate", "invoiceTotal", "invoiceType", "invoiceStatus", "documentId", "invoiceDocumentID",
+    // Services & Products
+    "code", "pricePlan", "deliverySpeed", "isActive", "rate", "category", "description", "type",
+    // Activities & Tasks & Cancellations & Bucket History
+    "oldBucket", "newBucket", "date", "author", "reason", "dueDate", "requestedDate", "cancellationDate", "cancellationReason", "totalDistance", "totalDuration", "scheduledDate"
   ];
-  const displayCols = columns.filter(c => priorityCols.includes(c) || c === "name").slice(0, 7);
+  
+  let displayCols = columns.filter(c => priorityCols.includes(c)).slice(0, 8);
+  if (displayCols.length === 0) {
+    displayCols = columns.filter(c => c !== "id").slice(0, 8);
+  }
+
+  const formatCellValue = (col: string, val: any) => {
+    if (val === undefined || val === null || val === "") return "-";
+    
+    // Currency formatting for totals and rates
+    if (col === "invoiceTotal" || (col === "rate" && typeof val === "number")) {
+      const num = Number(val);
+      if (!isNaN(num)) {
+        return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(num);
+      }
+    }
+
+    // Date formatting
+    if (col.toLowerCase().includes("date") || col.toLowerCase().includes("at")) {
+      if (typeof val === "string" && (val.includes("T") || val.includes("-"))) {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+      }
+    }
+
+    if (typeof val === "boolean") {
+      return val ? "Yes" : "No";
+    }
+
+    return String(val);
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -427,21 +519,21 @@ export function ResultsView({ collection, intent, rows, columns, value, humanSum
                 <TableRow key={row.id || i} className="border-border hover:bg-slate-50/50">
                   {displayCols.map((col) => {
                     const val = row[col];
-                    if (col === "status" || col === "customerStatus") {
+                    if (col === "status" || col === "customerStatus" || col === "invoiceStatus") {
                       return (
                         <TableCell key={col}>
                           <span
                             className="px-2 py-0.5 rounded text-xs font-semibold text-white"
                             style={{ backgroundColor: getStatusColor(val) }}
                           >
-                            {val}
+                            {val || "Standard"}
                           </span>
                         </TableCell>
                       );
                     }
                     return (
-                      <TableCell key={col} className="text-slate-600 max-w-[200px] truncate">
-                        {val === undefined || val === null ? "-" : String(val)}
+                      <TableCell key={col} className="text-slate-600 max-w-[220px] truncate">
+                        {formatCellValue(col, val)}
                       </TableCell>
                     );
                   })}

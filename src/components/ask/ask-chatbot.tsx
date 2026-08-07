@@ -25,7 +25,7 @@ export function AskChatbot() {
     {
       id: "welcome",
       sender: "bot",
-      text: "Hello! I am your Ask Prospect+ database assistant. Ask me anything about leads, companies, users, or franchisee territories."
+      text: "Hello! I am your Ask Prospect+ AI database assistant. Ask me about leads, invoices, services, products, bucket history transitions, tickets, or franchisee territories."
     }
   ]);
 

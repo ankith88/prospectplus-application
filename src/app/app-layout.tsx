@@ -167,7 +167,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       return 'search-ai';
     }
     if (path === '/leads/map') return 'field-logistics';
-    if (path.startsWith('/leads') || path.startsWith('/inbound-leads') || path.startsWith('/franchisee-leads') || path.startsWith('/admin/marketing/import-leads') || path.startsWith('/franchisee-lead-verification') || path.startsWith('/admin/in-review-leads') || path.startsWith('/admin/all-leads') || path.startsWith('/admin/unassigned-leads') || path.startsWith('/account-manager/pipeline') || path.startsWith('/multisites') || path.startsWith('/account-manager/multisites') || path.startsWith('/signed-customers') || path.startsWith('/lost-customers')) {
+    if (path.startsWith('/leads') || path.startsWith('/inbound-leads') || path.startsWith('/franchisee-leads') || path.startsWith('/admin/marketing/import-leads') || path.startsWith('/franchisee-lead-verification') || path.startsWith('/admin/in-review-leads') || path.startsWith('/admin/mass-link-customers') || path.startsWith('/admin/all-leads') || path.startsWith('/admin/unassigned-leads') || path.startsWith('/account-manager/pipeline') || path.startsWith('/multisites') || path.startsWith('/account-manager/multisites') || path.startsWith('/signed-customers') || path.startsWith('/lost-customers')) {
       return 'sales-crm';
     }
     if (path.startsWith('/customer-success') && !path.includes('/reporting')) {
@@ -295,6 +295,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/admin/marketing/import-leads': { label: 'Import Leads', category: 'Sales & CRM', icon: PlusCircle, href: '/admin/marketing/import-leads' },
     '/franchisee-lead-verification': { label: 'Franchisee Lead Review', category: 'Sales & CRM', icon: UserCheck, href: '/franchisee-lead-verification' },
     '/admin/in-review-leads': { label: 'In Review Leads', category: 'Sales & CRM', icon: ClipboardCheck, href: '/admin/in-review-leads' },
+    '/admin/mass-link-customers': { label: 'Mass Link Customers', category: 'Sales & CRM', icon: Network, href: '/admin/mass-link-customers' },
     '/admin/all-leads': { label: 'Master Leads Directory', category: 'Sales & CRM', icon: Layers, href: '/admin/all-leads' },
     '/admin/unassigned-leads': { label: 'Unassigned Leads', category: 'Sales & CRM', icon: ListTodo, href: '/admin/unassigned-leads' },
     '/leads/archive': { label: 'Archived Leads', category: 'Sales & CRM', icon: Archive, href: '/leads/archive' },
@@ -1242,6 +1243,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                               <Link href="/admin/in-review-leads">
                                 <ClipboardCheck />
                                 <span>In Review Leads</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {isSuperAdmin && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/mass-link-customers")} tooltip="Mass Link Customers">
+                              <Link href="/admin/mass-link-customers">
+                                <Network />
+                                <span>Mass Link Customers</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
@@ -2458,6 +2469,7 @@ const isCustomPath = (path: string) => {
 };
 
 const getPageNameFromPath = (path: string) => {
+  if (path === '/admin/mass-link-customers') return 'Mass Link Customers';
   if (path === '/admin/in-review-leads') return 'In Review Leads';
   if (path === '/leads/archive') return 'Archived Leads';
   if (path === '/leads/map') return 'Territory Map';

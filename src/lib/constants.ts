@@ -99,7 +99,8 @@ export const ALLOWED_ASK_UIDS = [
   'ncyhwLtOG1W7TZ43PkYCcObeCAf2',
   'xmvOICErk9WvpS8Psc9Geys2QQ62',
   'L3hjsZYldoVjVr8MAFRJt0bSGL12',
-  'a543AEr3TcaHyj4c1Gh0fJoQ6UB2'
+  'a543AEr3TcaHyj4c1Gh0fJoQ6UB2',
+  'jHLpIZ8r4tf0IJkuRQZXG8rUR333'
 ];
 
 export const GOOGLE_MAPS_LIBRARIES: ('places' | 'drawing' | 'geometry' | 'visualization')[] = [

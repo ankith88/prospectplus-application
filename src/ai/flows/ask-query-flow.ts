@@ -238,6 +238,64 @@ COLLECTIONS AND ALLOW-LISTED FIELDS:
     - companyName (string)
     - repName (string)
 
+17. invoices (invoices): Invoices and billing records subcollection across customers/companies.
+    Queryable fields:
+    - invoiceDate (string: ISO timestamp or date e.g. '2026-07-15')
+    - invoiceTotal (number)
+    - invoiceType (string: e.g. 'Standard', 'Credit Memo')
+    - invoiceStatus (string: 'Paid In Full' | 'Pending' | 'Overdue')
+    - status (string)
+    - companyName (string)
+    - leadId (string)
+    - companyId (string)
+    - franchisee (string)
+    - documentId (string)
+    - invoiceDocumentID (string)
+    - syncedWithNetSuite (boolean)
+
+18. services (services): Offerings and service catalog items.
+    Queryable fields:
+    - name (string)
+    - code (string)
+    - isActive (boolean)
+    - rate (number)
+    - category (string)
+    - description (string)
+    - type (string)
+
+19. products (products): Shipping and product catalog items.
+    Queryable fields:
+    - name (string)
+    - code (string)
+    - pricePlan (string)
+    - deliverySpeed (string: e.g. 'Premium' | 'Express')
+    - isActive (boolean)
+    - rate (number)
+    - category (string)
+    - type (string)
+
+20. buckethistory (buckethistory): Audit logs of lead pipeline bucket movements and handoffs across sales & AM teams.
+    Queryable fields:
+    - oldBucket (string: e.g. 'outbound', 'inbound', 'field_sales', 'nurture')
+    - newBucket (string: e.g. 'account_manager', 'customer_success', 'lpo_plus', 'multisite')
+    - date (string: ISO timestamp)
+    - author (string: representative name/email who moved the lead)
+    - leadId (string)
+    - companyName (string)
+    - reason (string)
+    - franchisee (string)
+
+21. leadhistory (leadhistory): Historical lead audit logs and bucket state transition history.
+    Queryable fields:
+    - oldBucket (string)
+    - newBucket (string)
+    - date (string: ISO timestamp)
+    - author (string)
+    - leadId (string)
+    - companyName (string)
+    - reason (string)
+    - franchisee (string)
+
 RULES & TERMINOLOGY:
 - Intent is "list" (retrieve matching records), "count" (count of records), or "aggregate" (grouping/summaries).
 - If the user asks to "group by", "summarize by", or "count by" a field (e.g. "count leads by status" or "group by status"), you MUST set the intent to "aggregate" and set "groupBy" to that field (e.g., "customerStatus").
@@ -257,6 +315,14 @@ RULES & TERMINOLOGY:
 - "standing order forms", "SCF contracts", or "SCFs" maps to the scfs collection.
 - "completed routes" or "field routes" maps to the routes collection.
 - "field checkins" or "site visits" maps to checkins or visitnotes.
+- Invoices & Billing Queries:
+  - When users ask about invoices from a timeframe (e.g. "invoices from last month", "invoices paid last month", "invoices issued this month"), map collection to "invoices" and set dateRange.field to "invoiceDate" with dateRange.from = "last_month" / "this_month".
+  - When users ask for invoice reports/summaries (e.g. "count of invoices by status", "invoices grouped by type"), map collection to "invoices", intent to "aggregate", and groupBy to "invoiceStatus" or "invoiceType".
+- Services & Products Queries:
+  - When users ask about services or active services, set collection to "services".
+  - When users ask about products, shipping products, or price plans, set collection to "products".
+- Bucket & Lead History Queries:
+  - When users ask about bucket changes, bucket history, lead transitions, handoffs, or who moved leads (e.g. "leads moved to account manager last month", "bucket transitions this week", "who moved leads yesterday"), map collection to "buckethistory" or "leadhistory", and set dateRange.field to "date".
 - When filtering dates (e.g. "this week", "last month", "yesterday", "today"), use the 'dateRange' field in the QuerySpec. Set dateRange.field to the relevant timestamp field:
   - For leads: dateLeadEntered (default), signedUpAt, lastContactedDate, followUpDate, quoteSentAt, or cancellationdate.
   - For packages: latest_scan_at.
@@ -265,6 +331,7 @@ RULES & TERMINOLOGY:
   - For activity: date.
   - For tasks: dueDate (default) or createdAt.
   - For visitnotes/checkins/routes/scfs/cancellations/campaigns: createdAt, timestamp, requestedDate, or sentAt.
+  - For invoices: invoiceDate.
   Set dateRange.from/dateRange.to to the relative range name (e.g. "this_week", "last_month", "today", "yesterday") so the query runner can resolve the exact boundaries.
 - "date entered", "date lead entered", or "entered date" maps to the field dateLeadEntered.
 - SAFETY RULE: Queries on the 'leads' collection must ALWAYS specify narrowing criteria (e.g. a date range like "this week", "last month", or a specific franchisee/operator, or an assigned AM/dialer/rep filter). If the user asks a broad question like "show all leads" or "list leads", explain to the user in a friendly way that they must narrow their query with a date range or filter.
