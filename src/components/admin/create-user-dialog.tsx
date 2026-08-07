@@ -37,7 +37,7 @@ const formSchema = z.object({
   lastName: z.string().min(1, 'Last name is required.'),
   email: z.string().email('A valid email is required.'),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
-  role: z.enum(['user', 'Outbound Admin', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Admin', 'Marketing Manager', 'Customer Success', 'Customer Service', 'Operations', 'Finance', 'Finanace Manager', 'Finance Manager', 'Data Admin']),
+  role: z.enum(['user', 'Outbound Admin', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Manager', 'Customer Success', 'Customer Service', 'Operations', 'Finance', 'Finanace Manager', 'Finance Manager', 'Data Admin']),
   phoneNumber: z.string().optional(),
   mobileNumber: z.string().optional(),
   aircallPhoneNumber: z.string().optional(),
@@ -321,7 +321,6 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                         <SelectItem value="Dashback">Dashback</SelectItem>
                         <SelectItem value="Sales Manager">Sales Manager</SelectItem>
                         <SelectItem value="Account Managers">Account Managers</SelectItem>
-                        <SelectItem value="Marketing Admin">Marketing Admin</SelectItem>
                         <SelectItem value="Marketing Manager">Marketing Manager</SelectItem>
                         <SelectItem value="Customer Success">Customer Success</SelectItem>
                         <SelectItem value="Customer Service">Customer Service</SelectItem>

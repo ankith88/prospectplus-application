@@ -123,7 +123,7 @@ export default function UnassignedCallsPage() {
   const [unassignedCalls, setUnassignedCalls] = useState<UnassignedCall[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers', 'Field Sales', 'Field Sales Admin'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers', 'Field Sales', 'Field Sales Admin'].includes(userProfile.activeRole);
 
   if (authLoading || loading) {
     return (

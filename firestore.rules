@@ -153,7 +153,7 @@ service cloud.firestore {
     match /marketing_templates/{templateId} {
       allow read, create: if isAuthenticated();
       allow update, delete: if isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Marketing Admin', 'Marketing Manager'] ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Marketing Manager'] ||
         (exists(resource.data.createdBy) && resource.data.createdBy == request.auth.uid) ||
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Sales Manager' && 
          exists(resource.data.createdByRole) && 
@@ -163,7 +163,7 @@ service cloud.firestore {
     match /marketing_sms_templates/{templateId} {
       allow read, create: if isAuthenticated();
       allow update, delete: if isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Marketing Admin', 'Marketing Manager'] ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Marketing Manager'] ||
         (exists(resource.data.createdBy) && resource.data.createdBy == request.auth.uid) ||
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Sales Manager' && 
          exists(resource.data.createdByRole) && 

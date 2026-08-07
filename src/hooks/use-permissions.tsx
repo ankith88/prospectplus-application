@@ -21,15 +21,15 @@ const PermissionsContext = createContext<PermissionsContextType>({
 
 // Default initial configuration based on requirements
 export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
-  executiveDashboard: ['Sales Manager', 'Marketing Manager'],
+  executiveDashboard: ['Sales Manager'],
   tickets: ['superadmin', 'Customer Service', 'Marketing Manager'],
-  marketingGroup: ['Marketing Admin', 'Marketing Manager', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
+  marketingGroup: ['Marketing Manager', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
   fieldSalesD2D: ['Field Sales', 'Field Sales Admin', 'Dashback'],
   captureVisit: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
   visitNotes: ['Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Dashback', 'Sales Manager'],
   routesCoverage: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
   teamSchedules: ['Field Sales Admin'],
-  newLead: ['Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager', 'Customer Service', 'Outbound Admin', 'Franchisee'],
+  newLead: ['Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager', 'Customer Service', 'Outbound Admin', 'Franchisee'],
   outboundLeads: ['user', 'Outbound Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Sales Manager'],
   inboundLeads: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'Franchisee'],
   importLeads: ['superadmin'],
@@ -38,15 +38,15 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   accountManagerPipeline: ['Sales Manager', 'Account Managers', 'Account Manager'],
   customerSuccessPipeline: ['Customer Success', 'Marketing Manager'],
   reporting: ['Field Sales', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager', 'user', 'Outbound Admin'],
-  fieldActivityReport: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback', 'Sales Manager'],
+  fieldActivityReport: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback', 'Sales Manager'],
   inboundReporting: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'Marketing Manager'],
   amReporting: ['Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
-  archivedLeads: ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'user', 'Outbound Admin'],
+  archivedLeads: ['admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'user', 'Outbound Admin'],
   deploymentHistory: ['Sales Manager', 'Field Sales Admin'],
-  signedCustomers: ['Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Franchisee', 'Account Managers', 'Account Manager', 'account managers', 'Customer Success', 'Sales Manager', 'Customer Service'],
+  signedCustomers: ['Marketing Manager', 'Lead Gen Admin', 'Franchisee', 'Account Managers', 'Account Manager', 'account managers', 'Customer Success', 'Sales Manager', 'Customer Service'],
   scans: ['superadmin', 'Customer Success', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager', 'Marketing Manager', 'Customer Service'],
-  historyAppointments: ['Marketing Admin', 'Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee
-  historyCallsTranscripts: ['Marketing Admin', 'Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee/Field Sales Admin
+  historyAppointments: ['Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee
+  historyCallsTranscripts: ['Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee/Field Sales Admin
   checkIns: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
   franchisees: ['Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success', 'customer success', 'customer_success', 'Customer Service', 'customer service', 'customer_service', 'Sales Manager'],
   territoryMap: ['superadmin', 'admin', 'Franchisee', 'franchisee', 'Executive', 'executive', 'Outbound Admin', 'outbound admin', 'Customer Service', 'customer service', 'customer_service', 'Customer Success', 'customer success', 'customer_success'],
@@ -173,8 +173,13 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
       return false;
     }
 
-    // Explicitly restrict Outbound Reporting from Marketing Manager, Marketing Admin, Lead Gen Admin, and Dashback
-    if (feature === 'reporting' && ['Marketing Manager', 'Marketing Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole)) {
+    // Explicitly restrict Outbound Reporting from Marketing Manager, Lead Gen Admin, and Dashback
+    if (feature === 'reporting' && ['Marketing Manager', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole)) {
+      return false;
+    }
+
+    // Explicitly restrict Executive Dashboard and Field Activity from Marketing Manager
+    if (['executiveDashboard', 'fieldActivityReport'].includes(feature) && ['Marketing Manager'].includes(userProfile.activeRole)) {
       return false;
     }
 

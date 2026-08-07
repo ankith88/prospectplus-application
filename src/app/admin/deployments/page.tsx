@@ -42,7 +42,7 @@ export default function DeploymentHistoryPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback'].includes(userProfile.activeRole);
 
   useEffect(() => {
     const fetchData = async () => {

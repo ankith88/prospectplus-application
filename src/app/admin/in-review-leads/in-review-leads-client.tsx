@@ -356,7 +356,7 @@ export function InReviewLeadsClient() {
           return allRoles.some(r => ['Customer Success'].includes(r))
         case 'nurture':
         case 'marketing':
-          return allRoles.some(r => ['admin', 'Marketing Admin', 'Marketing Manager'].includes(r))
+          return allRoles.some(r => ['admin', 'Marketing Manager'].includes(r))
         default:
           return true
       }

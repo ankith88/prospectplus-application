@@ -108,7 +108,7 @@ export function UnassignedLeadsClient() {
           return roles.some(r => ['Customer Success'].includes(r))
         case 'nurture':
         case 'marketing':
-          return roles.some(r => ['admin', 'Marketing Admin', 'Marketing Manager'].includes(r))
+          return roles.some(r => ['admin', 'Marketing Manager'].includes(r))
         default:
           return true
       }

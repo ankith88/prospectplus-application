@@ -664,8 +664,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canAccessAsk = !!userProfile?.uid && ALLOWED_ASK_UIDS.includes(userProfile.uid);
   const activeRoleStr = userProfile?.activeRole as string;
   const canViewFranchiseProspects = isSuperAdmin || ['admin', 'super user', 'Operations', 'operations'].includes(activeRoleStr);
-  const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || activeRoleStr === 'Outbound Admin' || activeRoleStr === 'Lead Gen Admin';
-  const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Outbound Admin' || activeRoleStr === 'Lead Gen Admin';
+  const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
   const canViewInReviewLeads = Boolean(isSuperAdmin);
   const canViewMasterLeadsDirectory = Boolean(isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr?.toLowerCase() === 'admin' || activeRoleStr?.toLowerCase() === 'superadmin');
   const canViewLeadManagementGroup = canCreateLead || isFranchiseeRole || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads || canViewFranchiseeVerification || canViewInReviewLeads || canViewMasterLeadsDirectory;
@@ -675,7 +675,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     'super user',
     'Sales Manager',
     'Marketing Manager',
-    'Marketing Admin',
     'Customer Success',
     'Account Managers',
     'Account Manager',

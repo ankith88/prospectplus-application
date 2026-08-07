@@ -61,7 +61,6 @@ export default function HomePage() {
         case 'admin':
         case 'super user':
         case 'Sales Manager':
-        case 'Marketing Admin':
         case 'Marketing Manager':
           router.replace('/account-lookup');
           break;

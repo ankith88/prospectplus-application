@@ -97,8 +97,8 @@ export default function ProspectingAreasPage() {
 
   const { isLoaded, loadError } = useGoogleMapsScript();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
-  const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen Admin';
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
+  const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen Admin';
 
   const fetchProspectingAreas = useCallback(async () => {
     if (!userProfile) return;

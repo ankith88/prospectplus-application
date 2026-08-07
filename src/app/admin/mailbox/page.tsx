@@ -76,7 +76,6 @@ export default function MailboxPage() {
     'super user',
     'Sales Manager',
     'Marketing Manager',
-    'Marketing Admin',
     'Customer Success',
     'Account Managers',
     'Account Manager',

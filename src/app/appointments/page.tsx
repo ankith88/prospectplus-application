@@ -80,7 +80,7 @@ export default function AllAppointmentsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers', 'Outbound Admin'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers', 'Outbound Admin'].includes(userProfile.activeRole);
 
 
   const fetchAppointments = async () => {

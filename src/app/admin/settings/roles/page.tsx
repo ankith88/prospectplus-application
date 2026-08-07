@@ -16,7 +16,7 @@ import type { UserProfile } from '@/lib/types';
 
 const AVAILABLE_ROLES = [
   'user', 'Outbound Admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee',
-  'Sales Manager', 'Dashback', 'Account Managers', 'Account Manager', 'Marketing Admin',
+  'Sales Manager', 'Dashback', 'Account Managers', 'Account Manager',
   'Marketing Manager', 'Customer Success', 'Customer Service', 'super user',
   'Operations', 'Finance', 'Finanace Manager', 'Finance Manager', 'Data Admin'
 ];

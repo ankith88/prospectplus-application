@@ -46,7 +46,7 @@ export default function DoorToDoorReportingPage() {
     campaign: 'all',
   });
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
 
   const fetchData = async () => {
     setLoading(true);

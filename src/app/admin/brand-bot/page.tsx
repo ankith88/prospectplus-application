@@ -19,7 +19,7 @@ export default function BrandBotPage() {
   const { toast } = useToast();
   const { userProfile } = useAuth();
 
-  const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager';
+  const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Manager';
 
   const [brandProfile, setBrandProfile] = useState<Partial<BrandProfile>>({
     strategy: {
@@ -154,7 +154,7 @@ export default function BrandBotPage() {
     return (
       <div className="p-8 text-center">
         <h2 className="text-2xl font-bold text-destructive">Unauthorized</h2>
-        <p className="text-muted-foreground mt-2">You need Admin, Marketing Admin, or Marketing Manager privileges to view this page.</p>
+        <p className="text-muted-foreground mt-2">You need Admin or Marketing Manager privileges to view this page.</p>
       </div>
     );
   }

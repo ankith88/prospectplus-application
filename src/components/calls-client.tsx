@@ -223,7 +223,7 @@ export default function CallsClientPage() {
     });
     
     const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
-    const isAdminRole = ['admin', 'Outbound Admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile?.activeRole || '');
+    const isAdminRole = ['admin', 'Outbound Admin', 'Marketing Manager'].includes(userProfile?.activeRole || '');
     if (isAm && userProfile?.displayName) {
         callsToFilter = callsToFilter.filter(c => 
             c.author === userProfile.displayName || 
@@ -795,7 +795,7 @@ export default function CallsClientPage() {
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={pendingFilters.leadName} onChange={(e) => handlePendingFilterChange('leadName', e.target.value)} />
                     </div>
-                    {['admin', 'Outbound Admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile?.activeRole || '') && (
+                    {['admin', 'Outbound Admin', 'Marketing Manager'].includes(userProfile?.activeRole || '') && (
                        <>
                         <div className="space-y-2">
                             <Label htmlFor="user">User</Label>
@@ -1109,7 +1109,7 @@ export default function CallsClientPage() {
                 <CardTitle>Call History</CardTitle>
                 <Badge variant="secondary">{tabFilteredCalls.length} call(s)</Badge>
             </div>
-            {['admin', 'Outbound Admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile?.activeRole || '') && (
+            {['admin', 'Outbound Admin', 'Marketing Manager'].includes(userProfile?.activeRole || '') && (
                 <Button onClick={handleExport} variant="outline" size="sm" disabled={tabFilteredCalls.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export

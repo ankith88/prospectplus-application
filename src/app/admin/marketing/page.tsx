@@ -20,7 +20,7 @@ export default function MarketingCampaignsPage() {
   const router = useRouter();
 
   const isSettingsAllowed = user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
-  const isFullMarketingAdmin = (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Dashback'].includes(userProfile.activeRole)) || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const isFullMarketingAdmin = (userProfile?.activeRole && ['admin', 'Marketing Manager', 'Dashback'].includes(userProfile.activeRole)) || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
   const isAmOrSalesManager = (userProfile?.activeRole && ['Sales Manager', 'Account Managers', 'Account Manager', 'account managers'].includes(userProfile.activeRole));
   const isCustomerService = userProfile?.activeRole === 'Customer Service';
   const isAllowed = isFullMarketingAdmin || isAmOrSalesManager || isCustomerService;

@@ -67,7 +67,7 @@ export function TemplateBuilder() {
 
     const role = userProfile.activeRole || '';
     const isOwner = template.createdBy === user.uid;
-    const isFullAdmin = ['admin', 'Marketing Admin', 'Marketing Manager'].includes(role) || user.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+    const isFullAdmin = ['admin', 'Marketing Manager'].includes(role) || user.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
     
     // Admins and template owner can always edit
     if (isFullAdmin || isOwner) return true;

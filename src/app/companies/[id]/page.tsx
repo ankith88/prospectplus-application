@@ -18,7 +18,7 @@ export default function CompanyProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const hasAccess = canView('signedCustomers') || (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Lead Gen', 'user', 'Dashback'].includes(userProfile.activeRole));
+  const hasAccess = canView('signedCustomers') || (userProfile?.activeRole && ['admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Lead Gen', 'user', 'Dashback'].includes(userProfile.activeRole));
 
   useEffect(() => {
     const { id } = params;

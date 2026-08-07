@@ -12,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader } from '@/components/ui/loader';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -28,11 +27,9 @@ import {
   Search,
   Sparkles,
   Bot,
-  Filter,
   RefreshCw,
   Phone,
   Mail,
-  ShieldCheck,
 } from 'lucide-react';
 
 export interface DiscoveredLocation {
@@ -80,28 +77,58 @@ export function DiscoverMultiSitesDialog({
     (
       loc: { name: string; formattedAddress?: string; suburb?: string; state?: string; postcode?: string; street?: string; lat?: number; lng?: number }
     ): { status: 'Signed Customer' | 'Lead' | 'Not in System'; existingRecord?: MapLead } => {
-      const locNameClean = loc.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const parentCoreName = (parentCompany?.companyName || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .replace(/limited|pty|ltd|inc|group|australia/g, '')
+        .trim();
+      
+      const locNameClean = loc.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .replace(/limited|pty|ltd|inc|group|australia/g, '')
+        .trim();
+      
       const locSuburb = (loc.suburb || '').trim().toLowerCase();
       const locPostcode = (loc.postcode || '').trim().toLowerCase();
       const locStreet = (loc.street || '').trim().toLowerCase();
       const locFullAddr = (loc.formattedAddress || '').trim().toLowerCase();
 
       const matchedRecord = allSystemRecords.find((rec) => {
+        // Must either be linked to parent company OR match parent/location company name
+        const isParentOrChild = rec.id === parentCompany?.id || (rec as any).parentLeadId === parentCompany?.id || (rec as any).parentId === parentCompany?.id;
+        const recNameClean = (rec.companyName || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '')
+          .replace(/limited|pty|ltd|inc|group|australia/g, '')
+          .trim();
+
+        // 1. Strict Name Guard: If not linked directly, the company name MUST match
+        const isNameMatch =
+          isParentOrChild ||
+          (parentCoreName.length >= 3 && recNameClean.includes(parentCoreName)) ||
+          (parentCoreName.length >= 3 && parentCoreName.includes(recNameClean)) ||
+          (locNameClean.length >= 3 && recNameClean.includes(locNameClean)) ||
+          (locNameClean.length >= 3 && locNameClean.includes(recNameClean));
+
+        if (!isNameMatch) {
+          return false;
+        }
+
         const recAddress = rec.address as Address | undefined;
         const recCity = ((recAddress?.city || (rec as any).city || '') as string).trim().toLowerCase();
         const recZip = ((recAddress?.zip || (rec as any).zip || '') as string).trim().toLowerCase();
         const recStreet = ((recAddress?.street || (rec as any).street || '') as string).trim().toLowerCase();
-        const recNameClean = (rec.companyName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-        // 1. Lat/Lng proximity match if available
+        // 2. Lat/Lng proximity match if available (within 300 meters)
         if (loc.lat != null && loc.lng != null && rec.latitude != null && rec.longitude != null && window.google?.maps?.geometry) {
           const p1 = new window.google.maps.LatLng(loc.lat, loc.lng);
           const p2 = new window.google.maps.LatLng(rec.latitude, rec.longitude);
           const dist = window.google.maps.geometry.spherical.computeDistanceBetween(p1, p2);
-          if (dist <= 250) return true; // within 250 meters
+          if (dist <= 300) return true;
         }
 
-        // 2. Exact Postcode AND (Suburb OR Street) match
+        // 3. Exact Postcode AND (Suburb OR Street) match
         if (locPostcode && recZip && locPostcode === recZip) {
           if (locSuburb && recCity && (locSuburb.includes(recCity) || recCity.includes(locSuburb))) {
             return true;
@@ -111,15 +138,17 @@ export function DiscoverMultiSitesDialog({
           }
         }
 
-        // 3. Suburb match AND company name similarity match
+        // 4. Suburb match AND Street match
         if (locSuburb && recCity && (locSuburb.includes(recCity) || recCity.includes(locSuburb))) {
-          const parentCoreName = (parentCompany?.companyName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (parentCoreName && (recNameClean.includes(parentCoreName) || parentCoreName.includes(recNameClean))) {
+          if (locStreet && recStreet && (locStreet.includes(recStreet) || recStreet.includes(locStreet))) {
+            return true;
+          }
+          if (isParentOrChild) {
             return true;
           }
         }
 
-        // 4. Full Address inclusion match
+        // 5. Full Address inclusion match
         if (locFullAddr && recStreet && recCity && locFullAddr.includes(recStreet) && locFullAddr.includes(recCity)) {
           return true;
         }
@@ -296,12 +325,10 @@ export function DiscoverMultiSitesDialog({
 
   const filteredLocations = useMemo(() => {
     return discoveredLocations.filter((item) => {
-      // Tab filter
       if (activeTab === 'new' && item.status !== 'Not in System') return false;
       if (activeTab === 'lead' && item.status !== 'Lead') return false;
       if (activeTab === 'signed' && item.status !== 'Signed Customer') return false;
 
-      // Text search filter
       if (searchFilter.trim()) {
         const q = searchFilter.toLowerCase();
         const nameMatch = item.name.toLowerCase().includes(q);
@@ -323,8 +350,8 @@ export function DiscoverMultiSitesDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl w-[95vw] md:w-full max-h-[92vh] flex flex-col">
-        <DialogHeader className="shrink-0">
+      <DialogContent className="max-w-4xl w-[95vw] md:w-full h-[88vh] max-h-[88vh] flex flex-col p-6 overflow-hidden">
+        <DialogHeader className="shrink-0 pb-2">
           <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-900">
             <Building className="h-5 w-5 text-primary" />
             Discover Multi-Sites for {parentCompany.companyName}
@@ -335,7 +362,7 @@ export function DiscoverMultiSitesDialog({
         </DialogHeader>
 
         {searching ? (
-          <div className="flex flex-col items-center justify-center py-20 space-y-4 my-auto">
+          <div className="flex-1 flex flex-col items-center justify-center space-y-4 my-auto">
             <Loader />
             <div className="text-center space-y-1">
               <p className="text-sm font-semibold text-slate-800 animate-pulse flex items-center justify-center gap-2">
@@ -348,93 +375,96 @@ export function DiscoverMultiSitesDialog({
             </div>
           </div>
         ) : (
-          <div className="space-y-4 py-2 overflow-hidden flex flex-col flex-1">
-            {/* Scan Summary Banner */}
-            {scanSummary && (
-              <div className="bg-purple-50/80 border border-purple-200 text-purple-900 px-3.5 py-2.5 rounded-lg text-xs flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-purple-600 shrink-0" />
-                <span><strong>AI Insights:</strong> {scanSummary}</span>
-              </div>
-            )}
+          <div className="flex-1 flex flex-col min-h-0 space-y-4 overflow-hidden pt-1">
+            {/* Top controls box (shrink-0) */}
+            <div className="shrink-0 space-y-3">
+              {/* Scan Summary Banner */}
+              {scanSummary && (
+                <div className="bg-purple-50/80 border border-purple-200 text-purple-900 px-3.5 py-2 rounded-lg text-xs flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-purple-600 shrink-0" />
+                  <span><strong>AI Insights:</strong> {scanSummary}</span>
+                </div>
+              )}
 
-            {/* Metric Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-muted/40 p-3.5 rounded-xl border shrink-0">
-              <div className="space-y-0.5">
-                <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Total Sites</span>
-                <p className="text-2xl font-bold text-slate-900">{discoveredLocations.length}</p>
+              {/* Metric Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-muted/40 p-3 rounded-xl border">
+                <div className="space-y-0.5">
+                  <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Total Sites</span>
+                  <p className="text-2xl font-bold text-slate-900">{discoveredLocations.length}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[11px] text-emerald-600 font-medium uppercase tracking-wider flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> Signed Customers
+                  </span>
+                  <p className="text-2xl font-bold text-emerald-700">{countSigned}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[11px] text-blue-600 font-medium uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" /> Leads in Pipeline
+                  </span>
+                  <p className="text-2xl font-bold text-blue-700">{countLeads}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[11px] text-purple-600 font-medium uppercase tracking-wider flex items-center gap-1">
+                    <PlusCircle className="h-3 w-3" /> New Sites (Not in System)
+                  </span>
+                  <p className="text-2xl font-bold text-purple-700">{countNew}</p>
+                </div>
               </div>
-              <div className="space-y-0.5">
-                <span className="text-[11px] text-emerald-600 font-medium uppercase tracking-wider flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" /> Signed Customers
-                </span>
-                <p className="text-2xl font-bold text-emerald-700">{countSigned}</p>
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-[11px] text-blue-600 font-medium uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" /> Leads in Pipeline
-                </span>
-                <p className="text-2xl font-bold text-blue-700">{countLeads}</p>
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-[11px] text-purple-600 font-medium uppercase tracking-wider flex items-center gap-1">
-                  <PlusCircle className="h-3 w-3" /> New Sites (Not in System)
-                </span>
-                <p className="text-2xl font-bold text-purple-700">{countNew}</p>
+
+              {/* Filter Tabs & Search Bar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg">
+                  <Button
+                    size="sm"
+                    variant={activeTab === 'all' ? 'secondary' : 'ghost'}
+                    className="text-xs h-7 px-3 font-medium"
+                    onClick={() => setActiveTab('all')}
+                  >
+                    All Sites ({discoveredLocations.length})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={activeTab === 'new' ? 'secondary' : 'ghost'}
+                    className="text-xs h-7 px-3 font-medium text-purple-700 hover:text-purple-800"
+                    onClick={() => setActiveTab('new')}
+                  >
+                    Not in System ({countNew})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={activeTab === 'lead' ? 'secondary' : 'ghost'}
+                    className="text-xs h-7 px-3 font-medium text-blue-700 hover:text-blue-800"
+                    onClick={() => setActiveTab('lead')}
+                  >
+                    Leads in Pipeline ({countLeads})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={activeTab === 'signed' ? 'secondary' : 'ghost'}
+                    className="text-xs h-7 px-3 font-medium text-emerald-700 hover:text-emerald-800"
+                    onClick={() => setActiveTab('signed')}
+                  >
+                    Signed Customers ({countSigned})
+                  </Button>
+                </div>
+
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Filter by suburb, state, name..."
+                    className="pl-8 h-8 text-xs bg-background"
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Filter Tabs & Search Bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-lg">
-                <Button
-                  size="sm"
-                  variant={activeTab === 'all' ? 'secondary' : 'ghost'}
-                  className="text-xs h-7 px-3 font-medium"
-                  onClick={() => setActiveTab('all')}
-                >
-                  All Sites ({discoveredLocations.length})
-                </Button>
-                <Button
-                  size="sm"
-                  variant={activeTab === 'new' ? 'secondary' : 'ghost'}
-                  className="text-xs h-7 px-3 font-medium text-purple-700 hover:text-purple-800"
-                  onClick={() => setActiveTab('new')}
-                >
-                  Not in System ({countNew})
-                </Button>
-                <Button
-                  size="sm"
-                  variant={activeTab === 'lead' ? 'secondary' : 'ghost'}
-                  className="text-xs h-7 px-3 font-medium text-blue-700 hover:text-blue-800"
-                  onClick={() => setActiveTab('lead')}
-                >
-                  Leads in Pipeline ({countLeads})
-                </Button>
-                <Button
-                  size="sm"
-                  variant={activeTab === 'signed' ? 'secondary' : 'ghost'}
-                  className="text-xs h-7 px-3 font-medium text-emerald-700 hover:text-emerald-800"
-                  onClick={() => setActiveTab('signed')}
-                >
-                  Signed Customers ({countSigned})
-                </Button>
-              </div>
-
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  placeholder="Filter by suburb, state, name..."
-                  className="pl-8 h-8 text-xs bg-background"
-                  value={searchFilter}
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Locations List */}
-            <ScrollArea className="flex-1 max-h-[48vh] pr-2">
+            {/* Locations List (Native Scroll Container flex-1 min-h-0 overflow-y-auto) */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-3">
               {filteredLocations.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-3 pb-2">
                   {filteredLocations.map((item) => (
                     <Card
                       key={item.id}
@@ -505,7 +535,7 @@ export function DiscoverMultiSitesDialog({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-xs h-8 border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                            className="text-xs h-8 border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-medium"
                             onClick={() => window.open(`/companies/${item.existingRecord!.id}`, '_blank')}
                           >
                             <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> View Customer
@@ -516,7 +546,7 @@ export function DiscoverMultiSitesDialog({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-xs h-8 border-blue-300 text-blue-800 hover:bg-blue-50"
+                            className="text-xs h-8 border-blue-300 text-blue-800 hover:bg-blue-50 font-medium"
                             onClick={() => window.open(`/leads/${item.existingRecord!.id}`, '_blank')}
                           >
                             <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> View Lead
@@ -545,11 +575,11 @@ export function DiscoverMultiSitesDialog({
                   <p>No multi-site locations match the current tab or search filter.</p>
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </div>
         )}
 
-        <DialogFooter className="border-t pt-3 flex flex-row justify-between items-center shrink-0">
+        <DialogFooter className="shrink-0 pt-3 border-t flex flex-row justify-between items-center">
           <Button variant="outline" size="sm" className="text-xs" onClick={performDiscovery} disabled={searching}>
             <RefreshCw className={`mr-2 h-3.5 w-3.5 ${searching ? 'animate-spin' : ''}`} /> Re-Scan Multi-Sites
           </Button>

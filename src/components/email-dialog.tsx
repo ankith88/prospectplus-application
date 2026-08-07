@@ -17,7 +17,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
 import { OpenTrackingTips } from '@/components/ui/open-tracking-tips';
+import { Bell, Loader2, Paperclip, X, Send } from 'lucide-react';
 
 interface EmailDialogProps {
   isOpen: boolean;

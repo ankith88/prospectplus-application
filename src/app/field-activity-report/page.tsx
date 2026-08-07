@@ -144,14 +144,14 @@ export default function FieldActivityReportPage() {
 
   const { canView } = usePermissions();
   const isFranchisee = userProfile?.activeRole?.toLowerCase() === 'franchisee';
-  const hasAccess = !isFranchisee && userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
+  const hasAccess = !isFranchisee && canView('fieldActivityReport');
 
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
     setIsRefreshing(true);
     setLoading(true);
     try {
-      const canSeeAll = ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.activeRole!);
+      const canSeeAll = ['admin', 'Marketing Manager', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.activeRole!);
       const notesPromise = canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid);
 
       const [notes, leads, appointments, users, upsells, activities] = await Promise.all([

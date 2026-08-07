@@ -254,7 +254,7 @@ export default function CustomerSuccessDashboard() {
         }
     };
 
-    const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'super user';
+    const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'super user';
     const isCs = userProfile?.activeRole === 'Customer Success';
     const canAssignCs = isAdmin;
     

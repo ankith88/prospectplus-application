@@ -92,7 +92,6 @@ export function canReassignLead(
     'Sales Manager', 
     'Outbound Admin', 
     'Lead Gen Admin', 
-    'Marketing Admin',
     'Account Manager',
     'Account Managers',
     'account managers'
@@ -109,7 +108,7 @@ export function canChangeBucket(
 
   const role = userProfile.activeRole || userProfile.role || '';
   if (role === 'Outbound Admin') return false;
-  return ['admin', 'Sales Manager', 'Lead Gen Admin', 'Marketing Admin', 'Marketing Manager'].includes(role);
+  return ['admin', 'Sales Manager', 'Lead Gen Admin', 'Marketing Manager'].includes(role);
 }
 
 export function isSaleDealsVisible(
