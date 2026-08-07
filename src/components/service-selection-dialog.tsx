@@ -888,7 +888,7 @@ export function ServiceSelectionDialog({
               customFrom: emailPreviewData.senderEmail,
               isTemplate: selectedTemplate !== 'custom',
               notifyOnOpen: emailPreviewData.notifyOnOpen,
-              notifyUserEmail: emailPreviewData.senderEmail,
+              notifyUserEmail: user?.email || emailPreviewData.senderEmail,
               trackingCategory: mode === 'Quote' ? 'quote' : 'custom'
           })
         });
@@ -928,7 +928,7 @@ export function ServiceSelectionDialog({
             isTemplate: selectedTemplate !== 'custom',
             leadId: lead.id,
             notifyOnOpen: emailPreviewData.notifyOnOpen,
-            notifyUserEmail: emailPreviewData.senderEmail,
+            notifyUserEmail: user?.email || emailPreviewData.senderEmail,
             trackingCategory: mode === 'Signup' ? 'signup' : 'custom'
           })
         });

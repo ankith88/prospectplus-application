@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     if (contactEmails.length === 0) {
       return NextResponse.json({ success: false, message: 'Selected contacts have no email address' }, { status: 400 });
     }
-    const contactEmail = contactEmails.join(', ');
+    const contactEmail = customTo || contactEmails.join(', ');
     
     // Fetch brand profile details
     const brandSnap = await db.collection('brandProfiles').doc('default_company').get();

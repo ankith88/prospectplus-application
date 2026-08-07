@@ -342,7 +342,7 @@ export function MultiSitesDashboard() {
                 const currentStatus = l.customerStatus || l.status || '';
                 if (statusFilter === 'New' && currentStatus !== 'New') return false;
                 if (statusFilter === 'In Progress' && !['In Progress', 'Contacted', 'Contact Attempted'].includes(currentStatus)) return false;
-                if (statusFilter === 'Quotes Out' && !['Quote Out', 'Proposal Sent', 'Quotes Out'].includes(currentStatus)) return false;
+                if (statusFilter === 'Quotes Out' && !['Quote Out', 'Quote Sent', 'Quotes Sent', 'Proposal Sent', 'Quotes Out'].includes(currentStatus)) return false;
                 if (statusFilter === 'Quote Accepted' && currentStatus !== 'Quote Accepted') return false;
                 if (statusFilter === 'Product Pending' && currentStatus !== 'Product Pending') return false;
                 if (statusFilter === 'Trialing' && !currentStatus.toLowerCase().includes('trial')) return false;
@@ -509,7 +509,7 @@ export function MultiSitesDashboard() {
             const st = l.customerStatus || l.status || 'New';
             if (st === 'New') counts.new++;
             else if (['In Progress', 'Contacted', 'Contact Attempted'].includes(st)) counts.wip++;
-            else if (['Quote Out', 'Proposal Sent', 'Quotes Out'].includes(st)) counts.quotesOut++;
+            else if (['Quote Out', 'Quote Sent', 'Quotes Sent', 'Proposal Sent', 'Quotes Out'].includes(st)) counts.quotesOut++;
             else if (st === 'Quote Accepted') counts.quotesAccepted++;
             else if (st === 'Product Pending') counts.productPending++;
             else if (st.toLowerCase().includes('localmile') || st.toLowerCase().includes('trial')) counts.localMile++;
@@ -524,7 +524,7 @@ export function MultiSitesDashboard() {
         if (viewTab === 'queue') return priorityQueueLeads;
         if (viewTab === 'new') return pipelineLeads.filter(l => (l.customerStatus || l.status || 'New') === 'New');
         if (viewTab === 'wip') return pipelineLeads.filter(l => ['In Progress', 'Contacted', 'Contact Attempted'].includes(l.customerStatus || l.status || ''));
-        if (viewTab === 'quotes-out') return pipelineLeads.filter(l => ['Quote Out', 'Proposal Sent', 'Quotes Out'].includes(l.customerStatus || l.status || ''));
+        if (viewTab === 'quotes-out') return pipelineLeads.filter(l => ['Quote Out', 'Quote Sent', 'Quotes Sent', 'Proposal Sent', 'Quotes Out'].includes(l.customerStatus || l.status || ''));
         if (viewTab === 'quotes-accepted') return pipelineLeads.filter(l => (l.customerStatus || l.status) === 'Quote Accepted');
         if (viewTab === 'product-pending') return pipelineLeads.filter(l => (l.customerStatus || l.status) === 'Product Pending');
         if (viewTab === 'localmile') return pipelineLeads.filter(l => (l.customerStatus || l.status || '').toLowerCase().includes('localmile') || (l.customerStatus || l.status || '').toLowerCase().includes('trial'));
@@ -543,7 +543,7 @@ export function MultiSitesDashboard() {
             (l as any).accountManagerUid === MULTISITE_ACCOUNT_MANAGER_UID ||
             (l as any).assignedTo === MULTISITE_ACCOUNT_MANAGER_UID
         ).length;
-        const activePipelines = pipelineLeads.filter(l => ['New', 'In Progress', 'Contacted', 'Appointment Booked', 'Trialing', 'Quote Out', 'Quote Accepted'].includes(l.customerStatus || l.status || '')).length;
+        const activePipelines = pipelineLeads.filter(l => ['New', 'In Progress', 'Contacted', 'Appointment Booked', 'Trialing', 'Quote Out', 'Quote Sent', 'Quotes Sent', 'Proposal Sent', 'Quote Accepted'].includes(l.customerStatus || l.status || '')).length;
 
         return { totalMultiSites, totalParents, totalChildren, assignedToTargetAm, activePipelines };
     }, [pipelineLeads, targetAmDisplayName]);
