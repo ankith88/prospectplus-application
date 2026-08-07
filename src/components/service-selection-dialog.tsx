@@ -26,7 +26,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { X, Trash2, Inbox, Info, Edit, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Trash2, Inbox, Info, Edit, ChevronDown, ChevronRight, Bell } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -159,7 +159,8 @@ export function ServiceSelectionDialog({
     primaryColor: '#095C7B',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     logoUrl: '',
-    senderEmail: ''
+    senderEmail: '',
+    notifyOnOpen: true
   });
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [franchiseeEmail, setFranchiseeEmail] = useState('');
@@ -885,7 +886,10 @@ export function ServiceSelectionDialog({
               cc: emailPreviewData.cc,
               bcc: emailPreviewData.bcc,
               customFrom: emailPreviewData.senderEmail,
-              isTemplate: selectedTemplate !== 'custom'
+              isTemplate: selectedTemplate !== 'custom',
+              notifyOnOpen: emailPreviewData.notifyOnOpen,
+              notifyUserEmail: emailPreviewData.senderEmail,
+              trackingCategory: mode === 'Quote' ? 'quote' : 'custom'
           })
         });
         const data = await res.json();
@@ -922,7 +926,10 @@ export function ServiceSelectionDialog({
             html: finalHtml,
             customFrom: emailPreviewData.senderEmail,
             isTemplate: selectedTemplate !== 'custom',
-            leadId: lead.id
+            leadId: lead.id,
+            notifyOnOpen: emailPreviewData.notifyOnOpen,
+            notifyUserEmail: emailPreviewData.senderEmail,
+            trackingCategory: mode === 'Signup' ? 'signup' : 'custom'
           })
         });
         const result = await response.json();
@@ -1978,7 +1985,7 @@ export function ServiceSelectionDialog({
                       </p>
                     )}
                   </div>
-                 <div className="space-y-2">
+                  <div className="space-y-2">
                    <Label>Subject</Label>
                    <Input 
                      id="service-email-subject"
@@ -1986,6 +1993,28 @@ export function ServiceSelectionDialog({
                      onChange={e => setEmailPreviewData(prev => ({...prev, subject: e.target.value}))} 
                    />
                  </div>
+
+                 {/* Open Tracking Notification Checkbox */}
+                 <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
+                   <Checkbox 
+                     id="notifyOnOpenServiceQuote" 
+                     checked={emailPreviewData.notifyOnOpen} 
+                     onCheckedChange={(checked) => setEmailPreviewData(prev => ({ ...prev, notifyOnOpen: !!checked }))}
+                   />
+                   <div className="grid gap-1 leading-none">
+                     <label
+                       htmlFor="notifyOnOpenServiceQuote"
+                       className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
+                     >
+                       <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
+                       Notify me (In-App & Email Alert) when recipient opens this email
+                     </label>
+                     <p className="text-[11px] text-slate-500">
+                       You will receive a notification and inbox alert when this quote/signup email is opened.
+                     </p>
+                   </div>
+                 </div>
+
                  <div className="space-y-2">
                    <div className="flex items-center justify-between">
                      <Label>Email Body</Label>

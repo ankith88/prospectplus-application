@@ -67,6 +67,7 @@ import {
   ChevronRight,
   GitMerge,
   Zap,
+  Bell,
 } from 'lucide-react'
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
@@ -1317,6 +1318,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [editableEmailBody, setEditableEmailBody] = useState<string>('');
   const [emailAttachments, setEmailAttachments] = useState<{ name: string; url: string }[]>([]);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [emailNotifyOnOpen, setEmailNotifyOnOpen] = useState(true);
 
   // Product state for the email dialog placeholder
   const [products, setProducts] = useState<any[]>([]);
@@ -1592,7 +1594,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           customSenderEmail: finalSenderEmail,
           customHtml: editableEmailBody,
           attachments: emailAttachments,
-          customSubject: emailSubject
+          customSubject: emailSubject,
+          notifyOnOpen: emailNotifyOnOpen,
+          notifyUserEmail: finalSenderEmail,
+          trackingCategory: 'marketing'
         })
       });
 
@@ -7355,6 +7360,27 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             ))}
                         </SelectContent>
                     </Select>
+                </div>
+
+                {/* Open Tracking Notification Checkbox */}
+                <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
+                  <Checkbox 
+                    id="notifyOnOpenDynamicTemplate" 
+                    checked={emailNotifyOnOpen} 
+                    onCheckedChange={(checked) => setEmailNotifyOnOpen(!!checked)}
+                  />
+                  <div className="grid gap-1 leading-none">
+                    <label
+                      htmlFor="notifyOnOpenDynamicTemplate"
+                      className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
+                    >
+                      <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
+                      Notify me (In-App & Email Alert) when recipient opens this email
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      You will receive a notification and inbox alert when this template email is opened.
+                    </p>
+                  </div>
                 </div>
 
                 {selectedTemplateId && (

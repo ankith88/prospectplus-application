@@ -13,9 +13,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, ChevronDown } from 'lucide-react';
+import { Loader2, Send, ChevronDown, Bell } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
@@ -40,6 +41,7 @@ interface Template {
 export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps) {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [notifyOnOpen, setNotifyOnOpen] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom');
   const [isSending, setIsSending] = useState(false);
@@ -148,7 +150,10 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
           html: selectedTemplate !== 'custom' ? message : message.replace(/\n/g, '<br/>'),
           customFrom: userProfile?.email,
           isTemplate: selectedTemplate !== 'custom',
-          leadId: lead.id
+          leadId: lead.id,
+          notifyOnOpen,
+          notifyUserEmail: userProfile?.email,
+          trackingCategory: 'custom'
         })
       });
 
@@ -226,6 +231,27 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
                 onChange={(e) => setSubject(e.target.value)}
                 className="bg-slate-50 focus-visible:bg-white transition-colors"
               />
+            </div>
+
+            {/* Open Tracking Notification Checkbox */}
+            <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
+              <Checkbox 
+                id="notifyOnOpenLeadEmail" 
+                checked={notifyOnOpen} 
+                onCheckedChange={(checked) => setNotifyOnOpen(!!checked)}
+              />
+              <div className="grid gap-1 leading-none">
+                <label
+                  htmlFor="notifyOnOpenLeadEmail"
+                  className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
+                >
+                  <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
+                  Notify me (In-App & Email Alert) when recipient opens this email
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  You will receive a notification and inbox alert when this message is opened.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-2">

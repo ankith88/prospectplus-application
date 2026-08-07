@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import {
   Mail,
@@ -28,6 +29,7 @@ import {
   Clock,
   ArrowUpRight,
   Copy,
+  Bell,
   Check,
   ShieldAlert,
   Send,
@@ -98,6 +100,7 @@ export default function MailboxPage() {
   const [sendLoading, setSendLoading] = useState<boolean>(false);
   const [composeAttachments, setComposeAttachments] = useState<{ name: string; url: string }[]>([]);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState<boolean>(false);
+  const [composeNotifyOnOpen, setComposeNotifyOnOpen] = useState<boolean>(true);
 
   // Draft States
   const [customInstruction, setCustomInstruction] = useState<string>('');
@@ -310,7 +313,11 @@ export default function MailboxPage() {
           to: composeToEmail,
           subject: composeSubject,
           html: composeBody.replace(/\n/g, '<br>'),
-          attachments: composeAttachments
+          attachments: composeAttachments,
+          leadId: composeToLeadId || undefined,
+          notifyOnOpen: composeNotifyOnOpen,
+          notifyUserEmail: userProfile?.email,
+          trackingCategory: 'custom'
         })
       });
 
@@ -829,6 +836,27 @@ export default function MailboxPage() {
                   onChange={(e) => setComposeSubject(e.target.value)}
                   className="text-xs border-slate-200 h-9"
                 />
+              </div>
+
+              {/* Open Tracking Notification Checkbox */}
+              <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
+                <Checkbox 
+                  id="composeNotifyOnOpenMailbox" 
+                  checked={composeNotifyOnOpen} 
+                  onCheckedChange={(checked) => setComposeNotifyOnOpen(!!checked)}
+                />
+                <div className="grid gap-1 leading-none">
+                  <label
+                    htmlFor="composeNotifyOnOpenMailbox"
+                    className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
+                  >
+                    <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
+                    Notify me (In-App & Email Alert) when recipient opens this email
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    You will receive a notification and inbox alert when this message is opened.
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-1">

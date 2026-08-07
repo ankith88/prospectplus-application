@@ -24,7 +24,7 @@ async function logEmailToLead(leadId: string, recipient: string, subject: string
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leadId, contactId, scfUrl, scfId, startDate, services, customHtml, customSubject, customTo, cc, bcc, customFrom, isTemplate } = body;
+    const { leadId, contactId, scfUrl, scfId, startDate, services, customHtml, customSubject, customTo, cc, bcc, customFrom, isTemplate, notifyOnOpen, notifyUserId, notifyUserEmail, trackingCategory } = body;
 
     if (!leadId || !contactId || !scfUrl) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
@@ -331,7 +331,12 @@ export async function POST(request: Request) {
       to: contactEmail,
       subject: templateSubject,
       html: formattedFallbackHtml,
-      customFrom
+      customFrom,
+      leadId,
+      notifyOnOpen: notifyOnOpen !== false,
+      notifyUserId,
+      notifyUserEmail: notifyUserEmail || customFrom,
+      trackingCategory: trackingCategory || 'quote'
     });
 
     if (!dispatchResult.success) {

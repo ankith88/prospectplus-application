@@ -11,7 +11,7 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leadIds, templateId, targetEmail, cc, bcc, customSenderEmail, overrideContactName, customHtml, attachments, customSubject } = body;
+    const { leadIds, templateId, targetEmail, cc, bcc, customSenderEmail, overrideContactName, customHtml, attachments, customSubject, notifyOnOpen, notifyUserId, notifyUserEmail, trackingCategory } = body;
 
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return NextResponse.json(
@@ -471,7 +471,12 @@ export async function POST(request: Request) {
             customFrom: customSenderEmail,
             cc: cc || undefined,
             bcc: bcc || undefined,
-            attachments
+            attachments,
+            leadId: leadId,
+            notifyOnOpen: notifyOnOpen !== false,
+            notifyUserId,
+            notifyUserEmail: notifyUserEmail || customSenderEmail,
+            trackingCategory: trackingCategory || 'marketing'
           });
 
           if (!sendResult.success) {
