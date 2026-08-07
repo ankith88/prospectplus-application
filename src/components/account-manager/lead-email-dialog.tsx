@@ -24,6 +24,7 @@ import { Lead } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor';
 import { encryptLeadId } from '@/lib/localmile-security';
+import { OpenTrackingTips } from '@/components/ui/open-tracking-tips';
 
 interface LeadEmailDialogProps {
   isOpen: boolean;
@@ -46,7 +47,7 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom');
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
 
   useEffect(() => {
     async function fetchTemplates() {
@@ -148,11 +149,12 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
           to: toEmail,
           subject,
           html: selectedTemplate !== 'custom' ? message : message.replace(/\n/g, '<br/>'),
-          customFrom: userProfile?.email,
+          customFrom: userProfile?.email || user?.email,
           isTemplate: selectedTemplate !== 'custom',
           leadId: lead.id,
           notifyOnOpen,
-          notifyUserEmail: userProfile?.email,
+          notifyUserId: userProfile?.uid || user?.uid,
+          notifyUserEmail: userProfile?.email || user?.email,
           trackingCategory: 'custom'
         })
       });
@@ -234,24 +236,27 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
             </div>
 
             {/* Open Tracking Notification Checkbox */}
-            <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
-              <Checkbox 
-                id="notifyOnOpenLeadEmail" 
-                checked={notifyOnOpen} 
-                onCheckedChange={(checked) => setNotifyOnOpen(!!checked)}
-              />
-              <div className="grid gap-1 leading-none">
-                <label
-                  htmlFor="notifyOnOpenLeadEmail"
-                  className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
-                >
-                  <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
-                  Notify me (In-App & Email Alert) when recipient opens this email
-                </label>
-                <p className="text-[11px] text-slate-500">
-                  You will receive a notification and inbox alert when this message is opened.
-                </p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
+                <Checkbox 
+                  id="notifyOnOpenLeadEmail" 
+                  checked={notifyOnOpen} 
+                  onCheckedChange={(checked) => setNotifyOnOpen(!!checked)}
+                />
+                <div className="grid gap-1 leading-none">
+                  <label
+                    htmlFor="notifyOnOpenLeadEmail"
+                    className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
+                  >
+                    <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
+                    Notify me (In-App & Email Alert) when recipient opens this email
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    You will receive a notification and inbox alert when this message is opened.
+                  </p>
+                </div>
               </div>
+              {notifyOnOpen && <OpenTrackingTips className="mt-1" />}
             </div>
 
             <div className="space-y-2">

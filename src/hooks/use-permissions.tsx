@@ -33,11 +33,11 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   outboundLeads: ['user', 'Outbound Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Sales Manager'],
   inboundLeads: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'Franchisee'],
   importLeads: ['superadmin'],
-  inReviewLeads: ['admin', 'superadmin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Sales Manager', 'Outbound Admin', 'user', 'Dialer', 'dialers', 'Account Managers', 'Account Manager'],
+  inReviewLeads: ['superadmin'],
   unassignedLeads: ['Lead Gen Admin'],
   accountManagerPipeline: ['Sales Manager', 'Account Managers', 'Account Manager'],
   customerSuccessPipeline: ['Customer Success', 'Marketing Manager'],
-  reporting: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager', 'user', 'Outbound Admin'],
+  reporting: ['Field Sales', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager', 'user', 'Outbound Admin'],
   fieldActivityReport: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback', 'Sales Manager'],
   inboundReporting: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'Marketing Manager'],
   amReporting: ['Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
@@ -170,6 +170,11 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
     
     // Explicitly restrict Franchisee role from reporting, field sales, visit notes, and capture visit
     if (userProfile.activeRole?.toLowerCase() === 'franchisee' && ['reporting', 'inboundReporting', 'fieldActivityReport', 'fieldSalesD2D', 'visitNotes', 'captureVisit'].includes(feature)) {
+      return false;
+    }
+
+    // Explicitly restrict Outbound Reporting from Marketing Manager, Marketing Admin, Lead Gen Admin, and Dashback
+    if (feature === 'reporting' && ['Marketing Manager', 'Marketing Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole)) {
       return false;
     }
 

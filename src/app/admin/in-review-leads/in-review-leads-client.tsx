@@ -44,8 +44,9 @@ import {
   SlidersHorizontal,
   Building,
   Briefcase,
+  RefreshCw,
 } from 'lucide-react'
-import { safeFormatDate, getLeadDisplayDateValue } from '@/lib/utils'
+import { getLeadDisplayDateValue } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 
@@ -129,11 +130,8 @@ export function InReviewLeadsClient() {
   const router = useRouter()
 
   const isAllowed = useMemo(() => {
-    const role = userProfile?.activeRole || userProfile?.role || ''
-    if (role === 'user' || role.toLowerCase() === 'user') return false
-    if (isSuperAdmin) return true
-    return ['admin', 'super user', 'Sales Manager', 'Marketing Admin', 'Marketing Manager', 'Outbound Admin', 'Lead Gen Admin', 'Account Managers', 'Account Manager'].includes(role)
-  }, [isSuperAdmin, userProfile])
+    return Boolean(isSuperAdmin)
+  }, [isSuperAdmin])
 
   const [leads, setLeads] = useState<Lead[]>([])
   const [users, setUsers] = useState<UserProfile[]>([])

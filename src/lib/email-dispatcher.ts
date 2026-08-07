@@ -112,6 +112,28 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
         const deliveryRef = db.collection('campaign_deliveries').doc();
         deliveryId = deliveryRef.id;
 
+        let resolvedCompanyName: string | null = null;
+        let resolvedLeadName: string | null = null;
+
+        if (leadId) {
+          try {
+            const leadSnap = await db.collection('leads').doc(leadId).get();
+            if (leadSnap.exists) {
+              const leadData = leadSnap.data();
+              resolvedCompanyName = leadData?.companyName || leadData?.company_name || null;
+              resolvedLeadName = leadData?.displayName || leadData?.firstName || null;
+            } else {
+              const compSnap = await db.collection('companies').doc(leadId).get();
+              if (compSnap.exists) {
+                const compData = compSnap.data();
+                resolvedCompanyName = compData?.companyName || compData?.company_name || null;
+              }
+            }
+          } catch (e) {
+            console.error('[Email Dispatcher] Error looking up companyName:', e);
+          }
+        }
+
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://prospectplus.com.au';
         const trackingPixel = `<img src="${baseUrl}/api/campaigns/track/open?id=${deliveryId}" width="1" height="1" border="0" alt="" style="display:block; width:1px; height:1px; border:0; outline:none; text-decoration:none;" />`;
 
@@ -129,6 +151,8 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
           id: deliveryId,
           leadId: leadId || null,
           leadEmail: extractCleanEmail(to),
+          companyName: resolvedCompanyName || null,
+          leadName: resolvedLeadName || null,
           subject,
           sentAt: new Date().toISOString(),
           status: 'delivered',

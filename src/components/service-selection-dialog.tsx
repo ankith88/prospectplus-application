@@ -43,6 +43,7 @@ import { Progress } from '@/components/ui/progress';
 import { isBankingServiceSelected, isH2hServiceSelected, getNearbyBanks, saveOrUpdateTaggedAddress, normalizeState, type BankLocationOption } from '@/lib/bank-utils';
 import { GoogleAddressInput } from './google-address-input';
 import { Calendar } from './ui/calendar';
+import { OpenTrackingTips } from '@/components/ui/open-tracking-tips';
 import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
@@ -889,6 +890,7 @@ export function ServiceSelectionDialog({
               customFrom: emailPreviewData.senderEmail,
               isTemplate: selectedTemplate !== 'custom',
               notifyOnOpen: emailPreviewData.notifyOnOpen,
+              notifyUserId: user?.uid,
               notifyUserEmail: user?.email || emailPreviewData.senderEmail,
               trackingCategory: mode === 'Quote' ? 'quote' : 'custom'
           })
@@ -929,6 +931,7 @@ export function ServiceSelectionDialog({
             isTemplate: selectedTemplate !== 'custom',
             leadId: lead.id,
             notifyOnOpen: emailPreviewData.notifyOnOpen,
+            notifyUserId: user?.uid,
             notifyUserEmail: user?.email || emailPreviewData.senderEmail,
             trackingCategory: mode === 'Signup' ? 'signup' : 'custom'
           })
@@ -1998,26 +2001,28 @@ export function ServiceSelectionDialog({
                    />
                  </div>
 
-                 {/* Open Tracking Notification Checkbox */}
-                 <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
-                   <Checkbox 
-                     id="notifyOnOpenServiceQuote" 
-                     checked={emailPreviewData.notifyOnOpen} 
-                     onCheckedChange={(checked) => setEmailPreviewData(prev => ({ ...prev, notifyOnOpen: !!checked }))}
-                   />
-                   <div className="grid gap-1 leading-none">
-                     <label
-                       htmlFor="notifyOnOpenServiceQuote"
-                       className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
-                     >
-                       <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
-                       Notify me (In-App & Email Alert) when recipient opens this email
-                     </label>
-                     <p className="text-[11px] text-slate-500">
-                       You will receive a notification and inbox alert when this quote/signup email is opened.
-                     </p>
-                   </div>
-                 </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
+                      <Checkbox 
+                        id="notifyOnOpenServiceQuote" 
+                        checked={emailPreviewData.notifyOnOpen} 
+                        onCheckedChange={(checked) => setEmailPreviewData(prev => ({ ...prev, notifyOnOpen: !!checked }))}
+                      />
+                      <div className="grid gap-1 leading-none">
+                        <label
+                          htmlFor="notifyOnOpenServiceQuote"
+                          className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
+                        >
+                          <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
+                          Notify me (In-App & Email Alert) when recipient opens this email
+                        </label>
+                        <p className="text-[11px] text-slate-500">
+                          You will receive a notification and inbox alert when this quote/signup email is opened.
+                        </p>
+                      </div>
+                    </div>
+                    {emailPreviewData.notifyOnOpen && <OpenTrackingTips className="mt-1" />}
+                  </div>
 
                  <div className="space-y-2">
                    <div className="flex items-center justify-between">

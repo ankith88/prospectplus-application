@@ -1179,7 +1179,7 @@ export function ImportLeadsClient() {
           leadData.salesRepAssigned = targetAmName;
           leadData.campaign = effectiveCampaign || 'MultiSite';
           // Multisite child leads matching their parent ABN should not be flagged as duplicates
-          if (effectiveParent || isDuplicateMatch?.id === effectiveParent?.id) {
+          if (effectiveParent || (isDuplicateMatch as any)?.id === (effectiveParent as any)?.id) {
             leadData.isDuplicate = false;
             leadData.similarLeads = [];
             leadData.duplicateConfidence = undefined;
@@ -2455,7 +2455,7 @@ export function ImportLeadsClient() {
                                   <TableCell className="text-right">
                                     {rec.internalId && isAlphanumeric ? (
                                       <Button
-                                        size="xs"
+                                        size="sm"
                                         variant="outline"
                                         onClick={() => executeNetSuiteSync(rec.internalId)}
                                         disabled={isSyncingNetSuite}

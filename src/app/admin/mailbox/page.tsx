@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
+import { encryptLeadId } from '@/lib/localmile-security';
+import { OpenTrackingTips } from '@/components/ui/open-tracking-tips';
 import { firestore, storage } from '@/lib/firebase';
 import { collection, query, orderBy, getDocs, limit, collectionGroup, getDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -64,7 +66,7 @@ interface EmailLog {
 }
 
 export default function MailboxPage() {
-  const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
+  const { user, userProfile, loading: authLoading, isSuperAdmin } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -316,7 +318,8 @@ export default function MailboxPage() {
           attachments: composeAttachments,
           leadId: composeToLeadId || undefined,
           notifyOnOpen: composeNotifyOnOpen,
-          notifyUserEmail: userProfile?.email,
+          notifyUserId: userProfile?.uid || user?.uid,
+          notifyUserEmail: userProfile?.email || user?.email,
           trackingCategory: 'custom'
         })
       });
@@ -839,24 +842,27 @@ export default function MailboxPage() {
               </div>
 
               {/* Open Tracking Notification Checkbox */}
-              <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
-                <Checkbox 
-                  id="composeNotifyOnOpenMailbox" 
-                  checked={composeNotifyOnOpen} 
-                  onCheckedChange={(checked) => setComposeNotifyOnOpen(!!checked)}
-                />
-                <div className="grid gap-1 leading-none">
-                  <label
-                    htmlFor="composeNotifyOnOpenMailbox"
-                    className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
-                  >
-                    <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
-                    Notify me (In-App & Email Alert) when recipient opens this email
-                  </label>
-                  <p className="text-[11px] text-slate-500">
-                    You will receive a notification and inbox alert when this message is opened.
-                  </p>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
+                  <Checkbox 
+                    id="composeNotifyOnOpenMailbox" 
+                    checked={composeNotifyOnOpen} 
+                    onCheckedChange={(checked) => setComposeNotifyOnOpen(!!checked)}
+                  />
+                  <div className="grid gap-1 leading-none">
+                    <label
+                      htmlFor="composeNotifyOnOpenMailbox"
+                      className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
+                    >
+                      <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
+                      Notify me (In-App & Email Alert) when recipient opens this email
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      You will receive a notification and inbox alert when this message is opened.
+                    </p>
+                  </div>
                 </div>
+                {composeNotifyOnOpen && <OpenTrackingTips className="mt-1" />}
               </div>
 
               <div className="space-y-1">

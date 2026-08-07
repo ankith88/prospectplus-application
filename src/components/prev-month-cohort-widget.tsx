@@ -133,13 +133,13 @@ export function PrevMonthCohortWidget({ summary, className = '', loading = false
                 <SectionHelp content={
                   <div className="space-y-1.5">
                     <p className="font-bold text-slate-900 border-b pb-1">Service Commencement Cohort Performance</p>
-                    <p>Tracks accounts whose <strong>Service Commencement Date</strong> fell in the last 3 months (<strong>{prevMonthName}</strong>), comparing contracted monthly recurring revenue (MRR) against <strong>actual invoices billed</strong>.</p>
-                    <p className="text-slate-600">Because billing begins upon service commencement (not contract signature), this cohort accurately measures active billing performance and flags unbilled started accounts.</p>
+                    <p>Tracks accounts whose <strong>Service Commencement Date</strong> fell in the target cohort window (<strong>{prevMonthName}</strong>), comparing contracted monthly recurring revenue (MRR) against <strong>actual invoices billed</strong>.</p>
+                    <p className="text-slate-600">This section evaluates accounts by commencement date (ignoring page activity date window) while honoring active <strong>Franchisee, Account Manager, Bucket, and Rep</strong> filters.</p>
                   </div>
                 } />
               </div>
               <CardDescription className="text-xs text-slate-500 mt-0.5">
-                Conversion yield &amp; billed revenue for accounts commencing services during the last 3 months ({prevMonthName}).
+                Conversion yield &amp; billed revenue for accounts commencing services during {prevMonthName}.
               </CardDescription>
             </div>
           </div>
@@ -375,7 +375,7 @@ export function PrevMonthCohortWidget({ summary, className = '', loading = false
                           </TableCell>
                           <TableCell className="text-right">
                             <Link href={`/leads/${item.leadId}`} target="_blank">
-                              <Button variant="ghost" size="xs" className="h-6 text-[11px] px-2 text-[#095c7b]">
+                              <Button variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-[#095c7b]">
                                 View Profile
                               </Button>
                             </Link>

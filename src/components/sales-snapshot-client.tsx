@@ -373,6 +373,7 @@ export default function SalesSnapshotClient() {
   const [filters, setFilters] = useState({
     dateFilterType: 'activityDate' as 'activityDate' | 'dateLeadEntered' | 'quoteSentAt' | 'signedUpAt' | 'scfAcceptedAt' | 'trialStartedAt',
     dateRange: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    cohortMonthsCount: 3,
     franchisee: [] as string[],
     status: [] as string[],
     bucket: [] as string[],
@@ -384,6 +385,7 @@ export default function SalesSnapshotClient() {
   const [appliedFilters, setAppliedFilters] = useState({
     dateFilterType: 'activityDate' as 'activityDate' | 'dateLeadEntered' | 'quoteSentAt' | 'signedUpAt' | 'scfAcceptedAt' | 'trialStartedAt',
     dateRange: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    cohortMonthsCount: 3,
     franchisee: [] as string[],
     status: [] as string[],
     bucket: [] as string[],
@@ -396,6 +398,7 @@ export default function SalesSnapshotClient() {
     return filters.dateFilterType !== appliedFilters.dateFilterType ||
            filters.dateRange?.from?.getTime() !== appliedFilters.dateRange?.from?.getTime() ||
            filters.dateRange?.to?.getTime() !== appliedFilters.dateRange?.to?.getTime() ||
+           filters.cohortMonthsCount !== appliedFilters.cohortMonthsCount ||
            filters.campaign !== appliedFilters.campaign ||
            JSON.stringify(filters.franchisee) !== JSON.stringify(appliedFilters.franchisee) ||
            JSON.stringify(filters.status) !== JSON.stringify(appliedFilters.status) ||
@@ -412,6 +415,7 @@ export default function SalesSnapshotClient() {
     const defaultFilters = {
       dateFilterType: 'activityDate' as const,
       dateRange: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
+      cohortMonthsCount: 3,
       franchisee: [],
       status: [],
       bucket: [],
@@ -1090,9 +1094,49 @@ export default function SalesSnapshotClient() {
     };
   }, [filteredLeads, filteredActivities, filteredAppointments, appliedFilters.dateFilterType, appliedFilters.dateRange]);
 
+  const cohortFilteredLeads = useMemo(() => {
+    return allLeads.filter(lead => {
+        if (lead.isDuplicate && !lead.parentLeadId && lead.bucket !== 'multisite') return false;
+
+        // Franchisee role override
+        if ((userProfile?.activeRole === 'Franchisee' || userProfile?.role?.toLowerCase() === 'franchisee') && userProfile.franchisee) {
+            if (lead.franchisee !== userProfile.franchisee) return false;
+        }
+
+        // Status filter
+        const statusMatch = appliedFilters.status.length === 0 || 
+                            appliedFilters.status.includes(lead.customerStatus || lead.status);
+
+        // Franchisee filter
+        const franchiseeMatch = appliedFilters.franchisee.length === 0 || 
+                                (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
+
+        // Bucket filter
+        const resolvedBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+        const bucketMatch = appliedFilters.bucket.length === 0 || appliedFilters.bucket.includes(resolvedBucket);
+
+        // Account Manager filter
+        const amMatch = appliedFilters.accountManager.length === 0 ||
+                        (lead.accountManagerAssigned && appliedFilters.accountManager.includes(lead.accountManagerAssigned));
+
+        // Dialer filter
+        const dialerMatch = appliedFilters.dialer.length === 0 ||
+                            (lead.dialerAssigned && appliedFilters.dialer.includes(lead.dialerAssigned));
+
+        const campaignMatch = !appliedFilters.campaign || appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
+
+        return statusMatch && franchiseeMatch && bucketMatch && amMatch && dialerMatch && campaignMatch;
+    });
+  }, [allLeads, appliedFilters, userProfile]);
+
   const prevMonthSummary = useMemo(() => {
-    return calculatePrevMonthRealizationCohort(filteredLeads, invoices, appliedFilters.dateRange);
-  }, [filteredLeads, invoices, appliedFilters.dateRange]);
+    return calculatePrevMonthRealizationCohort(
+      cohortFilteredLeads, 
+      invoices, 
+      appliedFilters.dateRange, 
+      appliedFilters.cohortMonthsCount || 3
+    );
+  }, [cohortFilteredLeads, invoices, appliedFilters.dateRange, appliedFilters.cohortMonthsCount]);
 
   const activeDrilldownLeads = useMemo(() => {
     if (!drilldownType) return [];
@@ -1350,6 +1394,26 @@ export default function SalesSnapshotClient() {
                       <Calendar mode="range" selected={filters.dateRange} onSelect={(date) => setFilters(prev => ({ ...prev, dateRange: date }))} />
                     </PopoverContent>
                   </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1 font-semibold text-[#095c7b]">
+                    <span>Commencement Cohort</span>
+                    <SectionHelp content="Selects the calendar months window for evaluating the Service Commencement Realization Cohort widget based on service commencement dates." />
+                  </Label>
+                  <Select 
+                    value={String(filters.cohortMonthsCount)} 
+                    onValueChange={(val) => setFilters(prev => ({ ...prev, cohortMonthsCount: parseInt(val, 10) }))}
+                  >
+                    <SelectTrigger className="border-[#095c7b]/30">
+                      <SelectValue placeholder="Prior 3 Months (Default)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3">Prior 3 Months (Default)</SelectItem>
+                      <SelectItem value="6">Prior 6 Months</SelectItem>
+                      <SelectItem value="12">Prior 12 Months</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -1611,7 +1675,7 @@ export default function SalesSnapshotClient() {
                           <TableHead className="font-semibold text-xs">Company / Business</TableHead>
                           <TableHead className="font-semibold text-xs">Status &amp; Progress</TableHead>
                           <TableHead className="font-semibold text-xs">Pipeline Stage</TableHead>
-                          <TableHead className="font-semibold text-xs">{franchiseeStatusFilter === 'LocalMile Opportunity' ? 'Date Registration Sent' : franchiseeStatusFilter === 'LocalMile Pending' ? 'Date LocalMile Accepted' : 'Date Entered'}</TableHead>
+                          <TableHead className="font-semibold text-xs">Date Entered</TableHead>
                           <TableHead className="font-semibold text-xs">User / Rep in Charge</TableHead>
                           <TableHead className="text-right font-semibold text-xs">MRR Value</TableHead>
                           <TableHead className="text-right font-semibold text-xs">Action</TableHead>

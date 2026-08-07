@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, Check, Trash2, Info, AlertTriangle, Phone, FileText, Send, Clock, MessageSquare } from 'lucide-react';
+import { Bell, Check, Trash2, Info, AlertTriangle, Phone, FileText, Send, Clock, MessageSquare, MailCheck } from 'lucide-react';
 import {
   Popover,
   PopoverContent,
@@ -79,6 +79,7 @@ export function NotificationCenter() {
             case 'transcript_sync': return <FileText className="h-4 w-4 text-green-500" />;
             case 'app_ticket_waiting': return <Clock className="h-4 w-4 text-amber-600 animate-pulse" />;
             case 'app_ticket_update': return <MessageSquare className="h-4 w-4 text-blue-500" />;
+            case 'email_opened': return <MailCheck className="h-4 w-4 text-emerald-600" />;
             default: return <Info className="h-4 w-4 text-muted-foreground" />;
         }
     };

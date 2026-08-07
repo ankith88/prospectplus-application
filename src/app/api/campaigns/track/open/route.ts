@@ -49,7 +49,7 @@ export async function GET(request: Request) {
           });
         }
 
-        // Post activity on the lead timeline
+        // Post activity on the lead timeline and update lead doc open metrics
         if (leadId) {
           try {
             await db.collection('leads').doc(leadId).collection('activity').add({
@@ -58,24 +58,116 @@ export async function GET(request: Request) {
               notes: `Recipient (${data?.leadEmail || 'Contact'}) opened email: '${data?.subject || 'Outbound Email'}'.`,
               author: 'Email Open Tracker'
             });
+
+            const leadUpdatePayload = {
+              hasOpenedEmail: true,
+              lastEmailOpenedAt: now,
+              lastOpenedEmailSubject: data?.subject || 'Outbound Email',
+              emailOpenCount: FieldValue.increment(1)
+            };
+
+            const leadRefDoc = db.collection('leads').doc(leadId);
+            const leadSnap = await leadRefDoc.get();
+            if (leadSnap.exists) {
+              await leadRefDoc.update(leadUpdatePayload);
+            } else {
+              const compRefDoc = db.collection('companies').doc(leadId);
+              const compSnap = await compRefDoc.get();
+              if (compSnap.exists) {
+                await compRefDoc.update(leadUpdatePayload);
+              }
+            }
           } catch (actErr) {
             console.error('Error logging lead activity for open event:', actErr);
           }
         }
 
         // Handle notifications if enabled
-        if (data?.notifyOnOpen || data?.notifyUserId || data?.notifyUserEmail) {
+        if (data?.notifyOnOpen !== false) {
           try {
-            const recipientLabel = data?.companyName || data?.leadName || data?.leadEmail || 'Recipient';
+            let resolvedCompany = data?.companyName;
+            if ((!resolvedCompany || resolvedCompany.includes('@')) && leadId) {
+              try {
+                const lDoc = await db.collection('leads').doc(leadId).get();
+                if (lDoc.exists) {
+                  resolvedCompany = lDoc.data()?.companyName || lDoc.data()?.company_name || null;
+                } else {
+                  const cDoc = await db.collection('companies').doc(leadId).get();
+                  if (cDoc.exists) {
+                    resolvedCompany = cDoc.data()?.companyName || cDoc.data()?.company_name || null;
+                  }
+                }
+              } catch (e) {}
+            }
+
+            const companyDisplay = resolvedCompany || 'N/A';
+            const recipientLabel = resolvedCompany || data?.leadName || data?.leadEmail || 'Recipient';
             const emailSubject = data?.subject || 'Outbound Email';
 
-            // 1. Create In-App Notification document
-            const targetUserId = data?.notifyUserId || 'all';
+            let targetUserId = data?.notifyUserId;
+            let repEmail = data?.notifyUserEmail || data?.customFrom;
+
+            // If targetUserId is missing or 'all', try resolving from notifyUserEmail / customFrom
+            if ((!targetUserId || targetUserId === 'all') && repEmail) {
+              const usersSnap = await db.collection('users').where('email', '==', repEmail.toLowerCase().trim()).limit(1).get();
+              if (!usersSnap.empty) {
+                targetUserId = usersSnap.docs[0].id;
+              }
+            }
+
+            // If repEmail is missing, try resolving from notifyUserId
+            if (!repEmail && targetUserId && targetUserId !== 'all') {
+              const userDoc = await db.collection('users').doc(targetUserId).get();
+              if (userDoc.exists) {
+                repEmail = userDoc.data()?.email;
+              }
+            }
+
+            // If still missing, check lead assigned account manager or sales rep
+            if ((!targetUserId || targetUserId === 'all' || !repEmail) && leadId) {
+              const leadSnap = await db.collection('leads').doc(leadId).get();
+              if (leadSnap.exists) {
+                const leadData = leadSnap.data();
+                const repName = leadData?.accountManagerAssigned || leadData?.salesRepAssigned || leadData?.dialerAssigned;
+                if (repName) {
+                  const usersSnap = await db.collection('users').get();
+                  const matchedUser = usersSnap.docs.find(d => {
+                    const u = d.data();
+                    const full = `${u.firstName || ''} ${u.lastName || ''}`.trim().toLowerCase();
+                    const disp = (u.displayName || '').trim().toLowerCase();
+                    return full === repName.trim().toLowerCase() || disp === repName.trim().toLowerCase() || d.id === repName;
+                  });
+                  if (matchedUser) {
+                    if (!targetUserId || targetUserId === 'all') targetUserId = matchedUser.id;
+                    if (!repEmail) repEmail = matchedUser.data()?.email;
+                  }
+                }
+              }
+            }
+
+            const notifMessage = `${recipientLabel} opened email: "${emailSubject}"`;
+            const notifLink = leadId ? `/leads/${leadId}` : '/admin/mailbox';
+
+            // 1. Create In-App Notification in user's subcollection (for real-time popup toast & notification center)
+            if (targetUserId && targetUserId !== 'all') {
+              await db.collection('users').doc(targetUserId).collection('notifications').add({
+                title: '📬 Email Opened',
+                message: notifMessage,
+                type: 'email_opened',
+                link: notifLink,
+                createdAt: now,
+                isRead: false,
+                leadId: leadId || null
+              });
+            }
+
+            // Also record in root notifications collection
             await db.collection('notifications').add({
-              userId: targetUserId,
+              userId: targetUserId || 'all',
               title: '📬 Email Opened',
-              body: `${recipientLabel} opened email: "${emailSubject}"`,
-              link: leadId ? `/leads/${leadId}` : '/admin/mailbox',
+              message: notifMessage,
+              body: notifMessage,
+              link: notifLink,
               createdAt: now,
               isRead: false,
               type: 'email_opened',
@@ -83,35 +175,6 @@ export async function GET(request: Request) {
             });
 
             // 2. Send instant Email Alert to Rep
-            let repEmail = data?.notifyUserEmail;
-
-            // If rep email is missing, lookup user by notifyUserId or salesRep/accountManager assigned on lead
-            if (!repEmail && data?.notifyUserId && data.notifyUserId !== 'all') {
-              const userDoc = await db.collection('users').doc(data.notifyUserId).get();
-              if (userDoc.exists) {
-                repEmail = userDoc.data()?.email;
-              }
-            }
-
-            if (!repEmail && leadId) {
-              const leadSnap = await db.collection('leads').doc(leadId).get();
-              if (leadSnap.exists) {
-                const leadData = leadSnap.data();
-                const repName = leadData?.accountManagerAssigned || leadData?.salesRepAssigned;
-                if (repName) {
-                  const usersSnap = await db.collection('users').get();
-                  const matchedUser = usersSnap.docs.find(d => {
-                    const u = d.data();
-                    const full = `${u.firstName || ''} ${u.lastName || ''}`.trim().toLowerCase();
-                    return full === repName.trim().toLowerCase();
-                  });
-                  if (matchedUser) {
-                    repEmail = matchedUser.data()?.email;
-                  }
-                }
-              }
-            }
-
             if (repEmail) {
               const formattedDate = new Date(now).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' });
               const alertSubject = `[Open Alert] ${recipientLabel} opened your email: "${emailSubject}"`;
@@ -137,7 +200,7 @@ export async function GET(request: Request) {
                 <td style="font-size: 14px; color: #4a5568; padding: 6px 0; border: 0;"><strong>Recipient:</strong> ${data?.leadEmail || 'Unknown'}</td>
               </tr>
               <tr>
-                <td style="font-size: 14px; color: #4a5568; padding: 6px 0; border: 0;"><strong>Company:</strong> ${data?.companyName || recipientLabel}</td>
+                <td style="font-size: 14px; color: #4a5568; padding: 6px 0; border: 0;"><strong>Company:</strong> ${companyDisplay}</td>
               </tr>
               <tr>
                 <td style="font-size: 14px; color: #4a5568; padding: 6px 0; border: 0;"><strong>Subject:</strong> ${emailSubject}</td>

@@ -113,18 +113,26 @@ export function calculatePrevMonthRealizationCohort(
   leads: Lead[],
   invoices: ExtendedInvoice[],
   activeDateRange?: { from?: Date; to?: Date },
-  monthsCount: number = 3
+  monthsCount: number = 3,
+  customCohortDateRange?: { from?: Date; to?: Date }
 ): PrevMonthCohortSummary {
-  // Determine reference date for the current active filter (default to today if omitted)
-  const referenceDate = activeDateRange?.from || new Date();
-  
-  // Calculate Previous 3 Months Range (prior 3 calendar months)
-  const prevMonthStart = startOfDay(startOfMonth(subMonths(referenceDate, monthsCount)));
-  const prevMonthEnd = endOfDay(endOfMonth(subMonths(referenceDate, 1)));
+  let prevMonthStart: Date;
+  let prevMonthEnd: Date;
+
+  if (customCohortDateRange?.from && customCohortDateRange?.to) {
+    prevMonthStart = startOfDay(customCohortDateRange.from);
+    prevMonthEnd = endOfDay(customCohortDateRange.to);
+  } else {
+    // Determine reference date (default to today if omitted)
+    const referenceDate = activeDateRange?.from || new Date();
+    // Calculate Previous Months Range (prior N calendar months)
+    prevMonthStart = startOfDay(startOfMonth(subMonths(referenceDate, monthsCount)));
+    prevMonthEnd = endOfDay(endOfMonth(subMonths(referenceDate, 1)));
+  }
   
   const startMonthName = format(prevMonthStart, 'MMM yyyy');
   const endMonthName = format(prevMonthEnd, 'MMM yyyy');
-  const prevMonthName = `${startMonthName} – ${endMonthName}`;
+  const prevMonthName = startMonthName === endMonthName ? startMonthName : `${startMonthName} – ${endMonthName}`;
 
   // Map invoices by parent lead/company ID
   const invoicesByParentMap = new Map<string, ExtendedInvoice[]>();
@@ -167,9 +175,10 @@ export function calculatePrevMonthRealizationCohort(
     const contractedMrr = calculateMonthlyValue(lead);
 
     // Get matching invoices for lead.id or lead.companyId
+    const companyId = (lead as any).companyId;
     const leadInvoices = [
       ...(invoicesByParentMap.get(lead.id) || []),
-      ...(lead.companyId ? invoicesByParentMap.get(lead.companyId) || [] : [])
+      ...(companyId ? invoicesByParentMap.get(companyId) || [] : [])
     ];
 
     // Deduplicate invoices by document ID if any overlap
@@ -206,10 +215,10 @@ export function calculatePrevMonthRealizationCohort(
 
     cohortDetails.push({
       leadId: lead.id,
-      companyName: lead.companyName || lead.company || lead.name || 'Unnamed Company',
+      companyName: lead.companyName || (lead as any).company || (lead as any).name || 'Unnamed Company',
       commencementDate: format(commencementDateObj, 'dd/MM/yyyy'),
       signedUpAt: lead.signedUpAt || lead.dateLeadEntered || null,
-      repName: lead.assignedUser || lead.accountManagerAssigned || lead.amAssigned || lead.userInCharge || lead.dialerAssigned || 'Unassigned',
+      repName: (lead as any).assignedUser || lead.accountManagerAssigned || (lead as any).amAssigned || (lead as any).userInCharge || lead.dialerAssigned || 'Unassigned',
       status,
       contractedMrr,
       actualInvoiced,

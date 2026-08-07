@@ -642,7 +642,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewFieldSalesMap = (isSuperAdmin || (userProfile?.activeRole && allowedRoutePlannerRoles.includes(userProfile.activeRole))) && userProfile?.activeRole !== 'user';
   const canViewFieldSalesGroup = canViewFieldSalesD2D || canViewVisits || canViewFieldSalesMap || canViewD2D;
   const canViewLeadManagementOutbound = canView('outboundLeads');
-  const canViewLeadManagementArchive = userProfile?.activeRole && !userProfile.activeRole.includes('Lead Gen') && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Dashback' && userProfile.activeRole !== 'Franchisee';
+  const canViewLeadManagementArchive = canView('archivedLeads');
   const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
   const canImportLeads = Boolean(isSuperAdmin);
   const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
@@ -665,8 +665,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewFranchiseProspects = isSuperAdmin || ['admin', 'super user', 'Operations', 'operations'].includes(activeRoleStr);
   const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || activeRoleStr === 'Outbound Admin' || activeRoleStr === 'Lead Gen Admin';
   const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
-  const canViewInReviewLeads = (isAdmin || isSuperAdmin || canView('inReviewLeads')) && !isUserRole;
-  const canViewMasterLeadsDirectory = (isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin') && !isUserRole && activeRoleStr !== 'Outbound Admin';
+  const canViewInReviewLeads = Boolean(isSuperAdmin);
+  const canViewMasterLeadsDirectory = Boolean(isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr?.toLowerCase() === 'admin' || activeRoleStr?.toLowerCase() === 'superadmin');
   const canViewLeadManagementGroup = canCreateLead || isFranchiseeRole || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads || canViewFranchiseeVerification || canViewInReviewLeads || canViewMasterLeadsDirectory;
   
   const allowedMailboxRoles = [

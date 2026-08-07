@@ -3793,7 +3793,7 @@ export default function AMReportsDashboard() {
                                     <TableHead>Account Manager</TableHead>
                                     <TableHead>Franchisee</TableHead>
                                     <TableHead>Lead Type</TableHead>
-                                    <TableHead>{getLeadDisplayDateLabel(drillDownData?.title, drillDownStatusFilter)}</TableHead>
+                                    <TableHead>{getLeadDisplayDateLabel((drillDownStatusFilter && drillDownStatusFilter !== 'all') ? drillDownStatusFilter : drillDownData?.title)}</TableHead>
                                     <TableHead className="text-right">MRR</TableHead>
                                     <TableHead className="text-right">Action</TableHead>
                                 </TableRow>

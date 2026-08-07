@@ -215,7 +215,12 @@ export async function POST(request: Request) {
         html: formattedHtml,
         customFrom,
         cc,
-        bcc
+        bcc,
+        leadId,
+        notifyOnOpen: notifyOnOpen !== false,
+        notifyUserId,
+        notifyUserEmail: notifyUserEmail || customFrom,
+        trackingCategory: trackingCategory || 'quote'
       });
 
       if (!dispatchResult.success) {

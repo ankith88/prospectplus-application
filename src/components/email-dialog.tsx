@@ -14,10 +14,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, Paperclip, X, Bell } from 'lucide-react';
 import { storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useAuth } from '@/hooks/use-auth';
+import { OpenTrackingTips } from '@/components/ui/open-tracking-tips';
 
 interface EmailDialogProps {
   isOpen: boolean;
@@ -29,6 +29,7 @@ interface EmailDialogProps {
 }
 
 export function EmailDialog({ isOpen, onClose, toEmail, recipientName, senderEmail, leadId }: EmailDialogProps) {
+  const { user } = useAuth();
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [notifyOnOpen, setNotifyOnOpen] = useState(true);
@@ -84,7 +85,8 @@ export function EmailDialog({ isOpen, onClose, toEmail, recipientName, senderEma
           attachments,
           leadId,
           notifyOnOpen,
-          notifyUserEmail: senderEmail,
+          notifyUserId: user?.uid,
+          notifyUserEmail: senderEmail || user?.email,
           trackingCategory: 'custom'
         })
       });
@@ -145,24 +147,27 @@ export function EmailDialog({ isOpen, onClose, toEmail, recipientName, senderEma
           </div>
 
           {/* Open Tracking Notification Checkbox */}
-          <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
-            <Checkbox 
-              id="notifyOnOpen" 
-              checked={notifyOnOpen} 
-              onCheckedChange={(checked) => setNotifyOnOpen(!!checked)}
-            />
-            <div className="grid gap-1 leading-none">
-              <label
-                htmlFor="notifyOnOpen"
-                className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
-              >
-                <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
-                Notify me (In-App & Email Alert) when recipient opens this email
-              </label>
-              <p className="text-[11px] text-slate-500">
-                You will receive a notification and inbox alert when this message is opened.
-              </p>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-md p-3">
+              <Checkbox 
+                id="notifyOnOpen" 
+                checked={notifyOnOpen} 
+                onCheckedChange={(checked) => setNotifyOnOpen(!!checked)}
+              />
+              <div className="grid gap-1 leading-none">
+                <label
+                  htmlFor="notifyOnOpen"
+                  className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer text-slate-800"
+                >
+                  <Bell className="h-3.5 w-3.5 text-[#095c7b]" />
+                  Notify me (In-App & Email Alert) when recipient opens this email
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  You will receive a notification and inbox alert when this message is opened.
+                </p>
+              </div>
             </div>
+            {notifyOnOpen && <OpenTrackingTips className="mt-1" />}
           </div>
 
           {/* Attachments List & Uploader */}

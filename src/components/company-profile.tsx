@@ -206,18 +206,19 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
       if (data.accountActivated) {
         toast({
-          title: 'ShipMate Portal Activated',
+          title: 'ShipMate Account Activated',
           description: `${contact.name} (${contact.email}) has an active ShipMate portal account.`,
         });
       } else if (data.createPasswordEmailSent) {
         toast({
-          title: 'Password Setup Email Sent',
-          description: `Password setup email was sent to ${contact.name} (${contact.email}). Account pending setup.`,
+          title: 'Not Activated (Password Setup Email Sent)',
+          description: `${contact.name} (${contact.email}) has NOT activated their account, but HAS received the password setup email.`,
         });
       } else {
         toast({
-          title: 'No Portal Activity',
-          description: `No ShipMate portal activity found for ${contact.email}.`,
+          variant: 'destructive',
+          title: 'Not Activated (Password Email Not Received)',
+          description: `${contact.name} (${contact.email}) has NOT activated their account and has NOT received the password setup email.`,
         });
       }
     } catch (err: any) {
@@ -787,7 +788,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                     {contact.shipmateStatus === 'Activated' ? (
                                         <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300 py-0 h-4 font-semibold">ShipMate Activated</Badge>
                                     ) : contact.shipmateStatus === 'Password Sent' ? (
-                                        <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-300 py-0 h-4 font-semibold">ShipMate Setup Sent</Badge>
+                                        <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-300 py-0 h-4 font-semibold">ShipMate Password Sent (Not Activated)</Badge>
+                                    ) : contact.shipmateStatus === 'No Access' ? (
+                                        <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-300 py-0 h-4 font-semibold">ShipMate Not Activated & No Email</Badge>
                                     ) : contact.accessToShipMate === 'yes' ? (
                                         <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 py-0 h-4">ShipMate Access</Badge>
                                     ) : null}

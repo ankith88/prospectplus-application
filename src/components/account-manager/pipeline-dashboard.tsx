@@ -1167,7 +1167,8 @@ function LeadGrid({
     isTodayTaskSection = false,
     isFutureTaskSection = false,
     isCompletedTaskSection = false,
-    emptyMessage = "No leads in this bucket."
+    emptyMessage = "No leads in this bucket.",
+    statusFilter
 }: { 
     leads: Lead[], 
     viewMode: 'table' | 'accordion' | 'grid' | 'queue', 
@@ -1188,7 +1189,8 @@ function LeadGrid({
     isTodayTaskSection?: boolean,
     isFutureTaskSection?: boolean,
     isCompletedTaskSection?: boolean,
-    emptyMessage?: string
+    emptyMessage?: string,
+    statusFilter?: string
 }) {
     if (leads.length === 0) {
         return <div className="text-center p-8 text-muted-foreground bg-white/40 rounded-lg border border-dashed border-slate-200">{emptyMessage}</div>;

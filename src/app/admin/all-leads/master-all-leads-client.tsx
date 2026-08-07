@@ -158,9 +158,8 @@ export function MasterAllLeadsClient() {
 
   const isAllowed = useMemo(() => {
     const role = userProfile?.activeRole || userProfile?.role || ''
-    if (role === 'user' || role.toLowerCase() === 'user') return false
     if (isSuperAdmin) return true
-    return ['admin', 'super user', 'Sales Manager', 'Marketing Admin', 'Marketing Manager'].includes(role)
+    return ['admin', 'super user'].includes(role) || role.toLowerCase() === 'admin' || role.toLowerCase() === 'superadmin'
   }, [isSuperAdmin, userProfile])
 
   const [leads, setLeads] = useState<Lead[]>([])

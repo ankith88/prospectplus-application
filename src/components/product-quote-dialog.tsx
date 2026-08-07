@@ -26,6 +26,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { isContactEmpty } from '@/lib/contact-utils';
 import { encryptLeadId } from '@/lib/localmile-security';
+import { OpenTrackingTips } from '@/components/ui/open-tracking-tips';
 
 interface ProductQuoteDialogProps {
   isOpen: boolean;
@@ -78,11 +79,7 @@ export function ProductQuoteDialog({
       return rolesToCheck.some(r => normalizedNames.includes(r));
     };
 
-    if (isAccountManagerUser) {
-      filtered = filtered.filter(u => userHasRole(u, ['Account Manager', 'Account Managers', 'account managers', 'Sales Manager']));
-    } else if (isDialerUser) {
-      filtered = filtered.filter(u => userHasRole(u, ['user', 'Dialer', 'dialers', 'Account Manager', 'Account Managers', 'account managers', 'Sales Manager']));
-    }
+    // Include all active users irrespective of role
 
     const getGroupRoleName = (u: any): string => {
       const primaryRole = u.activeRole || u.defaultRole || u.role || (u.assignedRoles && u.assignedRoles[0]) || 'Other';
@@ -472,7 +469,8 @@ export function ProductQuoteDialog({
           isTemplate: true,
           leadId: lead.id,
           notifyOnOpen: true,
-          notifyUserEmail: senderEmail,
+          notifyUserId: user?.uid || userProfile?.uid,
+          notifyUserEmail: senderEmail || user?.email,
           trackingCategory: 'quote'
         }),
       });
@@ -633,6 +631,8 @@ export function ProductQuoteDialog({
                 )}
               </div>
             </div>
+
+            <OpenTrackingTips className="mt-2" />
 
             <div className="space-y-2">
               <div className="flex justify-between items-center">

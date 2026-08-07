@@ -1059,18 +1059,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
       if (data.accountActivated) {
         toast({
-          title: 'ShipMate Portal Activated',
+          title: 'ShipMate Account Activated',
           description: `${contact.name} (${contact.email}) has an active ShipMate portal account.`,
         });
       } else if (data.createPasswordEmailSent) {
         toast({
-          title: 'Password Setup Email Sent',
-          description: `Password setup email was sent to ${contact.name} (${contact.email}). Account pending setup.`,
+          title: 'Not Activated (Password Setup Email Sent)',
+          description: `${contact.name} (${contact.email}) has NOT activated their account, but HAS received the password setup email.`,
         });
       } else {
         toast({
-          title: 'No Portal Activity',
-          description: `No ShipMate portal activity found for ${contact.email}.`,
+          variant: 'destructive',
+          title: 'Not Activated (Password Email Not Received)',
+          description: `${contact.name} (${contact.email}) has NOT activated their account and has NOT received the password setup email.`,
         });
       }
     } catch (err: any) {
@@ -1095,13 +1096,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         emails: [contact.email],
         leadId: lead.id,
         contactId: contact.id,
+        forceRefresh: true,
       });
 
       if (results.length > 0) {
         const res = results[0];
         setLead((prevLead) => {
+          let found = false;
           const updatedContacts = (prevLead.contacts || []).map((c) => {
-            if (c.email && c.email.toLowerCase().trim() === normEmail) {
+            if ((c.email && c.email.toLowerCase().trim() === normEmail) || (contact.id && c.id === contact.id)) {
+              found = true;
               return {
                 ...c,
                 verificationStatus: res.status,
@@ -1111,6 +1115,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             }
             return c;
           });
+
+          if (!found) {
+            updatedContacts.push({
+              id: contact.id || `contact_${Date.now()}`,
+              name: contact.name || 'Company Contact',
+              title: contact.title || 'General',
+              email: normEmail,
+              phone: contact.phone || prevLead.customerPhone || '',
+              verificationStatus: res.status,
+              verificationScore: res.score,
+              verifiedAt: res.verifiedAt,
+            });
+          }
+
           return { ...prevLead, contacts: updatedContacts };
         });
 
@@ -1143,6 +1161,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       const results = await verifyEmailsClient({
         emails: emailList,
         leadId: lead.id,
+        forceRefresh: true,
       });
 
       setLead((prevLead) => {
@@ -1164,11 +1183,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       });
 
       const cachedCount = results.filter((r) => r.cached).length;
-      const apiCount = results.length - cachedCount;
+      const liveCount = results.length - cachedCount;
 
       toast({
         title: 'Emails Verification Complete',
-        description: `Verified ${results.length} email(s) (${apiCount} via Hunter.io API, ${cachedCount} from cache).`,
+        description: `Verified ${results.length} email(s) (${liveCount} checked, ${cachedCount} from cache).`,
       });
     } catch (err: any) {
       toast({
@@ -3103,16 +3122,32 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </a>
                     ) : <span className="text-sm text-muted-foreground">-</span>
                 ) : emailClickable && value ? (
-                    userProfile?.activeRole === 'user' ? (
-                        <span className="text-sm font-semibold text-foreground text-left">{value}</span>
-                    ) : (
-                        <button 
-                            onClick={() => handleEmailClick(value)} 
-                            className="text-sm font-semibold text-primary hover:underline text-left"
-                        >
-                            {value}
-                        </button>
-                    )
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {userProfile?.activeRole === 'user' ? (
+                            <span className="text-sm font-semibold text-foreground text-left">{value}</span>
+                        ) : (
+                            <button 
+                                onClick={() => handleEmailClick(value)} 
+                                className="text-sm font-semibold text-primary hover:underline text-left"
+                            >
+                                {value}
+                            </button>
+                        )}
+                        {(() => {
+                            const norm = value.toLowerCase().trim();
+                            const matchingContact = (lead.contacts || []).find(c => c.email && c.email.toLowerCase().trim() === norm);
+                            return (
+                                <EmailVerificationBadge
+                                    status={matchingContact?.verificationStatus}
+                                    score={matchingContact?.verificationScore}
+                                    verifiedAt={matchingContact?.verifiedAt}
+                                    onVerify={() => handleVerifySingleEmail(matchingContact || { email: value })}
+                                    loading={!!verifyingEmails[norm]}
+                                    size="sm"
+                                />
+                            );
+                        })()}
+                    </div>
                 ) : isLink ? (
                     <div className="flex items-center gap-1.5">
                         <span className="text-sm font-semibold">{value || '-'}</span>
@@ -5346,7 +5381,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     {contact.shipmateStatus === 'Activated' ? (
                                         <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300 py-0 h-4 font-semibold">ShipMate Activated</Badge>
                                     ) : contact.shipmateStatus === 'Password Sent' ? (
-                                        <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-300 py-0 h-4 font-semibold">ShipMate Setup Sent</Badge>
+                                        <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-300 py-0 h-4 font-semibold">ShipMate Password Sent (Not Activated)</Badge>
+                                    ) : contact.shipmateStatus === 'No Access' ? (
+                                        <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-300 py-0 h-4 font-semibold">ShipMate Not Activated & No Email</Badge>
                                     ) : contact.accessToShipMate === 'yes' ? (
                                         <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 py-0 h-4">ShipMate Access</Badge>
                                     ) : null}

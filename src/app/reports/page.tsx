@@ -5,14 +5,17 @@ import ReportsClientPage from '@/components/reports-client';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { usePermissions } from '@/hooks/use-permissions';
 import { Loader } from '@/components/ui/loader';
 import { AccessDenied } from '@/components/access-denied';
 
 export default function ReportsPage() {
-  const { userProfile, loading } = useAuth();
-  const router = useRouter();
+  const { userProfile, loading: authLoading } = useAuth();
+  const { canView, loadingPermissions } = usePermissions();
 
-  const hasAccess = userProfile?.activeRole && userProfile.activeRole.toLowerCase() !== 'franchisee' && ['admin', 'user', 'Outbound Admin', 'Field Sales', 'Field Sales Admin', 'Sales Manager'].includes(userProfile.activeRole);
+  const loading = authLoading || loadingPermissions;
+  const hasAccess = canView('reporting');
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">

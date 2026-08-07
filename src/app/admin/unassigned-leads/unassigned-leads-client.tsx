@@ -17,11 +17,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { getLeadsFromFirebase, getAllUsers, bulkAssignUnassignedLeads } from '@/services/firebase'
 import type { Lead, UserProfile, LeadBucket } from '@/lib/types'
+import { useAuth } from '@/hooks/use-auth'
+import { usePermissions } from '@/hooks/use-permissions'
+import { useRouter } from 'next/navigation'
+import { AccessDenied } from '@/components/access-denied'
 import { useToast } from '@/hooks/use-toast'
 import { Loader } from '@/components/ui/loader'
 import { Search, Filter, Shuffle } from 'lucide-react'
 
 export function UnassignedLeadsClient() {
+  const { userProfile, isSuperAdmin, loading: authLoading } = useAuth()
+  const { canView, loadingPermissions } = usePermissions()
+  const router = useRouter()
+
+  const isAllowed = canView('unassignedLeads')
+
   const [leads, setLeads] = useState<Lead[]>([])
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,8 +64,22 @@ export function UnassignedLeadsClient() {
   }
 
   useEffect(() => {
-    fetchData()
-  }, [])
+    if (!authLoading && !loadingPermissions && isAllowed) {
+      fetchData()
+    }
+  }, [authLoading, loadingPermissions, isAllowed])
+
+  if (authLoading || loadingPermissions) {
+    return (
+      <div className="flex h-full items-center justify-center min-h-[400px]">
+        <Loader />
+      </div>
+    )
+  }
+
+  if (!isAllowed) {
+    return <AccessDenied />
+  }
 
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
