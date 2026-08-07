@@ -605,7 +605,8 @@ export function ServiceSelectionDialog({
             primaryColor: '#095C7B',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             logoUrl: '',
-            senderEmail: ''
+            senderEmail: '',
+            notifyOnOpen: true
         });
     }
   }, [isOpen, form, lead]);
@@ -1037,7 +1038,8 @@ export function ServiceSelectionDialog({
                primaryColor: '#095C7B',
                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                logoUrl: '',
-               senderEmail: defaultSenderEmail
+               senderEmail: defaultSenderEmail,
+               notifyOnOpen: true
            });
            setShowEmailPreview(true);
            setIsSubmitting(false);
@@ -1474,7 +1476,8 @@ export function ServiceSelectionDialog({
                       primaryColor: data.primaryColor || '#095C7B',
                       fontFamily: data.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                       logoUrl: data.logoUrl || '',
-                      senderEmail: defaultSenderEmail
+                      senderEmail: defaultSenderEmail,
+                      notifyOnOpen: true
                   });
                   setSubmittingProgress(100);
                   setShowEmailPreview(true);
@@ -1667,7 +1670,8 @@ export function ServiceSelectionDialog({
                 primaryColor: '#095C7B',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                 logoUrl: '',
-                senderEmail: defaultSenderEmail
+                senderEmail: defaultSenderEmail,
+                notifyOnOpen: true
             });
             setShowEmailPreview(true);
             setIsSubmitting(false);
