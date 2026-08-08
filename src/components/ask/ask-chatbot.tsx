@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ResultsView } from "@/components/ask/results-view";
 import { ALLOWED_ASK_UIDS } from "@/lib/constants";
+import { AiThinkingWave } from "@/components/ai-thinking-wave";
+import { CopyButton } from "@/components/ui/copy-button";
+
 
 interface Message {
   id: string;
@@ -106,16 +109,21 @@ export function AskChatbot() {
     <>
       {/* Floating Action Button - Hidden on mobile viewports */}
       <div className="hidden md:block fixed bottom-6 right-6 z-50">
-        <Button
-          onClick={() => setIsOpen(!isOpen)}
-          className={`h-14 w-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 border-none ${
-            isOpen 
-              ? "bg-rose-600 hover:bg-rose-700 text-white" 
-              : "bg-[#095c7b] hover:bg-[#07475f] text-white"
-          }`}
-        >
-          {isOpen ? <X className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
-        </Button>
+        <div className="relative group">
+          {!isOpen && (
+            <span className="absolute -inset-1 rounded-full bg-gradient-to-r from-sky-400 via-[#095c7b] to-teal-400 opacity-75 blur-xs group-hover:opacity-100 transition duration-500 animate-pulse" />
+          )}
+          <Button
+            onClick={() => setIsOpen(!isOpen)}
+            className={`relative h-14 w-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 border-none ${
+              isOpen 
+                ? "bg-rose-600 hover:bg-rose-700 text-white" 
+                : "bg-[#095c7b] hover:bg-[#07475f] text-white"
+            }`}
+          >
+            {isOpen ? <X className="h-6 w-6" /> : <Sparkles className="h-6 w-6 animate-pulse" />}
+          </Button>
+        </div>
       </div>
 
       {/* Slide-out Drawer Container */}
@@ -125,24 +133,29 @@ export function AskChatbot() {
         }`}
       >
         {/* Header */}
-        <div className="p-4 border-b border-border/80 bg-[#095c7b] text-white flex items-center justify-between shrink-0">
+        <div className="p-4 border-b border-border/80 bg-gradient-to-r from-[#095c7b] to-[#103d39] text-white flex items-center justify-between shrink-0 shadow-xs">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-[#eaf143]" />
-            <h3 className="font-serif font-semibold text-lg">Ask Prospect+ Assistant</h3>
+            <div className="p-1.5 rounded-lg bg-white/10 backdrop-blur-xs">
+              <Sparkles className="h-5 w-5 text-[#eaf143] animate-pulse" />
+            </div>
+            <div>
+              <h3 className="font-serif font-semibold text-base leading-tight">Ask Prospect+ Assistant</h3>
+              <p className="text-[10px] text-sky-200">AI Database Insights & Pipeline Intelligence</p>
+            </div>
           </div>
           <button 
             onClick={() => setIsOpen(false)} 
-            className="text-white/80 hover:text-white transition"
+            className="text-white/80 hover:text-white transition p-1 rounded-lg hover:bg-white/10"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Content Panel */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-slate-50">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-slate-50/80">
           {!isAllowed ? (
             /* Coming Soon Screen */
-            <div className="flex-grow flex flex-col items-center justify-center text-center p-6 gap-4 animate-fadeIn">
+            <div className="flex-grow flex flex-col items-center justify-center text-center p-6 gap-4 animate-in fade-in-50 duration-300">
               <div className="h-16 w-16 rounded-full bg-[#095c7b]/10 flex items-center justify-center text-[#095c7b]">
                 <MessageSquare className="h-8 w-8 animate-pulse" />
               </div>
@@ -157,26 +170,31 @@ export function AskChatbot() {
               {messages.map(msg => (
                 <div 
                   key={msg.id}
-                  className={`flex flex-col gap-1.5 ${
+                  className={`flex flex-col gap-1.5 animate-in fade-in-50 slide-in-from-bottom-2 duration-300 ${
                     msg.sender === "user" ? "items-end" : "items-start"
                   }`}
                 >
                   {/* Chat bubble text */}
                   {msg.text && (
                     <div 
-                      className={`max-w-[85%] p-3 rounded-xl text-sm leading-relaxed ${
+                      className={`group/msg relative max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-xs transition-all ${
                         msg.sender === "user" 
-                          ? "bg-[#095c7b] text-white rounded-br-none" 
-                          : "bg-white border border-border text-slate-700 rounded-bl-none shadow-sm"
+                          ? "bg-gradient-to-r from-[#095c7b] to-[#103d39] text-white rounded-br-none" 
+                          : "bg-white border border-slate-200/80 text-slate-700 rounded-bl-none shadow-xs"
                       }`}
                     >
-                      {msg.text}
+                      <div>{msg.text}</div>
+                      {msg.sender === "bot" && (
+                        <div className="mt-1 flex justify-end">
+                          <CopyButton textToCopy={msg.text} size="xs" />
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {/* Errors */}
                   {msg.error && (
-                    <div className="max-w-[85%] p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl rounded-bl-none text-xs leading-relaxed flex items-start gap-2 shadow-sm">
+                    <div className="max-w-[85%] p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl rounded-bl-none text-xs leading-relaxed flex items-start gap-2 shadow-xs animate-in fade-in-50">
                       <Info className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
                       <div>{msg.error}</div>
                     </div>
@@ -184,7 +202,7 @@ export function AskChatbot() {
 
                   {/* Embedded Results Panel */}
                   {msg.result && (
-                    <div className="w-full mt-2 max-w-full overflow-hidden bg-white border border-border rounded-xl p-3 shadow-sm">
+                    <div className="w-full mt-2 max-w-full overflow-hidden bg-white border border-slate-200 rounded-2xl p-3 shadow-xs animate-in fade-in-50 duration-300">
                       <ResultsView
                         collection={msg.result.spec.collection}
                         intent={msg.result.spec.intent}
@@ -200,9 +218,8 @@ export function AskChatbot() {
               ))}
 
               {loading && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-white border border-border px-3 py-2 rounded-xl rounded-bl-none self-start shadow-sm animate-pulse">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#095c7b]" />
-                  Querying CRM database...
+                <div className="self-start w-full max-w-[90%]">
+                  <AiThinkingWave text="Analyzing CRM database..." />
                 </div>
               )}
 
@@ -210,6 +227,7 @@ export function AskChatbot() {
             </>
           )}
         </div>
+
 
         {/* Input Bar */}
         {isAllowed && (

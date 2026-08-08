@@ -1,6 +1,8 @@
 'use client'
 
 import React from 'react'
+import { CopyButton } from '@/components/ui/copy-button'
+
 import { usePathname, useRouter } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
 import Link from 'next/link'
@@ -3162,10 +3164,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 )}
                 
                 {copyable && value && (
-                    <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleCopy(value, label)}>
-                        <Clipboard className="h-3 w-3" />
-                    </Button>
+                    <CopyButton
+                        textToCopy={value}
+                        size="icon"
+                        className="h-5 w-5"
+                        iconClassName="h-3.5 w-3.5"
+                    />
                 )}
+
+
+
                 
                 {callable && value && (
                     <>
@@ -4627,9 +4635,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => setSelectedAddress(fullAddressStr)}>
                                     <Search className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => handleCopy(fullAddressStr, 'Address')}>
-                                    <Clipboard className="h-4 w-4" />
-                                </Button>
+                                <CopyButton textToCopy={fullAddressStr} className="h-6 w-6" iconClassName="h-4 w-4" />
                             </div>
                         </div>
                         
@@ -5426,7 +5432,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                     {checkingShipmateId === contact.id ? (
                                                         <Loader2 className="h-3 w-3 animate-spin" />
                                                     ) : (
-                                                        <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
+                                                                        <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
                                                     )}
                                                     Check ShipMate
                                                 </Button>
@@ -5440,13 +5446,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             <p className="font-semibold text-primary">LocalMile.Plus Access Info:</p>
                                             <p className="flex items-center gap-2">
                                                 <span className="font-medium">Link:</span>
-                                                <a href={contact.localMilePlusAuthLink} target="_blank" className="text-blue-600 hover:underline truncate max-w-[150px]" title={contact.localMilePlusAuthLink}>{contact.localMilePlusAuthLink}</a>
-                                                <Button variant="ghost" size="icon" className="h-4 w-4 ml-auto" onClick={() => handleCopy(contact.localMilePlusAuthLink, 'Auth Link')}><Clipboard className="h-3 w-3" /></Button>
+                                                <a href={contact.localMilePlusAuthLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate max-w-[150px]" title={contact.localMilePlusAuthLink}>{contact.localMilePlusAuthLink}</a>
+                                                <CopyButton textToCopy={contact.localMilePlusAuthLink} size="icon" variant="ghost" className="h-4 w-4 ml-auto" iconClassName="h-3 w-3" toastTitle="Copied" toastDescription="Auth link copied to clipboard." />
                                             </p>
                                             <p className="flex items-center gap-2">
                                                 <span className="font-medium">Code:</span>
                                                 <span className="font-mono bg-muted px-1 py-0.5 rounded">{contact.securityCode}</span>
-                                                <Button variant="ghost" size="icon" className="h-4 w-4 ml-auto" onClick={() => handleCopy(contact.securityCode, 'Security Code')}><Clipboard className="h-3 w-3" /></Button>
+                                                <CopyButton textToCopy={contact.securityCode} size="icon" variant="ghost" className="h-4 w-4 ml-auto" iconClassName="h-3 w-3" toastTitle="Copied" toastDescription="Security code copied to clipboard." />
                                             </p>
                                             <div className="flex flex-col gap-2 mt-2">
                                                 <Button 

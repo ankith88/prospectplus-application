@@ -6,10 +6,18 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Shimmer Light Sweep Keyframes for Skeleton Loading */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* Ensure Google Places Autocomplete dropdown appears above other UI elements */
 .pac-container {
   z-index: 9999 !important;
 }
+
 
 @layer base {
   :root {

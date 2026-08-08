@@ -1,6 +1,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { CopyButton } from '@/components/ui/copy-button'
+
 import {
   ArrowLeft,
   Building,
@@ -475,10 +477,16 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 )}
                 
                 {copyable && value && (
-                    <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleCopy(value, label)}>
-                        <Clipboard className="h-3 w-3" />
-                    </Button>
+                    <CopyButton
+                        textToCopy={value}
+                        size="icon"
+                        className="h-5 w-5"
+                        iconClassName="h-3.5 w-3.5"
+                    />
                 )}
+
+
+
                 
                 {callable && value && (
                     <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(value)}>

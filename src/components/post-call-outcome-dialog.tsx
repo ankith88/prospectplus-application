@@ -47,6 +47,8 @@ import { LossReasonPicker } from '@/components/loss-reason-picker'
 import { isContactEmpty } from '@/lib/contact-utils'
 import { getMergedCancellationHierarchy } from '@/lib/cancellation-reasons-mapper'
 import { CallAttemptBadge } from './call-attempt-badge'
+import { triggerVictoryConfetti } from '@/lib/confetti'
+
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
@@ -1215,7 +1217,22 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
         }
 
         setSubmissionState('complete');
+
+        const outcomeLower = (values.outcome || '').toLowerCase();
+        const statusLower = (newStatus || '').toLowerCase();
+        if (
+            outcomeLower.includes('won') ||
+            outcomeLower.includes('signed') ||
+            outcomeLower.includes('register') ||
+            statusLower.includes('won') ||
+            statusLower.includes('signed') ||
+            statusLower.includes('customer')
+        ) {
+            triggerVictoryConfetti();
+        }
+
         onOutcomeLogged(newStatus, values.outcome); 
+
 
     } catch (error: any) {
         setSubmissionState('error');
