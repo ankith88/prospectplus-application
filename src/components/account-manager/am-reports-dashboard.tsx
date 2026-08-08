@@ -42,6 +42,8 @@ import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 import { calculatePrevMonthRealizationCohort, type ExtendedInvoice } from '@/lib/mrr-realization';
 import { PrevMonthCohortWidget } from '@/components/prev-month-cohort-widget';
 
+import { AnimatedNumber } from '@/components/ui/animated-number';
+
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (
   <Popover>
     <PopoverTrigger asChild>
@@ -59,20 +61,32 @@ const SectionHelp = ({ content }: { content: React.ReactNode }) => (
 );
 
 const StatCard = ({ title, value, icon: Icon, description, onClick, helpContent, className }: { title: string; value: string | number | React.ReactNode; icon: React.ElementType; description?: React.ReactNode; onClick?: () => void; helpContent?: React.ReactNode; className?: string }) => (
-  <Card className={cn("border-[#095c7b]/10 shadow-sm", onClick && "cursor-pointer hover:bg-muted/50 transition-colors", className)} onClick={onClick}>
+  <Card className={cn("group relative overflow-hidden border-[#095c7b]/15 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:shadow-lg bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-900/80", onClick && "cursor-pointer hover:border-[#095c7b]/30 active:scale-[0.99]", className)} onClick={onClick}>
+    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#095c7b] via-sky-500 to-[#103d39] transition-all duration-500 group-hover:h-1.5 opacity-90 group-hover:opacity-100" />
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-1.5">
         <span>{title}</span>
         {helpContent && <SectionHelp content={helpContent} />}
       </CardTitle>
-      <div className="p-2 bg-[#095c7b]/10 rounded-lg"><Icon className="h-4 w-4 text-[#095c7b]" /></div>
+      <div className="p-2 bg-[#095c7b]/10 rounded-xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 group-hover:bg-[#095c7b] group-hover:text-white text-[#095c7b]">
+        <Icon className="h-4 w-4" />
+      </div>
     </CardHeader>
     <CardContent>
-      <div className="text-2xl font-bold text-[#095c7b]">{value}</div>
+      <div className="text-2xl font-bold text-[#095c7b] dark:text-sky-400">
+        {typeof value === 'number' ? (
+          <AnimatedNumber value={value} />
+        ) : typeof value === 'string' && !isNaN(Number(value)) ? (
+          <AnimatedNumber value={Number(value)} />
+        ) : (
+          value
+        )}
+      </div>
       {description && <p className="text-xs text-slate-500 mt-1 font-medium">{description}</p>}
     </CardContent>
   </Card>
 );
+
 import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfDay, endOfDay, isWeekend } from 'date-fns';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell, ScatterChart, Scatter, ZAxis, ComposedChart, Line, LineChart, LabelList } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -465,13 +479,17 @@ export default function AMReportsDashboard() {
                 const fromDateStr = appliedActivityDateRange?.from ? startOfDay(appliedActivityDateRange.from).toISOString() : undefined;
                 const toDateStr = appliedActivityDateRange?.to ? endOfDay(appliedActivityDateRange.to).toISOString() : undefined;
 
-                const [snapLeads, snapCompanies, activitiesSnap, fetchedAppointments, invoicesSnap] = await Promise.all([
+                const [snapLeads, snapCompanies, activitiesSnap, fetchedAppointments, invoicesSnap, scfsSnap] = await Promise.all([
                     getDocs(qLeads),
                     getDocs(qCompanies),
                     getDocs(activitiesQuery),
                     getAllAppointments(fromDateStr, toDateStr),
                     getDocs(collectionGroup(firestore, 'invoices')).catch(err => {
                         console.warn("Failed to fetch invoices for cohort realization:", err);
+                        return { docs: [] };
+                    }),
+                    getDocs(collectionGroup(firestore, 'scfs')).catch(err => {
+                        console.warn("Failed to fetch scfs for cohort realization:", err);
                         return { docs: [] };
                     })
                 ]);
@@ -501,6 +519,26 @@ export default function AMReportsDashboard() {
                     .map(doc => ({ id: doc.id, ...doc.data() } as Lead));
 
                 const fetchedLeads = [...rawLeads, ...rawCompanies];
+
+                // Attach scfs subcollection documents to fetchedLeads
+                if (scfsSnap && scfsSnap.docs && scfsSnap.docs.length > 0) {
+                    const scfsByParentMap = new Map<string, any[]>();
+                    scfsSnap.docs.forEach(doc => {
+                        const parentId = doc.ref.parent?.parent?.id;
+                        if (parentId) {
+                            const existing = scfsByParentMap.get(parentId) || [];
+                            existing.push({ id: doc.id, ...doc.data() });
+                            scfsByParentMap.set(parentId, existing);
+                        }
+                    });
+
+                    fetchedLeads.forEach(lead => {
+                        const parentScfs = scfsByParentMap.get(lead.id);
+                        if (parentScfs && parentScfs.length > 0) {
+                            (lead as any).scfs = parentScfs;
+                        }
+                    });
+                }
                 
                 // Extract and map activities (excluding automated, CSV uploads, and Data Management status changes)
                 const activities = activitiesSnap.docs.map(doc => {

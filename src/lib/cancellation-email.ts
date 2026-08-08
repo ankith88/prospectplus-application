@@ -10,6 +10,8 @@ export interface CSRequestNotificationData {
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
+  requestedBy?: string;
+  capturedBy?: string;
   
   // Change of service fields
   serviceChangeCategories?: string[];
@@ -42,6 +44,8 @@ export async function sendCSRequestNotificationEmail(data: CSRequestNotification
       contactName,
       contactEmail,
       contactPhone,
+      requestedBy,
+      capturedBy,
       serviceChangeCategories = [],
       requestedServices = [],
       effectiveDate,
@@ -144,7 +148,8 @@ export async function sendCSRequestNotificationEmail(data: CSRequestNotification
                     <p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Company Name:</strong> ${companyName}</p>
                     ${(prospectPlusId || leadId) ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Prospect+ ID:</strong> #${prospectPlusId || leadId}</p>` : ''}
                     ${netsuiteId ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">NetSuite ID:</strong> #${netsuiteId}</p>` : ''}
-                    ${contactName ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Contact Person:</strong> ${contactName}</p>` : ''}
+                    <p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Person Requesting (External Contact):</strong> ${requestedBy || contactName || 'N/A'}</p>
+                    <p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Captured / Submitted By (Internal Staff):</strong> ${capturedBy || processedBy || 'N/A'}</p>
                     ${contactEmail ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Email:</strong> <a href="mailto:${contactEmail}" style="color: #095c7b; text-decoration: underline;">${contactEmail}</a></p>` : ''}
                     ${contactPhone ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Phone:</strong> ${contactPhone}</p>` : ''}
                     

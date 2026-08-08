@@ -26,6 +26,7 @@ export interface PrevMonthCohortSummary {
   prevMonthName: string;
   prevMonthStartDate: Date;
   prevMonthEndDate: Date;
+  monthsCount: number;
   signedCount: number;
   contractedMrr: number;
   actualInvoicedTotal: number;
@@ -36,17 +37,46 @@ export interface PrevMonthCohortSummary {
 
 /**
  * Extracts the Service Commencement Date for a lead or company object.
- * Hierarchy:
- * 1. Service-level startDate / trialStartDate
- * 2. Top-level commencementDate / serviceCommencementDate / startDate
- * 3. SCF acceptance date / signedUpAt timestamp
- * 4. Sign-up activity date
- * 5. Lead entry date
+ * Priority:
+ * 1. SCF subcollection documents (lead.scfs): startDate or service-level startDate / trialStartDate
+ * 2. Top-level services array (lead.services): startDate or trialStartDate
+ * 3. Explicit commencementDate / serviceCommencementDate / startDate / serviceStartDate / trialStartDate
  */
 export function getLeadCommencementDate(lead: Lead): Date | null {
   if (!lead) return null;
 
-  // 1. Check services array for explicit startDate or trialStartDate
+  // 1. Check SCF subcollection documents / scfs array (prioritize Accepted SCFs)
+  const scfs = (lead as any).scfs;
+  if (scfs && Array.isArray(scfs) && scfs.length > 0) {
+    const sortedScfs = [...scfs].sort((a, b) => {
+      const aAccepted = a.status === 'Accepted' || a.status === 'Signed' || a.status === 'Quote Accepted' ? 1 : 0;
+      const bAccepted = b.status === 'Accepted' || b.status === 'Signed' || b.status === 'Quote Accepted' ? 1 : 0;
+      return bAccepted - aAccepted;
+    });
+
+    for (const scf of sortedScfs) {
+      if (!scf) continue;
+      // Check top-level startDate on SCF document
+      const scfStartDate = scf.startDate || scf.serviceStartDate || scf.trialStartDate;
+      if (scfStartDate) {
+        const parsed = parseDateString(scfStartDate);
+        if (parsed && !isNaN(parsed.getTime())) return parsed;
+      }
+      // Check services sub-array inside the SCF document
+      if (scf.services && Array.isArray(scf.services) && scf.services.length > 0) {
+        for (const svc of scf.services) {
+          if (!svc) continue;
+          const svcDateVal = svc.startDate || svc.trialStartDate;
+          if (svcDateVal) {
+            const parsed = parseDateString(svcDateVal);
+            if (parsed && !isNaN(parsed.getTime())) return parsed;
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Check top-level services array for explicit startDate or trialStartDate
   if (lead.services && Array.isArray(lead.services) && lead.services.length > 0) {
     for (const svc of lead.services) {
       if (!svc) continue;
@@ -58,7 +88,7 @@ export function getLeadCommencementDate(lead: Lead): Date | null {
     }
   }
 
-  // 2. Check top-level commencement / start date fields
+  // 3. Check top-level commencement / start date fields
   const topLevelCommence = (lead as any).commencementDate ||
     (lead as any).serviceCommencementDate ||
     (lead as any).startDate ||
@@ -67,37 +97,6 @@ export function getLeadCommencementDate(lead: Lead): Date | null {
 
   if (topLevelCommence) {
     const parsed = parseDateString(topLevelCommence);
-    if (parsed && !isNaN(parsed.getTime())) return parsed;
-  }
-
-  // 3. Fallback to SCF acceptance date or signedUpAt
-  const signedDateVal = lead.signedUpAt ||
-    (lead as any).scfAcceptedAt ||
-    (lead as any).signedDate ||
-    (lead as any).signedAt ||
-    (lead as any).acceptedAt;
-
-  if (signedDateVal) {
-    const parsed = parseDateString(signedDateVal);
-    if (parsed && !isNaN(parsed.getTime())) return parsed;
-  }
-
-  // 4. Check activity log for sign-up activity
-  if (lead.activity && Array.isArray(lead.activity)) {
-    const signedActivity = lead.activity.find(act => {
-      const notes = act.notes || '';
-      return /Status changed to (Won|Signed)/i.test(notes) ||
-             /Signed customer|Converted to Signed|Contract Signed|SCF Signed|SCF Accepted/i.test(notes);
-    });
-    if (signedActivity) {
-      const parsed = parseDateString(signedActivity.date);
-      if (parsed && !isNaN(parsed.getTime())) return parsed;
-    }
-  }
-
-  // 5. Fallback to dateLeadEntered
-  if (lead.dateLeadEntered) {
-    const parsed = parseDateString(lead.dateLeadEntered);
     if (parsed && !isNaN(parsed.getTime())) return parsed;
   }
 
@@ -113,7 +112,7 @@ export function calculatePrevMonthRealizationCohort(
   leads: Lead[],
   invoices: ExtendedInvoice[],
   activeDateRange?: { from?: Date; to?: Date },
-  monthsCount: number = 3,
+  monthsCount: number = 1,
   customCohortDateRange?: { from?: Date; to?: Date }
 ): PrevMonthCohortSummary {
   let prevMonthStart: Date;
@@ -217,7 +216,7 @@ export function calculatePrevMonthRealizationCohort(
       leadId: lead.id,
       companyName: lead.companyName || (lead as any).company || (lead as any).name || 'Unnamed Company',
       commencementDate: format(commencementDateObj, 'dd/MM/yyyy'),
-      signedUpAt: lead.signedUpAt || lead.dateLeadEntered || null,
+      signedUpAt: lead.signedUpAt || null,
       repName: (lead as any).assignedUser || lead.accountManagerAssigned || (lead as any).amAssigned || (lead as any).userInCharge || lead.dialerAssigned || 'Unassigned',
       status,
       contractedMrr,
@@ -247,6 +246,7 @@ export function calculatePrevMonthRealizationCohort(
     prevMonthName,
     prevMonthStartDate: prevMonthStart,
     prevMonthEndDate: prevMonthEnd,
+    monthsCount,
     signedCount,
     contractedMrr,
     actualInvoicedTotal,

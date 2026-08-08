@@ -14,6 +14,8 @@ const CancellationSchema = z.object({
   contactEmail: z.string().email().optional().or(z.literal('')),
   contactPhone: z.string().optional(),
   contactName: z.string().optional(),
+  requestedBy: z.string().optional(),
+  capturedBy: z.string().optional(),
   cancellationTheme: z.string().optional(),
   cancellationWhy: z.string().optional(),
   cancellationReason: z.string().default('Other'),
@@ -129,6 +131,8 @@ export async function POST(request: Request) {
       netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',
       companyName,
       contactName: validated.contactName || '',
+      requestedBy: validated.requestedBy || validated.contactName || '',
+      capturedBy: validated.capturedBy || validated.processedBy || 'NetSuite Integration',
       contactEmail: validated.contactEmail || '',
       contactPhone: validated.contactPhone || '',
       requestedDate,
@@ -138,7 +142,7 @@ export async function POST(request: Request) {
       cancellationWhy: validated.cancellationWhy || '',
       cancellationReason: validated.cancellationReason,
       cancellationNotes: validated.cancellationNotes || '',
-      processedBy: validated.processedBy || 'NetSuite Integration',
+      processedBy: validated.processedBy || validated.capturedBy || 'NetSuite Integration',
       status: 'Pending',
       originalServices,
       createdAt: FieldValue.serverTimestamp(),
@@ -149,8 +153,8 @@ export async function POST(request: Request) {
     await activityRef.add({
       type: 'Update',
       date: requestedDate,
-      notes: `Cancellation request received from NetSuite.${validated.processedBy ? ` (Submitted by: ${validated.processedBy})` : ''}\nTheme: ${validated.cancellationTheme || 'N/A'}\nReason: ${validated.cancellationReason}\nNotes: ${validated.cancellationNotes || 'None'}\nRequested Stop Date: ${cancellationDate}`,
-      author: validated.processedBy ? `NetSuite (${validated.processedBy})` : 'NetSuite Integration',
+      notes: `Cancellation request received from NetSuite.\nPerson Requesting (External): ${validated.requestedBy || validated.contactName || 'N/A'}\nCaptured By (Internal): ${validated.capturedBy || validated.processedBy || 'NetSuite Integration'}\nTheme: ${validated.cancellationTheme || 'N/A'}\nReason: ${validated.cancellationReason}\nNotes: ${validated.cancellationNotes || 'None'}\nRequested Stop Date: ${cancellationDate}`,
+      author: validated.capturedBy || validated.processedBy ? `NetSuite (${validated.capturedBy || validated.processedBy})` : 'NetSuite Integration',
       syncedWithNetSuite: true
     });
 
@@ -161,6 +165,8 @@ export async function POST(request: Request) {
         netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',
         companyName,
         contactName: validated.contactName || '',
+        requestedBy: validated.requestedBy || validated.contactName || '',
+        capturedBy: validated.capturedBy || validated.processedBy || 'NetSuite Integration',
         contactEmail: validated.contactEmail || '',
         contactPhone: validated.contactPhone || '',
         cancellationTheme: validated.cancellationTheme || 'NetSuite Request',
@@ -169,7 +175,7 @@ export async function POST(request: Request) {
         cancellationNotes: validated.cancellationNotes || '',
         cancellationDate,
         trueServiceCancellationDate,
-        processedBy: validated.processedBy || 'NetSuite Integration',
+        processedBy: validated.capturedBy || validated.processedBy || 'NetSuite Integration',
       });
     } catch (emailErr) {
       console.error('[Cancellations Route] Error sending cancellation notification email:', emailErr);

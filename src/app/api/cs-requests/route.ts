@@ -25,6 +25,8 @@ const CSRequestSchema = z.object({
   contactEmail: z.string().email().optional().or(z.literal('')),
   contactPhone: z.string().optional(),
   contactName: z.string().optional(),
+  requestedBy: z.string().optional(),
+  capturedBy: z.string().optional(),
   
   // Change of Service specific fields
   serviceChangeCategories: z.array(z.string()).optional(),
@@ -141,6 +143,8 @@ export async function POST(request: Request) {
       netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',
       companyName,
       contactName: validated.contactName || '',
+      requestedBy: validated.requestedBy || validated.contactName || '',
+      capturedBy: validated.capturedBy || validated.processedBy || 'Customer Portal',
       contactEmail: validated.contactEmail || '',
       contactPhone: validated.contactPhone || '',
       requestedDate,
@@ -162,7 +166,7 @@ export async function POST(request: Request) {
       status: 'Pending',
       originalServices,
       originalMRR,
-      processedBy: validated.processedBy || 'Customer Online Portal',
+      processedBy: validated.processedBy || validated.capturedBy || 'Customer Online Portal',
       createdAt: FieldValue.serverTimestamp(),
     });
 
@@ -177,6 +181,8 @@ export async function POST(request: Request) {
         netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',
         companyName,
         contactName: validated.contactName || '',
+        requestedBy: validated.requestedBy || validated.contactName || '',
+        capturedBy: validated.capturedBy || validated.processedBy || 'Customer Portal',
         contactEmail: validated.contactEmail || '',
         contactPhone: validated.contactPhone || '',
         requestedDate,
@@ -187,7 +193,7 @@ export async function POST(request: Request) {
         cancellationReason: validated.cancellationReason || 'Other',
         cancellationNotes: validated.notes || '',
         attachments,
-        processedBy: validated.processedBy || 'Customer Online Portal',
+        processedBy: validated.processedBy || validated.capturedBy || 'Customer Online Portal',
         status: 'Pending',
         originalServices,
         createdAt: FieldValue.serverTimestamp(),
@@ -199,15 +205,17 @@ export async function POST(request: Request) {
     if (leadId) {
       const activityRef = db.collection('leads').doc(leadId).collection('activity');
       const attachInfo = attachments.length > 0 ? `\nAttachments (${attachments.length}): ${attachments.map(a => a.name).join(', ')}` : '';
+      const extContactStr = validated.requestedBy || validated.contactName || 'N/A';
+      const intStaffStr = validated.capturedBy || validated.processedBy || 'Customer Portal';
       const activityNote = isCancellation
-        ? `Cancellation request received via Public Customer Portal.\nReason: ${validated.cancellationReason || 'N/A'}\nNotes: ${validated.notes || 'None'}\nRequested Stop Date: ${validated.cancellationDate || 'N/A'}${attachInfo}`
-        : `Change of Service request received via Public Customer Portal.\nCategories: ${(validated.serviceChangeCategories || []).join(', ') || 'N/A'}\nEffective Date: ${validated.effectiveDate || 'N/A'}\nNotes: ${validated.notes || 'None'}${attachInfo}`;
+        ? `Cancellation request received via Service Portal.\nPerson Requesting (External): ${extContactStr}\nCaptured By (Internal): ${intStaffStr}\nReason: ${validated.cancellationReason || 'N/A'}\nNotes: ${validated.notes || 'None'}\nRequested Stop Date: ${validated.cancellationDate || 'N/A'}${attachInfo}`
+        : `Change of Service request received via Service Portal.\nPerson Requesting (External): ${extContactStr}\nCaptured By (Internal): ${intStaffStr}\nCategories: ${(validated.serviceChangeCategories || []).join(', ') || 'N/A'}\nEffective Date: ${validated.effectiveDate || 'N/A'}\nNotes: ${validated.notes || 'None'}${attachInfo}`;
 
       await activityRef.add({
         type: 'Update',
         date: requestedDate,
         notes: activityNote,
-        author: 'Customer Online Portal',
+        author: intStaffStr,
         syncedWithNetSuite: false
       });
     }
@@ -221,6 +229,8 @@ export async function POST(request: Request) {
         netsuiteId: validated.netsuiteId || (existingLead as any)?.netsuiteId || '',
         companyName,
         contactName: validated.contactName || '',
+        requestedBy: validated.requestedBy || validated.contactName || '',
+        capturedBy: validated.capturedBy || validated.processedBy || 'Internal Staff / Customer Portal',
         contactEmail: validated.contactEmail || '',
         contactPhone: validated.contactPhone || '',
         serviceChangeCategories: validated.serviceChangeCategories || [],
@@ -234,7 +244,7 @@ export async function POST(request: Request) {
         trueServiceCancellationDate: validated.trueServiceCancellationDate || validated.cancellationDate || requestedDate.split('T')[0],
         attachments,
         notes: validated.notes || '',
-        processedBy: 'Customer Online Portal',
+        processedBy: validated.capturedBy || validated.processedBy || 'Internal Staff / Customer Portal',
       });
     } catch (emailErr) {
       console.error('[CS Requests API] Error sending email notification:', emailErr);

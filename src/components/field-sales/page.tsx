@@ -562,15 +562,19 @@ export default function FieldSalesPage() {
         const usersMap = new Map(allDialers.map(user => [user.uid, user.displayName]));
         const allSystemRoutes = new Map<string, RouteWithUser>();
         allRoutes.forEach(route => {
-            const userName = usersMap.get(route.userId) || 'Unknown User';
-            allSystemRoutes.set(route.id, { ...route, userName });
+            if (route.id) {
+                const userName = usersMap.get(route.userId) || 'Unknown User';
+                allSystemRoutes.set(route.id, { ...route, userName });
+            }
         });
         savedRoutes.forEach(route => {
-            allSystemRoutes.set(route.id, {
-                ...route,
-                userName: userProfile.displayName || 'Admin',
-                userId: userProfile.uid,
-            });
+            if (route.id) {
+                allSystemRoutes.set(route.id, {
+                    ...route,
+                    userName: userProfile.displayName || 'Admin',
+                    userId: userProfile.uid,
+                });
+            }
         });
         return Array.from(allSystemRoutes.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
@@ -634,12 +638,12 @@ export default function FieldSalesPage() {
 
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueFranchisees: Option[] = useMemo(() => {
-    const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
-    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+    const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter((f): f is string => !!f));
+    return Array.from(franchisees).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
   const uniqueSources: Option[] = useMemo(() => {
-    const sources = new Set(allLeads.map(lead => lead.customerSource).filter(Boolean));
-    return Array.from(sources as string[]).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
+    const sources = new Set(allLeads.map(lead => lead.customerSource).filter((s): s is string => !!s));
+    return Array.from(sources).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
   const hasActiveFilters = filters.companyName !== '' || filters.status.length > 0 || filters.franchisee.length > 0 || !!filters.dateLeadEntered || filters.source.length > 0;
 

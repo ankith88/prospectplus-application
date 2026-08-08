@@ -1081,6 +1081,8 @@ export interface CSRequest {
     uploadedAt?: string;
   }>;
   requestedDate: string; // ISO string
+  requestedBy?: string;
+  capturedBy?: string;
   notes?: string;
   status: 'Pending' | 'In Progress' | 'Completed' | 'Saved' | 'Cancelled';
   originalServices?: ServiceSelection[];

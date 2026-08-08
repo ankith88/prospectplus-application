@@ -42,7 +42,7 @@ export function PrevMonthCohortWidget({ summary, className = '', loading = false
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const { prevMonthName, signedCount, contractedMrr, actualInvoicedTotal, realizationYield, cohortDetails } = summary;
+  const { prevMonthName, signedCount, contractedMrr, actualInvoicedTotal, realizationYield, cohortDetails, monthsCount = 1 } = summary;
 
   // Realization Yield Badge Styling
   const yieldBadgeConfig = useMemo(() => {
@@ -182,7 +182,9 @@ export function PrevMonthCohortWidget({ summary, className = '', loading = false
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <span className="text-2xl font-extrabold text-slate-800">{signedCount}</span>
-                <span className="text-[11px] text-slate-500 font-medium">Last 3 Months</span>
+                <span className="text-[11px] text-slate-500 font-medium">
+                  {monthsCount === 1 ? 'Last Month' : `Last ${monthsCount} Months`}
+                </span>
               </div>
               <p className="text-[11px] text-sky-700 mt-1 flex items-center font-medium group-hover:underline">
                 View commenced accounts <ExternalLink className="h-3 w-3 ml-1" />
@@ -273,7 +275,7 @@ export function PrevMonthCohortWidget({ summary, className = '', loading = false
                   Service Commencement Cohort Breakdown ({prevMonthName})
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500 mt-0.5">
-                  Detailed list of all {signedCount} accounts whose service commenced during the last 3 months ({prevMonthName}), showing contracted MRR vs actual billed invoices.
+                  Detailed list of all {signedCount} accounts whose service commenced during {monthsCount === 1 ? 'last month' : `the last ${monthsCount} months`} ({prevMonthName}), showing contracted MRR vs actual billed invoices.
                 </DialogDescription>
               </div>
               <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleExportCsv}>

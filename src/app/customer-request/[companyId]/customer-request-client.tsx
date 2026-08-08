@@ -37,6 +37,11 @@ import {
   X
 } from 'lucide-react';
 
+import { useAuth } from '@/hooks/use-auth';
+import { LossReasonPicker } from '@/components/loss-reason-picker';
+import { firestore } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+
 interface PublicCompany {
   id: string;
   prospectPlusId?: string;
@@ -66,6 +71,7 @@ const CANCELLATION_REASONS = [
 ];
 
 export default function CustomerRequestClient({ companyId }: { companyId: string }) {
+  const { userProfile, user } = useAuth();
   const [company, setCompany] = useState<PublicCompany | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +81,7 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
 
   // Contact Info
   const [contactName, setContactName] = useState('');
+  const [capturedBy, setCapturedBy] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
 
@@ -88,6 +95,10 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
   const [serviceChangeNotes, setServiceChangeNotes] = useState('');
 
   // Cancellation States
+  const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
+  const [selectedThemeId, setSelectedThemeId] = useState('');
+  const [selectedWhyId, setSelectedWhyId] = useState('');
+  const [selectedReasonId, setSelectedReasonId] = useState('');
   const [cancellationReason, setCancellationReason] = useState(CANCELLATION_REASONS[0]);
   const [cancellationWhy, setCancellationWhy] = useState('');
   const [cancellationDate, setCancellationDate] = useState('');
@@ -100,6 +111,25 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
   // Form handling
   const [submitting, setSubmitting] = useState(false);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
+
+  useEffect(() => {
+    const staffName = userProfile?.displayName || user?.displayName || user?.email || '';
+    if (staffName) {
+      setCapturedBy((prev) => prev || staffName);
+    }
+  }, [userProfile?.displayName, user?.displayName, user?.email]);
+
+  useEffect(() => {
+    const fetchHierarchy = async () => {
+      try {
+        const snap = await getDocs(collection(firestore, 'cancellation_hierarchy'));
+        setCancellationThemes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (e) {
+        console.error('Error fetching cancellation hierarchy:', e);
+      }
+    };
+    fetchHierarchy();
+  }, []);
 
   useEffect(() => {
     async function loadCompany() {
@@ -148,51 +178,49 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
     setServices(updated);
   };
 
-  const handleUpdateServiceFrequency = (index: number, freq: any) => {
+  const handleUpdateServiceFrequency = (index: number, newFreq: string) => {
     const updated = [...services];
-    updated[index].frequency = freq;
+    updated[index].frequency = newFreq;
     setServices(updated);
   };
 
   const handleRemoveServiceItem = (index: number) => {
     setServices(services.filter((_, i) => i !== index));
-    if (!selectedCategories.includes('remove_service')) {
-      setSelectedCategories([...selectedCategories, 'remove_service']);
-    }
   };
 
   const handleAddNewService = () => {
-    if (!newServiceName.trim()) return;
+    if (!newServiceName.trim()) {
+      alert('Please enter a service name.');
+      return;
+    }
     const rateVal = parseFloat(newServiceRate);
-    const newService: ServiceSelection = {
-      id: `custom_${Date.now()}`,
+    const newSrv: ServiceSelection = {
+      id: 'custom-' + Date.now(),
       name: newServiceName.trim(),
       frequency: newServiceFrequency,
       rate: isNaN(rateVal) ? 0 : rateVal,
       quantity: 1,
     };
-    setServices([...services, newService]);
+    setServices([...services, newSrv]);
     setNewServiceName('');
     setNewServiceRate('');
-    if (!selectedCategories.includes('add_service')) {
-      setSelectedCategories([...selectedCategories, 'add_service']);
-    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0 || !company) return;
+    if (!files || files.length === 0) return;
+
     setUploadingFile(true);
     try {
-      const uploadedList = [...attachments];
+      const uploadedList: RequestAttachment[] = [...attachments];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const storageRef = ref(storage, `cs_requests/${company.id}/${Date.now()}_${file.name.replace(/\s+/g, '_')}`);
+        const storageRef = ref(storage, `cs-requests/${companyId}/${Date.now()}_${file.name}`);
         await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
+        const downloadUrl = await getDownloadURL(storageRef);
         uploadedList.push({
           name: file.name,
-          url,
+          url: downloadUrl,
           size: file.size,
           type: file.type,
           uploadedAt: new Date().toISOString(),
@@ -215,19 +243,30 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
     e.preventDefault();
     if (!company) return;
 
-    if (!contactName.trim() || !contactEmail.trim()) {
-      alert('Please fill out your contact name and email address.');
+    if (!contactName.trim() || !capturedBy.trim()) {
+      alert('Please fill out both the External Contact Name (person requesting) and Internal Staff Name (person capturing).');
       return;
     }
 
     setSubmitting(true);
     try {
+      const selectedThemeObj = cancellationThemes.find((t) => t.id === selectedThemeId);
+      const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => w.id === selectedWhyId);
+      const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => r.id === selectedReasonId);
+
+      const themeName = selectedThemeObj?.name || 'Customer Portal Request';
+      const whyName = selectedWhyObj?.name || cancellationWhy || '';
+      const reasonName = selectedReasonObj?.name || cancellationReason || 'Unspecified / Other';
+
       const payload = {
         requestType,
         leadId: company.id,
         netsuiteId: company.netsuiteId,
         companyName: company.companyName,
-        contactName,
+        contactName: contactName.trim(),
+        requestedBy: contactName.trim(),
+        capturedBy: capturedBy.trim(),
+        processedBy: capturedBy.trim(),
         contactEmail,
         contactPhone,
         attachments,
@@ -238,10 +277,13 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
           requestedServices: services,
           effectiveDate,
         } : {
-          cancellationReason,
-          cancellationWhy,
+          cancellationReason: reasonName,
+          cancellationReasonId: selectedReasonId || '',
+          cancellationWhy: whyName,
+          cancellationWhyId: selectedWhyId || '',
           cancellationDate,
-          cancellationTheme: cancellationReason,
+          cancellationTheme: themeName,
+          cancellationThemeId: selectedThemeId || '',
         })
       };
 
@@ -477,18 +519,23 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
                       ].map((cat) => {
                         const isSelected = selectedCategories.includes(cat.id);
                         return (
-                          <div
+                          <button
                             key={cat.id}
+                            type="button"
                             onClick={() => toggleCategory(cat.id)}
-                            className={`cursor-pointer p-3 rounded-lg border text-xs font-semibold flex items-center justify-between transition-all ${
+                            className={`p-3 rounded-lg border text-xs font-semibold flex items-center justify-between transition-all text-left ${
                               isSelected
                                 ? 'border-[#095c7b] bg-sky-50 text-[#095c7b]'
                                 : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                             }`}
                           >
                             <span>{cat.label}</span>
-                            <Checkbox checked={isSelected} onCheckedChange={() => toggleCategory(cat.id)} />
-                          </div>
+                            <div className={`h-4 w-4 rounded-sm border flex items-center justify-center transition-colors ${
+                              isSelected ? 'bg-[#095c7b] text-white border-[#095c7b]' : 'border-slate-300 bg-white'
+                            }`}>
+                              {isSelected && <CheckCircle2 className="h-3.5 w-3.5" />}
+                            </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -649,63 +696,41 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
               {/* ---------------- CANCELLATION FORM ---------------- */}
               {requestType === 'cancellation' && (
                 <div className="space-y-6">
-                  
-                  <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs leading-relaxed space-y-1">
-                    <p className="font-bold flex items-center gap-1.5 text-sm">
-                      <AlertCircle className="w-4 h-4 text-rose-600" />
-                      We are sorry to see you go!
-                    </p>
-                    <p>
-                      Your feedback is invaluable in helping us improve our logistics service. Please provide any details below so our Customer Success team can process your request.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs font-semibold text-slate-700 mb-1 block">Primary Reason for Cancellation (Optional)</Label>
-                      <Select value={cancellationReason} onValueChange={setCancellationReason}>
-                        <SelectTrigger className="h-10 text-xs bg-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CANCELLATION_REASONS.map((reason) => (
-                            <SelectItem key={reason} value={reason}>
-                              {reason}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label className="text-xs font-semibold text-slate-700 mb-1 block">Requested Stop Date (Optional)</Label>
-                      <Input
-                        type="date"
-                        value={cancellationDate}
-                        onChange={(e) => setCancellationDate(e.target.value)}
-                        className="h-10 text-xs bg-white"
-                      />
-                    </div>
-                  </div>
-
                   <div>
-                    <Label className="text-xs font-semibold text-slate-700 mb-1 block">Specific Reason / Feedback (Optional)</Label>
-                    <Textarea
-                      placeholder="Could you tell us more about what prompted this decision? Is there anything MailPlus could do to keep your business?"
-                      value={cancellationWhy}
-                      onChange={(e) => setCancellationWhy(e.target.value)}
-                      rows={3}
-                      className="text-xs"
+                    <Label className="text-xs font-semibold text-slate-700 mb-1 block">Requested Stop Date (Optional)</Label>
+                    <Input
+                      type="date"
+                      value={cancellationDate}
+                      onChange={(e) => setCancellationDate(e.target.value)}
+                      className="h-10 text-xs bg-white max-w-xs"
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200">
+                    <Label className="text-xs font-semibold text-slate-700 block mb-2">
+                      Reason for Cancellation (Optional)
+                    </Label>
+                    <LossReasonPicker
+                      cancellationThemes={cancellationThemes}
+                      selectedThemeId={selectedThemeId}
+                      selectedWhyId={selectedWhyId}
+                      selectedReasonId={selectedReasonId}
+                      onSelect={(tId, wId, rId) => {
+                        setSelectedThemeId(tId);
+                        setSelectedWhyId(wId);
+                        setSelectedReasonId(rId);
+                      }}
+                      disabled={submitting}
                     />
                   </div>
 
                   <div>
-                    <Label className="text-xs font-semibold text-slate-700 mb-1 block">Additional Notes (Optional)</Label>
+                    <Label className="text-xs font-semibold text-slate-700 mb-1 block">Additional Notes & Feedback (Optional)</Label>
                     <Textarea
-                      placeholder="Any additional notes or comments regarding final pickups or billing..."
+                      placeholder="Any additional notes or comments regarding cancellation details..."
                       value={cancellationNotes}
                       onChange={(e) => setCancellationNotes(e.target.value)}
-                      rows={2}
+                      rows={3}
                       className="text-xs"
                     />
                   </div>
@@ -774,36 +799,37 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
                 )}
               </div>
 
-              {/* ---------------- CONTACT VERIFICATION SECTION ---------------- */}
+              {/* ---------------- SECTION 1: EXTERNAL CONTACT DETAILS ---------------- */}
               <div className="border-t border-slate-200 pt-6 space-y-4">
                 <Label className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-[#095c7b]" />
-                  Your Contact Information
+                  External Customer Contact Details
                 </Label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <Label className="text-xs text-slate-600 mb-1 block">Your Name</Label>
+                    <Label className="text-xs font-semibold text-slate-700 mb-1 block">
+                      Person Requesting / Authorising Cancellation (External Contact)*
+                    </Label>
                     <Input
                       value={contactName}
                       onChange={(e) => setContactName(e.target.value)}
-                      placeholder="Full Name"
+                      placeholder="e.g. Customer Contact Name or Representative"
                       className="h-9 text-xs"
                       required
                     />
                   </div>
                   <div>
-                    <Label className="text-xs text-slate-600 mb-1 block">Email Address</Label>
+                    <Label className="text-xs text-slate-600 mb-1 block">Customer Email Address</Label>
                     <Input
                       type="email"
                       value={contactEmail}
                       onChange={(e) => setContactEmail(e.target.value)}
                       placeholder="name@company.com"
                       className="h-9 text-xs"
-                      required
                     />
                   </div>
                   <div>
-                    <Label className="text-xs text-slate-600 mb-1 block">Phone Number</Label>
+                    <Label className="text-xs text-slate-600 mb-1 block">Customer Phone Number</Label>
                     <Input
                       value={contactPhone}
                       onChange={(e) => setContactPhone(e.target.value)}
@@ -811,6 +837,29 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
                       className="h-9 text-xs"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* ---------------- SECTION 2: INTERNAL STAFF DETAILS (DEDICATED SECTION & ROW) ---------------- */}
+              <div className="border-t border-slate-200 pt-6 space-y-3">
+                <Label className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                  <User className="w-4 h-4 text-[#095c7b]" />
+                  Internal Staff Verification
+                </Label>
+                <div className="max-w-md">
+                  <Label className="text-xs font-semibold text-slate-700 mb-1 block">
+                    Captured / Submitted By (Internal Staff)*
+                  </Label>
+                  <Input
+                    value={capturedBy}
+                    onChange={(e) => setCapturedBy(e.target.value)}
+                    placeholder="e.g. Staff Member Name"
+                    className="h-9 text-xs font-medium"
+                    required
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Name of the MailPlus staff member logging this request.
+                  </p>
                 </div>
               </div>
 

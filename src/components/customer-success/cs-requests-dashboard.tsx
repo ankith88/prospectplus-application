@@ -4,7 +4,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { collection, getDocs, updateDoc, doc, getDoc } from 'firebase/firestore';
-import { firestore } from '@/lib/firebase';
+import { firestore, storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { LossReasonPicker } from '@/components/loss-reason-picker';
+import { getMergedCancellationHierarchy } from '@/lib/cancellation-reasons-mapper';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
 import { Lead, CSRequest, ServiceSelection } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -20,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader } from '@/components/ui/loader';
 import { useToast } from '@/hooks/use-toast';
 import { logActivity } from '@/services/firebase';
+import { ServiceSelectionDialog } from '@/components/service-selection-dialog';
 import { 
   ListTodo, 
   Wrench, 
@@ -38,7 +42,8 @@ import {
   Calendar,
   Filter,
   Plus,
-  Paperclip
+  Paperclip,
+  TrendingUp
 } from 'lucide-react';
 
 const REASONS = ['Price too high', 'Competitor offer', 'Service Quality issues', 'No longer needed', 'Business closed', 'Other'];
@@ -70,8 +75,133 @@ export default function CSRequestsDashboard() {
   const [processMode, setProcessMode] = useState<'save' | 'cancel'>('save');
   const [cancelNotes, setCancelNotes] = useState('');
 
+  // Resell workflow states for Customer Retention
+  const [fullLeadForResell, setFullLeadForResell] = useState<Lead | null>(null);
+  const [isResellDialogOpen, setIsResellDialogOpen] = useState(false);
+  const [loadingResellLead, setLoadingResellLead] = useState(false);
+
+  const handleOpenResellDialog = async () => {
+    if (!selectedRequest) return;
+    setLoadingResellLead(true);
+    try {
+      const leadSnap = await getDoc(doc(firestore, 'leads', selectedRequest.leadId));
+      if (leadSnap.exists()) {
+        setFullLeadForResell({ id: leadSnap.id, ...leadSnap.data() } as Lead);
+        setIsResellDialogOpen(true);
+      } else {
+        toast({
+          title: 'Lead Not Found',
+          description: 'Could not locate lead details for sending resell quote.',
+          variant: 'destructive',
+        });
+      }
+    } catch (e) {
+      console.error("Failed to load lead for resell:", e);
+      toast({
+        title: 'Error',
+        description: 'Failed to load lead details for resell.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingResellLead(false);
+    }
+  };
+
+  const handleResellSuccess = async () => {
+    if (!selectedRequest) return;
+    try {
+      const userDisplayName = userProfile?.displayName || userProfile?.email || 'Customer Success Rep';
+      const processedAt = new Date().toISOString();
+
+      await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
+        status: 'Saved',
+        saveStrategy: cancelSaveStrategy !== 'Keep Existing' ? cancelSaveStrategy : 'Resell / Quote Sent',
+        notes: cancelNotes ? `Resell / Quote issued. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}` : 'Resell / Quote issued to customer',
+        attachments: proofAttachments,
+        processedBy: userDisplayName,
+        processedAt
+      });
+
+      try {
+        await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), {
+          status: 'Saved',
+          saveStrategy: cancelSaveStrategy !== 'Keep Existing' ? cancelSaveStrategy : 'Resell / Quote Sent',
+          notes: cancelNotes ? `Resell / Quote issued. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}` : 'Resell / Quote issued to customer',
+          attachments: proofAttachments,
+          processedBy: userDisplayName,
+          processedAt
+        });
+      } catch (e) { /* ignore if not found */ }
+
+      const saveCompRef = doc(firestore, 'companies', selectedRequest.leadId);
+      const saveLeadRef = doc(firestore, 'leads', selectedRequest.leadId);
+      const [saveCompSnap, saveLeadSnap] = await Promise.all([
+        getDoc(saveCompRef),
+        getDoc(saveLeadRef)
+      ]);
+
+      const saveUpdates = {
+        cancellationRequested: false,
+        customerStatus: 'Won'
+      };
+
+      if (saveCompSnap.exists()) {
+        await updateDoc(saveCompRef, saveUpdates);
+        await logActivity(selectedRequest.leadId, {
+          type: 'Update',
+          date: processedAt,
+          notes: `Customer Saved from Cancellation via Resell / Quote Update. Strategy: ${cancelSaveStrategy}`,
+          author: userDisplayName,
+        }, 'companies');
+      }
+
+      if (saveLeadSnap.exists()) {
+        await updateDoc(saveLeadRef, saveUpdates);
+        await logActivity(selectedRequest.leadId, {
+          type: 'Update',
+          date: processedAt,
+          notes: `Customer Saved from Cancellation via Resell / Quote Update. Strategy: ${cancelSaveStrategy}`,
+          author: userDisplayName,
+        }, 'leads');
+      }
+
+      toast({
+        title: 'Resell Quote Sent',
+        description: `${selectedRequest.companyName} retention quote sent & customer marked as Saved!`,
+      });
+
+      setIsResellDialogOpen(false);
+      setProcessModalOpen(false);
+      fetchRequests();
+    } catch (e) {
+      console.error("Error finalizing resell save for CS request:", e);
+      toast({
+        title: 'Error',
+        description: 'Failed to update request status after sending quote.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Cancellation Hierarchy & Proof Attachments
+  const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
+  const [selectedThemeId, setSelectedThemeId] = useState('');
+  const [selectedWhyId, setSelectedWhyId] = useState('');
+  const [selectedReasonId, setSelectedReasonId] = useState('');
+  const [proofAttachments, setProofAttachments] = useState<Array<{ name: string; url: string; size?: number; type?: string; uploadedAt?: string }>>([]);
+  const [uploadingProofFile, setUploadingProofFile] = useState(false);
+
   useEffect(() => {
     fetchRequests();
+    const fetchHierarchy = async () => {
+      try {
+        const snap = await getDocs(collection(firestore, 'cancellation_hierarchy'));
+        setCancellationThemes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (e) {
+        console.error('Error fetching cancellation hierarchy:', e);
+      }
+    };
+    fetchHierarchy();
   }, []);
 
   const fetchRequests = async () => {
@@ -212,7 +342,90 @@ export default function CSRequestsDashboard() {
     setCancelNotes(req.notes || '');
     setProcessMode('save');
 
+    // Pre-populate cancellation hierarchy IDs
+    const activeThemes = getMergedCancellationHierarchy(cancellationThemes);
+    let initThemeId = req.cancellationThemeId || '';
+    let initWhyId = req.cancellationWhyId || '';
+    let initReasonId = req.cancellationReasonId || '';
+
+    if (!initReasonId && req.cancellationReason) {
+      for (const t of activeThemes) {
+        for (const w of (t.whys || [])) {
+          for (const r of (w.reasons || [])) {
+            if (
+              r.name.toLowerCase() === req.cancellationReason.toLowerCase() ||
+              r.id === req.cancellationReasonId
+            ) {
+              initThemeId = String(t.id);
+              initWhyId = String(w.id);
+              initReasonId = String(r.id);
+              break;
+            }
+          }
+        }
+      }
+    }
+    setSelectedThemeId(initThemeId);
+    setSelectedWhyId(initWhyId);
+    setSelectedReasonId(initReasonId);
+    setProofAttachments(req.attachments || []);
+
     setProcessModalOpen(true);
+  };
+
+  const handleProofFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingProofFile(true);
+    try {
+      const uploadedList = [...proofAttachments];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        let fileUrl = '';
+
+        try {
+          const storageRef = ref(storage, `cancellations/proofs/${selectedRequest?.leadId || 'general'}/${Date.now()}_${file.name}`);
+          await uploadBytes(storageRef, file);
+          fileUrl = await getDownloadURL(storageRef);
+        } catch (storageErr) {
+          console.warn('[Proof Upload] Firebase Storage fallback to Base64:', storageErr);
+          fileUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        }
+
+        uploadedList.push({
+          name: file.name,
+          url: fileUrl,
+          size: file.size,
+          type: file.type,
+          uploadedAt: new Date().toISOString(),
+        });
+      }
+      setProofAttachments(uploadedList);
+      toast({
+        title: 'Document Attached',
+        description: `${files.length} proof document(s) attached.`,
+      });
+    } catch (err: any) {
+      console.error('Error attaching proof file:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Upload Failed',
+        description: err.message || 'Failed to attach proof document.',
+      });
+    } finally {
+      setUploadingProofFile(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleRemoveProofAttachment = (index: number) => {
+    setProofAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleCopyPublicLink = (companyId: string, companyName: string) => {
@@ -304,18 +517,38 @@ export default function CSRequestsDashboard() {
   // Process Cancellation (Save or True Cancel)
   const handleProcessCancellation = async () => {
     if (!selectedRequest) return;
+
+    if (processMode === 'cancel') {
+      if (!selectedThemeId || !selectedWhyId || !selectedReasonId) {
+        toast({
+          variant: 'destructive',
+          title: 'Theme, Why & Reason Required',
+          description: 'You must select a Theme, Why (Category), and Reason to process the cancellation.',
+        });
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const userDisplayName = userProfile?.displayName || userProfile?.email || 'Customer Success Rep';
       const processedAt = new Date().toISOString();
 
       if (processMode === 'save') {
-        // Mark as Saved
+        if (cancelSaveStrategy !== 'Keep Existing') {
+          // If strategy involves service/rate changes, route user to Resell quote process
+          setSubmitting(false);
+          await handleOpenResellDialog();
+          return;
+        }
+
+        // Mark as Saved (Keep Existing Services & Pricing)
         await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
           status: 'Saved',
           saveStrategy: cancelSaveStrategy,
           updatedServices: editServices,
           notes: cancelNotes,
+          attachments: proofAttachments,
           processedBy: userDisplayName,
           processedAt
         });
@@ -327,6 +560,7 @@ export default function CSRequestsDashboard() {
             saveStrategy: cancelSaveStrategy,
             updatedServices: editServices,
             notes: cancelNotes,
+            attachments: proofAttachments,
             processedBy: userDisplayName,
             processedAt
           });
@@ -371,12 +605,28 @@ export default function CSRequestsDashboard() {
           description: `${selectedRequest.companyName} marked as Saved!`,
         });
       } else {
+        // Resolve Theme, Why, and Reason details
+        const activeThemes = getMergedCancellationHierarchy(cancellationThemes);
+        const selectedThemeObj = activeThemes.find(t => String(t.id) === String(selectedThemeId));
+        const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => String(w.id) === String(selectedWhyId));
+        const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => String(r.id) === String(selectedReasonId));
+
+        const themeName = selectedThemeObj?.name || selectedRequest.cancellationTheme || '';
+        const whyName = selectedWhyObj?.name || (selectedRequest as any).cancellationWhy || (selectedRequest as any).cancellationCategory || '';
+        const reasonName = selectedReasonObj?.name || selectedRequest.cancellationReason || 'Other';
+
         // True Service Cancellation
         await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
           status: 'Cancelled',
           trueServiceCancellationDate: trueCancellationDate,
-          cancellationReason: cancelReason,
+          cancellationTheme: themeName,
+          cancellationThemeId: selectedThemeId,
+          cancellationWhy: whyName,
+          cancellationWhyId: selectedWhyId,
+          cancellationReason: reasonName,
+          cancellationReasonId: selectedReasonId,
           notes: cancelNotes,
+          attachments: proofAttachments,
           processedBy: userDisplayName,
           processedAt
         });
@@ -385,8 +635,14 @@ export default function CSRequestsDashboard() {
           await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), {
             status: 'Cancelled',
             trueServiceCancellationDate: trueCancellationDate,
-            cancellationReason: cancelReason,
+            cancellationTheme: themeName,
+            cancellationThemeId: selectedThemeId,
+            cancellationWhy: whyName,
+            cancellationWhyId: selectedWhyId,
+            cancellationReason: reasonName,
+            cancellationReasonId: selectedReasonId,
             notes: cancelNotes,
+            attachments: proofAttachments,
             processedBy: userDisplayName,
             processedAt
           });
@@ -405,15 +661,22 @@ export default function CSRequestsDashboard() {
           status: 'Lost Customer',
           cancellationRequested: false,
           cancellationdate: trueCancellationDate,
-          cancellationReason: cancelReason
+          cancellationTheme: themeName,
+          cancellationThemeId: selectedThemeId,
+          cancellationCategory: whyName,
+          cancellationWhyId: selectedWhyId,
+          cancellationReason: reasonName,
+          cancellationReasonId: selectedReasonId,
         };
+
+        const activityNotes = `True Service Cancellation processed. Stop Date: ${trueCancellationDate}.\nTheme: ${themeName} | Why: ${whyName} | Reason: ${reasonName}.${proofAttachments.length > 0 ? `\nProof Attachments: ${proofAttachments.length} document(s).` : ''}${cancelNotes ? `\nNotes: ${cancelNotes}` : ''}`;
 
         if (cancelCompSnap.exists()) {
           await updateDoc(cancelCompRef, cancelUpdates);
           await logActivity(selectedRequest.leadId, {
             type: 'Update',
             date: processedAt,
-            notes: `True Service Cancellation processed. Stop Date: ${trueCancellationDate}. Reason: ${cancelReason}`,
+            notes: activityNotes,
             author: userDisplayName,
           }, 'companies');
         }
@@ -423,7 +686,7 @@ export default function CSRequestsDashboard() {
           await logActivity(selectedRequest.leadId, {
             type: 'Update',
             date: processedAt,
-            notes: `True Service Cancellation processed. Stop Date: ${trueCancellationDate}. Reason: ${cancelReason}`,
+            notes: activityNotes,
             author: userDisplayName,
           }, 'leads');
         }
@@ -443,7 +706,7 @@ export default function CSRequestsDashboard() {
       console.error('[CS Requests Dashboard] Error processing cancellation:', e);
       toast({
         title: 'Error',
-        description: 'Failed to process cancellation request.',
+        description: 'Failed to update request.',
         variant: 'destructive'
       });
     } finally {
@@ -792,8 +1055,12 @@ export default function CSRequestsDashboard() {
                     </div>
                   )}
                   <div>
-                    <span className="font-semibold text-slate-500">Contact Person:</span>{' '}
-                    <span className="font-bold text-slate-800">{selectedRequest.contactName || 'N/A'}</span>
+                    <span className="font-semibold text-slate-500">Person Requesting (External):</span>{' '}
+                    <span className="font-bold text-slate-800">{selectedRequest.requestedBy || selectedRequest.contactName || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-500">Captured By (Internal Staff):</span>{' '}
+                    <span className="font-bold text-slate-800">{selectedRequest.capturedBy || selectedRequest.processedBy || 'N/A'}</span>
                   </div>
                   <div>
                     <span className="font-semibold text-slate-500">Email:</span>{' '}
@@ -974,6 +1241,29 @@ export default function CSRequestsDashboard() {
                         </Select>
                       </div>
 
+                      {cancelSaveStrategy !== 'Keep Existing' && (
+                        <div className="p-3.5 rounded-xl bg-emerald-100/80 border border-emerald-300 space-y-2.5 shadow-2xs">
+                          <div className="flex items-start gap-2">
+                            <Sparkles className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                            <div>
+                              <h5 className="text-xs font-bold text-emerald-900">Resell Quote Process Required</h5>
+                              <p className="text-[11.5px] text-emerald-800 leading-snug mt-0.5">
+                                Modifying services or rates requires launching the official Resell workflow to issue an updated quote & commencement agreement for customer sign-off.
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={handleOpenResellDialog}
+                            disabled={loadingResellLead}
+                            className="w-full h-8 text-xs bg-[#095c7b] hover:bg-[#07475f] text-white font-bold flex items-center justify-center gap-1.5 rounded-lg shadow-2xs"
+                          >
+                            {loadingResellLead ? <Loader className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
+                            Modify Services & Send Resell Quote
+                          </Button>
+                        </div>
+                      )}
+
                       <div>
                         <Label className="text-xs font-semibold text-slate-700 mb-1 block">Retention Notes</Label>
                         <Textarea
@@ -986,31 +1276,35 @@ export default function CSRequestsDashboard() {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-3 p-4 rounded-xl bg-rose-50/50 border border-rose-200">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <Label className="text-xs font-semibold text-slate-700 mb-1 block">True Stop Date</Label>
-                          <Input
-                            type="date"
-                            value={trueCancellationDate}
-                            onChange={(e) => setTrueCancellationDate(e.target.value)}
-                            className="h-9 text-xs bg-white"
-                          />
-                        </div>
+                    <div className="space-y-4 p-4 rounded-xl bg-rose-50/50 border border-rose-200">
+                      <div>
+                        <Label className="text-xs font-semibold text-slate-700 mb-1 block">True Stop Date *</Label>
+                        <Input
+                          type="date"
+                          value={trueCancellationDate}
+                          onChange={(e) => setTrueCancellationDate(e.target.value)}
+                          className="h-9 text-xs bg-white"
+                        />
+                      </div>
 
-                        <div>
-                          <Label className="text-xs font-semibold text-slate-700 mb-1 block">Final Reason</Label>
-                          <Select value={cancelReason} onValueChange={setCancelReason}>
-                            <SelectTrigger className="h-9 text-xs bg-white">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {REASONS.map(r => (
-                                <SelectItem key={r} value={r}>{r}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <Label className="text-xs font-bold text-slate-800">
+                            Cancellation Theme, Why & Reason <span className="text-rose-600 font-bold">* Mandatory</span>
+                          </Label>
                         </div>
+                        <LossReasonPicker
+                          cancellationThemes={cancellationThemes}
+                          selectedThemeId={selectedThemeId}
+                          selectedWhyId={selectedWhyId}
+                          selectedReasonId={selectedReasonId}
+                          onSelect={(tId, wId, rId) => {
+                            setSelectedThemeId(tId);
+                            setSelectedWhyId(wId);
+                            setSelectedReasonId(rId);
+                          }}
+                          disabled={submitting}
+                        />
                       </div>
 
                       <div>
@@ -1022,6 +1316,62 @@ export default function CSRequestsDashboard() {
                           rows={2}
                           className="text-xs bg-white"
                         />
+                      </div>
+
+                      {/* Proof Document Attachments Section */}
+                      <div className="pt-3 border-t border-rose-200/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <Paperclip className="w-3.5 h-3.5 text-[#095c7b]" />
+                            Attach Proof Documents / Evidence
+                          </Label>
+                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#095c7b] text-white hover:bg-[#07475f] text-xs font-semibold transition-colors">
+                            {uploadingProofFile ? (
+                              <Loader className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Plus className="w-3.5 h-3.5" />
+                            )}
+                            Attach Document
+                            <input
+                              type="file"
+                              multiple
+                              className="hidden"
+                              onChange={handleProofFileUpload}
+                              disabled={uploadingProofFile || submitting}
+                            />
+                          </label>
+                        </div>
+
+                        {proofAttachments.length > 0 ? (
+                          <div className="space-y-1.5 mt-2">
+                            {proofAttachments.map((att, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 text-xs">
+                                <a
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-[#095c7b] font-medium hover:underline truncate max-w-[80%]"
+                                >
+                                  <Paperclip className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{att.name}</span>
+                                  <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
+                                </a>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveProofAttachment(idx)}
+                                  className="h-6 px-1.5 text-rose-600 hover:bg-rose-50 text-[11px]"
+                                  disabled={submitting}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic">No proof documents attached yet.</p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1071,13 +1421,30 @@ export default function CSRequestsDashboard() {
                     processMode === 'save' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
                   }`}
                 >
-                  {submitting ? <Loader /> : processMode === 'save' ? 'Save Customer' : 'Confirm Cancellation'}
+                  {submitting ? (
+                    <Loader />
+                  ) : processMode === 'save' ? (
+                    cancelSaveStrategy === 'Keep Existing' ? 'Save Customer' : 'Save & Launch Resell Quote'
+                  ) : (
+                    'Confirm Cancellation'
+                  )}
                 </Button>
               )}
             </DialogFooter>
 
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Service Selection / Resell Dialog for Customer Retention */}
+      {isResellDialogOpen && fullLeadForResell && (
+        <ServiceSelectionDialog
+          isOpen={isResellDialogOpen}
+          onOpenChange={setIsResellDialogOpen}
+          lead={fullLeadForResell}
+          mode="Resell"
+          onSuccess={handleResellSuccess}
+        />
       )}
 
     </div>

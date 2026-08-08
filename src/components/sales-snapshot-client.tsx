@@ -373,7 +373,7 @@ export default function SalesSnapshotClient() {
   const [filters, setFilters] = useState({
     dateFilterType: 'activityDate' as 'activityDate' | 'dateLeadEntered' | 'quoteSentAt' | 'signedUpAt' | 'scfAcceptedAt' | 'trialStartedAt',
     dateRange: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
-    cohortMonthsCount: 3,
+    cohortMonthsCount: 1,
     franchisee: [] as string[],
     status: [] as string[],
     bucket: [] as string[],
@@ -385,7 +385,7 @@ export default function SalesSnapshotClient() {
   const [appliedFilters, setAppliedFilters] = useState({
     dateFilterType: 'activityDate' as 'activityDate' | 'dateLeadEntered' | 'quoteSentAt' | 'signedUpAt' | 'scfAcceptedAt' | 'trialStartedAt',
     dateRange: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
-    cohortMonthsCount: 3,
+    cohortMonthsCount: 1,
     franchisee: [] as string[],
     status: [] as string[],
     bucket: [] as string[],
@@ -415,7 +415,7 @@ export default function SalesSnapshotClient() {
     const defaultFilters = {
       dateFilterType: 'activityDate' as const,
       dateRange: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
-      cohortMonthsCount: 3,
+      cohortMonthsCount: 1,
       franchisee: [],
       status: [],
       bucket: [],
@@ -472,12 +472,16 @@ export default function SalesSnapshotClient() {
             where('duedate', '<=', endISO)
         );
 
-        const [activitiesSnap, apptsSnap, usersSnap, invoicesSnap] = await Promise.all([
+        const [activitiesSnap, apptsSnap, usersSnap, invoicesSnap, scfsSnap] = await Promise.all([
             getDocs(activityQuery),
             getDocs(apptQuery),
             getDocs(collection(firestore, 'users')),
             getDocs(collectionGroup(firestore, 'invoices')).catch(err => {
                 console.warn("Failed to fetch invoices for cohort realization:", err);
+                return { docs: [] };
+            }),
+            getDocs(collectionGroup(firestore, 'scfs')).catch(err => {
+                console.warn("Failed to fetch scfs for cohort realization:", err);
                 return { docs: [] };
             })
         ]);
@@ -630,8 +634,29 @@ export default function SalesSnapshotClient() {
             for (const item of [...rawLeads, ...rawCompanies]) {
                 leadMap.set(item.id, item);
             }
-            leadsList = Array.from(leadMap.values());
         }
+
+        // Attach scfs subcollection documents to lead objects
+        if (scfsSnap && scfsSnap.docs && scfsSnap.docs.length > 0) {
+            const scfsByParentMap = new Map<string, any[]>();
+            scfsSnap.docs.forEach(doc => {
+                const parentId = doc.ref.parent?.parent?.id;
+                if (parentId) {
+                    const existing = scfsByParentMap.get(parentId) || [];
+                    existing.push({ id: doc.id, ...doc.data() });
+                    scfsByParentMap.set(parentId, existing);
+                }
+            });
+
+            leadMap.forEach((lead, id) => {
+                const parentScfs = scfsByParentMap.get(id);
+                if (parentScfs && parentScfs.length > 0) {
+                    (lead as any).scfs = parentScfs;
+                }
+            });
+        }
+
+        leadsList = Array.from(leadMap.values());
 
         // Cache the result
         cacheRef.current[cacheKey] = { leads: leadsList, activities: actList, appointments: apptList };
@@ -1134,7 +1159,7 @@ export default function SalesSnapshotClient() {
       cohortFilteredLeads, 
       invoices, 
       appliedFilters.dateRange, 
-      appliedFilters.cohortMonthsCount || 3
+      appliedFilters.cohortMonthsCount || 1
     );
   }, [cohortFilteredLeads, invoices, appliedFilters.dateRange, appliedFilters.cohortMonthsCount]);
 
@@ -1406,10 +1431,11 @@ export default function SalesSnapshotClient() {
                     onValueChange={(val) => setFilters(prev => ({ ...prev, cohortMonthsCount: parseInt(val, 10) }))}
                   >
                     <SelectTrigger className="border-[#095c7b]/30">
-                      <SelectValue placeholder="Prior 3 Months (Default)" />
+                      <SelectValue placeholder="Last Month (Default)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="3">Prior 3 Months (Default)</SelectItem>
+                      <SelectItem value="1">Last Month (Default)</SelectItem>
+                      <SelectItem value="3">Prior 3 Months</SelectItem>
                       <SelectItem value="6">Prior 6 Months</SelectItem>
                       <SelectItem value="12">Prior 12 Months</SelectItem>
                     </SelectContent>
