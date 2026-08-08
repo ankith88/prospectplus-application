@@ -42,12 +42,7 @@ export function CancelCustomerDialog({
   const { user, userProfile, isSuperAdmin } = useAuth();
   const { toast } = useToast();
 
-  const isAdmin =
-    userProfile?.activeRole === 'admin' ||
-    userProfile?.role === 'admin' ||
-    isSuperAdmin;
-
-  const isDirectCancel = mode ? mode === 'cancel' : isAdmin;
+  const isDirectCancel = mode === 'cancel';
 
   const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
   const [requestedBy, setRequestedBy] = useState('');
@@ -161,15 +156,21 @@ export function CancelCustomerDialog({
     if (
       !requestedBy.trim() ||
       !capturedBy.trim() ||
-      !cancellationDate ||
-      !selectedThemeId ||
-      !selectedWhyId ||
-      !selectedReasonId
+      !cancellationDate
     ) {
       toast({
         variant: 'destructive',
         title: 'Missing required fields',
-        description: 'Please select a Theme, Why (Category), and Reason, and fill out external contact, internal staff, and date.',
+        description: 'Please fill out external contact, internal staff, and cancellation date.',
+      });
+      return;
+    }
+
+    if (isDirectCancel && (!selectedThemeId || !selectedWhyId || !selectedReasonId)) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing required fields',
+        description: 'Please select a Theme, Why (Category), and Reason for direct customer cancellation.',
       });
       return;
     }
@@ -186,7 +187,7 @@ export function CancelCustomerDialog({
 
       const themeName = selectedThemeObj?.name || 'Unspecified';
       const whyName = selectedWhyObj?.name || 'Unspecified';
-      const reasonName = selectedReasonObj?.name || 'Unspecified / Other';
+      const reasonName = selectedReasonObj?.name || (isDirectCancel ? 'Unspecified / Other' : 'Pending CS Review / Unspecified');
 
       const staffName = capturedBy.trim() || userProfile?.displayName || user?.displayName || 'Staff';
       const userEmail = userProfile?.email || user?.email || 'System';
@@ -451,8 +452,8 @@ export function CancelCustomerDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 overflow-hidden">
+        <DialogHeader className="p-6 pb-4 border-b border-slate-100 shrink-0">
           <DialogTitle>
             {isDirectCancel ? 'Cancel Customer Directly' : 'Request Customer Cancellation'}
           </DialogTitle>
@@ -463,7 +464,7 @@ export function CancelCustomerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 p-6 overflow-y-auto flex-1">
           {/* Section 1: External Contact */}
           <div className="space-y-2">
             <Label htmlFor="requestedBy" className="font-semibold text-slate-900 block">
@@ -511,7 +512,12 @@ export function CancelCustomerDialog({
 
           <div className="pt-3 border-t border-slate-200">
             <Label className="text-xs font-bold text-slate-800 block mb-2">
-              Reason for Cancellation <span className="text-rose-600 font-bold">* Mandatory</span>
+              Reason for Cancellation{' '}
+              {isDirectCancel ? (
+                <span className="text-rose-600 font-bold">* Mandatory</span>
+              ) : (
+                <span className="text-slate-500 font-normal">(Optional - CS will determine if unknown)</span>
+              )}
             </Label>
             <LossReasonPicker
               cancellationThemes={cancellationThemes}
@@ -584,7 +590,7 @@ export function CancelCustomerDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0 flex items-center justify-end gap-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -600,9 +606,7 @@ export function CancelCustomerDialog({
               !requestedBy.trim() ||
               !capturedBy.trim() ||
               !cancellationDate ||
-              !selectedThemeId ||
-              !selectedWhyId ||
-              !selectedReasonId
+              (isDirectCancel && (!selectedThemeId || !selectedWhyId || !selectedReasonId))
             }
           >
             {isSubmitting ? (
