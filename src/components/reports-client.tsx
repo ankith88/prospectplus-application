@@ -936,9 +936,26 @@ export default function ReportsClientPage({
     setAppliedFilters(defaultFilters);
   };
 
+  const leadsMap = useMemo(() => {
+    const map = new Map<string, Lead>();
+    allLeads.forEach(l => map.set(l.id, l));
+    return map;
+  }, [allLeads]);
+
+  const apptsAssignedToMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    allAppointments.forEach(a => {
+      if (a.leadId && a.assignedTo) {
+        if (!map.has(a.leadId)) map.set(a.leadId, new Set());
+        map.get(a.leadId)!.add(a.assignedTo);
+      }
+    });
+    return map;
+  }, [allAppointments]);
+
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
-        const lead = allLeads.find(l => l.id === call.leadId);
+        const lead = leadsMap.get(call.leadId);
         if (!lead) return false;
         
         if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
@@ -994,7 +1011,8 @@ export default function ReportsClientPage({
             }
         };
 
-        const appointmentAssignedToMatch = appliedFilters.appointmentAssignedTo.length === 0 || allAppointments.some(a => a.leadId === call.leadId && a.assignedTo && appliedFilters.appointmentAssignedTo.includes(a.assignedTo));
+        const apptAssignedSet = apptsAssignedToMap.get(call.leadId);
+        const appointmentAssignedToMatch = appliedFilters.appointmentAssignedTo.length === 0 || (apptAssignedSet && appliedFilters.appointmentAssignedTo.some(id => apptAssignedSet.has(id)));
 
         let assignmentDateMatch = true;
         if (appliedFilters.dialerAssignmentDate?.from) {
@@ -1029,12 +1047,12 @@ export default function ReportsClientPage({
 
         return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && activityDateMatch && durationMatch() && appointmentAssignedToMatch && assignmentDateMatch && leadCreatedDateMatch && campaignMatch;
     });
-  }, [allCalls, allLeads, appliedFilters, allAppointments, userProfile, isUserOnlyRole, currentUserIdentifiers]);
+  }, [allCalls, leadsMap, apptsAssignedToMap, appliedFilters, userProfile, isUserOnlyRole, currentUserIdentifiers]);
   
   const filteredAppointments = useMemo(() => {
     return allAppointments.filter(appointment => {
         if (appointment.leadName === 'Unknown Lead') return false;
-        const lead = allLeads.find(l => l.id === appointment.leadId);
+        const lead = leadsMap.get(appointment.leadId);
         if (!lead) return false;
 
         const campaignMatch = appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
@@ -1109,9 +1127,17 @@ export default function ReportsClientPage({
 
         return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch && assignmentDateMatch && leadCreatedDateMatch;
     });
-  }, [allAppointments, allLeads, appliedFilters, userProfile, isUserOnlyRole, currentUserIdentifiers]);
+  }, [allAppointments, leadsMap, appliedFilters, userProfile, isUserOnlyRole, currentUserIdentifiers]);
 
   const stats = useMemo(() => {
+    const activitiesByLeadIdMap = new Map<string, Array<Activity & { leadId: string }>>();
+    allActivities.forEach(a => {
+        if (!activitiesByLeadIdMap.has(a.leadId)) {
+            activitiesByLeadIdMap.set(a.leadId, []);
+        }
+        activitiesByLeadIdMap.get(a.leadId)!.push(a);
+    });
+
     const totalCalls = filteredCalls.length;
     const totalAppointments = filteredAppointments.length;
     
@@ -1145,7 +1171,7 @@ export default function ReportsClientPage({
         
         let interactionMatch = true;
         if (appliedFilters.activityDate?.from) {
-            const leadActs = allActivities.filter(a => a.leadId === l.id);
+            const leadActs = activitiesByLeadIdMap.get(l.id) || [];
             interactionMatch = leadActs.some(a => {
                 const actDate = parseDateString(a.date);
                 if (!actDate) return false;
@@ -1254,8 +1280,7 @@ export default function ReportsClientPage({
 
         if (!isClosed) {
             let activityDates: Date[] = [];
-            const leadActivities = allActivities.filter(act => 
-                act.leadId === lead.id && 
+            const leadActivities = (activitiesByLeadIdMap.get(lead.id) || []).filter(act => 
                 isManualActivity(act) && 
                 isActionByUserRole(act.author)
             );
@@ -1364,7 +1389,7 @@ export default function ReportsClientPage({
     const anyTrialLeads: Lead[] = [];
 
     baseFilteredLeads.forEach(lead => {
-        const leadActivities = allActivities.filter(act => act.leadId === lead.id);
+        const leadActivities = activitiesByLeadIdMap.get(lead.id) || [];
         
         // ShipMate Trial Detection
         const hasShipMateTrialActivity = leadActivities.some(act => 
@@ -1876,7 +1901,7 @@ export default function ReportsClientPage({
     const dropoffStageLeads: Record<string, Lead[]> = {};
 
     baseFilteredLeads.forEach(lead => {
-        const leadActivities = allActivities.filter(a => a.leadId === lead.id).sort((a, b) => {
+        const leadActivities = (activitiesByLeadIdMap.get(lead.id) || []).slice().sort((a, b) => {
             const dateA = parseDateString(a.date) || new Date(0);
             const dateB = parseDateString(b.date) || new Date(0);
             return dateA.getTime() - dateB.getTime();
@@ -2081,7 +2106,7 @@ export default function ReportsClientPage({
         const enteredDate = parseDateString(lead.assignedToDialerAt || lead.dateLeadEntered || (lead as any).createdAt) || new Date();
         const currentStatus = lead.status || 'New';
 
-        const leadActivities = allActivities.filter(a => a.leadId === lead.id);
+        const leadActivities = activitiesByLeadIdMap.get(lead.id) || [];
         const statusActivities = leadActivities
             .map(act => {
                 if (!act.notes) return null;
@@ -2392,7 +2417,7 @@ export default function ReportsClientPage({
           lost: leadsAppointedCount > 0 ? (lostCount / leadsAppointedCount) * 100 : 0,
       }
     };
-  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile, allVisitNotes, allActivities, burnRateTimeframe, teamPerformanceTimeframe]);
+  }, [filteredCalls, allLeads, filteredAppointments, allDialers, appliedFilters, userProfile, allVisitNotes, allActivities, burnRateTimeframe, teamPerformanceTimeframe]);
 
   const handleExportChartData = (data: any[], filename: string) => {
     if (data.length === 0) {
