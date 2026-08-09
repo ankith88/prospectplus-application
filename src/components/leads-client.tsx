@@ -48,6 +48,7 @@ import { Badge } from '@/components/ui/badge'
 import { CallAttemptBadge } from './call-attempt-badge'
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { CustomBulkSelectControl } from '@/components/ui/custom-bulk-select-control'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { format, startOfDay, endOfDay } from 'date-fns'
@@ -2026,6 +2027,12 @@ export default function LeadsClientPage({
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle>{userProfile?.activeRole === 'Franchisee' ? `${userProfile.franchisee} Franchise Leads` : 'My Assigned Leads'}</CardTitle>
             <div className="flex flex-wrap items-center gap-2">
+                <CustomBulkSelectControl
+                    allAvailableIds={myLeads.map(l => l.id)}
+                    selectedIds={selectedLeads}
+                    onSelect={setSelectedLeads}
+                    onClear={() => setSelectedLeads([])}
+                />
                 {isSessionActive && (
                   <Button onClick={handleEndSession} variant="destructive" size="sm">
                     <XCircle className="mr-2 h-4 w-4" />
@@ -2303,6 +2310,12 @@ export default function LeadsClientPage({
                 <Badge variant="secondary">{Object.values(groupedAssignedLeads).flat().flatMap(s => Object.values(s)).flat().length} lead(s)</Badge>
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
+                <CustomBulkSelectControl
+                    allAvailableIds={Object.values(groupedAssignedLeads).flat().flatMap(s => Object.values(s)).flat().map(l => l.id)}
+                    selectedIds={selectedLeads}
+                    onSelect={setSelectedLeads}
+                    onClear={() => setSelectedLeads([])}
+                />
                 {selectedLeads.length > 0 && (
                     <>
                        <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedLeads)}>

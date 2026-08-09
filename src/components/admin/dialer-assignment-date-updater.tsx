@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Loader } from '@/components/ui/loader';
+import { CustomBulkSelectControl } from '@/components/ui/custom-bulk-select-control';
 import { getLeadsFromFirebase, bulkUpdateDialerAssignmentDate } from '@/services/firebase';
 import type { Lead } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -372,6 +373,15 @@ export function DialerAssignmentDateUpdater() {
           </div>
         </div>
       )}
+
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <CustomBulkSelectControl
+          allAvailableIds={filteredItems.map(item => item.id)}
+          selectedIds={selectedItems}
+          onSelect={setSelectedItems}
+          onClear={() => setSelectedItems([])}
+        />
+      </div>
 
       {/* Interactive Gmail-style Select All Across Pages Banner */}
       {!loading && isAllCurrentPageSelected && filteredItems.length > displayedItems.length && (

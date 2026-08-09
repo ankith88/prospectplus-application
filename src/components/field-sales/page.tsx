@@ -24,6 +24,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog, Download, PlusCircle, Calendar as CalendarIcon } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
+import { CustomBulkSelectControl } from '@/components/ui/custom-bulk-select-control'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from '@/components/ui/dropdown-menu'
@@ -936,6 +937,12 @@ export default function FieldSalesPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <CardTitle>My Assigned Leads</CardTitle>
                 <div className="flex items-center gap-2">
+                   <CustomBulkSelectControl
+                     allAvailableIds={filteredMyLeads.map(l => l.id)}
+                     selectedIds={selectedLeads}
+                     onSelect={setSelectedLeads}
+                     onClear={() => setSelectedLeads([])}
+                   />
                    {selectedLeads.length > 0 && (
                       <>
                         <Button size="sm" variant="outline" onClick={openMoveLeadsDialog}>

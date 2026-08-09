@@ -23,6 +23,7 @@ import { useRouter } from 'next/navigation'
 import { AccessDenied } from '@/components/access-denied'
 import { useToast } from '@/hooks/use-toast'
 import { Loader } from '@/components/ui/loader'
+import { CustomBulkSelectControl } from '@/components/ui/custom-bulk-select-control'
 import { Search, Filter, Shuffle } from 'lucide-react'
 
 export function UnassignedLeadsClient() {
@@ -224,7 +225,13 @@ export function UnassignedLeadsClient() {
             </div>
           </div>
           
-          <div className="bg-muted/50 p-4 rounded-md border flex flex-wrap gap-4 items-end">
+          <div className="bg-muted/50 p-4 rounded-md border flex flex-wrap gap-4 items-end justify-between">
+            <CustomBulkSelectControl
+              allAvailableIds={filteredLeads.map(l => l.id)}
+              selectedIds={selectedLeads}
+              onSelect={setSelectedLeads}
+              onClear={() => setSelectedLeads([])}
+            />
             <div className="space-y-2 flex-1 min-w-[200px]">
               <label className="text-sm font-medium">Select Target Bucket</label>
               <Select value={selectedBucket} onValueChange={(val) => { setSelectedBucket(val); setSelectedUsers([]); }}>

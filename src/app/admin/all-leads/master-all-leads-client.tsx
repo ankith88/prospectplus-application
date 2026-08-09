@@ -26,6 +26,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { getLeadDisplayDateValue } from '@/lib/utils'
 import { Loader } from '@/components/ui/loader'
+import { CustomBulkSelectControl } from '@/components/ui/custom-bulk-select-control'
 import { 
   Search, 
   Filter, 
@@ -1175,9 +1176,12 @@ export function MasterAllLeadsClient() {
       <Card className="border-primary/30 bg-primary/5">
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm font-semibold bg-primary/10 text-primary px-3 py-1.5 rounded-md border border-primary/20">
-              {selectedLeads.length} lead(s) selected
-            </span>
+            <CustomBulkSelectControl
+              allAvailableIds={filteredLeads.map(l => l.id)}
+              selectedIds={selectedLeads}
+              onSelect={setSelectedLeads}
+              onClear={() => setSelectedLeads([])}
+            />
 
             {/* Target Bucket Selector */}
             <div className="w-[180px]">

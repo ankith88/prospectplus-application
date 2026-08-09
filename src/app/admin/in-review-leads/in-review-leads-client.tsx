@@ -26,6 +26,7 @@ import type { Lead, UserProfile, LeadBucket, Franchisee } from '@/lib/types'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { Loader } from '@/components/ui/loader'
+import { CustomBulkSelectControl } from '@/components/ui/custom-bulk-select-control'
 import { 
   Search, 
   Filter, 
@@ -679,14 +680,22 @@ export function InReviewLeadsClient() {
 
       {/* Bulk Action & Reassignment Card (styled like Master Directory) */}
       <Card className="border-primary/20 bg-primary/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Shuffle className="w-4 h-4 text-primary" />
-            Bulk Move & Assign Leads ({selectedLeads.length} Selected)
-          </CardTitle>
-          <CardDescription>
-            Select a target bucket and multi-select dialers or account managers to randomly and equally distribute selected leads.
-          </CardDescription>
+        <CardHeader className="pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Shuffle className="w-4 h-4 text-primary" />
+              Bulk Move & Assign Leads ({selectedLeads.length} Selected)
+            </CardTitle>
+            <CardDescription>
+              Select a target bucket and multi-select dialers or account managers to randomly and equally distribute selected leads.
+            </CardDescription>
+          </div>
+          <CustomBulkSelectControl
+            allAvailableIds={filteredLeads.map(l => l.id)}
+            selectedIds={selectedLeads}
+            onSelect={setSelectedLeads}
+            onClear={() => setSelectedLeads([])}
+          />
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-4">

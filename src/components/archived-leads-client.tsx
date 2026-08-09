@@ -22,6 +22,7 @@ import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
+import { CustomBulkSelectControl } from '@/components/ui/custom-bulk-select-control'
 import { MapModal } from '@/components/map-modal'
 import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User, Star, Download, History, RefreshCw, Route, Trash2, CheckCircle2, XCircle, Archive } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -1120,6 +1121,12 @@ export default function ArchivedLeadsClientPage() {
             <Badge variant="secondary">{sortedLeads.length} lead(s)</Badge>
           </CardTitle>
            <div className="flex items-center gap-2">
+                <CustomBulkSelectControl
+                  allAvailableIds={sortedLeads.map(l => l.id)}
+                  selectedIds={selectedLeads}
+                  onSelect={setSelectedLeads}
+                  onClear={() => setSelectedLeads([])}
+                />
                 {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager') && selectedLeads.length > 0 && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
