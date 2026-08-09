@@ -312,7 +312,7 @@ export interface ScfRecord {
     services: ServiceSelection[];
     products?: any[];
     startDate: string;
-    status: 'Pending' | 'Accepted' | 'Cancelled';
+    status: 'Pending' | 'Accepted' | 'Cancelled' | 'Signed' | 'Quote Accepted';
     createdAt: string;
     updatedAt?: string;
     createdBy?: string;
@@ -320,6 +320,7 @@ export interface ScfRecord {
     createdByEmail?: string;
     createdByUid?: string;
     acceptedAt?: string;
+    signedAt?: string;
     url: string;
     uploadedPdfUrl?: string;
     uploadedPdfName?: string;

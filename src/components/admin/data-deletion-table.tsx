@@ -19,10 +19,20 @@ import { Loader } from '../ui/loader';
 import { getLeadsFromFirebase, getCompaniesFromFirebase, deleteLead, deleteCompany } from '@/services/firebase';
 import type { Lead, LeadStatus } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, Search } from 'lucide-react';
+import { 
+  Trash2, 
+  Search, 
+  ChevronLeft, 
+  ChevronRight, 
+  ChevronsLeft, 
+  ChevronsRight, 
+  CheckCircle2, 
+  CheckSquare 
+} from 'lucide-react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Checkbox } from '../ui/checkbox';
 import { MultiSelectCombobox, type Option } from '../ui/multi-select-combobox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface DataDeletionTableProps {
   collectionName: 'leads' | 'companies';
@@ -38,6 +48,13 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [bucketFilter, setBucketFilter] = useState<string[]>([]);
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'all'>(50);
+  const [jumpPageInput, setJumpPageInput] = useState('');
+
+  // Selection & Deletion State
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -64,6 +81,12 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
     };
     fetchData();
   }, [collectionName, toast]);
+
+  // Reset pagination to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+    setJumpPageInput('');
+  }, [debouncedSearchTerm, debouncedCampaignFilter, statusFilter, bucketFilter, sourceFilter, pageSize]);
 
   const uniqueSources = useMemo(() => {
     if (collectionName !== 'leads') return [];
@@ -124,14 +147,64 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
     });
   }, [items, debouncedSearchTerm, debouncedCampaignFilter, statusFilter, bucketFilter, sourceFilter, collectionName]);
 
+  // Pagination calculations
+  const effectivePageSize = useMemo(() => {
+    if (pageSize === 'all') return Math.max(1, filteredItems.length);
+    return typeof pageSize === 'number' ? pageSize : (parseInt(String(pageSize), 10) || 50);
+  }, [pageSize, filteredItems.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / effectivePageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const startIndex = filteredItems.length === 0 ? 0 : (safeCurrentPage - 1) * effectivePageSize;
+  const endIndex = Math.min(startIndex + effectivePageSize, filteredItems.length);
+
+  const displayedItems = useMemo(() => {
+    return filteredItems.slice(startIndex, endIndex);
+  }, [filteredItems, startIndex, endIndex]);
+
+  const displayedItemIds = useMemo(() => displayedItems.map(i => i.id), [displayedItems]);
+  const filteredItemIds = useMemo(() => filteredItems.map(i => i.id), [filteredItems]);
+
+  const isAllCurrentPageSelected = displayedItemIds.length > 0 && displayedItemIds.every(id => selectedItems.includes(id));
+  const isSomeCurrentPageSelected = displayedItemIds.some(id => selectedItems.includes(id)) && !isAllCurrentPageSelected;
+  const isAllMatchingSelected = filteredItemIds.length > 0 && selectedItems.length === filteredItemIds.length;
+
   const handleSelectItem = (itemId: string, checked: boolean) => {
     setSelectedItems(prev =>
       checked ? [...prev, itemId] : prev.filter(id => id !== itemId)
     );
   };
   
-  const handleSelectAll = (checked: boolean) => {
-    setSelectedItems(checked ? filteredItems.slice(0, 50).map(i => i.id) : []);
+  const handleToggleSelectCurrentPage = (checked: boolean) => {
+    if (checked) {
+      setSelectedItems(prev => Array.from(new Set([...prev, ...displayedItemIds])));
+    } else {
+      setSelectedItems(prev => prev.filter(id => !displayedItemIds.includes(id)));
+    }
+  };
+
+  const handleSelectAllMatching = () => {
+    setSelectedItems(filteredItemIds);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedItems([]);
+  };
+
+  const handleJumpPage = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pageNum = parseInt(jumpPageInput, 10);
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+      setCurrentPage(pageNum);
+      setJumpPageInput('');
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Page',
+        description: `Please enter a valid page number between 1 and ${totalPages}.`
+      });
+    }
   };
 
   const handleDelete = async () => {
@@ -142,7 +215,7 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
       await deleteFunction(selectedItems);
       setItems(prev => prev.filter(item => !selectedItems.includes(item.id)));
       setSelectedItems([]);
-      toast({ title: 'Success', description: `${selectedItems.length} item(s) and all their data have been deleted.` });
+      toast({ title: 'Success', description: `${selectedItems.length.toLocaleString()} item(s) and all their data have been deleted.` });
     } catch (error) {
       console.error(`Failed to delete ${collectionName}:`, error);
       toast({ variant: 'destructive', title: 'Error', description: `Could not delete items.` });
@@ -152,7 +225,6 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
     }
   };
 
-  const isAllSelected = filteredItems.length > 0 && selectedItems.length === Math.min(filteredItems.length, 50);
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s }));
 
   return (
@@ -207,28 +279,81 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
         )}
       </div>
       
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-muted-foreground">
-            Showing {Math.min(50, filteredItems.length)} of {filteredItems.length} records.
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+          <span>
+            Matching Records: <strong className="font-semibold text-foreground">{filteredItems.length.toLocaleString()}</strong>
+          </span>
+          {filteredItems.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSelectAllMatching}
+              disabled={isAllMatchingSelected}
+              className="h-7 text-xs"
+            >
+              <CheckSquare className="mr-1 h-3.5 w-3.5" />
+              Select All {filteredItems.length.toLocaleString()} Records
+            </Button>
+          )}
         </div>
         {selectedItems.length > 0 && (
-          <Button variant="destructive" onClick={() => setShowConfirm(true)}>
+          <Button variant="destructive" size="sm" onClick={() => setShowConfirm(true)}>
               <Trash2 className="mr-2 h-4 w-4" />
-              Delete Selected ({selectedItems.length})
+              Delete Selected ({selectedItems.length.toLocaleString()})
           </Button>
         )}
       </div>
 
+      {/* Interactive Gmail-style Select All Across Pages Banner */}
+      {!loading && isAllCurrentPageSelected && filteredItems.length > displayedItems.length && (
+        <div className="px-4 py-2.5 bg-primary/10 border border-primary/30 rounded-md text-xs flex items-center justify-between flex-wrap gap-2 transition-all">
+          {isAllMatchingSelected ? (
+            <div className="flex items-center gap-2 text-primary font-medium">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>All <strong>{filteredItems.length.toLocaleString()}</strong> records across all <strong>{totalPages}</strong> pages are selected.</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-foreground">
+              <span>All <strong>{displayedItems.length}</strong> records on page <strong>{safeCurrentPage}</strong> are selected.</span>
+              <Button
+                variant="link"
+                size="sm"
+                onClick={handleSelectAllMatching}
+                className="h-auto p-0 text-xs font-semibold text-primary underline hover:text-primary/80"
+              >
+                Select all {filteredItems.length.toLocaleString()} matching records
+              </Button>
+            </div>
+          )}
+          {isAllMatchingSelected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDeselectAll}
+              className="h-6 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Clear Selection
+            </Button>
+          )}
+        </div>
+      )}
 
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
                <TableHead className="w-12">
                 <Checkbox
-                  checked={isAllSelected}
-                  onCheckedChange={handleSelectAll}
-                  aria-label="Select all items on this page"
+                  checked={isAllMatchingSelected ? true : (isAllCurrentPageSelected ? true : (isSomeCurrentPageSelected ? 'indeterminate' : false))}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      handleToggleSelectCurrentPage(true);
+                    } else {
+                      handleDeselectAll();
+                    }
+                  }}
+                  aria-label="Select all items on current page"
                 />
               </TableHead>
               <TableHead>Name</TableHead>
@@ -242,36 +367,143 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={collectionName === 'leads' ? 7 : 5} className="text-center"><Loader /></TableCell>
+                <TableCell colSpan={collectionName === 'leads' ? 7 : 5} className="text-center py-8"><Loader /></TableCell>
               </TableRow>
-            ) : filteredItems.length > 0 ? (
-              filteredItems.slice(0, 50).map((item) => ( // Limit to 50 results for performance
-                <TableRow key={item.id} data-state={selectedItems.includes(item.id) && "selected"}>
+            ) : displayedItems.length > 0 ? (
+              displayedItems.map((item) => {
+                const isSelected = selectedItems.includes(item.id);
+                return (
+                  <TableRow key={item.id} data-state={isSelected && "selected"}>
                     <TableCell>
-                        <Checkbox
-                            checked={selectedItems.includes(item.id)}
-                            onCheckedChange={(checked) => handleSelectItem(item.id, !!checked)}
-                        />
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => handleSelectItem(item.id, !!checked)}
+                      />
                     </TableCell>
-                  <TableCell className="font-medium">{item.companyName}</TableCell>
-                  <TableCell className="text-muted-foreground">{item.id}</TableCell>
-                  <TableCell>{item.campaign || 'N/A'}</TableCell>
-                  {collectionName === 'leads' && <TableCell className="capitalize">{item.bucket || 'N/A'}</TableCell>}
-                  {collectionName === 'leads' && <TableCell>{item.customerSource || 'N/A'}</TableCell>}
-                  <TableCell>{item.status}</TableCell>
-                </TableRow>
-              ))
+                    <TableCell className="font-medium">{item.companyName}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-xs">{item.id}</TableCell>
+                    <TableCell>{item.campaign || 'N/A'}</TableCell>
+                    {collectionName === 'leads' && <TableCell className="capitalize">{item.bucket || 'N/A'}</TableCell>}
+                    {collectionName === 'leads' && <TableCell>{item.customerSource || 'N/A'}</TableCell>}
+                    <TableCell>{item.status}</TableCell>
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
-                <TableCell colSpan={collectionName === 'leads' ? 7 : 5} className="h-24 text-center">
+                <TableCell colSpan={collectionName === 'leads' ? 7 : 5} className="h-24 text-center text-muted-foreground text-sm">
                   No results found.
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
-        {filteredItems.length > 50 && (
-            <div className="p-4 text-sm text-muted-foreground">Showing first 50 results. Refine your search for more specific results.</div>
+
+        {/* Table Pagination Footer */}
+        {!loading && filteredItems.length > 0 && (
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-4 px-4 py-3 border-t bg-muted/10 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span>
+                Showing <strong className="font-medium text-foreground">{startIndex + 1}</strong> to{' '}
+                <strong className="font-medium text-foreground">{endIndex}</strong> of{' '}
+                <strong className="font-medium text-foreground">{filteredItems.length.toLocaleString()}</strong> results
+              </span>
+            </div>
+
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* Rows per page selector */}
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Per page:</span>
+                <Select 
+                  value={pageSize.toString()} 
+                  onValueChange={(val) => setPageSize(val === 'all' ? 'all' : Number(val))}
+                >
+                  <SelectTrigger className="h-8 w-[90px] bg-background text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="z-[70]">
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                    <SelectItem value="250">250</SelectItem>
+                    <SelectItem value="500">500</SelectItem>
+                    <SelectItem value="1000">1,000</SelectItem>
+                    <SelectItem value="all">All ({filteredItems.length.toLocaleString()})</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Direct Jump to Page Form */}
+              {pageSize !== 'all' && totalPages > 1 && (
+                <form onSubmit={handleJumpPage} className="flex items-center gap-1.5 border-l border-border/60 pl-4">
+                  <span className="font-medium text-xs">Go to:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    placeholder={safeCurrentPage.toString()}
+                    value={jumpPageInput}
+                    onChange={(e) => setJumpPageInput(e.target.value)}
+                    className="h-8 w-14 text-xs px-2 text-center"
+                  />
+                  <Button type="submit" variant="secondary" size="sm" className="h-8 text-xs px-2 font-medium">
+                    Go
+                  </Button>
+                </form>
+              )}
+
+              {/* Page navigation controls */}
+              {pageSize !== 'all' && (
+                <div className="flex items-center gap-1 border-l border-border/60 pl-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={safeCurrentPage === 1}
+                    className="h-8 w-8 p-0"
+                    title="First Page"
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={safeCurrentPage === 1}
+                    className="h-8 w-8 p-0"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+
+                  <span className="font-medium text-foreground px-2 whitespace-nowrap">
+                    Page {safeCurrentPage} of {totalPages}
+                  </span>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={safeCurrentPage === totalPages}
+                    className="h-8 w-8 p-0"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={safeCurrentPage === totalPages}
+                    className="h-8 w-8 p-0"
+                    title="Last Page"
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
@@ -280,13 +512,13 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete {selectedItems.length} record(s) and all associated data.
+              This action cannot be undone. This will permanently delete {selectedItems.length.toLocaleString()} record(s) and all associated data.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-              {isDeleting ? <Loader /> : 'Delete'}
+              {isDeleting ? <Loader /> : `Delete (${selectedItems.length.toLocaleString()})`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -294,3 +526,4 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
     </div>
   );
 }
+

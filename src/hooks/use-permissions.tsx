@@ -54,6 +54,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   lpoLeads: ['superadmin', 'operations', 'admin'],
   franchiseeVerification: ['admin', 'superadmin'],
   customerSuccessOnboarding: ['Customer Success', 'Marketing Manager', 'superadmin', 'admin'],
+  multisiteReporting: ['admin', 'superadmin', 'Marketing Manager', 'Customer Success', 'customer success', 'customer_success', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager'],
 };
 
 export const PermissionsProvider = ({ children }: { children: React.ReactNode }) => {
@@ -129,6 +130,11 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
                 const currentHistoryCallsTranscripts: string[] = currentFeatures.historyCallsTranscripts || DEFAULT_ROLE_ACCESS.historyCallsTranscripts;
                 if (!currentHistoryCallsTranscripts.includes('Outbound Admin')) {
                     currentFeatures.historyCallsTranscripts = Array.from(new Set([...currentHistoryCallsTranscripts, 'Outbound Admin']));
+                    needsUpdate = true;
+                }
+
+                if (!currentFeatures.multisiteReporting) {
+                    currentFeatures.multisiteReporting = DEFAULT_ROLE_ACCESS.multisiteReporting;
                     needsUpdate = true;
                 }
 

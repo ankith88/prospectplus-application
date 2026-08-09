@@ -66,7 +66,7 @@ async function resolveUserFranchisee(userProfile: any, db: FirebaseFirestore.Fir
       .map((f: any) => (typeof f === 'string' ? f : (f?.franchiseeName || f?.name)))
       .filter((n: any): n is string => typeof n === 'string' && n.trim().length > 0);
     if (names.length === 1) return names[0].trim();
-    if (names.length > 1) return Array.from(new Set(names.map(n => n.trim())));
+    if (names.length > 1) return Array.from(new Set(names.map((n: string) => n.trim())));
   }
 
   // 4. Collect all possible franchisee IDs

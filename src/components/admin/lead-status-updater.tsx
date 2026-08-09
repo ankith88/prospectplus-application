@@ -59,7 +59,8 @@ export function LeadStatusUpdater() {
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(100);
+  const [pageSize, setPageSize] = useState<number | 'all'>(100);
+  const [jumpPageInput, setJumpPageInput] = useState('');
 
   // Bulk Operations State
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -90,6 +91,7 @@ export function LeadStatusUpdater() {
   // Reset pagination to page 1 whenever filters or page size change
   useEffect(() => {
     setCurrentPage(1);
+    setJumpPageInput('');
   }, [debouncedSearchTerm, sourceFilter, bucketFilter, statusFilter, amFilter, dialerFilter, dateRange, pageSize]);
 
   // Compute unique values for filters from items list
@@ -188,11 +190,16 @@ export function LeadStatusUpdater() {
   }, [debouncedSearchTerm, sourceFilter, bucketFilter, statusFilter, amFilter, dialerFilter, dateRange]);
 
   // Pagination logic
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
+  const effectivePageSize = useMemo(() => {
+    if (pageSize === 'all') return Math.max(1, filteredItems.length);
+    return typeof pageSize === 'number' ? pageSize : (parseInt(String(pageSize), 10) || 100);
+  }, [pageSize, filteredItems.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / effectivePageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
 
-  const startIndex = filteredItems.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, filteredItems.length);
+  const startIndex = filteredItems.length === 0 ? 0 : (safeCurrentPage - 1) * effectivePageSize;
+  const endIndex = Math.min(startIndex + effectivePageSize, filteredItems.length);
 
   const displayedItems = useMemo(() => {
     return filteredItems.slice(startIndex, endIndex);
@@ -230,6 +237,21 @@ export function LeadStatusUpdater() {
 
   const handleDeselectAll = () => {
     setSelectedItems([]);
+  };
+
+  const handleJumpPage = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pageNum = parseInt(jumpPageInput, 10);
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+      setCurrentPage(pageNum);
+      setJumpPageInput('');
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Page',
+        description: `Please enter a valid page number between 1 and ${totalPages}.`
+      });
+    }
   };
 
   // Single Status Update
@@ -585,6 +607,40 @@ export function LeadStatusUpdater() {
         </div>
       </div>
 
+      {/* Interactive Gmail-style Select All Across Pages Banner */}
+      {!loading && isAllCurrentPageSelected && filteredItems.length > displayedItems.length && (
+        <div className="px-4 py-2.5 bg-primary/10 border border-primary/30 rounded-md text-xs flex items-center justify-between flex-wrap gap-2 transition-all">
+          {isAllMatchingSelected ? (
+            <div className="flex items-center gap-2 text-primary font-medium">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>All <strong>{filteredItems.length.toLocaleString()}</strong> matching leads across all <strong>{totalPages}</strong> pages are selected.</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-foreground">
+              <span>All <strong>{displayedItems.length}</strong> leads on page <strong>{safeCurrentPage}</strong> are selected.</span>
+              <Button
+                variant="link"
+                size="sm"
+                onClick={handleSelectAllMatching}
+                className="h-auto p-0 text-xs font-semibold text-primary underline hover:text-primary/80"
+              >
+                Select all {filteredItems.length.toLocaleString()} leads matching search results
+              </Button>
+            </div>
+          )}
+          {isAllMatchingSelected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDeselectAll}
+              className="h-6 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Clear Selection
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Leads Table */}
       <div className="rounded-md border bg-background overflow-hidden">
         <Table>
@@ -592,8 +648,14 @@ export function LeadStatusUpdater() {
             <TableRow>
               <TableHead className="w-12">
                 <Checkbox
-                  checked={isAllCurrentPageSelected ? true : (isSomeCurrentPageSelected ? 'indeterminate' : false)}
-                  onCheckedChange={(checked) => handleToggleSelectCurrentPage(!!checked)}
+                  checked={isAllMatchingSelected ? true : (isAllCurrentPageSelected ? true : (isSomeCurrentPageSelected ? 'indeterminate' : false))}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      handleToggleSelectCurrentPage(true);
+                    } else {
+                      handleDeselectAll();
+                    }
+                  }}
                   aria-label="Select all items on current page"
                 />
               </TableHead>
@@ -668,8 +730,8 @@ export function LeadStatusUpdater() {
 
         {/* Table Pagination Footer */}
         {!loading && filteredItems.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t bg-muted/10 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-4 px-4 py-3 border-t bg-muted/10 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 flex-wrap">
               <span>
                 Showing <strong className="font-medium text-foreground">{startIndex + 1}</strong> to{' '}
                 <strong className="font-medium text-foreground">{endIndex}</strong> of{' '}
@@ -677,15 +739,15 @@ export function LeadStatusUpdater() {
               </span>
             </div>
 
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 flex-wrap">
               {/* Rows per page selector */}
               <div className="flex items-center gap-2">
                 <span className="font-medium">Per page:</span>
                 <Select 
                   value={pageSize.toString()} 
-                  onValueChange={(val) => setPageSize(Number(val))}
+                  onValueChange={(val) => setPageSize(val === 'all' ? 'all' : Number(val))}
                 >
-                  <SelectTrigger className="h-8 w-[75px] bg-background text-xs">
+                  <SelectTrigger className="h-8 w-[90px] bg-background text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="z-[70]">
@@ -694,58 +756,81 @@ export function LeadStatusUpdater() {
                     <SelectItem value="100">100</SelectItem>
                     <SelectItem value="250">250</SelectItem>
                     <SelectItem value="500">500</SelectItem>
+                    <SelectItem value="1000">1,000</SelectItem>
+                    <SelectItem value="all">All ({filteredItems.length.toLocaleString()})</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
+              {/* Direct Jump to Page Form */}
+              {pageSize !== 'all' && totalPages > 1 && (
+                <form onSubmit={handleJumpPage} className="flex items-center gap-1.5 border-l border-border/60 pl-4">
+                  <span className="font-medium text-xs">Go to:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    placeholder={safeCurrentPage.toString()}
+                    value={jumpPageInput}
+                    onChange={(e) => setJumpPageInput(e.target.value)}
+                    className="h-8 w-14 text-xs px-2 text-center"
+                  />
+                  <Button type="submit" variant="secondary" size="sm" className="h-8 text-xs px-2 font-medium">
+                    Go
+                  </Button>
+                </form>
+              )}
+
               {/* Page navigation controls */}
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(1)}
-                  disabled={safeCurrentPage === 1}
-                  className="h-8 w-8 p-0"
-                  title="First Page"
-                >
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={safeCurrentPage === 1}
-                  className="h-8 w-8 p-0"
-                  title="Previous Page"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
+              {pageSize !== 'all' && (
+                <div className="flex items-center gap-1 border-l border-border/60 pl-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={safeCurrentPage === 1}
+                    className="h-8 w-8 p-0"
+                    title="First Page"
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={safeCurrentPage === 1}
+                    className="h-8 w-8 p-0"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
 
-                <span className="font-medium text-foreground px-2">
-                  Page {safeCurrentPage} of {totalPages}
-                </span>
+                  <span className="font-medium text-foreground px-2 whitespace-nowrap">
+                    Page {safeCurrentPage} of {totalPages}
+                  </span>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={safeCurrentPage === totalPages}
-                  className="h-8 w-8 p-0"
-                  title="Next Page"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={safeCurrentPage === totalPages}
-                  className="h-8 w-8 p-0"
-                  title="Last Page"
-                >
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
-              </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={safeCurrentPage === totalPages}
+                    className="h-8 w-8 p-0"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={safeCurrentPage === totalPages}
+                    className="h-8 w-8 p-0"
+                    title="Last Page"
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -753,3 +838,4 @@ export function LeadStatusUpdater() {
     </div>
   );
 }
+

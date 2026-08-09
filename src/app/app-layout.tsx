@@ -186,7 +186,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       if (path === '/admin/tickets/reporting' || path === '/scans/report') return 'analytics-reports';
       return 'ops-history';
     }
-    if (path.startsWith('/sales-snapshot') || path.startsWith('/reports') || path.startsWith('/inbound-reporting') || path.startsWith('/admin/lifecycle-dashboard') || path.startsWith('/account-manager/reports') || path.startsWith('/customer-success/reporting') || path.startsWith('/field-activity-report') || path.startsWith('/admin/deployments')) {
+    if (path.startsWith('/sales-snapshot') || path.startsWith('/reports') || path.startsWith('/inbound-reporting') || path.startsWith('/multisite-reporting') || path.startsWith('/admin/lifecycle-dashboard') || path.startsWith('/account-manager/reports') || path.startsWith('/customer-success/reporting') || path.startsWith('/field-activity-report') || path.startsWith('/admin/deployments')) {
       return 'analytics-reports';
     }
     if (path.startsWith('/admin/franchisees')) {
@@ -355,6 +355,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/sales-snapshot': { label: 'Sales Snapshot', category: 'Analytics & Reports', icon: Layers, href: '/sales-snapshot' },
     '/reports': { label: 'Outbound Reporting', category: 'Analytics & Reports', icon: BarChart2, href: '/reports' },
     '/inbound-reporting': { label: 'Inbound Reporting', category: 'Analytics & Reports', icon: Inbox, href: '/inbound-reporting' },
+    '/multisite-reporting': { label: 'MultiSite Reporting', category: 'Analytics & Reports', icon: Network, href: '/multisite-reporting' },
     '/admin/lifecycle-dashboard': { label: 'Lifecycle Dashboard', category: 'Analytics & Reports', icon: Activity, href: '/admin/lifecycle-dashboard' },
     '/account-manager/reports': { label: 'AM Reporting', category: 'Analytics & Reports', icon: BarChart3, href: '/account-manager/reports' },
     '/admin/tickets/reporting': { label: 'Ticket Reporting', category: 'Analytics & Reports', icon: BarChart2, href: '/admin/tickets/reporting' },
@@ -403,7 +404,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       if (pathname.startsWith('/signed-customers') || pathname.startsWith('/lost-customers')) {
         setExpandedStates(prev => ({ ...prev, 'customers': true }));
       }
-      if (pathname.startsWith('/sales-snapshot') || pathname.startsWith('/reports') || pathname.startsWith('/inbound-reporting') || pathname.startsWith('/admin/lifecycle-dashboard')) {
+      if (pathname.startsWith('/sales-snapshot') || pathname.startsWith('/reports') || pathname.startsWith('/inbound-reporting') || pathname.startsWith('/multisite-reporting') || pathname.startsWith('/admin/lifecycle-dashboard')) {
         setExpandedStates(prev => ({ ...prev, 'sales-reports': true }));
       }
       if (pathname.startsWith('/account-manager/reports') || pathname.startsWith('/customer-success/reporting') || pathname.startsWith('/field-activity-report') || pathname.startsWith('/admin/deployments')) {
@@ -635,6 +636,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewVisits = canCaptureVisit || canProcessVisits;
   const canViewInbound = canView('inboundLeads');
   const canViewInboundReporting = canView('inboundReporting');
+  const canViewMultiSiteReporting = canView('multisiteReporting');
 
 
   const canViewMarketingGroup = (canView('marketingGroup') || userProfile?.activeRole === 'Customer Service') && userProfile?.activeRole !== 'user';
@@ -1849,6 +1851,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                               <Link href="/inbound-reporting">
                                 <Inbox />
                                 <span>Inbound Reporting</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewMultiSiteReporting && !isFranchiseeRole && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/multisite-reporting")} tooltip="MultiSite Reporting">
+                              <Link href="/multisite-reporting">
+                                <Network />
+                                <span>MultiSite Reporting</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>

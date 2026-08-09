@@ -71,6 +71,8 @@ export async function bulkLinkLeadsToParent(
         isParentLead: true,
         isMultisite: true,
         accountType: 'parent',
+        bucket: 'multisite',
+        campaign: 'MultiSite',
         updatedAt: nowIso,
       },
       { merge: true }
@@ -82,6 +84,8 @@ export async function bulkLinkLeadsToParent(
         isParentLead: true,
         isMultisite: true,
         accountType: 'parent',
+        bucket: 'multisite',
+        campaign: 'MultiSite',
         updatedAt: nowIso,
       })
     }
@@ -103,6 +107,9 @@ export async function bulkLinkLeadsToParent(
             parentLeadId: parentLeadId,
             parentCompanyId: parentLeadId,
             isChildSite: true,
+            bucket: 'multisite',
+            campaign: 'MultiSite',
+            linkedByName: userEmail || 'Superadmin',
             updatedAt: nowIso,
           })
         }
@@ -114,6 +121,9 @@ export async function bulkLinkLeadsToParent(
             parentLeadId: parentLeadId,
             parentCompanyId: parentLeadId,
             isChildSite: true,
+            bucket: 'multisite',
+            campaign: 'MultiSite',
+            linkedByName: userEmail || 'Superadmin',
             updatedAt: nowIso,
           })
         }

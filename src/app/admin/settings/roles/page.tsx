@@ -39,6 +39,7 @@ const FEATURES = [
   { id: 'customerSuccessPipeline', label: 'CS Pipeline' },
   { id: 'reporting', label: 'Outbound & Field Reporting' },
   { id: 'inboundReporting', label: 'Inbound Reporting' },
+  { id: 'multisiteReporting', label: 'MultiSite Reporting' },
   { id: 'amReporting', label: 'AM Reporting' },
   { id: 'deploymentHistory', label: 'Deployment History' },
   { id: 'signedCustomers', label: 'Signed Customers' },

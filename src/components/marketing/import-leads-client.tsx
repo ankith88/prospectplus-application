@@ -1134,6 +1134,10 @@ export function ImportLeadsClient() {
           bucket: selectedBucket,
           fieldSales: selectedBucket === 'field_sales',
           leadSource: leadSource || 'Bulk Import Wizard',
+          importedBy: authorName,
+          importedByName: authorName,
+          createdByName: authorName,
+          createdBy: userProfile?.uid || authorName,
         };
 
         if (!isUpdatingExistingLead) {

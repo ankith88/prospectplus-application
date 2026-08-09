@@ -262,17 +262,19 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
       const canvas = await html2canvas(element, {
         scale: 2, // High resolution
         useCORS: true,
+        allowTaint: true,
         logging: false,
         backgroundColor: "#ffffff"
       })
 
-      const imgData = canvas.toDataURL("image/png")
+      const imgData = canvas.toDataURL("image/jpeg", 0.82)
       
-      // Create PDF in A4 proportions
+      // Create PDF in A4 proportions with compression
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
-        format: "a4"
+        format: "a4",
+        compress: true
       })
 
       const imgWidth = 210 // A4 width in mm
@@ -282,13 +284,13 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
 
       let positionY = 0
 
-      pdf.addImage(imgData, "PNG", 0, positionY, imgWidth, imgHeight)
+      pdf.addImage(imgData, "JPEG", 0, positionY, imgWidth, imgHeight, undefined, "FAST")
       heightLeft -= pageHeight
 
       while (heightLeft >= 0) {
         positionY = heightLeft - imgHeight
         pdf.addPage()
-        pdf.addImage(imgData, "PNG", 0, positionY, imgWidth, imgHeight)
+        pdf.addImage(imgData, "JPEG", 0, positionY, imgWidth, imgHeight, undefined, "FAST")
         heightLeft -= pageHeight
       }
 
