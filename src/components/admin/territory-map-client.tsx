@@ -311,45 +311,53 @@ export default function TerritoryMapClient() {
     });
   }, [overlays, selectedFranchiseeId, selectedPlace]);
 
-  // Fetch or calculate boundary polygon paths for visible overlays
+  // Fetch real GeoJSON boundary polygon paths for visible overlays
   useEffect(() => {
     if (filteredOverlays.length === 0) return;
 
-    const missingItems = filteredOverlays.filter(o => !boundariesMap[o.id]);
-    if (missingItems.length === 0) return;
+    const unmappedItems = filteredOverlays.filter(o => !boundariesMap[o.id]);
+    if (unmappedItems.length === 0) return;
 
-    const newBoundaries: Record<string, google.maps.LatLngLiteral[][]> = {};
+    let isMounted = true;
 
-    // Generate fallback smooth polygon immediately for responsive rendering
-    missingItems.forEach(item => {
-      newBoundaries[item.id] = generatePolygonFallback(item.center.lat, item.center.lng);
-    });
-
-    setBoundariesMap(prev => ({ ...prev, ...newBoundaries }));
-
-    // Asynchronously fetch exact GeoJSON boundaries for top items from /api/territory/boundary
     const fetchRealBoundaries = async () => {
-      const itemsToFetch = missingItems.slice(0, 30);
-      for (const item of itemsToFetch) {
-        try {
-          const url = `/api/territory/boundary?suburb=${encodeURIComponent(item.suburb)}&state=${encodeURIComponent(item.state)}&postcode=${encodeURIComponent(item.postcode)}&lat=${item.center.lat}&lng=${item.center.lng}`;
-          const res = await fetch(url);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.paths && data.paths.length > 0) {
-              setBoundariesMap(prev => ({ ...prev, [item.id]: data.paths }));
-              if (data.center && data.center.lat && data.center.lng) {
-                item.center = data.center;
+      const chunkSize = 10;
+      for (let i = 0; i < unmappedItems.length; i += chunkSize) {
+        if (!isMounted) break;
+        const chunk = unmappedItems.slice(i, i + chunkSize);
+        const updates: Record<string, google.maps.LatLngLiteral[][]> = {};
+
+        await Promise.all(chunk.map(async (item) => {
+          try {
+            const url = `/api/territory/boundary?suburb=${encodeURIComponent(item.suburb)}&state=${encodeURIComponent(item.state)}&postcode=${encodeURIComponent(item.postcode)}&lat=${item.center.lat}&lng=${item.center.lng}`;
+            const res = await fetch(url);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.paths && data.paths.length > 0) {
+                updates[item.id] = data.paths;
+                if (data.center && data.center.lat && data.center.lng) {
+                  item.center = data.center;
+                }
               }
             }
+          } catch {
+            // Keep fallback
           }
-        } catch {
-          // Keep existing smooth polygon fallback
+        }));
+
+        if (isMounted && Object.keys(updates).length > 0) {
+          setBoundariesMap(prev => ({ ...prev, ...updates }));
         }
+
+        await new Promise(r => setTimeout(r, 120));
       }
     };
 
     fetchRealBoundaries();
+
+    return () => {
+      isMounted = false;
+    };
   }, [filteredOverlays, boundariesMap]);
 
   const onPlaceChanged = () => {

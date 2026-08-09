@@ -50,8 +50,8 @@ export function getApproxStateCoordinates(state?: string, postcode?: string | nu
 
   const base = STATE_CENTERS[st] || STATE_CENTERS.NSW;
   return {
-    lat: Number((base.lat + (Math.random() - 0.5) * 0.1).toFixed(6)),
-    lng: Number((base.lng + (Math.random() - 0.5) * 0.1).toFixed(6)),
+    lat: Number((base.lat + (Math.random() - 0.5) * 0.08).toFixed(6)),
+    lng: Number((base.lng + (Math.random() - 0.5) * 0.08).toFixed(6)),
   };
 }
 
@@ -141,8 +141,7 @@ export async function GET(request: Request) {
   let centerLat = latStr ? parseFloat(latStr) : null;
   let centerLng = lngStr ? parseFloat(lngStr) : null;
 
-  // Check if center is missing or erroneously in Central Australia / off-coast
-  const isInvalidCenter = centerLat === null || centerLng === null || isNaN(centerLat) || isNaN(centerLng) || (centerLat < -27 && centerLat > -28 && centerLng > 132 && centerLng < 135);
+  const isInvalidCenter = centerLat === null || centerLng === null || isNaN(centerLat) || isNaN(centerLng) || (centerLat < -24 && centerLat > -28 && centerLng > 130 && centerLng < 136);
 
   if (isInvalidCenter) {
     const approx = getApproxStateCoordinates(state, postcode);
@@ -159,8 +158,17 @@ export async function GET(request: Request) {
   // Query Nominatim for suburb boundary GeoJSON
   if (suburb) {
     try {
-      const queryStr = `${suburb}${state ? `, ${state}` : ''}${postcode ? ` ${postcode}` : ''}, Australia`;
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(queryStr)}&format=geojson&polygon_geojson=1&limit=3`;
+      // Refine query string for capital CBD names
+      let qSub = suburb;
+      const subUpper = suburb.toUpperCase();
+      if (subUpper === 'SYDNEY') qSub = 'Sydney CBD';
+      else if (subUpper === 'MELBOURNE') qSub = 'Melbourne CBD';
+      else if (subUpper === 'BRISBANE') qSub = 'Brisbane City';
+      else if (subUpper === 'PERTH') qSub = 'Perth CBD';
+      else if (subUpper === 'ADELAIDE') qSub = 'Adelaide CBD';
+
+      const queryStr = `${qSub} ${postcode || ''}, ${state || ''}, Australia`;
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(queryStr)}&format=geojson&polygon_geojson=1&limit=5`;
       
       const res = await fetch(url, {
         headers: {
@@ -174,10 +182,13 @@ export async function GET(request: Request) {
         const data = await res.json();
         const features = data.features || [];
 
-        // Find best boundary feature (locality, suburb, administrative)
+        // Prioritize actual suburb / locality / borough features over giant metropolitan boundaries
         const boundaryFeature = features.find((f: any) => 
           (f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon') &&
-          (f.properties?.addresstype === 'suburb' || f.properties?.addresstype === 'locality' || f.properties?.category === 'boundary')
+          ['suburb', 'locality', 'borough', 'quarter', 'neighbourhood', 'city_district', 'subdistrict'].includes(f.properties?.addresstype)
+        ) || features.find((f: any) => 
+          (f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon') &&
+          f.properties?.category === 'boundary'
         ) || features.find((f: any) => f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon');
 
         if (boundaryFeature) {
@@ -195,7 +206,7 @@ export async function GET(request: Request) {
     }
   }
 
-  // Fallback to smoothed polygon around state capital area
+  // Fallback to smoothed polygon around state capital area if OSM query returned no feature
   const fallbackPaths = generateFallbackPolygon(centerLat!, centerLng!);
   const val: BoundaryResult = { paths: fallbackPaths, center: { lat: centerLat!, lng: centerLng! }, isFallback: true };
   boundaryCache.set(cacheKey, val);
