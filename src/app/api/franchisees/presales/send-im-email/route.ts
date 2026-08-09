@@ -32,6 +32,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Recipient email address is required.' }, { status: 400 });
     }
 
+    if (!mergedPresalesDetails.territoryMapUrl) {
+      return NextResponse.json({
+        success: false,
+        message: 'Territory map attachment is required before sending the Franchisee IM email.',
+      }, { status: 400 });
+    }
+
     // Determine public URL for IM signing
     const origin = request.headers.get('origin') || 'https://prospectplus.com.au';
     const publicToken = encodePresaleId(franchiseeId);

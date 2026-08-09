@@ -209,6 +209,15 @@ export function TerritoryPresaleWizard({
       return;
     }
 
+    if (!presalesDetails.territoryMapUrl) {
+      toast({
+        title: 'Territory Map Required',
+        description: 'You cannot send out the IM confirmation email without uploading the territory map image first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSendingImEmail(true);
     try {
       const res = await fetch('/api/franchisees/presales/send-im-email', {
@@ -694,6 +703,14 @@ export function TerritoryPresaleWizard({
                       <Button
                         type="button"
                         onClick={() => {
+                          if (!presalesDetails.territoryMapUrl) {
+                            toast({
+                              title: 'Territory Map Required',
+                              description: 'You cannot send out the IM confirmation email without uploading the territory map image first.',
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
                           const defaultTo = Array.from(new Set([mainDetails.email, mainDetails.personalEmail].map((e) => (e || '').trim()).filter(Boolean))).join(', ');
                           setImRecipientEmail(defaultTo);
                           setImEmailDialogOpen(true);
@@ -991,6 +1008,19 @@ export function TerritoryPresaleWizard({
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-xs">
+            {/* TERRITORY MAP MANDATORY VALIDATION WARNING */}
+            {!presalesDetails.territoryMapUrl && (
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-3.5 flex items-center gap-3 text-amber-800 text-xs">
+                <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="font-bold">Territory Map Required</p>
+                  <p className="text-[11px] text-amber-700">
+                    A territory map image attachment is required before sending the Franchisee IM email. Please close this dialog and upload a map image under "Territory Map Attachment".
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* EMAIL METADATA GRID */}
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
               <div className="flex items-center justify-between border-b pb-1.5">
@@ -1076,7 +1106,7 @@ export function TerritoryPresaleWizard({
             <Button
               type="button"
               onClick={handleSendImEmail}
-              disabled={sendingImEmail}
+              disabled={sendingImEmail || !presalesDetails.territoryMapUrl}
               className="bg-[#095c7b] hover:bg-[#07465e] text-white text-xs font-bold gap-2"
             >
               {sendingImEmail ? <Loader className="h-4 w-4" /> : <Send className="h-4 w-4" />}
