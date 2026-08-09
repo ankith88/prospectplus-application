@@ -188,6 +188,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                                 fullProfile.franchiseeInternalId = activeFran.franchiseeId;
                                 fullProfile.franchisee = activeFran.franchiseeName;
                                 fullProfile.franchiseeRole = activeFran.relationship;
+
+                                if (!profileData.franchisee && activeFran.franchiseeName) {
+                                    updateDoc(doc(firestore, "users", user.uid), { franchisee: activeFran.franchiseeName }).catch(err => console.warn("Auto-persisting franchisee to user doc failed:", err));
+                                }
                             }
                         }
 

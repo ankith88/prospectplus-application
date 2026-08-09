@@ -46,6 +46,102 @@ const parseDateString = (dateVal: any): Date | null => {
   return date;
 };
 
+/**
+ * Helper to resolve franchisee name(s) for a user profile from all possible fields or Firestore lookup
+ */
+async function resolveUserFranchisee(userProfile: any, db: FirebaseFirestore.Firestore): Promise<string | string[] | null> {
+  // 1. Direct string property 'franchisee'
+  if (typeof userProfile.franchisee === 'string' && userProfile.franchisee.trim()) {
+    return userProfile.franchisee.trim();
+  }
+
+  // 2. Direct string property 'franchiseeName'
+  if (typeof userProfile.franchiseeName === 'string' && userProfile.franchiseeName.trim()) {
+    return userProfile.franchiseeName.trim();
+  }
+
+  // 3. Array of linkedFranchisees objects or strings
+  if (Array.isArray(userProfile.linkedFranchisees) && userProfile.linkedFranchisees.length > 0) {
+    const names = userProfile.linkedFranchisees
+      .map((f: any) => (typeof f === 'string' ? f : (f?.franchiseeName || f?.name)))
+      .filter((n: any): n is string => typeof n === 'string' && n.trim().length > 0);
+    if (names.length === 1) return names[0].trim();
+    if (names.length > 1) return Array.from(new Set(names.map(n => n.trim())));
+  }
+
+  // 4. Collect all possible franchisee IDs
+  const possibleIds: string[] = [];
+  if (userProfile.franchiseeId) possibleIds.push(String(userProfile.franchiseeId));
+  if (userProfile.franchiseeInternalId) possibleIds.push(String(userProfile.franchiseeInternalId));
+  if (Array.isArray(userProfile.linkedFranchiseeIds)) {
+    userProfile.linkedFranchiseeIds.forEach((id: any) => {
+      if (id) possibleIds.push(String(id));
+    });
+  }
+
+  const uniqueIds = Array.from(new Set(possibleIds)).filter(Boolean);
+  const names: string[] = [];
+
+  for (const franId of uniqueIds) {
+    try {
+      // Try direct doc ID
+      const franDoc = await db.collection('franchisees').doc(franId).get();
+      if (franDoc.exists) {
+        const name = franDoc.data()?.name || franDoc.data()?.franchiseeName || franDoc.data()?.territory;
+        if (name && typeof name === 'string' && name.trim()) {
+          names.push(name.trim());
+          continue;
+        }
+      }
+
+      // Try query by internalId (string or number)
+      const qSnap = await db.collection('franchisees').where('internalId', '==', franId).limit(1).get();
+      if (!qSnap.empty) {
+        const name = qSnap.docs[0].data()?.name || qSnap.docs[0].data()?.franchiseeName || qSnap.docs[0].data()?.territory;
+        if (name && typeof name === 'string' && name.trim()) {
+          names.push(name.trim());
+          continue;
+        }
+      }
+
+      const numId = Number(franId);
+      if (!isNaN(numId)) {
+        const qSnapNum = await db.collection('franchisees').where('internalId', '==', numId).limit(1).get();
+        if (!qSnapNum.empty) {
+          const name = qSnapNum.docs[0].data()?.name || qSnapNum.docs[0].data()?.franchiseeName || qSnapNum.docs[0].data()?.territory;
+          if (name && typeof name === 'string' && name.trim()) {
+            names.push(name.trim());
+            continue;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[resolveUserFranchisee] Error searching franchisee ${franId}:`, err);
+    }
+  }
+
+  if (names.length === 1) return names[0];
+  if (names.length > 1) return Array.from(new Set(names));
+
+  // 5. Try matching by email
+  const userEmail = userProfile.email || userProfile.personalEmail;
+  if (userEmail && typeof userEmail === 'string') {
+    try {
+      const emailSnap = await db.collection('franchisees').where('email', '==', userEmail).limit(1).get();
+      if (!emailSnap.empty) {
+        const name = emailSnap.docs[0].data()?.name || emailSnap.docs[0].data()?.franchiseeName || emailSnap.docs[0].data()?.territory;
+        if (name && typeof name === 'string' && name.trim()) {
+          return name.trim();
+        }
+      }
+    } catch (err) {
+      console.warn(`[resolveUserFranchisee] Error matching by email:`, err);
+    }
+  }
+
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     // 1. Authenticate user
@@ -72,6 +168,39 @@ export async function POST(request: NextRequest) {
     }
     const userProfile = userDoc.data() || {};
 
+    const role = (
+      userProfile.activeRole ||
+      userProfile.role ||
+      userProfile.defaultRole ||
+      (Array.isArray(userProfile.assignedRoles) && userProfile.assignedRoles[0]) ||
+      ''
+    ).trim();
+
+    const userAssignedRoles: string[] = Array.isArray(userProfile.assignedRoles)
+      ? userProfile.assignedRoles.map((r: any) => String(r).toLowerCase())
+      : [];
+
+    const privilegedRoles = [
+      'admin', 'super user', 'superadmin', 'sales manager', 'lead gen admin', 'field sales admin', 'operations', 'data admin'
+    ];
+
+    const isPrivileged = privilegedRoles.includes(role.toLowerCase()) ||
+      userAssignedRoles.some(r => privilegedRoles.includes(r));
+
+    const resolvedFranchisee = await resolveUserFranchisee(userProfile, db);
+
+    // If franchisee was resolved but not set as top-level 'franchisee' on Firestore user doc, backfill it
+    if (resolvedFranchisee && !userProfile.franchisee) {
+      const primaryFranName = Array.isArray(resolvedFranchisee) ? resolvedFranchisee[0] : resolvedFranchisee;
+      db.collection('users').doc(uid).update({ franchisee: primaryFranName }).catch(err => {
+        console.warn('Failed to backfill franchisee on user doc:', err);
+      });
+    }
+
+    const franchiseeStr = Array.isArray(resolvedFranchisee)
+      ? resolvedFranchisee.join(', ')
+      : (resolvedFranchisee || '');
+
     // 3. Run AI flow
     const body = await request.json();
     const { question } = body;
@@ -86,9 +215,9 @@ export async function POST(request: NextRequest) {
         userProfile: {
           uid,
           email: userProfile.email || '',
-          displayName: userProfile.displayName || '',
-          activeRole: userProfile.activeRole || '',
-          franchisee: userProfile.franchisee || '',
+          displayName: userProfile.displayName || userProfile.name || '',
+          activeRole: role,
+          franchisee: franchiseeStr,
         }
       });
     } catch (flowErr: any) {
@@ -127,35 +256,40 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Inject role-based scope restrictions
-    const role = userProfile.activeRole || '';
-    const isFranchisee = role === 'Franchisee';
-    const isPrivileged = [
-      'admin', 'super user', 'Sales Manager', 'Lead Gen Admin', 'Field Sales Admin', 'Operations', 'Data Admin'
-    ].includes(role);
+    const isFranchisee = role.toLowerCase() === 'franchisee' && !isPrivileged;
 
     // Franchisee scoping: Must restrict all collections to their specific franchisee territory
     if (isFranchisee) {
-      const userFranchisee = userProfile.franchisee;
-      if (!userFranchisee) {
-        return NextResponse.json({ error: 'Forbidden: Franchisee user profile lacks assigned franchisee' }, { status: 403 });
+      if (!resolvedFranchisee) {
+        return NextResponse.json({
+          error: "Your account is set to the Franchisee role, but no assigned franchisee territory was found on your profile. Please contact an administrator to link your account.",
+          suggestions: [
+            'Show my hot leads',
+            'Count leads by status',
+            'Quotes sent this week'
+          ]
+        }, { status: 200 });
       }
 
+      const isArrayFran = Array.isArray(resolvedFranchisee);
+      const franOp = isArrayFran ? 'in' : '==';
+      const franValue = resolvedFranchisee;
+
       if (spec.collection === 'leads' || spec.collection === 'companies') {
-        // Remove any existing filters on 'franchisee' to prevent bypass, then force theirs
         spec.filters = spec.filters.filter(f => f.field !== 'franchisee');
-        spec.filters.push({ field: 'franchisee', op: '==', value: userFranchisee });
+        spec.filters.push({ field: 'franchisee', op: franOp, value: franValue });
       } else if (spec.collection === 'packages') {
         spec.filters = spec.filters.filter(f => f.field !== 'franchisee_name');
-        spec.filters.push({ field: 'franchisee_name', op: '==', value: userFranchisee });
+        spec.filters.push({ field: 'franchisee_name', op: franOp, value: franValue });
       } else if (spec.collection === 'users') {
         spec.filters = spec.filters.filter(f => f.field !== 'franchisee');
-        spec.filters.push({ field: 'franchisee', op: '==', value: userFranchisee });
+        spec.filters.push({ field: 'franchisee', op: franOp, value: franValue });
       } else if (spec.collection === 'franchisees') {
         spec.filters = spec.filters.filter(f => f.field !== 'name');
-        spec.filters.push({ field: 'name', op: '==', value: userFranchisee });
+        spec.filters.push({ field: 'name', op: franOp, value: franValue });
       } else if (['visitnotes', 'cancellations', 'scfs', 'checkins', 'contacts', 'invoices', 'buckethistory', 'leadhistory'].includes(spec.collection)) {
         spec.filters = spec.filters.filter(f => f.field !== 'franchisee');
-        spec.filters.push({ field: 'franchisee', op: '==', value: userFranchisee });
+        spec.filters.push({ field: 'franchisee', op: franOp, value: franValue });
       }
     }
 

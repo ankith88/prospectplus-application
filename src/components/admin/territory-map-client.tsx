@@ -60,6 +60,47 @@ const getAddressComponents = (place: google.maps.places.PlaceResult) => {
   return { suburb, state, postcode };
 };
 
+const STATE_CENTERS: Record<string, google.maps.LatLngLiteral> = {
+  NSW: { lat: -33.8688, lng: 151.2093 },
+  VIC: { lat: -37.8136, lng: 144.9631 },
+  QLD: { lat: -27.4698, lng: 153.0251 },
+  WA:  { lat: -31.9505, lng: 115.8605 },
+  SA:  { lat: -34.9285, lng: 138.6007 },
+  TAS: { lat: -42.8821, lng: 147.3272 },
+  ACT: { lat: -35.2809, lng: 149.1300 },
+  NT:  { lat: -12.4634, lng: 130.8456 },
+};
+
+function inferStateFromPostcode(postcode?: string | number): string {
+  if (!postcode) return '';
+  const code = parseInt(String(postcode).trim(), 10);
+  if (isNaN(code)) return '';
+
+  if ((code >= 1000 && code <= 2599) || (code >= 2619 && code <= 2899) || (code >= 2921 && code <= 2999)) return 'NSW';
+  if (code >= 2600 && code <= 2618) return 'ACT';
+  if (code >= 3000 && code <= 3999) return 'VIC';
+  if (code >= 4000 && code <= 4999) return 'QLD';
+  if (code >= 5000 && code <= 5999) return 'SA';
+  if (code >= 6000 && code <= 6999) return 'WA';
+  if (code >= 7000 && code <= 7999) return 'TAS';
+  if (code >= 800 && code <= 999) return 'NT';
+
+  return '';
+}
+
+function getApproxStateCoordinates(state?: string, postcode?: string | number): google.maps.LatLngLiteral {
+  let st = (state || '').trim().toUpperCase();
+  if (!st || !STATE_CENTERS[st]) {
+    st = inferStateFromPostcode(postcode);
+  }
+
+  const base = STATE_CENTERS[st] || STATE_CENTERS.NSW;
+  return {
+    lat: Number((base.lat + (Math.random() - 0.5) * 0.08).toFixed(6)),
+    lng: Number((base.lng + (Math.random() - 0.5) * 0.08).toFixed(6)),
+  };
+}
+
 // Generate a pastel color for each franchisee for clear visual distinction
 const getFranchiseeColor = (internalId: string) => {
   let hash = 0;
@@ -170,9 +211,11 @@ export default function TerritoryMapClient() {
           const t = suburbList[idx];
           if (!t || !t.suburbs) continue;
 
-          // Lat/lng fallback if missing
-          const lat = t.lat ?? (defaultCenter.lat + (Math.random() - 0.5) * 5);
-          const lng = t.lng ?? (defaultCenter.lng + (Math.random() - 0.5) * 5);
+          // Lat/lng fallback using state/postcode coordinates if missing or in central desert
+          const isCentralDesert = t.lat !== undefined && t.lat < -24 && t.lat > -28 && t.lng !== undefined && t.lng > 130 && t.lng < 136;
+          const center = (t.lat !== undefined && t.lng !== undefined && !isCentralDesert)
+            ? { lat: t.lat, lng: t.lng }
+            : getApproxStateCoordinates(t.state, t.post_code);
 
           newOverlays.push({
             id: `${franchisee.internalId}-${String(cat.key)}-${t.suburbs}-${t.post_code || idx}-${idx}`,
@@ -182,7 +225,7 @@ export default function TerritoryMapClient() {
             state: t.state || '',
             categoryKey: String(cat.key),
             categoryLabel: cat.label,
-            center: { lat, lng },
+            center,
           });
         }
       }
@@ -289,12 +332,15 @@ export default function TerritoryMapClient() {
       const itemsToFetch = missingItems.slice(0, 30);
       for (const item of itemsToFetch) {
         try {
-          const url = `/api/territory/boundary?suburb=${encodeURIComponent(item.suburb)}&state=${encodeURIComponent(item.state)}&lat=${item.center.lat}&lng=${item.center.lng}`;
+          const url = `/api/territory/boundary?suburb=${encodeURIComponent(item.suburb)}&state=${encodeURIComponent(item.state)}&postcode=${encodeURIComponent(item.postcode)}&lat=${item.center.lat}&lng=${item.center.lng}`;
           const res = await fetch(url);
           if (res.ok) {
             const data = await res.json();
             if (data.paths && data.paths.length > 0) {
               setBoundariesMap(prev => ({ ...prev, [item.id]: data.paths }));
+              if (data.center && data.center.lat && data.center.lng) {
+                item.center = data.center;
+              }
             }
           }
         } catch {
