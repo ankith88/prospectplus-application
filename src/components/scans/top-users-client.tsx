@@ -453,7 +453,7 @@ export function TopUsersClient() {
         <div className="flex items-center gap-3">
           {cachedAt && (
             <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 rounded-full px-3 py-1 font-medium">
-              Data Updated: {new Date(cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(cachedAt).toLocaleDateString()})
+              Data Updated: {new Date(cachedAt).toLocaleString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
             </span>
           )}
           <Button 

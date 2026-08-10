@@ -233,6 +233,7 @@ export async function cacheTopUsersReport(db: admin.firestore.Firestore) {
 
   const packagesSnap = await db.collection('packages')
     .where('latest_scan_at', '>=', limitDateStr)
+    .select('scans', 'sync_date', 'latest_scan_at')
     .get();
 
   const packages = packagesSnap.docs.map(doc => doc.data());
@@ -494,7 +495,7 @@ export async function cacheTopUsersReport(db: admin.firestore.Firestore) {
         const activitySnap = await db.collection(stat.type)
           .doc(stat.companyId)
           .collection('activity')
-          .limit(10)
+          .limit(3)
           .get();
 
         if (!activitySnap.empty) {

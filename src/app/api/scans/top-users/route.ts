@@ -96,8 +96,9 @@ export async function GET(request: Request) {
   const refreshParam = searchParams.get('refresh') === 'true';
   const validRanges = ['today', 'yesterday', 'this_week', 'last_7', 'last_30', 'this_month', 'last_month', 'prev_and_this_month'];
 
+  const db = getFirestore(adminApp);
+
   try {
-    const db = getFirestore(adminApp);
 
     // 1. Try to read from pre-cached range document in Firestore (skip if explicit refresh requested)
     if (!refreshParam && rangeParam && validRanges.includes(rangeParam)) {
@@ -346,41 +347,37 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch last activity for top 100 customers in controlled batches
-    const BATCH_SIZE = 15;
-    for (let i = 0; i < top100.length; i += BATCH_SIZE) {
-      const batch = top100.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(async (stat) => {
-        if (!stat.companyId || !stat.type) {
-          stat.lastContact = null;
-          return;
-        }
-        try {
-          const activitySnap = await db.collection(stat.type)
-            .doc(stat.companyId)
-            .collection('activity')
-            .limit(10)
-            .get();
+    // Fetch last activity for top 100 customers in parallel
+    await Promise.all(top100.map(async (stat) => {
+      if (!stat.companyId || !stat.type) {
+        stat.lastContact = null;
+        return;
+      }
+      try {
+        const activitySnap = await db.collection(stat.type)
+          .doc(stat.companyId)
+          .collection('activity')
+          .limit(3)
+          .get();
 
-          if (!activitySnap.empty) {
-            const activities = activitySnap.docs.map(d => d.data());
-            activities.sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-            const act = activities[0];
-            stat.lastContact = {
-              date: act.date || null,
-              type: act.type || null,
-              author: act.author || null,
-              notes: act.notes || null
-            };
-          } else {
-            stat.lastContact = null;
-          }
-        } catch (err) {
-          console.error(`Failed to fetch activity for ${stat.companyId}`, err);
+        if (!activitySnap.empty) {
+          const activities = activitySnap.docs.map(d => d.data());
+          activities.sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+          const act = activities[0];
+          stat.lastContact = {
+            date: act.date || null,
+            type: act.type || null,
+            author: act.author || null,
+            notes: act.notes || null
+          };
+        } else {
           stat.lastContact = null;
         }
-      }));
-    }
+      } catch (err) {
+        console.error(`Failed to fetch activity for ${stat.companyId}`, err);
+        stat.lastContact = null;
+      }
+    }));
 
     // Save to Firestore ranges cache if we computed a preset range
     if (rangeParam && validRanges.includes(rangeParam)) {
@@ -404,6 +401,27 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error('Failed to aggregate top users:', error);
+    if (rangeParam && validRanges.includes(rangeParam)) {
+      try {
+        const cachedDoc = await db.collection('reports')
+          .doc('top_users')
+          .collection('ranges')
+          .doc(rangeParam)
+          .get();
+
+        if (cachedDoc.exists) {
+          const data = cachedDoc.data();
+          if (data && data.customers) {
+            return NextResponse.json({
+              customers: data.customers,
+              cachedAt: data.cachedAt || new Date().toISOString()
+            });
+          }
+        }
+      } catch (fallbackErr) {
+        console.error(`Fallback cache read failed for range ${rangeParam}:`, fallbackErr);
+      }
+    }
     return NextResponse.json({ error: 'Failed to aggregate top users' }, { status: 500 });
   }
 }
