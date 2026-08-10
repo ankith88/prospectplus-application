@@ -10,8 +10,8 @@ interface CacheEntry {
   data: any;
 }
 
-// In-memory cache for fast sub-second tab switching (60s TTL)
-let memoryCache: CacheEntry | null = null;
+// In-memory cache keyed by date range for fast sub-second loads (60s TTL)
+const memoryCacheMap = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 60 * 1000;
 
 function safeGetStatus(val: any): string {
@@ -45,19 +45,6 @@ export async function GET(req: NextRequest) {
     const forceRefresh = searchParams.get('refresh') === 'true';
 
     const now = Date.now();
-    const isDefaultQuery = !startDateParam && !endDateParam;
-
-    // Return in-memory cached data if available and fresh (for default views)
-    if (!forceRefresh && isDefaultQuery && memoryCache && (now - memoryCache.timestamp < CACHE_TTL_MS)) {
-      return NextResponse.json({
-        success: true,
-        cached: true,
-        cachedAt: new Date(memoryCache.timestamp).toISOString(),
-        data: memoryCache.data
-      });
-    }
-
-    const db = getFirestore(adminApp);
 
     // Calculate start boundary
     let startISO = new Date(2026, 6, 1).toISOString(); // Default 1st July 2026
@@ -68,22 +55,59 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Parallel server-side Firestore fetches via Firebase Admin SDK
-    const activityQuery = db.collectionGroup('activity').where('date', '>=', startISO);
+    const cacheKey = `${startISO}_${endDateParam || ''}`;
+    const cachedEntry = memoryCacheMap.get(cacheKey);
+
+    // Return in-memory cached data if available and fresh (< 60s)
+    if (!forceRefresh && cachedEntry && (now - cachedEntry.timestamp < CACHE_TTL_MS)) {
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        cachedAt: new Date(cachedEntry.timestamp).toISOString(),
+        data: cachedEntry.data
+      });
+    }
+
+    const db = getFirestore(adminApp);
+
+    // 1. Filter activities by manual types ('Call', 'Email', 'Note', 'Meeting', 'Task')
+    // This avoids fetching 180,000+ automated background 'Update' logs that take 60-80s
+    const activityQuery = db.collectionGroup('activity')
+      .where('type', 'in', ['Call', 'Email', 'Note', 'Meeting', 'Task'])
+      .where('date', '>=', startISO);
+
     const apptQuery = db.collectionGroup('appointments');
-    const usersQuery = db.collection('users').get();
-    const leadsQuery = db.collection('leads').where('bucket', '==', 'outbound').get();
-    const companiesQuery = db.collection('companies').where('bucket', '==', 'outbound').get();
+
+    // 2. Use field projections (.select) on leads, companies, and users queries
+    // This avoids downloading heavy unused sub-fields/histories over the network
+    const usersQuery = db.collection('users')
+      .select('firstName', 'lastName', 'displayName', 'email', 'role', 'activeRole', 'assignedRoles', 'disabled');
+
+    const leadFields = [
+      'companyName', 'status', 'customerStatus', 'dialerAssigned', 'salesRepAssigned',
+      'franchisee', 'fieldSales', 'dateLeadEntered', 'createdAt', 'assignedToDialerAt',
+      'visitNoteID', 'providedShipMateOnboarding', 'firstJobCreatedAt', 'jobCount',
+      'localMileTrialsRemaining', 'localMileTermsAccepted', 'wasOutbound', 'notes',
+      'discoveryData', 'entityId', 'prospectPlusId', 'customerEntityId', 'internalid', 'bucket'
+    ];
+
+    const leadsQuery = db.collection('leads')
+      .where('bucket', '==', 'outbound')
+      .select(...leadFields);
+
+    const companiesQuery = db.collection('companies')
+      .where('bucket', '==', 'outbound')
+      .select(...leadFields);
 
     const [activitiesSnap, apptsSnap, usersSnap, leadsSnap, companiesSnap] = await Promise.all([
       activityQuery.get(),
       apptQuery.get(),
-      usersQuery,
-      leadsQuery,
-      companiesQuery
+      usersQuery.get(),
+      leadsQuery.get(),
+      companiesQuery.get()
     ]);
 
-    // 1. Process User/Dialer List
+    // Process User/Dialer List
     const userList: string[] = [];
     usersSnap.docs.forEach(doc => {
       const data = doc.data();
@@ -113,7 +137,7 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // 2. Process Leads & Companies into Lean Objects
+    // Process Leads & Companies into Lean Objects
     const processDoc = (doc: FirebaseFirestore.QueryDocumentSnapshot, isFromCompanies = false) => {
       const data = doc.data();
       return {
@@ -167,7 +191,7 @@ export async function GET(req: NextRequest) {
     const activeLeadMap = new Map<string, any>();
     combinedLeads.forEach(l => activeLeadMap.set(l.id, l));
 
-    // 3. Process Activities & Calls
+    // Process Activities & Calls
     const rawActivities: any[] = [];
     activitiesSnap.docs.forEach(doc => {
       const data = doc.data();
@@ -252,7 +276,7 @@ export async function GET(req: NextRequest) {
       return dateB.getTime() - dateA.getTime();
     });
 
-    // 4. Process Appointments
+    // Process Appointments
     const cutoffDate = new Date(2026, 6, 1);
     const appts: any[] = [];
     apptsSnap.docs.forEach(doc => {
@@ -315,13 +339,11 @@ export async function GET(req: NextRequest) {
       dialers: userList,
     };
 
-    // Store default query results in server cache
-    if (isDefaultQuery) {
-      memoryCache = {
-        timestamp: Date.now(),
-        data: responseData,
-      };
-    }
+    // Store query results in memory cache
+    memoryCacheMap.set(cacheKey, {
+      timestamp: Date.now(),
+      data: responseData,
+    });
 
     return NextResponse.json({
       success: true,

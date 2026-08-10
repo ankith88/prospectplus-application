@@ -224,20 +224,54 @@ export async function GET(request: Request) {
       dateLimit = new Date(now.getFullYear(), now.getMonth() - 6, 1); // limit all-time to last 6 months to prevent crashing
     }
 
-    // Shifting query limit date back by 30 days buffer
+    // Shifting query limit date back by 3 days buffer for edge-case scan events
     const queryDateLimit = new Date(dateLimit);
     if (filterDateRange !== 'all') {
-      queryDateLimit.setDate(queryDateLimit.getDate() - 30);
+      queryDateLimit.setDate(queryDateLimit.getDate() - 3);
     }
 
-    // Fetch partner locations
+    // Pre-fetch partner locations, companies, and leads concurrently
     const partnerLocationMap: Record<string, { id: string, name: string }> = {};
-    const pLocSnap = await db.collection('partner_locations').get();
+    const companyLookupMap = new Map<string, { id: string, name: string, franchisee?: string }>();
+
+    const [pLocSnap, compSnap, leadSnap] = await Promise.all([
+      db.collection('partner_locations').get(),
+      db.collection('companies').select('internalid', 'companyName', 'franchisee').get(),
+      db.collection('leads').select('internalid', 'companyName', 'franchisee').get()
+    ]);
+
     pLocSnap.docs.forEach((doc: any) => {
       const data = doc.data();
       if (data.internalId || doc.id) {
         const key = String(data.internalId || doc.id);
         partnerLocationMap[key] = { id: doc.id, name: data.name || 'Unknown Location' };
+      }
+    });
+
+    compSnap.docs.forEach((doc: any) => {
+      const data = doc.data();
+      if (data.internalid !== undefined && data.internalid !== null && data.internalid !== '') {
+        const info = {
+          id: doc.id,
+          name: data.companyName || 'Unknown Company',
+          franchisee: data.franchisee || 'Unassigned'
+        };
+        companyLookupMap.set(String(data.internalid), info);
+      }
+    });
+
+    leadSnap.docs.forEach((doc: any) => {
+      const data = doc.data();
+      if (data.internalid !== undefined && data.internalid !== null && data.internalid !== '') {
+        const key = String(data.internalid);
+        if (!companyLookupMap.has(key)) {
+          const info = {
+            id: doc.id,
+            name: data.companyName || 'Unknown Company',
+            franchisee: data.franchisee || 'Unassigned'
+          };
+          companyLookupMap.set(key, info);
+        }
       }
     });
 
@@ -283,57 +317,9 @@ export async function GET(request: Request) {
 
     let filteredCount = 0;
 
-    // Cache to resolve companies/leads
-    const companyCache = new Map<string, { id: string, name: string, franchisee?: string } | null>();
-
-    const getCompanyInfo = async (nsId: string) => {
+    const getCompanyInfo = (nsId: string) => {
       const key = String(nsId);
-      if (companyCache.has(key)) {
-        return companyCache.get(key);
-      }
-
-      // Check companies
-      let compSnap = await db.collection('companies').where('internalid', '==', key).limit(1).get();
-      if (compSnap.empty) {
-        const nsIdNum = Number(key);
-        if (!isNaN(nsIdNum)) {
-          compSnap = await db.collection('companies').where('internalid', '==', nsIdNum).limit(1).get();
-        }
-      }
-      if (!compSnap.empty) {
-        const doc = compSnap.docs[0];
-        const data = doc.data();
-        const info = {
-          id: doc.id,
-          name: data.companyName || 'Unknown Company',
-          franchisee: data.franchisee || 'Unassigned'
-        };
-        companyCache.set(key, info);
-        return info;
-      }
-
-      // Check leads
-      let leadSnap = await db.collection('leads').where('internalid', '==', key).limit(1).get();
-      if (leadSnap.empty) {
-        const nsIdNum = Number(key);
-        if (!isNaN(nsIdNum)) {
-          leadSnap = await db.collection('leads').where('internalid', '==', nsIdNum).limit(1).get();
-        }
-      }
-      if (!leadSnap.empty) {
-        const doc = leadSnap.docs[0];
-        const data = doc.data();
-        const info = {
-          id: doc.id,
-          name: data.companyName || 'Unknown Company',
-          franchisee: data.franchisee || 'Unassigned'
-        };
-        companyCache.set(key, info);
-        return info;
-      }
-
-      companyCache.set(key, null);
-      return null;
+      return companyLookupMap.get(key) || null;
     };
 
     // Stream query
@@ -375,7 +361,7 @@ export async function GET(request: Request) {
       const needsLookup = !pkg.customer_name || !pkg.franchisee_name || isException || (isDelivered && pkg.sync_date);
 
       if (customerNsId && needsLookup) {
-        const company = await getCompanyInfo(customerNsId);
+        const company = getCompanyInfo(customerNsId);
         if (company) {
           companyName = company.name;
           franchisee = company.franchisee || 'Unassigned';
@@ -384,46 +370,6 @@ export async function GET(request: Request) {
       }
 
       const companyLower = companyName.toLowerCase();
-
-      // Customer Health Metrics (for all packages)
-      const custHealthName = companyName || 'Unlinked';
-      if (!customerUsage[custHealthName]) {
-        customerUsage[custHealthName] = {
-          name: custHealthName,
-          companyId: companyId,
-          firstScanDate: null,
-          lastScanDate: null,
-          currentPeriodScans: 0,
-          prevPeriodScans: 0,
-          currentPeriodUniquePackages: new Set<string>()
-        };
-      } else if (companyId && !customerUsage[custHealthName].companyId) {
-        customerUsage[custHealthName].companyId = companyId;
-      }
-
-      const allDates: Date[] = [];
-      if (pkg.sync_date) allDates.push(parseDateString(pkg.sync_date));
-      pkg.scans?.forEach(s => {
-        if (s.updated_at) allDates.push(parseDateString(s.updated_at));
-      });
-
-      allDates.forEach(d => {
-        if (isNaN(d.getTime())) return;
-        
-        if (!customerUsage[custHealthName].firstScanDate || d < customerUsage[custHealthName].firstScanDate!) {
-          customerUsage[custHealthName].firstScanDate = d;
-        }
-        if (!customerUsage[custHealthName].lastScanDate || d > customerUsage[custHealthName].lastScanDate!) {
-          customerUsage[custHealthName].lastScanDate = d;
-        }
-
-        if (d >= currentStart && d <= currentEnd) {
-          customerUsage[custHealthName].currentPeriodScans++;
-          if (pkg.code) customerUsage[custHealthName].currentPeriodUniquePackages.add(pkg.code);
-        } else if (d >= prevStart && d <= prevEnd) {
-          customerUsage[custHealthName].prevPeriodScans++;
-        }
-      });
 
       // Filter check
       let matchesFilter = true;
@@ -504,6 +450,46 @@ export async function GET(request: Request) {
       }
 
       if (!matchesFilter) continue;
+
+      // Customer Health Metrics (calculated for packages matching active filters)
+      const custHealthName = companyName || 'Unlinked';
+      if (!customerUsage[custHealthName]) {
+        customerUsage[custHealthName] = {
+          name: custHealthName,
+          companyId: companyId,
+          firstScanDate: null,
+          lastScanDate: null,
+          currentPeriodScans: 0,
+          prevPeriodScans: 0,
+          currentPeriodUniquePackages: new Set<string>()
+        };
+      } else if (companyId && !customerUsage[custHealthName].companyId) {
+        customerUsage[custHealthName].companyId = companyId;
+      }
+
+      const allDates: Date[] = [];
+      if (pkg.sync_date) allDates.push(parseDateString(pkg.sync_date));
+      pkg.scans?.forEach(s => {
+        if (s.updated_at) allDates.push(parseDateString(s.updated_at));
+      });
+
+      allDates.forEach(d => {
+        if (isNaN(d.getTime())) return;
+        
+        if (!customerUsage[custHealthName].firstScanDate || d < customerUsage[custHealthName].firstScanDate!) {
+          customerUsage[custHealthName].firstScanDate = d;
+        }
+        if (!customerUsage[custHealthName].lastScanDate || d > customerUsage[custHealthName].lastScanDate!) {
+          customerUsage[custHealthName].lastScanDate = d;
+        }
+
+        if (d >= currentStart && d <= currentEnd) {
+          customerUsage[custHealthName].currentPeriodScans++;
+          if (pkg.code) customerUsage[custHealthName].currentPeriodUniquePackages.add(pkg.code);
+        } else if (d >= prevStart && d <= prevEnd) {
+          customerUsage[custHealthName].prevPeriodScans++;
+        }
+      });
 
       filteredCount++;
 

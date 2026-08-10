@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader'
 import { PercentageLoader } from '@/components/ui/percentage-loader'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapPin, TrendingDown, TrendingUp, UserPlus, UserMinus, Activity, RefreshCw, Info } from 'lucide-react'
+import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapPin, TrendingDown, TrendingUp, UserPlus, UserMinus, Activity, RefreshCw, Info, Filter, RotateCcw } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -240,7 +241,7 @@ export function ScansReportingClient({
     }
   } | null>(null)
 
-  // Filters State
+  // Pending Filters State (UI Inputs)
   const [filterBarcode, setFilterBarcode] = useState('')
   const [filterConnoteNumber, setFilterConnoteNumber] = useState('')
   const [filterCustomer, setFilterCustomer] = useState('')
@@ -253,62 +254,142 @@ export function ScansReportingClient({
   const [selectedCourier, setSelectedCourier] = useState<string[]>([])
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
 
-  const [debouncedBarcode, setDebouncedBarcode] = useState('')
-  const [debouncedConnoteNumber, setDebouncedConnoteNumber] = useState('')
-  const [debouncedCustomer, setDebouncedCustomer] = useState('')
+  // Applied Filters State (triggers API fetch)
+  const [appliedFilters, setAppliedFilters] = useState({
+    filterBarcode: '',
+    filterConnoteNumber: '',
+    filterCustomer: '',
+    filterUnlinked: false,
+    filterDateRange: 'this_month',
+    customStartDate: '',
+    customEndDate: '',
+    selectedSpeed: [] as string[],
+    selectedScanType: [] as string[],
+    selectedCourier: [] as string[],
+    selectedFranchise: [] as string[],
+  })
+
+  // Filter options accumulator state
+  const [filterOptions, setFilterOptions] = useState<{
+    uniqueScanTypes: {label: string, value: string}[];
+    uniqueCouriers: {label: string, value: string}[];
+    uniqueSpeeds: {label: string, value: string}[];
+    uniqueFranchisees: {label: string, value: string}[];
+  }>({
+    uniqueScanTypes: [],
+    uniqueCouriers: [],
+    uniqueSpeeds: [],
+    uniqueFranchisees: []
+  })
 
   useEffect(() => {
     if (externalDateRange) {
-      setFilterDateRange(externalDateRange.from ? 'custom' : 'all')
-      setCustomStartDate(externalDateRange.from ? toYMD(externalDateRange.from) : '')
-      setCustomEndDate(externalDateRange.to ? toYMD(externalDateRange.to) : (externalDateRange.from ? toYMD(externalDateRange.from) : ''))
+      const rangeVal = externalDateRange.from ? 'custom' : 'all'
+      const startVal = externalDateRange.from ? toYMD(externalDateRange.from) : ''
+      const endVal = externalDateRange.to ? toYMD(externalDateRange.to) : (externalDateRange.from ? toYMD(externalDateRange.from) : '')
+
+      setFilterDateRange(rangeVal)
+      setCustomStartDate(startVal)
+      setCustomEndDate(endVal)
+
+      setAppliedFilters(prev => ({
+        ...prev,
+        filterDateRange: rangeVal,
+        customStartDate: startVal,
+        customEndDate: endVal
+      }))
     }
   }, [externalDateRange])
 
-  // Debouncing text inputs
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedBarcode(filterBarcode)
-    }, 400)
-    return () => clearTimeout(handler)
-  }, [filterBarcode])
+  const handleApplyFilters = () => {
+    setAppliedFilters({
+      filterBarcode,
+      filterConnoteNumber,
+      filterCustomer,
+      filterUnlinked,
+      filterDateRange,
+      customStartDate,
+      customEndDate,
+      selectedSpeed,
+      selectedScanType,
+      selectedCourier,
+      selectedFranchise,
+    })
+  }
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedConnoteNumber(filterConnoteNumber)
-    }, 400)
-    return () => clearTimeout(handler)
-  }, [filterConnoteNumber])
+  const handleResetFilters = () => {
+    const defaultDateRange = externalDateRange ? (externalDateRange.from ? 'custom' : 'all') : 'this_month'
+    const defaultStart = externalDateRange?.from ? toYMD(externalDateRange.from) : ''
+    const defaultEnd = externalDateRange?.to ? toYMD(externalDateRange.to) : (externalDateRange?.from ? toYMD(externalDateRange.from) : '')
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedCustomer(filterCustomer)
-    }, 400)
-    return () => clearTimeout(handler)
-  }, [filterCustomer])
+    setFilterBarcode('')
+    setFilterConnoteNumber('')
+    setFilterCustomer('')
+    setFilterUnlinked(false)
+    setFilterDateRange(defaultDateRange)
+    setCustomStartDate(defaultStart)
+    setCustomEndDate(defaultEnd)
+    setSelectedSpeed([])
+    setSelectedScanType([])
+    setSelectedCourier([])
+    setSelectedFranchise([])
+
+    setAppliedFilters({
+      filterBarcode: '',
+      filterConnoteNumber: '',
+      filterCustomer: '',
+      filterUnlinked: false,
+      filterDateRange: defaultDateRange,
+      customStartDate: defaultStart,
+      customEndDate: defaultEnd,
+      selectedSpeed: [],
+      selectedScanType: [],
+      selectedCourier: [],
+      selectedFranchise: [],
+    })
+  }
 
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
       try {
         const params = new URLSearchParams()
-        if (debouncedBarcode) params.set('filterBarcode', debouncedBarcode)
-        if (debouncedConnoteNumber) params.set('filterConnoteNumber', debouncedConnoteNumber)
-        if (debouncedCustomer) params.set('filterCustomer', debouncedCustomer)
-        if (filterUnlinked) params.set('filterUnlinked', 'true')
-        params.set('filterDateRange', filterDateRange)
-        if (customStartDate) params.set('customStartDate', customStartDate)
-        if (customEndDate) params.set('customEndDate', customEndDate)
+        if (appliedFilters.filterBarcode) params.set('filterBarcode', appliedFilters.filterBarcode)
+        if (appliedFilters.filterConnoteNumber) params.set('filterConnoteNumber', appliedFilters.filterConnoteNumber)
+        if (appliedFilters.filterCustomer) params.set('filterCustomer', appliedFilters.filterCustomer)
+        if (appliedFilters.filterUnlinked) params.set('filterUnlinked', 'true')
+        params.set('filterDateRange', appliedFilters.filterDateRange)
+        if (appliedFilters.customStartDate) params.set('customStartDate', appliedFilters.customStartDate)
+        if (appliedFilters.customEndDate) params.set('customEndDate', appliedFilters.customEndDate)
 
-        if (selectedSpeed.length > 0) params.set('selectedSpeed', selectedSpeed.join(','))
-        if (selectedScanType.length > 0) params.set('selectedScanType', selectedScanType.join(','))
-        if (selectedCourier.length > 0) params.set('selectedCourier', selectedCourier.join(','))
-        if (selectedFranchise.length > 0) params.set('selectedFranchise', selectedFranchise.join(','))
+        if (appliedFilters.selectedSpeed.length > 0) params.set('selectedSpeed', appliedFilters.selectedSpeed.join(','))
+        if (appliedFilters.selectedScanType.length > 0) params.set('selectedScanType', appliedFilters.selectedScanType.join(','))
+        if (appliedFilters.selectedCourier.length > 0) params.set('selectedCourier', appliedFilters.selectedCourier.join(','))
+        if (appliedFilters.selectedFranchise.length > 0) params.set('selectedFranchise', appliedFilters.selectedFranchise.join(','))
 
         const res = await fetch(`/api/scans/report?${params.toString()}`)
         if (!res.ok) throw new Error('Failed to fetch scans report data')
         const data = await res.json()
         setReportData(data)
+
+        if (data.filtersOptions) {
+          setFilterOptions(prev => {
+            const merge = (existing: {label: string, value: string}[], incoming?: {label: string, value: string}[]) => {
+              const map = new Map<string, string>();
+              existing.forEach(o => map.set(o.value, o.label));
+              incoming?.forEach(o => map.set(o.value, o.label));
+              return Array.from(map.entries())
+                .map(([value, label]) => ({ label, value }))
+                .sort((a, b) => a.label.localeCompare(b.label));
+            };
+            return {
+              uniqueScanTypes: merge(prev.uniqueScanTypes, data.filtersOptions.uniqueScanTypes),
+              uniqueCouriers: merge(prev.uniqueCouriers, data.filtersOptions.uniqueCouriers),
+              uniqueSpeeds: merge(prev.uniqueSpeeds, data.filtersOptions.uniqueSpeeds),
+              uniqueFranchisees: merge(prev.uniqueFranchisees, data.filtersOptions.uniqueFranchisees),
+            };
+          });
+        }
       } catch (error) {
         console.error("Error fetching report data:", error)
       } finally {
@@ -317,25 +398,13 @@ export function ScansReportingClient({
     }
 
     fetchData()
-  }, [
-    debouncedBarcode,
-    debouncedConnoteNumber,
-    debouncedCustomer,
-    filterUnlinked,
-    filterDateRange,
-    customStartDate,
-    customEndDate,
-    selectedSpeed,
-    selectedScanType,
-    selectedCourier,
-    selectedFranchise
-  ])
+  }, [appliedFilters])
 
   const metrics = reportData?.metrics
-  const uniqueScanTypes = reportData?.filtersOptions?.uniqueScanTypes || []
-  const uniqueCouriers = reportData?.filtersOptions?.uniqueCouriers || []
-  const uniqueSpeeds = reportData?.filtersOptions?.uniqueSpeeds || []
-  const uniqueFranchisees = reportData?.filtersOptions?.uniqueFranchisees || []
+  const uniqueScanTypes = filterOptions.uniqueScanTypes.length > 0 ? filterOptions.uniqueScanTypes : (reportData?.filtersOptions?.uniqueScanTypes || [])
+  const uniqueCouriers = filterOptions.uniqueCouriers.length > 0 ? filterOptions.uniqueCouriers : (reportData?.filtersOptions?.uniqueCouriers || [])
+  const uniqueSpeeds = filterOptions.uniqueSpeeds.length > 0 ? filterOptions.uniqueSpeeds : (reportData?.filtersOptions?.uniqueSpeeds || [])
+  const uniqueFranchisees = filterOptions.uniqueFranchisees.length > 0 ? filterOptions.uniqueFranchisees : (reportData?.filtersOptions?.uniqueFranchisees || [])
 
   if (loading || !metrics) {
     return (
@@ -359,20 +428,61 @@ export function ScansReportingClient({
       )}
 
       {!hideFilters && (
-        <Card id="step-report-filters">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Filters</CardTitle>
-            <CardDescription>Adjust these filters to recalculate reporting metrics dynamically.</CardDescription>
+        <Card id="step-report-filters" className="border border-slate-200 bg-slate-50/70 shadow-sm">
+          <CardHeader className="pb-3 border-b border-slate-200/60">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-semibold flex items-center gap-2 text-slate-900">
+                  <Filter className="h-4 w-4 text-indigo-600" />
+                  Report Filters & Search Controls
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-500 mt-0.5">
+                  Configure your desired filters below and click <strong className="font-semibold text-slate-700">Apply Filter</strong> to update the report.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2.5 self-end sm:self-auto shrink-0">
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleResetFilters}
+                  className="h-9 text-xs flex items-center gap-1.5"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reset
+                </Button>
+                <Button 
+                  type="button"
+                  variant="default" 
+                  size="sm" 
+                  onClick={handleApplyFilters}
+                  className="h-9 text-xs bg-slate-900 hover:bg-slate-800 text-white font-medium flex items-center gap-1.5 px-4 shadow-sm"
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  Apply Filter
+                </Button>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-1 block">Search Barcode</label>
-                <Input placeholder="E.g. MP123456" value={filterBarcode} onChange={e => setFilterBarcode(e.target.value)} />
+                <Input 
+                  placeholder="E.g. MP123456" 
+                  value={filterBarcode} 
+                  onChange={e => setFilterBarcode(e.target.value)} 
+                  onKeyDown={e => e.key === 'Enter' && handleApplyFilters()}
+                />
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-1 block">Connote Number</label>
-                <Input placeholder="E.g. CON-123" value={filterConnoteNumber} onChange={e => setFilterConnoteNumber(e.target.value)} />
+                <Input 
+                  placeholder="E.g. CON-123" 
+                  value={filterConnoteNumber} 
+                  onChange={e => setFilterConnoteNumber(e.target.value)} 
+                  onKeyDown={e => e.key === 'Enter' && handleApplyFilters()}
+                />
               </div>
               <div>
                 <div className="flex justify-between items-center mb-1">
@@ -382,7 +492,14 @@ export function ScansReportingClient({
                     <label htmlFor="unlinked-filter" className="text-[10px] font-medium text-slate-500 cursor-pointer">Unlinked Only</label>
                   </div>
                 </div>
-                <Input placeholder="E.g. Acme Corp" value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)} disabled={filterUnlinked} className={filterUnlinked ? "opacity-50 bg-slate-50" : ""} />
+                <Input 
+                  placeholder="E.g. Acme Corp" 
+                  value={filterCustomer} 
+                  onChange={e => setFilterCustomer(e.target.value)} 
+                  disabled={filterUnlinked} 
+                  className={filterUnlinked ? "opacity-50 bg-slate-50" : ""} 
+                  onKeyDown={e => e.key === 'Enter' && handleApplyFilters()}
+                />
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-1 block">Franchise</label>

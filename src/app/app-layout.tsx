@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -186,7 +186,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       if (path === '/admin/tickets/reporting' || path === '/scans/report') return 'analytics-reports';
       return 'ops-history';
     }
-    if (path.startsWith('/sales-snapshot') || path.startsWith('/reports') || path.startsWith('/inbound-reporting') || path.startsWith('/multisite-reporting') || path.startsWith('/admin/lifecycle-dashboard') || path.startsWith('/account-manager/reports') || path.startsWith('/customer-success/reporting') || path.startsWith('/field-activity-report') || path.startsWith('/admin/deployments')) {
+    if (path.startsWith('/sales-snapshot') || path.startsWith('/reports') || path.startsWith('/inbound-reporting') || path.startsWith('/multisite-reporting') || path.startsWith('/admin/lifecycle-dashboard') || path.startsWith('/account-manager/reports') || path.startsWith('/customer-success/reporting') || path.startsWith('/customer-success/cancellation-reporting') || path.startsWith('/field-activity-report') || path.startsWith('/admin/deployments')) {
       return 'analytics-reports';
     }
     if (path.startsWith('/admin/franchisees')) {
@@ -311,6 +311,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/customer-success/cs-requests': { label: 'CS Requests', category: 'Customer Success', icon: ListTodo, href: '/customer-success/cs-requests' },
     '/customer-success/cancellations': { label: 'CS Requests', category: 'Customer Success', icon: ListTodo, href: '/customer-success/cs-requests' },
     '/customer-success/reporting': { label: 'CS Reporting', category: 'Customer Success', icon: BarChart3, href: '/customer-success/reporting' },
+    '/customer-success/cancellation-reporting': { label: 'Cancellation Reporting', category: 'Customer Success', icon: TrendingDown, href: '/customer-success/cancellation-reporting' },
 
     // Field & Logistics
     '/field-sales': { label: 'Door-to-Door', category: 'Field & Logistics', icon: Briefcase, href: '/field-sales' },
@@ -661,6 +662,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
   const canViewCustomerSuccessOnboarding = canView('customerSuccessOnboarding') || user?.uid === 'Uh71ctLejpg8dietKngBQwnqivI2';
   const canViewScans = canView('scans');
+  const canViewCancellationReporting = canView('cancellationReporting') || isSuperAdmin || ['admin', 'superadmin', 'marketing manager', 'customer success', 'customer service'].includes(activeRoleLower);
   const canViewTickets = canView('tickets');
   const canViewLpoLeads = canView('lpoLeads');
   const canAccessAsk = !!userProfile?.uid && ALLOWED_ASK_UIDS.includes(userProfile.uid);
@@ -1388,6 +1390,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             </Link>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
+                        {canViewCancellationReporting && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/customer-success/cancellation-reporting")} tooltip="Cancellation Reporting">
+                              <Link href="/customer-success/cancellation-reporting">
+                                <TrendingDown />
+                                <span>Cancellation Reporting</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
                       </SidebarMenu>
                     </SidebarGroupContent>
                   )}
@@ -1891,6 +1903,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                               <Link href="/customer-success/reporting">
                                 <BarChart3 />
                                 <span>CS Reporting</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewCancellationReporting && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/customer-success/cancellation-reporting")} tooltip="Cancellation Reporting">
+                              <Link href="/customer-success/cancellation-reporting">
+                                <TrendingDown />
+                                <span>Cancellation Reporting</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>

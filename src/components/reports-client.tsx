@@ -562,7 +562,7 @@ export default function ReportsClientPage({
 
             const apiRes = await fetch(`/api/admin/outbound-reporting?${queryParams.toString()}`);
             if (apiRes.ok) {
-                const json = await apiRes.ok ? await apiRes.json() : null;
+                const json = await apiRes.json();
                 if (json && json.success && json.data) {
                     setFetchProgress(80);
                     const { leads, activities, calls, appointments, dialers } = json.data;
