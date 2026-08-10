@@ -36,10 +36,12 @@ interface MultiSiteManagerProps {
 export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSiteManagerProps) {
     const { toast } = useToast();
     const { userProfile, isSuperAdmin } = useAuth();
-    const isAdminOrSuperAdmin = isSuperAdmin || userProfile?.activeRole === 'admin';
+    const roleStr = (userProfile?.activeRole || userProfile?.role || '').toLowerCase();
+    const isAdminOrSuperAdmin = isSuperAdmin || roleStr === 'admin' || roleStr === 'superadmin' || roleStr === 'super user';
 
     const [isOpen, setIsOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
+    const [unlinkingChildId, setUnlinkingChildId] = useState<string | null>(null);
     
     const [childLeads, setChildLeads] = useState<Lead[]>([]);
     const [parentLead, setParentLead] = useState<Lead | null>(null);
@@ -334,6 +336,14 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     };
 
     const handleUnlinkParent = async () => {
+        if (!isAdminOrSuperAdmin) {
+            toast({
+                title: "Permission Denied",
+                description: "Disconnecting multi-site locations can only be done by Admins and Superadmins.",
+                variant: "destructive"
+            });
+            return;
+        }
         if (!confirm(`Are you sure you want to disconnect ${lead.companyName} from its parent customer?`)) {
             return;
         }
@@ -353,6 +363,37 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
             });
         } finally {
             setIsSavingParent(false);
+        }
+    };
+
+    const handleUnlinkChild = async (child: Lead) => {
+        if (!isAdminOrSuperAdmin) {
+            toast({
+                title: "Permission Denied",
+                description: "Disconnecting multi-site locations can only be done by Admins and Superadmins.",
+                variant: "destructive"
+            });
+            return;
+        }
+        if (!confirm(`Are you sure you want to disconnect ${child.companyName} from ${lead.companyName}?`)) {
+            return;
+        }
+        setUnlinkingChildId(child.id);
+        try {
+            await updateLeadDetails(child.id, child, { parentLeadId: "" });
+            toast({
+                title: "Child Customer Disconnected",
+                description: `Successfully disconnected ${child.companyName} from ${lead.companyName}.`,
+            });
+            onLocationsUpdated();
+        } catch (error: any) {
+            toast({
+                title: "Error Disconnecting Child",
+                description: error.message,
+                variant: "destructive"
+            });
+        } finally {
+            setUnlinkingChildId(null);
         }
     };
 
@@ -956,7 +997,23 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                                      <TableCell>
                                                          <LeadStatusBadge status={child.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (child.status as any)} />
                                                      </TableCell>
-                                                     <TableCell className="text-right">
+                                                     <TableCell className="text-right flex items-center justify-end gap-1">
+                                                         {isAdminOrSuperAdmin && (
+                                                             <Button
+                                                                 variant="ghost"
+                                                                 size="icon"
+                                                                 className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                                 onClick={() => handleUnlinkChild(child)}
+                                                                 disabled={unlinkingChildId === child.id}
+                                                                 title="Disconnect Child Location"
+                                                             >
+                                                                 {unlinkingChildId === child.id ? (
+                                                                     <Loader2 className="h-4 w-4 animate-spin" />
+                                                                 ) : (
+                                                                     <Link2Off className="h-4 w-4" />
+                                                                 )}
+                                                             </Button>
+                                                         )}
                                                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
                                                              <a href={`/leads/${child.id}`}>
                                                                  <ArrowRight className="h-4 w-4" />

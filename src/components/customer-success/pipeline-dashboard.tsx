@@ -31,6 +31,120 @@ import { LeadEmailDialog } from '../account-manager/lead-email-dialog';
 import { LeadNotesDialog } from '../account-manager/lead-notes-dialog';
 import { SmsDialog } from '@/components/sms-dialog';
 
+export interface LeadOriginInfo {
+    label: string;
+    type: 'outbound' | 'inbound' | 'field_sales' | 'account_manager' | 'multisite' | 'franchisee' | 'marketing' | 'customer_success' | 'other';
+    badgeClass: string;
+}
+
+export function getLeadOrigin(lead: Lead): LeadOriginInfo {
+    if (!lead) {
+        return { label: 'Unknown', type: 'other', badgeClass: 'bg-slate-50 text-slate-600 border-slate-200' };
+    }
+
+    // 1. Check bucketHistory if available (earliest oldBucket before customer_success)
+    if (lead.bucketHistory && Array.isArray(lead.bucketHistory) && lead.bucketHistory.length > 0) {
+        const sortedHistory = [...lead.bucketHistory].sort((a, b) => {
+            const dateA = a.date ? new Date(a.date).getTime() : 0;
+            const dateB = b.date ? new Date(b.date).getTime() : 0;
+            return dateA - dateB;
+        });
+
+        for (const entry of sortedHistory) {
+            const oldB = (entry.oldBucket || '').trim().toLowerCase();
+            if (oldB && oldB !== 'customer_success' && oldB !== 'unassigned' && oldB !== 'blank' && oldB !== 'none') {
+                if (oldB === 'outbound') {
+                    return { label: 'Outbound', type: 'outbound', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' };
+                }
+                if (oldB === 'inbound' || oldB === 'website') {
+                    return { label: 'Inbound (Website)', type: 'inbound', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+                }
+                if (oldB === 'field_sales' || oldB === 'field') {
+                    return { label: 'Field Sales', type: 'field_sales', badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+                }
+                if (oldB === 'account_manager' || oldB === 'am') {
+                    return { label: 'Account Manager', type: 'account_manager', badgeClass: 'bg-purple-50 text-purple-700 border-purple-200' };
+                }
+                if (oldB === 'multisite') {
+                    return { label: 'MultiSite', type: 'multisite', badgeClass: 'bg-violet-50 text-violet-700 border-violet-200' };
+                }
+                if (oldB === 'marketing' || oldB === 'nurture') {
+                    return { label: 'Marketing / Nurture', type: 'marketing', badgeClass: 'bg-pink-50 text-pink-700 border-pink-200' };
+                }
+                if (oldB === 'lpo_plus') {
+                    return { label: 'LPO.Plus', type: 'other', badgeClass: 'bg-cyan-50 text-cyan-700 border-cyan-200' };
+                }
+            }
+        }
+    }
+
+    // 2. Check explicit attributes
+    const custSourceLower = (lead.customerSource || '').toLowerCase();
+    const leadSourceLower = (lead.leadSource || '').toLowerCase();
+    const campaignLower = (lead.campaign || '').toLowerCase();
+
+    // Inbound / Website check
+    const isInbound = 
+        custSourceLower.includes('inbound') || custSourceLower.includes('website') || custSourceLower.includes('web') ||
+        leadSourceLower.includes('inbound') || leadSourceLower.includes('website') || leadSourceLower.includes('web') ||
+        campaignLower.includes('inbound') || campaignLower.includes('website') ||
+        !!lead.inboundDetails;
+
+    // Outbound check
+    const isOutbound = 
+        lead.wasOutbound === true ||
+        !!lead.dialerAssigned ||
+        custSourceLower.includes('outbound') || custSourceLower.includes('dialer') ||
+        leadSourceLower.includes('outbound') || leadSourceLower.includes('dialer');
+
+    // Franchisee check
+    const isFranchisee = 
+        lead.isZeeCreated === true ||
+        lead.leadSource === 'Franchisee Generated' ||
+        lead.customerSource === 'Franchisee Generated' ||
+        lead.campaign === 'Franchisee Generated' ||
+        lead.createdByRole?.toLowerCase() === 'franchisee' ||
+        lead.leadSource === '-4';
+
+    if (isInbound) {
+        return { label: 'Inbound (Website)', type: 'inbound', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    }
+
+    if (isOutbound) {
+        return { label: 'Outbound', type: 'outbound', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' };
+    }
+
+    if (isFranchisee) {
+        return { label: 'Franchisee', type: 'franchisee', badgeClass: 'bg-amber-50 text-amber-700 border-amber-200' };
+    }
+
+    if (lead.fieldSales || lead.fieldRepAssigned) {
+        return { label: 'Field Sales', type: 'field_sales', badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+    }
+
+    if (lead.campaign === 'MultiSite' || (lead.multiSiteLocations && lead.multiSiteLocations.length > 0)) {
+        return { label: 'MultiSite', type: 'multisite', badgeClass: 'bg-violet-50 text-violet-700 border-violet-200' };
+    }
+
+    if (lead.accountManagerAssigned) {
+        return { label: 'Account Manager', type: 'account_manager', badgeClass: 'bg-purple-50 text-purple-700 border-purple-200' };
+    }
+
+    if (lead.campaign === 'Customer Success Generated') {
+        return { label: 'CS Direct', type: 'customer_success', badgeClass: 'bg-teal-50 text-teal-700 border-teal-200' };
+    }
+
+    if (lead.customerSource && lead.customerSource !== 'Unassigned') {
+        return { label: lead.customerSource, type: 'other', badgeClass: 'bg-slate-50 text-slate-700 border-slate-200' };
+    }
+
+    if (lead.leadSource && lead.leadSource !== '-4') {
+        return { label: lead.leadSource, type: 'other', badgeClass: 'bg-slate-50 text-slate-700 border-slate-200' };
+    }
+
+    return { label: 'Outbound', type: 'outbound', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' };
+}
+
 export default function CustomerSuccessDashboard() {
     const { userProfile, loading } = useAuth();
     
@@ -45,6 +159,7 @@ export default function CustomerSuccessDashboard() {
     const [filters, setFilters] = useState({
         status: 'all',
         campaign: 'all',
+        origin: 'all',
         franchisee: '',
         state: '',
         suburb: '',
@@ -374,7 +489,26 @@ export default function CustomerSuccessDashboard() {
                         (selectedCs !== 'all' && selectedCs !== 'unassigned' ? l.customerSuccessAssigned === selectedCs : true)
                     );
                     
-                    setLeads(filteredLeads);
+                    // Fetch bucket_history subcollection for leads where bucketHistory array is missing
+                    const leadsWithHistory = await Promise.all(
+                        filteredLeads.map(async (l) => {
+                            if (l.bucketHistory && Array.isArray(l.bucketHistory) && l.bucketHistory.length > 0) {
+                                return l;
+                            }
+                            try {
+                                const bhSnap = await getDocs(collection(firestore, 'leads', l.id, 'bucket_history'));
+                                if (!bhSnap.empty) {
+                                    const historyList = bhSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+                                    return { ...l, bucketHistory: historyList };
+                                }
+                            } catch (err) {
+                                // ignore
+                            }
+                            return l;
+                        })
+                    );
+
+                    setLeads(leadsWithHistory);
                 }
             } catch (error) {
                 console.error("Error fetching pipeline leads", error);
@@ -429,6 +563,10 @@ export default function CustomerSuccessDashboard() {
             if (searchQuery && !lead.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) && !(lead.prospectPlusId && lead.prospectPlusId.toLowerCase().includes(searchQuery.toLowerCase()))) return false;
             if (filters.status !== 'all' && currentStatus !== filters.status) return false;
             if (filters.campaign !== 'all' && lead.campaign !== filters.campaign) return false;
+            if (filters.origin !== 'all') {
+                const origin = getLeadOrigin(lead);
+                if (origin.type !== filters.origin) return false;
+            }
             if (filters.franchisee && !lead.franchisee?.toLowerCase().includes(filters.franchisee.toLowerCase())) return false;
             if (filters.state && !lead.address?.state?.toLowerCase().includes(filters.state.toLowerCase())) return false;
             if (filters.suburb && !lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase())) return false;
@@ -588,6 +726,23 @@ export default function CustomerSuccessDashboard() {
                                     </Select>
                                 </div>
                                 <div className="grid gap-2">
+                                    <Label htmlFor="origin">Original Bucket / Source</Label>
+                                    <Select value={filters.origin} onValueChange={(val) => setFilters({...filters, origin: val})}>
+                                        <SelectTrigger id="origin"><SelectValue placeholder="All Sources" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Sources</SelectItem>
+                                            <SelectItem value="outbound">Outbound Team</SelectItem>
+                                            <SelectItem value="inbound">Inbound (Website)</SelectItem>
+                                            <SelectItem value="field_sales">Field Sales</SelectItem>
+                                            <SelectItem value="account_manager">Account Manager</SelectItem>
+                                            <SelectItem value="franchisee">Franchisee Generated</SelectItem>
+                                            <SelectItem value="multisite">MultiSite</SelectItem>
+                                            <SelectItem value="marketing">Marketing / Nurture</SelectItem>
+                                            <SelectItem value="customer_success">Customer Success Direct</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid gap-2">
                                     <Label htmlFor="campaign">Campaign</Label>
                                     <Input id="campaign" placeholder="e.g. MultiSite" value={filters.campaign === 'all' ? '' : filters.campaign} onChange={(e) => setFilters({...filters, campaign: e.target.value || 'all'})} />
                                 </div>
@@ -611,7 +766,7 @@ export default function CustomerSuccessDashboard() {
                                 </div>
                                 <Button 
                                     variant="outline" 
-                                    onClick={() => setFilters({ status: 'all', campaign: 'all', franchisee: '', state: '', suburb: '', postcode: '' })}
+                                    onClick={() => setFilters({ status: 'all', campaign: 'all', origin: 'all', franchisee: '', state: '', suburb: '', postcode: '' })}
                                 >
                                     Clear Filters
                                 </Button>
@@ -1115,6 +1270,7 @@ function LeadGrid({
                     <TableHeader className="bg-slate-50">
                         <TableRow>
                             <TableHead className="font-bold text-[#095c7b]">Company & Status</TableHead>
+                            <TableHead className="font-bold text-[#095c7b]">Original Bucket / Source</TableHead>
                             <TableHead className="font-bold text-[#095c7b]">Assigned CS</TableHead>
                             <TableHead className="font-bold text-[#095c7b]">Franchisee</TableHead>
                             <TableHead className="font-bold text-[#095c7b]">Contact Details</TableHead>
@@ -1171,6 +1327,7 @@ function LeadGrid({
                                 });
                                 
                             const isCalled = lead.csCalled || false;
+                            const origin = getLeadOrigin(lead);
                             
                             const currentStatus = lead.customerStatus || lead.status;
                             let rowBgClass = "hover:bg-slate-50/80 transition-colors";
@@ -1196,6 +1353,11 @@ function LeadGrid({
                                                 </Badge>
                                             </div>
                                         </div>
+                                    </TableCell>
+                                    <TableCell className="font-medium">
+                                        <Badge variant="outline" className={`text-[11px] font-semibold border ${origin.badgeClass}`}>
+                                            {origin.label}
+                                        </Badge>
                                     </TableCell>
                                     <TableCell className="font-medium text-slate-700">
                                         {lead.customerSuccessAssigned || <span className="text-slate-400 italic text-xs">Unassigned</span>}
@@ -1388,6 +1550,7 @@ function LeadGrid({
 function LeadCard({ lead, onCall, onClick, onEmail, onNotes, journeys = [], journeyStates = {} }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, journeys?: any[], journeyStates?: Record<string, any[]> }) {
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
     const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
+    const origin = getLeadOrigin(lead);
     
     // Gather unique phone numbers
     const phoneNumbers: { label: string; phone: string }[] = [];
@@ -1446,19 +1609,13 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, journeys = [], jour
                             <Badge variant="outline" className="text-[10px] bg-slate-50 border-slate-200 uppercase shrink-0">
                                 {currentStatus}
                             </Badge>
-                            {lead.bucket && (
-                                <Badge 
-                                    variant="outline" 
-                                    className={`text-[10px] uppercase shrink-0 border ${
-                                        lead.bucket === 'outbound' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                        lead.bucket === 'field_sales' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                                        lead.bucket === 'inbound' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                        'bg-slate-50 text-slate-700 border-slate-200'
-                                    }`}
-                                >
-                                    {lead.bucket === 'field_sales' ? 'Field Sales' : lead.bucket}
-                                </Badge>
-                            )}
+                            <Badge 
+                                variant="outline" 
+                                className={`text-[10px] uppercase font-semibold shrink-0 border ${origin.badgeClass}`}
+                                title={`Lead originally came from ${origin.label}`}
+                            >
+                                Origin: {origin.label}
+                            </Badge>
                         </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 z-10">

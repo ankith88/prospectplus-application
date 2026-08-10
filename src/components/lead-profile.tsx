@@ -2845,6 +2845,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 dateRegistrationSent: nowIso,
                 registrationSentAt: nowIso,
                 ...(!isOutbound ? { 
+                    bucket: 'customer_success',
                     customerSuccessAssigned: 'Belinda Urbani' 
                 } : {}),
                 localMileTrialsRemaining: 5,

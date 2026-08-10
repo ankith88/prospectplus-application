@@ -94,6 +94,22 @@ export async function PATCH(
       updateData.createdAt = FieldValue.serverTimestamp();
     }
 
+    // Evaluate LocalMile bucket and Customer Success assignment rules
+    const targetStatus = body.customerStatus || body.status || body.netsuiteLeadStatus;
+    const isLocalMilePending = targetStatus === 'LocalMile Pending' || targetStatus === 'Customer - LocalMile Pending' || body.localMileTermsAccepted === true;
+    const isLocalMileOpportunity = targetStatus === 'LocalMile Opportunity';
+    const currentBucket = existingData.bucket || (existingData.fieldSales ? 'field_sales' : 'outbound');
+
+    if (isLocalMilePending) {
+      updateData.bucket = 'customer_success';
+      updateData.customerSuccessAssigned = 'Belinda Urbani';
+      if (!existingData.dateLocalmileAccepted) updateData.dateLocalmileAccepted = new Date().toISOString();
+      if (!existingData.localMileAcceptedAt) updateData.localMileAcceptedAt = new Date().toISOString();
+    } else if (isLocalMileOpportunity && currentBucket !== 'outbound') {
+      updateData.bucket = 'customer_success';
+      updateData.customerSuccessAssigned = 'Belinda Urbani';
+    }
+
     // Perform update
     await leadRef.update(updateData);
 

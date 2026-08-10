@@ -1456,17 +1456,28 @@ async function updateLeadStatus(
     try {
         const updates: any = { customerStatus: status, statusReason: reason || '' };
         const now = new Date().toISOString();
+        const leadRef = doc(firestore, 'leads', leadId);
+        const leadSnap = await getDoc(leadRef);
+        const leadData = leadSnap.exists() ? leadSnap.data() : {};
+        const currentBucket = leadData?.bucket || (leadData?.fieldSales ? 'field_sales' : 'outbound');
+
         if (status === 'Quote Sent') {
             updates.quoteSentAt = now;
         } else if (status === 'Won') {
             updates.signedUpAt = now;
-        } else if (['Trialing ShipMate', 'Trialing LocalMile', 'LocalMile Opportunity', 'Free Trial'].includes(status)) {
+        } else if (['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial'].includes(status)) {
             updates.trialStartedAt = now;
+        } else if (status === 'LocalMile Opportunity') {
+            updates.trialStartedAt = now;
+            if (currentBucket !== 'outbound') {
+                updates.bucket = 'customer_success';
+                updates.customerSuccessAssigned = 'Belinda Urbani';
+            }
         } else if (status === 'LocalMile Pending') {
             updates.bucket = 'customer_success';
             updates.customerSuccessAssigned = 'Belinda Urbani';
         }
-        await updateDoc(doc(firestore, 'leads', leadId), updates);
+        await updateDoc(leadRef, updates);
 
         const isDataMgmt = options?.isDataManagement || options?.source === 'data_management' || (reason && reason.toLowerCase().includes('data management'));
         let logNotes = reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}`;
@@ -1765,6 +1776,7 @@ async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLea
     const dataToSave = { ...newLeadData };
     const statusVal = newLeadData.customerStatus || newLeadData.status;
     const now = new Date().toISOString();
+    const currentBucket = (oldLead as any).bucket || ((oldLead as any).fieldSales ? 'field_sales' : 'outbound');
     if (statusVal) {
         if (statusVal === 'Quote Sent') {
             dataToSave.quoteSentAt = now;
@@ -1775,6 +1787,10 @@ async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLea
             if (statusVal === 'LocalMile Opportunity') {
                 if (!dataToSave.dateRegistrationSent) dataToSave.dateRegistrationSent = now;
                 if (!dataToSave.registrationSentAt) dataToSave.registrationSentAt = now;
+                if (currentBucket !== 'outbound') {
+                    dataToSave.bucket = 'customer_success';
+                    dataToSave.customerSuccessAssigned = 'Belinda Urbani';
+                }
             }
         } else if (statusVal === 'LocalMile Pending') {
             dataToSave.bucket = 'customer_success';

@@ -530,7 +530,7 @@ export default function ReportsClientPage({
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
     setLoading(true);
-    setFetchProgress(15);
+    setFetchProgress(20);
     setError(null);
     console.time("Outbound Reporting - Load Time");
     const startTimePerf = performance.now();
@@ -548,37 +548,60 @@ export default function ReportsClientPage({
         }
 
         const isDateRangeChanged = lastFetchedStartISORef.current !== startISO;
-        let localStaticData = staticDataRef.current;
         if (isDateRangeChanged) {
             setStaticData(null);
-            localStaticData = null;
             lastFetchedStartISORef.current = startISO;
         }
 
-        const activityQuery = query(
-            collectionGroup(firestore, 'activity'),
-            where('date', '>=', startISO)
-        );
+        // 1. Try high-performance Server API route first
+        let apiSuccess = false;
+        try {
+            const queryParams = new URLSearchParams();
+            if (startISO) queryParams.set('startDate', startISO);
+            if (isRefreshing) queryParams.set('refresh', 'true');
 
-        const apptQuery = query(
-            collectionGroup(firestore, 'appointments')
-        );
-
-        const fetches: Promise<any>[] = [
-            getDocs(activityQuery),
-            getDocs(apptQuery)
-        ];
-
-        if (!localStaticData) {
-            fetches.push(getDocs(collection(firestore, 'users')));
+            const apiRes = await fetch(`/api/admin/outbound-reporting?${queryParams.toString()}`);
+            if (apiRes.ok) {
+                const json = await apiRes.ok ? await apiRes.json() : null;
+                if (json && json.success && json.data) {
+                    setFetchProgress(80);
+                    const { leads, activities, calls, appointments, dialers } = json.data;
+                    setAllLeads(leads || []);
+                    setAllActivities(activities || []);
+                    setAllCalls(calls || []);
+                    setAllAppointments(appointments || []);
+                    if (dialers && dialers.length > 0) {
+                        setAllDialers(dialers);
+                    }
+                    setStaticData({ leads: leads || [], dialers: dialers || [], notes: [] });
+                    apiSuccess = true;
+                }
+            }
+        } catch (apiErr) {
+            console.warn("Fast API route unavailable, falling back to direct Firestore fetch:", apiErr);
         }
 
-        const results = await Promise.all(fetches);
-        setFetchProgress(40);
-        const activitiesSnap = results[0];
-        const apptsSnap = results[1];
+        // 2. Fallback to direct client-side Firestore queries if API route is unavailable
+        if (!apiSuccess) {
+            const activityQuery = query(
+                collectionGroup(firestore, 'activity'),
+                where('date', '>=', startISO)
+            );
 
-        if (!localStaticData && results.length > 2) {
+            const apptQuery = query(
+                collectionGroup(firestore, 'appointments')
+            );
+
+            const fetches: Promise<any>[] = [
+                getDocs(activityQuery),
+                getDocs(apptQuery),
+                getDocs(collection(firestore, 'users'))
+            ];
+
+            const results = await Promise.all(fetches);
+            setFetchProgress(40);
+            const activitiesSnap = results[0];
+            const apptsSnap = results[1];
             const usersSnap = results[2];
 
             const userList = usersSnap.docs.map((doc: any) => {
@@ -611,92 +634,13 @@ export default function ReportsClientPage({
             }).filter(Boolean) as string[];
             setAllDialers(userList);
 
-            // Collect active lead IDs referenced by human activities and appointments
-            const activeLeadIds = new Set<string>();
-            activitiesSnap.docs.forEach((doc: any) => {
-                const data = doc.data();
-                const authorLower = (data.author || '').toLowerCase();
-                const notesLower = (data.notes || '').toLowerCase();
-                if (
-                    authorLower.includes('system') || 
-                    authorLower.includes('script') || 
-                    authorLower.includes('backfill') ||
-                    notesLower.includes('performed by: system') ||
-                    notesLower.includes('system backfill script')
-                ) {
-                    return;
-                }
-                const leadId = doc.ref.parent.parent?.id;
-                if (leadId) activeLeadIds.add(leadId);
-            });
-            apptsSnap.docs.forEach((doc: any) => {
-                const data = doc.data();
-                const authorLower = (data.author || data.createdBy || '').toLowerCase();
-                const notesLower = (data.notes || data.title || '').toLowerCase();
-                if (
-                    authorLower.includes('system') || 
-                    authorLower.includes('script') || 
-                    authorLower.includes('backfill') ||
-                    notesLower.includes('performed by: system') ||
-                    notesLower.includes('system backfill script')
-                ) {
-                    return;
-                }
-                const leadId = doc.ref.parent.parent?.id;
-                if (leadId) activeLeadIds.add(leadId);
-            });
+            const qLeads = query(collection(firestore, 'leads'), where('bucket', '==', 'outbound'));
+            const qCompanies = query(collection(firestore, 'companies'), where('bucket', '==', 'outbound'));
+            const [lSnap, cSnap] = await Promise.all([
+                getDocs(qLeads),
+                getDocs(qCompanies)
+            ]);
 
-            // activeLeadIds now strictly contains leads with human activities or appointments after July 1 2026
-
-            let leadsDocs: any[] = [];
-            let companiesDocs: any[] = [];
-
-            const fetchInBatches = async (ids: string[], isCompanies: boolean) => {
-                const colName = isCompanies ? 'companies' : 'leads';
-                const batches: string[][] = [];
-                for (let i = 0; i < ids.length; i += 30) {
-                    batches.push(ids.slice(i, i + 30));
-                }
-                const resultsSnap: any[] = [];
-                const concurrencyLimit = 5;
-                for (let i = 0; i < batches.length; i += concurrencyLimit) {
-                    const chunk = batches.slice(i, i + concurrencyLimit);
-                    const snaps = await Promise.all(chunk.map(batch => 
-                        getDocs(query(collection(firestore, colName), where(documentId(), 'in', batch)))
-                    ));
-                    resultsSnap.push(...snaps.flatMap(snap => snap.docs));
-                }
-                return resultsSnap;
-            };
-
-            if (appliedFilters.dialerAssignmentDate?.from || appliedFilters.leadCreatedDate?.from) {
-                // Fetch leads assigned within or matching the assignment criteria directly
-                const qLeads = query(collection(firestore, 'leads'), where('bucket', '==', 'outbound'));
-                const qCompanies = query(collection(firestore, 'companies'), where('bucket', '==', 'outbound'));
-                const [lSnap, cSnap] = await Promise.all([
-                    getDocs(qLeads),
-                    getDocs(qCompanies)
-                ]);
-                leadsDocs = lSnap.docs;
-                companiesDocs = cSnap.docs;
-            } else if (activeLeadIds.size > 0) {
-                const [leadsBatch, companiesBatch] = await Promise.all([
-                    fetchInBatches(Array.from(activeLeadIds), false),
-                    fetchInBatches(Array.from(activeLeadIds), true)
-                ]);
-                leadsDocs = leadsBatch;
-                companiesDocs = companiesBatch;
-            } else if (!appliedFilters.activityDate?.from) {
-                // Fallback if there are no date bounds at all
-                const qLeads = query(collection(firestore, 'leads'), where('bucket', '==', 'outbound'));
-                const qCompanies = query(collection(firestore, 'companies'), where('bucket', '==', 'outbound'));
-                const [lSnap, cSnap] = await Promise.all([
-                    getDocs(qLeads),
-                    getDocs(qCompanies)
-                ]);
-                leadsDocs = lSnap.docs;
-                companiesDocs = cSnap.docs;
-            }
             setFetchProgress(75);
 
             const processRecords = (docs: any[], isFromCompanies = false) => {
@@ -726,8 +670,8 @@ export default function ReportsClientPage({
                 }).filter((l: Lead) => l.fieldSales !== true);
             };
 
-            const rawLeads = processRecords(leadsDocs, false);
-            const rawCompanies = processRecords(companiesDocs, true);
+            const rawLeads = processRecords(lSnap.docs, false);
+            const rawCompanies = processRecords(cSnap.docs, true);
             
             const leadMap = new Map<string, Lead>();
             for (const lead of [...rawLeads, ...rawCompanies]) {
@@ -746,149 +690,147 @@ export default function ReportsClientPage({
                 return !(companyNameLower.includes('website') || notesLower.includes('website') || statusLower.includes('website'));
             });
             setAllLeads(combinedLeads);
-            localStaticData = { leads: combinedLeads, dialers: userList, notes: [] };
-            setStaticData(localStaticData);
-        }
+            setStaticData({ leads: combinedLeads, dialers: userList, notes: [] });
 
-        const activeLeadMap = new Map<string, Lead>();
-        localStaticData?.leads.forEach(l => activeLeadMap.set(l.id, l));
+            const activeLeadMap = new Map<string, Lead>();
+            combinedLeads.forEach(l => activeLeadMap.set(l.id, l));
 
-        const rawActivities = activitiesSnap.docs.map((activityDoc: any) => {
-            const data = activityDoc.data() as Activity;
-            const leadId = activityDoc.ref.parent.parent?.id;
-            if (!leadId) return null;
-            const lead = activeLeadMap.get(leadId);
-            if (!lead) return null;
-            if (!isManualActivity(data)) return null;
-            
-            if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
-                if (lead.franchisee !== userProfile.franchisee) return null;
-            }
-
-            let author = data.author || '';
-            if (author.trim().toLowerCase() === 'leeroy russell') {
-                author = 'Lee Russell';
-            }
-
-            // Exclude non-user system activities (e.g. system backfill scripts, automated logs)
-            const authorLower = author.toLowerCase();
-            const notesLower = (data.notes || '').toLowerCase();
-            if (
-                authorLower.includes('system') || 
-                authorLower.includes('script') || 
-                authorLower.includes('backfill') ||
-                notesLower.includes('performed by: system') ||
-                notesLower.includes('system backfill script')
-            ) {
-                return null;
-            }
-
-            return {
-                ...data,
-                author,
-                id: activityDoc.id,
-                leadId,
-            };
-        }).filter(Boolean) as (Activity & { leadId: string })[];
-
-        setAllActivities(rawActivities);
-
-        const rawCalls = rawActivities.map(activity => {
-            if (activity.type !== 'Call') return null;
-            const lead = activeLeadMap.get(activity.leadId)!;
-            const outcomeMatch = activity.notes.match(/Outcome: ([^.]+)\./);
-            const outcome = outcomeMatch ? outcomeMatch[1] : (activity.notes.includes('Initiated call to') ? 'No Answer' : 'Other');
-            return {
-                ...activity,
-                leadName: lead.companyName,
-                leadStatus: lead.status,
-                dialerAssigned: lead.dialerAssigned || 'Unassigned',
-                outcome
-            };
-        }).filter(Boolean) as any[];
-
-        const finalCalls: CallActivity[] = [];
-        const callsByLead: Record<string, CallActivity[]> = {};
-        rawCalls.forEach(c => {
-            if (!callsByLead[c.leadId]) callsByLead[c.leadId] = [];
-            callsByLead[c.leadId].push(c);
-        });
-
-        Object.values(callsByLead).forEach(leadCalls => {
-            const outcomes = leadCalls.filter(c => c.notes.includes('Outcome: ') || c.callId);
-            const attempts = leadCalls.filter(c => c.notes.includes('Initiated call to'));
-
-            finalCalls.push(...outcomes);
-
-            attempts.forEach(attempt => {
-                const parsedAttempt = parseDateString(attempt.date);
-                const attemptTime = parsedAttempt ? parsedAttempt.getTime() : 0;
-                const matched = outcomes.some(outcome => {
-                    const parsedOutcome = parseDateString(outcome.date);
-                    const outcomeTime = parsedOutcome ? parsedOutcome.getTime() : 0;
-                    return attemptTime && outcomeTime && Math.abs(outcomeTime - attemptTime) < 5 * 60 * 1000;
-                });
-                if (!matched) {
-                    finalCalls.push(attempt);
+            const rawActivities = activitiesSnap.docs.map((activityDoc: any) => {
+                const data = activityDoc.data() as Activity;
+                const leadId = activityDoc.ref.parent.parent?.id;
+                if (!leadId) return null;
+                const lead = activeLeadMap.get(leadId);
+                if (!lead) return null;
+                if (!isManualActivity(data)) return null;
+                
+                if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
+                    if (lead.franchisee !== userProfile.franchisee) return null;
                 }
+
+                let author = data.author || '';
+                if (author.trim().toLowerCase() === 'leeroy russell') {
+                    author = 'Lee Russell';
+                }
+
+                const authorLower = author.toLowerCase();
+                const notesLower = (data.notes || '').toLowerCase();
+                if (
+                    authorLower.includes('system') || 
+                    authorLower.includes('script') || 
+                    authorLower.includes('backfill') ||
+                    notesLower.includes('performed by: system') ||
+                    notesLower.includes('system backfill script')
+                ) {
+                    return null;
+                }
+
+                return {
+                    ...data,
+                    author,
+                    id: activityDoc.id,
+                    leadId,
+                };
+            }).filter(Boolean) as (Activity & { leadId: string })[];
+
+            setAllActivities(rawActivities);
+
+            const rawCalls = rawActivities.map(activity => {
+                if (activity.type !== 'Call') return null;
+                const lead = activeLeadMap.get(activity.leadId)!;
+                const outcomeMatch = activity.notes.match(/Outcome: ([^.]+)\./);
+                const outcome = outcomeMatch ? outcomeMatch[1] : (activity.notes.includes('Initiated call to') ? 'No Answer' : 'Other');
+                return {
+                    ...activity,
+                    leadName: lead.companyName,
+                    leadStatus: lead.status,
+                    dialerAssigned: lead.dialerAssigned || 'Unassigned',
+                    outcome
+                };
+            }).filter(Boolean) as any[];
+
+            const finalCalls: CallActivity[] = [];
+            const callsByLead: Record<string, CallActivity[]> = {};
+            rawCalls.forEach(c => {
+                if (!callsByLead[c.leadId]) callsByLead[c.leadId] = [];
+                callsByLead[c.leadId].push(c);
             });
-        });
-        
-        finalCalls.sort((a, b) => {
-            const dateA = parseDateString(a.date) || new Date(0);
-            const dateB = parseDateString(b.date) || new Date(0);
-            return dateB.getTime() - dateA.getTime();
-        });
-        setAllCalls(finalCalls);
 
-        const appts = apptsSnap.docs.map((apptDoc: any) => {
-            const data = apptDoc.data() as Appointment;
-            const authorLower = ((data as any).author || (data as any).createdBy || '').toLowerCase();
-            const notesLower = ((data as any).notes || (data as any).title || '').toLowerCase();
-            if (
-                authorLower.includes('system') || 
-                authorLower.includes('script') || 
-                authorLower.includes('backfill') ||
-                notesLower.includes('performed by: system') ||
-                notesLower.includes('system backfill script')
-            ) {
-                return null;
-            }
-            const apptDate = parseDateString(data.starttime || data.duedate || data.date || data.appointmentDate || (data as any).createdAt);
-            if (apptDate && apptDate < new Date(2026, 6, 1)) {
-                return null;
-            }
-            const leadId = apptDoc.ref.parent.parent?.id;
-            if (!leadId) return null;
-            const lead = activeLeadMap.get(leadId);
-            if (!lead) return null;
+            Object.values(callsByLead).forEach(leadCalls => {
+                const outcomes = leadCalls.filter(c => c.notes.includes('Outcome: ') || c.callId);
+                const attempts = leadCalls.filter(c => c.notes.includes('Initiated call to'));
 
-            if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
-                if (lead.franchisee !== userProfile.franchisee) return null;
-            }
+                finalCalls.push(...outcomes);
 
-            return {
-                ...data,
-                id: apptDoc.id,
-                leadId,
-                leadName: lead.companyName,
-                dialerAssigned: lead.dialerAssigned,
-                leadStatus: lead.status,
-                discoveryData: lead.discoveryData,
-                entityId: lead.entityId || (lead as any).customerEntityId || (lead as any).internalid,
-                duedate: data.duedate || data.date || '',
-                starttime: data.starttime || data.date || '',
-                appointmentDate: data.appointmentDate || data.createdAt || '',
-                assignedTo: data.assignedTo || data.amName || '',
-            };
-        }).filter(Boolean) as AppointmentWithLead[];
-        
-        appts.sort((a, b) => {
-            const dateA = parseDateString(a.starttime) || new Date(0);
-            const dateB = parseDateString(b.starttime) || new Date(0);
-            return dateB.getTime() - dateA.getTime();
-        });
-        setAllAppointments(appts);
+                attempts.forEach(attempt => {
+                    const parsedAttempt = parseDateString(attempt.date);
+                    const attemptTime = parsedAttempt ? parsedAttempt.getTime() : 0;
+                    const matched = outcomes.some(outcome => {
+                        const parsedOutcome = parseDateString(outcome.date);
+                        const outcomeTime = parsedOutcome ? parsedOutcome.getTime() : 0;
+                        return attemptTime && outcomeTime && Math.abs(outcomeTime - attemptTime) < 5 * 60 * 1000;
+                    });
+                    if (!matched) {
+                        finalCalls.push(attempt);
+                    }
+                });
+            });
+            
+            finalCalls.sort((a, b) => {
+                const dateA = parseDateString(a.date) || new Date(0);
+                const dateB = parseDateString(b.date) || new Date(0);
+                return dateB.getTime() - dateA.getTime();
+            });
+            setAllCalls(finalCalls);
+
+            const appts = apptsSnap.docs.map((apptDoc: any) => {
+                const data = apptDoc.data() as Appointment;
+                const authorLower = ((data as any).author || (data as any).createdBy || '').toLowerCase();
+                const notesLower = ((data as any).notes || (data as any).title || '').toLowerCase();
+                if (
+                    authorLower.includes('system') || 
+                    authorLower.includes('script') || 
+                    authorLower.includes('backfill') ||
+                    notesLower.includes('performed by: system') ||
+                    notesLower.includes('system backfill script')
+                ) {
+                    return null;
+                }
+                const apptDate = parseDateString(data.starttime || data.duedate || data.date || data.appointmentDate || (data as any).createdAt);
+                if (apptDate && apptDate < new Date(2026, 6, 1)) {
+                    return null;
+                }
+                const leadId = apptDoc.ref.parent.parent?.id;
+                if (!leadId) return null;
+                const lead = activeLeadMap.get(leadId);
+                if (!lead) return null;
+
+                if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
+                    if (lead.franchisee !== userProfile.franchisee) return null;
+                }
+
+                return {
+                    ...data,
+                    id: apptDoc.id,
+                    leadId,
+                    leadName: lead.companyName,
+                    dialerAssigned: lead.dialerAssigned,
+                    leadStatus: lead.status,
+                    discoveryData: lead.discoveryData,
+                    entityId: lead.entityId || (lead as any).customerEntityId || (lead as any).internalid,
+                    duedate: data.duedate || data.date || '',
+                    starttime: data.starttime || data.date || '',
+                    appointmentDate: data.appointmentDate || data.createdAt || '',
+                    assignedTo: data.assignedTo || data.amName || '',
+                };
+            }).filter(Boolean) as AppointmentWithLead[];
+            
+            appts.sort((a, b) => {
+                const dateA = parseDateString(a.starttime) || new Date(0);
+                const dateB = parseDateString(b.starttime) || new Date(0);
+                return dateB.getTime() - dateA.getTime();
+            });
+            setAllAppointments(appts);
+        }
 
     } catch (error: any) {
         console.error("Failed to refresh reporting data:", error);
@@ -897,10 +839,11 @@ export default function ReportsClientPage({
     } finally {
         setLoading(false);
         setIsRefreshing(false);
+        setFetchProgress(100);
         console.timeEnd("Outbound Reporting - Load Time");
         setLoadTime(Math.round(performance.now() - startTimePerf));
     }
-  }, [userProfile, toast, appliedFilters.activityDate, appliedFilters.dialerAssignmentDate, appliedFilters.leadCreatedDate]);
+  }, [userProfile, toast, isRefreshing, appliedFilters.activityDate, appliedFilters.dialerAssignmentDate, appliedFilters.leadCreatedDate, setLoadTime]);
 
   useEffect(() => {
     if (userProfile) {

@@ -284,70 +284,59 @@ function SelectServicesContent() {
         newStatus = 'LocalMile Opportunity';
         successDescription = 'The LocalMile free trial has been initiated.';
       } else if (mode === 'signup') {
-        if (values.addServices && values.startDate) {
-          const salesRepIdMap: Record<string, string> = {
-            "Lee Russell": "668711",
-            "Kerina Helliwell": "696160",
-            "Luke F": "653718",
-            "Account Manager": "409635"
-          };
-          const salesRepId = lead.accountManagerAssigned ? salesRepIdMap[lead.accountManagerAssigned] || "" : "";
+        const salesRepIdMap: Record<string, string> = {
+          "Lee Russell": "668711",
+          "Kerina Helliwell": "696160",
+          "Luke F": "653718",
+          "Account Manager": "409635"
+        };
+        const salesRepId = lead.accountManagerAssigned ? salesRepIdMap[lead.accountManagerAssigned] || "" : "";
+        
+        const mappedServices = (values.addServices && values.startDate) ? serviceSelections.map(s => {
+          const matchingService = availableServices.find(as => as.label === s.service);
           
-          const mappedServices = serviceSelections.map(s => {
-            const matchingService = availableServices.find(as => as.label === s.service);
-            
-            let freqStr = "0,0,0,0,0,0";
-            if (s.frequency === 'Adhoc') {
-               freqStr = "0,0,0,0,0,1";
-            } else if (Array.isArray(s.frequency)) {
-               const daysMap = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-               const boolArr = daysMap.map(d => s.frequency.includes(d) ? '1' : '0');
-               freqStr = [...boolArr, '0'].join(',');
-            }
-            
-            return {
-               id: matchingService ? String(matchingService.id) : "",
-               name: s.service,
-               price: String(s.rate),
-               freq: freqStr
-            };
-          });
-
-          nsResponse = await submitServiceQuote({
-             customerId: (lead as any).internalid || lead.entityId || "",
-             contactId: values.serviceCommencementContactId || "",
-             salesRecordId: lead.salesRecordInternalId || "",
-             salesRepId: salesRepId,
-             services: mappedServices,
-             commDate: format(values.startDate, 'dd/MM/yyyy'),
-             accountManagerName: lead.accountManagerAssigned,
-             createShipMateAccount: values.shipmateAccess || undefined
-          });
-          
-          if (!nsResponse.success) throw new Error(nsResponse.message);
-          
-          // Also call initiateSignup for shipmate/localmile if needed, but the original logic passed services to initiateSignup too.
-          // Since we submitted services via submitServiceQuote, we might still need to call initiateSignup for shipmate/localmile if requested.
-          if (values.shipmateAccess || values.localmileAccess) {
-             await initiateSignup({
-               leadId: lead.id,
-               services: [], // Services already handled
-               startDate: format(values.startDate, 'yyyy-MM-dd'),
-               shipmateAccess: values.shipmateAccess,
-               localmileAccess: values.localmileAccess,
-               accountManagerName: lead.accountManagerAssigned
-             });
+          let freqStr = "0,0,0,0,0,0";
+          if (s.frequency === 'Adhoc') {
+             freqStr = "0,0,0,0,0,1";
+          } else if (Array.isArray(s.frequency)) {
+             const daysMap = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+             const boolArr = daysMap.map(d => s.frequency.includes(d) ? '1' : '0');
+             freqStr = [...boolArr, '0'].join(',');
           }
-        } else {
-          // If no services are added, we still need to potentially activate ShipMate/LocalMile
-          nsResponse = await initiateSignup({
-            leadId: lead.id,
-            services: [],
-            startDate: format(new Date(), 'yyyy-MM-dd'), // Default to today if no services
-            shipmateAccess: values.shipmateAccess,
-            localmileAccess: values.localmileAccess,
-            accountManagerName: lead.accountManagerAssigned
-          });
+          
+          return {
+             id: matchingService ? String(matchingService.id) : "",
+             name: s.service,
+             price: String(s.rate),
+             freq: freqStr
+          };
+        }) : [];
+
+        // NetSuite API 1900 MUST ALWAYS be called during signup, irrespective of whether services were selected
+        nsResponse = await submitServiceQuote({
+           operation: 'signCustomer',
+           customerId: (lead as any).internalid || lead.entityId || "",
+           contactId: values.serviceCommencementContactId || "",
+           salesRecordId: lead.salesRecordInternalId || "",
+           salesRepId: salesRepId,
+           services: mappedServices,
+           commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : format(new Date(), 'dd/MM/yyyy'),
+           accountManagerName: lead.accountManagerAssigned,
+           createShipMateAccount: values.shipmateAccess || undefined
+        });
+        
+        if (!nsResponse.success) throw new Error(nsResponse.message);
+        
+        // Also call initiateSignup for shipmate/localmile if requested
+        if (values.shipmateAccess || values.localmileAccess) {
+           await initiateSignup({
+             leadId: lead.id,
+             services: [], // Services already handled via submitServiceQuote above
+             startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+             shipmateAccess: values.shipmateAccess,
+             localmileAccess: values.localmileAccess,
+             accountManagerName: lead.accountManagerAssigned
+           });
         }
         newStatus = 'Won';
         successDescription = 'The new customer has been signed up.';

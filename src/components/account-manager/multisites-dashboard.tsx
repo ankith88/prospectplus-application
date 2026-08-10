@@ -16,13 +16,14 @@ import {
   ExternalLink, ChevronRight, ChevronDown, CheckCircle2, 
   Mail, FileText, RefreshCw, User, Store,
   ShieldCheck, Sparkles, Link2, Calendar, ListTodo, CheckSquare, Plus,
-  AlertCircle
+  AlertCircle, UserX, Square
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getAllFranchisees, updateTaskCompletion, logActivity } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MULTISITE_ACCOUNT_MANAGER_UID } from '@/lib/constants';
 import Link from 'next/link';
@@ -32,6 +33,9 @@ import { LeadNotesDialog } from './lead-notes-dialog';
 import { EnterMultiSiteLeadDialog } from '@/components/enter-multisite-lead-dialog';
 import { convertParentLeadToSignedCustomer } from '@/services/parent-lead-conversion';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
+import { LossReasonPicker } from '@/components/loss-reason-picker';
+import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
+import { updateDoc } from 'firebase/firestore';
 import { startOfDay } from 'date-fns';
 
 const AUSTRALIAN_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'];
@@ -104,6 +108,195 @@ export function MultiSitesDashboard() {
 
     // Collapsible states for hierarchy cards
     const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
+
+    // Cancellation themes for LossReasonPicker
+    const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
+
+    // Selection state for child leads per parent (parentId -> array of selected child lead IDs)
+    const [selectedChildIdsByParent, setSelectedChildIdsByParent] = useState<Record<string, string[]>>({});
+
+    // Bulk Mark as Lost dialog state
+    const [bulkLostDialogOpen, setBulkLostDialogOpen] = useState(false);
+    const [bulkLostParent, setBulkLostParent] = useState<Lead | null>(null);
+    const [bulkLostChildLeads, setBulkLostChildLeads] = useState<Lead[]>([]);
+    const [bulkLostSelectedIds, setBulkLostSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkLostThemeId, setBulkLostThemeId] = useState('');
+    const [bulkLostWhyId, setBulkLostWhyId] = useState('');
+    const [bulkLostReasonId, setBulkLostReasonId] = useState('');
+    const [bulkLostNotes, setBulkLostNotes] = useState('');
+    const [isSubmittingBulkLost, setIsSubmittingBulkLost] = useState(false);
+
+    // Fetch cancellation hierarchy for LossReasonPicker
+    useEffect(() => {
+        async function fetchHierarchy() {
+            try {
+                const snap = await getDocs(collection(firestore, 'cancellation_hierarchy'));
+                setCancellationThemes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            } catch (error) {
+                console.error("Failed to fetch cancellation hierarchy", error);
+            }
+        }
+        fetchHierarchy();
+    }, []);
+
+    // Selection helpers for bulk actions
+    const toggleSelectChild = (parentId: string, childId: string) => {
+        setSelectedChildIdsByParent(prev => {
+            const current = prev[parentId] || [];
+            const updated = current.includes(childId)
+                ? current.filter(id => id !== childId)
+                : [...current, childId];
+            return { ...prev, [parentId]: updated };
+        });
+    };
+
+    const toggleSelectAllChildren = (parentId: string, allChildIds: string[]) => {
+        setSelectedChildIdsByParent(prev => {
+            const current = prev[parentId] || [];
+            const isAllSelected = allChildIds.length > 0 && allChildIds.every(id => current.includes(id));
+            return { ...prev, [parentId]: isAllSelected ? [] : [...allChildIds] };
+        });
+    };
+
+    const openBulkLostDialog = (parent: Lead | null, availableChildren: Lead[], preselectedChildIds?: string[]) => {
+        if (!parent && availableChildren.length === 0) return;
+
+        const childIdsToSelect = (preselectedChildIds && preselectedChildIds.length > 0)
+            ? preselectedChildIds
+            : availableChildren.map(c => c.id);
+
+        const initialSet = new Set<string>(childIdsToSelect);
+        if (parent && parent.customerStatus !== 'Lost' && parent.status !== 'Lost' && parent.customerStatus !== 'Lost Customer') {
+            initialSet.add(parent.id);
+        }
+
+        setBulkLostParent(parent);
+        setBulkLostChildLeads(availableChildren);
+        setBulkLostSelectedIds(initialSet);
+        setBulkLostThemeId('');
+        setBulkLostWhyId('');
+        setBulkLostReasonId('');
+        setBulkLostNotes('');
+        setBulkLostDialogOpen(true);
+    };
+
+    const handleExecuteBulkMarkAsLost = async () => {
+        if (bulkLostSelectedIds.size === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'No Leads Selected',
+                description: 'Please select at least one lead or site to mark as lost.'
+            });
+            return;
+        }
+
+        if (!bulkLostNotes.trim()) {
+            toast({
+                variant: 'destructive',
+                title: 'Notes Required',
+                description: 'Please enter notes explaining why these leads are being marked as lost.'
+            });
+            return;
+        }
+
+        setIsSubmittingBulkLost(true);
+
+        try {
+            let themeName = 'Unspecified';
+            let whyName = 'Unspecified';
+            let reasonName = 'Unspecified / Other';
+
+            if (bulkLostThemeId) {
+                const themeObj = cancellationThemes.find(t => t.id === bulkLostThemeId);
+                if (themeObj) {
+                    themeName = themeObj.name || 'Unspecified';
+                    const whyObj = themeObj.whys?.find((w: any) => w.id === bulkLostWhyId);
+                    if (whyObj) {
+                        whyName = whyObj.name || 'Unspecified';
+                        const reasonObj = whyObj.reasons?.find((r: any) => r.id === bulkLostReasonId);
+                        if (reasonObj) {
+                            reasonName = reasonObj.name || 'Unspecified';
+                        }
+                    }
+                }
+            }
+
+            const staffName = userProfile?.displayName || userProfile?.email || 'Staff';
+            const targetIds = Array.from(bulkLostSelectedIds);
+
+            for (const targetId of targetIds) {
+                const leadRef = doc(firestore, 'leads', targetId);
+                const compRef = doc(firestore, 'companies', targetId);
+
+                const [leadSnap, compSnap] = await Promise.all([
+                    getDoc(leadRef),
+                    getDoc(compRef)
+                ]);
+
+                const isCompany = compSnap.exists();
+                const lostStatus = isCompany ? 'Lost Customer' : 'Lost';
+
+                const updateFields: any = {
+                    customerStatus: lostStatus,
+                    status: lostStatus,
+                    statusReason: reasonName,
+                    cancellationReason: reasonName,
+                    cancellationReasonId: bulkLostReasonId || '',
+                    cancellationTheme: themeName,
+                    cancellationThemeId: bulkLostThemeId || '',
+                    cancellationCategory: whyName,
+                    cancellationWhyId: bulkLostWhyId || '',
+                    cancellationDate: new Date().toISOString().split('T')[0],
+                    lossNotes: bulkLostNotes.trim(),
+                    updatedAt: new Date().toISOString()
+                };
+
+                if (leadSnap.exists()) {
+                    await updateDoc(leadRef, updateFields);
+                    await logActivity(targetId, {
+                        type: 'Update',
+                        notes: `Bulk marked as Lost under parent "${bulkLostParent?.companyName || 'MultiSite'}". Theme: ${themeName}, Category: ${whyName}, Reason: ${reasonName}. Notes: ${bulkLostNotes.trim()}`,
+                        author: staffName
+                    }, 'leads');
+                }
+
+                if (compSnap.exists()) {
+                    await updateDoc(compRef, updateFields);
+                    await logActivity(targetId, {
+                        type: 'Update',
+                        notes: `Bulk marked as Lost under parent "${bulkLostParent?.companyName || 'MultiSite'}". Theme: ${themeName}, Category: ${whyName}, Reason: ${reasonName}. Notes: ${bulkLostNotes.trim()}`,
+                        author: staffName
+                    }, 'companies');
+                }
+
+                const leadData = leadSnap.exists() ? leadSnap.data() : compSnap.data();
+                deactivateLocalMileAccessForLead(targetId, leadData?.contacts, isCompany ? 'companies' : 'leads').catch(err => {
+                    console.warn(`[Bulk Lost] Failed LocalMile deactivation for ${targetId}:`, err);
+                });
+            }
+
+            toast({
+                title: 'Leads Marked as Lost',
+                description: `Successfully marked ${targetIds.length} lead(s) under "${bulkLostParent?.companyName || 'Parent'}" as Lost.`
+            });
+
+            if (bulkLostParent) {
+                setSelectedChildIdsByParent(prev => ({ ...prev, [bulkLostParent.id]: [] }));
+            }
+
+            setBulkLostDialogOpen(false);
+            fetchMultiSiteData();
+        } catch (err: any) {
+            console.error("Failed to bulk mark leads as lost:", err);
+            toast({
+                variant: 'destructive',
+                title: 'Bulk Update Failed',
+                description: err.message || 'Failed to update selected leads to Lost status.'
+            });
+        } finally {
+            setIsSubmittingBulkLost(false);
+        }
+    };
 
     useEffect(() => {
         setIsCustom(true);
@@ -732,6 +925,15 @@ export function MultiSitesDashboard() {
                                                 <Plus className="h-3.5 w-3.5 text-emerald-600" /> Add Child Site
                                             </Button>
 
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                onClick={() => openBulkLostDialog(parent, children, selectedChildIdsByParent[parentId])}
+                                                className="h-8 text-xs gap-1 bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold"
+                                            >
+                                                <UserX className="h-3.5 w-3.5 text-amber-700" /> Bulk Mark as Lost
+                                            </Button>
+
                                             <Button variant="outline" size="sm" asChild className="h-8 text-xs gap-1 bg-white">
                                                 <Link href={`/leads/${parent.id}`}>
                                                     <ExternalLink className="h-3.5 w-3.5" /> View Profile
@@ -751,71 +953,120 @@ export function MultiSitesDashboard() {
                                                 No linked child locations matching the current criteria.
                                             </p>
                                         ) : (
-                                            <Table>
-                                                <TableHeader className="bg-slate-50">
-                                                    <TableRow>
-                                                        <TableHead className="text-xs font-semibold">Child Site Name</TableHead>
-                                                        <TableHead className="text-xs font-semibold">Full Address</TableHead>
-                                                        <TableHead className="text-xs font-semibold">Local Contact</TableHead>
-                                                        <TableHead className="text-xs font-semibold">Servicing Franchisee</TableHead>
-                                                        <TableHead className="text-xs font-semibold">Status</TableHead>
-                                                        <TableHead className="text-xs font-semibold text-right">Actions</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {children.map(child => (
-                                                        <TableRow key={child.id} className="hover:bg-slate-50/80">
-                                                            <TableCell className="font-medium text-sm text-slate-800">
-                                                                <div className="flex flex-col">
-                                                                    <div className="flex items-center gap-1.5 font-semibold text-slate-900">
-                                                                        <Store className="h-3.5 w-3.5 text-indigo-500" />
-                                                                        {child.companyName}
-                                                                    </div>
-                                                                    {child.prospectPlusId && (
-                                                                        <span className="text-[10px] text-slate-400 font-mono">ID: {child.prospectPlusId}</span>
-                                                                    )}
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="text-xs text-slate-600 max-w-[280px]">
-                                                                {formatFullAddress(child)}
-                                                            </TableCell>
-                                                            <TableCell className="text-xs text-slate-600">
-                                                                {child.customerServiceEmail || child.customerPhone || child.contacts?.[0]?.name ? (
-                                                                    <div className="flex flex-col">
-                                                                        <span className="font-medium text-slate-800">{child.contacts?.[0]?.name || child.customerServiceEmail || '-'}</span>
-                                                                        <span className="text-[11px] text-slate-400">{child.customerPhone || ''}</span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <span className="text-slate-400 italic">Not set</span>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell className="text-xs text-slate-600">
-                                                                <Badge variant="outline" className="bg-slate-50 border-slate-300">
-                                                                    {(child as any).franchiseeName || child.franchisee || 'MailPlus Pty Ltd'}
-                                                                </Badge>
-                                                            </TableCell>
-                                                            <TableCell className="text-xs">
-                                                                <LeadStatusBadge status={(child.customerStatus || child.status || 'New') as any} />
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                <div className="flex items-center justify-end gap-1.5">
-                                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setActiveLead(child); setNotesDialogOpen(true); }}>
-                                                                        <FileText className="h-3.5 w-3.5 text-slate-600" />
-                                                                    </Button>
-                                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setActiveLead(child); setEmailDialogOpen(true); }}>
-                                                                        <Mail className="h-3.5 w-3.5 text-slate-600" />
-                                                                    </Button>
-                                                                    <Button variant="outline" size="sm" asChild className="h-7 text-[11px] px-2">
-                                                                        <Link href={`/leads/${child.id}`}>
-                                                                            Open
-                                                                        </Link>
-                                                                    </Button>
-                                                                </div>
-                                                            </TableCell>
+                                            <div className="space-y-3">
+                                                {/* Selection Toolbar Bar */}
+                                                {(selectedChildIdsByParent[parentId] || []).length > 0 && (
+                                                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-md flex items-center justify-between gap-2">
+                                                        <span className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
+                                                            <CheckSquare className="h-4 w-4 text-amber-700" />
+                                                            {(selectedChildIdsByParent[parentId] || []).length} of {children.length} child site(s) selected
+                                                        </span>
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => openBulkLostDialog(parent, children, selectedChildIdsByParent[parentId])}
+                                                                className="h-7 text-xs bg-amber-800 text-white hover:bg-amber-900 font-semibold gap-1"
+                                                            >
+                                                                <UserX className="h-3.5 w-3.5" /> Mark {(selectedChildIdsByParent[parentId] || []).length} Selected as Lost
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => toggleSelectAllChildren(parentId, [])}
+                                                                className="h-7 text-xs text-slate-600 hover:bg-amber-100"
+                                                            >
+                                                                Clear Selection
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                <Table>
+                                                    <TableHeader className="bg-slate-50">
+                                                        <TableRow>
+                                                            <TableHead className="w-10 text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={children.length > 0 && children.every(c => (selectedChildIdsByParent[parentId] || []).includes(c.id))}
+                                                                    onChange={() => toggleSelectAllChildren(parentId, children.map(c => c.id))}
+                                                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                                    title="Select all child sites"
+                                                                />
+                                                            </TableHead>
+                                                            <TableHead className="text-xs font-semibold">Child Site Name</TableHead>
+                                                            <TableHead className="text-xs font-semibold">Full Address</TableHead>
+                                                            <TableHead className="text-xs font-semibold">Local Contact</TableHead>
+                                                            <TableHead className="text-xs font-semibold">Servicing Franchisee</TableHead>
+                                                            <TableHead className="text-xs font-semibold">Status</TableHead>
+                                                            <TableHead className="text-xs font-semibold text-right">Actions</TableHead>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {children.map(child => {
+                                                            const isChecked = (selectedChildIdsByParent[parentId] || []).includes(child.id);
+                                                            return (
+                                                                <TableRow key={child.id} className={isChecked ? 'bg-amber-50/50 hover:bg-amber-50/70' : 'hover:bg-slate-50/80'}>
+                                                                    <TableCell className="w-10 text-center">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => toggleSelectChild(parentId, child.id)}
+                                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                                        />
+                                                                    </TableCell>
+                                                                    <TableCell className="font-medium text-sm text-slate-800">
+                                                                        <div className="flex flex-col">
+                                                                            <div className="flex items-center gap-1.5 font-semibold text-slate-900">
+                                                                                <Store className="h-3.5 w-3.5 text-indigo-500" />
+                                                                                {child.companyName}
+                                                                            </div>
+                                                                            {child.prospectPlusId && (
+                                                                                <span className="text-[10px] text-slate-400 font-mono">ID: {child.prospectPlusId}</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs text-slate-600 max-w-[280px]">
+                                                                        {formatFullAddress(child)}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs text-slate-600">
+                                                                        {child.customerServiceEmail || child.customerPhone || child.contacts?.[0]?.name ? (
+                                                                            <div className="flex flex-col">
+                                                                                <span className="font-medium text-slate-800">{child.contacts?.[0]?.name || child.customerServiceEmail || '-'}</span>
+                                                                                <span className="text-[11px] text-slate-400">{child.customerPhone || ''}</span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <span className="text-slate-400 italic">Not set</span>
+                                                                        )}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs text-slate-600">
+                                                                        <Badge variant="outline" className="bg-slate-50 border-slate-300">
+                                                                            {(child as any).franchiseeName || child.franchisee || 'MailPlus Pty Ltd'}
+                                                                        </Badge>
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs">
+                                                                        <LeadStatusBadge status={(child.customerStatus || child.status || 'New') as any} />
+                                                                    </TableCell>
+                                                                    <TableCell className="text-right">
+                                                                        <div className="flex items-center justify-end gap-1.5">
+                                                                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setActiveLead(child); setNotesDialogOpen(true); }}>
+                                                                                <FileText className="h-3.5 w-3.5 text-slate-600" />
+                                                                            </Button>
+                                                                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setActiveLead(child); setEmailDialogOpen(true); }}>
+                                                                                <Mail className="h-3.5 w-3.5 text-slate-600" />
+                                                                            </Button>
+                                                                            <Button variant="outline" size="sm" asChild className="h-7 text-[11px] px-2">
+                                                                                <Link href={`/leads/${child.id}`}>
+                                                                                    Open
+                                                                                </Link>
+                                                                            </Button>
+                                                                        </div>
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            );
+                                                        })}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
                                         )
                                     )}
 
@@ -1552,6 +1803,175 @@ export function MultiSitesDashboard() {
                             {isConvertingParent && <Loader />}
                             <Link2 className="h-4 w-4" /> Link & Convert Parent
                         </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* BULK MARK AS LOST DIALOG */}
+            <Dialog open={bulkLostDialogOpen} onOpenChange={setBulkLostDialogOpen}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-700">
+                            <UserX className="h-5 w-5" /> Bulk Mark MultiSite Leads as Lost
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-500">
+                            Select the leads and site locations under <strong className="text-slate-800">{bulkLostParent?.companyName || 'Parent Account'}</strong> to mark as lost, select the loss reason, and enter required notes.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2 text-xs">
+                        {/* Lead Selection Box */}
+                        <div className="border rounded-md p-3 bg-slate-50 space-y-2">
+                            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                    <CheckSquare className="h-4 w-4 text-red-600" />
+                                    Accounts to Mark as Lost ({bulkLostSelectedIds.size} selected)
+                                </Label>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            const allIds = bulkLostChildLeads.map(c => c.id);
+                                            if (bulkLostParent) allIds.push(bulkLostParent.id);
+                                            setBulkLostSelectedIds(new Set(allIds));
+                                        }}
+                                        className="h-6 text-[11px] px-2 bg-white"
+                                    >
+                                        Select All
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setBulkLostSelectedIds(new Set())}
+                                        className="h-6 text-[11px] px-2 bg-white"
+                                    >
+                                        Deselect All
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Parent Lead Checkbox */}
+                            {bulkLostParent && (
+                                <label className="flex items-center gap-2 p-2 bg-white rounded border border-slate-200 cursor-pointer font-medium hover:bg-slate-100/70">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkLostSelectedIds.has(bulkLostParent.id)}
+                                        onChange={(e) => {
+                                            const next = new Set(bulkLostSelectedIds);
+                                            if (e.target.checked) next.add(bulkLostParent.id);
+                                            else next.delete(bulkLostParent.id);
+                                            setBulkLostSelectedIds(next);
+                                        }}
+                                        className="rounded border-slate-300 text-red-600 focus:ring-red-500"
+                                    />
+                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
+                                        Parent Account
+                                    </Badge>
+                                    <span className="font-bold text-slate-900">{bulkLostParent.companyName}</span>
+                                    <span className="text-slate-400 text-[11px]">({bulkLostParent.customerStatus || bulkLostParent.status || 'Lead'})</span>
+                                </label>
+                            )}
+
+                            {/* Child Leads Checkboxes */}
+                            <div className="max-h-48 overflow-y-auto space-y-1.5 pt-1">
+                                <span className="text-[11px] font-semibold text-slate-500 block px-1">
+                                    Child Site Locations ({bulkLostChildLeads.length}):
+                                </span>
+                                {bulkLostChildLeads.length === 0 ? (
+                                    <p className="text-xs text-slate-400 italic px-1">No child sites found.</p>
+                                ) : (
+                                    bulkLostChildLeads.map(child => {
+                                        const isChecked = bulkLostSelectedIds.has(child.id);
+                                        return (
+                                            <label key={child.id} className="flex items-center gap-2 p-2 bg-white rounded border border-slate-200 cursor-pointer hover:bg-slate-100/70">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={(e) => {
+                                                        const next = new Set(bulkLostSelectedIds);
+                                                        if (e.target.checked) next.add(child.id);
+                                                        else next.delete(child.id);
+                                                        setBulkLostSelectedIds(next);
+                                                    }}
+                                                    className="rounded border-slate-300 text-red-600 focus:ring-red-500"
+                                                />
+                                                <Store className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                                                <span className="font-semibold text-slate-800">{child.companyName}</span>
+                                                <span className="text-slate-400 text-[11px] truncate max-w-[240px]">({formatFullAddress(child)})</span>
+                                                <Badge variant="outline" className="text-[10px] ml-auto shrink-0 bg-slate-50">
+                                                    {child.customerStatus || child.status || 'New'}
+                                                </Badge>
+                                            </label>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Loss Reason Picker */}
+                        <div className="space-y-1.5 border rounded-md p-3 bg-white border-slate-200">
+                            <Label className="text-xs font-bold text-slate-800 block mb-1">
+                                Reason for Loss / Cancellation <span className="text-red-500">*</span>
+                            </Label>
+                            <LossReasonPicker
+                                cancellationThemes={cancellationThemes}
+                                selectedThemeId={bulkLostThemeId}
+                                selectedWhyId={bulkLostWhyId}
+                                selectedReasonId={bulkLostReasonId}
+                                onSelect={(themeId, whyId, reasonId) => {
+                                    setBulkLostThemeId(themeId);
+                                    setBulkLostWhyId(whyId);
+                                    setBulkLostReasonId(reasonId);
+                                }}
+                            />
+                        </div>
+
+                        {/* Notes Input */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-800">
+                                Detailed Notes & Rationale <span className="text-red-500">*</span>
+                            </Label>
+                            <Textarea
+                                placeholder="Enter detailed notes explaining why these multi-site leads are being marked as lost..."
+                                value={bulkLostNotes}
+                                onChange={(e) => setBulkLostNotes(e.target.value)}
+                                rows={3}
+                                className="bg-white text-xs"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+                        <span className="text-xs text-slate-500 font-medium">
+                            <strong className="text-red-700 font-bold">{bulkLostSelectedIds.size}</strong> account(s) will be updated to status <strong className="text-red-700 font-bold">Lost</strong>.
+                        </span>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setBulkLostDialogOpen(false)}
+                                disabled={isSubmittingBulkLost}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                size="sm"
+                                onClick={handleExecuteBulkMarkAsLost}
+                                disabled={isSubmittingBulkLost || bulkLostSelectedIds.size === 0 || !bulkLostNotes.trim()}
+                                className="bg-red-600 hover:bg-red-700 text-white font-semibold gap-1.5"
+                            >
+                                {isSubmittingBulkLost ? (
+                                    <>
+                                        <Loader className="h-4 w-4 animate-spin" /> Updating Leads...
+                                    </>
+                                ) : (
+                                    <>
+                                        <UserX className="h-4 w-4" /> Mark {bulkLostSelectedIds.size} Lead(s) as Lost
+                                    </>
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>
