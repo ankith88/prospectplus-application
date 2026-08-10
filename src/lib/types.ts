@@ -1009,14 +1009,52 @@ export interface BrandProfile {
   };
 }
 
+export const RETENTION_STRATEGIES = [
+  'Keep Existing Services & Pricing',
+  'Change Frequency & Update Price',
+  'Keep Frequency & Update Price',
+  'Remove Specific Service Item',
+  'One-Off Credit or Goodwill Gesture',
+  'MailPlus Absorbing a Cost',
+] as const;
+
+export type RetentionStrategy = typeof RETENTION_STRATEGIES[number];
+
+export function normalizeRetentionStrategy(strategy?: string): string {
+  if (!strategy) return 'Keep Existing Services & Pricing';
+  
+  switch (strategy) {
+    case 'Keep Existing':
+    case 'Keep Existing Services & Pricing':
+      return 'Keep Existing Services & Pricing';
+    case 'Change Frequency & Price':
+    case 'Change Frequency & Update Price':
+      return 'Change Frequency & Update Price';
+    case 'Keep Frequency Update Price':
+    case 'Keep Frequency & Update Price':
+      return 'Keep Frequency & Update Price';
+    case 'Remove Service':
+    case 'Remove Specific Service Item':
+      return 'Remove Specific Service Item';
+    case 'One-Off Credit or Goodwill Gesture':
+      return 'One-Off Credit or Goodwill Gesture';
+    case 'MailPlus Absorbing a Cost':
+      return 'MailPlus Absorbing a Cost';
+    default:
+      return strategy;
+  }
+}
+
 export interface CancellationRequest {
   id: string;
   leadId: string;
+  prospectPlusId?: string;
+  netsuiteId?: string;
   companyName: string;
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
-  requestedDate: string; // ISO String (date of request submission)
+  requestedDate: string; // ISO String
   cancellationDate: string; // ISO String (requested stop date)
   trueServiceCancellationDate: string; // ISO String (actual date services stop)
   cancellationReason: string; // 'Price' | 'Competitor' | 'Service Quality' | 'No Longer Needed' | 'Business Closed' | 'Other'
@@ -1025,7 +1063,7 @@ export interface CancellationRequest {
   cancellationWhyId?: string;
   cancellationReasonId?: string;
   status: 'Pending' | 'Saved' | 'Cancelled';
-  saveStrategy?: 'Keep Existing' | 'Change Frequency & Price' | 'Keep Frequency Update Price' | 'Remove Service';
+  saveStrategy?: RetentionStrategy | string;
   originalServices: ServiceSelection[];
   updatedServices?: ServiceSelection[];
   notes?: string;

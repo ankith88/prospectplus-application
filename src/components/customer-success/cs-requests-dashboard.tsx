@@ -9,7 +9,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { LossReasonPicker } from '@/components/loss-reason-picker';
 import { getMergedCancellationHierarchy } from '@/lib/cancellation-reasons-mapper';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
-import { Lead, CSRequest, ServiceSelection } from '@/lib/types';
+import { Lead, CSRequest, ServiceSelection, RETENTION_STRATEGIES, RetentionStrategy } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -69,7 +69,7 @@ export default function CSRequestsDashboard() {
   const [serviceChangeNotes, setServiceChangeNotes] = useState('');
 
   // Processing States for Cancellation
-  const [cancelSaveStrategy, setCancelSaveStrategy] = useState<'Keep Existing' | 'Change Frequency & Price' | 'Keep Frequency Update Price' | 'Remove Service'>('Keep Existing');
+  const [cancelSaveStrategy, setCancelSaveStrategy] = useState<RetentionStrategy>('Keep Existing Services & Pricing');
   const [cancelReason, setCancelReason] = useState('Other');
   const [trueCancellationDate, setTrueCancellationDate] = useState('');
   const [processMode, setProcessMode] = useState<'save' | 'cancel'>('save');
@@ -115,7 +115,7 @@ export default function CSRequestsDashboard() {
 
       await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
         status: 'Saved',
-        saveStrategy: cancelSaveStrategy !== 'Keep Existing' ? cancelSaveStrategy : 'Resell / Quote Sent',
+        saveStrategy: cancelSaveStrategy,
         notes: cancelNotes ? `Resell / Quote issued. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}` : 'Resell / Quote issued to customer',
         attachments: proofAttachments,
         processedBy: userDisplayName,
@@ -125,7 +125,7 @@ export default function CSRequestsDashboard() {
       try {
         await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), {
           status: 'Saved',
-          saveStrategy: cancelSaveStrategy !== 'Keep Existing' ? cancelSaveStrategy : 'Resell / Quote Sent',
+          saveStrategy: cancelSaveStrategy,
           notes: cancelNotes ? `Resell / Quote issued. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}` : 'Resell / Quote issued to customer',
           attachments: proofAttachments,
           processedBy: userDisplayName,
@@ -336,7 +336,7 @@ export default function CSRequestsDashboard() {
     setEditServices(JSON.parse(JSON.stringify(req.requestedServices || req.originalServices || [])));
     setServiceChangeNotes(req.notes || '');
 
-    setCancelSaveStrategy('Keep Existing');
+    setCancelSaveStrategy('Keep Existing Services & Pricing');
     setCancelReason(req.cancellationReason || 'Other');
     setTrueCancellationDate(req.cancellationDate?.substring(0, 10) || new Date().toISOString().substring(0, 10));
     setCancelNotes(req.notes || '');
@@ -535,7 +535,7 @@ export default function CSRequestsDashboard() {
       const processedAt = new Date().toISOString();
 
       if (processMode === 'save') {
-        if (cancelSaveStrategy !== 'Keep Existing') {
+        if (['Change Frequency & Update Price', 'Keep Frequency & Update Price', 'Remove Specific Service Item'].includes(cancelSaveStrategy)) {
           // If strategy involves service/rate changes, route user to Resell quote process
           setSubmitting(false);
           await handleOpenResellDialog();
@@ -1221,48 +1221,49 @@ export default function CSRequestsDashboard() {
                     </button>
                   </div>
 
-                  {processMode === 'save' ? (
-                    <div className="space-y-3 p-4 rounded-xl bg-emerald-50/50 border border-emerald-200">
-                      <div>
-                        <Label className="text-xs font-semibold text-slate-700 mb-1 block">Retention Strategy</Label>
-                        <Select 
-                          value={cancelSaveStrategy} 
-                          onValueChange={(val: any) => setCancelSaveStrategy(val)}
-                        >
-                          <SelectTrigger className="h-9 text-xs bg-white">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Keep Existing">Keep Existing Services & Pricing</SelectItem>
-                            <SelectItem value="Change Frequency & Price">Change Frequency & Update Price</SelectItem>
-                            <SelectItem value="Keep Frequency Update Price">Keep Frequency & Update Price</SelectItem>
-                            <SelectItem value="Remove Service">Remove Specific Service Item</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {cancelSaveStrategy !== 'Keep Existing' && (
-                        <div className="p-3.5 rounded-xl bg-emerald-100/80 border border-emerald-300 space-y-2.5 shadow-2xs">
-                          <div className="flex items-start gap-2">
-                            <Sparkles className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                            <div>
-                              <h5 className="text-xs font-bold text-emerald-900">Resell Quote Process Required</h5>
-                              <p className="text-[11.5px] text-emerald-800 leading-snug mt-0.5">
-                                Modifying services or rates requires launching the official Resell workflow to issue an updated quote & commencement agreement for customer sign-off.
-                              </p>
-                            </div>
+                      {processMode === 'save' ? (
+                        <div className="space-y-3 p-4 rounded-xl bg-emerald-50/50 border border-emerald-200">
+                          <div>
+                            <Label className="text-xs font-semibold text-slate-700 mb-1 block">Retention Strategy</Label>
+                            <Select 
+                              value={cancelSaveStrategy} 
+                              onValueChange={(val: any) => setCancelSaveStrategy(val)}
+                            >
+                              <SelectTrigger className="h-9 text-xs bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {RETENTION_STRATEGIES.map((strat) => (
+                                  <SelectItem key={strat} value={strat}>
+                                    {strat}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
-                          <Button
-                            type="button"
-                            onClick={handleOpenResellDialog}
-                            disabled={loadingResellLead}
-                            className="w-full h-8 text-xs bg-[#095c7b] hover:bg-[#07475f] text-white font-bold flex items-center justify-center gap-1.5 rounded-lg shadow-2xs"
-                          >
-                            {loadingResellLead ? <Loader className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
-                            Modify Services & Send Resell Quote
-                          </Button>
-                        </div>
-                      )}
+
+                          {['Change Frequency & Update Price', 'Keep Frequency & Update Price', 'Remove Specific Service Item'].includes(cancelSaveStrategy) && (
+                            <div className="p-3.5 rounded-xl bg-emerald-100/80 border border-emerald-300 space-y-2.5 shadow-2xs">
+                              <div className="flex items-start gap-2">
+                                <Sparkles className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                                <div>
+                                  <h5 className="text-xs font-bold text-emerald-900">Resell Quote Process Required</h5>
+                                  <p className="text-[11.5px] text-emerald-800 leading-snug mt-0.5">
+                                    Modifying services or rates requires launching the official Resell workflow to issue an updated quote & commencement agreement for customer sign-off.
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                onClick={handleOpenResellDialog}
+                                disabled={loadingResellLead}
+                                className="w-full h-8 text-xs bg-[#095c7b] hover:bg-[#07475f] text-white font-bold flex items-center justify-center gap-1.5 rounded-lg shadow-2xs"
+                              >
+                                {loadingResellLead ? <Loader className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
+                                Modify Services & Send Resell Quote
+                              </Button>
+                            </div>
+                          )}
 
                       <div>
                         <Label className="text-xs font-semibold text-slate-700 mb-1 block">Retention Notes</Label>
@@ -1424,7 +1425,7 @@ export default function CSRequestsDashboard() {
                   {submitting ? (
                     <Loader />
                   ) : processMode === 'save' ? (
-                    cancelSaveStrategy === 'Keep Existing' ? 'Save Customer' : 'Save & Launch Resell Quote'
+                    ['Keep Existing Services & Pricing', 'One-Off Credit or Goodwill Gesture', 'MailPlus Absorbing a Cost'].includes(cancelSaveStrategy) ? 'Save Customer' : 'Save & Launch Resell Quote'
                   ) : (
                     'Confirm Cancellation'
                   )}

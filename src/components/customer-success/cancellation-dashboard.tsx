@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { collection, query, getDocs, updateDoc, doc, addDoc, limit, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
-import { Lead, CancellationRequest, ServiceSelection } from '@/lib/types';
+import { Lead, CancellationRequest, ServiceSelection, RETENTION_STRATEGIES, RetentionStrategy } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,7 +54,7 @@ export default function CancellationDashboard() {
   const [processMode, setProcessMode] = useState<'save' | 'cancel'>('save');
 
   // Save Strategy Form States
-  const [saveStrategy, setSaveStrategy] = useState<'Keep Existing' | 'Change Frequency & Price' | 'Keep Frequency Update Price' | 'Remove Service'>('Keep Existing');
+  const [saveStrategy, setSaveStrategy] = useState<RetentionStrategy>('Keep Existing Services & Pricing');
   const [editServices, setEditServices] = useState<ServiceSelection[]>([]);
   const [saveNotes, setSaveNotes] = useState('');
 
@@ -101,7 +101,7 @@ export default function CancellationDashboard() {
 
       await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), {
         status: 'Saved',
-        saveStrategy: 'Resell / Quote Sent',
+        saveStrategy: saveStrategy || 'Change Frequency & Update Price',
         notes: saveNotes ? `Resell / Quote issued. Notes: ${saveNotes}` : 'Resell / Quote issued to customer',
         processedBy: userDisplayName,
         processedAt
@@ -169,7 +169,7 @@ export default function CancellationDashboard() {
     setSelectedRequest(req);
     // Initialize services editing from request original services or lead's current services
     setEditServices(JSON.parse(JSON.stringify(req.originalServices || [])));
-    setSaveStrategy('Keep Existing');
+    setSaveStrategy('Keep Existing Services & Pricing');
     setProcessMode('save');
     setCancelReason(req.cancellationReason || 'Price too high');
     setSelectedThemeId(req.cancellationThemeId || '');
@@ -258,7 +258,7 @@ export default function CancellationDashboard() {
 
       // 1. Calculate updated services based on strategy
       let finalServices = [...editServices];
-      if (saveStrategy === 'Keep Existing') {
+      if (saveStrategy === 'Keep Existing Services & Pricing') {
         finalServices = [...(selectedRequest.originalServices || [])];
       }
 
@@ -915,7 +915,7 @@ export default function CancellationDashboard() {
               <div className="space-y-4 pt-3 border-t border-slate-200/80">
                 <div className="space-y-2">
                   <Label htmlFor="saveStrategy" className="font-bold text-slate-700 text-xs uppercase tracking-wider">
-                    Or Save with Existing Terms
+                    Retention Strategy
                   </Label>
                   <Select 
                     value={saveStrategy} 
@@ -925,7 +925,11 @@ export default function CancellationDashboard() {
                       <SelectValue placeholder="Select strategy..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Keep Existing">Keep Existing Services (No change)</SelectItem>
+                      {RETENTION_STRATEGIES.map((strat) => (
+                        <SelectItem key={strat} value={strat}>
+                          {strat}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

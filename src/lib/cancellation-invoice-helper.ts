@@ -1,5 +1,5 @@
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, query, where, orderBy, limit } from 'firebase/firestore';
 import { Invoice } from '@/lib/types';
 import { parseISO, format, isValid } from 'date-fns';
 
@@ -8,27 +8,109 @@ export interface InvoiceAvgResult {
   monthsFound: number;
   invoicesCount: number;
   recentInvoices: Invoice[];
+  isSignedCustomer: boolean;
 }
 
 /**
- * Fetches invoices for a given company or lead ID from Firestore
+ * Resolves all candidate Firestore company/lead document IDs given an array of candidate IDs
+ * (e.g. leadId, companyId, netsuiteId, prospectPlusId).
+ */
+async function resolveFirestoreDocIds(candidateIds: string[]): Promise<string[]> {
+  const resolved = new Set<string>();
+
+  for (const rawId of candidateIds) {
+    if (!rawId || typeof rawId !== 'string') continue;
+    const cleanId = rawId.trim();
+    if (!cleanId) continue;
+
+    // 1. Direct document check in companies & leads
+    try {
+      const compSnap = await getDoc(doc(firestore, 'companies', cleanId));
+      if (compSnap.exists()) {
+        resolved.add(compSnap.id);
+      }
+    } catch {}
+
+    try {
+      const leadSnap = await getDoc(doc(firestore, 'leads', cleanId));
+      if (leadSnap.exists()) {
+        resolved.add(leadSnap.id);
+      }
+    } catch {}
+
+    // 2. Query companies collection by netsuiteId, internalid (string or number), prospectPlusId
+    const searchKeys = ['netsuiteId', 'internalid', 'internalId', 'prospectPlusId', 'customerEntityId'];
+    
+    for (const key of searchKeys) {
+      try {
+        const qComp = query(collection(firestore, 'companies'), where(key, '==', cleanId), limit(1));
+        const qSnap = await getDocs(qComp);
+        if (!qSnap.empty) {
+          resolved.add(qSnap.docs[0].id);
+        }
+      } catch {}
+
+      if (!isNaN(Number(cleanId))) {
+        try {
+          const qCompNum = query(collection(firestore, 'companies'), where(key, '==', Number(cleanId)), limit(1));
+          const qSnapNum = await getDocs(qCompNum);
+          if (!qSnapNum.empty) {
+            resolved.add(qSnapNum.docs[0].id);
+          }
+        } catch {}
+      }
+    }
+
+    // 3. Query leads collection by netsuiteId, internalid
+    for (const key of ['netsuiteId', 'internalid', 'internalId']) {
+      try {
+        const qLead = query(collection(firestore, 'leads'), where(key, '==', cleanId), limit(1));
+        const qSnap = await getDocs(qLead);
+        if (!qSnap.empty) {
+          resolved.add(qSnap.docs[0].id);
+        }
+      } catch {}
+
+      if (!isNaN(Number(cleanId))) {
+        try {
+          const qLeadNum = query(collection(firestore, 'leads'), where(key, '==', Number(cleanId)), limit(1));
+          const qSnapNum = await getDocs(qLeadNum);
+          if (!qSnapNum.empty) {
+            resolved.add(qSnapNum.docs[0].id);
+          }
+        } catch {}
+      }
+    }
+  }
+
+  return Array.from(resolved);
+}
+
+/**
+ * Fetches invoices for a given customer from Firestore across all resolved company/lead document IDs,
  * and calculates the average monthly invoice value over the last 3 available billing months.
  *
- * If no invoices exist in Firestore, returns avgMonthlyInvoice = 0 (no fallback to contract rate).
+ * If no invoices exist in Firestore, returns avgMonthlyInvoice = 0.
  */
 export async function fetch3MonthAvgInvoiceMRR(
   companyId?: string,
-  leadId?: string
+  leadId?: string,
+  netsuiteId?: string,
+  prospectPlusId?: string
 ): Promise<InvoiceAvgResult> {
-  const idsToTry = Array.from(new Set([companyId, leadId].filter(Boolean) as string[]));
+  const candidateIds = Array.from(new Set([companyId, leadId, netsuiteId, prospectPlusId].filter(Boolean) as string[]));
   
-  if (idsToTry.length === 0) {
-    return { avgMonthlyInvoice: 0, monthsFound: 0, invoicesCount: 0, recentInvoices: [] };
+  if (candidateIds.length === 0) {
+    return { avgMonthlyInvoice: 0, monthsFound: 0, invoicesCount: 0, recentInvoices: [], isSignedCustomer: false };
   }
 
-  let rawInvoices: Invoice[] = [];
+  const docIdsToQuery = await resolveFirestoreDocIds(candidateIds);
+  const targetIds = docIdsToQuery.length > 0 ? docIdsToQuery : candidateIds;
 
-  for (const id of idsToTry) {
+  let rawInvoices: Invoice[] = [];
+  let isSignedCustomer = docIdsToQuery.length > 0;
+
+  for (const id of targetIds) {
     try {
       // 1. Try companies/{id}/invoices
       const compInvoicesRef = collection(firestore, 'companies', id, 'invoices');
@@ -40,24 +122,20 @@ export async function fetch3MonthAvgInvoiceMRR(
       }
 
       // 2. Try leads/{id}/invoices if needed
-      if (rawInvoices.length === 0) {
-        const leadInvoicesRef = collection(firestore, 'leads', id, 'invoices');
-        const leadSnap = await getDocs(leadInvoicesRef);
-        if (!leadSnap.empty) {
-          leadSnap.forEach(d => {
-            rawInvoices.push({ id: d.id, ...d.data() } as Invoice);
-          });
-        }
+      const leadInvoicesRef = collection(firestore, 'leads', id, 'invoices');
+      const leadSnap = await getDocs(leadInvoicesRef);
+      if (!leadSnap.empty) {
+        leadSnap.forEach(d => {
+          rawInvoices.push({ id: d.id, ...d.data() } as Invoice);
+        });
       }
-
-      if (rawInvoices.length > 0) break;
     } catch (e) {
       console.error(`Error fetching invoices for ID ${id}:`, e);
     }
   }
 
   if (rawInvoices.length === 0) {
-    return { avgMonthlyInvoice: 0, monthsFound: 0, invoicesCount: 0, recentInvoices: [] };
+    return { avgMonthlyInvoice: 0, monthsFound: 0, invoicesCount: 0, recentInvoices: [], isSignedCustomer };
   }
 
   // Deduplicate invoices by document ID or invoiceDocumentID/invoiceInternalID
@@ -91,7 +169,7 @@ export async function fetch3MonthAvgInvoiceMRR(
   });
 
   if (monthlyTotals.size === 0) {
-    return { avgMonthlyInvoice: 0, monthsFound: 0, invoicesCount: uniqueInvoices.length, recentInvoices: uniqueInvoices };
+    return { avgMonthlyInvoice: 0, monthsFound: 0, invoicesCount: uniqueInvoices.length, recentInvoices: uniqueInvoices, isSignedCustomer: true };
   }
 
   // Sort available months descending (newest month first) and take the top 3
@@ -109,6 +187,7 @@ export async function fetch3MonthAvgInvoiceMRR(
     avgMonthlyInvoice,
     monthsFound,
     invoicesCount: uniqueInvoices.length,
-    recentInvoices: uniqueInvoices
+    recentInvoices: uniqueInvoices,
+    isSignedCustomer: true
   };
 }

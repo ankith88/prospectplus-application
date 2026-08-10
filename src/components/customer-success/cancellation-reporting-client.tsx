@@ -6,7 +6,7 @@ import { usePermissions } from '@/hooks/use-permissions';
 import { AccessDenied } from '@/components/access-denied';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { CancellationRequest, ServiceSelection } from '@/lib/types';
+import { CancellationRequest, ServiceSelection, normalizeRetentionStrategy, RETENTION_STRATEGIES } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +47,8 @@ import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, Cart
 import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 
+import { fetch3MonthAvgInvoiceMRR } from '@/lib/cancellation-invoice-helper';
+
 const CHART_COLORS = ['#095c7b', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#a78bfa', '#e11d48', '#059669', '#d97706', '#6366f1'];
 
 export const calculateMRR = (services: ServiceSelection[]) => {
@@ -67,6 +69,29 @@ export const calculateMRR = (services: ServiceSelection[]) => {
     }
   }
   return mrr;
+};
+
+export const getLostMRR = (r: CancellationRequest): number => {
+  if (r.avg3MonthInvoiceMRR !== undefined && r.avg3MonthInvoiceMRR !== null && r.avg3MonthInvoiceMRR > 0) {
+    return r.avg3MonthInvoiceMRR;
+  }
+  if (r.originalMRR !== undefined && r.originalMRR !== null && r.originalMRR > 0) {
+    return r.originalMRR;
+  }
+  if (r.isSignedCustomer) {
+    return r.avg3MonthInvoiceMRR ?? 0;
+  }
+  return calculateMRR(r.originalServices);
+};
+
+export const getSavedMRR = (r: CancellationRequest): number => {
+  if (r.savedMRR !== undefined && r.savedMRR !== null && r.savedMRR > 0) {
+    return r.savedMRR;
+  }
+  if (r.newInvoiceMRR !== undefined && r.newInvoiceMRR !== null && r.newInvoiceMRR > 0) {
+    return r.newInvoiceMRR;
+  }
+  return calculateMRR(r.updatedServices && r.updatedServices.length > 0 ? r.updatedServices : r.originalServices);
 };
 
 export default function CancellationReportingClient() {
@@ -167,7 +192,7 @@ export default function CancellationReportingClient() {
         `"${r.status}"`,
         `"${isSigned ? 'Yes' : 'No'}"`,
         avg3Month.toFixed(2),
-        `"${r.saveStrategy || ''}"`,
+        `"${normalizeRetentionStrategy(r.saveStrategy) || ''}"`,
         `"${(r.cancellationTheme || '').replace(/"/g, '""')}"`,
         `"${(r.cancellationReason || '').replace(/"/g, '""')}"`,
         `"${r.requestedDate || ''}"`,
@@ -279,11 +304,59 @@ export default function CancellationReportingClient() {
       });
 
       setRequests(mergedList);
+      enrichRequestsWithInvoices(mergedList);
     } catch (e) {
       console.error("Error fetching cancellation requests for reporting:", e);
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const enrichRequestsWithInvoices = async (list: CancellationRequest[]) => {
+    const uncalculated = list.filter(r => 
+      r.avg3MonthInvoiceMRR === undefined || 
+      (r.status === 'Cancelled' && (!r.originalMRR || r.originalMRR === 0))
+    );
+
+    if (uncalculated.length === 0) return;
+
+    const BATCH_SIZE = 8;
+    const enrichedMap = new Map<string, Partial<CancellationRequest>>();
+
+    for (let i = 0; i < uncalculated.length; i += BATCH_SIZE) {
+      const batch = uncalculated.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map(async req => {
+          try {
+            const res = await fetch3MonthAvgInvoiceMRR(
+              req.leadId,
+              req.leadId,
+              req.netsuiteId,
+              req.prospectPlusId
+            );
+
+            if (res.isSignedCustomer || res.invoicesCount > 0) {
+              enrichedMap.set(req.id, {
+                isSignedCustomer: true,
+                avg3MonthInvoiceMRR: res.avgMonthlyInvoice,
+                ...(req.status === 'Cancelled' && (!req.originalMRR || req.originalMRR === 0)
+                  ? { originalMRR: res.avgMonthlyInvoice }
+                  : {})
+              });
+            }
+          } catch (e) {
+            console.error("Error fetching invoice avg for request:", req.id, e);
+          }
+        })
+      );
+    }
+
+    if (enrichedMap.size > 0) {
+      setRequests(prev => prev.map(r => {
+        const updates = enrichedMap.get(r.id);
+        return updates ? { ...r, ...updates } : r;
+      }));
     }
   };
 
@@ -331,7 +404,7 @@ export default function CancellationReportingClient() {
       }
 
       // Strategy filter
-      if (strategyFilter !== 'all' && req.saveStrategy !== strategyFilter) {
+      if (strategyFilter !== 'all' && normalizeRetentionStrategy(req.saveStrategy) !== strategyFilter) {
         return false;
       }
 
@@ -448,7 +521,7 @@ export default function CancellationReportingClient() {
     // Retention Strategy Breakdown
     const strategyMap: Record<string, { count: number; mrrSaved: number }> = {};
     savedRequests.forEach(r => {
-      const strategy = r.saveStrategy || 'Keep Existing';
+      const strategy = normalizeRetentionStrategy(r.saveStrategy);
       if (!strategyMap[strategy]) strategyMap[strategy] = { count: 0, mrrSaved: 0 };
       strategyMap[strategy].count += 1;
       strategyMap[strategy].mrrSaved += getSavedMRR(r);
@@ -488,7 +561,7 @@ export default function CancellationReportingClient() {
 
     // List of unique themes & strategies for filters
     const availableThemes = Array.from(new Set(requests.map(r => r.cancellationTheme).filter(Boolean)));
-    const availableStrategies = Array.from(new Set(requests.map(r => r.saveStrategy).filter(Boolean)));
+    const availableStrategies = Array.from(new Set(requests.map(r => r.saveStrategy ? normalizeRetentionStrategy(r.saveStrategy) : null).filter((s): s is string => Boolean(s))));
 
     return {
       totalRequests,
@@ -556,7 +629,7 @@ export default function CancellationReportingClient() {
         `"${r.status}"`,
         `"${isSigned ? 'Yes' : 'No'}"`,
         avg3Month.toFixed(2),
-        `"${r.saveStrategy || ''}"`,
+        `"${normalizeRetentionStrategy(r.saveStrategy) || ''}"`,
         `"${(r.cancellationTheme || '').replace(/"/g, '""')}"`,
         // @ts-ignore
         `"${(r.cancellationCategory || r.cancellationWhy || '').replace(/"/g, '""')}"`,
@@ -1160,7 +1233,7 @@ export default function CancellationReportingClient() {
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-medium">
-                              {req.saveStrategy || 'Keep Existing'}
+                              {normalizeRetentionStrategy(req.saveStrategy)}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right font-bold text-emerald-600">
@@ -1217,7 +1290,7 @@ export default function CancellationReportingClient() {
                   </TableHeader>
                   <TableBody>
                     {metrics.cancelledRequests.map(req => {
-                      const mrrLost = req.originalMRR ?? calculateMRR(req.originalServices);
+                      const mrrLost = getLostMRR(req);
                       return (
                         <TableRow key={req.id}>
                           <TableCell className="font-semibold text-slate-800">
@@ -1327,7 +1400,7 @@ export default function CancellationReportingClient() {
                           </TableCell>
                           <TableCell className="text-xs text-slate-600">
                             {req.status === 'Saved' ? (
-                              <span className="text-emerald-700 font-medium">{req.saveStrategy || 'Saved'}</span>
+                              <span className="text-emerald-700 font-medium">{normalizeRetentionStrategy(req.saveStrategy)}</span>
                             ) : (
                               <span>{req.cancellationReason || 'Other'}</span>
                             )}
@@ -1446,8 +1519,8 @@ export default function CancellationReportingClient() {
                 </TableHeader>
                 <TableBody>
                   {filteredModalItems.map(req => {
-                    const origMRR = req.originalMRR ?? calculateMRR(req.originalServices);
-                    const savedMRR = req.savedMRR ?? calculateMRR(req.updatedServices || req.originalServices);
+                    const origMRR = getLostMRR(req);
+                    const savedMRR = getSavedMRR(req);
 
                     return (
                       <TableRow key={req.id}>
@@ -1474,7 +1547,7 @@ export default function CancellationReportingClient() {
                         <TableCell className="text-slate-700">
                           {req.status === 'Saved' ? (
                             <div>
-                              <span className="font-medium text-emerald-700">{req.saveStrategy || 'Keep Existing'}</span>
+                              <span className="font-medium text-emerald-700">{normalizeRetentionStrategy(req.saveStrategy)}</span>
                               {req.cancellationTheme && <div className="text-[10px] text-slate-400">{req.cancellationTheme}</div>}
                             </div>
                           ) : (
