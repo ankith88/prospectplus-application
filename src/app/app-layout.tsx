@@ -679,7 +679,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     'super user',
     'Sales Manager',
     'Marketing Manager',
-    'Customer Success',
     'Account Managers',
     'Account Manager',
     'account managers'
@@ -688,6 +687,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                            userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' || 
                            (userProfile?.activeRole && allowedMailboxRoles.includes(userProfile.activeRole))) && userProfile?.activeRole !== 'user';
   const canViewCustomers = canView('signedCustomers');
+  const canViewAnalyticsReportsGroup = canViewReporting || 
+                                        isFranchiseeRole || 
+                                        canViewInboundReporting || 
+                                        canViewMultiSiteReporting || 
+                                        canViewCustomerSuccessPipeline || 
+                                        canViewCancellationReporting || 
+                                        canViewTickets || 
+                                        canViewScans || 
+                                        canViewAccountManagerPipeline;
 
   return (
     <>
@@ -938,7 +946,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
 
               {/* Group 9: ANALYTICS & REPORTS */}
-              {(canViewReporting || isFranchiseeRole) && (
+              {canViewAnalyticsReportsGroup && (
                 <SidebarMenuItem>
                   <SidebarMenuButton 
                     tooltip="Analytics & Reports" 
@@ -1818,7 +1826,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
 
               {/* Group 9: ANALYTICS & REPORTS */}
-              {(canViewReporting || isFranchiseeRole) && (
+              {canViewAnalyticsReportsGroup && (
                 <SidebarGroup>
                   <SidebarGroupLabel 
                     onClick={() => toggleGroup('analytics-reports')} 
@@ -1837,7 +1845,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   {!isGroupCollapsed('analytics-reports') && (
                     <SidebarGroupContent>
                       <SidebarMenu>
-                        {userProfile?.activeRole !== 'user' && userProfile?.activeRole?.toLowerCase() !== 'user' && userProfile?.activeRole !== 'Outbound Admin' && (
+                        {(canViewReporting || isFranchiseeRole) && userProfile?.activeRole !== 'user' && userProfile?.activeRole?.toLowerCase() !== 'user' && userProfile?.activeRole !== 'Outbound Admin' && (
                           <SidebarMenuItem>
                             <SidebarMenuButton asChild isActive={isActive("/sales-snapshot")} tooltip="Sales Snapshot">
                               <Link href="/sales-snapshot">

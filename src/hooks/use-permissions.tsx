@@ -22,7 +22,7 @@ const PermissionsContext = createContext<PermissionsContextType>({
 // Default initial configuration based on requirements
 export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   executiveDashboard: ['Sales Manager'],
-  tickets: ['superadmin', 'Customer Service', 'Marketing Manager'],
+  tickets: ['superadmin', 'Customer Service', 'Marketing Manager', 'Customer Success', 'customer success', 'customer_success'],
   marketingGroup: ['Marketing Manager', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
   fieldSalesD2D: ['Field Sales', 'Field Sales Admin', 'Dashback'],
   captureVisit: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
@@ -136,6 +136,15 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
 
                 if (!currentFeatures.multisiteReporting) {
                     currentFeatures.multisiteReporting = DEFAULT_ROLE_ACCESS.multisiteReporting;
+                    needsUpdate = true;
+                }
+
+                const currentTickets: string[] = currentFeatures.tickets || DEFAULT_ROLE_ACCESS.tickets;
+                if (!currentTickets.includes('Customer Success')) {
+                    currentFeatures.tickets = Array.from(new Set([
+                        ...currentTickets,
+                        'Customer Success', 'customer success', 'customer_success'
+                    ]));
                     needsUpdate = true;
                 }
 

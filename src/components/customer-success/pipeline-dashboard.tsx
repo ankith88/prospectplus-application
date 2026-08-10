@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, TableProperties as TableIcon, UserCog, PhoneCall, Ban, Sparkles } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, TableProperties as TableIcon, UserCog, PhoneCall, Ban, Sparkles, Calendar, Clock } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
 import { logActivity, logCallActivity, logCsCallActivity, updateLeadDetails } from '@/services/firebase';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
@@ -23,7 +23,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { parseDateString } from '@/lib/utils';
+import { parseDateString, safeFormatDate } from '@/lib/utils';
 
 
 // Dialogs
@@ -145,6 +145,58 @@ export function getLeadOrigin(lead: Lead): LeadOriginInfo {
     return { label: 'Outbound', type: 'outbound', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' };
 }
 
+export function getLeadSystemEnteredDate(lead: Lead): string | undefined {
+    if (!lead) return undefined;
+    return (
+        lead.dateLeadEntered ||
+        (lead as any).dateCreated ||
+        (lead as any).createdAt ||
+        lead.inboundDetails?.submittedAt ||
+        lead.assignedToDialerAt
+    );
+}
+
+export function getLeadCsBucketDate(lead: Lead): string | undefined {
+    if (!lead) return undefined;
+
+    // 1. Check explicit fields if set
+    const explicitDate = (lead as any).dateCustomerSuccessEntered || 
+                         (lead as any).customerSuccessDate || 
+                         (lead as any).dateCustomerSuccessAssigned || 
+                         (lead as any).customerSuccessAssignedAt ||
+                         (lead as any).dateMovedToCS;
+    if (explicitDate) return explicitDate;
+
+    // 2. Check bucketHistory for entry where newBucket === 'customer_success'
+    if (lead.bucketHistory && Array.isArray(lead.bucketHistory) && lead.bucketHistory.length > 0) {
+        const csHistoryEntries = lead.bucketHistory.filter(
+            bh => (bh.newBucket || '').trim().toLowerCase() === 'customer_success'
+        );
+        if (csHistoryEntries.length > 0) {
+            const sorted = [...csHistoryEntries].sort((a, b) => {
+                const dA = a.date ? new Date(a.date).getTime() : 0;
+                const dB = b.date ? new Date(b.date).getTime() : 0;
+                return dA - dB;
+            });
+            if (sorted[0]?.date) {
+                return sorted[0].date;
+            }
+        }
+    }
+
+    // 3. If lead was generated directly in CS
+    if (lead.campaign === 'Customer Success Generated' || (lead as any).leadSource === 'Customer Success Generated') {
+        return getLeadSystemEnteredDate(lead);
+    }
+
+    // 4. Fallback for lead in customer_success bucket
+    if (lead.bucket === 'customer_success') {
+        return getLeadSystemEnteredDate(lead);
+    }
+
+    return undefined;
+}
+
 export default function CustomerSuccessDashboard() {
     const { userProfile, loading } = useAuth();
     
@@ -154,7 +206,7 @@ export default function CustomerSuccessDashboard() {
     const [selectedCs, setSelectedCs] = useState<string>('all');
     
     const [viewMode, setViewMode] = useState<'board' | 'accordion' | 'grid' | 'table'>('table');
-    const [sortBy, setSortBy] = useState<'franchisee' | 'companyName' | 'dateLeadEntered'>('franchisee');
+    const [sortBy, setSortBy] = useState<'franchisee' | 'companyName' | 'dateLeadEntered' | 'dateCsEntered'>('franchisee');
     
     const [filters, setFilters] = useState({
         status: 'all',
@@ -879,13 +931,14 @@ export default function CustomerSuccessDashboard() {
                             <ArrowUpDown className="h-3.5 w-3.5 text-[#095c7b]/60 shrink-0" />
                             <span className="text-[10px] font-bold text-[#095c7b]/75 uppercase tracking-wider shrink-0 hidden sm:inline">Sort</span>
                             <Select value={sortBy} onValueChange={(val) => setSortBy(val as any)}>
-                                <SelectTrigger className="h-8 w-full sm:w-[150px] text-xs bg-white border-[#095c7b]/20 text-[#095c7b] focus:ring-0">
+                                <SelectTrigger className="h-8 w-full sm:w-[170px] text-xs bg-white border-[#095c7b]/20 text-[#095c7b] focus:ring-0">
                                     <SelectValue placeholder="Sort by..." />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="franchisee" className="text-xs">Franchisee</SelectItem>
                                     <SelectItem value="companyName" className="text-xs">Company Name</SelectItem>
-                                    <SelectItem value="dateLeadEntered" className="text-xs">Date Assigned</SelectItem>
+                                    <SelectItem value="dateLeadEntered" className="text-xs">Date Lead Entered</SelectItem>
+                                    <SelectItem value="dateCsEntered" className="text-xs">Date Entered CS</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -1204,7 +1257,7 @@ function LeadGrid({
 }: { 
     leads: Lead[], 
     viewMode: 'board' | 'accordion' | 'grid' | 'table', 
-    sortBy: 'franchisee' | 'companyName' | 'dateLeadEntered', 
+    sortBy: 'franchisee' | 'companyName' | 'dateLeadEntered' | 'dateCsEntered', 
     onCall: (id: string, phone: string) => void, 
     onClick: (id: string) => void, 
     onEmail: (lead: Lead) => void, 
@@ -1234,8 +1287,12 @@ function LeadGrid({
             } else if (sortBy === 'companyName') {
                 return (a.companyName || '').localeCompare(b.companyName || '');
             } else if (sortBy === 'dateLeadEntered') {
-                const dateA = parseDateString(a.dateLeadEntered)?.getTime() || 0;
-                const dateB = parseDateString(b.dateLeadEntered)?.getTime() || 0;
+                const dateA = parseDateString(getLeadSystemEnteredDate(a))?.getTime() || 0;
+                const dateB = parseDateString(getLeadSystemEnteredDate(b))?.getTime() || 0;
+                return dateB - dateA;
+            } else if (sortBy === 'dateCsEntered') {
+                const dateA = parseDateString(getLeadCsBucketDate(a))?.getTime() || 0;
+                const dateB = parseDateString(getLeadCsBucketDate(b))?.getTime() || 0;
                 return dateB - dateA;
             }
             return 0;
@@ -1271,6 +1328,8 @@ function LeadGrid({
                         <TableRow>
                             <TableHead className="font-bold text-[#095c7b]">Company & Status</TableHead>
                             <TableHead className="font-bold text-[#095c7b]">Original Bucket / Source</TableHead>
+                            <TableHead className="font-bold text-[#095c7b]">Date Lead Entered</TableHead>
+                            <TableHead className="font-bold text-[#095c7b]">Date Entered CS</TableHead>
                             <TableHead className="font-bold text-[#095c7b]">Assigned CS</TableHead>
                             <TableHead className="font-bold text-[#095c7b]">Franchisee</TableHead>
                             <TableHead className="font-bold text-[#095c7b]">Contact Details</TableHead>
@@ -1329,6 +1388,11 @@ function LeadGrid({
                             const isCalled = lead.csCalled || false;
                             const origin = getLeadOrigin(lead);
                             
+                            const systemDateVal = getLeadSystemEnteredDate(lead);
+                            const csDateVal = getLeadCsBucketDate(lead);
+                            const systemDateStr = systemDateVal ? safeFormatDate(systemDateVal, 'dd/MM/yyyy') : '-';
+                            const csDateStr = csDateVal ? safeFormatDate(csDateVal, 'dd/MM/yyyy') : '-';
+                            
                             const currentStatus = lead.customerStatus || lead.status;
                             let rowBgClass = "hover:bg-slate-50/80 transition-colors";
                             if (currentStatus === "LocalMile Opportunity") {
@@ -1358,6 +1422,18 @@ function LeadGrid({
                                         <Badge variant="outline" className={`text-[11px] font-semibold border ${origin.badgeClass}`}>
                                             {origin.label}
                                         </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-xs text-slate-700 whitespace-nowrap">
+                                        <div className="flex items-center gap-1.5" title="When lead came into the system">
+                                            <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                            <span className="font-medium">{systemDateStr}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-xs text-slate-700 whitespace-nowrap">
+                                        <div className="flex items-center gap-1.5" title="When lead came into Customer Success bucket">
+                                            <Clock className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                                            <span className="font-medium text-indigo-950">{csDateStr}</span>
+                                        </div>
                                     </TableCell>
                                     <TableCell className="font-medium text-slate-700">
                                         {lead.customerSuccessAssigned || <span className="text-slate-400 italic text-xs">Unassigned</span>}
@@ -1552,6 +1628,11 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, journeys = [], jour
     const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
     const origin = getLeadOrigin(lead);
     
+    const systemDateVal = getLeadSystemEnteredDate(lead);
+    const csDateVal = getLeadCsBucketDate(lead);
+    const systemDateStr = systemDateVal ? safeFormatDate(systemDateVal, 'dd/MM/yyyy') : '-';
+    const csDateStr = csDateVal ? safeFormatDate(csDateVal, 'dd/MM/yyyy') : '-';
+
     // Gather unique phone numbers
     const phoneNumbers: { label: string; phone: string }[] = [];
     if (lead.customerPhone) {
@@ -1721,6 +1802,17 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, journeys = [], jour
                             </div>
                         </div>
                     )}
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-[#095c7b]/10 mt-2">
+                        <div className="flex items-center gap-1" title="When lead came into system">
+                            <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                            <span>Entered: <strong className="font-semibold text-slate-700">{systemDateStr}</strong></span>
+                        </div>
+                        <div className="flex items-center gap-1" title="When lead came into Customer Success bucket">
+                            <Clock className="h-3 w-3 text-indigo-500 shrink-0" />
+                            <span>CS: <strong className="font-semibold text-indigo-900">{csDateStr}</strong></span>
+                        </div>
+                    </div>
                 </div>
             </CardContent>
         </Card>
