@@ -1037,6 +1037,9 @@ export interface CancellationRequest {
   callsCount?: number;
   originalMRR?: number;
   savedMRR?: number;
+  isSignedCustomer?: boolean;
+  avg3MonthInvoiceMRR?: number;
+  newInvoiceMRR?: number;
   serviceRateChanged?: boolean;
   serviceFrequencyChanged?: boolean;
   serviceDeleted?: boolean;

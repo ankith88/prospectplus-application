@@ -38,6 +38,7 @@ import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, Cart
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy';
 import { logActivity } from '@/services/firebase';
 import { ServiceSelectionDialog } from '@/components/service-selection-dialog';
+import { fetch3MonthAvgInvoiceMRR } from '@/lib/cancellation-invoice-helper';
 
 const REASONS = ['Price too high', 'Competitor offer', 'Service Quality issues', 'No longer needed', 'Business closed', 'Other'];
 const COLORS = ['#095c7b', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#a78bfa'];
@@ -61,6 +62,11 @@ export default function CancellationDashboard() {
   const [cancelReason, setCancelReason] = useState('');
   const [trueCancellationDate, setTrueCancellationDate] = useState('');
   const [cancelNotes, setCancelNotes] = useState('');
+
+  // Signed customer & 3-month avg invoice states
+  const [avg3MonthInvoice, setAvg3MonthInvoice] = useState<number | null>(null);
+  const [isSignedCustomer, setIsSignedCustomer] = useState<boolean>(false);
+  const [loadingInvoiceAvg, setLoadingInvoiceAvg] = useState<boolean>(false);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -159,7 +165,7 @@ export default function CancellationDashboard() {
     }
   };
 
-  const handleOpenProcess = (req: CancellationRequest) => {
+  const handleOpenProcess = async (req: CancellationRequest) => {
     setSelectedRequest(req);
     // Initialize services editing from request original services or lead's current services
     setEditServices(JSON.parse(JSON.stringify(req.originalServices || [])));
@@ -173,6 +179,31 @@ export default function CancellationDashboard() {
     setSaveNotes('');
     setCancelNotes('');
     setProcessModalOpen(true);
+
+    // Fetch signed status and 3-month average invoice value
+    setLoadingInvoiceAvg(true);
+    try {
+      const leadDoc = await getDoc(doc(firestore, 'leads', req.leadId));
+      const compDoc = await getDoc(doc(firestore, 'companies', req.leadId));
+      const leadData = (compDoc.exists() ? compDoc.data() : leadDoc.data()) || {};
+      const statusStr = leadData.customerStatus || leadData.status || '';
+      const isSigned = ['Won', 'Signed', 'Customer', 'Lost Customer'].includes(statusStr) || compDoc.exists() || !!leadData.signedUpAt;
+      
+      setIsSignedCustomer(isSigned);
+
+      if (isSigned) {
+        const invoiceRes = await fetch3MonthAvgInvoiceMRR(req.leadId, req.leadId);
+        setAvg3MonthInvoice(invoiceRes.avgMonthlyInvoice);
+      } else {
+        setAvg3MonthInvoice(null);
+      }
+    } catch (err) {
+      console.error("Error fetching signed customer invoice average:", err);
+      setIsSignedCustomer(false);
+      setAvg3MonthInvoice(null);
+    } finally {
+      setLoadingInvoiceAvg(false);
+    }
   };
 
   const calculateMRR = (services: ServiceSelection[]) => {
@@ -257,8 +288,9 @@ export default function CancellationDashboard() {
         serviceDeleted = true;
       }
 
-      const originalMRR = calculateMRR(originalServices);
-      const savedMRR = calculateMRR(finalServices);
+      const newInvoiceMRR = calculateMRR(finalServices);
+      const savedMRR = newInvoiceMRR; // Retained revenue monthly value
+      const baselineAvg = isSignedCustomer ? (avg3MonthInvoice ?? 0) : calculateMRR(originalServices);
 
       // 2. Update Lead document
       const leadRef = doc(firestore, 'leads', selectedRequest.leadId);
@@ -278,7 +310,10 @@ export default function CancellationDashboard() {
         notes: saveNotes,
         processedBy: userDisplayName,
         processedAt,
-        originalMRR,
+        isSignedCustomer,
+        avg3MonthInvoiceMRR: isSignedCustomer ? (avg3MonthInvoice ?? 0) : undefined,
+        newInvoiceMRR,
+        originalMRR: baselineAvg,
         savedMRR,
         serviceRateChanged,
         serviceFrequencyChanged,
@@ -358,6 +393,9 @@ export default function CancellationDashboard() {
         });
       }
 
+      const originalServices = selectedRequest.originalServices || [];
+      const lostMRR = isSignedCustomer ? (avg3MonthInvoice ?? 0) : calculateMRR(originalServices);
+
       // 2. Update Cancellation Request document
       const cancelReqRef = doc(firestore, 'cancellations', selectedRequest.id);
       await updateDoc(cancelReqRef, {
@@ -370,7 +408,10 @@ export default function CancellationDashboard() {
         cancellationWhyId: selectedWhyId,
         notes: cancelNotes,
         processedBy: userDisplayName,
-        processedAt
+        processedAt,
+        isSignedCustomer,
+        avg3MonthInvoiceMRR: isSignedCustomer ? (avg3MonthInvoice ?? 0) : undefined,
+        originalMRR: lostMRR
       });
 
       // Call NetSuite outcome sync with Customer - Lost outcome
@@ -392,7 +433,7 @@ export default function CancellationDashboard() {
       }
 
       // Call external LocalMile deactivation logic
-      deactivateLocalMileAccessForLead(selectedRequest.leadId, undefined, targetCollectionName).catch(err => {
+      deactivateLocalMileAccessForLead(selectedRequest.leadId, undefined, compSnap.exists() ? 'companies' : 'leads').catch(err => {
         console.error("LocalMile deactivation api fail", err);
       });
 
@@ -778,6 +819,18 @@ export default function CancellationDashboard() {
               Decide whether to apply a save strategy or execute the customer cancellation.
             </DialogDescription>
           </DialogHeader>
+
+          {isSignedCustomer && (
+            <div className="bg-sky-50/90 border border-sky-200 p-3.5 rounded-xl mb-4 flex items-center justify-between text-xs text-sky-900 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-[#095c7b] text-white">Signed Customer</Badge>
+                <span className="font-semibold text-slate-700">3-Month Avg Invoice Value:</span>
+              </div>
+              <span className="font-bold text-sm text-[#095c7b]">
+                {loadingInvoiceAvg ? 'Calculating...' : `$${(avg3MonthInvoice ?? 0).toFixed(2)}/mo`}
+              </span>
+            </div>
+          )}
 
           {/* Toggle Process Mode */}
           <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-lg mb-6">

@@ -137,6 +137,8 @@ export default function CancellationReportingClient() {
       'Contact Name',
       'Contact Email',
       'Status',
+      'Signed Customer',
+      '3-Month Avg Invoice ($)',
       'Save Strategy',
       'Cancellation Theme',
       'Cancellation Reason',
@@ -152,7 +154,9 @@ export default function CancellationReportingClient() {
     ];
 
     const rows = items.map(r => {
-      const origMRR = r.originalMRR ?? calculateMRR(r.originalServices);
+      const isSigned = Boolean(r.isSignedCustomer);
+      const avg3Month = r.avg3MonthInvoiceMRR ?? (isSigned ? (r.originalMRR ?? 0) : 0);
+      const origMRR = r.originalMRR ?? (isSigned ? avg3Month : calculateMRR(r.originalServices));
       const savedMRR = r.status === 'Saved' ? (r.savedMRR ?? calculateMRR(r.updatedServices || r.originalServices)) : 0;
       const mrrLost = r.status === 'Cancelled' ? origMRR : 0;
 
@@ -161,6 +165,8 @@ export default function CancellationReportingClient() {
         `"${(r.contactName || '').replace(/"/g, '""')}"`,
         `"${(r.contactEmail || '').replace(/"/g, '""')}"`,
         `"${r.status}"`,
+        `"${isSigned ? 'Yes' : 'No'}"`,
+        avg3Month.toFixed(2),
         `"${r.saveStrategy || ''}"`,
         `"${(r.cancellationTheme || '').replace(/"/g, '""')}"`,
         `"${(r.cancellationReason || '').replace(/"/g, '""')}"`,
@@ -242,6 +248,9 @@ export default function CancellationReportingClient() {
             processedAt: data.processedAt || '',
             originalMRR: data.originalMRR,
             savedMRR: data.savedMRR,
+            isSignedCustomer: data.isSignedCustomer,
+            avg3MonthInvoiceMRR: data.avg3MonthInvoiceMRR,
+            newInvoiceMRR: data.newInvoiceMRR,
             serviceRateChanged: data.serviceRateChanged,
             serviceFrequencyChanged: data.serviceFrequencyChanged,
             serviceDeleted: data.serviceDeleted,
@@ -356,24 +365,35 @@ export default function CancellationReportingClient() {
     const totalProcessed = savedRequests.length + cancelledRequests.length;
     const saveRate = totalProcessed > 0 ? Math.round((savedRequests.length / totalProcessed) * 100) : 0;
 
+    // Helper to calculate lost MRR for a cancelled request
+    const getLostMRR = (r: CancellationRequest) => {
+      if (r.originalMRR !== undefined && r.originalMRR !== null) {
+        return r.originalMRR;
+      }
+      if (r.isSignedCustomer) {
+        return r.avg3MonthInvoiceMRR ?? 0;
+      }
+      return calculateMRR(r.originalServices);
+    };
+
+    // Helper to calculate saved MRR (retained revenue) for a saved request
+    const getSavedMRR = (r: CancellationRequest) => {
+      if (r.savedMRR !== undefined && r.savedMRR !== null) {
+        return r.savedMRR;
+      }
+      return calculateMRR(r.updatedServices && r.updatedServices.length > 0 ? r.updatedServices : r.originalServices);
+    };
+
     // Money Calculations
     let totalMRRSaved = 0;
     let totalMRRLost = 0;
 
     savedRequests.forEach(r => {
-      let saved = r.savedMRR;
-      if (saved === undefined || saved === null) {
-        saved = calculateMRR(r.updatedServices && r.updatedServices.length > 0 ? r.updatedServices : r.originalServices);
-      }
-      totalMRRSaved += saved;
+      totalMRRSaved += getSavedMRR(r);
     });
 
     cancelledRequests.forEach(r => {
-      let lost = r.originalMRR;
-      if (lost === undefined || lost === null) {
-        lost = calculateMRR(r.originalServices);
-      }
-      totalMRRLost += lost;
+      totalMRRLost += getLostMRR(r);
     });
 
     const netMRR = totalMRRSaved - totalMRRLost;
@@ -387,8 +407,7 @@ export default function CancellationReportingClient() {
       const theme = r.cancellationTheme || 'Uncategorized';
       if (!themeMap[theme]) themeMap[theme] = { count: 0, mrrLost: 0 };
       themeMap[theme].count += 1;
-      let lost = r.originalMRR ?? calculateMRR(r.originalServices);
-      themeMap[theme].mrrLost += lost;
+      themeMap[theme].mrrLost += getLostMRR(r);
     });
     const themeData = Object.entries(themeMap).map(([name, data]) => ({
       name,
@@ -404,8 +423,7 @@ export default function CancellationReportingClient() {
       const cat = r.cancellationCategory || r.cancellationWhy || 'General';
       if (!categoryMap[cat]) categoryMap[cat] = { count: 0, mrrLost: 0 };
       categoryMap[cat].count += 1;
-      let lost = r.originalMRR ?? calculateMRR(r.originalServices);
-      categoryMap[cat].mrrLost += lost;
+      categoryMap[cat].mrrLost += getLostMRR(r);
     });
     const categoryData = Object.entries(categoryMap).map(([name, data]) => ({
       name,
@@ -419,8 +437,7 @@ export default function CancellationReportingClient() {
       const reason = r.cancellationReason || 'No Reason Provided';
       if (!reasonMap[reason]) reasonMap[reason] = { count: 0, mrrLost: 0 };
       reasonMap[reason].count += 1;
-      let lost = r.originalMRR ?? calculateMRR(r.originalServices);
-      reasonMap[reason].mrrLost += lost;
+      reasonMap[reason].mrrLost += getLostMRR(r);
     });
     const reasonData = Object.entries(reasonMap).map(([name, data]) => ({
       name,
@@ -434,8 +451,7 @@ export default function CancellationReportingClient() {
       const strategy = r.saveStrategy || 'Keep Existing';
       if (!strategyMap[strategy]) strategyMap[strategy] = { count: 0, mrrSaved: 0 };
       strategyMap[strategy].count += 1;
-      let saved = r.savedMRR ?? calculateMRR(r.updatedServices || r.originalServices);
-      strategyMap[strategy].mrrSaved += saved;
+      strategyMap[strategy].mrrSaved += getSavedMRR(r);
     });
     const strategyData = Object.entries(strategyMap).map(([name, data]) => ({
       name,
@@ -454,12 +470,10 @@ export default function CancellationReportingClient() {
       }
       if (r.status === 'Saved') {
         monthlyMap[month].savedCount += 1;
-        let saved = r.savedMRR ?? calculateMRR(r.updatedServices || r.originalServices);
-        monthlyMap[month].mrrSaved += saved;
+        monthlyMap[month].mrrSaved += getSavedMRR(r);
       } else if (r.status === 'Cancelled') {
         monthlyMap[month].cancelledCount += 1;
-        let lost = r.originalMRR ?? calculateMRR(r.originalServices);
-        monthlyMap[month].mrrLost += lost;
+        monthlyMap[month].mrrLost += getLostMRR(r);
       }
     });
 
@@ -510,13 +524,15 @@ export default function CancellationReportingClient() {
       'Contact Name',
       'Contact Email',
       'Status',
+      'Signed Customer',
+      '3-Month Avg Invoice ($)',
       'Save Strategy',
       'Cancellation Theme',
       'Cancellation Category / Why',
       'Cancellation Reason',
       'Requested Date',
       'True Cancellation Date',
-      'Original MRR ($)',
+      'Original / Baseline MRR ($)',
       'Saved MRR ($)',
       'MRR Lost ($)',
       'Annual Value Saved ($)',
@@ -527,7 +543,9 @@ export default function CancellationReportingClient() {
     ];
 
     const rows = filteredRequests.map(r => {
-      const origMRR = r.originalMRR ?? calculateMRR(r.originalServices);
+      const isSigned = Boolean(r.isSignedCustomer);
+      const avg3Month = r.avg3MonthInvoiceMRR ?? (isSigned ? (r.originalMRR ?? 0) : 0);
+      const origMRR = r.originalMRR ?? (isSigned ? avg3Month : calculateMRR(r.originalServices));
       const savedMRR = r.status === 'Saved' ? (r.savedMRR ?? calculateMRR(r.updatedServices || r.originalServices)) : 0;
       const mrrLost = r.status === 'Cancelled' ? origMRR : 0;
 
@@ -536,6 +554,8 @@ export default function CancellationReportingClient() {
         `"${(r.contactName || '').replace(/"/g, '""')}"`,
         `"${(r.contactEmail || '').replace(/"/g, '""')}"`,
         `"${r.status}"`,
+        `"${isSigned ? 'Yes' : 'No'}"`,
+        avg3Month.toFixed(2),
         `"${r.saveStrategy || ''}"`,
         `"${(r.cancellationTheme || '').replace(/"/g, '""')}"`,
         // @ts-ignore
