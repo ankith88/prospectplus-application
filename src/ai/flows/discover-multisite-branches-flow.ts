@@ -142,6 +142,13 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
     }
 
     let targetUrl = resolvedWebsiteUrl;
+    if (!targetUrl && coreName) {
+      const clean = coreName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (clean.length > 2) {
+        targetUrl = `https://www.${clean}.com.au`;
+      }
+    }
+
     if (targetUrl && !/^https?:\/\//i.test(targetUrl)) {
       targetUrl = 'https://' + targetUrl;
     }
@@ -165,8 +172,8 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
           const homepageText = cleanHtmlText(html);
           fetchedPages.push(`--- HOMEPAGE TEXT (${targetUrl}) ---\n${homepageText.substring(0, 7000)}`);
 
-          // Look for location / contact / store links in HTML
-          const linkRegex = /href=["']([^"']*(?:location|store|branch|contact|about|depot|find-us|our-offices)[^"']*)["']/gi;
+          // Look for location / contact / store / office links in HTML
+          const linkRegex = /href=["']([^"']*(?:location|store|branch|contact|about|depot|find-us|office|our-offices)[^"']*)["']/gi;
           let match;
           const locationLinks = new Set<string>();
           while ((match = linkRegex.exec(html)) !== null) {
@@ -186,7 +193,7 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
 
           // Also include search result URLs that look like store locators
           searchResults.urls.forEach((u) => {
-            if (/(?:location|store|branch|find-us|contact)/i.test(u) && locationLinks.size < 5) {
+            if (/(?:location|store|branch|find-us|contact|office)/i.test(u) && locationLinks.size < 6) {
               locationLinks.add(u);
             }
           });
@@ -341,4 +348,3 @@ export async function discoverCompanyBranches(input: z.infer<typeof DiscoverBran
     return { success: false, error: error.message || String(error) };
   }
 }
-

@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Address, Contact, Lead } from "@/lib/types";
 import { createChildSiteLead, updateLeadDetails, getSiblingLeads, getLeadFromFirebase, getCompanyFromFirebase, getLastInvoicesForCompanies, getAllFranchisees } from "@/services/firebase";
-import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search, Receipt, FileText, Store } from "lucide-react";
+import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search, Receipt, FileText, Store, Sparkles } from "lucide-react";
+import { DiscoverMultiSitesDialog } from "@/components/discover-multisites-dialog";
 import { GoogleAddressInput } from "@/components/google-address-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -53,6 +54,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     ].some(r => roleStr.includes(r) || roleStr === r);
 
     const [isOpen, setIsOpen] = useState(false);
+    const [isDiscoverOpen, setIsDiscoverOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     const [unlinkingChildId, setUnlinkingChildId] = useState<string | null>(null);
     
@@ -578,6 +580,16 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                     <CardDescription>Manage child sites and generate local leads.</CardDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                    {canManageMultiSite && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100 font-semibold"
+                            onClick={() => setIsDiscoverOpen(true)}
+                        >
+                            <Sparkles className="mr-1.5 h-4 w-4 text-purple-600" /> Discover Branches via Website
+                        </Button>
+                    )}
                     {!lead.parentLeadId && canManageMultiSite && (
                         <>
                             <Dialog open={isLinkParentOpen} onOpenChange={setIsLinkParentOpen}>
@@ -1176,6 +1188,12 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                  onOpenChange={setIsInvoiceDialogOpen}
                  invoice={selectedInvoice}
                  companyName={selectedInvoiceCompany}
+             />
+             <DiscoverMultiSitesDialog
+                 isOpen={isDiscoverOpen}
+                 onOpenChange={setIsDiscoverOpen}
+                 parentCompany={parentLead || lead}
+                 onLocationsUpdated={onLocationsUpdated}
              />
          </Card>
      );
