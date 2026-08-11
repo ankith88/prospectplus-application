@@ -185,13 +185,13 @@ export function AddressAutocomplete({ onAddressSelect }: AddressAutocompleteProp
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField control={control} name="address.city" render={({ field }) => (
-                    <FormItem><FormLabel>Suburb<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} disabled className="bg-slate-100 font-medium cursor-not-allowed opacity-90" placeholder="Auto-filled from address" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Suburb<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} className="bg-background font-medium" placeholder="Suburb" /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={control} name="address.state" render={({ field }) => (
-                    <FormItem><FormLabel>State<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} disabled className="bg-slate-100 font-medium cursor-not-allowed opacity-90" placeholder="Auto-filled from address" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>State<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} className="bg-background font-medium" placeholder="State" /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={control} name="address.zip" render={({ field }) => (
-                    <FormItem><FormLabel>Postcode<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} disabled className="bg-slate-100 font-medium cursor-not-allowed opacity-90" placeholder="Auto-filled from address" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Postcode<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} className="bg-background font-medium" placeholder="Postcode" /></FormControl><FormMessage /></FormItem>
                 )}/>
             </div>
             <FormField control={control} name="address.country" render={({ field }) => (

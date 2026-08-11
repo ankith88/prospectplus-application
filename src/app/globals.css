@@ -134,6 +134,7 @@ body {
   body.logged-in {
     --background: 111 20% 84%; /* #d0dfcd */
     --card: 0 0% 100%; /* white */
+    --input: 165 15% 65%; /* distinct border color against sage green */
   }
 }
 

@@ -35,7 +35,7 @@ import { firestore } from "@/lib/firebase"
 import { updateLeadDetails } from "@/services/firebase"
 import { collection, query, where, getDocs } from "firebase/firestore"
 
-const boxTypes = ["PO Box", "P.O. Box", "GPO Box", "G.P.O Box"];
+const boxTypes = ["PO Box", "GPO Box"];
 
 const formSchema = z.object({
   boxType: z.string().min(1, "Box type is required"),
@@ -92,7 +92,7 @@ const parseExistingPostal = (postalAddress: any) => {
   const match1 = addr1.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box)\s+([A-Za-z0-9\-]+)$/i);
   if (match1) {
     const foundPrefix = match1[1];
-    const boxType = boxTypes.find(p => p.toLowerCase() === foundPrefix.toLowerCase()) || "PO Box";
+    const boxType = foundPrefix.toUpperCase().includes("GPO") ? "GPO Box" : "PO Box";
     return {
       boxType,
       boxNumber: match1[2],
@@ -105,7 +105,7 @@ const parseExistingPostal = (postalAddress: any) => {
   const match2 = street.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box)\s+([A-Za-z0-9\-]+)(?:,\s*(.*))?$/i);
   if (match2) {
     const foundPrefix = match2[1];
-    const boxType = boxTypes.find(p => p.toLowerCase() === foundPrefix.toLowerCase()) || "PO Box";
+    const boxType = foundPrefix.toUpperCase().includes("GPO") ? "GPO Box" : "PO Box";
     return {
       boxType,
       boxNumber: match2[2],

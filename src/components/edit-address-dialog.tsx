@@ -28,14 +28,33 @@ const formSchema = z.object({
   address: z.object({
     address1: z.string().nullish(),
     street: z.string().min(1, "Street is required"),
-    city: z.string().min(1, "Suburb is required"),
-    state: z.string().min(1, "State is required"),
-    zip: z.string().min(1, "Postcode is required"),
+    city: z.string().nullish(),
+    state: z.string().nullish(),
+    zip: z.string().nullish(),
     country: z.string().default("Australia"),
     lat: z.number().nullish(),
     lng: z.number().nullish(),
   })
 })
+
+function getInitialAddress(lead: Lead) {
+  let addrObj: any = lead.address;
+  if (typeof addrObj !== 'object' || addrObj === null) {
+    addrObj = {};
+  }
+  const clean = (val: any) => (val === "undefined" || !val ? "" : String(val));
+
+  return {
+    address1: clean(addrObj.address1 || (lead as any).unit || (lead as any).level || (lead as any).suite),
+    street: clean(addrObj.street || (typeof lead.address === 'string' ? lead.address : '') || (lead as any).street),
+    city: clean(addrObj.city || (lead as any).suburb || (lead as any).city),
+    state: clean(addrObj.state || (lead as any).state),
+    zip: clean(addrObj.zip || (lead as any).postcode || (lead as any).zip),
+    country: clean(addrObj.country) || "Australia",
+    lat: lead.latitude ?? addrObj.lat ?? undefined,
+    lng: lead.longitude ?? addrObj.lng ?? undefined,
+  };
+}
 
 interface EditAddressDialogProps {
   lead: Lead
@@ -66,39 +85,9 @@ export function EditAddressDialog({
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      address: {
-        address1: lead.address?.address1 === "undefined" || !lead.address?.address1 ? "" : lead.address.address1,
-        street: lead.address?.street === "undefined" || !lead.address?.street ? "" : lead.address.street,
-        city: lead.address?.city === "undefined" || !lead.address?.city ? "" : lead.address.city,
-        state: lead.address?.state === "undefined" || !lead.address?.state ? "" : lead.address.state,
-        zip: lead.address?.zip === "undefined" || !lead.address?.zip ? "" : lead.address.zip,
-        country: lead.address?.country ?? "Australia",
-        lat: lead.latitude ?? lead.address?.lat ?? undefined,
-        lng: lead.longitude ?? lead.address?.lng ?? undefined,
-      }
+      address: getInitialAddress(lead),
     },
   })
-
-  useEffect(() => {
-    if (isOpen) {
-      form.reset({
-        address: {
-          address1: lead.address?.address1 === "undefined" || !lead.address?.address1 ? "" : lead.address.address1,
-          street: lead.address?.street === "undefined" || !lead.address?.street ? "" : lead.address.street,
-          city: lead.address?.city === "undefined" || !lead.address?.city ? "" : lead.address.city,
-          state: lead.address?.state === "undefined" || !lead.address?.state ? "" : lead.address.state,
-          zip: lead.address?.zip === "undefined" || !lead.address?.zip ? "" : lead.address.zip,
-          country: lead.address?.country ?? "Australia",
-          lat: lead.latitude ?? lead.address?.lat ?? undefined,
-          lng: lead.longitude ?? lead.address?.lng ?? undefined,
-        }
-      })
-      setMatchedFranchisees([])
-      setTerritoryCheckDone(false)
-      setSelectedFranchiseeId('')
-      setEmailSent(false)
-    }
-  }, [isOpen, lead, form])
 
   const checkTerritory = async (city: string, zip: string) => {
     if (!city || !zip) return;
@@ -129,6 +118,23 @@ export function EditAddressDialog({
       setIsCheckingTerritory(false);
     }
   };
+
+  useEffect(() => {
+    if (isOpen) {
+      const initial = getInitialAddress(lead);
+      form.reset({
+        address: initial,
+      })
+      setMatchedFranchisees([])
+      setTerritoryCheckDone(false)
+      setSelectedFranchiseeId('')
+      setEmailSent(false)
+
+      if (initial.city && initial.zip) {
+        checkTerritory(initial.city, initial.zip);
+      }
+    }
+  }, [isOpen, lead, form])
 
   const handleAddressSelect = (parsed: Address) => {
     if (parsed.city && parsed.zip) {
@@ -303,7 +309,14 @@ export function EditAddressDialog({
           <DialogTitle>Edit Site Address</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+            console.warn("Form validation errors:", errors);
+            toast({
+              variant: "destructive",
+              title: "Validation Error",
+              description: "Please ensure all required address fields are complete.",
+            });
+          })} className="space-y-4">
             <AddressAutocomplete onAddressSelect={handleAddressSelect} />
 
             {isCheckingTerritory && (

@@ -2036,6 +2036,7 @@ export function ServiceSelectionDialog({
                     <Input 
                       value={emailPreviewData.bcc} 
                       onChange={e => setEmailPreviewData(prev => ({...prev, bcc: e.target.value}))} 
+                      placeholder="e.g. bcc@mailplus.com.au"
                     />
                     {accountManagerEmail && !emailPreviewData.bcc.includes(accountManagerEmail) && (
                       <p className="text-xs text-muted-foreground mt-1 cursor-pointer hover:underline" onClick={() => setEmailPreviewData(prev => ({...prev, bcc: prev.bcc ? `${prev.bcc}, ${accountManagerEmail}` : accountManagerEmail}))}>
@@ -2049,6 +2050,7 @@ export function ServiceSelectionDialog({
                      id="service-email-subject"
                      value={emailPreviewData.subject} 
                      onChange={e => setEmailPreviewData(prev => ({...prev, subject: e.target.value}))} 
+                     placeholder="Enter email subject..."
                    />
                  </div>
 
