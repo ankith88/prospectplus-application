@@ -386,7 +386,6 @@ export function EnterMultiSiteLeadDialog({
             </Label>
             <Input
               id="site-name"
-              placeholder="e.g. Clayton Utz - Sydney"
               value={siteName}
               onChange={(e) => setSiteName(e.target.value)}
               className="h-9 text-xs bg-white font-medium"
@@ -410,7 +409,6 @@ export function EnterMultiSiteLeadDialog({
                 </Label>
                 <Input
                   id="company-email"
-                  placeholder="sydney@company.com"
                   type="email"
                   value={companyEmail}
                   onChange={(e) => setCompanyEmail(e.target.value)}
@@ -423,7 +421,6 @@ export function EnterMultiSiteLeadDialog({
                 </Label>
                 <Input
                   id="company-phone"
-                  placeholder="02 9353 4000"
                   value={companyPhone}
                   onChange={(e) => setCompanyPhone(e.target.value)}
                   className="h-8 text-xs bg-white"
@@ -444,7 +441,6 @@ export function EnterMultiSiteLeadDialog({
             <div className="space-y-1">
               <Label className="text-[11px] text-muted-foreground">Search Address Autocomplete (Optional):</Label>
               <GoogleAddressInput
-                placeholder="Start typing site address..."
                 onAddressSelect={handleGoogleAddressSelect}
                 showSelectedBadge={false}
               />
@@ -458,7 +454,6 @@ export function EnterMultiSiteLeadDialog({
                 </Label>
                 <Input
                   id="street-address"
-                  placeholder="e.g. 71 Eagle Street"
                   value={streetAddress}
                   onChange={(e) => setStreetAddress(e.target.value)}
                   className="h-8 text-xs bg-white"
@@ -471,7 +466,6 @@ export function EnterMultiSiteLeadDialog({
                 </Label>
                 <Input
                   id="level-suite"
-                  placeholder="e.g. Level 28, Riparian Plaza"
                   value={levelSuite}
                   onChange={(e) => setLevelSuite(e.target.value)}
                   className="h-8 text-xs bg-white"
@@ -485,7 +479,6 @@ export function EnterMultiSiteLeadDialog({
                   </Label>
                   <Input
                     id="suburb-city"
-                    placeholder="e.g. Brisbane"
                     value={suburbCity}
                     onChange={(e) => setSuburbCity(e.target.value)}
                     className="h-8 text-xs bg-white"
@@ -497,7 +490,6 @@ export function EnterMultiSiteLeadDialog({
                   </Label>
                   <Input
                     id="state-code"
-                    placeholder="e.g. QLD"
                     value={stateCode}
                     onChange={(e) => setStateCode(e.target.value)}
                     className="h-8 text-xs bg-white uppercase"
@@ -509,7 +501,6 @@ export function EnterMultiSiteLeadDialog({
                   </Label>
                   <Input
                     id="postcode"
-                    placeholder="e.g. 4000"
                     value={postcode}
                     onChange={(e) => setPostcode(e.target.value)}
                     className="h-8 text-xs bg-white"
@@ -622,7 +613,6 @@ export function EnterMultiSiteLeadDialog({
               </Label>
               <Input
                 id="contact-name"
-                placeholder="e.g. John Smith"
                 value={contactName}
                 onChange={(e) => setContactName(e.target.value)}
                 className="h-8 text-xs bg-white"
@@ -634,7 +624,6 @@ export function EnterMultiSiteLeadDialog({
               </Label>
               <Input
                 id="contact-title"
-                placeholder="e.g. Branch Partner / Site Manager"
                 value={contactTitle}
                 onChange={(e) => setContactTitle(e.target.value)}
                 className="h-8 text-xs bg-white"
@@ -647,7 +636,6 @@ export function EnterMultiSiteLeadDialog({
                 </Label>
                 <Input
                   id="contact-email"
-                  placeholder="john.smith@company.com"
                   type="email"
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
@@ -660,7 +648,6 @@ export function EnterMultiSiteLeadDialog({
                 </Label>
                 <Input
                   id="contact-phone"
-                  placeholder="0400 000 000"
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
                   className="h-8 text-xs bg-white"
@@ -676,7 +663,6 @@ export function EnterMultiSiteLeadDialog({
             </Label>
             <Textarea
               id="site-notes"
-              placeholder="Add notes or specific requirements for this location..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
