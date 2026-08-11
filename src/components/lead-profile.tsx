@@ -315,6 +315,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [isEditingAbn, setIsEditingAbn] = useState(false);
     const [abnValue, setAbnValue] = useState(initialLead.abn || '');
     const [isSavingAbn, setIsSavingAbn] = useState(false);
+
+    const [isEditingWebsite, setIsEditingWebsite] = useState(false);
+    const [websiteValue, setWebsiteValue] = useState(initialLead.websiteUrl || (initialLead as any).website || '');
+    const [quickWebsiteInput, setQuickWebsiteInput] = useState(initialLead.websiteUrl || (initialLead as any).website || '');
+    const [isSavingWebsite, setIsSavingWebsite] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
 
     useEffect(() => {
@@ -2443,6 +2448,59 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
+  const handleSaveWebsite = async (urlOverride?: string) => {
+    const rawVal = (urlOverride !== undefined ? urlOverride : websiteValue).trim();
+    if (!rawVal) {
+      toast({ variant: 'destructive', title: 'No Website URL', description: 'Please enter a website URL to save.' });
+      return;
+    }
+    let formattedUrl = rawVal;
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = `https://${formattedUrl}`;
+    }
+
+    setIsSavingWebsite(true);
+    try {
+      await updateLeadDetails(lead.id, lead, { websiteUrl: formattedUrl, website: formattedUrl } as any);
+
+      const leadRef = doc(firestore, 'leads', lead.id);
+      const companyRef = doc(firestore, 'companies', lead.id);
+      await Promise.all([
+        setDoc(leadRef, { websiteUrl: formattedUrl, website: formattedUrl, updatedAt: new Date().toISOString() }, { merge: true }),
+        setDoc(companyRef, { websiteUrl: formattedUrl, website: formattedUrl, updatedAt: new Date().toISOString() }, { merge: true }),
+      ]).catch(() => {});
+
+      sendLeadUpdateToNetSuite({
+        leadId: lead.id,
+        companyName: lead.companyName,
+        email: lead.customerServiceEmail || '',
+        phone: lead.customerPhone || '',
+        website: formattedUrl,
+        industry: lead.industryCategory || '',
+        abn: lead.abn || '',
+      }).catch(() => {});
+
+      setLead(prev => ({ ...prev, websiteUrl: formattedUrl, website: formattedUrl }));
+      setWebsiteValue(formattedUrl);
+      setQuickWebsiteInput(formattedUrl);
+      setIsEditingWebsite(false);
+
+      toast({
+        title: 'Website URL Saved to Record',
+        description: `Saved "${formattedUrl}" under websiteUrl on ${lead.companyName}.`,
+      });
+    } catch (error: any) {
+      console.error('Failed to update websiteUrl:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error Saving Website',
+        description: error?.message || 'Failed to save website URL. Please try again.',
+      });
+    } finally {
+      setIsSavingWebsite(false);
+    }
+  };
+
   const handleBucketChange = async (newBucket: string) => {
     const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
     if (newBucket === 'lpo_plus' && isLost) {
@@ -4363,7 +4421,57 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
                     {/* Row 3: Website & ABN */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100/60">
-                        <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
+                        {isEditingWebsite ? (
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                    <Globe className="h-4 w-4" />
+                                    <span className="text-[11px] font-medium uppercase tracking-wider">Website URL</span>
+                                </div>
+                                <div className="flex items-center gap-2 min-h-[1.5rem]">
+                                    <Input
+                                        value={websiteValue}
+                                        onChange={(e) => setWebsiteValue(e.target.value)}
+                                        placeholder="https://example.com"
+                                        className="h-8 flex-1 text-xs bg-white"
+                                        disabled={isSavingWebsite}
+                                    />
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                        onClick={() => handleSaveWebsite()}
+                                        disabled={isSavingWebsite}
+                                    >
+                                        {isSavingWebsite ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                        onClick={() => {
+                                            setIsEditingWebsite(false);
+                                            setWebsiteValue(lead.websiteUrl || '');
+                                        }}
+                                        disabled={isSavingWebsite}
+                                    >
+                                        <XCircle className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <DetailItem
+                                icon={Globe}
+                                label="Website"
+                                value={lead.websiteUrl}
+                                isWebsite
+                                actionIcon={Edit}
+                                onActionClick={() => {
+                                    setIsEditingWebsite(true);
+                                    setWebsiteValue(lead.websiteUrl || '');
+                                }}
+                                actionClassName="text-primary hover:text-primary/80 hover:bg-primary/5 h-6 w-6"
+                            />
+                        )}
                         {isEditingAbn ? (
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -5128,12 +5236,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardHeader>
                     <CardContent className="pt-6">
                         {!lead.websiteUrl ? (
-                            <div className="flex flex-col items-center justify-center p-8 text-center bg-amber-50/50 rounded-xl border border-amber-100">
-                                <Globe className="w-10 h-10 text-amber-500 mb-3" />
-                                <h3 className="font-semibold text-amber-800 text-lg mb-1">No Website Url Found</h3>
-                                <p className="text-sm text-amber-600/80 max-w-md">
-                                    Please edit this lead's details to add a company website URL before scanning with AI bots.
-                                </p>
+                            <div className="flex flex-col items-center justify-center p-8 text-center bg-amber-50/50 rounded-xl border border-amber-100 space-y-4">
+                                <div className="flex flex-col items-center">
+                                    <Globe className="w-10 h-10 text-amber-500 mb-2" />
+                                    <h3 className="font-semibold text-amber-800 text-lg mb-1">No Website Url Found</h3>
+                                    <p className="text-sm text-amber-600/80 max-w-md">
+                                        Enter a website URL below to save it to this record under field "websiteUrl" and enable AI website scanning.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2 max-w-md w-full">
+                                    <Input
+                                        placeholder="https://example.com"
+                                        value={quickWebsiteInput}
+                                        onChange={(e) => setQuickWebsiteInput(e.target.value)}
+                                        className="bg-white text-xs h-9"
+                                    />
+                                    <Button
+                                        size="sm"
+                                        onClick={() => handleSaveWebsite(quickWebsiteInput)}
+                                        disabled={isSavingWebsite || !quickWebsiteInput.trim()}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shrink-0"
+                                    >
+                                        {isSavingWebsite ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save to Record"}
+                                    </Button>
+                                </div>
                             </div>
                         ) : companyInsights.length === 0 ? (
                             <div className="flex flex-col items-center justify-center p-12 text-center bg-muted/30 rounded-xl border border-dashed">

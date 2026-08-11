@@ -34,6 +34,8 @@ import {
   CalendarCheck,
   ShieldCheck,
   Loader2,
+  Check,
+  XCircle,
 } from 'lucide-react'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { getOnboardingRequestByLeadId } from '@/services/onboarding-service'
@@ -61,7 +63,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { CancelCustomerDialog } from '@/components/cancel-customer-dialog'
 import { LogNoteDialog } from './log-note-dialog'
 import { LossReasonPicker } from './loss-reason-picker'
-import { collection, getDocs, orderBy, query, doc, getDoc, where } from 'firebase/firestore'
+import { collection, getDocs, orderBy, query, doc, getDoc, setDoc, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { canEditSignedCustomerAddress } from '@/lib/lead-permissions'
 import { RequestAddressChangeDialog } from '@/components/request-address-change-dialog'
@@ -169,6 +171,50 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [isSuburbsModalOpen, setIsSuburbsModalOpen] = useState(false);
   const [operatorMap, setOperatorMap] = useState<Record<string, string>>({});
   const [checkingShipmateId, setCheckingShipmateId] = useState<string | null>(null);
+
+  const [isEditingWebsite, setIsEditingWebsite] = useState(false);
+  const [websiteValue, setWebsiteValue] = useState(initialCompany.websiteUrl || (initialCompany as any).website || '');
+  const [isSavingWebsite, setIsSavingWebsite] = useState(false);
+
+  const handleSaveWebsite = async (urlOverride?: string) => {
+    const rawVal = (urlOverride !== undefined ? urlOverride : websiteValue).trim();
+    if (!rawVal) {
+      toast({ variant: 'destructive', title: 'No Website URL', description: 'Please enter a website URL to save.' });
+      return;
+    }
+    let formattedUrl = rawVal;
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = `https://${formattedUrl}`;
+    }
+
+    setIsSavingWebsite(true);
+    try {
+      const compRef = doc(firestore, 'companies', company.id);
+      const leadRef = doc(firestore, 'leads', company.id);
+      await Promise.all([
+        setDoc(compRef, { websiteUrl: formattedUrl, website: formattedUrl, updatedAt: new Date().toISOString() }, { merge: true }),
+        setDoc(leadRef, { websiteUrl: formattedUrl, website: formattedUrl, updatedAt: new Date().toISOString() }, { merge: true }),
+      ]);
+
+      setCompany(prev => ({ ...prev, websiteUrl: formattedUrl, website: formattedUrl } as any));
+      setWebsiteValue(formattedUrl);
+      setIsEditingWebsite(false);
+
+      toast({
+        title: 'Website URL Saved to Record',
+        description: `Saved "${formattedUrl}" under websiteUrl field.`,
+      });
+    } catch (error: any) {
+      console.error('Failed to update websiteUrl:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error Saving Website',
+        description: error?.message || 'Failed to save website URL.',
+      });
+    } finally {
+      setIsSavingWebsite(false);
+    }
+  };
 
   const handleCheckShipmateStatus = async (contact: any) => {
     if (!contact.email) return;
@@ -616,7 +662,57 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         <DetailItem icon={Key} label="Customer ID" value={company.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={(company as any).internalid || company.salesRecordInternalId} copyable />
                         <DetailItem icon={CalendarIcon} label={getLeadDisplayDateLabel(company)} value={formatDate(getLeadDisplayDateValue(company))} />
-                        <DetailItem icon={Globe} label="Website" value={company.websiteUrl} isWebsite />
+                        {isEditingWebsite ? (
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                    <Globe className="h-4 w-4" />
+                                    <span className="text-[11px] font-medium uppercase tracking-wider">Website URL</span>
+                                </div>
+                                <div className="flex items-center gap-2 min-h-[1.5rem]">
+                                    <Input
+                                        value={websiteValue}
+                                        onChange={(e) => setWebsiteValue(e.target.value)}
+                                        placeholder="https://example.com"
+                                        className="h-8 flex-1 text-xs bg-white"
+                                        disabled={isSavingWebsite}
+                                    />
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                        onClick={() => handleSaveWebsite()}
+                                        disabled={isSavingWebsite}
+                                    >
+                                        {isSavingWebsite ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                        onClick={() => {
+                                            setIsEditingWebsite(false);
+                                            setWebsiteValue(company.websiteUrl || '');
+                                        }}
+                                        disabled={isSavingWebsite}
+                                    >
+                                        <XCircle className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <DetailItem
+                                icon={Globe}
+                                label="Website"
+                                value={company.websiteUrl}
+                                isWebsite
+                                actionIcon={Edit}
+                                onActionClick={() => {
+                                    setIsEditingWebsite(true);
+                                    setWebsiteValue(company.websiteUrl || '');
+                                }}
+                                actionClassName="text-primary hover:text-primary/80 hover:bg-primary/5 h-6 w-6"
+                            />
+                        )}
                         <DetailItem icon={Hash} label="ABN" value={company.abn || '- None -'} copyable />
                         <DetailItem icon={Tag} label="Industry" value={company.industryCategory} />
                     </div>

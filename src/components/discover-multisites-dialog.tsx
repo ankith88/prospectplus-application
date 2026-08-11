@@ -20,7 +20,7 @@ import type { MapLead, Lead, Address } from '@/lib/types';
 import { discoverCompanyBranches, findCompanyWebsite } from '@/ai/flows/discover-multisite-branches-flow';
 import { createChildSiteLead, findFranchiseeForAddress } from '@/services/firebase';
 import { firestore } from '@/lib/firebase';
-import { doc, updateDoc, collection, getDocs, getDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, getDocs, getDoc, setDoc, query, where } from 'firebase/firestore';
 import {
   Building,
   MapPin,
@@ -203,9 +203,10 @@ export function DiscoverMultiSitesDialog({
       const res = await findCompanyWebsite(targetName, companyEmail);
       if (res.success && res.websiteUrl) {
         setWebsiteUrlInput(res.websiteUrl);
+        const detailMsg = res.specificPageUrl ? ` (Location page: ${res.specificPageUrl})` : '';
         toast({
           title: 'Website Discovered',
-          description: `Found official website (${res.source || 'Web'}): ${res.websiteUrl}`,
+          description: `Found official website (${res.source || 'Web'}): ${res.websiteUrl}${detailMsg}`,
         });
       } else {
         toast({
@@ -222,56 +223,131 @@ export function DiscoverMultiSitesDialog({
   };
 
   const handleSaveWebsiteToRecord = async () => {
-    if (!parentCompany?.id || !websiteUrlInput.trim()) {
-      toast({ variant: 'destructive', title: 'No Record or Website', description: 'Enter a website URL and ensure a parent lead/company is selected.' });
+    let rawUrl = (typeof websiteUrlInput === 'string' ? websiteUrlInput : String(websiteUrlInput || '')).trim();
+    if (!rawUrl) {
+      toast({
+        variant: 'destructive',
+        title: 'No Website URL',
+        description: 'Please enter a website URL to save.',
+      });
       return;
     }
+
+    if (!/^https?:\/\//i.test(rawUrl)) {
+      rawUrl = `https://${rawUrl}`;
+      setWebsiteUrlInput(rawUrl);
+    }
+
     setIsSavingWebsite(true);
     try {
-      const urlToSave = websiteUrlInput.trim();
-      const targetId = parentCompany.id;
+      let targetRecord: MapLead | Lead | null = parentCompany;
+      let targetId = parentCompany?.id;
+      let targetName = parentCompany?.companyName || companyNameInput.trim();
 
-      // Check both 'leads' and 'companies' collections in Firestore
-      const leadRef = doc(firestore, 'leads', targetId);
-      const companyRef = doc(firestore, 'companies', targetId);
+      const recordsToSearch = allSystemRecords.length > 0 ? allSystemRecords : fetchedSystemRecords;
 
-      const [leadSnap, companySnap] = await Promise.all([
-        getDoc(leadRef),
-        getDoc(companyRef),
-      ]);
+      // If targetId is missing, search loaded system records for matching company name
+      if (!targetId && targetName) {
+        const cleanTargetName = targetName.toLowerCase();
+        const matched = recordsToSearch.find((r) => {
+          const name = (r.companyName || '').toLowerCase();
+          return name === cleanTargetName || name.includes(cleanTargetName) || cleanTargetName.includes(name);
+        });
+        if (matched) {
+          targetRecord = matched;
+          targetId = matched.id;
+          targetName = matched.companyName;
+        }
+      }
 
       const updatePayload = {
-        websiteUrl: urlToSave,
-        website: urlToSave,
+        websiteUrl: rawUrl,
+        website: rawUrl,
         updatedAt: new Date().toISOString(),
       };
 
       const updatePromises: Promise<any>[] = [];
       const updatedCollections: string[] = [];
 
-      if (leadSnap.exists()) {
-        updatePromises.push(setDoc(leadRef, updatePayload, { merge: true }));
-        updatedCollections.push('leads');
+      if (targetId) {
+        const leadRef = doc(firestore, 'leads', targetId);
+        const companyRef = doc(firestore, 'companies', targetId);
+
+        const [leadSnap, companySnap] = await Promise.all([
+          getDoc(leadRef),
+          getDoc(companyRef),
+        ]);
+
+        if (leadSnap.exists()) {
+          updatePromises.push(setDoc(leadRef, updatePayload, { merge: true }));
+          updatedCollections.push('leads');
+        }
+
+        if (companySnap.exists()) {
+          updatePromises.push(setDoc(companyRef, updatePayload, { merge: true }));
+          updatedCollections.push('companies');
+        }
+
+        if (updatePromises.length === 0) {
+          const isComp = (targetRecord as any)?.isCompany || (targetRecord as any)?.customerStatus === 'Signed Customer';
+          const primaryRef = isComp ? companyRef : leadRef;
+          updatePromises.push(setDoc(primaryRef, updatePayload, { merge: true }));
+          updatedCollections.push(isComp ? 'companies' : 'leads');
+        }
+      } else if (targetName) {
+        // Query Firestore for documents matching companyName in leads and companies
+        const [leadsQuerySnap, companiesQuerySnap] = await Promise.all([
+          getDocs(query(collection(firestore, 'leads'), where('companyName', '==', targetName))),
+          getDocs(query(collection(firestore, 'companies'), where('companyName', '==', targetName))),
+        ]);
+
+        leadsQuerySnap.docs.forEach((d) => {
+          updatePromises.push(setDoc(d.ref, updatePayload, { merge: true }));
+          if (!updatedCollections.includes('leads')) updatedCollections.push('leads');
+        });
+
+        companiesQuerySnap.docs.forEach((d) => {
+          updatePromises.push(setDoc(d.ref, updatePayload, { merge: true }));
+          if (!updatedCollections.includes('companies')) updatedCollections.push('companies');
+        });
       }
 
-      if (companySnap.exists()) {
-        updatePromises.push(setDoc(companyRef, updatePayload, { merge: true }));
-        updatedCollections.push('companies');
-      }
-
-      // If neither document existed by exact ID, fallback to setDoc with merge on primary collection
       if (updatePromises.length === 0) {
-        const isComp = (parentCompany as any).isCompany || (parentCompany as any).customerStatus === 'Signed Customer';
-        const primaryRef = isComp ? companyRef : leadRef;
-        updatePromises.push(setDoc(primaryRef, updatePayload, { merge: true }));
-        updatedCollections.push(isComp ? 'companies' : 'leads');
+        toast({
+          variant: 'destructive',
+          title: 'Record Not Found',
+          description: targetName
+            ? `Could not find an existing lead or company record for "${targetName}" to save website URL.`
+            : 'Please enter a company name or select a parent record first.',
+        });
+        return;
       }
 
       await Promise.all(updatePromises);
 
+      // Mutate in-memory objects so UI updates instantly
+      if (parentCompany) {
+        (parentCompany as any).websiteUrl = rawUrl;
+        (parentCompany as any).website = rawUrl;
+      }
+      if (targetRecord) {
+        (targetRecord as any).websiteUrl = rawUrl;
+        (targetRecord as any).website = rawUrl;
+      }
+
+      recordsToSearch.forEach((r) => {
+        if (targetId && r.id === targetId) {
+          r.websiteUrl = rawUrl;
+          (r as any).website = rawUrl;
+        } else if (targetName && (r.companyName || '').toLowerCase() === targetName.toLowerCase()) {
+          r.websiteUrl = rawUrl;
+          (r as any).website = rawUrl;
+        }
+      });
+
       toast({
         title: 'Website Saved to Record',
-        description: `Saved ${urlToSave} to field "websiteUrl" on ${parentCompany.companyName} (${updatedCollections.join(' & ')}).`,
+        description: `Saved ${rawUrl} under field "websiteUrl" on ${targetName || 'Record'} (${updatedCollections.join(' & ')}).`,
       });
       onLocationsUpdated?.();
     } catch (err: any) {
@@ -416,7 +492,8 @@ export function DiscoverMultiSitesDialog({
     setSelectedLocationIds(new Set());
 
     const coreName = targetName.split(' - ')[0].trim();
-    const websiteUrl = websiteUrlInput.trim() || parentCompany?.websiteUrl || (parentCompany as any)?.website || '';
+    const currentWebsiteStr = typeof websiteUrlInput === 'string' ? websiteUrlInput : String(websiteUrlInput || '');
+    const websiteUrl = currentWebsiteStr.trim() || parentCompany?.websiteUrl || (parentCompany as any)?.website || '';
     const rawDiscovered: DiscoveredLocation[] = [];
 
     // CHANNEL 1: AI & Web Scraper + Hunter.io
@@ -429,6 +506,9 @@ export function DiscoverMultiSitesDialog({
       if (aiResult.success && aiResult.data?.branches) {
         if (aiResult.data.companySummary) {
           setScanSummary(aiResult.data.companySummary);
+        }
+        if (aiResult.data.websiteUrl && typeof aiResult.data.websiteUrl === 'string' && (!currentWebsiteStr || currentWebsiteStr.includes('/locations/') || currentWebsiteStr.includes('/our-locations/'))) {
+          setWebsiteUrlInput(aiResult.data.websiteUrl);
         }
 
         aiResult.data.branches.forEach((b, idx) => {
@@ -867,7 +947,7 @@ export function DiscoverMultiSitesDialog({
                   onChange={(e) => setWebsiteUrlInput(e.target.value)}
                   className="h-8 text-xs bg-white flex-1"
                 />
-                {parentCompany?.id && websiteUrlInput.trim() && (
+                {(typeof websiteUrlInput === 'string' ? websiteUrlInput : String(websiteUrlInput || '')).trim() && (
                   <Button
                     type="button"
                     size="sm"
@@ -902,10 +982,10 @@ export function DiscoverMultiSitesDialog({
                 <Building className="h-3.5 w-3.5 text-primary shrink-0" />
                 <span>Linking child leads to Parent: <strong>{parentCompany.companyName}</strong> ({parentCompany.id})</span>
               </div>
-              {websiteUrlInput && (
+              {Boolean(websiteUrlInput) && (
                 <div className="flex items-center gap-1.5 text-[11px] text-purple-700 font-medium">
                   <Globe className="h-3 w-3" />
-                  <span>Target Website: <strong>{websiteUrlInput}</strong></span>
+                  <span>Target Website: <strong>{String(websiteUrlInput)}</strong></span>
                 </div>
               )}
             </div>
