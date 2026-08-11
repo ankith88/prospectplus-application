@@ -532,6 +532,8 @@ export interface Lead {
   franchisee?: string;
   franchisee_id?: string;
   websiteUrl?: string;
+  pageURL?: string;
+  interestedIn?: string;
   industryCategory?: string
   industrySubCategory?: string
   salesRepAssigned?: string

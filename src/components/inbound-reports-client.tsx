@@ -39,7 +39,10 @@ import {
   Package,
   Activity as ActivityIcon,
   Layers,
-  AlertTriangle
+  AlertTriangle,
+  Globe,
+  Search,
+  Sparkles
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -425,6 +428,9 @@ export default function InboundReportsClientPage({
   const [activeNetsuiteIndex, setActiveNetsuiteIndex] = useState<number | null>(null);
   const [activeCustomerIndex, setActiveCustomerIndex] = useState<number | null>(null);
   const [activeLeadTypeIndex, setActiveLeadTypeIndex] = useState<number | null>(null);
+  const [activeInterestIndex, setActiveInterestIndex] = useState<number | null>(null);
+  const [webpageSearchQuery, setWebpageSearchQuery] = useState<string>("");
+  const [interestSearchQuery, setInterestSearchQuery] = useState<string>("");
   const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
   const [drillDownStatusFilter, setDrillDownStatusFilter] = useState<string>("all");
   const [drillDownBucketFilter, setDrillDownBucketFilter] = useState<string>("all");
@@ -2019,7 +2025,167 @@ export default function InboundReportsClientPage({
       byAM: outOfTerritoryByAM,
     };
 
+    // --- 1. Inbound Webpages & Landing Pages Aggregation ---
+    const webpageMap: Record<string, {
+        url: string;
+        displayUrl: string;
+        referrer: string;
+        leads: Lead[];
+        total: number;
+        active: number;
+        signed: number;
+        lost: number;
+    }> = {};
+
+    filteredLeads.forEach(lead => {
+        const rawUrl = lead.inboundDetails?.landingPage || lead.pageURL || lead.customerSource || 'Direct / Form';
+        let cleanUrl = (rawUrl || 'Direct / Form').trim();
+        
+        let displayUrl = cleanUrl;
+        if (displayUrl.startsWith('http://') || displayUrl.startsWith('https://')) {
+            try {
+                const parsed = new URL(displayUrl);
+                displayUrl = parsed.hostname + (parsed.pathname === '/' ? '' : parsed.pathname);
+            } catch (e) {
+                displayUrl = cleanUrl.replace(/^https?:\/\//, '');
+            }
+        }
+
+        const rawReferrer = lead.inboundDetails?.referrer || 'Direct / None';
+        let referrerDisplay = rawReferrer.trim();
+        if (referrerDisplay.startsWith('http://') || referrerDisplay.startsWith('https://')) {
+            try {
+                const parsedRef = new URL(referrerDisplay);
+                referrerDisplay = parsedRef.hostname;
+            } catch (e) {
+                referrerDisplay = rawReferrer.replace(/^https?:\/\//, '');
+            }
+        }
+
+        const key = displayUrl.toLowerCase();
+        if (!webpageMap[key]) {
+            webpageMap[key] = {
+                url: cleanUrl,
+                displayUrl: displayUrl || 'Direct / Form',
+                referrer: referrerDisplay || 'Direct / None',
+                leads: [],
+                total: 0,
+                active: 0,
+                signed: 0,
+                lost: 0,
+            };
+        }
+
+        const item = webpageMap[key];
+        item.leads.push(lead);
+        item.total += 1;
+        if (isSignedLead(lead)) {
+            item.signed += 1;
+        } else if (isLostLead(lead)) {
+            item.lost += 1;
+        } else {
+            item.active += 1;
+        }
+    });
+
+    const webpageDataList = Object.values(webpageMap)
+        .map(w => ({
+            ...w,
+            conversionRate: w.total > 0 ? parseFloat(((w.signed / w.total) * 100).toFixed(1)) : 0
+        }))
+        .sort((a, b) => b.total - a.total);
+
+    const topWebpagesChartData = webpageDataList.slice(0, 10).map(w => ({
+        name: w.displayUrl.length > 30 ? w.displayUrl.substring(0, 27) + '...' : w.displayUrl,
+        fullName: w.displayUrl,
+        value: w.total,
+        signed: w.signed,
+        conversionRate: w.conversionRate
+    }));
+
+    const trackedWebpagesCount = filteredLeads.filter(l => !!(l.inboundDetails?.landingPage || l.pageURL)).length;
+    const trackedWebpagesPercent = totalInbound > 0 ? parseFloat(((trackedWebpagesCount / totalInbound) * 100).toFixed(1)) : 0;
+    const topWebpageName = webpageDataList.length > 0 ? webpageDataList[0].displayUrl : 'N/A';
+    const bestConvertingWebpageObj = [...webpageDataList]
+        .filter(w => w.total >= 2)
+        .sort((a, b) => b.conversionRate - a.conversionRate)[0] || webpageDataList[0];
+    const bestConvertingWebpageName = bestConvertingWebpageObj ? `${bestConvertingWebpageObj.displayUrl} (${bestConvertingWebpageObj.conversionRate}%)` : 'N/A';
+
+    // --- 2. Selected Interests & Service Options Aggregation ---
+    const interestMap: Record<string, {
+        interest: string;
+        leads: Lead[];
+        total: number;
+        active: number;
+        signed: number;
+        lost: number;
+    }> = {};
+
+    filteredLeads.forEach(lead => {
+        let rawInterest = 
+            lead.interestedIn || 
+            lead.discoveryData?.interestedIn || 
+            (lead.selectedServiceOption ? lead.selectedServiceOption.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : null) || 
+            lead.leadType || 
+            'General Inbound / Not Specified';
+
+        if (!rawInterest || rawInterest.trim() === '') rawInterest = 'General Inbound / Not Specified';
+
+        const interestItems = rawInterest.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean);
+        if (interestItems.length === 0) interestItems.push('General Inbound / Not Specified');
+
+        interestItems.forEach((itemStr: string) => {
+            const key = itemStr.toLowerCase();
+            if (!interestMap[key]) {
+                interestMap[key] = {
+                    interest: itemStr,
+                    leads: [],
+                    total: 0,
+                    active: 0,
+                    signed: 0,
+                    lost: 0,
+                };
+            }
+
+            const item = interestMap[key];
+            item.leads.push(lead);
+            item.total += 1;
+            if (isSignedLead(lead)) {
+                item.signed += 1;
+            } else if (isLostLead(lead)) {
+                item.lost += 1;
+            } else {
+                item.active += 1;
+            }
+        });
+    });
+
+    const interestDataList = Object.values(interestMap)
+        .map(i => ({
+            ...i,
+            percentage: totalInbound > 0 ? parseFloat(((i.total / totalInbound) * 100).toFixed(1)) : 0,
+            conversionRate: i.total > 0 ? parseFloat(((i.signed / i.total) * 100).toFixed(1)) : 0
+        }))
+        .sort((a, b) => b.total - a.total);
+
+    const topInterestName = interestDataList.length > 0 ? interestDataList[0].interest : 'N/A';
+    const bestConvertingInterestObj = [...interestDataList]
+        .filter(i => i.total >= 2)
+        .sort((a, b) => b.conversionRate - a.conversionRate)[0] || interestDataList[0];
+    const bestConvertingInterestName = bestConvertingInterestObj ? `${bestConvertingInterestObj.interest} (${bestConvertingInterestObj.conversionRate}%)` : 'N/A';
+    const totalExplicitInterestsCount = filteredLeads.filter(l => !!(l.interestedIn || l.discoveryData?.interestedIn || l.selectedServiceOption)).length;
+
     return {
+        webpageDataList,
+        topWebpagesChartData,
+        trackedWebpagesCount,
+        trackedWebpagesPercent,
+        topWebpageName,
+        bestConvertingWebpageName,
+        interestDataList,
+        topInterestName,
+        bestConvertingInterestName,
+        totalExplicitInterestsCount,
         inboundJourneyStats,
         shipmateTrialLeads,
         shipmateJourney,
@@ -2593,6 +2759,373 @@ export default function InboundReportsClientPage({
                 </Card>
                 )}
             </div>
+            )}
+
+            {/* Inbound Webpages & Landing Pages Analytics */}
+            {(!visibleSections || visibleSections.includes('webpages-analytics')) && (
+            <Card id="step-report-inbound-webpages" className="mt-6 shadow-md border-primary/10">
+                <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <Globe className="h-5 w-5 text-[#095c7b]" />
+                                <span>Inbound Webpages & Landing Pages</span>
+                                <SectionHelp content="Analytics showing which website landing pages and referrers generated inbound leads, along with lead volume and conversion performance." />
+                            </CardTitle>
+                            <CardDescription>
+                                Track performance, lead volume, and signed conversions by landing page URL and referrer.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(
+                                stats.webpageDataList.map(w => ({
+                                    'Landing Page URL': w.url,
+                                    'Display URL': w.displayUrl,
+                                    'Referrer Domain': w.referrer,
+                                    'Total Inbound Leads': w.total,
+                                    'Active Pipeline': w.active,
+                                    'Signed / Won': w.signed,
+                                    'Lost Leads': w.lost,
+                                    'Conversion Rate %': `${w.conversionRate}%`
+                                })), 
+                                'inbound_webpages_performance'
+                            )}>
+                                <Download className="h-4 w-4 mr-2" /> Export Table
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    {/* KPI Callouts */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200/60 dark:border-sky-800/40">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-300">Top Inbound Webpage</span>
+                                <Globe className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                            </div>
+                            <p className="text-base font-bold text-sky-950 dark:text-sky-100 mt-2 truncate" title={stats.topWebpageName}>
+                                {stats.topWebpageName}
+                            </p>
+                            <p className="text-xs text-sky-600 dark:text-sky-400 mt-0.5">Highest lead volume page</p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Best Converting Webpage</span>
+                                <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <p className="text-base font-bold text-emerald-950 dark:text-emerald-100 mt-2 truncate" title={stats.bestConvertingWebpageName}>
+                                {stats.bestConvertingWebpageName}
+                            </p>
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">Highest win rate landing page</p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Tracked Page URL Ratio</span>
+                                <Target className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            </div>
+                            <p className="text-xl font-bold text-amber-950 dark:text-amber-100 mt-2">
+                                {stats.trackedWebpagesCount} <span className="text-sm font-normal text-amber-700 dark:text-amber-300">({stats.trackedWebpagesPercent}%)</span>
+                            </p>
+                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Leads with landing page logged</p>
+                        </div>
+                    </div>
+
+                    {/* Webpages Bar Chart & Search Table */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Chart */}
+                        <div className="lg:col-span-1 border rounded-lg p-4 bg-card">
+                            <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                                <BarChart3 className="h-4 w-4 text-primary" /> Top Webpages by Lead Count
+                            </h4>
+                            {stats.topWebpagesChartData.length > 0 ? (
+                                <ChartContainer config={{}} className="h-[280px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={stats.topWebpagesChartData} layout="vertical" margin={{ left: 10, right: 20 }}>
+                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                            <XAxis type="number" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                                            <YAxis dataKey="name" type="category" width={110} fontSize={11} tickLine={false} axisLine={false} />
+                                            <Tooltip content={<ChartTooltipContent />} />
+                                            <Bar dataKey="value" name="Inbound Leads" fill="#0284c7" radius={[0, 4, 4, 0]}>
+                                                <LabelList dataKey="value" position="right" fill="#64748b" fontSize={11} />
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </ChartContainer>
+                            ) : (
+                                <div className="h-[280px] flex items-center justify-center text-muted-foreground text-xs italic">No webpage data captured.</div>
+                            )}
+                        </div>
+
+                        {/* Table */}
+                        <div className="lg:col-span-2 border rounded-lg p-4 bg-card flex flex-col">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
+                                <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                                    <Globe className="h-4 w-4 text-primary" /> Webpage & Referrer Conversion Breakdown
+                                </h4>
+                                <div className="relative w-full sm:w-60">
+                                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Filter webpage URL..."
+                                        value={webpageSearchQuery}
+                                        onChange={(e) => setWebpageSearchQuery(e.target.value)}
+                                        className="h-8 pl-8 text-xs"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="overflow-x-auto border rounded-md max-h-[300px]">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/50">
+                                            <TableHead className="text-xs">Webpage / Landing URL</TableHead>
+                                            <TableHead className="text-xs">Referrer</TableHead>
+                                            <TableHead className="text-xs text-right">Leads</TableHead>
+                                            <TableHead className="text-xs text-right">Active</TableHead>
+                                            <TableHead className="text-xs text-right">Signed</TableHead>
+                                            <TableHead className="text-xs text-right">Conv. Rate</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {stats.webpageDataList
+                                            .filter(w => !webpageSearchQuery || w.displayUrl.toLowerCase().includes(webpageSearchQuery.toLowerCase()) || w.referrer.toLowerCase().includes(webpageSearchQuery.toLowerCase()))
+                                            .map((w, idx) => (
+                                                <TableRow 
+                                                    key={w.displayUrl + idx}
+                                                    className="cursor-pointer hover:bg-muted/60 transition-colors"
+                                                    onClick={() => setDrillDownData({
+                                                        title: `Leads from Webpage: ${w.displayUrl}`,
+                                                        leads: w.leads
+                                                    })}
+                                                >
+                                                    <TableCell className="font-medium text-xs py-2 max-w-[200px] truncate" title={w.url}>
+                                                        <span className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+                                                            <Globe className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                                            {w.displayUrl}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs py-2 text-muted-foreground max-w-[130px] truncate" title={w.referrer}>
+                                                        {w.referrer}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs py-2 text-right font-semibold">{w.total}</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right text-amber-600 dark:text-amber-400 font-medium">{w.active}</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right text-emerald-600 dark:text-emerald-400 font-bold">{w.signed}</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right">
+                                                        <Badge variant={w.conversionRate > 20 ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
+                                                            {w.conversionRate}%
+                                                        </Badge>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        {stats.webpageDataList.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center py-6 text-xs text-muted-foreground italic">
+                                                    No webpage landing URLs captured for the selected filter period.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-2 italic">
+                                * Click any webpage row to view the list of leads submitted through that page.
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+            )}
+
+            {/* Selected Interests & Service Options Analytics */}
+            {(!visibleSections || visibleSections.includes('interests-analytics')) && (
+            <Card id="step-report-inbound-interests" className="mt-6 shadow-md border-primary/10">
+                <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <Sparkles className="h-5 w-5 text-[#095c7b]" />
+                                <span>Selected Interests & Service Options</span>
+                                <SectionHelp content="Breakdown of product/service interests selected by prospects when submitting inbound forms or during discovery." />
+                            </CardTitle>
+                            <CardDescription>
+                                Analyze inbound lead demand and conversion performance by selected service option or product interest.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(
+                                stats.interestDataList.map(i => ({
+                                    'Interest / Service': i.interest,
+                                    'Total Leads': i.total,
+                                    '% of Total Inbound': `${i.percentage}%`,
+                                    'Active Pipeline': i.active,
+                                    'Signed / Won': i.signed,
+                                    'Lost Leads': i.lost,
+                                    'Conversion Rate %': `${i.conversionRate}%`
+                                })), 
+                                'inbound_interests_performance'
+                            )}>
+                                <Download className="h-4 w-4 mr-2" /> Export Table
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    {/* KPI Callouts */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/40">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-purple-700 dark:text-purple-300">Top Selected Interest</span>
+                                <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                            </div>
+                            <p className="text-base font-bold text-purple-950 dark:text-purple-100 mt-2 truncate" title={stats.topInterestName}>
+                                {stats.topInterestName}
+                            </p>
+                            <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">Most requested service/product</p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Best Converting Interest</span>
+                                <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <p className="text-base font-bold text-emerald-950 dark:text-emerald-100 mt-2 truncate" title={stats.bestConvertingInterestName}>
+                                {stats.bestConvertingInterestName}
+                            </p>
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">Highest win rate interest selection</p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-800/40">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300">Leads with Explicit Interest</span>
+                                <Package className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <p className="text-xl font-bold text-blue-950 dark:text-blue-100 mt-2">
+                                {stats.totalExplicitInterestsCount} <span className="text-sm font-normal text-blue-700 dark:text-blue-300">({stats.totalInbound > 0 ? ((stats.totalExplicitInterestsCount / stats.totalInbound) * 100).toFixed(1) : 0}%)</span>
+                            </p>
+                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Explicitly selected service option</p>
+                        </div>
+                    </div>
+
+                    {/* Interests Chart & Table */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Chart */}
+                        <div className="lg:col-span-1 border rounded-lg p-4 bg-card">
+                            <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                                <BarChart3 className="h-4 w-4 text-primary" /> Interest Share Distribution
+                            </h4>
+                            {stats.interestDataList.length > 0 ? (
+                                <ChartContainer config={{}} className="h-[280px] w-full">
+                                    <PieChart>
+                                        <Pie
+                                            data={stats.interestDataList}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={55}
+                                            outerRadius={85}
+                                            paddingAngle={4}
+                                            dataKey="total"
+                                            onMouseEnter={(_, index) => setActiveInterestIndex(index)}
+                                            onMouseLeave={() => setActiveInterestIndex(null)}
+                                            label={({ percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
+                                        >
+                                            {stats.interestDataList.map((entry, index) => (
+                                                <Cell
+                                                    key={`interest-cell-${index}`}
+                                                    fill={COLORS[index % COLORS.length]}
+                                                    style={{
+                                                        opacity: activeInterestIndex === null || activeInterestIndex === index ? 1 : 0.3,
+                                                        transition: 'opacity 0.2s ease'
+                                                    }}
+                                                />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip />
+                                        <Legend
+                                            formatter={(value) => (
+                                                <span className="text-xs">{value}</span>
+                                            )}
+                                        />
+                                    </PieChart>
+                                </ChartContainer>
+                            ) : (
+                                <div className="h-[280px] flex items-center justify-center text-muted-foreground text-xs italic">No interest data available.</div>
+                            )}
+                        </div>
+
+                        {/* Table */}
+                        <div className="lg:col-span-2 border rounded-lg p-4 bg-card flex flex-col">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
+                                <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                                    <Sparkles className="h-4 w-4 text-primary" /> Interest Performance & Conversion Rates
+                                </h4>
+                                <div className="relative w-full sm:w-60">
+                                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Filter interest..."
+                                        value={interestSearchQuery}
+                                        onChange={(e) => setInterestSearchQuery(e.target.value)}
+                                        className="h-8 pl-8 text-xs"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="overflow-x-auto border rounded-md max-h-[300px]">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/50">
+                                            <TableHead className="text-xs">Interest / Service Option</TableHead>
+                                            <TableHead className="text-xs text-right">Leads</TableHead>
+                                            <TableHead className="text-xs text-right">% of Inbound</TableHead>
+                                            <TableHead className="text-xs text-right">Active</TableHead>
+                                            <TableHead className="text-xs text-right">Signed</TableHead>
+                                            <TableHead className="text-xs text-right">Conv. Rate</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {stats.interestDataList
+                                            .filter(i => !interestSearchQuery || i.interest.toLowerCase().includes(interestSearchQuery.toLowerCase()))
+                                            .map((i, idx) => (
+                                                <TableRow 
+                                                    key={i.interest + idx}
+                                                    className="cursor-pointer hover:bg-muted/60 transition-colors"
+                                                    onClick={() => setDrillDownData({
+                                                        title: `Leads Interested in: ${i.interest}`,
+                                                        leads: i.leads
+                                                    })}
+                                                >
+                                                    <TableCell className="font-medium text-xs py-2 flex items-center gap-2">
+                                                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                                                        <span className="text-blue-600 dark:text-blue-400 hover:underline">{i.interest}</span>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs py-2 text-right font-semibold">{i.total}</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right text-muted-foreground">{i.percentage}%</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right text-amber-600 dark:text-amber-400 font-medium">{i.active}</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right text-emerald-600 dark:text-emerald-400 font-bold">{i.signed}</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right">
+                                                        <Badge variant={i.conversionRate > 20 ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
+                                                            {i.conversionRate}%
+                                                        </Badge>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        {stats.interestDataList.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center py-6 text-xs text-muted-foreground italic">
+                                                    No interest selections recorded.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-2 italic">
+                                * Click any interest row to view all matching leads.
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
             )}
 
             {/* Daily Account Manager Activity */}

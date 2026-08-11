@@ -83,8 +83,13 @@ export async function POST(req: NextRequest) {
       isFiveFreeCollections,
       lpoLeadId,
       lpo_lead_id,
-      selectedServiceOption
+      selectedServiceOption,
+      pageUrl,
+      sourcePageUrl,
+      url
     } = body;
+
+    const finalPageUrl = pageUrl || sourcePageUrl || url || null;
 
     // Support both flat fields and nested address object
     const finalZip = zip || address?.zip;
@@ -223,12 +228,14 @@ export async function POST(req: NextRequest) {
       syncedWithNetSuite: false,
       lpoLeadId: lpoLeadId || lpo_lead_id || null,
       selectedServiceOption: selectedServiceOption || null,
+      pageUrl: finalPageUrl,
       discoveryData: {
         interestedIn: interestedIn || null,
         weeklyParcels: weeklyParcels || null,
       },
       inboundDetails: {
         ...inboundDetails,
+        pageUrl: finalPageUrl,
         submittedAt: inboundDetails?.submittedAt || new Date().toISOString()
       }
     };
@@ -337,6 +344,7 @@ export async function POST(req: NextRequest) {
       bucket: leadData.bucket === '5-free-trial' ? 'inbound' : leadData.bucket,
       noFranchisees: leadData.noFranchisees,
       selectedServiceOption: leadData.selectedServiceOption || undefined,
+      pageUrl: leadData.pageUrl || undefined,
     };
 
     let docRef: any;

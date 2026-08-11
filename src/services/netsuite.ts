@@ -899,10 +899,11 @@ interface NewLeadData {
   parentLeadId?: string;
   parentId?: string;
   parentCustomer?: string;
+  pageUrl?: string;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees, selectedServiceOption, parentLeadId, parentId, parentCustomer } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees, selectedServiceOption, parentLeadId, parentId, parentCustomer, pageUrl } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -1009,6 +1010,11 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
     if (payload.franchiseeReviewPending !== undefined) {
         params.append('franchisee_review_pending', String(payload.franchiseeReviewPending));
+    }
+    if (pageUrl) {
+        params.append('page_url', pageUrl);
+        params.append('custentity_page_url', pageUrl);
+        params.append('pageUrl', pageUrl);
     }
 
     const url = `${baseUrl}?${params.toString()}`;
