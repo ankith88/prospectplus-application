@@ -65,6 +65,8 @@ export interface DiscoveredLocation {
   createdLeadId?: string;
 }
 
+import { EnterMultiSiteLeadDialog } from '@/components/enter-multisite-lead-dialog';
+
 interface DiscoverMultiSitesDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -78,9 +80,9 @@ interface DiscoverMultiSitesDialogProps {
 export function DiscoverMultiSitesDialog({
   isOpen,
   onOpenChange,
-  parentCompany,
+  parentCompany = null,
   allSystemRecords = [],
-  map,
+  map = null,
   onAddMultiSiteLead,
   onLocationsUpdated,
 }: DiscoverMultiSitesDialogProps) {
@@ -104,6 +106,15 @@ export function DiscoverMultiSitesDialog({
   const [isFindingWebsite, setIsFindingWebsite] = useState(false);
   const [isSavingWebsite, setIsSavingWebsite] = useState(false);
   const [fetchedSystemRecords, setFetchedSystemRecords] = useState<MapLead[]>([]);
+
+  // Add Multi-Site Location modal state
+  const [selectedLocationForModal, setSelectedLocationForModal] = useState<DiscoveredLocation | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  const handleOpenAddLocationModal = (item: DiscoveredLocation) => {
+    setSelectedLocationForModal(item);
+    setIsAddModalOpen(true);
+  };
 
   // Load all system records from Firestore when dialog opens if allSystemRecords prop is empty
   useEffect(() => {
@@ -1069,7 +1080,7 @@ export function DiscoverMultiSitesDialog({
                                   ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                   : 'bg-purple-600 hover:bg-purple-700 text-white'
                               }`}
-                              onClick={() => handleCreateChildLeadInNetSuite(item)}
+                              onClick={() => handleOpenAddLocationModal(item)}
                             >
                               {isCreating ? (
                                 <>
@@ -1110,6 +1121,27 @@ export function DiscoverMultiSitesDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <EnterMultiSiteLeadDialog
+        isOpen={isAddModalOpen}
+        onOpenChange={setIsAddModalOpen}
+        parentCompany={parentCompany}
+        initialLocation={selectedLocationForModal}
+        onSuccess={() => {
+          if (selectedLocationForModal) {
+            setDiscoveredLocations((prev) =>
+              prev.map((loc) =>
+                loc.id === selectedLocationForModal.id
+                  ? { ...loc, status: 'Lead' }
+                  : loc
+              )
+            );
+          }
+          if (onLocationsUpdated) {
+            onLocationsUpdated();
+          }
+        }}
+      />
     </Dialog>
   );
 }
