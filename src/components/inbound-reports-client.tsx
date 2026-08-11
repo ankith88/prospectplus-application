@@ -431,6 +431,7 @@ export default function InboundReportsClientPage({
   const [activeInterestIndex, setActiveInterestIndex] = useState<number | null>(null);
   const [webpageSearchQuery, setWebpageSearchQuery] = useState<string>("");
   const [interestSearchQuery, setInterestSearchQuery] = useState<string>("");
+  const [weeklyParcelsSearchQuery, setWeeklyParcelsSearchQuery] = useState<string>("");
   const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
   const [drillDownStatusFilter, setDrillDownStatusFilter] = useState<string>("all");
   const [drillDownBucketFilter, setDrillDownBucketFilter] = useState<string>("all");
@@ -2038,7 +2039,7 @@ export default function InboundReportsClientPage({
     }> = {};
 
     filteredLeads.forEach(lead => {
-        const rawUrl = lead.inboundDetails?.landingPage || lead.pageURL || lead.customerSource || 'Direct / Form';
+        const rawUrl = lead.inboundPageUrl || lead.inboundDetails?.landingPage || lead.pageURL || lead.customerSource || 'Direct / Form';
         let cleanUrl = (rawUrl || 'Direct / Form').trim();
         
         let displayUrl = cleanUrl;
@@ -2103,7 +2104,7 @@ export default function InboundReportsClientPage({
         conversionRate: w.conversionRate
     }));
 
-    const trackedWebpagesCount = filteredLeads.filter(l => !!(l.inboundDetails?.landingPage || l.pageURL)).length;
+    const trackedWebpagesCount = filteredLeads.filter(l => !!(l.inboundPageUrl || l.inboundDetails?.landingPage || l.pageURL)).length;
     const trackedWebpagesPercent = totalInbound > 0 ? parseFloat(((trackedWebpagesCount / totalInbound) * 100).toFixed(1)) : 0;
     const topWebpageName = webpageDataList.length > 0 ? webpageDataList[0].displayUrl : 'N/A';
     const bestConvertingWebpageObj = [...webpageDataList]
@@ -2175,6 +2176,61 @@ export default function InboundReportsClientPage({
     const bestConvertingInterestName = bestConvertingInterestObj ? `${bestConvertingInterestObj.interest} (${bestConvertingInterestObj.conversionRate}%)` : 'N/A';
     const totalExplicitInterestsCount = filteredLeads.filter(l => !!(l.interestedIn || l.discoveryData?.interestedIn || l.selectedServiceOption)).length;
 
+    // --- 3. Weekly Parcels Volume Aggregation ---
+    const weeklyParcelsMap: Record<string, {
+        tier: string;
+        leads: Lead[];
+        total: number;
+        active: number;
+        signed: number;
+        lost: number;
+    }> = {};
+
+    filteredLeads.forEach(lead => {
+        const rawParcelStr = lead.weeklyParcels || lead.discoveryData?.weeklyParcels || 'Unspecified / Not Logged';
+        let tierLabel = (rawParcelStr || 'Unspecified / Not Logged').trim();
+        if (!tierLabel) tierLabel = 'Unspecified / Not Logged';
+
+        const key = tierLabel.toLowerCase();
+        if (!weeklyParcelsMap[key]) {
+            weeklyParcelsMap[key] = {
+                tier: tierLabel,
+                leads: [],
+                total: 0,
+                active: 0,
+                signed: 0,
+                lost: 0,
+            };
+        }
+
+        const item = weeklyParcelsMap[key];
+        item.leads.push(lead);
+        item.total += 1;
+        if (isSignedLead(lead)) {
+            item.signed += 1;
+        } else if (isLostLead(lead)) {
+            item.lost += 1;
+        } else {
+            item.active += 1;
+        }
+    });
+
+    const weeklyParcelsDataList = Object.values(weeklyParcelsMap)
+        .map(w => ({
+            ...w,
+            percentage: totalInbound > 0 ? parseFloat(((w.total / totalInbound) * 100).toFixed(1)) : 0,
+            conversionRate: w.total > 0 ? parseFloat(((w.signed / w.total) * 100).toFixed(1)) : 0
+        }))
+        .sort((a, b) => b.total - a.total);
+
+    const topWeeklyParcelsTierName = weeklyParcelsDataList.length > 0 ? weeklyParcelsDataList[0].tier : 'N/A';
+    const bestConvertingWeeklyParcelsObj = [...weeklyParcelsDataList]
+        .filter(w => w.total >= 2)
+        .sort((a, b) => b.conversionRate - a.conversionRate)[0] || weeklyParcelsDataList[0];
+    const bestConvertingWeeklyParcelsName = bestConvertingWeeklyParcelsObj ? `${bestConvertingWeeklyParcelsObj.tier} (${bestConvertingWeeklyParcelsObj.conversionRate}%)` : 'N/A';
+    const totalWeeklyParcelsLoggedCount = filteredLeads.filter(l => !!(l.weeklyParcels || l.discoveryData?.weeklyParcels)).length;
+    const totalWeeklyParcelsLoggedPercent = totalInbound > 0 ? parseFloat(((totalWeeklyParcelsLoggedCount / totalInbound) * 100).toFixed(1)) : 0;
+
     return {
         webpageDataList,
         topWebpagesChartData,
@@ -2186,6 +2242,11 @@ export default function InboundReportsClientPage({
         topInterestName,
         bestConvertingInterestName,
         totalExplicitInterestsCount,
+        weeklyParcelsDataList,
+        topWeeklyParcelsTierName,
+        bestConvertingWeeklyParcelsName,
+        totalWeeklyParcelsLoggedCount,
+        totalWeeklyParcelsLoggedPercent,
         inboundJourneyStats,
         shipmateTrialLeads,
         shipmateJourney,
@@ -3121,6 +3182,177 @@ export default function InboundReportsClientPage({
                             </div>
                             <p className="text-[11px] text-muted-foreground mt-2 italic">
                                 * Click any interest row to view all matching leads.
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+            )}
+
+            {/* Weekly Parcels Volume Analytics */}
+            {(!visibleSections || visibleSections.includes('weekly-parcels-analytics')) && (
+            <Card id="step-report-inbound-parcels" className="mt-6 shadow-md border-primary/10">
+                <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <Package className="h-5 w-5 text-[#095c7b]" />
+                                <span>Weekly Parcels Volume</span>
+                                <SectionHelp content="Distribution of inbound leads based on expected weekly shipping parcel volume." />
+                            </CardTitle>
+                            <CardDescription>
+                                Analyze inbound lead volume and conversion performance grouped by weekly parcel ranges.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(
+                                stats.weeklyParcelsDataList.map(w => ({
+                                    'Weekly Parcels Tier': w.tier,
+                                    'Total Leads': w.total,
+                                    '% of Total Inbound': `${w.percentage}%`,
+                                    'Active Pipeline': w.active,
+                                    'Signed / Won': w.signed,
+                                    'Lost Leads': w.lost,
+                                    'Conversion Rate %': `${w.conversionRate}%`
+                                })), 
+                                'inbound_weekly_parcels_performance'
+                            )}>
+                                <Download className="h-4 w-4 mr-2" /> Export Table
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    {/* KPI Callouts */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-800/40">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">Top Parcel Tier</span>
+                                <Package className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <p className="text-base font-bold text-indigo-950 dark:text-indigo-100 mt-2 truncate" title={stats.topWeeklyParcelsTierName}>
+                                {stats.topWeeklyParcelsTierName}
+                            </p>
+                            <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Most common parcel volume tier</p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Best Converting Tier</span>
+                                <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <p className="text-base font-bold text-emerald-950 dark:text-emerald-100 mt-2 truncate" title={stats.bestConvertingWeeklyParcelsName}>
+                                {stats.bestConvertingWeeklyParcelsName}
+                            </p>
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">Highest win rate parcel tier</p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200/60 dark:border-teal-800/40">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-300">Volume Logged Ratio</span>
+                                <Target className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                            </div>
+                            <p className="text-xl font-bold text-teal-950 dark:text-teal-100 mt-2">
+                                {stats.totalWeeklyParcelsLoggedCount} <span className="text-sm font-normal text-teal-700 dark:text-teal-300">({stats.totalWeeklyParcelsLoggedPercent}%)</span>
+                            </p>
+                            <p className="text-xs text-teal-600 dark:text-teal-400 mt-0.5">Leads with weekly parcels specified</p>
+                        </div>
+                    </div>
+
+                    {/* Parcels Chart & Table */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Chart */}
+                        <div className="lg:col-span-1 border rounded-lg p-4 bg-card">
+                            <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                                <BarChart3 className="h-4 w-4 text-primary" /> Parcel Volume Tier Distribution
+                            </h4>
+                            {stats.weeklyParcelsDataList.length > 0 ? (
+                                <ChartContainer config={{}} className="h-[280px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={stats.weeklyParcelsDataList.slice(0, 10)} margin={{ left: 10, right: 20 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="tier" fontSize={11} tickLine={false} axisLine={false} />
+                                            <YAxis fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                                            <Tooltip content={<ChartTooltipContent />} />
+                                            <Bar dataKey="total" name="Inbound Leads" fill="#0d9488" radius={[4, 4, 0, 0]} maxBarSize={45}>
+                                                <LabelList dataKey="total" position="top" fill="#64748b" fontSize={11} />
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </ChartContainer>
+                            ) : (
+                                <div className="h-[280px] flex items-center justify-center text-muted-foreground text-xs italic">No weekly parcels data available.</div>
+                            )}
+                        </div>
+
+                        {/* Table */}
+                        <div className="lg:col-span-2 border rounded-lg p-4 bg-card flex flex-col">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
+                                <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                                    <Package className="h-4 w-4 text-primary" /> Weekly Parcels Performance Breakdown
+                                </h4>
+                                <div className="relative w-full sm:w-60">
+                                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Filter parcel tier..."
+                                        value={weeklyParcelsSearchQuery}
+                                        onChange={(e) => setWeeklyParcelsSearchQuery(e.target.value)}
+                                        className="h-8 pl-8 text-xs"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="overflow-x-auto border rounded-md max-h-[300px]">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/50">
+                                            <TableHead className="text-xs">Weekly Parcels Tier</TableHead>
+                                            <TableHead className="text-xs text-right">Leads</TableHead>
+                                            <TableHead className="text-xs text-right">% of Inbound</TableHead>
+                                            <TableHead className="text-xs text-right">Active</TableHead>
+                                            <TableHead className="text-xs text-right">Signed</TableHead>
+                                            <TableHead className="text-xs text-right">Conv. Rate</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {stats.weeklyParcelsDataList
+                                            .filter(w => !weeklyParcelsSearchQuery || w.tier.toLowerCase().includes(weeklyParcelsSearchQuery.toLowerCase()))
+                                            .map((w, idx) => (
+                                                <TableRow 
+                                                    key={w.tier + idx}
+                                                    className="cursor-pointer hover:bg-muted/60 transition-colors"
+                                                    onClick={() => setDrillDownData({
+                                                        title: `Leads with Weekly Parcels: ${w.tier}`,
+                                                        leads: w.leads
+                                                    })}
+                                                >
+                                                    <TableCell className="font-medium text-xs py-2 flex items-center gap-2">
+                                                        <Package className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                                        <span className="text-blue-600 dark:text-blue-400 hover:underline">{w.tier}</span>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs py-2 text-right font-semibold">{w.total}</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right text-muted-foreground">{w.percentage}%</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right text-amber-600 dark:text-amber-400 font-medium">{w.active}</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right text-emerald-600 dark:text-emerald-400 font-bold">{w.signed}</TableCell>
+                                                    <TableCell className="text-xs py-2 text-right">
+                                                        <Badge variant={w.conversionRate > 20 ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
+                                                            {w.conversionRate}%
+                                                        </Badge>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        {stats.weeklyParcelsDataList.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center py-6 text-xs text-muted-foreground italic">
+                                                    No weekly parcels data recorded.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-2 italic">
+                                * Click any parcel tier row to view all matching leads.
                             </p>
                         </div>
                     </div>

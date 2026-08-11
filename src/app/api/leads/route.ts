@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       url
     } = body;
 
-    const finalPageUrl = pageUrl || sourcePageUrl || url || null;
+    const finalPageUrl = body.inboundPageUrl || pageUrl || sourcePageUrl || url || inboundDetails?.landingPage || null;
 
     // Support both flat fields and nested address object
     const finalZip = zip || address?.zip;
@@ -228,6 +228,7 @@ export async function POST(req: NextRequest) {
       syncedWithNetSuite: false,
       lpoLeadId: lpoLeadId || lpo_lead_id || null,
       selectedServiceOption: selectedServiceOption || null,
+      inboundPageUrl: finalPageUrl,
       pageUrl: finalPageUrl,
       discoveryData: {
         interestedIn: interestedIn || null,

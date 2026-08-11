@@ -313,13 +313,17 @@ function SelectServicesContent() {
         }) : [];
 
         // NetSuite API 1900 MUST ALWAYS be called during signup, irrespective of whether services were selected
+        const hasPriorQuote = !!(lead as any).commRegId || 
+                              ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won'].includes((lead as any).status || '') || 
+                              !!(lead as any).scfAcceptedAt;
+        const signupServices = hasPriorQuote ? [] : mappedServices;
         nsResponse = await submitServiceQuote({
            operation: 'signCustomer',
            customerId: (lead as any).internalid || lead.entityId || "",
            contactId: values.serviceCommencementContactId || "",
            salesRecordId: lead.salesRecordInternalId || "",
            salesRepId: salesRepId,
-           services: mappedServices,
+           services: signupServices,
            commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : format(new Date(), 'dd/MM/yyyy'),
            accountManagerName: lead.accountManagerAssigned,
            createShipMateAccount: values.shipmateAccess || undefined

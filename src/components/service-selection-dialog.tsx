@@ -129,16 +129,47 @@ export function ServiceSelectionDialog({
   const [selectionType, setSelectionType] = useState<'services' | 'products' | 'both' | null>(null);
 
   useEffect(() => {
-    if (mode === 'Free Trial') {
-      setSelectionType('services');
-    } else if (mode === 'Resend SCF' || mode === 'Confirm Signup') {
-      setSelectionType('services');
-    } else {
+    async function initSelectionType() {
+      if (mode === 'Free Trial' || mode === 'Resend SCF' || mode === 'Confirm Signup') {
+        setSelectionType('services');
+        return;
+      }
       if (lead && (lead as any).lastSelectionType) {
         setSelectionType((lead as any).lastSelectionType);
-      } else {
-        setSelectionType(null);
+        return;
       }
+      if (lead?.id && isOpen) {
+        try {
+          const scfs = await getScfRecords(lead.id);
+          if (scfs && scfs.length > 0) {
+            scfs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            const latest = scfs[0];
+            const hasProds = latest.products && latest.products.length > 0;
+            const hasServs = latest.services && latest.services.length > 0;
+            if (hasProds && hasServs) {
+              setSelectionType('both');
+              return;
+            } else if (hasProds) {
+              setSelectionType('products');
+              return;
+            } else if (hasServs) {
+              setSelectionType('services');
+              return;
+            }
+          }
+        } catch (e) {
+          console.error("Error determining initial selection type from SCF:", e);
+        }
+      }
+      if (lead?.services && lead.services.length > 0) {
+        setSelectionType('services');
+        return;
+      }
+      setSelectionType(null);
+    }
+
+    if (isOpen) {
+      initSelectionType();
     }
   }, [mode, isOpen, lead]);
 
@@ -1324,62 +1355,64 @@ export function ServiceSelectionDialog({
 
         const expectedUrl = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc&requestData=${encodeURIComponent(JSON.stringify(expectedPayload))}&accountManagerName=${encodeURIComponent(amNameVal)}&accountManagerId=${encodeURIComponent(salesRepId)}`;
 
-        // Trigger NetSuite Sync with detailed browser logging
-        console.group(`🌐 [NetSuite API 1900 Call] ${opName}`);
-        console.log(`📡 Full Request URL:\n${expectedUrl}`);
-        console.log(`📦 Unencoded JSON Payload (requestData):\n`, expectedPayload);
-        console.log(`📋 Parameters Breakdown:`, {
-           operation: opName,
-           customerId: customerIdVal,
-           contactId: contactIdVal,
-           salesRecordId: salesRecordIdVal,
-           salesRepId: salesRepId,
-           accountManagerId: salesRepId,
-           accountManagerName: amNameVal,
-           commDate: commDateVal,
-           createShipMateAccount: values.createShipMateAccount || undefined,
-           services: mappedServices
-        });
-        console.groupEnd();
-
-        submitServiceQuote({
-           operation: opName,
-           customerId: customerIdVal,
-           contactId: contactIdVal,
-           salesRecordId: salesRecordIdVal,
-           salesRepId: salesRepId,
-           services: mappedServices,
-           commDate: commDateVal,
-           accountManagerName: amNameVal,
-           createShipMateAccount: values.createShipMateAccount || undefined,
-        })
-          .then(async (nsResponse) => {
-             console.group(`✅ [NetSuite API 1900 Response]`);
-             console.log(`Response Payload:`, nsResponse);
-             if (nsResponse.requestUrl) console.log(`Executed Request URL:\n${nsResponse.requestUrl}`);
-             if (nsResponse.requestData) console.log(`Executed JSON Payload:\n`, nsResponse.requestData);
-             console.groupEnd();
-
-             if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
-                await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
-                console.log(`[NetSuite Sync Success] Updated commRegId ${nsResponse.commRegId} for lead ${lead.id}`);
-             } else {
-                console.error(`[NetSuite Sync Warning] NetSuite response message:`, nsResponse.message);
-                await logActivity(lead.id, {
-                   type: 'Update',
-                   notes: `Background NetSuite Sync failed: ${nsResponse.message || 'Unknown error'}`,
-                   author: 'System'
-                });
-             }
-          })
-          .catch(async (err) => {
-             console.error(`❌ [NetSuite API 1900 Error]`, err);
-             await logActivity(lead.id, {
-                type: 'Update',
-                notes: `Background NetSuite Sync error: ${err.message || err}`,
-                author: 'System'
-             });
+        // If Quote or Resell mode, trigger NetSuite Quote API in background
+        if (mode === 'Quote' || mode === 'Resell') {
+          console.group(`🌐 [NetSuite API 1900 Call] ${opName}`);
+          console.log(`📡 Full Request URL:\n${expectedUrl}`);
+          console.log(`📦 Unencoded JSON Payload (requestData):\n`, expectedPayload);
+          console.log(`📋 Parameters Breakdown:`, {
+             operation: opName,
+             customerId: customerIdVal,
+             contactId: contactIdVal,
+             salesRecordId: salesRecordIdVal,
+             salesRepId: salesRepId,
+             accountManagerId: salesRepId,
+             accountManagerName: amNameVal,
+             commDate: commDateVal,
+             createShipMateAccount: values.createShipMateAccount || undefined,
+             services: mappedServices
           });
+          console.groupEnd();
+
+          submitServiceQuote({
+             operation: opName,
+             customerId: customerIdVal,
+             contactId: contactIdVal,
+             salesRecordId: salesRecordIdVal,
+             salesRepId: salesRepId,
+             services: mappedServices,
+             commDate: commDateVal,
+             accountManagerName: amNameVal,
+             createShipMateAccount: values.createShipMateAccount || undefined,
+          })
+            .then(async (nsResponse) => {
+               console.group(`✅ [NetSuite API 1900 Response]`);
+               console.log(`Response Payload:`, nsResponse);
+               if (nsResponse.requestUrl) console.log(`Executed Request URL:\n${nsResponse.requestUrl}`);
+               if (nsResponse.requestData) console.log(`Executed JSON Payload:\n`, nsResponse.requestData);
+               console.groupEnd();
+
+               if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
+                  await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
+                  console.log(`[NetSuite Sync Success] Updated commRegId ${nsResponse.commRegId} for lead ${lead.id}`);
+               } else {
+                  console.error(`[NetSuite Sync Warning] NetSuite response message:`, nsResponse.message);
+                  await logActivity(lead.id, {
+                     type: 'Update',
+                     notes: `Background NetSuite Sync failed: ${nsResponse.message || 'Unknown error'}`,
+                     author: 'System'
+                  });
+               }
+            })
+            .catch(async (err) => {
+               console.error(`❌ [NetSuite API 1900 Error]`, err);
+               await logActivity(lead.id, {
+                  type: 'Update',
+                  notes: `Background NetSuite Sync error: ${err.message || err}`,
+                  author: 'System'
+               });
+            });
+        }
 
         // Map selected products with precalculated fuel surcharges to save directly on SCF document
         const scfProducts = selectionType === 'services' ? [] : products.filter(p => selectedProducts.includes(p.id)).map(p => {
@@ -1544,13 +1577,31 @@ export function ServiceSelectionDialog({
 
             // 1. Call NetSuite APIs first
            try {
+             // Check if any NEW services were added during signup that were NOT present in the prior quote/SCF
+             const latestScf = (existingScfs && existingScfs.length > 0) ? existingScfs[0] : null;
+             const priorServicesList = (latestScf && latestScf.services && latestScf.services.length > 0)
+               ? latestScf.services
+               : (lead?.services || []);
+             
+             const priorServiceNames = new Set(priorServicesList.map((s: any) => (s.name || s.service || '').toLowerCase().trim()));
+             const newlyAddedServices = mappedServices.filter(s => !priorServiceNames.has((s.name || s.service || '').toLowerCase().trim()));
+
+             const hasPriorQuote = (existingScfs && existingScfs.length > 0) || 
+                                   !!lead.commRegId || 
+                                   ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won'].includes(lead.status || '');
+             
+             // If prior quote exists, pass ONLY newly added services (if any). If no prior quote exists, pass all mappedServices.
+             const signupServices = hasPriorQuote 
+               ? (newlyAddedServices.length > 0 ? newlyAddedServices : []) 
+               : mappedServices;
+
              const nsResponse = await submitServiceQuote({
                operation: 'signCustomer',
                customerId: (lead as any).internalid || lead.id,
                contactId: values.selectedContactId || "",
                salesRecordId: lead.salesRecordInternalId || "",
                salesRepId: salesRepId,
-               services: mappedServices,
+               services: signupServices,
                commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
                accountManagerName: lead.accountManagerAssigned,
                createShipMateAccount: values.createShipMateAccount || undefined,
