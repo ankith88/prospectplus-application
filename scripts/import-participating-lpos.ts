@@ -4,7 +4,6 @@ import Papa from 'papaparse';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
-// Initialize Firebase Admin for standalone CLI execution
 if (getApps().length === 0) {
   const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(process.cwd(), 'service-account.json');
   if (fs.existsSync(serviceAccountPath)) {
@@ -58,48 +57,73 @@ async function runCliImport() {
   console.log(`[CLI LPO Import] Parsed ${rawRows.length} rows from CSV.`);
 
   const mapRowToLpo = (row: Record<string, any>) => {
-    const getVal = (keys: string[]) => {
-      for (const k of keys) {
-        const found = Object.keys(row).find((rk) => rk.trim().toLowerCase() === k.toLowerCase());
-        if (found && row[found] !== undefined && row[found] !== null) {
+    const keys = Object.keys(row);
+    const getVal = (possibleHeaders: string[], colIdx?: number) => {
+      for (const k of possibleHeaders) {
+        const found = keys.find((rk) => rk.trim().toLowerCase() === k.toLowerCase());
+        if (found && row[found] !== undefined && row[found] !== null && String(row[found]).trim() !== '') {
           return String(row[found]).trim();
         }
+      }
+      if (colIdx !== undefined && keys[colIdx] && row[keys[colIdx]] !== undefined && row[keys[colIdx]] !== null) {
+        return String(row[keys[colIdx]]).trim();
       }
       return '';
     };
 
+    // User Column Letters:
+    // Col G: Linked Partner Location
+    // Col I: Customer ID (customerEntityId)
+    // Col K: Name of the Linked Franchisee
+    // Col N: Address Line 1
+    // Col O: Address Line 2
+    // Col T: Contact Name
+    // Col U: Contact Email
+    // Col V: Contact Phone
+    const linkedPartnerLocationName = getVal(['Linked NCL', 'Linked Partner Location'], 6);
+    const linkedCustomerId = getVal(['ID', 'Customer ID', 'customerEntityId'], 8);
+    const linkedFranchiseeName = getVal(['LPO Tier', 'Company Name / Franchise', 'Linked Franchisee'], 10);
+    const address1 = getVal(['Street No & Name', 'Address Line 1'], 13);
+    const address2 = getVal(['LPO Suburb', 'Address Line 2'], 14);
+    const lpoOwnerName = getVal(['Contact Name'], 19);
+    const email = getVal(['Email Address'], 20);
+    const phone = getVal(['Contact Number'], 21);
+
     return {
-      lpoInternalId: getVal(['Internal ID', 'lpoInternalId']),
-      inactive: getVal(['Inactive'])?.toLowerCase() === 'yes',
-      secondaryInternalId: getVal(['Internal ID_1']),
-      lpoCreatedDate: getVal(['Date Created']),
-      lpoLastModifiedDate: getVal(['Last Modified']),
-      lpoName: getVal(['LPO Name']) || 'Unnamed LPO',
-      linkedNcl: getVal(['Linked NCL']),
-      rawCustomerName: getVal(['Customer']),
-      linkedCustomerId: getVal(['ID', 'Customer ID', 'customerEntityId']), // Column I
-      companyNameFranchise: getVal(['Company Name / Franchise']),
-      lpoTier: getVal(['LPO Tier']),
-      status: getVal(['Status*']) || 'New',
-      poLevelTier: getVal(['PO Level / Tier']),
-      address1: getVal(['Street No & Name']),
-      city: getVal(['LPO Suburb']),
-      state: getVal(['LPO State']),
-      postcode: getVal(['LPO Postcode']),
-      notes: getVal(['Notes']),
-      lpoOwnerName: getVal(['Contact Name']),
-      phone: getVal(['Contact Number']),
-      email: getVal(['Email Address']),
-      pageURL: getVal(['Page URL - S/O']),
-      salesRep: getVal(['Sales Rep']),
-      validationProvided: getVal(['Validation Provided']),
-      leadGenerator: getVal(['Lead Generator']),
-      faceToFace: getVal(['Face-to-face']),
-      confAndCall: getVal(['Conf & Call']),
-      acceptedTerms: getVal(['Accepted T&C']),
-      dynamicScf: getVal(['Dynamic SCF']),
-      adhocBooking: getVal(['Adhoc Booking']),
-      defaultPassword: getVal(['Default Password']),
+      lpoInternalId: getVal(['Internal ID'], 0),
+      inactive: getVal(['Inactive'], 1)?.toLowerCase() === 'yes',
+      secondaryInternalId: getVal(['Internal ID_1'], 2),
+      lpoCreatedDate: getVal(['Date Created'], 3),
+      lpoLastModifiedDate: getVal(['Last Modified'], 4),
+      lpoName: getVal(['LPO Name'], 5) || 'Unnamed LPO',
+      linkedNcl: linkedPartnerLocationName,
+      linkedPartnerLocationName,
+      rawCustomerName: getVal(['Customer'], 7),
+      linkedCustomerId,
+      companyNameFranchise: linkedFranchiseeName,
+      linkedFranchiseeName,
+      lpoTier: getVal(['LPO Tier'], 10),
+      status: getVal(['Status*'], 11) || 'New',
+      poLevelTier: getVal(['PO Level / Tier'], 12),
+      address1,
+      address2,
+      city: getVal(['LPO Suburb'], 14),
+      state: getVal(['LPO State'], 15),
+      postcode: getVal(['LPO Postcode'], 16),
+      notes: getVal(['Notes'], 17),
+      lpoOwnerName,
+      phone,
+      email,
+      pageURL: getVal(['Page URL - S/O'], 22),
+      salesRep: getVal(['Sales Rep'], 23),
+      validationProvided: getVal(['Validation Provided'], 24),
+      leadGenerator: getVal(['Lead Generator'], 25),
+      faceToFace: getVal(['Face-to-face'], 26),
+      confAndCall: getVal(['Conf & Call'], 27),
+      acceptedTerms: getVal(['Accepted T&C'], 28),
+      dynamicScf: getVal(['Dynamic SCF'], 29),
+      adhocBooking: getVal(['Adhoc Booking'], 30),
+      defaultPassword: getVal(['Default Password'], 31),
     };
   };
 
@@ -153,7 +177,50 @@ async function runCliImport() {
 
   console.log(`[CLI LPO Import] Matched ${matchedCustomerMap.size} of ${customerIds.length} customer IDs strictly on customerEntityId.`);
 
-  // Step 3: Deduplication check against existing lpo_leads
+  // Extract services from child customers for matched companies
+  const companyChildServicesMap = new Map<string, { ampoRate: number; pmpoRate: number; packageRate: number; additionalBagRate: number; services: any[] }>();
+
+  for (const [_, match] of matchedCustomerMap.entries()) {
+    if (match.collectionName === 'companies') {
+      let childSnap = await db.collection('leads').where('parentCompanyId', '==', match.docId).get();
+      if (childSnap.empty) {
+        childSnap = await db.collection('leads').where('parentLeadId', '==', match.docId).get();
+      }
+      if (childSnap.empty) {
+        childSnap = await db.collection('companies').where('parentCompanyId', '==', match.docId).get();
+      }
+
+      let ampoRate = 0;
+      let pmpoRate = 0;
+      let packageRate = 0;
+      let additionalBagRate = 0;
+      let servicesList: any[] = [];
+
+      childSnap.forEach((cDoc) => {
+        const cData = cDoc.data();
+        if (cData.services && Array.isArray(cData.services)) {
+          servicesList.push(...cData.services);
+          for (const s of cData.services) {
+            const sName = (s.name || s.serviceName || s.title || '').toLowerCase();
+            const sRate = typeof s.rate === 'number' ? s.rate : parseFloat(String(s.rate || 0).replace(/[^0-9.]/g, '')) || 0;
+
+            if (sName.includes('am') || sName.includes('morning')) ampoRate = sRate;
+            else if (sName.includes('pm') || sName.includes('afternoon')) pmpoRate = sRate;
+            else if (sName.includes('package') || sName.includes('parcel')) packageRate = sRate;
+            else if (sName.includes('bag') || sName.includes('additional')) additionalBagRate = sRate;
+          }
+        }
+        if (cData.ampoRate) ampoRate = parseFloat(cData.ampoRate) || ampoRate;
+        if (cData.pmpoRate) pmpoRate = parseFloat(cData.pmpoRate) || pmpoRate;
+        if (cData.packageRate) packageRate = parseFloat(cData.packageRate) || packageRate;
+        if (cData.additionalBagRate) additionalBagRate = parseFloat(cData.additionalBagRate) || additionalBagRate;
+      });
+
+      companyChildServicesMap.set(match.docId, { ampoRate, pmpoRate, packageRate, additionalBagRate, services: servicesList });
+    }
+  }
+
+  // Deduplication check
   const existingLposSnap = await db.collection('lpo_leads').get();
   const existingByInternalId = new Map<string, string>();
   const existingByName = new Map<string, string>();
@@ -214,6 +281,7 @@ async function runCliImport() {
       email: row.email,
       phone: row.phone,
       address1: row.address1,
+      address2: row.address2,
       city: row.city,
       state: row.state,
       postcode: row.postcode,
@@ -227,9 +295,11 @@ async function runCliImport() {
       lpoCreatedDate: row.lpoCreatedDate,
       lpoLastModifiedDate: row.lpoLastModifiedDate,
       linkedNcl: row.linkedNcl,
+      linkedPartnerLocationName: row.linkedPartnerLocationName,
       rawCustomerName: row.rawCustomerName,
       linkedCustomerId: rawCustId,
       companyNameFranchise: row.companyNameFranchise,
+      linkedFranchiseeName: row.linkedFranchiseeName,
       lpoTier: row.lpoTier,
       poLevelTier: row.poLevelTier,
       pageURL: row.pageURL,
@@ -248,6 +318,18 @@ async function runCliImport() {
       linkStatus,
       updatedAt: FieldValue.serverTimestamp(),
     };
+
+    // Assign Step 2 rates from child services if linked to a company
+    if (custMatch && custMatch.collectionName === 'companies') {
+      const childRates = companyChildServicesMap.get(custMatch.docId);
+      if (childRates) {
+        if (childRates.ampoRate) payload.ampoRate = childRates.ampoRate;
+        if (childRates.pmpoRate) payload.pmpoRate = childRates.pmpoRate;
+        if (childRates.packageRate) payload.packageRate = childRates.packageRate;
+        if (childRates.additionalBagRate) payload.additionalBagRate = childRates.additionalBagRate;
+        if (childRates.services && childRates.services.length > 0) payload.services = childRates.services;
+      }
+    }
 
     if (!existingId) {
       payload.createdAt = FieldValue.serverTimestamp();

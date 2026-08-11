@@ -56,6 +56,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     const [companyEmail, setCompanyEmail] = useState("");
     const [companyPhone, setCompanyPhone] = useState("");
     const [notes, setNotes] = useState("");
+    const [address1, setAddress1] = useState("");
     const [street, setStreet] = useState("");
     const [city, setCity] = useState("");
     const [state, setState] = useState("");
@@ -403,11 +404,6 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
             return;
         }
 
-        if (!managerName) {
-            toast({ title: "Validation Error", description: "Local site contact name is required.", variant: "destructive" });
-            return;
-        }
-
         const targetParentId = lead.parentLeadId || lead.id;
         const targetParentLead = parentLead || lead;
 
@@ -419,6 +415,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
         setIsCreating(true);
         try {
             const newAddress: Address = {
+                ...(address1.trim() ? { address1: address1.trim() } : {}),
                 street,
                 city,
                 state,
@@ -430,9 +427,9 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
 
             const localManager: Contact = {
                 id: crypto.randomUUID(),
-                name: managerName,
-                email: managerEmail,
-                phone: managerPhone,
+                name: managerName.trim(),
+                email: managerEmail.trim(),
+                phone: managerPhone.trim(),
                 title: managerTitle.trim() || "Local Site Contact"
             };
 
@@ -467,6 +464,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
             setCompanyEmail("");
             setCompanyPhone("");
             setNotes("");
+            setAddress1("");
             setStreet("");
             setCity("");
             setState("");
@@ -723,13 +721,16 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                     <div className="grid grid-cols-1 gap-2">
                                         <GoogleAddressInput
                                             label=""
-                                            placeholder="Street Address"
+                                            placeholder="Street Address *"
                                             value={street}
                                             onChange={(val) => setStreet(val)}
                                             onAddressSelect={(parsedAddress) => {
                                                 const streetVal = parsedAddress.street || parsedAddress.address1 || "";
                                                 const cityVal = parsedAddress.city || "";
                                                 setStreet(streetVal);
+                                                if (parsedAddress.address1 && parsedAddress.address1 !== streetVal) {
+                                                    setAddress1(parsedAddress.address1);
+                                                }
                                                 setCity(cityVal);
                                                 setState(parsedAddress.state || "");
                                                 setZip(parsedAddress.zip || "");
@@ -741,26 +742,31 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                             }}
                                             showSelectedBadge={false}
                                         />
+                                        <Input
+                                            placeholder="Level / Suite (optional)"
+                                            value={address1}
+                                            onChange={e => setAddress1(e.target.value)}
+                                        />
                                         <div className="grid grid-cols-2 gap-2">
-                                            <Input placeholder="Suburb / City" value={city} onChange={e => {
+                                            <Input placeholder="Suburb / City *" value={city} onChange={e => {
                                                 const cityVal = e.target.value;
                                                 setCity(cityVal);
                                                 if (cityVal && !customSiteName) {
                                                     setCustomSiteName(`${(parentLead || lead).companyName} - ${cityVal}`);
                                                 }
                                             }} />
-                                            <Input placeholder="State" value={state} onChange={e => setState(e.target.value)} />
+                                            <Input placeholder="State *" value={state} onChange={e => setState(e.target.value)} />
                                         </div>
-                                        <Input placeholder="Postcode" value={zip} onChange={e => setZip(e.target.value)} />
+                                        <Input placeholder="Postcode *" value={zip} onChange={e => setZip(e.target.value)} />
                                     </div>
                                 </div>
                                 
                                 <div className="space-y-2 pt-3 border-t">
                                     <h4 className="font-semibold flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-                                        <Users className="w-4 h-4 text-primary" /> Local Site Contact Details
+                                        <Users className="w-4 h-4 text-primary" /> Local Site Contact Details (Optional)
                                     </h4>
                                     <div className="grid grid-cols-1 gap-2">
-                                        <Input placeholder="Contact Name *" value={managerName} onChange={e => setManagerName(e.target.value)} />
+                                        <Input placeholder="Contact Name (optional)" value={managerName} onChange={e => setManagerName(e.target.value)} />
                                         <Input placeholder="Job Title (optional)" value={managerTitle} onChange={e => setManagerTitle(e.target.value)} />
                                         <div className="grid grid-cols-2 gap-2">
                                             <Input placeholder="Email (optional)" type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} />

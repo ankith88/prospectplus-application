@@ -85,6 +85,7 @@ export function EnterMultiSiteLeadDialog({
   const [siteName, setSiteName] = useState('');
   const [companyEmail, setCompanyEmail] = useState('');
   const [companyPhone, setCompanyPhone] = useState('');
+  const [levelSuite, setLevelSuite] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactTitle, setContactTitle] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -99,11 +100,16 @@ export function EnterMultiSiteLeadDialog({
       setContactTitle('');
       setContactEmail('');
       setContactPhone('');
+      setLevelSuite('');
       if (initialPlace) {
         setSiteName(initialPlace.name || `${parentCompany.companyName} - `);
         setCompanyEmail(parentCompany.customerServiceEmail || '');
         setCompanyPhone(initialPlace.formatted_phone_number || parentCompany.customerPhone || '');
-        setSelectedAddress(parsePlaceAddress(initialPlace));
+        const parsed = parsePlaceAddress(initialPlace);
+        setSelectedAddress(parsed);
+        if (parsed.address1 && parsed.address1 !== parsed.street) {
+          setLevelSuite(parsed.address1);
+        }
       } else {
         setSiteName(`${parentCompany.companyName} - `);
         setCompanyEmail(parentCompany.customerServiceEmail || '');
@@ -117,6 +123,9 @@ export function EnterMultiSiteLeadDialog({
 
   const handleAddressSelect = (addr: Address) => {
     setSelectedAddress(addr);
+    if (addr.address1 && addr.address1 !== addr.street) {
+      setLevelSuite(addr.address1);
+    }
     if (addr.city && (!siteName || siteName === `${parentCompany.companyName} - `)) {
       setSiteName(`${parentCompany.companyName} - ${addr.city}`);
     }
@@ -179,11 +188,16 @@ export function EnterMultiSiteLeadDialog({
       }
 
       const nameParts = contactName.trim().split(' ');
-      const firstName = nameParts[0] || 'Info';
-      const lastName = nameParts.slice(1).join(' ') || siteName.trim();
+      const firstName = contactName.trim() ? nameParts[0] : '';
+      const lastName = contactName.trim() ? nameParts.slice(1).join(' ') : '';
 
       const resolvedPhone = companyPhone.trim() || contactPhone.trim() || parentCompany.customerPhone || '';
       const resolvedEmail = companyEmail.trim() || contactEmail.trim() || parentCompany.customerServiceEmail || '';
+
+      const finalAddress: Address = {
+        ...selectedAddress,
+        ...(levelSuite.trim() ? { address1: levelSuite.trim() } : {}),
+      };
 
       const newLeadPayload = {
         companyName: siteName.trim(),
@@ -191,7 +205,7 @@ export function EnterMultiSiteLeadDialog({
         websiteUrl: parentCompany.websiteUrl || '',
         customerPhone: resolvedPhone,
         customerServiceEmail: resolvedEmail,
-        address: selectedAddress,
+        address: finalAddress,
         contact: {
           firstName,
           lastName,
@@ -336,19 +350,30 @@ export function EnterMultiSiteLeadDialog({
               onAddressSelect={handleAddressSelect}
               showSelectedBadge={true}
             />
+            <div className="space-y-1 pt-1">
+              <Label htmlFor="level-suite" className="text-xs text-muted-foreground">
+                Level / Suite / Unit (Optional)
+              </Label>
+              <Input
+                id="level-suite"
+                placeholder="e.g. Suite 4, Level 2"
+                value={levelSuite}
+                onChange={(e) => setLevelSuite(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="border-t pt-3 space-y-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <User className="h-3.5 w-3.5 text-primary" /> Local Site Contact Details
+              <User className="h-3.5 w-3.5 text-primary" /> Local Site Contact Details (Optional)
             </h4>
             <div className="space-y-2">
               <Label htmlFor="contact-name" className="flex items-center gap-1 text-xs">
-                <User className="h-3.5 w-3.5" /> Contact Name
+                <User className="h-3.5 w-3.5" /> Contact Name (Optional)
               </Label>
               <Input
                 id="contact-name"
-                placeholder="e.g. Jane Smith"
+                placeholder="e.g. Jane Smith (Optional)"
                 value={contactName}
                 onChange={(e) => setContactName(e.target.value)}
               />

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, RefreshCw, ArrowRight, Link as LinkIcon } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, RefreshCw, ArrowRight, Link as LinkIcon } from 'lucide-react';
 
 interface ParsedLpoRow {
   lpoName: string;
@@ -15,6 +15,7 @@ interface ParsedLpoRow {
   email?: string;
   phone?: string;
   address1?: string;
+  address2?: string;
   city?: string;
   state?: string;
   postcode?: string;
@@ -26,9 +27,11 @@ interface ParsedLpoRow {
   lpoCreatedDate?: string;
   lpoLastModifiedDate?: string;
   linkedNcl?: string;
+  linkedPartnerLocationName?: string;
   rawCustomerName?: string;
   linkedCustomerId?: string; // Column I ID
   companyNameFranchise?: string;
+  linkedFranchiseeName?: string;
   lpoTier?: string;
   poLevelTier?: string;
   pageURL?: string;
@@ -53,53 +56,79 @@ export function ImportLposClient() {
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<any | null>(null);
 
-  // Auto Header Mapper
-  const mapRowToLpo = (row: Record<string, any>): ParsedLpoRow => {
-    const getVal = (possibleHeaders: string[]) => {
+  // Auto Header & Column Letter/Index Mapper
+  const mapRowToLpo = (row: Record<string, any>, rowArray?: any[]): ParsedLpoRow => {
+    const keys = Object.keys(row);
+
+    const getVal = (possibleHeaders: string[], colIdx?: number) => {
       for (const h of possibleHeaders) {
-        const foundKey = Object.keys(row).find((k) => k.trim().toLowerCase() === h.toLowerCase());
-        if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) {
+        const foundKey = keys.find((k) => k.trim().toLowerCase() === h.toLowerCase());
+        if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null && String(row[foundKey]).trim() !== '') {
           return String(row[foundKey]).trim();
         }
+      }
+      if (colIdx !== undefined && rowArray && rowArray[colIdx] !== undefined && rowArray[colIdx] !== null) {
+        return String(rowArray[colIdx]).trim();
+      }
+      if (colIdx !== undefined && keys[colIdx] && row[keys[colIdx]] !== undefined && row[keys[colIdx]] !== null) {
+        return String(row[keys[colIdx]]).trim();
       }
       return '';
     };
 
-    // Column "I" is ID (Customer ID)
-    const linkedCustomerId = getVal(['ID', 'Customer ID', 'customerEntityId', 'Column I']);
+    // User Column Letters:
+    // Col G (Index 6): Linked Partner Location
+    // Col I (Index 8): ID (Customer Entity ID)
+    // Col K (Index 10): Name of the Linked Franchisee
+    // Col N (Index 13): Address line 1
+    // Col O (Index 14): Address line 2
+    // Col T (Index 19): Contact Name
+    // Col U (Index 20): Contact Email
+    // Col V (Index 21): Contact Phone
+    const linkedPartnerLocationName = getVal(['Linked NCL', 'Linked Partner Location', 'Col G'], 6);
+    const linkedCustomerId = getVal(['ID', 'Customer ID', 'customerEntityId', 'Col I'], 8);
+    const linkedFranchiseeName = getVal(['LPO Tier', 'Company Name / Franchise', 'Linked Franchisee', 'Col K'], 10);
+    const address1 = getVal(['Street No & Name', 'Address Line 1', 'Col N'], 13);
+    const address2 = getVal(['LPO Suburb', 'Address Line 2', 'Col O'], 14);
+    const lpoOwnerName = getVal(['Contact Name', 'Col T'], 19);
+    const email = getVal(['Email Address', 'Contact Email', 'Col U'], 20);
+    const phone = getVal(['Contact Number', 'Contact Phone', 'Col V'], 21);
 
     return {
-      lpoInternalId: getVal(['Internal ID', 'lpoInternalId']),
-      inactive: getVal(['Inactive', 'inactive']),
-      secondaryInternalId: getVal(['Internal ID_1', 'secondaryInternalId']),
-      lpoCreatedDate: getVal(['Date Created', 'createdDate']),
-      lpoLastModifiedDate: getVal(['Last Modified', 'lastModified']),
-      lpoName: getVal(['LPO Name', 'lpoName', 'Name']) || 'Unnamed LPO',
-      linkedNcl: getVal(['Linked NCL', 'linkedNcl']),
-      rawCustomerName: getVal(['Customer', 'customerName']),
+      lpoInternalId: getVal(['Internal ID', 'lpoInternalId'], 0),
+      inactive: getVal(['Inactive', 'inactive'], 1),
+      secondaryInternalId: getVal(['Internal ID_1', 'secondaryInternalId'], 2),
+      lpoCreatedDate: getVal(['Date Created', 'createdDate'], 3),
+      lpoLastModifiedDate: getVal(['Last Modified', 'lastModified'], 4),
+      lpoName: getVal(['LPO Name', 'lpoName', 'Name'], 5) || 'Unnamed LPO',
+      linkedNcl: linkedPartnerLocationName,
+      linkedPartnerLocationName,
+      rawCustomerName: getVal(['Customer', 'customerName'], 7),
       linkedCustomerId,
-      companyNameFranchise: getVal(['Company Name / Franchise', 'Company Name', 'companyNameFranchise']),
-      lpoTier: getVal(['LPO Tier', 'lpoTier']),
-      status: getVal(['Status*', 'Status', 'status']) || 'New',
-      poLevelTier: getVal(['PO Level / Tier', 'poLevelTier']),
-      address1: getVal(['Street No & Name', 'Street Address', 'Address', 'address1']),
-      city: getVal(['LPO Suburb', 'Suburb', 'City', 'city']),
-      state: getVal(['LPO State', 'State', 'state']),
-      postcode: getVal(['LPO Postcode', 'Postcode', 'postcode']),
-      notes: getVal(['Notes', 'notes']),
-      lpoOwnerName: getVal(['Contact Name', 'Owner Name', 'Contact', 'lpoOwnerName']),
-      phone: getVal(['Contact Number', 'Phone', 'phone']),
-      email: getVal(['Email Address', 'Email', 'email']),
-      pageURL: getVal(['Page URL - S/O', 'pageURL']),
-      salesRep: getVal(['Sales Rep', 'salesRep']),
-      validationProvided: getVal(['Validation Provided', 'validationProvided']),
-      leadGenerator: getVal(['Lead Generator', 'leadGenerator']),
-      faceToFace: getVal(['Face-to-face', 'faceToFace']),
-      confAndCall: getVal(['Conf & Call', 'confAndCall']),
-      acceptedTerms: getVal(['Accepted T&C', 'acceptedTerms']),
-      dynamicScf: getVal(['Dynamic SCF', 'dynamicScf']),
-      adhocBooking: getVal(['Adhoc Booking', 'adhocBooking']),
-      defaultPassword: getVal(['Default Password', 'defaultPassword']),
+      companyNameFranchise: linkedFranchiseeName,
+      linkedFranchiseeName,
+      lpoTier: getVal(['LPO Tier'], 10),
+      status: getVal(['Status*', 'Status', 'status'], 11) || 'New',
+      poLevelTier: getVal(['PO Level / Tier'], 12),
+      address1,
+      address2,
+      city: getVal(['LPO Suburb', 'City', 'city'], 14),
+      state: getVal(['LPO State', 'State', 'state'], 15),
+      postcode: getVal(['LPO Postcode', 'Postcode', 'postcode'], 16),
+      notes: getVal(['Notes', 'notes'], 17),
+      lpoOwnerName,
+      phone,
+      email,
+      pageURL: getVal(['Page URL - S/O', 'pageURL'], 22),
+      salesRep: getVal(['Sales Rep', 'salesRep'], 23),
+      validationProvided: getVal(['Validation Provided', 'validationProvided'], 24),
+      leadGenerator: getVal(['Lead Generator', 'leadGenerator'], 25),
+      faceToFace: getVal(['Face-to-face', 'faceToFace'], 26),
+      confAndCall: getVal(['Conf & Call', 'confAndCall'], 27),
+      acceptedTerms: getVal(['Accepted T&C', 'acceptedTerms'], 28),
+      dynamicScf: getVal(['Dynamic SCF', 'dynamicScf'], 29),
+      adhocBooking: getVal(['Adhoc Booking', 'adhocBooking'], 30),
+      defaultPassword: getVal(['Default Password', 'defaultPassword'], 31),
     };
   };
 
@@ -128,7 +157,7 @@ export function ImportLposClient() {
         const rawHeaders = results.meta.fields || [];
         setHeaders(rawHeaders);
 
-        const mapped = (results.data as Record<string, any>[]).map(mapRowToLpo);
+        const mapped = (results.data as Record<string, any>[]).map((row) => mapRowToLpo(row));
         setParsedRows(mapped);
 
         toast({
@@ -204,7 +233,7 @@ export function ImportLposClient() {
             1. Select CSV File
           </CardTitle>
           <CardDescription>
-            Choose the CSV containing Participating LPO records. Column "I" must contain the Customer Entity ID.
+            Column G: Partner Location | Col K: Franchisee Name | Col N: Addr 1 | Col O: Addr 2 | Col T: Contact Name | Col U: Email | Col V: Phone | Col I: Customer ID
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -274,11 +303,11 @@ export function ImportLposClient() {
                     <TableHead className="font-bold">#</TableHead>
                     <TableHead className="font-bold">LPO Internal ID</TableHead>
                     <TableHead className="font-bold">LPO Name</TableHead>
-                    <TableHead className="font-bold">Owner Name</TableHead>
+                    <TableHead className="font-bold">Contact (Col T/U/V)</TableHead>
                     <TableHead className="font-bold">Col I Customer ID</TableHead>
-                    <TableHead className="font-bold">Suburb & State</TableHead>
-                    <TableHead className="font-bold">Phone / Email</TableHead>
-                    <TableHead className="font-bold">Status</TableHead>
+                    <TableHead className="font-bold">Address (Col N / O)</TableHead>
+                    <TableHead className="font-bold">Col G Partner</TableHead>
+                    <TableHead className="font-bold">Col K Franchisee</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -287,7 +316,11 @@ export function ImportLposClient() {
                       <TableCell className="text-xs text-slate-500 font-mono">{idx + 1}</TableCell>
                       <TableCell className="text-xs font-semibold text-slate-700">{row.lpoInternalId || '—'}</TableCell>
                       <TableCell className="text-sm font-bold text-slate-900">{row.lpoName}</TableCell>
-                      <TableCell className="text-xs text-slate-700">{row.lpoOwnerName || '—'}</TableCell>
+                      <TableCell className="text-xs text-slate-700">
+                        <div className="font-semibold">{row.lpoOwnerName || '—'}</div>
+                        <div className="text-slate-500">{row.email}</div>
+                        <div className="text-slate-400">{row.phone}</div>
+                      </TableCell>
                       <TableCell className="text-xs font-mono font-bold text-[#095c7b]">
                         {row.linkedCustomerId ? (
                           <Badge variant="outline" className="border-[#095c7b]/30 text-[#095c7b] bg-teal-50/50">
@@ -298,17 +331,11 @@ export function ImportLposClient() {
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-slate-600">
-                        {row.city ? `${row.city}, ` : ''}{row.state} {row.postcode}
+                        <div>{row.address1}</div>
+                        <div className="text-slate-400">{row.address2}</div>
                       </TableCell>
-                      <TableCell className="text-xs text-slate-600">
-                        <div>{row.phone}</div>
-                        <div className="text-slate-400">{row.email}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className="bg-slate-100 text-slate-800 hover:bg-slate-100 text-[11px]">
-                          {row.status}
-                        </Badge>
-                      </TableCell>
+                      <TableCell className="text-xs text-slate-700">{row.linkedPartnerLocationName || '—'}</TableCell>
+                      <TableCell className="text-xs text-slate-700">{row.linkedFranchiseeName || '—'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

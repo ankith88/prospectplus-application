@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
     const db = getFirestore(adminApp);
 
-    // Step 1: Extract all unique Customer IDs (Column "I") from the payload
+    // Step 1: Extract all unique Customer IDs (Column "I") from payload
     const rawCustomerIds = Array.from(
       new Set(
         rows
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       // 1. Query 'leads' strictly by customerEntityId == string
       let snap = await db.collection('leads').where('customerEntityId', '==', custId).limit(1).get();
       
-      // 2. Query 'leads' strictly by customerEntityId == number (if numeric)
+      // 2. Query 'leads' strictly by customerEntityId == number
       if (snap.empty && !isNaN(numId)) {
         snap = await db.collection('leads').where('customerEntityId', '==', numId).limit(1).get();
       }
@@ -71,7 +71,50 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Step 3: Fetch existing LPO records in Firestore for deduplication (by lpoInternalId or lpoName)
+    // Pre-fetch child customer services for matched parent companies
+    const companyChildServicesMap = new Map<string, { ampoRate: number; pmpoRate: number; packageRate: number; additionalBagRate: number; services: any[] }>();
+
+    for (const [_, match] of matchedCustomerMap.entries()) {
+      if (match.collectionName === 'companies') {
+        let childSnap = await db.collection('leads').where('parentCompanyId', '==', match.docId).get();
+        if (childSnap.empty) {
+          childSnap = await db.collection('leads').where('parentLeadId', '==', match.docId).get();
+        }
+        if (childSnap.empty) {
+          childSnap = await db.collection('companies').where('parentCompanyId', '==', match.docId).get();
+        }
+
+        let ampoRate = 0;
+        let pmpoRate = 0;
+        let packageRate = 0;
+        let additionalBagRate = 0;
+        let servicesList: any[] = [];
+
+        childSnap.forEach((cDoc) => {
+          const cData = cDoc.data();
+          if (cData.services && Array.isArray(cData.services)) {
+            servicesList.push(...cData.services);
+            for (const s of cData.services) {
+              const sName = (s.name || s.serviceName || s.title || '').toLowerCase();
+              const sRate = typeof s.rate === 'number' ? s.rate : parseFloat(String(s.rate || 0).replace(/[^0-9.]/g, '')) || 0;
+
+              if (sName.includes('am') || sName.includes('morning')) ampoRate = sRate;
+              else if (sName.includes('pm') || sName.includes('afternoon')) pmpoRate = sRate;
+              else if (sName.includes('package') || sName.includes('parcel')) packageRate = sRate;
+              else if (sName.includes('bag') || sName.includes('additional')) additionalBagRate = sRate;
+            }
+          }
+          if (cData.ampoRate) ampoRate = parseFloat(cData.ampoRate) || ampoRate;
+          if (cData.pmpoRate) pmpoRate = parseFloat(cData.pmpoRate) || pmpoRate;
+          if (cData.packageRate) packageRate = parseFloat(cData.packageRate) || packageRate;
+          if (cData.additionalBagRate) additionalBagRate = parseFloat(cData.additionalBagRate) || additionalBagRate;
+        });
+
+        companyChildServicesMap.set(match.docId, { ampoRate, pmpoRate, packageRate, additionalBagRate, services: servicesList });
+      }
+    }
+
+    // Step 3: Fetch existing LPOs for deduplication
     const lpoLeadsSnap = await db.collection('lpo_leads').get();
     const existingLposByInternalId = new Map<string, { id: string; prospectPlusId: string }>();
     const existingLposByName = new Map<string, { id: string; prospectPlusId: string }>();
@@ -92,7 +135,7 @@ export async function POST(req: NextRequest) {
     let unlinkedCount = 0;
     const rowResults: any[] = [];
 
-    // Step 4: Write in chunked batches (limit 400 per batch)
+    // Step 4: Write in chunked batches
     let batch = db.batch();
     let opCount = 0;
 
@@ -109,7 +152,6 @@ export async function POST(req: NextRequest) {
       const lpoInternalId = row.lpoInternalId ? String(row.lpoInternalId).trim() : '';
       const rawCustId = row.linkedCustomerId ? String(row.linkedCustomerId).trim() : '';
 
-      // Check existing doc match
       let existing = lpoInternalId ? existingLposByInternalId.get(lpoInternalId) : undefined;
       if (!existing && lpoName) {
         existing = existingLposByName.get(lpoName.toLowerCase());
@@ -128,26 +170,39 @@ export async function POST(req: NextRequest) {
         createdCount++;
       }
 
-      // Check Customer Match via customerEntityId STRICTLY
       const customerMatch = rawCustId ? matchedCustomerMap.get(rawCustId) : undefined;
 
       const linkStatus = customerMatch ? 'Linked' : 'Unlinked';
       const linkedLeadId = customerMatch ? customerMatch.docId : null;
       const linkedLeadCompanyName = customerMatch ? customerMatch.companyName : null;
 
-      if (customerMatch) {
-        linkedCount++;
-      } else {
-        unlinkedCount++;
-      }
+      if (customerMatch) linkedCount++;
+      else unlinkedCount++;
+
+      // Exact Column Mapping based on User Specification:
+      // Col G: Linked Partner Location
+      // Col K: Name of the Linked Franchisee
+      // Col N: Address line 1
+      // Col O: Address line 2
+      // Col T: Contact Name
+      // Col U: Contact Email
+      // Col V: Contact Phone
+      const linkedPartnerLocationName = row.linkedPartnerLocationName || row.linkedNcl || '';
+      const linkedFranchiseeName = row.linkedFranchiseeName || row.companyNameFranchise || row.lpoTier || '';
+      const address1 = row.address1 || '';
+      const address2 = row.address2 || '';
+      const lpoOwnerName = row.lpoOwnerName || row.contactName || '';
+      const email = row.email || '';
+      const phone = row.phone || '';
 
       const lpoDocData: any = {
         prospectPlusId,
         lpoName,
-        lpoOwnerName: row.lpoOwnerName ? String(row.lpoOwnerName).trim() : '',
-        email: row.email ? String(row.email).trim() : '',
-        phone: row.phone ? String(row.phone).trim() : '',
-        address1: row.address1 ? String(row.address1).trim() : '',
+        lpoOwnerName,
+        email,
+        phone,
+        address1,
+        address2,
         city: row.city ? String(row.city).trim() : '',
         state: row.state ? String(row.state).trim() : '',
         postcode: row.postcode ? String(row.postcode).trim() : '',
@@ -155,7 +210,6 @@ export async function POST(req: NextRequest) {
         status: row.status ? String(row.status).trim() : 'New',
         source: 'CSV Import',
 
-        // 31 CSV Specific fields
         lpoInternalId,
         inactive: row.inactive === true || String(row.inactive).toLowerCase() === 'yes',
         secondaryInternalId: row.secondaryInternalId ? String(row.secondaryInternalId).trim() : '',
@@ -164,7 +218,9 @@ export async function POST(req: NextRequest) {
         linkedNcl: row.linkedNcl ? String(row.linkedNcl).trim() : '',
         rawCustomerName: row.rawCustomerName ? String(row.rawCustomerName).trim() : '',
         linkedCustomerId: rawCustId,
-        companyNameFranchise: row.companyNameFranchise ? String(row.companyNameFranchise).trim() : '',
+        companyNameFranchise: linkedFranchiseeName,
+        linkedFranchiseeName,
+        linkedPartnerLocationName,
         lpoTier: row.lpoTier ? String(row.lpoTier).trim() : '',
         poLevelTier: row.poLevelTier ? String(row.poLevelTier).trim() : '',
         pageURL: row.pageURL ? String(row.pageURL).trim() : '',
@@ -178,12 +234,23 @@ export async function POST(req: NextRequest) {
         adhocBooking: row.adhocBooking ? String(row.adhocBooking).trim() : '',
         defaultPassword: row.defaultPassword ? String(row.defaultPassword).trim() : '',
 
-        // Linking
         linkedLeadId,
         linkedLeadCompanyName,
         linkStatus,
         updatedAt: FieldValue.serverTimestamp(),
       };
+
+      // Assign Child Customer Service Rates for Step 2 if linked to a company
+      if (customerMatch && customerMatch.collectionName === 'companies') {
+        const childRates = companyChildServicesMap.get(customerMatch.docId);
+        if (childRates) {
+          if (childRates.ampoRate) lpoDocData.ampoRate = childRates.ampoRate;
+          if (childRates.pmpoRate) lpoDocData.pmpoRate = childRates.pmpoRate;
+          if (childRates.packageRate) lpoDocData.packageRate = childRates.packageRate;
+          if (childRates.additionalBagRate) lpoDocData.additionalBagRate = childRates.additionalBagRate;
+          if (childRates.services && childRates.services.length > 0) lpoDocData.services = childRates.services;
+        }
+      }
 
       if (!existing) {
         lpoDocData.createdAt = FieldValue.serverTimestamp();
@@ -192,7 +259,6 @@ export async function POST(req: NextRequest) {
       batch.set(docRef, lpoDocData, { merge: true });
       opCount++;
 
-      // If matched to a customer doc, also update customer record with parent LPO link
       if (customerMatch) {
         const targetRef = db.collection(customerMatch.collectionName).doc(customerMatch.docId);
         batch.set(
