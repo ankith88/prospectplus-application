@@ -1357,9 +1357,44 @@ export function ServiceSelectionDialog({
 
         // If Quote or Resell mode, trigger NetSuite Quote API in background
         if (mode === 'Quote' || mode === 'Resell') {
+          const existingScfsForQuote = await getScfRecords(lead.id);
+          const latestScfForQuote = (existingScfsForQuote && existingScfsForQuote.length > 0) ? existingScfsForQuote[0] : null;
+          const priorServicesListForQuote = (latestScfForQuote && latestScfForQuote.services && latestScfForQuote.services.length > 0)
+            ? latestScfForQuote.services
+            : (lead?.services || []);
+
+          const priorServiceNamesForQuote = new Set(priorServicesListForQuote.map((s: any) => (s.name || (s as any).service || '').toLowerCase().trim()));
+          const newlyAddedServicesForQuote = mappedServices.filter(s => !priorServiceNamesForQuote.has((s.name || (s as any).service || '').toLowerCase().trim()));
+
+          const hasPriorQuote = (existingScfsForQuote && existingScfsForQuote.length > 0) || 
+                                !!lead.commRegId || 
+                                ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won'].includes(lead.status || '');
+
+          const servicesToPassToQuote = hasPriorQuote 
+            ? (newlyAddedServicesForQuote.length > 0 ? newlyAddedServicesForQuote : []) 
+            : mappedServices;
+
+          const expectedPayloadQuote = {
+            operation: opName,
+            requestParams: {
+              customerId: customerIdVal,
+              contactId: contactIdVal,
+              salesRecordId: salesRecordIdVal,
+              salesRepId: salesRepId,
+              accountManagerId: salesRepId,
+              accountManagerName: amNameVal,
+              commDate: commDateVal,
+              createShipMateAccount: values.createShipMateAccount || undefined,
+              services: servicesToPassToQuote,
+              dateArray: []
+            }
+          };
+
+          const expectedUrlQuote = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc&requestData=${encodeURIComponent(JSON.stringify(expectedPayloadQuote))}&accountManagerName=${encodeURIComponent(amNameVal)}&accountManagerId=${encodeURIComponent(salesRepId)}`;
+
           console.group(`🌐 [NetSuite API 1900 Call] ${opName}`);
-          console.log(`📡 Full Request URL:\n${expectedUrl}`);
-          console.log(`📦 Unencoded JSON Payload (requestData):\n`, expectedPayload);
+          console.log(`📡 Full Request URL:\n${expectedUrlQuote}`);
+          console.log(`📦 Unencoded JSON Payload (requestData):\n`, expectedPayloadQuote);
           console.log(`📋 Parameters Breakdown:`, {
              operation: opName,
              customerId: customerIdVal,
@@ -1370,7 +1405,7 @@ export function ServiceSelectionDialog({
              accountManagerName: amNameVal,
              commDate: commDateVal,
              createShipMateAccount: values.createShipMateAccount || undefined,
-             services: mappedServices
+             services: servicesToPassToQuote
           });
           console.groupEnd();
 
@@ -1380,7 +1415,7 @@ export function ServiceSelectionDialog({
              contactId: contactIdVal,
              salesRecordId: salesRecordIdVal,
              salesRepId: salesRepId,
-             services: mappedServices,
+             services: servicesToPassToQuote,
              commDate: commDateVal,
              accountManagerName: amNameVal,
              createShipMateAccount: values.createShipMateAccount || undefined,
