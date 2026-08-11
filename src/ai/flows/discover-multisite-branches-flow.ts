@@ -351,3 +351,35 @@ export async function discoverCompanyBranches(input: z.infer<typeof DiscoverBran
     return { success: false, error: error.message || String(error) };
   }
 }
+
+export async function findCompanyWebsite(companyName: string) {
+  try {
+    const coreName = companyName.split(' - ')[0].trim();
+    const query = `${coreName} Australia official website`;
+    const searchResults = await searchWebForQuery(query);
+
+    let foundUrl = '';
+    if (searchResults.urls.length > 0) {
+      foundUrl = searchResults.urls.find(
+        (u) =>
+          !u.includes('facebook.com') &&
+          !u.includes('linkedin.com') &&
+          !u.includes('yellowpages.com.au') &&
+          !u.includes('wikipedia.org') &&
+          !u.includes('dnb.com') &&
+          !u.includes('bloomberg.com')
+      ) || searchResults.urls[0];
+    }
+
+    if (!foundUrl && coreName) {
+      const clean = coreName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (clean.length > 2) {
+        foundUrl = `https://www.${clean}.com.au`;
+      }
+    }
+
+    return { success: true, websiteUrl: foundUrl };
+  } catch (err: any) {
+    return { success: false, error: err.message || String(err) };
+  }
+}

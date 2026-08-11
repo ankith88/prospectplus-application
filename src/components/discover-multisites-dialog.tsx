@@ -17,8 +17,10 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import type { MapLead, Lead, Address } from '@/lib/types';
-import { discoverCompanyBranches } from '@/ai/flows/discover-multisite-branches-flow';
+import { discoverCompanyBranches, findCompanyWebsite } from '@/ai/flows/discover-multisite-branches-flow';
 import { createChildSiteLead, findFranchiseeForAddress } from '@/services/firebase';
+import { firestore } from '@/lib/firebase';
+import { doc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import {
   Building,
   MapPin,
@@ -39,6 +41,8 @@ import {
   CheckSquare,
   Square,
   AlertTriangle,
+  Save,
+  Compass,
 } from 'lucide-react';
 
 export interface DiscoveredLocation {
@@ -93,10 +97,70 @@ export function DiscoverMultiSitesDialog({
   const [companyNameInput, setCompanyNameInput] = useState('');
   const [websiteUrlInput, setWebsiteUrlInput] = useState('');
 
-  // Creation tracking
+  // Creation & website tracking
   const [creatingLeadIds, setCreatingLeadIds] = useState<Set<string>>(new Set());
   const [selectedLocationIds, setSelectedLocationIds] = useState<Set<string>>(new Set());
   const [isBatchCreating, setIsBatchCreating] = useState(false);
+  const [isFindingWebsite, setIsFindingWebsite] = useState(false);
+  const [isSavingWebsite, setIsSavingWebsite] = useState(false);
+  const [fetchedSystemRecords, setFetchedSystemRecords] = useState<MapLead[]>([]);
+
+  // Load all system records from Firestore when dialog opens if allSystemRecords prop is empty
+  useEffect(() => {
+    if (!isOpen) return;
+    async function loadSystemRecords() {
+      try {
+        const [leadsSnap, companiesSnap] = await Promise.all([
+          getDocs(collection(firestore, 'leads')),
+          getDocs(collection(firestore, 'companies')),
+        ]);
+
+        const leadsData: MapLead[] = leadsSnap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            companyName: data.companyName || data.tradingName || 'Unnamed Lead',
+            address: data.address || {
+              street: data.street || '',
+              city: data.city || '',
+              state: data.state || '',
+              zip: data.zip || '',
+            },
+            latitude: data.latitude || data.lat,
+            longitude: data.longitude || data.lng,
+            isCompany: false,
+            status: data.status || 'Lead',
+            ...data,
+          } as any;
+        });
+
+        const companiesData: MapLead[] = companiesSnap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            companyName: data.companyName || data.tradingName || 'Unnamed Company',
+            address: data.address || {
+              street: data.street || '',
+              city: data.city || '',
+              state: data.state || '',
+              zip: data.zip || '',
+            },
+            latitude: data.latitude || data.lat,
+            longitude: data.longitude || data.lng,
+            isCompany: true,
+            status: data.status || 'Signed Customer',
+            ...data,
+          } as any;
+        });
+
+        setFetchedSystemRecords([...leadsData, ...companiesData]);
+      } catch (err) {
+        console.warn('Failed to load system records for address matching:', err);
+      }
+    }
+
+    loadSystemRecords();
+  }, [isOpen]);
 
   // Initialize input state from parentCompany when opened
   useEffect(() => {
@@ -110,6 +174,68 @@ export function DiscoverMultiSitesDialog({
       }
     }
   }, [isOpen, parentCompany]);
+
+  const handleAutoFindWebsite = async () => {
+    const targetName = companyNameInput.trim() || parentCompany?.companyName || '';
+    if (!targetName) {
+      toast({ variant: 'destructive', title: 'Company Name Required', description: 'Enter a company name to find its website.' });
+      return;
+    }
+    setIsFindingWebsite(true);
+    try {
+      const res = await findCompanyWebsite(targetName);
+      if (res.success && res.websiteUrl) {
+        setWebsiteUrlInput(res.websiteUrl);
+        toast({
+          title: 'Website Discovered',
+          description: `Found official website: ${res.websiteUrl}`,
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Website Not Found',
+          description: `Could not automatically find website for ${targetName}. Please enter it manually.`,
+        });
+      }
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Website Search Error', description: err.message || String(err) });
+    } finally {
+      setIsFindingWebsite(false);
+    }
+  };
+
+  const handleSaveWebsiteToRecord = async () => {
+    if (!parentCompany?.id || !websiteUrlInput.trim()) {
+      toast({ variant: 'destructive', title: 'No Record or Website', description: 'Enter a website URL and ensure a parent lead/company is selected.' });
+      return;
+    }
+    setIsSavingWebsite(true);
+    try {
+      const urlToSave = websiteUrlInput.trim();
+      const isComp = (parentCompany as any).isCompany || (parentCompany as any).customerStatus === 'Signed Customer';
+      const collName = isComp ? 'companies' : 'leads';
+      const docRef = doc(firestore, collName, parentCompany.id);
+      await updateDoc(docRef, {
+        websiteUrl: urlToSave,
+        website: urlToSave,
+        updatedAt: new Date().toISOString(),
+      });
+      toast({
+        title: 'Website Saved to Record',
+        description: `Saved ${urlToSave} to field "websiteUrl" on ${parentCompany.companyName}.`,
+      });
+      onLocationsUpdated?.();
+    } catch (err: any) {
+      console.error('Failed to save websiteUrl to Firestore:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error Saving Website',
+        description: err.message || String(err),
+      });
+    } finally {
+      setIsSavingWebsite(false);
+    }
+  };
 
   const matchLocationToDatabase = useCallback(
     (
@@ -145,7 +271,9 @@ export function DiscoverMultiSitesDialog({
       const locStreetClean = cleanAddressStr(loc.street || '');
       const locFullAddrClean = cleanAddressStr(loc.formattedAddress || '');
 
-      const matchedRecord = allSystemRecords.find((rec) => {
+      const recordsToSearch = allSystemRecords.length > 0 ? allSystemRecords : fetchedSystemRecords;
+
+      const matchedRecord = recordsToSearch.find((rec) => {
         const isParentOrChild = rec.id === parentCompany?.id || (rec as any).parentLeadId === parentCompany?.id || (rec as any).parentId === parentCompany?.id;
         const recNameClean = (rec.companyName || '')
           .toLowerCase()
@@ -602,27 +730,56 @@ export function DiscoverMultiSitesDialog({
         </DialogHeader>
 
         {/* Company Search Controls Header */}
-        <div className="shrink-0 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-3">
+        <div className="shrink-0 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
-            <div className="sm:col-span-5 space-y-1">
+            <div className="sm:col-span-4 space-y-1">
               <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Company Name</label>
               <Input
-                placeholder="e.g. Bunnings, TNT Express, Harvey Norman..."
+                placeholder="e.g. Clayton Utz, Bunnings..."
                 value={companyNameInput}
                 onChange={(e) => setCompanyNameInput(e.target.value)}
                 className="h-8 text-xs bg-white"
               />
             </div>
             <div className="sm:col-span-5 space-y-1">
-              <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Website URL (Optional)</label>
-              <Input
-                placeholder="e.g. www.bunnings.com.au"
-                value={websiteUrlInput}
-                onChange={(e) => setWebsiteUrlInput(e.target.value)}
-                className="h-8 text-xs bg-white"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Website URL</label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAutoFindWebsite}
+                  disabled={isFindingWebsite || !companyNameInput.trim()}
+                  className="h-4 text-[10px] text-purple-700 hover:text-purple-900 p-0 font-semibold flex items-center gap-1"
+                >
+                  {isFindingWebsite ? <Loader2 className="h-3 w-3 animate-spin" /> : <Compass className="h-3 w-3" />}
+                  Auto-Find Website
+                </Button>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  placeholder="e.g. https://www.claytonutz.com/"
+                  value={websiteUrlInput}
+                  onChange={(e) => setWebsiteUrlInput(e.target.value)}
+                  className="h-8 text-xs bg-white flex-1"
+                />
+                {parentCompany?.id && websiteUrlInput.trim() && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSaveWebsiteToRecord}
+                    disabled={isSavingWebsite}
+                    className="h-8 text-[11px] px-2.5 bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 font-semibold shrink-0"
+                    title="Save confirmed website URL to company/lead record"
+                  >
+                    {isSavingWebsite ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3 mr-1" />}
+                    Save to Record
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-3 flex items-center gap-1.5">
               <Button
                 size="sm"
                 onClick={performDiscovery}
@@ -630,15 +787,23 @@ export function DiscoverMultiSitesDialog({
                 className="w-full h-8 text-xs font-semibold bg-primary hover:bg-primary/90 text-white shadow-sm"
               >
                 {searching ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Search className="mr-1.5 h-3.5 w-3.5" />}
-                Scan Website
+                Scan Website Branches
               </Button>
             </div>
           </div>
 
           {parentCompany && (
-            <div className="flex items-center gap-2 text-xs text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-              <Building className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span>Linking child leads to Parent Lead: <strong>{parentCompany.companyName}</strong> ({parentCompany.id})</span>
+            <div className="flex items-center justify-between text-xs text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-2">
+                <Building className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span>Linking child leads to Parent: <strong>{parentCompany.companyName}</strong> ({parentCompany.id})</span>
+              </div>
+              {websiteUrlInput && (
+                <div className="flex items-center gap-1.5 text-[11px] text-purple-700 font-medium">
+                  <Globe className="h-3 w-3" />
+                  <span>Target Website: <strong>{websiteUrlInput}</strong></span>
+                </div>
+              )}
             </div>
           )}
         </div>
