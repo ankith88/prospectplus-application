@@ -68,7 +68,14 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
     let siteContent = '';
     const fetchedPages: string[] = [];
 
-    let targetUrl = websiteUrl;
+    let targetUrl = websiteUrl?.trim();
+    if (!targetUrl && companyName) {
+      const clean = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (clean.length > 2) {
+        targetUrl = `https://www.${clean}.com.au`;
+      }
+    }
+
     if (targetUrl && !/^https?:\/\//i.test(targetUrl)) {
       targetUrl = 'https://' + targetUrl;
     }

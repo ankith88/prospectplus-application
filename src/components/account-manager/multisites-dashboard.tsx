@@ -28,6 +28,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { MULTISITE_ACCOUNT_MANAGER_UID } from '@/lib/constants';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
+import { DiscoverMultiSitesDialog } from '@/components/discover-multisites-dialog';
 import { LeadEmailDialog } from './lead-email-dialog';
 import { LeadNotesDialog } from './lead-notes-dialog';
 import { EnterMultiSiteLeadDialog } from '@/components/enter-multisite-lead-dialog';
@@ -95,6 +96,7 @@ export function MultiSitesDashboard() {
     const [emailDialogOpen, setEmailDialogOpen] = useState(false);
     const [notesDialogOpen, setNotesDialogOpen] = useState(false);
     const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
+    const [discoverDialogOpen, setDiscoverDialogOpen] = useState(false);
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
 
     // Child lead creation dialog state (triggered from parent rows)
@@ -1386,6 +1388,9 @@ export function MultiSitesDashboard() {
                     <Button variant="outline" size="sm" onClick={fetchMultiSiteData} disabled={isLoadingData} className="gap-2 bg-white">
                         <RefreshCw className={`h-4 w-4 ${isLoadingData ? 'animate-spin' : ''}`} /> Refresh
                     </Button>
+                    <Button variant="outline" size="sm" onClick={() => setDiscoverDialogOpen(true)} className="gap-2 bg-purple-50 border-purple-200 text-purple-800 hover:bg-purple-100 font-semibold">
+                        <Sparkles className="h-4 w-4 text-purple-600" /> Discover Branches via Website
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => setPromoteDialogOpen(true)} className="gap-2 bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100">
                         <Sparkles className="h-4 w-4 text-indigo-600" /> Promote MultiSite Parent
                     </Button>
@@ -2003,6 +2008,12 @@ export function MultiSitesDashboard() {
                     onClose={() => setNotesDialogOpen(false)}
                 />
             )}
+
+            <DiscoverMultiSitesDialog
+                isOpen={discoverDialogOpen}
+                onOpenChange={setDiscoverDialogOpen}
+                onLocationsUpdated={fetchMultiSiteData}
+            />
         </div>
     );
 }

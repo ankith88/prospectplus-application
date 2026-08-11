@@ -2821,7 +2821,7 @@ async function getFranchiseeByName(name: string): Promise<import('@/lib/types').
     }
 }
 
-async function findFranchiseeForAddress(city: string, state: string, zip: string): Promise<{ name: string; internalId: string; isMultiple?: boolean }> {
+export async function findFranchiseeForAddress(city: string, state: string, zip: string): Promise<{ name: string; internalId: string; isMultiple?: boolean }> {
     try {
         const snap = await getDocs(collection(firestore, 'franchisees'));
         const franchisees = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
