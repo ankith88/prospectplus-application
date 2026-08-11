@@ -43,15 +43,16 @@ const discoverBranchesPrompt = ai.definePrompt({
 Your job is to analyze the extracted web search snippets, website content, store locator pages, and Hunter.io records for "{{companyName}}" (Website: {{websiteUrl}}) and extract ALL branch locations, offices, warehouses, depots, or retail store locations across Australia.
 
 Instructions:
-1. Examine all scraped pages, "Where We Are" navigation lists, and office subpages.
-2. Extract every single branch, city office (e.g. Sydney, Melbourne, Brisbane, Perth, Canberra, Darwin, Adelaide, Gold Coast, Newcastle), warehouse, or depot location.
-3. For each location, extract:
+1. Examine all scraped pages, "Where We Are" navigation lists, footer links, and office subpages.
+2. Extract EVERY single branch, city office (e.g. Sydney, Melbourne, Brisbane, Perth, Canberra, Darwin, Adelaide, Gold Coast, Newcastle), warehouse, or depot location mentioned anywhere in the content.
+3. CRITICAL: You MUST include all office locations found even if only the city or suburb name is mentioned (e.g. "Melbourne Office", "Brisbane Office", "Perth Office", "Canberra Office", "Darwin Office"). Never omit or discard an office location just because a full street address is not explicitly written in the scraped text snippet.
+4. For each location, extract:
    - Branch name or title (e.g. "{{companyName}} - Sydney", "{{companyName}} Melbourne Office")
-   - Full street address with building name, level/suite, street number, and street name (CRITICAL: Do NOT return just city or state names as fullAddress. Example: "Level 28, Riparian Plaza, 71 Eagle Street, Brisbane QLD 4000" or "Level 15, 1 Bligh St, Sydney NSW 2000")
+   - Street address (if mentioned, otherwise leave empty or use building/suburb)
    - Suburb/City (in Australia)
    - State (MUST use valid Australian state code: NSW, VIC, QLD, WA, SA, TAS, ACT, NT)
    - Postcode (if mentioned)
-   - Full formatted address
+   - Full formatted address string
    - Phone number / Email for that specific location (if available)
 
 Scraped Content & Search Results:

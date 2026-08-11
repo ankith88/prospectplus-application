@@ -644,8 +644,15 @@ export function DiscoverMultiSitesDialog({
   }, [companyNameInput, websiteUrlInput, parentCompany, map, matchLocationToDatabase, toast]);
 
   useEffect(() => {
-    if (isOpen && (parentCompany || companyNameInput)) {
-      performDiscovery();
+    if (isOpen) {
+      if (parentCompany) {
+        setCompanyNameInput(parentCompany.companyName || '');
+        setWebsiteUrlInput(parentCompany.websiteUrl || (parentCompany as any).website || '');
+      }
+      setScanSummary(null);
+      setDiscoveredLocations([]);
+      setSearchFilter('');
+      setActiveTab('all');
     }
   }, [isOpen, parentCompany]);
 
@@ -1185,9 +1192,14 @@ export function DiscoverMultiSitesDialog({
                   })}
                 </div>
               ) : (
-                <div className="py-16 text-center text-muted-foreground text-xs space-y-2">
-                  <Building className="h-8 w-8 text-slate-300 mx-auto" />
-                  <p>No branch locations match the current filter. Try scanning a company website or clearing filters.</p>
+                <div className="py-14 text-center text-muted-foreground text-xs space-y-3 max-w-md mx-auto">
+                  <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center mx-auto shadow-sm">
+                    <Search className="h-6 w-6" />
+                  </div>
+                  <p className="font-bold text-slate-800 text-sm">Ready to Discover Multi-Site Locations</p>
+                  <p className="text-slate-500 leading-relaxed">
+                    Click <strong className="text-slate-900 font-semibold">Scan Website Branches</strong> above to crawl official office pages, Hunter.io, and Google Maps for <strong>{parentCompany?.companyName || 'this company'}</strong>, or click <strong className="text-purple-700 font-semibold">Auto-Find Website</strong> if the domain is missing.
+                  </p>
                 </div>
               )}
             </div>
