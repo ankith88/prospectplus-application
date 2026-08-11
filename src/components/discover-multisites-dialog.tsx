@@ -20,7 +20,7 @@ import type { MapLead, Lead, Address } from '@/lib/types';
 import { discoverCompanyBranches, findCompanyWebsite } from '@/ai/flows/discover-multisite-branches-flow';
 import { createChildSiteLead, findFranchiseeForAddress } from '@/services/firebase';
 import { firestore } from '@/lib/firebase';
-import { doc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, collection, getDocs, getDoc, setDoc } from 'firebase/firestore';
 import {
   Building,
   MapPin,
@@ -229,17 +229,49 @@ export function DiscoverMultiSitesDialog({
     setIsSavingWebsite(true);
     try {
       const urlToSave = websiteUrlInput.trim();
-      const isComp = (parentCompany as any).isCompany || (parentCompany as any).customerStatus === 'Signed Customer';
-      const collName = isComp ? 'companies' : 'leads';
-      const docRef = doc(firestore, collName, parentCompany.id);
-      await updateDoc(docRef, {
+      const targetId = parentCompany.id;
+
+      // Check both 'leads' and 'companies' collections in Firestore
+      const leadRef = doc(firestore, 'leads', targetId);
+      const companyRef = doc(firestore, 'companies', targetId);
+
+      const [leadSnap, companySnap] = await Promise.all([
+        getDoc(leadRef),
+        getDoc(companyRef),
+      ]);
+
+      const updatePayload = {
         websiteUrl: urlToSave,
         website: urlToSave,
         updatedAt: new Date().toISOString(),
-      });
+      };
+
+      const updatePromises: Promise<any>[] = [];
+      const updatedCollections: string[] = [];
+
+      if (leadSnap.exists()) {
+        updatePromises.push(setDoc(leadRef, updatePayload, { merge: true }));
+        updatedCollections.push('leads');
+      }
+
+      if (companySnap.exists()) {
+        updatePromises.push(setDoc(companyRef, updatePayload, { merge: true }));
+        updatedCollections.push('companies');
+      }
+
+      // If neither document existed by exact ID, fallback to setDoc with merge on primary collection
+      if (updatePromises.length === 0) {
+        const isComp = (parentCompany as any).isCompany || (parentCompany as any).customerStatus === 'Signed Customer';
+        const primaryRef = isComp ? companyRef : leadRef;
+        updatePromises.push(setDoc(primaryRef, updatePayload, { merge: true }));
+        updatedCollections.push(isComp ? 'companies' : 'leads');
+      }
+
+      await Promise.all(updatePromises);
+
       toast({
         title: 'Website Saved to Record',
-        description: `Saved ${urlToSave} to field "websiteUrl" on ${parentCompany.companyName}.`,
+        description: `Saved ${urlToSave} to field "websiteUrl" on ${parentCompany.companyName} (${updatedCollections.join(' & ')}).`,
       });
       onLocationsUpdated?.();
     } catch (err: any) {
