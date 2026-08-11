@@ -64,12 +64,13 @@ export async function POST(req: NextRequest) {
     }
     const parentLeadData = parentLeadSnap.data()!;
 
-    // 2. Resolve Franchisee based on child address
+    // 2. Resolve Franchisee based on child address suburb, state & postcode
     let matchedFranchiseeIds: string[] = [];
     let matchedFranchiseeNames: string[] = [];
     
-    const zipTrimmed = address.zip.trim();
-    const cityTrimmed = address.city.trim().toUpperCase();
+    const zipTrimmed = String(address.zip).trim();
+    const cityTrimmed = (address.city || '').trim().toUpperCase();
+    const stateTrimmed = (address.state || '').trim().toUpperCase();
     
     const franchiseesRef = db.collection('franchisees');
     const franchiseesSnap = await franchiseesRef.get();
@@ -77,17 +78,26 @@ export async function POST(req: NextRequest) {
     franchiseesSnap.docs.forEach(docSnap => {
       const data = docSnap.data();
       const territories = data.territoryJson || [];
-      const matches = territories.some((t: any) => t.post_code === zipTrimmed && (t.suburbs || '').toUpperCase() === cityTrimmed);
+      const ausPostTerritories = data.ausPostSuburbsJson || [];
+      const matches = territories.some((t: any) => 
+        String(t.post_code).trim() === zipTrimmed && 
+        (t.suburbs || '').trim().toUpperCase() === cityTrimmed &&
+        (!stateTrimmed || !t.state || (t.state || '').trim().toUpperCase() === stateTrimmed)
+      ) || ausPostTerritories.some((t: any) => 
+        String(t.post_code).trim() === zipTrimmed && 
+        (t.suburbs || '').trim().toUpperCase() === cityTrimmed &&
+        (!stateTrimmed || !t.state || (t.state || '').trim().toUpperCase() === stateTrimmed)
+      );
       if (matches) {
         matchedFranchiseeIds.push(data.internalId || docSnap.id);
         matchedFranchiseeNames.push(data.name || data.franchiseeName || docSnap.id);
       }
     });
 
-    let assignedFranchisee = 'MailPlus Pty Ltd';
+    let assignedFranchiseeId = '435';
     let assignedFranchiseeName = 'MailPlus Pty Ltd';
     if (matchedFranchiseeIds.length === 1) {
-      assignedFranchisee = matchedFranchiseeIds[0];
+      assignedFranchiseeId = matchedFranchiseeIds[0];
       assignedFranchiseeName = matchedFranchiseeNames[0];
     }
 
@@ -135,8 +145,10 @@ export async function POST(req: NextRequest) {
       zip: address.zip,
       latitude: address.latitude || null,
       longitude: address.longitude || null,
-      franchisee: assignedFranchisee,
+      franchisee: assignedFranchiseeName,
       franchiseeName: assignedFranchiseeName,
+      franchisee_id: assignedFranchiseeId,
+      franchiseeInternalId: assignedFranchiseeId,
       status: 'New',
       customerStatus: 'New',
       dateLeadEntered: new Date().toISOString(),

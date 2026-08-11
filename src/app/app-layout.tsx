@@ -659,6 +659,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     ['franchisee', 'executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success'].includes(activeRoleLower);
   const canViewFranchisees = canView('franchisees');
   const canViewAccountManagerPipeline = canView('accountManagerPipeline');
+  const canViewMultisite = isSuperAdmin || canView('multisiteReporting') || canViewAccountManagerPipeline || ['admin', 'superadmin', 'sales manager', 'account manager', 'account managers', 'customer success', 'customer service'].includes(activeRoleLower);
   const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
   const canViewCustomerSuccessOnboarding = canView('customerSuccessOnboarding') || user?.uid === 'Uh71ctLejpg8dietKngBQwnqivI2';
   const canViewScans = canView('scans');
@@ -1299,24 +1300,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           </SidebarMenuItem>
                         )}
                         {canViewAccountManagerPipeline && (
-                          <>
-                            <SidebarMenuItem>
-                              <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")} tooltip="AM Pipeline">
-                                <Link href="/account-manager/pipeline">
-                                  <ListTodo />
-                                  <span>AM Pipeline</span>
-                                </Link>
-                              </SidebarMenuButton>
-                            </SidebarMenuItem>
-                            <SidebarMenuItem>
-                              <SidebarMenuButton asChild isActive={isActive("/multisites") || isActive("/account-manager/multisites")} tooltip="MultiSites">
-                                <Link href="/multisites">
-                                  <Network />
-                                  <span>MultiSites</span>
-                                </Link>
-                              </SidebarMenuButton>
-                            </SidebarMenuItem>
-                          </>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")} tooltip="AM Pipeline">
+                              <Link href="/account-manager/pipeline">
+                                <ListTodo />
+                                <span>AM Pipeline</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {(canViewAccountManagerPipeline || canViewMultisite) && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/multisites") || isActive("/account-manager/multisites")} tooltip="MultiSites">
+                              <Link href="/multisites">
+                                <Network />
+                                <span>MultiSites</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
                         )}
                         {canViewCustomers && (
                           <>

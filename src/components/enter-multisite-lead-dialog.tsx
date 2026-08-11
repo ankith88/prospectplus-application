@@ -21,8 +21,9 @@ import { createNewLead, getAllFranchisees, logNoteActivity } from '@/services/fi
 import { MULTISITE_ACCOUNT_MANAGER_UID } from '@/lib/constants';
 import { firestore } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { Building, User, Mail, Phone, FileText, Briefcase } from 'lucide-react';
+import { Building, User, Mail, Phone, FileText, Briefcase, Store } from 'lucide-react';
 import { GoogleAddressInput } from '@/components/google-address-input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface EnterMultiSiteLeadDialogProps {
   isOpen: boolean;
@@ -93,6 +94,75 @@ export function EnterMultiSiteLeadDialog({
   const [notes, setNotes] = useState('');
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
 
+  // Franchisee assignment state
+  const [allFrsList, setAllFrsList] = useState<import('@/lib/types').Franchisee[]>([]);
+  const [selectedFranchiseeId, setSelectedFranchiseeId] = useState<string>('435');
+  const [selectedFranchiseeName, setSelectedFranchiseeName] = useState<string>('MailPlus Pty Ltd');
+  const [franchiseeMatchReason, setFranchiseeMatchReason] = useState<string>('');
+  const [showOverrideFranchisee, setShowOverrideFranchisee] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    async function loadFrs() {
+      try {
+        const frs = await getAllFranchisees();
+        setAllFrsList(frs);
+      } catch (err) {
+        console.warn('Failed to load franchisees:', err);
+      }
+    }
+    loadFrs();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !selectedAddress) {
+      setSelectedFranchiseeId('435');
+      setSelectedFranchiseeName('MailPlus Pty Ltd');
+      setFranchiseeMatchReason('Please select a site address to resolve servicing franchisee.');
+      return;
+    }
+
+    const cityUpper = (selectedAddress.city || '').trim().toUpperCase();
+    const stateUpper = (selectedAddress.state || '').trim().toUpperCase();
+    const zipStr = String(selectedAddress.zip || '').trim();
+
+    if (!cityUpper || !zipStr) {
+      setSelectedFranchiseeId('435');
+      setSelectedFranchiseeName('MailPlus Pty Ltd');
+      setFranchiseeMatchReason('Address missing suburb or postcode.');
+      return;
+    }
+
+    const matches = allFrsList.filter(f =>
+      f.territoryJson?.some(t =>
+        t.suburbs?.toUpperCase() === cityUpper &&
+        (!stateUpper || !t.state || t.state.toUpperCase() === stateUpper) &&
+        String(t.post_code).trim() === zipStr
+      ) ||
+      f.ausPostSuburbsJson?.some(t =>
+        t.suburbs?.toUpperCase() === cityUpper &&
+        (!stateUpper || !t.state || t.state.toUpperCase() === stateUpper) &&
+        String(t.post_code).trim() === zipStr
+      )
+    );
+
+    if (matches.length === 1) {
+      const matchedName = matches[0].name || matches[0].franchiseeName || 'MailPlus Pty Ltd';
+      const matchedId = matches[0].internalId || matches[0].id || '435';
+      setSelectedFranchiseeId(matchedId);
+      setSelectedFranchiseeName(matchedName);
+      setFranchiseeMatchReason(`Matched territory for ${matchedName}.`);
+    } else if (matches.length > 1) {
+      setSelectedFranchiseeId('435');
+      setSelectedFranchiseeName('MailPlus Pty Ltd');
+      setFranchiseeMatchReason(`Multiple franchisees (${matches.map(m => m.name).join(', ')}) cover this area. Defaulted to MailPlus Pty Ltd.`);
+    } else {
+      setSelectedFranchiseeId('435');
+      setSelectedFranchiseeName('MailPlus Pty Ltd');
+      setFranchiseeMatchReason(`No territory matched for ${cityUpper} ${zipStr}. Defaulted to MailPlus Pty Ltd (Out of Territory).`);
+    }
+  }, [selectedAddress, allFrsList, isOpen]);
+
   useEffect(() => {
     if (parentCompany && isOpen) {
       setNotes('');
@@ -159,33 +229,8 @@ export function EnterMultiSiteLeadDialog({
         console.warn('Failed to fetch Account Manager details:', e);
       }
 
-      // 2. Resolve Franchisee based on address postcode/city match if possible
-      let matchedFranchiseeName = parentCompany.franchisee || 'MailPlus Pty Ltd';
-      try {
-        const allFrs = await getAllFranchisees();
-        const cityUpper = selectedAddress.city.trim().toUpperCase();
-        const stateUpper = selectedAddress.state.trim().toUpperCase();
-        const zipStr = String(selectedAddress.zip).trim();
-
-        const match = allFrs.find(f =>
-          f.territoryJson?.some(t =>
-            t.suburbs?.toUpperCase() === cityUpper &&
-            t.state?.toUpperCase() === stateUpper &&
-            String(t.post_code) === zipStr
-          ) ||
-          f.ausPostSuburbsJson?.some(t =>
-            t.suburbs?.toUpperCase() === cityUpper &&
-            t.state?.toUpperCase() === stateUpper &&
-            String(t.post_code) === zipStr
-          )
-        );
-
-        if (match && match.name) {
-          matchedFranchiseeName = match.name;
-        }
-      } catch (err) {
-        console.warn('Territory lookup error:', err);
-      }
+      const matchedFranchiseeName = selectedFranchiseeName;
+      const matchedFranchiseeId = selectedFranchiseeId;
 
       const nameParts = contactName.trim().split(' ');
       const firstName = contactName.trim() ? nameParts[0] : '';
@@ -202,6 +247,8 @@ export function EnterMultiSiteLeadDialog({
       const newLeadPayload = {
         companyName: siteName.trim(),
         parentLeadId: parentCompany.id,
+        parentId: parentCompany.id,
+        parentCustomer: parentCompany.id,
         websiteUrl: parentCompany.websiteUrl || '',
         customerPhone: resolvedPhone,
         customerServiceEmail: resolvedEmail,
@@ -221,6 +268,9 @@ export function EnterMultiSiteLeadDialog({
         accountManagerUid: MULTISITE_ACCOUNT_MANAGER_UID,
         assignedTo: MULTISITE_ACCOUNT_MANAGER_UID,
         franchisee: matchedFranchiseeName,
+        franchiseeName: matchedFranchiseeName,
+        franchiseeInternalId: matchedFranchiseeId,
+        franchisee_id: matchedFranchiseeId,
         status: 'New',
         customerStatus: 'New',
       };
@@ -360,6 +410,62 @@ export function EnterMultiSiteLeadDialog({
                 value={levelSuite}
                 onChange={(e) => setLevelSuite(e.target.value)}
               />
+            </div>
+
+            {/* Servicing Franchisee Section */}
+            <div className="p-3 border rounded-lg bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900 space-y-2 mt-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-950 dark:text-emerald-100">
+                  <Store className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>
+                    Assigned Franchisee: <strong className="text-emerald-900 dark:text-emerald-200 font-bold">{selectedFranchiseeName}</strong>
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px] px-2 bg-white dark:bg-slate-900 text-emerald-800 dark:text-emerald-300 border-emerald-300 hover:bg-emerald-100 font-medium"
+                  onClick={() => setShowOverrideFranchisee(!showOverrideFranchisee)}
+                >
+                  {showOverrideFranchisee ? "Use Automatic Allocation" : "Change / Override Franchisee"}
+                </Button>
+              </div>
+
+              {franchiseeMatchReason && !showOverrideFranchisee && (
+                <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
+                  {franchiseeMatchReason}
+                </p>
+              )}
+
+              {showOverrideFranchisee && (
+                <div className="pt-2 border-t border-emerald-200 dark:border-emerald-900 space-y-1.5">
+                  <Label className="text-xs font-semibold text-emerald-950 dark:text-emerald-100">
+                    Select Franchisee Override
+                  </Label>
+                  <Select
+                    value={selectedFranchiseeId}
+                    onValueChange={(val) => {
+                      setSelectedFranchiseeId(val);
+                      const found = allFrsList.find(f => (f.internalId || f.id) === val);
+                      setSelectedFranchiseeName(found?.name || 'MailPlus Pty Ltd');
+                    }}
+                  >
+                    <SelectTrigger className="w-full h-8 text-xs bg-white dark:bg-slate-900 border-emerald-300">
+                      <SelectValue placeholder="Select Franchisee" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      {[...allFrsList]
+                        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                        .map(f => (
+                          <SelectItem key={f.internalId || f.id} value={f.internalId || f.id || '435'}>
+                            {f.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
 

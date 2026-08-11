@@ -132,7 +132,7 @@ export function AddressAutocomplete({ onAddressSelect }: AddressAutocompleteProp
                     <FormItem>
                         <FormLabel>Suite/Level/Unit</FormLabel>
                         <FormControl>
-                            <Input placeholder="e.g. Suite 5, Level 2" {...field} />
+                            <Input placeholder="Suite, level, unit, etc." {...field} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -157,7 +157,7 @@ export function AddressAutocomplete({ onAddressSelect }: AddressAutocompleteProp
                                     // Delay hiding predictions so button click registers first
                                     setTimeout(() => setIsFocused(false), 200);
                                 }}
-                                placeholder="Start typing a street address..." 
+                                placeholder="Enter street address..." 
                                 autoComplete="off"
                             />
                         </FormControl>

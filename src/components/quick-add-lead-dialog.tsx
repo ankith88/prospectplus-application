@@ -477,7 +477,7 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                          <div className="flex gap-2">
                             <Input 
                                 id="quick-add-search" 
-                                placeholder="Start typing..."
+                                placeholder="Search business name or address..."
                                 value={searchQuery}
                                 onChange={handleInputChange}
                             />

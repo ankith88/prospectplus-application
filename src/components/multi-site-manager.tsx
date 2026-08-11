@@ -8,9 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Address, Contact, Lead } from "@/lib/types";
-import { createChildSiteLead, updateLeadDetails, getSiblingLeads, getLeadFromFirebase, getCompanyFromFirebase, getLastInvoicesForCompanies } from "@/services/firebase";
-import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search, Receipt, FileText } from "lucide-react";
+import { createChildSiteLead, updateLeadDetails, getSiblingLeads, getLeadFromFirebase, getCompanyFromFirebase, getLastInvoicesForCompanies, getAllFranchisees } from "@/services/firebase";
+import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search, Receipt, FileText, Store } from "lucide-react";
 import { GoogleAddressInput } from "@/components/google-address-input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -36,8 +37,20 @@ interface MultiSiteManagerProps {
 export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSiteManagerProps) {
     const { toast } = useToast();
     const { userProfile, isSuperAdmin } = useAuth();
-    const roleStr = (userProfile?.activeRole || userProfile?.role || '').toLowerCase();
-    const isAdminOrSuperAdmin = isSuperAdmin || roleStr === 'admin' || roleStr === 'superadmin' || roleStr === 'super user';
+    const roleStr = (userProfile?.activeRole || userProfile?.role || '').toLowerCase().trim();
+    const canManageMultiSite = isSuperAdmin || [
+        'admin',
+        'superadmin',
+        'super user',
+        'customer success',
+        'customer service',
+        'account manager',
+        'account managers',
+        'sales manager',
+        'sales management',
+        'outbound admin',
+        'lead gen admin'
+    ].some(r => roleStr.includes(r) || roleStr === r);
 
     const [isOpen, setIsOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -69,6 +82,69 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     const [managerTitle, setManagerTitle] = useState("");
     const [managerEmail, setManagerEmail] = useState("");
     const [managerPhone, setManagerPhone] = useState("");
+
+    // Franchisee assignment state for Add Location dialog
+    const [allFranchiseesList, setAllFranchiseesList] = useState<import('@/lib/types').Franchisee[]>([]);
+    const [selectedFranchiseeId, setSelectedFranchiseeId] = useState<string>('435');
+    const [selectedFranchiseeName, setSelectedFranchiseeName] = useState<string>('MailPlus Pty Ltd');
+    const [franchiseeMatchReason, setFranchiseeMatchReason] = useState<string>('');
+    const [showOverrideFranchisee, setShowOverrideFranchisee] = useState<boolean>(false);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        async function loadFrs() {
+            try {
+                const frs = await getAllFranchisees();
+                setAllFranchiseesList(frs);
+            } catch (err) {
+                console.warn('Failed to load franchisees list:', err);
+            }
+        }
+        loadFrs();
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const cityUpper = city.trim().toUpperCase();
+        const stateUpper = state.trim().toUpperCase();
+        const zipTrimmed = zip.trim();
+
+        if (!cityUpper || !zipTrimmed) {
+            setSelectedFranchiseeId('435');
+            setSelectedFranchiseeName('MailPlus Pty Ltd');
+            setFranchiseeMatchReason('Enter suburb and postcode to detect territory franchisee.');
+            return;
+        }
+
+        const matches = allFranchiseesList.filter(f =>
+            f.territoryJson?.some(t =>
+                t.suburbs?.toUpperCase() === cityUpper &&
+                (!stateUpper || !t.state || t.state.toUpperCase() === stateUpper) &&
+                String(t.post_code).trim() === zipTrimmed
+            ) ||
+            f.ausPostSuburbsJson?.some(t =>
+                t.suburbs?.toUpperCase() === cityUpper &&
+                (!stateUpper || !t.state || t.state.toUpperCase() === stateUpper) &&
+                String(t.post_code).trim() === zipTrimmed
+            )
+        );
+
+        if (matches.length === 1) {
+            const matchedName = matches[0].name || matches[0].franchiseeName || 'MailPlus Pty Ltd';
+            const matchedId = matches[0].internalId || matches[0].id || '435';
+            setSelectedFranchiseeId(matchedId);
+            setSelectedFranchiseeName(matchedName);
+            setFranchiseeMatchReason(`Matched territory for ${matchedName}.`);
+        } else if (matches.length > 1) {
+            setSelectedFranchiseeId('435');
+            setSelectedFranchiseeName('MailPlus Pty Ltd');
+            setFranchiseeMatchReason(`Multiple franchisees (${matches.map(m => m.name).join(', ')}) cover this area. Defaulted to MailPlus Pty Ltd.`);
+        } else {
+            setSelectedFranchiseeId('435');
+            setSelectedFranchiseeName('MailPlus Pty Ltd');
+            setFranchiseeMatchReason(`No territory matched for ${cityTrimmed} ${zipTrimmed}. Defaulted to MailPlus Pty Ltd (Out of Territory).`);
+        }
+    }, [city, state, zip, allFranchiseesList, isOpen]);
 
     // Linking parent state
     const [isLinkParentOpen, setIsLinkParentOpen] = useState(false);
@@ -337,10 +413,10 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     };
 
     const handleUnlinkParent = async () => {
-        if (!isAdminOrSuperAdmin) {
+        if (!canManageMultiSite) {
             toast({
                 title: "Permission Denied",
-                description: "Disconnecting multi-site locations can only be done by Admins and Superadmins.",
+                description: "Disconnecting multi-site locations requires Customer Success, Account Manager, Sales Manager, or Admin permissions.",
                 variant: "destructive"
             });
             return;
@@ -368,10 +444,10 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     };
 
     const handleUnlinkChild = async (child: Lead) => {
-        if (!isAdminOrSuperAdmin) {
+        if (!canManageMultiSite) {
             toast({
                 title: "Permission Denied",
-                description: "Disconnecting multi-site locations can only be done by Admins and Superadmins.",
+                description: "Disconnecting multi-site locations requires Customer Success, Account Manager, Sales Manager, or Admin permissions.",
                 variant: "destructive"
             });
             return;
@@ -445,7 +521,8 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                 notes,
                 userProfile?.displayName || userProfile?.email || 'User',
                 companyEmail.trim(),
-                companyPhone.trim()
+                companyPhone.trim(),
+                { name: selectedFranchiseeName, internalId: selectedFranchiseeId }
             );
 
             // Update parent lead with the new location
@@ -501,7 +578,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                     <CardDescription>Manage child sites and generate local leads.</CardDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    {!lead.parentLeadId && isAdminOrSuperAdmin && (
+                    {!lead.parentLeadId && canManageMultiSite && (
                         <>
                             <Dialog open={isLinkParentOpen} onOpenChange={setIsLinkParentOpen}>
                                 <DialogTrigger asChild>
@@ -657,7 +734,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                         </>
                     )}
                     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                        {!lead.parentLeadId && (
+                        {!lead.parentLeadId && canManageMultiSite && (
                             <DialogTrigger asChild>
                                 <Button variant="outline" size="sm">
                                     <PlusCircle className="mr-2 h-4 w-4" /> Add Location
@@ -758,6 +835,62 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                             <Input placeholder="State *" value={state} onChange={e => setState(e.target.value)} />
                                         </div>
                                         <Input placeholder="Postcode *" value={zip} onChange={e => setZip(e.target.value)} />
+
+                                         {/* Servicing Franchisee Section */}
+                                         <div className="p-3 border rounded-lg bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900 space-y-2 mt-2">
+                                             <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                 <div className="flex items-center gap-2 text-xs font-semibold text-emerald-950 dark:text-emerald-100">
+                                                     <Store className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                                     <span>
+                                                         Assigned Franchisee: <strong className="text-emerald-900 dark:text-emerald-200 font-bold">{selectedFranchiseeName}</strong>
+                                                     </span>
+                                                 </div>
+                                                 <Button
+                                                     type="button"
+                                                     variant="outline"
+                                                     size="sm"
+                                                     className="h-7 text-[11px] px-2 bg-white dark:bg-slate-900 text-emerald-800 dark:text-emerald-300 border-emerald-300 hover:bg-emerald-100 font-medium"
+                                                     onClick={() => setShowOverrideFranchisee(!showOverrideFranchisee)}
+                                                 >
+                                                     {showOverrideFranchisee ? "Use Automatic Allocation" : "Change / Override Franchisee"}
+                                                 </Button>
+                                             </div>
+
+                                             {franchiseeMatchReason && !showOverrideFranchisee && (
+                                                 <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
+                                                     {franchiseeMatchReason}
+                                                 </p>
+                                             )}
+
+                                             {showOverrideFranchisee && (
+                                                 <div className="pt-2 border-t border-emerald-200 dark:border-emerald-900 space-y-1.5">
+                                                     <Label className="text-xs font-semibold text-emerald-950 dark:text-emerald-100">
+                                                         Select Franchisee Override
+                                                     </Label>
+                                                     <Select
+                                                         value={selectedFranchiseeId}
+                                                         onValueChange={(val) => {
+                                                             setSelectedFranchiseeId(val);
+                                                             const found = allFranchiseesList.find(f => (f.internalId || f.id) === val);
+                                                             setSelectedFranchiseeName(found?.name || 'MailPlus Pty Ltd');
+                                                         }}
+                                                     >
+                                                         <SelectTrigger className="w-full h-8 text-xs bg-white dark:bg-slate-900 border-emerald-300">
+                                                             <SelectValue placeholder="Select Franchisee" />
+                                                         </SelectTrigger>
+                                                         <SelectContent className="max-h-60 overflow-y-auto">
+                                                             {[...allFranchiseesList]
+                                                                 .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                                                                 .map(f => (
+                                                                     <SelectItem key={f.internalId || f.id} value={f.internalId || f.id || '435'}>
+                                                                         {f.name}
+                                                                     </SelectItem>
+                                                                 ))}
+                                                         </SelectContent>
+                                                     </Select>
+                                                 </div>
+                                             )}
+                                         </div>
                                     </div>
                                 </div>
                                 
@@ -830,17 +963,19 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-100 dark:border-amber-900/20">
-                                    <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-amber-800 border-amber-200 hover:bg-amber-50" onClick={() => setIsOpen(true)}>
-                                        <PlusCircle className="mr-1.5 h-3.5 w-3.5" />
-                                        Add Child Location
-                                    </Button>
+                                    {canManageMultiSite && (
+                                        <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-amber-800 border-amber-200 hover:bg-amber-50" onClick={() => setIsOpen(true)}>
+                                            <PlusCircle className="mr-1.5 h-3.5 w-3.5" />
+                                            Add Child Location
+                                        </Button>
+                                    )}
                                     <Button variant="outline" size="sm" className="h-8 text-xs bg-white" asChild>
                                         <a href={`/leads/${parentLead.id}`}>
                                             View Parent
                                             <ArrowRight className="ml-1 h-3.5 w-3.5" />
                                         </a>
                                     </Button>
-                                    {isAdminOrSuperAdmin && (
+                                    {canManageMultiSite && (
                                         <Button
                                             variant="ghost"
                                             size="sm"
@@ -1004,7 +1139,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                                          <LeadStatusBadge status={child.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (child.status as any)} />
                                                      </TableCell>
                                                      <TableCell className="text-right flex items-center justify-end gap-1">
-                                                         {isAdminOrSuperAdmin && (
+                                                         {canManageMultiSite && (
                                                              <Button
                                                                  variant="ghost"
                                                                  size="icon"

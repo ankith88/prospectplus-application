@@ -892,7 +892,7 @@ export function NewLeadForm() {
     // Resolve Account Manager for UID AR2TfLJJCAQBUVf4IxHa6P3AKqG2
     let targetAmForMultisite = values.accountManagerAssigned;
     if (isMultisite || values.campaign === 'MultiSite' || values.campaign === 'Multisite') {
-        const foundAm = allUsers.find(u => u.id === MULTISITE_ACCOUNT_MANAGER_UID || (u as any).uid === MULTISITE_ACCOUNT_MANAGER_UID);
+        const foundAm = allUsers.find(u => u.uid === MULTISITE_ACCOUNT_MANAGER_UID || (u as any).id === MULTISITE_ACCOUNT_MANAGER_UID);
         if (foundAm) {
             targetAmForMultisite = foundAm.displayName || `${foundAm.firstName || ''} ${foundAm.lastName || ''}`.trim() || MULTISITE_ACCOUNT_MANAGER_UID;
         } else {
@@ -1233,7 +1233,7 @@ export function NewLeadForm() {
                             field.ref(node);
                             companySearchRef.current = node;
                           }}
-                          placeholder="Start typing to search Google Maps..."
+                          placeholder="Search company name or address..."
                         />
                         <Button
                           type="button"
@@ -1416,19 +1416,19 @@ export function NewLeadForm() {
                   <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Company Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField control={form.control} name="companyName" render={({ field }) => (
-                    <FormItem><FormLabel>Company Name<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Name<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} placeholder="Enter company name" /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={form.control} name="websiteUrl" render={({ field }) => (
-                    <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://example.com" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://company.com" /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={form.control} name="customerPhone" render={({ field }) => (
-                    <FormItem><FormLabel>Company Phone<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Phone<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input type="tel" {...field} placeholder="Enter company phone" /></FormControl><FormMessage /></FormItem>
                 )}/>
                  <FormField control={form.control} name="customerServiceEmail" render={({ field }) => (
-                    <FormItem><FormLabel>Company Email<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Email<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input type="email" {...field} placeholder="Enter company email" /></FormControl><FormMessage /></FormItem>
                 )}/>
                  <FormField control={form.control} name="abn" render={({ field }) => (
-                    <FormItem><FormLabel>ABN</FormLabel><FormControl><Input {...field} placeholder="11 digits" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>ABN</FormLabel><FormControl><Input {...field} placeholder="Enter 11-digit ABN" /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField
                   control={form.control}
@@ -1719,19 +1719,19 @@ export function NewLeadForm() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField control={form.control} name="contact.firstName" render={({ field }) => (
-                        <FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} placeholder="Enter first name" /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.lastName" render={({ field }) => (
-                        <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} placeholder="Enter last name" /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.title" render={({ field }) => (
-                        <FormItem><FormLabel>Job Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Job Title</FormLabel><FormControl><Input {...field} placeholder="Enter job title" /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.email" render={({ field }) => (
-                        <FormItem><FormLabel>Email {hadConversationWithContact && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel><FormControl><Input {...field} type="email" placeholder="john.d@example.com" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Email {hadConversationWithContact && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel><FormControl><Input {...field} type="email" placeholder="email@company.com" /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.phone" render={({ field }) => (
-                        <FormItem><FormLabel>Phone {hadConversationWithContact && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel><FormControl><Input {...field} type="tel" placeholder="0412 345 678" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Phone {hadConversationWithContact && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel><FormControl><Input {...field} type="tel" placeholder="Enter phone number" /></FormControl><FormMessage /></FormItem>
                     )}/>
                 </div>
             </div>
@@ -1774,7 +1774,7 @@ export function NewLeadForm() {
                         <FormControl>
                             <div className="relative">
                                 <Textarea
-                                    placeholder="Add any initial notes or comments about this lead... or use the mic to dictate."
+                                    placeholder="Add initial notes or comments about this lead..."
                                     {...field}
                                     rows={5}
                                 />

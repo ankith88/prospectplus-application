@@ -2821,7 +2821,7 @@ async function getFranchiseeByName(name: string): Promise<import('@/lib/types').
     }
 }
 
-async function findFranchiseeForAddress(city: string, state: string, zip: string): Promise<string | undefined> {
+async function findFranchiseeForAddress(city: string, state: string, zip: string): Promise<{ name: string; internalId: string; isMultiple?: boolean }> {
     try {
         const snap = await getDocs(collection(firestore, 'franchisees'));
         const franchisees = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
@@ -2829,24 +2829,32 @@ async function findFranchiseeForAddress(city: string, state: string, zip: string
         const leadState = state?.toLowerCase().trim();
         const leadZip = zip?.toLowerCase().trim();
         
-        if (!leadCity || !leadState || !leadZip) return 'MailPlus Pty Ltd';
+        if (!leadCity || !leadZip) return { name: 'MailPlus Pty Ltd', internalId: '435' };
 
         const matches = franchisees.filter(f => {
-            if (!f.territoryJson) return false;
-            return f.territoryJson.some((t: any) => 
+            const inTerritory = f.territoryJson?.some((t: any) => 
                 t.suburbs?.toLowerCase().trim() === leadCity &&
-                t.state?.toLowerCase().trim() === leadState &&
-                t.post_code?.toLowerCase().trim() === leadZip
+                (!leadState || !t.state || t.state.toLowerCase().trim() === leadState) &&
+                String(t.post_code).toLowerCase().trim() === leadZip
             );
+            const inAusPost = f.ausPostSuburbsJson?.some((t: any) => 
+                t.suburbs?.toLowerCase().trim() === leadCity &&
+                (!leadState || !t.state || t.state.toLowerCase().trim() === leadState) &&
+                String(t.post_code).toLowerCase().trim() === leadZip
+            );
+            return inTerritory || inAusPost;
         });
 
         if (matches.length === 1) {
-            return matches[0].name || 'MailPlus Pty Ltd';
+            return {
+                name: matches[0].name || matches[0].franchiseeName || 'MailPlus Pty Ltd',
+                internalId: matches[0].internalId || matches[0].id || '435'
+            };
         }
-        return 'MailPlus Pty Ltd';
+        return { name: 'MailPlus Pty Ltd', internalId: '435', isMultiple: matches.length > 1 };
     } catch (error) {
         console.error("Failed to find franchisee for address:", error);
-        return 'MailPlus Pty Ltd';
+        return { name: 'MailPlus Pty Ltd', internalId: '435' };
     }
 }
 
@@ -2859,10 +2867,15 @@ async function createChildSiteLead(
     notes?: string,
     authorName?: string,
     companyEmail?: string,
-    companyPhone?: string
+    companyPhone?: string,
+    customFranchisee?: { name: string; internalId: string }
 ): Promise<string> {
-    // 1. Find Franchisee
-    const franchiseeName = await findFranchiseeForAddress(siteAddress.city, siteAddress.state, siteAddress.zip);
+    // 1. Find Franchisee based on suburb, state & postcode or custom override
+    const franchiseeInfo = (customFranchisee && customFranchisee.name)
+        ? customFranchisee
+        : await findFranchiseeForAddress(siteAddress.city, siteAddress.state, siteAddress.zip);
+    const franchiseeName = franchiseeInfo.name;
+    const franchiseeInternalId = franchiseeInfo.internalId;
     
     // 2. Fetch Parent Lead Data for NetSuite Sync
     let parentLeadData: any = {};
@@ -2890,7 +2903,7 @@ async function createChildSiteLead(
     const resolvedCustomerPhone = companyPhone || localManager.phone || parentLeadData.customerPhone || '';
     const resolvedCustomerEmail = companyEmail || localManager.email || parentLeadData.customerServiceEmail || '';
 
-    // 3. Push to NetSuite (NetSuite will create the lead in Firestore)
+    // 3. Push to NetSuite (NetSuite will create the lead and return NetSuite internalId)
     const netSuitePayload = {
         companyName: companyName,
         websiteUrl: parentLeadData.websiteUrl || '',
@@ -2908,6 +2921,10 @@ async function createChildSiteLead(
             phone: localManager.phone || ''
         },
         franchiseeName: franchiseeName,
+        franchiseeInternalId: franchiseeInternalId,
+        parentLeadId: parentLeadId,
+        parentId: parentLeadId,
+        parentCustomer: parentLeadId,
         dialerAssigned: parentLeadData.dialerAssigned || '',
         bucket: 'multisite',
         accountManagerUid: MULTISITE_ACCOUNT_MANAGER_UID,
@@ -2922,10 +2939,13 @@ async function createChildSiteLead(
     
     const newLeadId = String(nsResult.leadId);
 
-    // 4. Link the child lead to the parent lead using setDoc with merge to ensure it doesn't fail if NetSuite is slow
+    // 4. Link the child lead to the parent lead using setDoc with merge
     const childLeadPayload: any = { 
         parentLeadId: parentLeadId,
-        franchisee: franchiseeName || 'Unassigned',
+        franchisee: franchiseeName || 'MailPlus Pty Ltd',
+        franchiseeName: franchiseeName || 'MailPlus Pty Ltd',
+        franchisee_id: franchiseeInternalId || '435',
+        franchiseeInternalId: franchiseeInternalId || '435',
         salesRecordInternalId: newLeadId,
         address: siteAddress,
         bucket: 'multisite',
