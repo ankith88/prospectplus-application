@@ -177,7 +177,12 @@ export function DiscoverMultiSitesDialog({
 
   const handleAutoFindWebsite = async () => {
     const targetName = companyNameInput.trim() || parentCompany?.companyName || '';
-    const companyEmail = (parentCompany as any)?.companyEmail || (parentCompany as any)?.email;
+    const companyEmail =
+      (parentCompany as any)?.companyEmail ||
+      (parentCompany as any)?.email ||
+      (parentCompany as any)?.contactEmail ||
+      (parentCompany as any)?.contacts?.[0]?.email ||
+      (parentCompany as any)?.primaryContact?.email;
     if (!targetName && !companyEmail) {
       toast({ variant: 'destructive', title: 'Company Name Required', description: 'Enter a company name to find its website.' });
       return;

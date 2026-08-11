@@ -358,11 +358,13 @@ const PUBLIC_EMAIL_DOMAINS = new Set([
   'mail.com', 'zoho.com', 'yandex.com', 'protonmail.com', 'gmx.com'
 ]);
 
-const IGNORED_DIRECTORY_DOMAINS = [
-  'facebook.com', 'linkedin.com', 'yellowpages.com.au', 'whitepages.com.au',
-  'wikipedia.org', 'dnb.com', 'bloomberg.com', 'business.gov.au', 'abr.business.gov.au',
-  'asic.gov.au', 'creditorwatch.com.au', 'ibisworld.com', 'truelocal.com.au',
-  'glassdoor.com', 'indeed.com', 'seek.com.au', 'zoominfo.com'
+const IGNORED_DIRECTORY_PATTERNS = [
+  /facebook\.com/i, /linkedin\.com/i, /yellowpages/i, /whitepages/i,
+  /wikipedia\.org/i, /dnb\.com/i, /bloomberg\.com/i, /business\.gov/i,
+  /abr\.business/i, /asic/i, /creditorwatch/i, /ibisworld/i, /truelocal/i,
+  /glassdoor/i, /indeed/i, /seek\.com/i, /zoominfo/i, /\/abn\//i, /\/acn\//i,
+  /\/companies\//i, /\/directory\//i, /\/registry\//i, /\/company\//i,
+  /company-list/i, /opencorporates/i, /businesscheck/i
 ];
 
 export async function findCompanyWebsite(companyName: string, companyEmail?: string) {
@@ -395,26 +397,52 @@ export async function findCompanyWebsite(companyName: string, companyEmail?: str
 
     if (!cleanBrandName) cleanBrandName = companyName;
 
+    // 3. Hunter.io API Domain Search by Company Name
+    const apiKey = process.env.HUNTER_API_KEY;
+    if (apiKey) {
+      const namesToSearch = Array.from(new Set([cleanBrandName, companyName.split(' - ')[0].trim()])).filter(Boolean);
+      for (const nameToTry of namesToSearch) {
+        try {
+          const hUrl = `https://api.hunter.io/v2/domain-search?company=${encodeURIComponent(nameToTry)}&api_key=${apiKey}`;
+          const hCtrl = new AbortController();
+          const hTimeout = setTimeout(() => hCtrl.abort(), 6000);
+          const hRes = await fetch(hUrl, { signal: hCtrl.signal as any });
+          clearTimeout(hTimeout);
+          if (hRes.ok) {
+            const hData = (await hRes.json()) as any;
+            const domain = hData?.data?.domain;
+            if (domain && !PUBLIC_EMAIL_DOMAINS.has(domain.toLowerCase())) {
+              return {
+                success: true,
+                websiteUrl: `https://www.${domain.replace(/^www\./i, '')}`,
+                source: 'Hunter.io',
+              };
+            }
+          }
+        } catch (hErr) {
+          console.warn(`Hunter.io domain lookup warning for ${nameToTry}:`, hErr);
+        }
+      }
+    }
+
+    // 4. Web Search Fallback (Strictly excluding registry/directory domains and paths)
     const query = `${cleanBrandName} Australia official website`;
     const searchResults = await searchWebForQuery(query);
 
     let foundUrl = '';
     if (searchResults.urls.length > 0) {
       foundUrl = searchResults.urls.find((u) => {
-        const urlLower = u.toLowerCase();
-        return !IGNORED_DIRECTORY_DOMAINS.some((domain) => urlLower.includes(domain));
+        return !IGNORED_DIRECTORY_PATTERNS.some((pattern) => pattern.test(u));
       }) || '';
     }
 
-    // Secondary fallback search if first attempt returned no valid non-directory URL
     if (!foundUrl) {
       const rawName = companyName.split(' - ')[0].trim();
       const rawQuery = `${rawName} official website`;
       const rawResults = await searchWebForQuery(rawQuery);
       if (rawResults.urls.length > 0) {
         foundUrl = rawResults.urls.find((u) => {
-          const urlLower = u.toLowerCase();
-          return !IGNORED_DIRECTORY_DOMAINS.some((domain) => urlLower.includes(domain));
+          return !IGNORED_DIRECTORY_PATTERNS.some((pattern) => pattern.test(u));
         }) || '';
       }
     }
