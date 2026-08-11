@@ -38,6 +38,7 @@ import {
   Check,
   CheckSquare,
   Square,
+  AlertTriangle,
 } from 'lucide-react';
 
 export interface DiscoveredLocation {
@@ -764,6 +765,23 @@ export function DiscoverMultiSitesDialog({
                               <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                               <span>{item.formattedAddress}</span>
                             </p>
+
+                            {item.existingRecord && (
+                              <div className="mt-1.5 bg-amber-50 border border-amber-200 text-amber-900 px-2.5 py-1 rounded-md text-[11px] flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-1.5 font-semibold">
+                                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                  Address Match Flagged: "{item.existingRecord.companyName}" registered in system ({item.status})
+                                </span>
+                                <a
+                                  href={item.status === 'Signed Customer' ? `/companies/${item.existingRecord.id}` : `/leads/${item.existingRecord.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-amber-800 hover:underline font-bold inline-flex items-center gap-1 shrink-0"
+                                >
+                                  View Record <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </div>
+                            )}
 
                             <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap pt-0.5">
                               {item.phone && (

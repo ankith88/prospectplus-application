@@ -42,14 +42,17 @@ const discoverBranchesPrompt = ai.definePrompt({
   prompt: `You are an expert enterprise research agent specializing in Australian company footprints.
 Your job is to analyze the extracted web search snippets, website content, store locator pages, and Hunter.io records for "{{companyName}}" (Website: {{websiteUrl}}) and extract ALL branch locations, offices, warehouses, depots, or retail store locations across Australia.
 
-Extract each branch with:
-- Branch name or title (e.g. "{{companyName}} - Sydney", "{{companyName}} Melbourne Depot", "Parramatta Store")
-- Street address (if mentioned)
-- Suburb/City (in Australia)
-- State (MUST use valid Australian state code: NSW, VIC, QLD, WA, SA, TAS, ACT, NT)
-- Postcode (if mentioned)
-- Full formatted address
-- Phone number / Email for that specific location (if available)
+Instructions:
+1. Examine all scraped pages, "Where We Are" navigation lists, and office subpages.
+2. Extract every single branch, city office (e.g. Sydney, Melbourne, Brisbane, Perth, Canberra, Darwin, Adelaide, Gold Coast, Newcastle), warehouse, or depot location.
+3. For each location, extract:
+   - Branch name or title (e.g. "{{companyName}} - Sydney", "{{companyName}} Melbourne Office")
+   - Street address (if mentioned)
+   - Suburb/City (in Australia)
+   - State (MUST use valid Australian state code: NSW, VIC, QLD, WA, SA, TAS, ACT, NT)
+   - Postcode (if mentioned)
+   - Full formatted address
+   - Phone number / Email for that specific location (if available)
 
 Scraped Content & Search Results:
 """
@@ -126,7 +129,7 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
 
     // --- STEP 1: Web Search for Store Locators / Branches / Domain if missing ---
     const coreName = companyName.split(' - ')[0].trim();
-    const searchQuery = `${coreName} Australia store locator locations branches`;
+    const searchQuery = `${coreName} Australia store locator locations offices branches`;
     const searchResults = await searchWebForQuery(searchQuery);
 
     if (searchResults.snippets.length > 0) {
@@ -153,7 +156,7 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
       targetUrl = 'https://' + targetUrl;
     }
 
-    // --- STEP 2: Scrape Homepage & Store Locator Links ---
+    // --- STEP 2: Deep Crawler - Crawl Homepage & Location/Office Subpages ---
     if (targetUrl) {
       try {
         const controller = new AbortController();
@@ -170,10 +173,10 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
         if (res.ok) {
           const html = await res.text();
           const homepageText = cleanHtmlText(html);
-          fetchedPages.push(`--- HOMEPAGE TEXT (${targetUrl}) ---\n${homepageText.substring(0, 7000)}`);
+          fetchedPages.push(`--- HOMEPAGE / ENTRY PAGE TEXT (${targetUrl}) ---\n${homepageText.substring(0, 8000)}`);
 
-          // Look for location / contact / store / office links in HTML
-          const linkRegex = /href=["']([^"']*(?:location|store|branch|contact|about|depot|find-us|office|our-offices)[^"']*)["']/gi;
+          // Comprehensive subpage link matcher (captures /about/sydney-office, /about/melbourne-office, /contact, /locations, /offices, etc.)
+          const linkRegex = /href=["']([^"']*(?:location|store|branch|contact|about|depot|find-us|office|our-offices|where-we-are|sydney|melbourne|brisbane|perth|canberra|darwin|adelaide)[^"']*)["']/gi;
           let match;
           const locationLinks = new Set<string>();
           while ((match = linkRegex.exec(html)) !== null) {
@@ -186,19 +189,19 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
                 continue;
               }
             }
-            if (/^https?:\/\//i.test(link) && locationLinks.size < 4) {
+            if (/^https?:\/\//i.test(link) && locationLinks.size < 8) {
               locationLinks.add(link);
             }
           }
 
-          // Also include search result URLs that look like store locators
+          // Also include search result URLs that look like store/office locators
           searchResults.urls.forEach((u) => {
-            if (/(?:location|store|branch|find-us|contact|office)/i.test(u) && locationLinks.size < 6) {
+            if (/(?:location|store|branch|find-us|contact|office|about)/i.test(u) && locationLinks.size < 10) {
               locationLinks.add(u);
             }
           });
 
-          // Fetch subpages in parallel
+          // Fetch subpages in parallel (up to 8 subpages)
           const subpagePromises = Array.from(locationLinks).map(async (url) => {
             try {
               const subCtrl = new AbortController();
@@ -216,7 +219,7 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
                 return `--- STORE LOCATOR / BRANCH SUBPAGE (${url}) ---\n${text.substring(0, 7000)}`;
               }
             } catch (e) {
-              // Ignore subpage errors
+              // Ignore subpage fetch errors
             }
             return null;
           });
@@ -306,7 +309,7 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
     }
 
     // --- STEP 4: GenAI Parsing for All Australian Branch Locations ---
-    const truncatedText = combinedContent.substring(0, 22000);
+    const truncatedText = combinedContent.substring(0, 26000);
     const { output } = await discoverBranchesPrompt({
       companyName,
       websiteUrl: targetUrl || websiteUrl,
