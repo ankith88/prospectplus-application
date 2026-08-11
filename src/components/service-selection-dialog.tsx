@@ -1583,8 +1583,8 @@ export function ServiceSelectionDialog({
                ? latestScf.services
                : (lead?.services || []);
              
-             const priorServiceNames = new Set(priorServicesList.map((s: any) => (s.name || s.service || '').toLowerCase().trim()));
-             const newlyAddedServices = mappedServices.filter(s => !priorServiceNames.has((s.name || s.service || '').toLowerCase().trim()));
+             const priorServiceNames = new Set(priorServicesList.map((s: any) => (s.name || (s as any).service || '').toLowerCase().trim()));
+             const newlyAddedServices = mappedServices.filter(s => !priorServiceNames.has((s.name || (s as any).service || '').toLowerCase().trim()));
 
              const hasPriorQuote = (existingScfs && existingScfs.length > 0) || 
                                    !!lead.commRegId || 

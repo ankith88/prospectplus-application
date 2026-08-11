@@ -43,7 +43,7 @@ export interface DiscoveredLocation {
   phone?: string;
   email?: string;
   website?: string;
-  source: 'AI / Website' | 'Hunter.io' | 'Google Maps';
+  source: 'AI / Web Search' | 'Hunter.io' | 'Google Search' | 'Google Maps' | string;
   status: 'Signed Customer' | 'Lead' | 'Not in System';
   existingRecord?: MapLead;
   place?: any;
@@ -357,7 +357,7 @@ export function DiscoverMultiSitesDialog({
             Discover Multi-Sites for {parentCompany.companyName}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Multi-source discovery scanning AI online web scrapers, Hunter.io domain records, and Google Places across Australia cross-referenced against your ProspectPlus database.
+            Multi-source discovery scanning Google web search results, online store locators, Hunter.io domain intelligence, and Google Places cross-referenced against your ProspectPlus database.
           </DialogDescription>
         </DialogHeader>
 
@@ -366,11 +366,11 @@ export function DiscoverMultiSitesDialog({
             <Loader />
             <div className="text-center space-y-1">
               <p className="text-sm font-semibold text-slate-800 animate-pulse flex items-center justify-center gap-2">
-                <Bot className="h-4 w-4 text-purple-600 animate-spin" />
-                Scanning AI online web sources, Hunter.io API & Google Places...
+                <Globe className="h-4 w-4 text-purple-600 animate-spin" />
+                Scraping Google search, online store locators, Hunter.io API & Google Places...
               </p>
               <p className="text-xs text-muted-foreground">
-                Analyzing store locators, website content, and matching existing leads & customer records...
+                Discovering physical branch addresses online and matching existing leads & signed customer records...
               </p>
             </div>
           </div>
@@ -493,8 +493,9 @@ export function DiscoverMultiSitesDialog({
 
                           {/* Source Tag */}
                           <Badge variant="secondary" className="text-[10px] bg-slate-100 text-slate-600 font-normal">
-                            {item.source === 'AI / Website' && <Bot className="h-3 w-3 mr-1 text-purple-600" />}
+                            {(item.source === 'AI / Web Search' || item.source === 'AI / Website') && <Globe className="h-3 w-3 mr-1 text-purple-600" />}
                             {item.source === 'Hunter.io' && <Mail className="h-3 w-3 mr-1 text-rose-600" />}
+                            {item.source === 'Google Search' && <Search className="h-3 w-3 mr-1 text-blue-600" />}
                             {item.source === 'Google Maps' && <MapPin className="h-3 w-3 mr-1 text-amber-600" />}
                             {item.source}
                           </Badge>

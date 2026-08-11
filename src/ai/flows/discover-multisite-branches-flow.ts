@@ -12,7 +12,7 @@ const DiscoveredBranchSchema = z.object({
   fullAddress: z.string().describe("Complete formatted address string"),
   phone: z.string().optional().describe("Branch direct phone number"),
   email: z.string().optional().describe("Branch direct email"),
-  source: z.string().optional().describe("Discovery source tag: AI / Website / Hunter.io"),
+  source: z.string().optional().describe("Discovery source tag: AI / Web Search / Hunter.io / Google Search"),
 });
 
 const DiscoverBranchesOutputSchema = z.object({
@@ -40,23 +40,78 @@ const discoverBranchesPrompt = ai.definePrompt({
   },
   output: { schema: DiscoverBranchesOutputSchema },
   prompt: `You are an expert enterprise research agent specializing in Australian company footprints.
-Your job is to analyze the extracted website content for "{{companyName}}" (Website: {{websiteUrl}}) and extract ALL branch locations, offices, warehouses, depots, or retail store locations across Australia.
+Your job is to analyze the extracted web search snippets, website content, store locator pages, and Hunter.io records for "{{companyName}}" (Website: {{websiteUrl}}) and extract ALL branch locations, offices, warehouses, depots, or retail store locations across Australia.
 
 Extract each branch with:
-- Branch name or title
+- Branch name or title (e.g. "{{companyName}} - Sydney", "{{companyName}} Melbourne Depot", "Parramatta Store")
 - Street address (if mentioned)
-- Suburb/City
+- Suburb/City (in Australia)
 - State (MUST use valid Australian state code: NSW, VIC, QLD, WA, SA, TAS, ACT, NT)
 - Postcode (if mentioned)
 - Full formatted address
 - Phone number / Email for that specific location (if available)
 
-Website Content:
+Scraped Content & Search Results:
 """
 {{{siteContent}}}
 """
 `,
 });
+
+function cleanHtmlText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function searchWebForQuery(query: string): Promise<{ snippets: string[]; urls: string[] }> {
+  const snippets: string[] = [];
+  const urls: string[] = [];
+  try {
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 7000);
+
+    const res = await fetch(searchUrl, {
+      signal: controller.signal as any,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const html = await res.text();
+      const cleaned = cleanHtmlText(html);
+      snippets.push(cleaned.substring(0, 6000));
+
+      // Extract result URLs
+      const urlRegex = /class="result__url"[^>]*href="([^"]+)"/gi;
+      let match;
+      while ((match = urlRegex.exec(html)) !== null) {
+        let url = match[1];
+        if (url.includes('uddg=')) {
+          const actualUrl = decodeURIComponent(url.split('uddg=')[1].split('&')[0]);
+          if (/^https?:\/\//i.test(actualUrl) && !actualUrl.includes('duckduckgo.com')) {
+            urls.push(actualUrl);
+          }
+        } else if (/^https?:\/\//i.test(url)) {
+          urls.push(url);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`Web search warning for query "${query}":`, err);
+  }
+  return { snippets, urls };
+}
 
 export const discoverCompanyBranchesFlow = ai.defineFlow(
   {
@@ -65,35 +120,53 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
     outputSchema: DiscoverBranchesOutputSchema,
   },
   async ({ companyName, websiteUrl }) => {
-    let siteContent = '';
     const fetchedPages: string[] = [];
+    const hunterBranches: z.infer<typeof DiscoveredBranchSchema>[] = [];
+    let resolvedWebsiteUrl = websiteUrl;
 
-    let targetUrl = websiteUrl;
+    // --- STEP 1: Web Search for Store Locators / Branches / Domain if missing ---
+    const coreName = companyName.split(' - ')[0].trim();
+    const searchQuery = `${coreName} Australia store locator locations branches`;
+    const searchResults = await searchWebForQuery(searchQuery);
+
+    if (searchResults.snippets.length > 0) {
+      fetchedPages.push(`--- GOOGLE / WEB SEARCH SNIPPETS FOR "${searchQuery}" ---\n${searchResults.snippets.join('\n')}`);
+    }
+
+    // Resolve target website URL if missing
+    if (!resolvedWebsiteUrl && searchResults.urls.length > 0) {
+      const mainDomain = searchResults.urls.find((u) => !u.includes('facebook.com') && !u.includes('linkedin.com') && !u.includes('yellowpages.com.au'));
+      if (mainDomain) {
+        resolvedWebsiteUrl = mainDomain;
+      }
+    }
+
+    let targetUrl = resolvedWebsiteUrl;
     if (targetUrl && !/^https?:\/\//i.test(targetUrl)) {
       targetUrl = 'https://' + targetUrl;
     }
 
+    // --- STEP 2: Scrape Homepage & Store Locator Links ---
     if (targetUrl) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12000);
+        const timeout = setTimeout(() => controller.abort(), 10000);
 
-        const res = await fetch(targetUrl, { signal: controller.signal as any });
+        const res = await fetch(targetUrl, {
+          signal: controller.signal as any,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+        });
         clearTimeout(timeout);
 
         if (res.ok) {
           const html = await res.text();
-          const homepageText = html
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-          fetchedPages.push(homepageText.substring(0, 8000));
+          const homepageText = cleanHtmlText(html);
+          fetchedPages.push(`--- HOMEPAGE TEXT (${targetUrl}) ---\n${homepageText.substring(0, 7000)}`);
 
           // Look for location / contact / store links in HTML
-          const linkRegex = /href=["']([^"']*(?:location|store|branch|contact|about|depot|find-us)[^"']*)["']/gi;
+          const linkRegex = /href=["']([^"']*(?:location|store|branch|contact|about|depot|find-us|our-offices)[^"']*)["']/gi;
           let match;
           const locationLinks = new Set<string>();
           while ((match = linkRegex.exec(html)) !== null) {
@@ -106,30 +179,37 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
                 continue;
               }
             }
-            if (/^https?:\/\//i.test(link) && locationLinks.size < 3) {
+            if (/^https?:\/\//i.test(link) && locationLinks.size < 4) {
               locationLinks.add(link);
             }
           }
+
+          // Also include search result URLs that look like store locators
+          searchResults.urls.forEach((u) => {
+            if (/(?:location|store|branch|find-us|contact)/i.test(u) && locationLinks.size < 5) {
+              locationLinks.add(u);
+            }
+          });
 
           // Fetch subpages in parallel
           const subpagePromises = Array.from(locationLinks).map(async (url) => {
             try {
               const subCtrl = new AbortController();
               const subTimeout = setTimeout(() => subCtrl.abort(), 8000);
-              const subRes = await fetch(url, { signal: subCtrl.signal as any });
+              const subRes = await fetch(url, {
+                signal: subCtrl.signal as any,
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                },
+              });
               clearTimeout(subTimeout);
               if (subRes.ok) {
                 const subHtml = await subRes.text();
-                return subHtml
-                  .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-                  .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-                  .replace(/<[^>]+>/g, ' ')
-                  .replace(/\s+/g, ' ')
-                  .trim()
-                  .substring(0, 8000);
+                const text = cleanHtmlText(subHtml);
+                return `--- STORE LOCATOR / BRANCH SUBPAGE (${url}) ---\n${text.substring(0, 7000)}`;
               }
             } catch (e) {
-              // Ignore subpage fetch errors
+              // Ignore subpage errors
             }
             return null;
           });
@@ -142,10 +222,7 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
       }
     }
 
-    siteContent = fetchedPages.join('\n--- PAGE SEPARATOR ---\n');
-
-    // Hunter.io API Integration if configured
-    const hunterBranches: z.infer<typeof DiscoveredBranchSchema>[] = [];
+    // --- STEP 3: Hunter.io API Integration ---
     if (targetUrl) {
       try {
         const apiKey = process.env.HUNTER_API_KEY;
@@ -159,22 +236,47 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
             clearTimeout(hTimeout);
             if (hRes.ok) {
               const hData = (await hRes.json()) as any;
-              const org = hData?.data?.organization || companyName;
+              const org = hData?.data?.organization || coreName;
               const city = hData?.data?.city;
               const state = hData?.data?.state;
               const street = hData?.data?.street;
               const postalCode = hData?.data?.postal_code;
+              const phone = hData?.data?.phone_number;
+              const email = hData?.data?.email;
+
               if (city || state || street) {
                 hunterBranches.push({
                   name: `${org} Head Office / Primary Site`,
                   street: street || undefined,
                   suburb: city || 'Australia',
-                  state: state || 'AU',
+                  state: state || 'NSW',
                   postcode: postalCode || undefined,
                   fullAddress: [street, city, state, postalCode, 'Australia'].filter(Boolean).join(', '),
-                  phone: hData?.data?.phone_number || undefined,
-                  email: hData?.data?.email || undefined,
+                  phone: phone || undefined,
+                  email: email || undefined,
                   source: 'Hunter.io',
+                });
+              }
+
+              // Also check Hunter emails for location-specific titles/departments
+              if (Array.isArray(hData?.data?.emails)) {
+                hData.data.emails.forEach((emp: any) => {
+                  const pos = (emp.position || emp.department || '').toLowerCase();
+                  if (/(sydney|melbourne|brisbane|perth|adelaide|canberra|darwin|hobart|gold coast|newcastle|geelong)/i.test(pos)) {
+                    const matchedCity = pos.match(/(sydney|melbourne|brisbane|perth|adelaide|canberra|darwin|hobart|gold coast|newcastle|geelong)/i)?.[0];
+                    if (matchedCity) {
+                      const cityName = matchedCity.charAt(0).toUpperCase() + matchedCity.slice(1);
+                      hunterBranches.push({
+                        name: `${org} ${cityName} Branch (${emp.position || 'Contact'})`,
+                        suburb: cityName,
+                        state: 'AU',
+                        fullAddress: `${cityName}, Australia`,
+                        email: emp.value,
+                        phone: emp.phone_number,
+                        source: 'Hunter.io',
+                      });
+                    }
+                  }
                 });
               }
             }
@@ -185,43 +287,46 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
       }
     }
 
-    if (!siteContent || siteContent.length < 50) {
+    const combinedContent = fetchedPages.join('\n\n');
+
+    if (!combinedContent || combinedContent.length < 50) {
       return {
         companyName,
-        websiteUrl,
-        companySummary: `No detailed website text found for ${companyName}.`,
+        websiteUrl: targetUrl || websiteUrl,
+        companySummary: `No detailed web search text found for ${companyName}.`,
         branches: hunterBranches,
       };
     }
 
-    const truncatedText = siteContent.substring(0, 20000);
+    // --- STEP 4: GenAI Parsing for All Australian Branch Locations ---
+    const truncatedText = combinedContent.substring(0, 22000);
     const { output } = await discoverBranchesPrompt({
       companyName,
-      websiteUrl,
+      websiteUrl: targetUrl || websiteUrl,
       siteContent: truncatedText,
     });
 
     const aiBranches = (output?.branches || []).map((b) => ({
       ...b,
-      source: 'AI / Website',
+      source: 'AI / Web Search',
     }));
 
-    // Deduplicate Hunter and AI branches
+    // Combine Hunter and AI branches, deduplicate by suburb/address
     const allBranches = [...aiBranches, ...hunterBranches];
     const uniqueBranches = allBranches.filter(
       (b, index, self) =>
         index ===
         self.findIndex(
           (t) =>
-            t.fullAddress.toLowerCase() === b.fullAddress.toLowerCase() ||
-            (t.suburb.toLowerCase() === b.suburb.toLowerCase() && t.state.toLowerCase() === b.state.toLowerCase())
+            (t.fullAddress && b.fullAddress && t.fullAddress.toLowerCase() === b.fullAddress.toLowerCase()) ||
+            (t.suburb && b.suburb && t.suburb.toLowerCase() === b.suburb.toLowerCase() && t.state && b.state && t.state.toLowerCase() === b.state.toLowerCase())
         )
     );
 
     return {
       companyName,
-      websiteUrl,
-      companySummary: output?.companySummary || `Discovered ${uniqueBranches.length} branch locations online.`,
+      websiteUrl: targetUrl || websiteUrl,
+      companySummary: output?.companySummary || `Discovered ${uniqueBranches.length} branch locations across Australia from web search & Hunter.io.`,
       branches: uniqueBranches,
     };
   }
@@ -236,3 +341,4 @@ export async function discoverCompanyBranches(input: z.infer<typeof DiscoverBran
     return { success: false, error: error.message || String(error) };
   }
 }
+
