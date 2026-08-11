@@ -128,10 +128,22 @@ export function DiscoverMultiSitesDialog({
         .replace(/limited|pty|ltd|inc|group|australia/g, '')
         .trim();
       
+      const cleanAddressStr = (addr: string) =>
+        (addr || '')
+          .toLowerCase()
+          .replace(/street/g, 'st')
+          .replace(/road/g, 'rd')
+          .replace(/avenue/g, 'ave')
+          .replace(/level/g, 'lvl')
+          .replace(/suite/g, 'ste')
+          .replace(/drive/g, 'dr')
+          .replace(/[^a-z0-9]/g, '')
+          .trim();
+
       const locSuburb = (loc.suburb || '').trim().toLowerCase();
       const locPostcode = (loc.postcode || '').trim().toLowerCase();
-      const locStreet = (loc.street || '').trim().toLowerCase();
-      const locFullAddr = (loc.formattedAddress || '').trim().toLowerCase();
+      const locStreetClean = cleanAddressStr(loc.street || '');
+      const locFullAddrClean = cleanAddressStr(loc.formattedAddress || '');
 
       const matchedRecord = allSystemRecords.find((rec) => {
         const isParentOrChild = rec.id === parentCompany?.id || (rec as any).parentLeadId === parentCompany?.id || (rec as any).parentId === parentCompany?.id;
@@ -148,13 +160,14 @@ export function DiscoverMultiSitesDialog({
           (locNameClean.length >= 3 && recNameClean.includes(locNameClean)) ||
           (locNameClean.length >= 3 && locNameClean.includes(recNameClean));
 
-        if (!isNameMatch) return false;
-
         const recAddress = rec.address as Address | undefined;
         const recCity = ((recAddress?.city || (rec as any).city || '') as string).trim().toLowerCase();
         const recZip = ((recAddress?.zip || (rec as any).zip || '') as string).trim().toLowerCase();
-        const recStreet = ((recAddress?.street || (rec as any).street || '') as string).trim().toLowerCase();
+        const recStreetRaw = ((recAddress?.street || (rec as any).street || '') as string).trim().toLowerCase();
+        const recStreetClean = cleanAddressStr(recStreetRaw);
+        const recFullAddrClean = cleanAddressStr(`${recStreetRaw} ${recCity} ${recZip}`);
 
+        // 1. Lat/Lng proximity match if available (within 300 meters)
         if (loc.lat != null && loc.lng != null && rec.latitude != null && rec.longitude != null && window.google?.maps?.geometry) {
           const p1 = new window.google.maps.LatLng(loc.lat, loc.lng);
           const p2 = new window.google.maps.LatLng(rec.latitude, rec.longitude);
@@ -162,17 +175,41 @@ export function DiscoverMultiSitesDialog({
           if (dist <= 300) return true;
         }
 
-        if (locPostcode && recZip && locPostcode === recZip) {
+        // 2. Normalized Street Address + Suburb match
+        if (locStreetClean.length >= 4 && recStreetClean.length >= 4) {
+          const streetOverlap = locStreetClean.includes(recStreetClean) || recStreetClean.includes(locStreetClean);
+          const suburbOverlap = !locSuburb || !recCity || locSuburb.includes(recCity) || recCity.includes(locSuburb);
+          const zipOverlap = !locPostcode || !recZip || locPostcode === recZip;
+
+          if (streetOverlap && (suburbOverlap || zipOverlap)) {
+            return true;
+          }
+        }
+
+        // 3. Full Address String inclusion match
+        if (locFullAddrClean.length >= 8 && recStreetClean.length >= 4) {
+          if (locFullAddrClean.includes(recStreetClean) && (!recCity || locFullAddrClean.includes(recCity))) {
+            return true;
+          }
+        }
+        if (recFullAddrClean.length >= 8 && locStreetClean.length >= 4) {
+          if (recFullAddrClean.includes(locStreetClean) && (!locSuburb || recFullAddrClean.includes(locSuburb))) {
+            return true;
+          }
+        }
+
+        // 4. Name Match + Suburb / Postcode match
+        if (isNameMatch && locPostcode && recZip && locPostcode === recZip) {
+          if (!locSuburb || !recCity || locSuburb.includes(recCity) || recCity.includes(locSuburb)) {
+            return true;
+          }
+        }
+
+        // 5. Linked parent or child record
+        if (isParentOrChild) {
           if (locSuburb && recCity && (locSuburb.includes(recCity) || recCity.includes(locSuburb))) return true;
-          if (locStreet && recStreet && (locStreet.includes(recStreet) || recStreet.includes(locStreet))) return true;
+          if (locPostcode && recZip && locPostcode === recZip) return true;
         }
-
-        if (locSuburb && recCity && (locSuburb.includes(recCity) || recCity.includes(locSuburb))) {
-          if (locStreet && recStreet && (locStreet.includes(recStreet) || recStreet.includes(locStreet))) return true;
-          if (isParentOrChild) return true;
-        }
-
-        if (locFullAddr && recStreet && recCity && locFullAddr.includes(recStreet) && locFullAddr.includes(recCity)) return true;
 
         return false;
       });
@@ -257,7 +294,7 @@ export function DiscoverMultiSitesDialog({
       console.warn('AI branch discovery warning:', aiErr);
     }
 
-    // CHANNEL 2: Google Places Search
+    // CHANNEL 2: Google Places Search for Full Address Enrichment
     if (window.google?.maps?.places) {
       try {
         const dummyNode = document.createElement('div');
@@ -283,6 +320,7 @@ export function DiscoverMultiSitesDialog({
 
                 const suburb = getComponent('locality') || getComponent('postal_town');
                 const postcode = getComponent('postal_code');
+                const state = getComponent('administrative_area_level_1', true);
                 const street = `${getComponent('street_number')} ${getComponent('route')}`.trim();
                 const lat = place.geometry?.location?.lat();
                 const lng = place.geometry?.location?.lng();
@@ -291,25 +329,44 @@ export function DiscoverMultiSitesDialog({
                   name: place.name || coreName,
                   formattedAddress: place.formatted_address || place.vicinity,
                   suburb,
+                  state,
                   postcode,
                   street,
                   lat,
                   lng,
                 });
 
-                const isAlreadyAdded = rawDiscovered.some((existing) => {
-                  const addrMatch = existing.formattedAddress.toLowerCase() === (place.formatted_address || '').toLowerCase();
+                // Find if an existing item was discovered by AI in the same suburb
+                const existingIndex = rawDiscovered.findIndex((existing) => {
+                  const addrMatch = (existing.formattedAddress || '').toLowerCase() === (place.formatted_address || '').toLowerCase();
                   const suburbMatch = suburb && existing.suburb && existing.suburb.toLowerCase() === suburb.toLowerCase();
-                  return addrMatch || (suburbMatch && existing.name.toLowerCase().includes(coreName.toLowerCase()));
+                  return addrMatch || (suburbMatch && (existing.name.toLowerCase().includes(coreName.toLowerCase()) || coreName.toLowerCase().includes(existing.name.toLowerCase())));
                 });
 
-                if (!isAlreadyAdded) {
+                if (existingIndex >= 0) {
+                  // Enrich existing item with Google Places full street address
+                  const existing = rawDiscovered[existingIndex];
+                  const fullAddr = place.formatted_address || place.vicinity || existing.formattedAddress;
+                  rawDiscovered[existingIndex] = {
+                    ...existing,
+                    formattedAddress: fullAddr,
+                    street: street || existing.street || fullAddr.split(',')[0],
+                    suburb: suburb || existing.suburb,
+                    state: state || existing.state,
+                    postcode: postcode || existing.postcode,
+                    phone: place.formatted_phone_number || existing.phone,
+                    status: match.status !== 'Not in System' ? match.status : existing.status,
+                    existingRecord: match.existingRecord || existing.existingRecord,
+                    place: place || existing.place,
+                  };
+                } else {
                   rawDiscovered.push({
                     id: `gplaces-${pIdx}-${Date.now()}`,
                     name: place.name || `${coreName} Branch`,
                     formattedAddress: place.formatted_address || place.vicinity || 'Address N/A',
                     street,
                     suburb,
+                    state,
                     postcode,
                     phone: place.formatted_phone_number,
                     website: place.website,

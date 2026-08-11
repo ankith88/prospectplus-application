@@ -2829,29 +2829,48 @@ export async function findFranchiseeForAddress(city: string, state: string, zip:
         const leadState = state?.toLowerCase().trim();
         const leadZip = zip?.toLowerCase().trim();
         
-        if (!leadCity || !leadZip) return { name: 'MailPlus Pty Ltd', internalId: '435' };
+        if (!leadCity && !leadZip) return { name: 'MailPlus Pty Ltd', internalId: '435' };
 
         const matches = franchisees.filter(f => {
-            const inTerritory = f.territoryJson?.some((t: any) => 
-                t.suburbs?.toLowerCase().trim() === leadCity &&
-                (!leadState || !t.state || t.state.toLowerCase().trim() === leadState) &&
-                String(t.post_code).toLowerCase().trim() === leadZip
-            );
-            const inAusPost = f.ausPostSuburbsJson?.some((t: any) => 
-                t.suburbs?.toLowerCase().trim() === leadCity &&
-                (!leadState || !t.state || t.state.toLowerCase().trim() === leadState) &&
-                String(t.post_code).toLowerCase().trim() === leadZip
-            );
+            const checkTerritory = (tList: any[]) => {
+                if (!Array.isArray(tList)) return false;
+                return tList.some((t: any) => {
+                    const subStr = (t.suburbs || t.suburb || '').toLowerCase();
+                    const subMatch = leadCity && (
+                        subStr === leadCity ||
+                        subStr.includes(leadCity) ||
+                        subStr.split(',').map((s: string) => s.trim()).includes(leadCity)
+                    );
+                    const stateMatch = !leadState || !t.state || t.state.toLowerCase().trim() === leadState;
+                    const zipMatch = !leadZip || String(t.post_code || t.postcode || '').toLowerCase().trim() === leadZip;
+
+                    if (leadZip && leadCity) {
+                        return zipMatch && subMatch && stateMatch;
+                    }
+                    if (leadZip) {
+                        return zipMatch && stateMatch;
+                    }
+                    return subMatch && stateMatch;
+                });
+            };
+
+            const inTerritory = checkTerritory(f.territoryJson);
+            const inAusPost = checkTerritory(f.ausPostSuburbsJson);
             return inTerritory || inAusPost;
         });
 
-        if (matches.length === 1) {
+        if (matches.length >= 1) {
+            const matchedFranchisee = matches[0];
+            const franchiseeName = matchedFranchisee.name || matchedFranchisee.franchiseeName || 'MailPlus Pty Ltd';
+            const franchiseeId = matchedFranchisee.internalId || matchedFranchisee.id || '435';
             return {
-                name: matches[0].name || matches[0].franchiseeName || 'MailPlus Pty Ltd',
-                internalId: matches[0].internalId || matches[0].id || '435'
+                name: franchiseeName,
+                internalId: String(franchiseeId),
+                isMultiple: matches.length > 1
             };
         }
-        return { name: 'MailPlus Pty Ltd', internalId: '435', isMultiple: matches.length > 1 };
+
+        return { name: 'MailPlus Pty Ltd', internalId: '435' };
     } catch (error) {
         console.error("Failed to find franchisee for address:", error);
         return { name: 'MailPlus Pty Ltd', internalId: '435' };
