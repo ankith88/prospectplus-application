@@ -841,7 +841,6 @@ export function DiscoverMultiSitesDialog({
             <div className="sm:col-span-4 space-y-1">
               <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Company Name</label>
               <Input
-                placeholder="e.g. Clayton Utz, Bunnings..."
                 value={companyNameInput}
                 onChange={(e) => setCompanyNameInput(e.target.value)}
                 className="h-8 text-xs bg-white"
@@ -864,7 +863,6 @@ export function DiscoverMultiSitesDialog({
               </div>
               <div className="flex items-center gap-1.5">
                 <Input
-                  placeholder="e.g. https://www.claytonutz.com/"
                   value={websiteUrlInput}
                   onChange={(e) => setWebsiteUrlInput(e.target.value)}
                   className="h-8 text-xs bg-white flex-1"
@@ -1016,10 +1014,9 @@ export function DiscoverMultiSitesDialog({
                   <div className="relative w-full sm:w-56">
                     <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
-                      placeholder="Filter by suburb, state, franchisee..."
-                      className="pl-8 h-7 text-xs bg-background"
                       value={searchFilter}
                       onChange={(e) => setSearchFilter(e.target.value)}
+                      className="pl-8 h-7 text-xs bg-background"
                     />
                   </div>
                 </div>
