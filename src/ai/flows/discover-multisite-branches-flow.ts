@@ -47,7 +47,7 @@ Instructions:
 2. Extract every single branch, city office (e.g. Sydney, Melbourne, Brisbane, Perth, Canberra, Darwin, Adelaide, Gold Coast, Newcastle), warehouse, or depot location.
 3. For each location, extract:
    - Branch name or title (e.g. "{{companyName}} - Sydney", "{{companyName}} Melbourne Office")
-   - Street address (if mentioned)
+   - Full street address with building name, level/suite, street number, and street name (CRITICAL: Do NOT return just city or state names as fullAddress. Example: "Level 28, Riparian Plaza, 71 Eagle Street, Brisbane QLD 4000" or "Level 15, 1 Bligh St, Sydney NSW 2000")
    - Suburb/City (in Australia)
    - State (MUST use valid Australian state code: NSW, VIC, QLD, WA, SA, TAS, ACT, NT)
    - Postcode (if mentioned)
@@ -155,6 +155,9 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
     if (targetUrl && !/^https?:\/\//i.test(targetUrl)) {
       targetUrl = 'https://' + targetUrl;
     }
+    if (targetUrl && !targetUrl.endsWith('/')) {
+      targetUrl += '/';
+    }
 
     // --- STEP 2: Deep Crawler - Crawl Homepage & Location/Office Subpages ---
     if (targetUrl) {
@@ -180,23 +183,21 @@ export const discoverCompanyBranchesFlow = ai.defineFlow(
           let match;
           const locationLinks = new Set<string>();
           while ((match = linkRegex.exec(html)) !== null) {
-            let link = match[1];
-            if (link.startsWith('/')) {
-              try {
-                const parsedUrl = new URL(targetUrl);
-                link = `${parsedUrl.origin}${link}`;
-              } catch (e) {
-                continue;
+            const rawLink = match[1];
+            if (!rawLink || rawLink.startsWith('#') || rawLink.startsWith('javascript:')) continue;
+            try {
+              const resolvedUrl = new URL(rawLink, targetUrl).href;
+              if (/^https?:\/\//i.test(resolvedUrl) && locationLinks.size < 12) {
+                locationLinks.add(resolvedUrl);
               }
-            }
-            if (/^https?:\/\//i.test(link) && locationLinks.size < 8) {
-              locationLinks.add(link);
+            } catch (e) {
+              continue;
             }
           }
 
           // Also include search result URLs that look like store/office locators
           searchResults.urls.forEach((u) => {
-            if (/(?:location|store|branch|find-us|contact|office|about)/i.test(u) && locationLinks.size < 10) {
+            if (/(?:location|store|branch|find-us|contact|office|about)/i.test(u) && locationLinks.size < 14) {
               locationLinks.add(u);
             }
           });
@@ -452,6 +453,10 @@ export async function findCompanyWebsite(companyName: string, companyEmail?: str
       if (clean.length > 2) {
         foundUrl = `https://www.${clean}.com.au`;
       }
+    }
+
+    if (foundUrl && !foundUrl.endsWith('/')) {
+      foundUrl += '/';
     }
 
     return { success: true, websiteUrl: foundUrl, source: 'Web Search' };

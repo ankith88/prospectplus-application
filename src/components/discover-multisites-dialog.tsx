@@ -563,6 +563,56 @@ export function DiscoverMultiSitesDialog({
       }
     }
 
+    // CHANNEL 3: Targeted Google Places Street Address Resolution for items lacking full address
+    if (window.google?.maps?.places) {
+      try {
+        const dummyNode = document.createElement('div');
+        const placesService = map
+          ? new window.google.maps.places.PlacesService(map)
+          : new window.google.maps.places.PlacesService(dummyNode);
+
+        for (let i = 0; i < rawDiscovered.length; i++) {
+          const item = rawDiscovered[i];
+          const fullAddrStr = item.formattedAddress || '';
+          if (!item.street || fullAddrStr === `${item.suburb}, ${item.state} Australia` || fullAddrStr.split(',').length < 3) {
+            const targetedQuery = `${coreName} ${item.suburb || ''} ${item.state || ''} office Australia`.trim();
+            await new Promise<void>((resTarget) => {
+              placesService.textSearch({ query: targetedQuery, region: 'AU' }, (tResults, tStatus) => {
+                if (tStatus === google.maps.places.PlacesServiceStatus.OK && tResults && tResults.length > 0) {
+                  const place = tResults[0];
+                  const getComp = (type: string, useShort = false) => {
+                    const comp = place.address_components?.find((c) => c.types.includes(type));
+                    return (useShort ? comp?.short_name : comp?.long_name) || '';
+                  };
+                  const suburb = getComp('locality') || getComp('postal_town') || item.suburb;
+                  const postcode = getComp('postal_code') || item.postcode;
+                  const state = getComp('administrative_area_level_1', true) || item.state;
+                  const streetNumRoute = `${getComp('street_number')} ${getComp('route')}`.trim();
+                  const fullAddr = place.formatted_address || place.vicinity;
+
+                  if (fullAddr) {
+                    rawDiscovered[i] = {
+                      ...item,
+                      formattedAddress: fullAddr,
+                      street: streetNumRoute || fullAddr.split(',')[0] || item.street,
+                      suburb: suburb || item.suburb,
+                      state: state || item.state,
+                      postcode: postcode || item.postcode,
+                      phone: place.formatted_phone_number || item.phone,
+                      place: place || item.place,
+                    };
+                  }
+                }
+                resTarget();
+              });
+            });
+          }
+        }
+      } catch (tErr) {
+        console.warn('Targeted street address resolution warning:', tErr);
+      }
+    }
+
     // RESOLVE SERVICING FRANCHISEE FOR EACH DISCOVERED BRANCH
     const enrichedList = await Promise.all(
       rawDiscovered.map(async (item) => {

@@ -18,11 +18,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, MapLead, Address, Contact } from '@/lib/types';
-import { createChildSiteLead, createNewLead, getAllFranchisees, logNoteActivity } from '@/services/firebase';
-import { MULTISITE_ACCOUNT_MANAGER_UID } from '@/lib/constants';
-import { firestore } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { Building, User, Mail, Phone, FileText, Briefcase, Store, Check, Sparkles, Send, MapPin } from 'lucide-react';
+import { createChildSiteLead, getAllFranchisees } from '@/services/firebase';
+import { Building, User, Mail, Phone, FileText, Briefcase, Store, Check, Sparkles, Send, MapPin, Search } from 'lucide-react';
 import { GoogleAddressInput } from '@/components/google-address-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { DiscoveredLocation } from '@/components/discover-multisites-dialog';
@@ -90,13 +87,19 @@ export function EnterMultiSiteLeadDialog({
   const [siteName, setSiteName] = useState('');
   const [companyEmail, setCompanyEmail] = useState('');
   const [companyPhone, setCompanyPhone] = useState('');
+  
+  // Separate Address Field States
+  const [streetAddress, setStreetAddress] = useState('');
   const [levelSuite, setLevelSuite] = useState('');
+  const [suburbCity, setSuburbCity] = useState('');
+  const [stateCode, setStateCode] = useState('');
+  const [postcode, setPostcode] = useState('');
+
   const [contactName, setContactName] = useState('');
   const [contactTitle, setContactTitle] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [notes, setNotes] = useState('');
-  const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const [selectedContactIndex, setSelectedContactIndex] = useState<number | null>(null);
 
   // Franchisee assignment state
@@ -119,25 +122,19 @@ export function EnterMultiSiteLeadDialog({
     loadFrs();
   }, [isOpen]);
 
+  // Recalculate servicing franchisee based on suburbCity, stateCode & postcode
   useEffect(() => {
-    if (!isOpen || !selectedAddress) {
-      if (!initialLocation?.servicingFranchisee) {
-        setSelectedFranchiseeId('435');
-        setSelectedFranchiseeName('MailPlus Pty Ltd');
-        setFranchiseeMatchReason('Please select a site address to resolve servicing franchisee.');
-      }
-      return;
-    }
+    if (!isOpen) return;
 
-    const cityUpper = (selectedAddress.city || '').trim().toUpperCase();
-    const stateUpper = (selectedAddress.state || '').trim().toUpperCase();
-    const zipStr = String(selectedAddress.zip || '').trim();
+    const cityUpper = suburbCity.trim().toUpperCase();
+    const stateUpper = stateCode.trim().toUpperCase();
+    const zipStr = postcode.trim();
 
     if (!cityUpper || !zipStr) {
       if (!initialLocation?.servicingFranchisee) {
         setSelectedFranchiseeId('435');
         setSelectedFranchiseeName('MailPlus Pty Ltd');
-        setFranchiseeMatchReason('Address missing suburb or postcode.');
+        setFranchiseeMatchReason('Please enter suburb and postcode to detect servicing franchisee.');
       }
       return;
     }
@@ -166,7 +163,7 @@ export function EnterMultiSiteLeadDialog({
       setSelectedFranchiseeName('MailPlus Pty Ltd');
       setFranchiseeMatchReason(`No territory matched for ${cityUpper} ${zipStr}. Defaulted to MailPlus Pty Ltd (Out of Territory).`);
     }
-  }, [selectedAddress, allFrsList, isOpen, initialLocation]);
+  }, [suburbCity, stateCode, postcode, allFrsList, isOpen, initialLocation]);
 
   useEffect(() => {
     if (parentCompany && isOpen) {
@@ -175,17 +172,22 @@ export function EnterMultiSiteLeadDialog({
         setSiteName(initialLocation.name || `${parentCompany.companyName} - ${initialLocation.suburb || ''}`);
         setCompanyEmail(initialLocation.email || parentCompany.customerServiceEmail || '');
         setCompanyPhone(initialLocation.phone || parentCompany.customerPhone || '');
-        setLevelSuite(initialLocation.street && initialLocation.street.toLowerCase().includes('level') ? initialLocation.street.split(',')[0] : '');
-        setNotes(`Created via Website Branch Discovery (${initialLocation.source || 'AI/Web'})`);
+        
+        // Pre-fill separate address fields
+        const rawStreet = initialLocation.street || initialLocation.formattedAddress || '';
+        if (rawStreet.toLowerCase().includes('level') || rawStreet.toLowerCase().includes('suite')) {
+          const parts = rawStreet.split(',');
+          setLevelSuite(parts[0]?.trim() || '');
+          setStreetAddress(parts.slice(1).join(',').trim() || parts[0]?.trim() || '');
+        } else {
+          setLevelSuite('');
+          setStreetAddress(rawStreet);
+        }
 
-        setSelectedAddress({
-          address1: initialLocation.street || '',
-          street: initialLocation.street || initialLocation.formattedAddress || '',
-          city: initialLocation.suburb || '',
-          state: initialLocation.state || '',
-          zip: initialLocation.postcode || '',
-          country: 'Australia',
-        });
+        setSuburbCity(initialLocation.suburb || '');
+        setStateCode(initialLocation.state || '');
+        setPostcode(initialLocation.postcode || '');
+        setNotes(`Created via Website Branch Discovery (${initialLocation.source || 'AI/Web'})`);
 
         if (initialLocation.servicingFranchisee) {
           setSelectedFranchiseeId(initialLocation.servicingFranchisee.internalId || '435');
@@ -210,15 +212,19 @@ export function EnterMultiSiteLeadDialog({
         setCompanyEmail(parentCompany.customerServiceEmail || '');
         setCompanyPhone(initialPlace.formatted_phone_number || parentCompany.customerPhone || '');
         const parsed = parsePlaceAddress(initialPlace);
-        setSelectedAddress(parsed);
-        if (parsed.address1 && parsed.address1 !== parsed.street) {
-          setLevelSuite(parsed.address1);
-        }
+        setStreetAddress(parsed.street || parsed.address1 || '');
+        setSuburbCity(parsed.city || '');
+        setStateCode(parsed.state || '');
+        setPostcode(parsed.zip || '');
       } else {
         setSiteName(`${parentCompany.companyName} - `);
         setCompanyEmail(parentCompany.customerServiceEmail || '');
         setCompanyPhone(parentCompany.customerPhone || '');
-        setSelectedAddress(null);
+        setStreetAddress('');
+        setLevelSuite('');
+        setSuburbCity('');
+        setStateCode('');
+        setPostcode('');
         setContactName('');
         setContactTitle('');
         setContactEmail('');
@@ -230,7 +236,7 @@ export function EnterMultiSiteLeadDialog({
 
   if (!parentCompany) return null;
 
-  // Build selectable contacts list (Discovered Contacts + Parent Account Contacts)
+  // Selectable contacts list
   const availableContacts: Array<{ name: string; title: string; email: string; phone: string; source: string }> = [];
 
   if (initialLocation && (initialLocation.email || initialLocation.phone || initialLocation.name)) {
@@ -264,8 +270,11 @@ export function EnterMultiSiteLeadDialog({
     setContactPhone(contactObj.phone);
   };
 
-  const handleAddressSelect = (addr: Address) => {
-    setSelectedAddress(addr);
+  const handleGoogleAddressSelect = (addr: Address) => {
+    if (addr.street) setStreetAddress(addr.street);
+    if (addr.city) setSuburbCity(addr.city);
+    if (addr.state) setStateCode(addr.state);
+    if (addr.zip) setPostcode(addr.zip);
     if (addr.address1 && addr.address1 !== addr.street) {
       setLevelSuite(addr.address1);
     }
@@ -279,16 +288,20 @@ export function EnterMultiSiteLeadDialog({
       toast({ variant: 'destructive', title: 'Site Name Required', description: 'Please enter a site or branch name.' });
       return;
     }
-    if (!selectedAddress || !selectedAddress.city || !selectedAddress.state || !selectedAddress.zip) {
-      toast({ variant: 'destructive', title: 'Address Required', description: 'Please select a valid site address using Google Places search.' });
+    if (!streetAddress.trim() || !suburbCity.trim() || !stateCode.trim() || !postcode.trim()) {
+      toast({ variant: 'destructive', title: 'Complete Address Required', description: 'Please fill in Street Address, Suburb, State, and Postcode.' });
       return;
     }
 
     setSubmitting(true);
     try {
       const finalAddress: Address = {
-        ...selectedAddress,
-        ...(levelSuite.trim() ? { address1: levelSuite.trim() } : {}),
+        address1: levelSuite.trim() ? `${levelSuite.trim()}, ${streetAddress.trim()}` : streetAddress.trim(),
+        street: streetAddress.trim(),
+        city: suburbCity.trim(),
+        state: stateCode.trim(),
+        zip: postcode.trim(),
+        country: 'Australia',
       };
 
       const localManager = {
@@ -306,7 +319,7 @@ export function EnterMultiSiteLeadDialog({
 
       const copiedContacts = (parentCompany as any)?.contacts || [];
 
-      // Call NetSuite child lead creation service (Syncs NetSuite API, creates Firestore record, assigns territory franchisee)
+      // Call NetSuite child lead creation service
       const childLeadId = await createChildSiteLead(
         parentCompany.id,
         siteName.trim(),
@@ -345,7 +358,7 @@ export function EnterMultiSiteLeadDialog({
         <DialogHeader className="shrink-0 pb-2 border-b">
           <DialogTitle className="flex items-center gap-2 text-lg font-bold text-slate-900">
             <Building className="h-5 w-5 text-primary" />
-            Add Multi-Site Location & Sync NetSuite Lead
+            Add Multi-Site Location &amp; Sync NetSuite Lead
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             Generate a child lead for this location, assign it to the local franchisee, and sync with NetSuite API.
@@ -353,7 +366,7 @@ export function EnterMultiSiteLeadDialog({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto space-y-4 py-3 pr-1 text-sm">
-          {/* Parent Customer Connection Banner */}
+          {/* Parent Customer Banner */}
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
             <Building className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
             <div>
@@ -419,44 +432,90 @@ export function EnterMultiSiteLeadDialog({
             </div>
           </div>
 
-          {/* Site Address */}
-          <div className="border-t pt-3 space-y-2">
-            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5 text-primary" /> Site Address *
-            </Label>
-            
-            {selectedAddress?.street ? (
-              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-1 text-xs">
-                <p className="font-semibold text-slate-900">{selectedAddress.street}</p>
-                <p className="text-slate-600">{[selectedAddress.city, selectedAddress.state, selectedAddress.zip, 'Australia'].filter(Boolean).join(', ')}</p>
-                <Button
-                  type="button"
-                  variant="link"
-                  className="h-auto p-0 text-[11px] text-purple-700 hover:underline"
-                  onClick={() => setSelectedAddress(null)}
-                >
-                  Change / Edit Address
-                </Button>
-              </div>
-            ) : (
+          {/* Site Address Section with Separate Input Fields */}
+          <div className="border-t pt-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5 text-primary" /> Site Address Details *
+              </Label>
+            </div>
+
+            {/* Google Address Autocomplete Bar */}
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground">Search Address Autocomplete (Optional):</Label>
               <GoogleAddressInput
                 placeholder="Start typing site address..."
-                onAddressSelect={handleAddressSelect}
-                showSelectedBadge={true}
+                onAddressSelect={handleGoogleAddressSelect}
+                showSelectedBadge={false}
               />
-            )}
+            </div>
 
-            <div className="space-y-1 pt-1">
-              <Label htmlFor="level-suite" className="text-xs text-muted-foreground">
-                Level / Suite / Unit (Optional)
-              </Label>
-              <Input
-                id="level-suite"
-                placeholder="e.g. Level 15, Suite 4"
-                value={levelSuite}
-                onChange={(e) => setLevelSuite(e.target.value)}
-                className="h-8 text-xs bg-white"
-              />
+            {/* Separate Address Fields */}
+            <div className="space-y-2.5 pt-1">
+              <div className="space-y-1">
+                <Label htmlFor="street-address" className="text-xs font-semibold text-slate-700">
+                  Street Address *
+                </Label>
+                <Input
+                  id="street-address"
+                  placeholder="e.g. 71 Eagle Street"
+                  value={streetAddress}
+                  onChange={(e) => setStreetAddress(e.target.value)}
+                  className="h-8 text-xs bg-white"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="level-suite" className="text-xs font-semibold text-slate-700">
+                  Level / Suite / Building Name (Optional)
+                </Label>
+                <Input
+                  id="level-suite"
+                  placeholder="e.g. Level 28, Riparian Plaza"
+                  value={levelSuite}
+                  onChange={(e) => setLevelSuite(e.target.value)}
+                  className="h-8 text-xs bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="space-y-1 sm:col-span-1">
+                  <Label htmlFor="suburb-city" className="text-xs font-semibold text-slate-700">
+                    Suburb / City *
+                  </Label>
+                  <Input
+                    id="suburb-city"
+                    placeholder="e.g. Brisbane"
+                    value={suburbCity}
+                    onChange={(e) => setSuburbCity(e.target.value)}
+                    className="h-8 text-xs bg-white"
+                  />
+                </div>
+                <div className="space-y-1 sm:col-span-1">
+                  <Label htmlFor="state-code" className="text-xs font-semibold text-slate-700">
+                    State *
+                  </Label>
+                  <Input
+                    id="state-code"
+                    placeholder="e.g. QLD"
+                    value={stateCode}
+                    onChange={(e) => setStateCode(e.target.value)}
+                    className="h-8 text-xs bg-white uppercase"
+                  />
+                </div>
+                <div className="space-y-1 sm:col-span-1">
+                  <Label htmlFor="postcode" className="text-xs font-semibold text-slate-700">
+                    Postcode *
+                  </Label>
+                  <Input
+                    id="postcode"
+                    placeholder="e.g. 4000"
+                    value={postcode}
+                    onChange={(e) => setPostcode(e.target.value)}
+                    className="h-8 text-xs bg-white"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Servicing Franchisee Section */}
