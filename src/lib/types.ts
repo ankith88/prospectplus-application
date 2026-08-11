@@ -1210,3 +1210,59 @@ export interface OnboardingMetricsSummary {
   cancelledCount: number;
   bookingRatePercentage: number;
 }
+
+export interface LpoLead {
+  id?: string;
+  prospectPlusId: string;
+  lpoName: string;
+  lpoOwnerName: string;
+  email: string;
+  phone: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+  lat?: string | number | null;
+  lng?: string | number | null;
+  notes?: string;
+  status: string;
+  source?: string;
+  createdAt?: any;
+  updatedAt?: any;
+  createdBy?: string;
+  createdById?: string | null;
+
+  // CSV Import fields
+  lpoInternalId?: string;
+  inactive?: boolean;
+  secondaryInternalId?: string;
+  lpoCreatedDate?: string;
+  lpoLastModifiedDate?: string;
+  linkedNcl?: string;
+  rawCustomerName?: string;
+  linkedCustomerId?: string; // Column I ID
+  companyNameFranchise?: string;
+  lpoTier?: string;
+  poLevelTier?: string;
+  pageURL?: string;
+  salesRep?: string;
+  validationProvided?: string;
+  leadGenerator?: string;
+  faceToFace?: string;
+  confAndCall?: string;
+  acceptedTerms?: string | boolean;
+  dynamicScf?: string;
+  adhocBooking?: string;
+  defaultPassword?: string;
+
+  // Customer & Partner linkage
+  linkedLeadId?: string | null;
+  linkedLeadCompanyName?: string | null;
+  linkStatus?: 'Linked' | 'Unlinked';
+  isConverted?: boolean;
+  conversionStep?: number;
+  linkedPartnerLocationId?: string | null;
+  linkedPartnerLocationName?: string | null;
+}
+

@@ -222,19 +222,19 @@ export default function PublicFranchiseeIMPage() {
   const pd = presale.presalesDetails || ({} as any);
   const md = presale.mainDetails || ({} as any);
 
-  const territoryName = pd.territoryName || md.tradingEntity || presale.franchiseeName || 'MailPlus Territory';
-  const dateStarted = pd.dateBusinessStarted || md.dateBusinessStarted || 'N/A';
-  const numOwners = pd.numberOfOwners || '1';
-  const reasonSale = pd.reasonForSale || 'Moving';
-  const serviceRev = pd.serviceRevenue ? `$${Number(pd.serviceRevenue).toLocaleString('en-AU')} (+gst)` : '$300,437.26 (+gst)';
-  const feePercent = pd.franchiseFeesOnServiceRevenue || '25%';
-  const mktgLevy = pd.marketingLevy || '5%';
-  const expressRev = pd.expressRevenue || `Product Commission $${Number(pd.mpexCommission || 856.60).toLocaleString('en-AU')}`;
-  const salePriceFormatted = pd.salePrice ? `$${Number(pd.salePrice).toLocaleString('en-AU')} NEG` : '$335,000.00 NEG';
-  const dailyRunTime = pd.totalDailyRunTime || 'Between 8.5 to 9.5 hours per day';
-  const morningShift = pd.currentMorningShift || '6:00am to 11:00am';
-  const afternoonShift = pd.currentAfternoonShift || '1:00pm to 4:00pm';
-  const franchiseTermText = pd.franchiseTerm || pd.termOnFranchiseeIM || 'Unlimited';
+  const territoryName = pd.territoryName || md.tradingEntity || presale.franchiseeName || '';
+  const dateStarted = pd.dateBusinessStarted || md.dateBusinessStarted || '';
+  const numOwners = pd.numberOfOwners || '';
+  const reasonSale = pd.reasonForSale || '';
+  const serviceRev = pd.serviceRevenue ? (typeof pd.serviceRevenue === 'number' ? `$${Number(pd.serviceRevenue).toLocaleString('en-AU')} (+gst)` : String(pd.serviceRevenue)) : '';
+  const feePercent = pd.franchiseFeesOnServiceRevenue || '';
+  const mktgLevy = pd.marketingLevy || '';
+  const expressRev = pd.expressRevenue || (pd.mpexCommission ? `Product Commission $${Number(pd.mpexCommission).toLocaleString('en-AU')}` : '');
+  const salePriceFormatted = pd.salePrice ? (typeof pd.salePrice === 'number' ? `$${Number(pd.salePrice).toLocaleString('en-AU')} NEG` : String(pd.salePrice)) : '';
+  const dailyRunTime = pd.totalDailyRunTime || '';
+  const morningShift = pd.currentMorningShift || '';
+  const afternoonShift = pd.currentAfternoonShift || '';
+  const franchiseTermText = pd.franchiseTerm || pd.termOnFranchiseeIM || '';
   const mapUrl = pd.territoryMapUrl;
 
   return (

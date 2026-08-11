@@ -1,0 +1,413 @@
+"use client";
+
+import React, { useState } from 'react';
+import Papa from 'papaparse';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useToast } from '@/hooks/use-toast';
+import { Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, RefreshCw, ArrowRight, Link as LinkIcon } from 'lucide-react';
+
+interface ParsedLpoRow {
+  lpoName: string;
+  lpoOwnerName?: string;
+  email?: string;
+  phone?: string;
+  address1?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+  notes?: string;
+  status?: string;
+  lpoInternalId?: string;
+  inactive?: any;
+  secondaryInternalId?: string;
+  lpoCreatedDate?: string;
+  lpoLastModifiedDate?: string;
+  linkedNcl?: string;
+  rawCustomerName?: string;
+  linkedCustomerId?: string; // Column I ID
+  companyNameFranchise?: string;
+  lpoTier?: string;
+  poLevelTier?: string;
+  pageURL?: string;
+  salesRep?: string;
+  validationProvided?: string;
+  leadGenerator?: string;
+  faceToFace?: string;
+  confAndCall?: string;
+  acceptedTerms?: string;
+  dynamicScf?: string;
+  adhocBooking?: string;
+  defaultPassword?: string;
+  [key: string]: any;
+}
+
+export function ImportLposClient() {
+  const { toast } = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [parsedRows, setParsedRows] = useState<ParsedLpoRow[]>([]);
+  const [isParsing, setIsParsing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<any | null>(null);
+
+  // Auto Header Mapper
+  const mapRowToLpo = (row: Record<string, any>): ParsedLpoRow => {
+    const getVal = (possibleHeaders: string[]) => {
+      for (const h of possibleHeaders) {
+        const foundKey = Object.keys(row).find((k) => k.trim().toLowerCase() === h.toLowerCase());
+        if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) {
+          return String(row[foundKey]).trim();
+        }
+      }
+      return '';
+    };
+
+    // Column "I" is ID (Customer ID)
+    const linkedCustomerId = getVal(['ID', 'Customer ID', 'customerEntityId', 'Column I']);
+
+    return {
+      lpoInternalId: getVal(['Internal ID', 'lpoInternalId']),
+      inactive: getVal(['Inactive', 'inactive']),
+      secondaryInternalId: getVal(['Internal ID_1', 'secondaryInternalId']),
+      lpoCreatedDate: getVal(['Date Created', 'createdDate']),
+      lpoLastModifiedDate: getVal(['Last Modified', 'lastModified']),
+      lpoName: getVal(['LPO Name', 'lpoName', 'Name']) || 'Unnamed LPO',
+      linkedNcl: getVal(['Linked NCL', 'linkedNcl']),
+      rawCustomerName: getVal(['Customer', 'customerName']),
+      linkedCustomerId,
+      companyNameFranchise: getVal(['Company Name / Franchise', 'Company Name', 'companyNameFranchise']),
+      lpoTier: getVal(['LPO Tier', 'lpoTier']),
+      status: getVal(['Status*', 'Status', 'status']) || 'New',
+      poLevelTier: getVal(['PO Level / Tier', 'poLevelTier']),
+      address1: getVal(['Street No & Name', 'Street Address', 'Address', 'address1']),
+      city: getVal(['LPO Suburb', 'Suburb', 'City', 'city']),
+      state: getVal(['LPO State', 'State', 'state']),
+      postcode: getVal(['LPO Postcode', 'Postcode', 'postcode']),
+      notes: getVal(['Notes', 'notes']),
+      lpoOwnerName: getVal(['Contact Name', 'Owner Name', 'Contact', 'lpoOwnerName']),
+      phone: getVal(['Contact Number', 'Phone', 'phone']),
+      email: getVal(['Email Address', 'Email', 'email']),
+      pageURL: getVal(['Page URL - S/O', 'pageURL']),
+      salesRep: getVal(['Sales Rep', 'salesRep']),
+      validationProvided: getVal(['Validation Provided', 'validationProvided']),
+      leadGenerator: getVal(['Lead Generator', 'leadGenerator']),
+      faceToFace: getVal(['Face-to-face', 'faceToFace']),
+      confAndCall: getVal(['Conf & Call', 'confAndCall']),
+      acceptedTerms: getVal(['Accepted T&C', 'acceptedTerms']),
+      dynamicScf: getVal(['Dynamic SCF', 'dynamicScf']),
+      adhocBooking: getVal(['Adhoc Booking', 'adhocBooking']),
+      defaultPassword: getVal(['Default Password', 'defaultPassword']),
+    };
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    setFile(selectedFile);
+    setIsParsing(true);
+    setImportResult(null);
+
+    Papa.parse(selectedFile, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        setIsParsing(false);
+        if (!results.data || results.data.length === 0) {
+          toast({
+            variant: 'destructive',
+            title: 'Empty File',
+            description: 'No valid data rows found in uploaded CSV file.',
+          });
+          return;
+        }
+
+        const rawHeaders = results.meta.fields || [];
+        setHeaders(rawHeaders);
+
+        const mapped = (results.data as Record<string, any>[]).map(mapRowToLpo);
+        setParsedRows(mapped);
+
+        toast({
+          title: 'CSV File Loaded',
+          description: `Successfully parsed ${mapped.length} Participating LPO records.`,
+        });
+      },
+      error: (err) => {
+        setIsParsing(false);
+        console.error('CSV Parsing Error:', err);
+        toast({
+          variant: 'destructive',
+          title: 'File Error',
+          description: 'Failed to parse CSV file. Ensure it is valid formatting.',
+        });
+      },
+    });
+  };
+
+  const handleExecuteImport = async () => {
+    if (parsedRows.length === 0) return;
+
+    setIsImporting(true);
+    try {
+      const response = await fetch('/api/lpo-leads/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: parsedRows }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Bulk import failed.');
+      }
+
+      setImportResult(data);
+      toast({
+        title: 'Import Completed',
+        description: data.message,
+      });
+    } catch (err: any) {
+      console.error('Import execution error:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Import Failed',
+        description: err.message || 'An error occurred during import execution.',
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <FileSpreadsheet className="h-6 w-6 text-[#095c7b]" />
+            Import Participating LPOs
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Upload CSV file of Participating LPOs to import into <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">lpo_leads</code> and link with existing Customers via Column "I" (<code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">customerEntityId</code>).
+          </p>
+        </div>
+      </div>
+
+      {/* Step 1: Upload Card */}
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <Upload className="h-5 w-5 text-[#095c7b]" />
+            1. Select CSV File
+          </CardTitle>
+          <CardDescription>
+            Choose the CSV containing Participating LPO records. Column "I" must contain the Customer Entity ID.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-[#095c7b] transition-colors bg-slate-50/50">
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              className="hidden"
+              id="lpo-csv-input"
+            />
+            <label htmlFor="lpo-csv-input" className="cursor-pointer flex flex-col items-center gap-2">
+              <Upload className="h-10 w-10 text-slate-400" />
+              <span className="text-sm font-semibold text-slate-700">
+                {file ? file.name : 'Click to select or drop CSV file'}
+              </span>
+              <span className="text-xs text-slate-500">Supports standard Participating LPO CSV formats</span>
+            </label>
+          </div>
+
+          {isParsing && (
+            <div className="flex items-center gap-2 text-sm text-[#095c7b] font-medium">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Parsing CSV file contents...
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Step 2: Dry Run / Match Preview Table */}
+      {parsedRows.length > 0 && (
+        <Card className="border-slate-200">
+          <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-[#095c7b]" />
+                2. Preview Parsed LPOs ({parsedRows.length} records)
+              </CardTitle>
+              <CardDescription>
+                Review mapped fields below before executing Firestore batch import.
+              </CardDescription>
+            </div>
+
+            <Button
+              onClick={handleExecuteImport}
+              disabled={isImporting}
+              className="bg-[#095c7b] hover:bg-[#053647] text-white font-semibold"
+            >
+              {isImporting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Importing to Firestore...
+                </>
+              ) : (
+                <>
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  Execute Bulk Import
+                </>
+              )}
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border border-slate-200 rounded-lg overflow-x-auto max-h-96">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead className="font-bold">#</TableHead>
+                    <TableHead className="font-bold">LPO Internal ID</TableHead>
+                    <TableHead className="font-bold">LPO Name</TableHead>
+                    <TableHead className="font-bold">Owner Name</TableHead>
+                    <TableHead className="font-bold">Col I Customer ID</TableHead>
+                    <TableHead className="font-bold">Suburb & State</TableHead>
+                    <TableHead className="font-bold">Phone / Email</TableHead>
+                    <TableHead className="font-bold">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parsedRows.slice(0, 50).map((row, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="text-xs text-slate-500 font-mono">{idx + 1}</TableCell>
+                      <TableCell className="text-xs font-semibold text-slate-700">{row.lpoInternalId || '—'}</TableCell>
+                      <TableCell className="text-sm font-bold text-slate-900">{row.lpoName}</TableCell>
+                      <TableCell className="text-xs text-slate-700">{row.lpoOwnerName || '—'}</TableCell>
+                      <TableCell className="text-xs font-mono font-bold text-[#095c7b]">
+                        {row.linkedCustomerId ? (
+                          <Badge variant="outline" className="border-[#095c7b]/30 text-[#095c7b] bg-teal-50/50">
+                            {row.linkedCustomerId}
+                          </Badge>
+                        ) : (
+                          <span className="text-slate-400 font-normal italic">None</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-600">
+                        {row.city ? `${row.city}, ` : ''}{row.state} {row.postcode}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-600">
+                        <div>{row.phone}</div>
+                        <div className="text-slate-400">{row.email}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-slate-100 text-slate-800 hover:bg-slate-100 text-[11px]">
+                          {row.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {parsedRows.length > 50 && (
+              <p className="text-xs text-slate-500 text-center italic">
+                Showing first 50 of {parsedRows.length} parsed records.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 3: Import Results Card */}
+      {importResult && (
+        <Card className="border-emerald-200 bg-emerald-50/10 shadow-sm border-2">
+          <CardHeader className="bg-emerald-50/30 border-b border-emerald-100 flex flex-row items-center justify-between py-4">
+            <div>
+              <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                Import Complete
+              </CardTitle>
+              <CardDescription className="text-emerald-700 text-xs">
+                {importResult.message}
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6 space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="p-4 bg-white rounded-lg border border-slate-200 text-center">
+                <p className="text-xs font-semibold text-slate-500">Total Processed</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">{importResult.summary?.total}</p>
+              </div>
+              <div className="p-4 bg-white rounded-lg border border-slate-200 text-center">
+                <p className="text-xs font-semibold text-slate-500">New Created</p>
+                <p className="text-2xl font-bold text-emerald-600 mt-1">{importResult.summary?.created}</p>
+              </div>
+              <div className="p-4 bg-white rounded-lg border border-slate-200 text-center">
+                <p className="text-xs font-semibold text-slate-500">Updated</p>
+                <p className="text-2xl font-bold text-blue-600 mt-1">{importResult.summary?.updated}</p>
+              </div>
+              <div className="p-4 bg-white rounded-lg border border-emerald-200 bg-emerald-50/20 text-center">
+                <p className="text-xs font-semibold text-emerald-700">Customers Linked</p>
+                <p className="text-2xl font-bold text-emerald-700 mt-1">{importResult.summary?.linked}</p>
+              </div>
+              <div className="p-4 bg-white rounded-lg border border-slate-200 text-center">
+                <p className="text-xs font-semibold text-slate-500">Unlinked (No Match)</p>
+                <p className="text-2xl font-bold text-slate-600 mt-1">{importResult.summary?.unlinked}</p>
+              </div>
+            </div>
+
+            {/* Results detail list */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Processed LPOs Summary (Sample)
+              </h4>
+              <div className="border border-slate-200 rounded-lg overflow-x-auto max-h-60 bg-white">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>LPO Name</TableHead>
+                      <TableHead>Col I Customer ID</TableHead>
+                      <TableHead>Link Status</TableHead>
+                      <TableHead>Matched Customer</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {importResult.results?.slice(0, 30).map((r: any, idx: number) => (
+                      <TableRow key={idx}>
+                        <TableCell className="text-xs font-semibold text-slate-800">{r.lpoName}</TableCell>
+                        <TableCell className="text-xs font-mono text-[#095c7b]">{r.linkedCustomerId || '—'}</TableCell>
+                        <TableCell>
+                          {r.linkStatus === 'Linked' ? (
+                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                              <LinkIcon className="h-3 w-3 mr-1" /> Linked
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-slate-500 border-slate-300">
+                              Unlinked
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-600">
+                          {r.linkedLeadCompanyName ? (
+                            <span className="font-medium text-slate-800">{r.linkedLeadCompanyName} ({r.linkedLeadId})</span>
+                          ) : (
+                            <span className="text-slate-400 italic">customerEntityId not found</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

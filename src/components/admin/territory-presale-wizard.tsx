@@ -75,27 +75,27 @@ export function TerritoryPresaleWizard({
   });
 
   const [presalesDetails, setPresalesDetails] = useState<PresalesDetails>({
-    commencementDate: '01/02/2020',
-    expiryDate: '01/02/2025',
+    commencementDate: '',
+    expiryDate: '',
     ultimateExpiryDate: '',
-    unlimitedTermOffer: 'Yes',
-    unlimitedTermFee: 25000,
-    renewalTermsYears: 5,
-    termOnFranchiseeIM: 'Unlimited',
-    dateBusinessStarted: '2015-02-01',
-    totalDailyRunTime: '5 - 6 hrs',
-    lowPrice: 50000,
-    highPrice: 75000,
-    serviceRevenue: 53301,
-    serviceRevenueYear: '01/04/2021 - 31/03/2022',
-    mpexCommission: 3,
-    mpexCommissionYear: '01/04/2021 - 31/03/2022',
+    unlimitedTermOffer: '',
+    unlimitedTermFee: 0,
+    renewalTermsYears: 0,
+    termOnFranchiseeIM: '',
+    dateBusinessStarted: '',
+    totalDailyRunTime: '',
+    lowPrice: 0,
+    highPrice: 0,
+    serviceRevenue: '',
+    serviceRevenueYear: '',
+    mpexCommission: 0,
+    mpexCommissionYear: '',
     sendleCommission: 0,
-    sendleCommissionYear: '01/04/2021 - 31/03/2022',
-    salesCommissionPercent: 10,
-    nabAccreditation: 'No',
+    sendleCommissionYear: '',
+    salesCommissionPercent: 0,
+    nabAccreditation: '',
     nabAccreditationFee: 0,
-    salePrice: 82500,
+    salePrice: '',
   });
 
   const isAdminOrOps =
@@ -135,6 +135,25 @@ export function TerritoryPresaleWizard({
           if (d.mainDetails) setMainDetails(d.mainDetails);
           if (d.deedOfVariation) setDeedOfVariation(d.deedOfVariation);
           if (d.presalesDetails) setPresalesDetails(d.presalesDetails);
+
+          // Determine the first incomplete step
+          const isDeedSigned =
+            d.deedOfVariation?.status === 'signed_online' ||
+            d.deedOfVariation?.status === 'pdf_uploaded';
+          const isMainDetailsComplete = Boolean(
+            d.mainDetails?.tradingEntity &&
+            (d.mainDetails?.mainContact || d.mainDetails?.email)
+          );
+
+          let initialStep: 1 | 2 | 3 | 4 = 1;
+          if (!isMainDetailsComplete) {
+            initialStep = 1;
+          } else if (!isDeedSigned) {
+            initialStep = 2;
+          } else {
+            initialStep = 4;
+          }
+          setActiveStep(initialStep);
         }
       } catch (err) {
         console.error('Failed to load presale record', err);
@@ -737,10 +756,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.territoryName || mainDetails.tradingEntity || franchiseeName}
+                          value={presalesDetails.territoryName || mainDetails.tradingEntity || franchiseeName || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, territoryName: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-semibold"
-                          placeholder="MailPlus Waterloo Alexandria"
                         />
                       </div>
 
@@ -751,10 +769,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.dateBusinessStarted}
+                          value={presalesDetails.dateBusinessStarted || mainDetails.dateBusinessStarted || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, dateBusinessStarted: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="1/02/2022"
                         />
                       </div>
 
@@ -765,10 +782,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.numberOfOwners || '1'}
+                          value={presalesDetails.numberOfOwners || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, numberOfOwners: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="1"
                         />
                       </div>
 
@@ -779,10 +795,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.reasonForSale || 'Moving'}
+                          value={presalesDetails.reasonForSale || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, reasonForSale: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="Moving"
                         />
                       </div>
 
@@ -793,10 +808,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.serviceRevenue}
+                          value={presalesDetails.serviceRevenue || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, serviceRevenue: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="$300,437.26 (+gst)"
                         />
                       </div>
 
@@ -807,10 +821,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.franchiseFeesOnServiceRevenue || '25%'}
+                          value={presalesDetails.franchiseFeesOnServiceRevenue || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, franchiseFeesOnServiceRevenue: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="25%"
                         />
                       </div>
 
@@ -821,10 +834,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.marketingLevy || '5%'}
+                          value={presalesDetails.marketingLevy || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, marketingLevy: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="5%"
                         />
                       </div>
 
@@ -835,10 +847,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.expressRevenue || `Product Commission $${presalesDetails.mpexCommission || 856.60}`}
+                          value={presalesDetails.expressRevenue || (presalesDetails.mpexCommission ? `Product Commission $${presalesDetails.mpexCommission}` : '')}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, expressRevenue: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="Product Commission $856.60"
                         />
                       </div>
 
@@ -849,10 +860,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.salePrice}
+                          value={presalesDetails.salePrice || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, salePrice: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-sm font-extrabold text-[#095c7b]"
-                          placeholder="$335,000.00 NEG"
                         />
                       </div>
 
@@ -863,10 +873,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.totalDailyRunTime || 'Between 8.5 to 9.5 hours per day'}
+                          value={presalesDetails.totalDailyRunTime || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, totalDailyRunTime: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="Between 8.5 to 9.5 hours per day"
                         />
                       </div>
 
@@ -877,10 +886,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.currentMorningShift || '6:00am to 11:00am'}
+                          value={presalesDetails.currentMorningShift || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, currentMorningShift: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="6:00am to 11:00am"
                         />
                       </div>
 
@@ -891,10 +899,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.currentAfternoonShift || '1:00pm to 4:00pm'}
+                          value={presalesDetails.currentAfternoonShift || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, currentAfternoonShift: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="1:00pm to 4:00pm"
                         />
                       </div>
 
@@ -905,10 +912,9 @@ export function TerritoryPresaleWizard({
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
-                          value={presalesDetails.franchiseTerm || presalesDetails.termOnFranchiseeIM || 'Unlimited'}
+                          value={presalesDetails.franchiseTerm || presalesDetails.termOnFranchiseeIM || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, franchiseTerm: e.target.value })}
                           className="border-0 focus-visible:ring-0 text-xs font-medium"
-                          placeholder="Unlimited"
                         />
                       </div>
 

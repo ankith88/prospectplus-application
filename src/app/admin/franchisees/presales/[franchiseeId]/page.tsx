@@ -211,7 +211,7 @@ export default function DedicatedTerritoryPresalePage() {
     commencementDate: '',
     expiryDate: '',
     ultimateExpiryDate: '',
-    unlimitedTermOffer: 'No',
+    unlimitedTermOffer: '',
     unlimitedTermFee: 0,
     renewalTermsYears: 0,
     termOnFranchiseeIM: '',
@@ -219,16 +219,16 @@ export default function DedicatedTerritoryPresalePage() {
     totalDailyRunTime: '',
     lowPrice: 0,
     highPrice: 0,
-    serviceRevenue: 0,
+    serviceRevenue: '',
     serviceRevenueYear: '',
     mpexCommission: 0,
     mpexCommissionYear: '',
     sendleCommission: 0,
     sendleCommissionYear: '',
     salesCommissionPercent: 0,
-    nabAccreditation: 'No',
+    nabAccreditation: '',
     nabAccreditationFee: 0,
-    salePrice: 0,
+    salePrice: '',
   });
 
   // Google Places Autocomplete state
@@ -306,6 +306,25 @@ export default function DedicatedTerritoryPresalePage() {
           }
           if (d.deedOfVariation) setDeedOfVariation(d.deedOfVariation);
           if (d.presalesDetails) setPresalesDetails(d.presalesDetails);
+
+          // Determine the first incomplete step
+          const isDeedSigned =
+            d.deedOfVariation?.status === 'signed_online' ||
+            d.deedOfVariation?.status === 'pdf_uploaded';
+          const isMainDetailsComplete = Boolean(
+            d.mainDetails?.tradingEntity &&
+            (d.mainDetails?.mainContact || d.mainDetails?.email)
+          );
+
+          let initialStep: 1 | 2 | 3 | 4 = 1;
+          if (!isMainDetailsComplete) {
+            initialStep = 1;
+          } else if (!isDeedSigned) {
+            initialStep = 2;
+          } else {
+            initialStep = 4;
+          }
+          setActiveStep(initialStep);
         }
       } catch (err) {
         console.error('Failed to load presale record', err);
@@ -1344,7 +1363,6 @@ export default function DedicatedTerritoryPresalePage() {
                         value={presalesDetails.territoryName || mainDetails.tradingEntity || mainDetails.franchiseeName || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, territoryName: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-semibold"
-                        placeholder="MailPlus Waterloo Alexandria"
                       />
                     </div>
 
@@ -1355,10 +1373,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.dateBusinessStarted}
+                        value={presalesDetails.dateBusinessStarted || mainDetails.dateBusinessStarted || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, dateBusinessStarted: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="1/02/2022"
                       />
                     </div>
 
@@ -1369,10 +1386,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.numberOfOwners || '1'}
+                        value={presalesDetails.numberOfOwners || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, numberOfOwners: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="1"
                       />
                     </div>
 
@@ -1383,10 +1399,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.reasonForSale || 'Moving'}
+                        value={presalesDetails.reasonForSale || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, reasonForSale: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="Moving"
                       />
                     </div>
 
@@ -1397,10 +1412,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.serviceRevenue}
+                        value={presalesDetails.serviceRevenue || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, serviceRevenue: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="$300,437.26 (+gst)"
                       />
                     </div>
 
@@ -1411,10 +1425,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.franchiseFeesOnServiceRevenue || '25%'}
+                        value={presalesDetails.franchiseFeesOnServiceRevenue || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, franchiseFeesOnServiceRevenue: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="25%"
                       />
                     </div>
 
@@ -1425,10 +1438,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.marketingLevy || '5%'}
+                        value={presalesDetails.marketingLevy || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, marketingLevy: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="5%"
                       />
                     </div>
 
@@ -1439,10 +1451,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.expressRevenue || `Product Commission $${presalesDetails.mpexCommission || 856.60}`}
+                        value={presalesDetails.expressRevenue || (presalesDetails.mpexCommission ? `Product Commission $${presalesDetails.mpexCommission}` : '')}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, expressRevenue: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="Product Commission $856.60"
                       />
                     </div>
 
@@ -1453,10 +1464,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.salePrice}
+                        value={presalesDetails.salePrice || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, salePrice: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-sm font-extrabold text-[#095c7b]"
-                        placeholder="$335,000.00 NEG"
                       />
                     </div>
 
@@ -1467,10 +1477,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.totalDailyRunTime || 'Between 8.5 to 9.5 hours per day'}
+                        value={presalesDetails.totalDailyRunTime || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, totalDailyRunTime: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="Between 8.5 to 9.5 hours per day"
                       />
                     </div>
 
@@ -1481,10 +1490,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.currentMorningShift || '6:00am to 11:00am'}
+                        value={presalesDetails.currentMorningShift || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, currentMorningShift: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="6:00am to 11:00am"
                       />
                     </div>
 
@@ -1495,10 +1503,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.currentAfternoonShift || '1:00pm to 4:00pm'}
+                        value={presalesDetails.currentAfternoonShift || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, currentAfternoonShift: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="1:00pm to 4:00pm"
                       />
                     </div>
 
@@ -1509,10 +1516,9 @@ export default function DedicatedTerritoryPresalePage() {
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
-                        value={presalesDetails.franchiseTerm || presalesDetails.termOnFranchiseeIM || 'Unlimited'}
+                        value={presalesDetails.franchiseTerm || presalesDetails.termOnFranchiseeIM || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, franchiseTerm: e.target.value })}
                         className="border-0 focus-visible:ring-0 text-xs font-medium"
-                        placeholder="Unlimited"
                       />
                     </div>
 

@@ -117,9 +117,10 @@ async function resolveFirestoreDocIds(candidateIds: string[]): Promise<string[]>
 
 /**
  * Fetches invoices for a given customer from Firestore across all resolved company/lead document IDs,
- * and calculates the average monthly invoice value over the last 3 available billing months.
+ * and calculates the average monthly invoice value over the 3 available billing months PRIOR to the
+ * most recent month (ignoring the last month with an invoice as it may be pro-rated/partial).
  *
- * If no invoices exist in Firestore, returns avgMonthlyInvoice = 0.
+ * If no prior invoices exist in Firestore, returns avgMonthlyInvoice = 0.
  */
 export async function fetch3MonthAvgInvoiceMRR(
   companyId?: string,
@@ -196,15 +197,18 @@ export async function fetch3MonthAvgInvoiceMRR(
     return { avgMonthlyInvoice: 0, monthsFound: 0, invoicesCount: uniqueInvoices.length, recentInvoices: uniqueInvoices, isSignedCustomer: true };
   }
 
-  // Sort available months descending (newest month first) and take the top 3
-  const sortedMonths = Array.from(monthlyTotals.keys()).sort().reverse().slice(0, 3);
+  // Sort available months descending (newest month first)
+  const allSortedMonths = Array.from(monthlyTotals.keys()).sort().reverse();
+
+  // Ignore the most recent month with an invoice and take the 3 months before that
+  const monthsToAverage = allSortedMonths.length > 1 ? allSortedMonths.slice(1, 4) : [];
   
   let totalSum = 0;
-  sortedMonths.forEach(m => {
+  monthsToAverage.forEach(m => {
     totalSum += monthlyTotals.get(m) || 0;
   });
 
-  const monthsFound = sortedMonths.length;
+  const monthsFound = monthsToAverage.length;
   const avgMonthlyInvoice = monthsFound > 0 ? Number((totalSum / monthsFound).toFixed(2)) : 0;
 
   return {

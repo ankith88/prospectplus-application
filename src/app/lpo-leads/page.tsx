@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Building, ArrowUpRight, Plus, Clock, CheckCircle2, XCircle, ChevronsUpDown, Check } from 'lucide-react';
+import { Building, ArrowUpRight, Plus, Clock, CheckCircle2, XCircle, ChevronsUpDown, Check, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -99,27 +99,30 @@ export default function LpoLeadsListPage() {
         fields: ['address_components', 'geometry'],
       },
       (place, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && place && place.address_components) {
-          const components = place.address_components;
-          const getComponent = (type: string, useShort = false) => {
-            const c = components.find(x => x.types.includes(type));
-            return useShort ? c?.short_name : c?.long_name;
-          };
+        if (status === google.maps.places.PlacesServiceStatus.OK && place && place.geometry && place.geometry.location) {
+          setLat(place.geometry.location.lat());
+          setLng(place.geometry.location.lng());
 
-          const streetNumber = getComponent('street_number') || '';
-          const route = getComponent('route') || '';
-          const street = `${streetNumber} ${route}`.trim();
-          
-          setAddress1(street);
-          setCity(getComponent('locality') || '');
-          setState(getComponent('administrative_area_level_1', true) || '');
-          setPostcode(getComponent('postal_code') || '');
-          setAddressPredictions([]);
+          const components = place.address_components || [];
+          let streetNum = '';
+          let route = '';
+          let sub = '';
+          let st = '';
+          let pc = '';
 
-          if (place.geometry?.location) {
-            setLat(place.geometry.location.lat());
-            setLng(place.geometry.location.lng());
+          for (const c of components) {
+            if (c.types.includes('street_number')) streetNum = c.long_name;
+            if (c.types.includes('route')) route = c.long_name;
+            if (c.types.includes('locality')) sub = c.long_name;
+            if (c.types.includes('administrative_area_level_1')) st = c.short_name;
+            if (c.types.includes('postal_code')) pc = c.long_name;
           }
+
+          setAddress1(`${streetNum} ${route}`.trim());
+          if (sub) setCity(sub);
+          if (st) setState(st);
+          if (pc) setPostcode(pc);
+          setAddressPredictions([]);
         }
       }
     );
@@ -250,23 +253,18 @@ export default function LpoLeadsListPage() {
       });
       setLeads(leadsData);
       setLoadingLeads(false);
-    }, (error) => {
-      console.error('Error fetching LPO leads:', error);
+    }, (err) => {
+      console.error('Error fetching LPO leads:', err);
       setLoadingLeads(false);
     });
 
-    // Fetch Partner Locations
     const fetchPartners = async () => {
       try {
-        const locationsSnap = await getDocs(collection(firestore, 'partner_locations'));
+        const snap = await getDocs(collection(firestore, 'partner_locations'));
         const locs: any[] = [];
-        locationsSnap.forEach((docSnap) => {
-          const data = docSnap.data();
-          if (data.locationType === 'AusPost' || data.type === 'AusPost') {
-            locs.push({ id: docSnap.id, ...data });
-          }
+        snap.forEach((docSnap) => {
+          locs.push({ id: docSnap.id, ...docSnap.data() });
         });
-        locs.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setPartnerLocations(locs);
       } catch (err) {
         console.error('Error fetching partner locations:', err);
@@ -297,17 +295,25 @@ export default function LpoLeadsListPage() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Building className="h-8 w-8 text-[#095c7b]" />
-            LPO Leads
+            Participating LPOs
           </h1>
           <p className="text-slate-500 mt-1">Manage and track Licensed Post Office franchise leads.</p>
         </div>
-        <Button 
-          onClick={() => setIsCreateOpen(true)} 
-          className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Create LPO Lead
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button asChild variant="outline" className="border-[#095c7b] text-[#095c7b] hover:bg-teal-50 font-semibold">
+            <Link href="/admin/import-lpos">
+              <Upload className="h-4 w-4 mr-2" />
+              Import LPOs
+            </Link>
+          </Button>
+          <Button 
+            onClick={() => setIsCreateOpen(true)} 
+            className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create LPO Lead
+          </Button>
+        </div>
       </div>
 
       <Card className="border-slate-200/80 shadow-sm">
