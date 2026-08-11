@@ -1760,11 +1760,7 @@ export default function SignedCustomersPage() {
           parentCompany={selectedDiscoverCompany}
           allSystemRecords={allMapData}
           map={map}
-          onAddMultiSiteLead={(place) => {
-            setSelectedMultiSiteCompany(selectedDiscoverCompany);
-            setSelectedPlaceForChildLead(place);
-            setIsMultiSiteDialogOpen(true);
-          }}
+          onLocationsUpdated={fetchData}
         />
     </>
   )
