@@ -728,7 +728,18 @@ export function MultiSitesDashboard() {
     // Metric Calculations
     const metrics = useMemo(() => {
         const totalMultiSites = pipelineLeads.length;
-        const totalParents = pipelineLeads.filter(l => !l.parentLeadId).length;
+        
+        // Calculate total parent accounts represented across filtered leads (including signed customer parents of child site leads)
+        const parentAccountIds = new Set<string>();
+        filteredLeads.forEach(l => {
+            if (!l.parentLeadId) {
+                parentAccountIds.add(l.id);
+            } else {
+                parentAccountIds.add(l.parentLeadId);
+            }
+        });
+        const totalParents = parentAccountIds.size;
+
         const totalChildren = pipelineLeads.filter(l => l.parentLeadId).length;
         const assignedToTargetAm = pipelineLeads.filter(l => 
             l.accountManagerAssigned === targetAmDisplayName || 
@@ -739,7 +750,7 @@ export function MultiSitesDashboard() {
         const activePipelines = pipelineLeads.filter(l => ['New', 'In Progress', 'Contacted', 'Appointment Booked', 'Trialing', 'Quote Out', 'Quote Sent', 'Quotes Sent', 'Proposal Sent', 'Quote Accepted'].includes(l.customerStatus || l.status || '')).length;
 
         return { totalMultiSites, totalParents, totalChildren, assignedToTargetAm, activePipelines };
-    }, [pipelineLeads, targetAmDisplayName]);
+    }, [filteredLeads, pipelineLeads, targetAmDisplayName]);
 
     const toggleParentOpen = (parentId: string) => {
         setOpenParents(prev => ({ ...prev, [parentId]: !prev[parentId] }));

@@ -168,27 +168,7 @@ export async function POST(req: NextRequest) {
     // Set self-reference id if applicable
     await childLeadDocRef.update({ id: childLeadId });
 
-    // 5. Add local manager contact to child
-    const childContactsRef = db.collection('leads').doc(childLeadId).collection('contacts');
-    if (localManager && localManager.name) {
-      await childContactsRef.add({
-        ...localManager,
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    // 6. Copy Parent Contacts to child
-    const parentContactsRef = db.collection('leads').doc(parentLeadId).collection('contacts');
-    const parentContactsSnap = await parentContactsRef.get();
-    for (const contactDoc of parentContactsSnap.docs) {
-      const contactData = contactDoc.data();
-      await childContactsRef.add({
-        ...contactData,
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    // 7. Update parent lead's multiSiteLocations array
+    // 5. Update parent lead's multiSiteLocations array
     await parentLeadRef.update({
       multiSiteLocations: FieldValue.arrayUnion({
         street: address.street || '',

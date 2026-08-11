@@ -2966,27 +2966,7 @@ async function createChildSiteLead(
 
     await setDoc(doc(firestore, 'leads', newLeadId), prepareForFirestore(childLeadPayload), { merge: true });
 
-    // 5. Add Local Manager Contact to the new lead's subcollection
-    const contactsSubRef = collection(firestore, 'leads', newLeadId, 'contacts');
-    if (localManager && localManager.name) {
-        await addDoc(contactsSubRef, prepareForFirestore({
-            ...localManager,
-            createdAt: new Date().toISOString()
-        }));
-    }
-
-    // 6. Copy Parent Contacts to the new lead's subcollection
-    for (const contact of copiedContacts) {
-        const { id, ...contactData } = contact;
-        if (contactData.name) {
-             await addDoc(contactsSubRef, prepareForFirestore({
-                ...contactData,
-                createdAt: new Date().toISOString()
-             }));
-        }
-    }
-
-    // 7. Log Activity on the new child lead
+    // 5. Log Activity on the new child lead
     const activityRef = collection(firestore, 'leads', newLeadId, 'activity');
     await addDoc(activityRef, prepareForFirestore({
       type: 'Update',
