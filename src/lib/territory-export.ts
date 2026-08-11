@@ -63,6 +63,21 @@ export function extractSuburbRecords(
           ? item.primary_op.join('; ')
           : String(item.primary_op || '');
 
+        let secondaryOpStr = '';
+        if (typeof item.secondary_op === 'string') {
+          secondaryOpStr = item.secondary_op;
+        } else if (Array.isArray(item.secondary_op)) {
+          secondaryOpStr = item.secondary_op.map(op => {
+            if (typeof op === 'object' && op !== null) {
+              return op.name || op.franchisee || op.id || JSON.stringify(op);
+            }
+            return String(op);
+          }).join('; ');
+        } else if (typeof item.secondary_op === 'object' && item.secondary_op !== null) {
+          const secObj = item.secondary_op as any;
+          secondaryOpStr = secObj.name || secObj.franchisee || secObj.id || JSON.stringify(secObj);
+        }
+
         records.push({
           franchiseeId: f.internalId || f.id || '',
           franchiseeName: f.name || f.internalId || 'N/A',
@@ -74,7 +89,7 @@ export function extractSuburbRecords(
           postcode: String(item.post_code || ''),
           state: item.state || '',
           primaryOps: primaryOpsStr,
-          secondaryOp: item.secondary_op || '',
+          secondaryOp: secondaryOpStr,
           nextDay: item.next_day === true ? 'Yes' : item.next_day === false ? 'No' : 'N/A',
           parentLpoId: item.parent_lpo_id || '',
           lat: item.lat !== undefined && item.lat !== null ? String(item.lat) : '',

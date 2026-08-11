@@ -1,15 +1,24 @@
 import { z } from 'zod';
 
 export const SuburbMappingSchema = z.object({
-  suburbs: z.string(),
-  post_code: z.string(),
-  state: z.string(),
-  primary_op: z.array(z.string()).or(z.string().transform(s => s ? [s] : [])),
-  secondary_op: z.string().nullable().optional().transform(v => v ?? ""),
-  next_day: z.boolean().nullable(),
-  parent_lpo_id: z.string().optional(),
-  lat: z.number().optional(),
-  lng: z.number().optional(),
+  suburbs: z.string().nullable().optional().transform(v => v ?? ""),
+  post_code: z.string().or(z.number().transform(n => String(n))).nullable().optional().transform(v => v ?? ""),
+  state: z.string().nullable().optional().transform(v => v ?? ""),
+  primary_op: z.array(z.string().or(z.number().transform(n => String(n))))
+    .or(z.string().or(z.number()).transform(s => s ? [String(s)] : []))
+    .optional()
+    .default([]),
+  secondary_op: z.union([z.string(), z.array(z.any()), z.record(z.any())])
+    .nullable()
+    .optional()
+    .transform(v => v ?? ""),
+  next_day: z.boolean()
+    .or(z.string().transform(v => v === 'true' || v === 'Yes' || v === '1'))
+    .nullable()
+    .optional(),
+  parent_lpo_id: z.string().or(z.number().transform(n => String(n))).optional(),
+  lat: z.number().or(z.string().transform(s => parseFloat(s))).optional(),
+  lng: z.number().or(z.string().transform(s => parseFloat(s))).optional(),
 });
 
 const parseFeeValue = (val: any): number => {

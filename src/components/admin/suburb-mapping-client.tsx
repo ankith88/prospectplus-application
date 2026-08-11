@@ -168,12 +168,21 @@ export default function SuburbMappingClient() {
     } else if (typeof item.primary_op === 'string' && item.primary_op) {
       primary_op = [item.primary_op];
     }
+    let secondary_op = '';
+    if (typeof item.secondary_op === 'string') {
+      secondary_op = item.secondary_op;
+    } else if (Array.isArray(item.secondary_op)) {
+      secondary_op = item.secondary_op.map((op: any) => typeof op === 'object' && op !== null ? (op.name || op.franchisee || op.id || JSON.stringify(op)) : String(op)).join(', ');
+    } else if (typeof item.secondary_op === 'object' && item.secondary_op !== null) {
+      secondary_op = item.secondary_op.name || item.secondary_op.franchisee || item.secondary_op.id || JSON.stringify(item.secondary_op);
+    }
+
     return {
       suburbs: item.suburbs || '',
       post_code: item.post_code || '',
       state: item.state || '',
       primary_op,
-      secondary_op: item.secondary_op || '',
+      secondary_op,
       next_day: item.next_day ?? false,
       parent_lpo_id: item.parent_lpo_id || '',
       lat: item.lat,

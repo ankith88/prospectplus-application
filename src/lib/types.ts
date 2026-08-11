@@ -777,7 +777,7 @@ export interface SuburbMapping {
   post_code: string;     // Postal string code identifier (e.g., "4110")
   state: string;         // State abbreviation code (e.g., "QLD")
   primary_op: string[];  // Array of parsed operation identification IDs
-  secondary_op: string;  // Fallback operator string parameter index 
+  secondary_op?: string | any[] | Record<string, any> | null;  // Fallback operator string or array/object mapping 
   next_day: boolean | null; // Operational routing delivery flag mapping
   parent_lpo_id?: string; // Optional field mapping tracking if present inside LPO data maps
   lat?: number;
@@ -821,7 +821,7 @@ export interface SuburbMapping {
   post_code: string;     // Postal string code identifier (e.g., "4110")
   state: string;         // State abbreviation code (e.g., "QLD")
   primary_op: string[];  // Array of parsed operation identification IDs
-  secondary_op: string;  // Fallback operator string parameter index 
+  secondary_op?: string | any[] | Record<string, any> | null;  // Fallback operator string or array/object mapping 
   next_day: boolean | null; // Operational routing delivery flag mapping
   parent_lpo_id?: string; // Optional field mapping tracking if present inside LPO data maps
 }

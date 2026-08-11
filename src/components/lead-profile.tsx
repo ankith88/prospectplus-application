@@ -7191,8 +7191,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                   })()}
                                 </TableCell>
                                 <TableCell>
-                                  {operatorMap[String(item.secondary_op)] || item.secondary_op || '-'}
-                                </TableCell>
+                                   {(() => {
+                                     const sec = item.secondary_op;
+                                     if (!sec) return '-';
+                                     if (Array.isArray(sec)) {
+                                       return sec.map((op: any) => typeof op === 'object' && op !== null ? (op.name || op.franchisee || op.id || JSON.stringify(op)) : (operatorMap[String(op)] || op)).join(', ') || '-';
+                                     }
+                                     if (typeof sec === 'object') {
+                                       return (sec as any).name || (sec as any).franchisee || JSON.stringify(sec);
+                                     }
+                                     return operatorMap[String(sec)] || String(sec);
+                                   })()}
+                                 </TableCell>
                                 <TableCell>{item.next_day ? 'Yes' : 'No'}</TableCell>
                               </TableRow>
                             ))}
