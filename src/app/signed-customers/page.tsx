@@ -172,7 +172,8 @@ export default function SignedCustomersPage() {
     try {
       const [companies, leads] = await Promise.all([
         getCompaniesFromFirebase({
-            franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
+            franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined,
+            skipCoordinateCheck: true,
         }),
         getLeadsFromFirebase({ 
             summary: true,

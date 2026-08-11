@@ -150,7 +150,8 @@ export default function SignedCustomersPage() {
     try {
       const [companies, leads] = await Promise.all([
         getCompaniesFromFirebase({
-            franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
+            franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined,
+            skipCoordinateCheck: true,
         }),
         getLeadsFromFirebase({ 
             summary: true,
@@ -158,12 +159,23 @@ export default function SignedCustomersPage() {
         }),
       ]);
       const companyMapLeads = companies
-        .filter(c => c.latitude != null && c.longitude != null)
-        .map(c => ({ ...c, latitude: Number(c.latitude), longitude: Number(c.longitude), isCompany: true, isProspect: false, status: 'Won' as const } as MapLead));
+        .map(c => ({
+          ...c,
+          latitude: c.latitude != null ? Number(c.latitude) : undefined,
+          longitude: c.longitude != null ? Number(c.longitude) : undefined,
+          isCompany: true,
+          isProspect: false,
+          status: 'Won' as const
+        } as MapLead));
       
       const leadMapLeads = leads
-        .filter(l => l.latitude != null && l.longitude != null)
-        .map(l => ({ ...l, latitude: Number(l.latitude), longitude: Number(l.longitude), isCompany: false, isProspect: false } as MapLead));
+        .map(l => ({
+          ...l,
+          latitude: l.latitude != null ? Number(l.latitude) : undefined,
+          longitude: l.longitude != null ? Number(l.longitude) : undefined,
+          isCompany: false,
+          isProspect: false
+        } as MapLead));
 
       setAllMapData([...companyMapLeads, ...leadMapLeads]);
     } catch (error) {

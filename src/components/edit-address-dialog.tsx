@@ -190,11 +190,17 @@ export function EditAddressDialog({
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      const addressUpdate = {
-        ...values.address,
+      const addressUpdate: Address = {
+        street: values.address.street || '',
+        city: values.address.city || '',
+        state: values.address.state || '',
+        zip: values.address.zip || '',
+        country: values.address.country || 'Australia',
         address1: values.address.address1 ?? undefined,
         lat: values.address.lat ?? lead.latitude ?? undefined,
         lng: values.address.lng ?? lead.longitude ?? undefined,
+        partnerLocationId: values.address.partnerLocationId ?? undefined,
+        partnerLocationName: values.address.partnerLocationName ?? undefined,
       };
 
       const payload: Partial<Lead> = {
@@ -249,9 +255,17 @@ export function EditAddressDialog({
 
       onLeadUpdated(payload, lead);
 
-      const mergedSiteAddress = {
-        ...lead.address,
-        ...addressUpdate,
+      const mergedSiteAddress: Address = {
+        street: addressUpdate.street || lead.address?.street || '',
+        city: addressUpdate.city || lead.address?.city || '',
+        state: addressUpdate.state || lead.address?.state || '',
+        zip: addressUpdate.zip || lead.address?.zip || '',
+        country: addressUpdate.country || lead.address?.country || 'Australia',
+        address1: addressUpdate.address1 ?? lead.address?.address1,
+        lat: addressUpdate.lat ?? lead.address?.lat,
+        lng: addressUpdate.lng ?? lead.address?.lng,
+        partnerLocationId: addressUpdate.partnerLocationId ?? lead.address?.partnerLocationId,
+        partnerLocationName: addressUpdate.partnerLocationName ?? lead.address?.partnerLocationName,
       };
 
       await sendAddressUpdateToNetSuite({

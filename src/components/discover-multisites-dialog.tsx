@@ -378,25 +378,46 @@ export function DiscoverMultiSitesDialog({
         .replace(/[^a-z0-9]/g, '')
         .replace(/limited|pty|ltd|inc|group|australia/g, '')
         .trim();
+
+      const stripUnitAndLevel = (addr: string) => {
+        if (!addr) return '';
+        return addr
+          .replace(/^(level|lvl|suite|ste|unit|u|shop|lot|floor|fl)\s*\d+[a-z]?[\s,/\-]*/i, '')
+          .replace(/^(g\d+|\d+)\s*\/\s*/i, '')
+          .trim();
+      };
       
       const cleanAddressStr = (addr: string) =>
-        (addr || '')
+        stripUnitAndLevel(addr)
           .toLowerCase()
           .replace(/street/g, 'st')
           .replace(/road/g, 'rd')
           .replace(/avenue/g, 'ave')
-          .replace(/level/g, 'lvl')
-          .replace(/suite/g, 'ste')
           .replace(/drive/g, 'dr')
+          .replace(/highway/g, 'hwy')
+          .replace(/place/g, 'pl')
+          .replace(/parade/g, 'pde')
+          .replace(/terrace/g, 'tce')
+          .replace(/court/g, 'ct')
+          .replace(/boulevard/g, 'blvd')
+          .replace(/circuit/g, 'cct')
+          .replace(/crescent/g, 'cres')
           .replace(/[^a-z0-9]/g, '')
           .trim();
 
       const locSuburb = (loc.suburb || '').trim().toLowerCase();
       const locPostcode = (loc.postcode || '').trim().toLowerCase();
-      const locStreetClean = cleanAddressStr(loc.street || '');
+      const locStreetRaw = loc.street || loc.formattedAddress || '';
+      const locStreetClean = cleanAddressStr(locStreetRaw);
       const locFullAddrClean = cleanAddressStr(loc.formattedAddress || '');
 
-      const recordsToSearch = allSystemRecords.length > 0 ? allSystemRecords : fetchedSystemRecords;
+      // Combine prop records and fetched records to ensure un-geocoded records are searched
+      const recordMap = new Map<string, MapLead>();
+      allSystemRecords.forEach((r) => recordMap.set(r.id, r));
+      fetchedSystemRecords.forEach((r) => {
+        if (!recordMap.has(r.id)) recordMap.set(r.id, r);
+      });
+      const recordsToSearch = Array.from(recordMap.values());
 
       const matchedRecord = recordsToSearch.find((rec) => {
         const isParentOrChild = rec.id === parentCompany?.id || (rec as any).parentLeadId === parentCompany?.id || (rec as any).parentId === parentCompany?.id;
@@ -414,11 +435,28 @@ export function DiscoverMultiSitesDialog({
           (locNameClean.length >= 3 && locNameClean.includes(recNameClean));
 
         const recAddress = rec.address as Address | undefined;
-        const recCity = ((recAddress?.city || (rec as any).city || '') as string).trim().toLowerCase();
-        const recZip = ((recAddress?.zip || (rec as any).zip || '') as string).trim().toLowerCase();
-        const recStreetRaw = ((recAddress?.street || (rec as any).street || '') as string).trim().toLowerCase();
+        let recCity = ((recAddress?.city || (rec as any).city || (rec as any).suburb || '') as string).trim().toLowerCase();
+        let recZip = ((recAddress?.zip || (rec as any).zip || (rec as any).postcode || '') as string).trim().toLowerCase();
+        
+        let recStreetRaw = (
+          typeof rec.address === 'string'
+            ? rec.address
+            : recAddress?.street || (rec as any).street || (rec as any).streetAddress || (rec as any).address1 || (rec as any).fullAddress || ''
+        ).trim().toLowerCase();
+
+        // If recStreetRaw, recCity, or recZip are empty but a single full address string exists, parse it
+        if ((!recStreetRaw || !recCity || !recZip) && typeof rec.address === 'string') {
+          const parts = (rec.address as string).split(',').map((s) => s.trim());
+          if (parts.length >= 2) {
+            if (!recStreetRaw) recStreetRaw = parts[0];
+            if (!recCity && parts.length >= 3) recCity = parts[1].toLowerCase();
+            const pcMatch = (rec.address as string).match(/\b\d{4}\b/);
+            if (!recZip && pcMatch) recZip = pcMatch[0];
+          }
+        }
+
         const recStreetClean = cleanAddressStr(recStreetRaw);
-        const recFullAddrClean = cleanAddressStr(`${recStreetRaw} ${recCity} ${recZip}`);
+        const recFullAddrClean = cleanAddressStr(typeof rec.address === 'string' ? rec.address : `${recStreetRaw} ${recCity} ${recZip}`);
 
         // 1. Lat/Lng proximity match if available (within 300 meters)
         if (loc.lat != null && loc.lng != null && rec.latitude != null && rec.longitude != null && window.google?.maps?.geometry) {
@@ -428,7 +466,7 @@ export function DiscoverMultiSitesDialog({
           if (dist <= 300) return true;
         }
 
-        // 2. Normalized Street Address + Suburb match
+        // 2. Normalized Street Address + Suburb/Zip match
         if (locStreetClean.length >= 4 && recStreetClean.length >= 4) {
           const streetOverlap = locStreetClean.includes(recStreetClean) || recStreetClean.includes(locStreetClean);
           const suburbOverlap = !locSuburb || !recCity || locSuburb.includes(recCity) || recCity.includes(locSuburb);
@@ -440,20 +478,22 @@ export function DiscoverMultiSitesDialog({
         }
 
         // 3. Full Address String inclusion match
-        if (locFullAddrClean.length >= 8 && recStreetClean.length >= 4) {
+        if (locFullAddrClean.length >= 6 && recStreetClean.length >= 4) {
           if (locFullAddrClean.includes(recStreetClean) && (!recCity || locFullAddrClean.includes(recCity))) {
             return true;
           }
         }
-        if (recFullAddrClean.length >= 8 && locStreetClean.length >= 4) {
+        if (recFullAddrClean.length >= 6 && locStreetClean.length >= 4) {
           if (recFullAddrClean.includes(locStreetClean) && (!locSuburb || recFullAddrClean.includes(locSuburb))) {
             return true;
           }
         }
 
         // 4. Name Match + Suburb / Postcode match
-        if (isNameMatch && locPostcode && recZip && locPostcode === recZip) {
-          if (!locSuburb || !recCity || locSuburb.includes(recCity) || recCity.includes(locSuburb)) {
+        if (isNameMatch && (locPostcode || recZip || locSuburb || recCity)) {
+          const zipOverlap = locPostcode && recZip && locPostcode === recZip;
+          const suburbOverlap = locSuburb && recCity && (locSuburb.includes(recCity) || recCity.includes(locSuburb));
+          if (zipOverlap || suburbOverlap) {
             return true;
           }
         }
@@ -476,7 +516,7 @@ export function DiscoverMultiSitesDialog({
 
       return { status: 'Not in System' };
     },
-    [allSystemRecords, parentCompany, companyNameInput]
+    [allSystemRecords, fetchedSystemRecords, parentCompany, companyNameInput]
   );
 
   const performDiscovery = useCallback(async () => {
@@ -575,16 +615,37 @@ export function DiscoverMultiSitesDialog({
                   return (useShort ? comp?.short_name : comp?.long_name) || '';
                 };
 
-                const suburb = getComponent('locality') || getComponent('postal_town');
-                const postcode = getComponent('postal_code');
-                const state = getComponent('administrative_area_level_1', true);
-                const street = `${getComponent('street_number')} ${getComponent('route')}`.trim();
+                let suburb = getComponent('locality') || getComponent('postal_town');
+                let postcode = getComponent('postal_code');
+                let state = getComponent('administrative_area_level_1', true);
+                let street = `${getComponent('street_number')} ${getComponent('route')}`.trim();
+                if (street === 'undefined undefined' || street === 'undefined') street = '';
+
+                // Fallback parsing from formatted_address if address_components is not populated
+                const fmtAddr = place.formatted_address || place.vicinity || '';
+                if (fmtAddr && (!suburb || !postcode || !street)) {
+                  const pcMatch = fmtAddr.match(/\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+(\d{4})\b/i);
+                  if (pcMatch) {
+                    if (!state) state = pcMatch[1].toUpperCase();
+                    if (!postcode) postcode = pcMatch[2];
+                  }
+                  const parts = fmtAddr.split(',').map((s) => s.trim());
+                  if (parts.length >= 2) {
+                    if (!street) street = parts[0];
+                    if (!suburb && parts.length >= 3) {
+                      suburb = parts[parts.length - 2].replace(/\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT|\d{4}|Australia)\b/gi, '').trim();
+                    } else if (!suburb && parts.length === 2) {
+                      suburb = parts[1].replace(/\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT|\d{4}|Australia)\b/gi, '').trim();
+                    }
+                  }
+                }
+
                 const lat = place.geometry?.location?.lat();
                 const lng = place.geometry?.location?.lng();
 
                 const match = matchLocationToDatabase({
                   name: place.name || coreName,
-                  formattedAddress: place.formatted_address || place.vicinity,
+                  formattedAddress: fmtAddr,
                   suburb,
                   state,
                   postcode,
