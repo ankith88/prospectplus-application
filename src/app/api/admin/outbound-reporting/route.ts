@@ -16,7 +16,13 @@ const CACHE_TTL_MS = 60 * 1000;
 
 function safeGetStatus(val: any): string {
   if (!val) return 'Uncontacted';
-  if (typeof val === 'string') return val;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed === 'SUSPECT-Unqualified' || trimmed === 'SUSPECT - Unqualified') return 'New';
+    let clean = trimmed.replace(/^(SUSPECT|Customer)\s*-\s*/i, '');
+    if (clean === 'Signed') return 'Won';
+    return clean;
+  }
   return String(val);
 }
 
@@ -88,15 +94,14 @@ export async function GET(req: NextRequest) {
       'franchisee', 'fieldSales', 'dateLeadEntered', 'createdAt', 'assignedToDialerAt',
       'visitNoteID', 'providedShipMateOnboarding', 'firstJobCreatedAt', 'jobCount',
       'localMileTrialsRemaining', 'localMileTermsAccepted', 'wasOutbound', 'notes',
-      'discoveryData', 'entityId', 'prospectPlusId', 'customerEntityId', 'internalid', 'bucket'
+      'discoveryData', 'entityId', 'prospectPlusId', 'customerEntityId', 'internalid', 'bucket',
+      'dateLocalmileAccepted', 'localMileAcceptedAt', 'dateRegistrationSent', 'registrationSentAt', 'bucketHistory'
     ];
 
     const leadsQuery = db.collection('leads')
-      .where('bucket', '==', 'outbound')
       .select(...leadFields);
 
     const companiesQuery = db.collection('companies')
-      .where('bucket', '==', 'outbound')
       .select(...leadFields);
 
     const [activitiesSnap, apptsSnap, usersSnap, leadsSnap, companiesSnap] = await Promise.all([
@@ -161,6 +166,11 @@ export async function GET(req: NextRequest) {
         jobCount: data.jobCount || 0,
         localMileTrialsRemaining: data.localMileTrialsRemaining || 0,
         localMileTermsAccepted: data.localMileTermsAccepted || false,
+        dateLocalmileAccepted: data.dateLocalmileAccepted || null,
+        localMileAcceptedAt: data.localMileAcceptedAt || null,
+        dateRegistrationSent: data.dateRegistrationSent || null,
+        registrationSentAt: data.registrationSentAt || null,
+        bucketHistory: data.bucketHistory || [],
         bucket: data.bucket || 'outbound',
         wasOutbound: data.wasOutbound || false,
         notes: data.notes || '',
@@ -180,7 +190,12 @@ export async function GET(req: NextRequest) {
     }
 
     const combinedLeads = Array.from(leadMap.values()).filter(l => {
-      const isOutbound = l.bucket === 'outbound' || l.wasOutbound === true || !!l.dialerAssigned;
+      const isOutbound = l.bucket === 'outbound' || 
+                         l.wasOutbound === true || 
+                         !!l.dialerAssigned || 
+                         l.status === 'LocalMile Pending' || 
+                         l.customerStatus === 'LocalMile Pending' || 
+                         (Array.isArray(l.bucketHistory) && l.bucketHistory.some((bh: any) => (bh.oldBucket || '').toLowerCase() === 'outbound' || (bh.newBucket || '').toLowerCase() === 'outbound'));
       if (!isOutbound) return false;
       const companyNameLower = (l.companyName || '').toLowerCase();
       const notesLower = (l.notes || '').toLowerCase();

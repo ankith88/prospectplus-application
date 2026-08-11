@@ -1,5 +1,5 @@
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs, getDoc, doc, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, query, where, limit } from 'firebase/firestore';
 import { Invoice } from '@/lib/types';
 import { parseISO, format, isValid } from 'date-fns';
 
@@ -9,6 +9,35 @@ export interface InvoiceAvgResult {
   invoicesCount: number;
   recentInvoices: Invoice[];
   isSignedCustomer: boolean;
+}
+
+function parseDateRobust(dateVal: any): Date | null {
+  if (!dateVal) return null;
+  if (typeof dateVal === 'object' && typeof dateVal.toDate === 'function') {
+    try { return dateVal.toDate(); } catch {}
+  }
+  if (typeof dateVal === 'object' && dateVal._seconds) {
+    return new Date(dateVal._seconds * 1000);
+  }
+  if (typeof dateVal === 'object' && dateVal.seconds) {
+    return new Date(dateVal.seconds * 1000);
+  }
+  if (dateVal instanceof Date && isValid(dateVal)) return dateVal;
+  if (typeof dateVal === 'string') {
+    let parsed = parseISO(dateVal);
+    if (isValid(parsed)) return parsed;
+    parsed = new Date(dateVal);
+    if (isValid(parsed)) return parsed;
+    const parts = dateVal.split(/[/.-]/);
+    if (parts.length === 3) {
+      const d = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const y = parseInt(parts[2], 10);
+      parsed = new Date(y, m, d);
+      if (isValid(parsed)) return parsed;
+    }
+  }
+  return null;
 }
 
 /**
@@ -152,14 +181,9 @@ export async function fetch3MonthAvgInvoiceMRR(
   const monthlyTotals = new Map<string, number>();
 
   uniqueInvoices.forEach(inv => {
-    if (!inv.invoiceDate) return;
-    let d: Date | null = null;
-    try {
-      d = typeof inv.invoiceDate === 'string' ? parseISO(inv.invoiceDate) : new Date(inv.invoiceDate);
-    } catch {
-      d = null;
-    }
-    if (!d || !isValid(d)) return;
+    const dateVal = inv.invoiceDate || (inv as any).createdAt || (inv as any).updatedAt;
+    const d = parseDateRobust(dateVal);
+    if (!d) return;
 
     const monthKey = format(d, 'yyyy-MM');
     const rawVal = inv.invoiceTotal != null ? inv.invoiceTotal : '0.00';

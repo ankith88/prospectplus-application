@@ -41,7 +41,8 @@ import {
   Clock, 
   Building,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  RotateCcw
 } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
@@ -106,12 +107,74 @@ export default function CancellationReportingClient() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [themeFilter, setThemeFilter] = useState<string>('all');
+  const [whyFilter, setWhyFilter] = useState<string>('all');
+  const [reasonFilter, setReasonFilter] = useState<string>('all');
   const [strategyFilter, setStrategyFilter] = useState<string>('all');
   const [quickDateRange, setQuickDateRange] = useState<string>('thisMonth');
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date())
   });
+
+  // Dynamic filter options based on dataset
+  const availableOptions = useMemo(() => {
+    const themes = new Set<string>();
+    const whys = new Set<string>();
+    const reasons = new Set<string>();
+    const strategies = new Set<string>();
+
+    requests.forEach(r => {
+      if (r.cancellationTheme) themes.add(r.cancellationTheme.trim());
+
+      // @ts-ignore
+      const why = r.cancellationCategory || r.cancellationWhy;
+      if (why && typeof why === 'string') whys.add(why.trim());
+
+      if (r.cancellationReason && typeof r.cancellationReason === 'string') reasons.add(r.cancellationReason.trim());
+
+      const strat = normalizeRetentionStrategy(r.saveStrategy);
+      if (strat && strat !== 'Unspecified') strategies.add(strat);
+    });
+
+    RETENTION_STRATEGIES.forEach(s => strategies.add(s));
+
+    return {
+      themes: Array.from(themes).filter(Boolean).sort(),
+      whys: Array.from(whys).filter(Boolean).sort(),
+      reasons: Array.from(reasons).filter(Boolean).sort(),
+      strategies: Array.from(strategies).filter(Boolean).sort()
+    };
+  }, [requests]);
+
+  const hasActiveFilters = 
+    searchQuery.trim() !== '' ||
+    statusFilter !== 'all' ||
+    themeFilter !== 'all' ||
+    whyFilter !== 'all' ||
+    reasonFilter !== 'all' ||
+    strategyFilter !== 'all' ||
+    quickDateRange !== 'allTime';
+
+  const activeFilterCount = [
+    searchQuery.trim() !== '',
+    statusFilter !== 'all',
+    themeFilter !== 'all',
+    whyFilter !== 'all',
+    reasonFilter !== 'all',
+    strategyFilter !== 'all',
+    quickDateRange !== 'allTime'
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setThemeFilter('all');
+    setWhyFilter('all');
+    setReasonFilter('all');
+    setStrategyFilter('all');
+    setQuickDateRange('allTime');
+    setDateRange(undefined);
+  };
 
   // Modal Pop-Up state for KPI Drilldowns
   const [modalData, setModalData] = useState<{
@@ -386,9 +449,11 @@ export default function CancellationReportingClient() {
         const matchContact = req.contactName?.toLowerCase().includes(q);
         const matchReason = req.cancellationReason?.toLowerCase().includes(q);
         const matchTheme = req.cancellationTheme?.toLowerCase().includes(q);
+        // @ts-ignore
+        const matchWhy = (req.cancellationCategory || req.cancellationWhy)?.toLowerCase().includes(q);
         const matchNotes = req.notes?.toLowerCase().includes(q);
         const matchBy = req.processedBy?.toLowerCase().includes(q);
-        if (!matchName && !matchContact && !matchReason && !matchTheme && !matchNotes && !matchBy) {
+        if (!matchName && !matchContact && !matchReason && !matchTheme && !matchWhy && !matchNotes && !matchBy) {
           return false;
         }
       }
@@ -403,7 +468,19 @@ export default function CancellationReportingClient() {
         return false;
       }
 
-      // Strategy filter
+      // Why / Category filter
+      if (whyFilter !== 'all') {
+        // @ts-ignore
+        const reqWhy = req.cancellationCategory || req.cancellationWhy;
+        if (reqWhy !== whyFilter) return false;
+      }
+
+      // Cancellation Reason filter
+      if (reasonFilter !== 'all' && req.cancellationReason !== reasonFilter) {
+        return false;
+      }
+
+      // Retention Strategy filter
       if (strategyFilter !== 'all' && normalizeRetentionStrategy(req.saveStrategy) !== strategyFilter) {
         return false;
       }
@@ -426,7 +503,7 @@ export default function CancellationReportingClient() {
 
       return true;
     });
-  }, [requests, searchQuery, statusFilter, themeFilter, strategyFilter, dateRange]);
+  }, [requests, searchQuery, statusFilter, themeFilter, whyFilter, reasonFilter, strategyFilter, dateRange]);
 
   // Comprehensive Metrics Calculations
   const metrics = useMemo(() => {
@@ -756,6 +833,135 @@ export default function CancellationReportingClient() {
           </Button>
         </div>
       </div>
+
+      {/* Dedicated Filter Section */}
+      <Card className="bg-white/90 border-white/60 shadow-sm rounded-2xl">
+        <CardHeader className="py-3.5 px-5 flex flex-row items-center justify-between border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-[#095c7b]/10 text-[#095c7b] rounded-xl">
+              <Filter className="h-4 w-4" />
+            </div>
+            <div>
+              <CardTitle className="text-sm font-bold text-[#095c7b]">Filter Requests & Analytics</CardTitle>
+              <CardDescription className="text-xs text-slate-500">
+                Filter by search query, status, cancellation theme, why category, reason, or retention strategy
+              </CardDescription>
+            </div>
+          </div>
+          {hasActiveFilters && (
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] font-semibold text-xs py-1 px-2.5 rounded-lg">
+                {activeFilterCount} Active {activeFilterCount === 1 ? 'Filter' : 'Filters'}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetFilters}
+                className="h-8 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 gap-1.5 font-medium rounded-lg"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Clear All Filters
+              </Button>
+            </div>
+          )}
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            {/* Search Input */}
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-700">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Search customer..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="pl-8 bg-white border-slate-300 text-xs h-9 focus:border-[#095c7b]"
+                />
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-700">Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="bg-white border-slate-300 text-xs h-9">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="Saved">Saved</SelectItem>
+                  <SelectItem value="Cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Cancellation Theme Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-700">Cancellation Theme</Label>
+              <Select value={themeFilter} onValueChange={setThemeFilter}>
+                <SelectTrigger className="bg-white border-slate-300 text-xs h-9">
+                  <SelectValue placeholder="All Themes" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="all">All Themes</SelectItem>
+                  {availableOptions.themes.map(t => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Why / Category Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-700">Why / Category</Label>
+              <Select value={whyFilter} onValueChange={setWhyFilter}>
+                <SelectTrigger className="bg-white border-slate-300 text-xs h-9">
+                  <SelectValue placeholder="All Why Categories" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {availableOptions.whys.map(w => (
+                    <SelectItem key={w} value={w}>{w}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Cancellation Reason Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-700">Cancellation Reason</Label>
+              <Select value={reasonFilter} onValueChange={setReasonFilter}>
+                <SelectTrigger className="bg-white border-slate-300 text-xs h-9">
+                  <SelectValue placeholder="All Reasons" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="all">All Reasons</SelectItem>
+                  {availableOptions.reasons.map(r => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Retention Strategy Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-700">Retention Strategy</Label>
+              <Select value={strategyFilter} onValueChange={setStrategyFilter}>
+                <SelectTrigger className="bg-white border-slate-300 text-xs h-9">
+                  <SelectValue placeholder="All Strategies" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="all">All Retention Strategies</SelectItem>
+                  {availableOptions.strategies.map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* KPI Cards Section */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
