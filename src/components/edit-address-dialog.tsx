@@ -199,8 +199,8 @@ export function EditAddressDialog({
         address1: values.address.address1 ?? undefined,
         lat: values.address.lat ?? lead.latitude ?? undefined,
         lng: values.address.lng ?? lead.longitude ?? undefined,
-        partnerLocationId: values.address.partnerLocationId ?? undefined,
-        partnerLocationName: values.address.partnerLocationName ?? undefined,
+        partnerLocationId: (values.address as any).partnerLocationId ?? lead.address?.partnerLocationId,
+        partnerLocationName: (values.address as any).partnerLocationName ?? lead.address?.partnerLocationName,
       };
 
       const payload: Partial<Lead> = {
