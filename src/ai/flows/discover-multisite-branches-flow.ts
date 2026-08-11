@@ -352,33 +352,81 @@ export async function discoverCompanyBranches(input: z.infer<typeof DiscoverBran
   }
 }
 
-export async function findCompanyWebsite(companyName: string) {
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com',
+  'bigpond.com', 'bigpond.net.au', 'optusnet.com.au', 'tpg.com.au', 'iinet.net.au',
+  'mail.com', 'zoho.com', 'yandex.com', 'protonmail.com', 'gmx.com'
+]);
+
+const IGNORED_DIRECTORY_DOMAINS = [
+  'facebook.com', 'linkedin.com', 'yellowpages.com.au', 'whitepages.com.au',
+  'wikipedia.org', 'dnb.com', 'bloomberg.com', 'business.gov.au', 'abr.business.gov.au',
+  'asic.gov.au', 'creditorwatch.com.au', 'ibisworld.com', 'truelocal.com.au',
+  'glassdoor.com', 'indeed.com', 'seek.com.au', 'zoominfo.com'
+];
+
+export async function findCompanyWebsite(companyName: string, companyEmail?: string) {
   try {
-    const coreName = companyName.split(' - ')[0].trim();
-    const query = `${coreName} Australia official website`;
+    // 1. Try extracting domain from companyEmail if provided (e.g. sydfos@claytonutz.com -> https://www.claytonutz.com)
+    if (companyEmail && companyEmail.includes('@')) {
+      const emailDomain = companyEmail.split('@')[1]?.toLowerCase().trim();
+      if (emailDomain && !PUBLIC_EMAIL_DOMAINS.has(emailDomain)) {
+        return {
+          success: true,
+          websiteUrl: `https://www.${emailDomain.replace(/^www\./i, '')}`,
+          source: 'Email Domain',
+        };
+      }
+    }
+
+    // 2. Clean corporate trust boilerplate from companyName (e.g. "Budage Pty Ltd ATF Tonclay Services Trust Parent")
+    let cleanBrandName = companyName
+      .split(' - ')[0]
+      .replace(/atf/gi, ' ')
+      .replace(/trust/gi, ' ')
+      .replace(/parent/gi, ' ')
+      .replace(/pty/gi, ' ')
+      .replace(/ltd/gi, ' ')
+      .replace(/limited/gi, ' ')
+      .replace(/inc/gi, ' ')
+      .replace(/services/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleanBrandName) cleanBrandName = companyName;
+
+    const query = `${cleanBrandName} Australia official website`;
     const searchResults = await searchWebForQuery(query);
 
     let foundUrl = '';
     if (searchResults.urls.length > 0) {
-      foundUrl = searchResults.urls.find(
-        (u) =>
-          !u.includes('facebook.com') &&
-          !u.includes('linkedin.com') &&
-          !u.includes('yellowpages.com.au') &&
-          !u.includes('wikipedia.org') &&
-          !u.includes('dnb.com') &&
-          !u.includes('bloomberg.com')
-      ) || searchResults.urls[0];
+      foundUrl = searchResults.urls.find((u) => {
+        const urlLower = u.toLowerCase();
+        return !IGNORED_DIRECTORY_DOMAINS.some((domain) => urlLower.includes(domain));
+      }) || '';
     }
 
-    if (!foundUrl && coreName) {
-      const clean = coreName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    // Secondary fallback search if first attempt returned no valid non-directory URL
+    if (!foundUrl) {
+      const rawName = companyName.split(' - ')[0].trim();
+      const rawQuery = `${rawName} official website`;
+      const rawResults = await searchWebForQuery(rawQuery);
+      if (rawResults.urls.length > 0) {
+        foundUrl = rawResults.urls.find((u) => {
+          const urlLower = u.toLowerCase();
+          return !IGNORED_DIRECTORY_DOMAINS.some((domain) => urlLower.includes(domain));
+        }) || '';
+      }
+    }
+
+    if (!foundUrl && cleanBrandName) {
+      const clean = cleanBrandName.toLowerCase().replace(/[^a-z0-9]/g, '');
       if (clean.length > 2) {
         foundUrl = `https://www.${clean}.com.au`;
       }
     }
 
-    return { success: true, websiteUrl: foundUrl };
+    return { success: true, websiteUrl: foundUrl, source: 'Web Search' };
   } catch (err: any) {
     return { success: false, error: err.message || String(err) };
   }

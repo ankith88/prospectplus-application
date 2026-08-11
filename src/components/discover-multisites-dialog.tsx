@@ -177,18 +177,19 @@ export function DiscoverMultiSitesDialog({
 
   const handleAutoFindWebsite = async () => {
     const targetName = companyNameInput.trim() || parentCompany?.companyName || '';
-    if (!targetName) {
+    const companyEmail = (parentCompany as any)?.companyEmail || (parentCompany as any)?.email;
+    if (!targetName && !companyEmail) {
       toast({ variant: 'destructive', title: 'Company Name Required', description: 'Enter a company name to find its website.' });
       return;
     }
     setIsFindingWebsite(true);
     try {
-      const res = await findCompanyWebsite(targetName);
+      const res = await findCompanyWebsite(targetName, companyEmail);
       if (res.success && res.websiteUrl) {
         setWebsiteUrlInput(res.websiteUrl);
         toast({
           title: 'Website Discovered',
-          description: `Found official website: ${res.websiteUrl}`,
+          description: `Found official website (${res.source || 'Web'}): ${res.websiteUrl}`,
         });
       } else {
         toast({
