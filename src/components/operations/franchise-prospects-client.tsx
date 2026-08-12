@@ -57,6 +57,8 @@ export default function FranchiseProspectsClient() {
   // Add Prospect Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submittingNewProspect, setSubmittingNewProspect] = useState(false);
+  const DEFAULT_BROCHURE_EMAIL_COPY = `Thank you for your enquiry regarding MailPlus franchise opportunities.\n\nAs Step 1 of our franchise review process, please find attached our official MailPlus Franchise Information Brochure detailing our mobile B2B express logistics model, recurring revenue streams, and head office sales support.\n\nOur team will be in contact shortly to discuss your application. If you have immediate questions, feel free to call us on 1300 65 65 95.`;
+
   const [addForm, setAddForm] = useState({
     firstName: '',
     lastName: '',
@@ -70,11 +72,15 @@ export default function FranchiseProspectsClient() {
     employment: '',
     message: '',
     sendBrochureImmediately: true,
+    emailMessage: DEFAULT_BROCHURE_EMAIL_COPY,
   });
 
   // Send Email / Brochure Modal State
   const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false);
   const [emailTargetProspect, setEmailTargetProspect] = useState<FranchiseProspect | null>(null);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailCc, setEmailCc] = useState('michael.mcdaid@mailplus.com.au');
+  const [emailBcc, setEmailBcc] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [includeBrochure, setIncludeBrochure] = useState(true);
@@ -229,6 +235,7 @@ export default function FranchiseProspectsClient() {
         employment: addForm.employment,
         message: addForm.message.trim(),
         sendBrochureImmediately: addForm.sendBrochureImmediately,
+        customMessage: addForm.emailMessage.trim(),
         createdByName: userProfile?.displayName || userProfile?.email || 'Operations User',
         createdByUid: userProfile?.uid || 'system',
       };
@@ -265,6 +272,7 @@ export default function FranchiseProspectsClient() {
         employment: '',
         message: '',
         sendBrochureImmediately: true,
+        emailMessage: DEFAULT_BROCHURE_EMAIL_COPY,
       });
 
       fetchProspects();
@@ -279,6 +287,9 @@ export default function FranchiseProspectsClient() {
   // Open Send Email Modal
   const handleOpenSendEmail = (prospect: FranchiseProspect, isStep1Brochure: boolean = false) => {
     setEmailTargetProspect(prospect);
+    setEmailTo(prospect.email || '');
+    setEmailCc('michael.mcdaid@mailplus.com.au');
+    setEmailBcc('');
     setIncludeBrochure(true);
     setAdditionalFiles([]);
     const territoryText = prospect.preferredTerritory ? ` in ${prospect.preferredTerritory}` : '';
@@ -328,8 +339,8 @@ export default function FranchiseProspectsClient() {
   // Submit Send Email Action
   const handleSendEmail = async () => {
     if (!emailTargetProspect) return;
-    if (!emailTargetProspect.email) {
-      toast({ variant: 'destructive', title: 'No Email', description: 'Prospect does not have a valid email address.' });
+    if (!emailTo.trim()) {
+      toast({ variant: 'destructive', title: 'No Email', description: 'Please enter a valid recipient email address.' });
       return;
     }
 
@@ -337,6 +348,9 @@ export default function FranchiseProspectsClient() {
     try {
       const payload = {
         prospectId: emailTargetProspect.id,
+        toEmail: emailTo,
+        ccEmail: emailCc,
+        bccEmail: emailBcc,
         subject: emailSubject,
         customMessage: emailMessage,
         includeBrochure,
@@ -718,9 +732,9 @@ export default function FranchiseProspectsClient() {
             <TableBody>
               {filteredProspects.map((prospect) => {
                 const kfsDone = Boolean(prospect.keyFactSheet?.publicToken);
-                const deedDone = prospect.confidentialityDeed?.status === 'signed_online';
-                const eoiDone = prospect.eoiData?.status === 'signed_online';
-                const depositDone = Boolean(prospect.depositDetails?.isPaid);
+                const deedDone = prospect.confidentialityDeed?.status === 'signed_online' || prospect.confidentialityDeed?.status === 'uploaded' || Boolean(prospect.confidentialityDeed?.documents && prospect.confidentialityDeed.documents.length > 0);
+                const eoiDone = prospect.eoiData?.status === 'signed_online' || prospect.eoiData?.status === 'uploaded' || Boolean(prospect.eoiData?.documents && prospect.eoiData.documents.length > 0);
+                const depositDone = Boolean(prospect.depositDetails?.isPaid) || Boolean(prospect.depositDetails?.documents && prospect.depositDetails.documents.length > 0);
 
                 return (
                   <TableRow key={prospect.id} className="hover:bg-slate-50/70 transition-colors">
@@ -894,9 +908,9 @@ export default function FranchiseProspectsClient() {
                 {/* 5-Step Franchise Prospect Pipeline Progress Stepper */}
                 {(() => {
                   const kfsDone = Boolean(selectedProspect.keyFactSheet?.publicToken);
-                  const deedDone = selectedProspect.confidentialityDeed?.status === 'signed_online';
-                  const eoiDone = selectedProspect.eoiData?.status === 'signed_online';
-                  const depositDone = Boolean(selectedProspect.depositDetails?.isPaid);
+                  const deedDone = selectedProspect.confidentialityDeed?.status === 'signed_online' || selectedProspect.confidentialityDeed?.status === 'uploaded' || Boolean(selectedProspect.confidentialityDeed?.documents && selectedProspect.confidentialityDeed.documents.length > 0);
+                  const eoiDone = selectedProspect.eoiData?.status === 'signed_online' || selectedProspect.eoiData?.status === 'uploaded' || Boolean(selectedProspect.eoiData?.documents && selectedProspect.eoiData.documents.length > 0);
+                  const depositDone = Boolean(selectedProspect.depositDetails?.isPaid) || Boolean(selectedProspect.depositDetails?.documents && selectedProspect.depositDetails.documents.length > 0);
                   const completedCount = [kfsDone, deedDone, eoiDone, depositDone].filter(Boolean).length;
 
                   return (
@@ -1429,6 +1443,20 @@ export default function FranchiseProspectsClient() {
                 </div>
 
                 <div className="space-y-2">
+                  <div className="space-y-1 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
+                    <label className="text-[11px] font-bold text-slate-700 block flex items-center justify-between">
+                      <span>Edit Email Copy (Prefilled)</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Edits update live preview below</span>
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={addForm.emailMessage}
+                      onChange={(e) => setAddForm({ ...addForm, emailMessage: e.target.value })}
+                      placeholder="Edit email copy to be sent to applicant..."
+                      className="w-full p-2 text-xs border rounded-md focus:outline-none focus:ring-2 focus:ring-[#095c7b] bg-slate-50/50"
+                    />
+                  </div>
+
                   <div className="bg-white rounded-lg border border-slate-200 p-3 text-xs space-y-1.5 shadow-sm">
                     <div className="flex items-center gap-2 border-b pb-1.5 text-slate-600">
                       <span className="font-semibold text-slate-900 w-12">From:</span>
@@ -1475,15 +1503,21 @@ export default function FranchiseProspectsClient() {
                       <p className="font-bold text-[#095c7b] text-sm">
                         Hi {addForm.firstName ? addForm.firstName : 'Applicant'},
                       </p>
-                      <p>
-                        Thank you for your enquiry regarding MailPlus franchise opportunities
-                        {addForm.preferredTerritory && addForm.preferredTerritory !== 'NONE'
-                          ? ` in ${addForm.preferredTerritory === 'OTHER' ? addForm.customTerritory || 'your territory' : addForm.preferredTerritory}`
-                          : ''}.
-                      </p>
-                      <p>
-                        As Step 1 of our franchise review process, please find attached our official <strong>MailPlus Franchise Information Brochure</strong> detailing our mobile B2B express logistics model, recurring revenue streams, and head office sales support.
-                      </p>
+
+                      {addForm.emailMessage
+                        ? addForm.emailMessage
+                            .split('\n')
+                            .filter((p) => p.trim())
+                            .map((para, i) => <p key={i}>{para}</p>)
+                        : (
+                          <p>
+                            Thank you for your enquiry regarding MailPlus franchise opportunities
+                            {addForm.preferredTerritory && addForm.preferredTerritory !== 'NONE'
+                              ? ` in ${addForm.preferredTerritory === 'OTHER' ? addForm.customTerritory || 'your territory' : addForm.preferredTerritory}`
+                              : ''}.
+                          </p>
+                        )}
+
                       <div className="bg-slate-50 border border-slate-200 rounded-md p-2.5 space-y-1.5 my-2">
                         <div className="flex items-start gap-2">
                           <span>🚚</span>
@@ -1494,9 +1528,7 @@ export default function FranchiseProspectsClient() {
                           <div><strong>Exclusive Territory:</strong> Dedicated customer base with full head office operational backing.</div>
                         </div>
                       </div>
-                      <p>
-                        Our team will be in contact shortly to discuss your application. If you have immediate questions, feel free to call us on <strong>1300 65 65 95</strong>.
-                      </p>
+
                       <div className="pt-2 border-t text-slate-600">
                         <p>Kind regards,</p>
                         <p className="font-bold text-[#095c7b]">Greg Hart</p>
@@ -1526,7 +1558,7 @@ export default function FranchiseProspectsClient() {
 
       {/* Send Email & Attachments Modal */}
       <Dialog open={isSendEmailModalOpen} onOpenChange={setIsSendEmailModalOpen}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-[#095c7b]">Send Email & Attachments</DialogTitle>
             <DialogDescription>
@@ -1534,93 +1566,230 @@ export default function FranchiseProspectsClient() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Subject</label>
-              <Input
-                value={emailSubject}
-                onChange={(e) => setEmailSubject(e.target.value)}
-                placeholder="Email Subject Line..."
-              />
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
+            {/* Left Column: Controls */}
+            <div className="lg:col-span-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">To Recipient Email(s)</label>
+                <Input
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
+                  placeholder="recipient@example.com"
+                  className="text-xs"
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Custom Message Body</label>
-              <textarea
-                rows={5}
-                value={emailMessage}
-                onChange={(e) => setEmailMessage(e.target.value)}
-                placeholder="Type your email message to the prospect..."
-                className="w-full p-2.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
-              />
-            </div>
-
-            {/* Step 1 Brochure Attachment Toggle */}
-            <div className="p-3 bg-slate-50 border rounded-md flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-[#095c7b]" />
-                <div>
-                  <span className="text-xs font-semibold text-slate-800 block">Attach Franchise Brochure PDF (Step 1)</span>
-                  <span className="text-[11px] text-slate-500">Official brochure from Zee sales process folder</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">CC Email(s)</label>
+                  <Input
+                    value={emailCc}
+                    onChange={(e) => setEmailCc(e.target.value)}
+                    placeholder="michael.mcdaid@mailplus.com.au"
+                    className="text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">BCC Email(s)</label>
+                  <Input
+                    value={emailBcc}
+                    onChange={(e) => setEmailBcc(e.target.value)}
+                    placeholder="Optional BCC..."
+                    className="text-xs"
+                  />
                 </div>
               </div>
-              <input
-                type="checkbox"
-                checked={includeBrochure}
-                onChange={(e) => setIncludeBrochure(e.target.checked)}
-                className="h-4 w-4 text-[#095c7b] rounded border-slate-300"
-              />
-            </div>
 
-            {/* Custom Attachments Section */}
-            <div className="space-y-2 pt-1 border-t">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                  <Paperclip className="h-3.5 w-3.5 text-[#095c7b]" />
-                  Additional Custom Attachments
-                </label>
-                <label className="cursor-pointer text-xs font-semibold text-[#095c7b] hover:underline flex items-center gap-1">
-                  <Plus className="h-3.5 w-3.5" /> Attach File
-                  <input type="file" multiple onChange={handleFileUpload} className="hidden" />
-                </label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">Subject Line</label>
+                <Input
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder="Email Subject Line..."
+                />
               </div>
 
-              {additionalFiles.length > 0 ? (
-                <div className="space-y-1.5 bg-slate-50 p-2.5 rounded border">
-                  {additionalFiles.map((file, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-xs bg-white p-2 rounded border">
-                      <div className="flex items-center gap-2 truncate pr-2">
-                        <Paperclip className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
-                        <span className="font-medium text-slate-800 truncate">{file.name}</span>
-                        {file.size ? <span className="text-slate-400 text-[10px]">({Math.round(file.size / 1024)}KB)</span> : null}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                  <span>Custom Message Body (Prefilled / Editable)</span>
+                  <span className="text-[10px] text-slate-500 font-normal">Edits reflect live on preview</span>
+                </label>
+                <textarea
+                  rows={6}
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  placeholder="Type or edit your email message..."
+                  className="w-full p-2.5 text-xs border rounded-md focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+                />
+              </div>
+
+              {/* Step 1 Brochure Attachment Toggle */}
+              <div className="p-3 bg-slate-50 border rounded-md flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-[#095c7b]" />
+                  <div>
+                    <span className="text-xs font-semibold text-slate-800 block">Attach Franchise Brochure PDF (Step 1)</span>
+                    <span className="text-[11px] text-slate-500">Official brochure from Zee sales process folder</span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={includeBrochure}
+                  onChange={(e) => setIncludeBrochure(e.target.checked)}
+                  className="h-4 w-4 text-[#095c7b] rounded border-slate-300"
+                />
+              </div>
+
+              {/* Custom Attachments Section */}
+              <div className="space-y-2 pt-1 border-t">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                    <Paperclip className="h-3.5 w-3.5 text-[#095c7b]" />
+                    Additional Custom Attachments
+                  </label>
+                  <label className="cursor-pointer text-xs font-semibold text-[#095c7b] hover:underline flex items-center gap-1">
+                    <Plus className="h-3.5 w-3.5" /> Attach File
+                    <input type="file" multiple onChange={handleFileUpload} className="hidden" />
+                  </label>
+                </div>
+
+                {additionalFiles.length > 0 ? (
+                  <div className="space-y-1.5 bg-slate-50 p-2.5 rounded border">
+                    {additionalFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs bg-white p-2 rounded border">
+                        <div className="flex items-center gap-2 truncate pr-2">
+                          <Paperclip className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
+                          <span className="font-medium text-slate-800 truncate">{file.name}</span>
+                          {file.size ? <span className="text-slate-400 text-[10px]">({Math.round(file.size / 1024)}KB)</span> : null}
+                        </div>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleRemoveFile(idx)}
+                          className="h-6 w-6 text-slate-400 hover:text-red-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleRemoveFile(idx)}
-                        className="h-6 w-6 text-slate-400 hover:text-red-600"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-slate-400 italic">No extra custom files attached yet.</p>
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">No extra custom files attached yet.</p>
+                )}
+              </div>
             </div>
 
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setIsSendEmailModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSendEmail} disabled={sendingEmail} className="bg-[#095c7b] hover:bg-[#074760] text-white gap-1.5">
-                {sendingEmail ? <Loader className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                Send Email & Log History
-              </Button>
-            </DialogFooter>
+            {/* Right Column: Live Styled Email Preview */}
+            <div className="lg:col-span-6 space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <Mail className="h-4 w-4 text-[#095c7b]" /> Live Outbound Email Preview
+                </h3>
+                <Badge variant="outline" className="text-[10px] bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/20">
+                  Real-Time View
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                <div className="bg-white rounded-lg border border-slate-200 p-3 text-xs space-y-1.5 shadow-sm">
+                  <div className="flex items-center gap-2 border-b pb-1.5 text-slate-600">
+                    <span className="font-semibold text-slate-900 w-12">From:</span>
+                    <span className="font-mono text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">
+                      greg.hart@mailplus.com.au
+                    </span>
+                    <span className="text-[10px] text-slate-500">(Greg Hart)</span>
+                  </div>
+                  {emailCc && (
+                    <div className="flex items-center gap-2 border-b pb-1.5 text-slate-600">
+                      <span className="font-semibold text-slate-900 w-12">CC:</span>
+                      <span className="font-mono text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] truncate">
+                        {emailCc}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 border-b pb-1.5 text-slate-600">
+                    <span className="font-semibold text-slate-900 w-12">To:</span>
+                    <span className="font-mono text-slate-800 truncate">
+                      {emailTo ? emailTo : <span className="text-slate-400 italic">recipient@example.com</span>}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 border-b pb-1.5 text-slate-600">
+                    <span className="font-semibold text-slate-900 w-12">Subject:</span>
+                    <span className="font-medium text-slate-800 truncate">
+                      {emailSubject || 'MailPlus Franchise Opportunity'}
+                    </span>
+                  </div>
+                  {includeBrochure || additionalFiles.length > 0 ? (
+                    <div className="flex items-center gap-2 text-slate-600 flex-wrap">
+                      <span className="font-semibold text-slate-900 w-12">Attach:</span>
+                      {includeBrochure && (
+                        <span className="inline-flex items-center gap-1 bg-blue-50 text-[#095c7b] border border-blue-200 rounded px-2 py-0.5 font-medium text-[11px]">
+                          <Paperclip className="h-3 w-3" /> MailPlus Franchise Information Brochure.pdf
+                        </span>
+                      )}
+                      {additionalFiles.map((f, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border rounded px-2 py-0.5 font-medium text-[11px] truncate max-w-[180px]">
+                          <Paperclip className="h-3 w-3" /> {f.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Styled Email Body Box */}
+                <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm text-xs">
+                  <div className="bg-[#095c7b] py-3 text-center">
+                    <img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" className="h-7 inline-block" />
+                  </div>
+                  <div className="p-4 space-y-3 text-slate-700 leading-relaxed">
+                    <p className="font-bold text-[#095c7b] text-sm">
+                      Hi {emailTargetProspect?.firstName || emailTargetProspect?.fullName || 'Applicant'},
+                    </p>
+
+                    {emailMessage ? (
+                      emailMessage
+                        .split('\n')
+                        .filter((p) => p.trim())
+                        .map((para, i) => <p key={i}>{para}</p>)
+                    ) : (
+                      <p className="text-slate-400 italic">No message body typed yet...</p>
+                    )}
+
+                    <div className="bg-slate-50 border border-slate-200 rounded-md p-2.5 space-y-1.5 my-2">
+                      <div className="flex items-start gap-2">
+                        <span>🚚</span>
+                        <div><strong>Proven Mobile B2B Model:</strong> Recurring B2B customer pickup & delivery revenue.</div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span>📍</span>
+                        <div><strong>Exclusive Territory:</strong> Dedicated customer base with full head office operational backing.</div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t text-slate-600">
+                      <p>Kind regards,</p>
+                      <p className="font-bold text-[#095c7b]">Greg Hart</p>
+                      <p className="text-[11px] text-slate-500">Head of Franchise Sales | MailPlus</p>
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border-t p-2.5 text-center text-[10px] text-slate-400">
+                    MailPlus Australia &copy; 2026 | Business logistics, made simple.
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <DialogFooter className="pt-4 mt-4 border-t">
+            <Button type="button" variant="outline" onClick={() => setIsSendEmailModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendEmail} disabled={sendingEmail} className="bg-[#095c7b] hover:bg-[#074760] text-white gap-1.5">
+              {sendingEmail ? <Loader className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              Send Email & Log History
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1806,6 +1975,25 @@ export default function FranchiseProspectsClient() {
               />
             </div>
 
+            {depositTargetProspect?.depositDetails?.documents && depositTargetProspect.depositDetails.documents.length > 0 && (
+              <div className="p-3 border rounded bg-slate-50 space-y-2 text-xs">
+                <span className="text-slate-700 font-bold uppercase text-[10px] block">Attached Deposit Receipts</span>
+                <div className="space-y-1.5">
+                  {depositTargetProspect.depositDetails.documents.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-2 bg-white border rounded text-xs">
+                      <div className="flex items-center gap-2 truncate mr-2">
+                        <FileText className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <span className="font-medium text-slate-800 truncate">{doc.name}</span>
+                      </div>
+                      <Button type="button" size="sm" variant="outline" className="h-7 text-[11px] gap-1 shrink-0" onClick={() => window.open(doc.url, '_blank')}>
+                        <ExternalLink className="h-3 w-3" /> View
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setIsDepositModalOpen(false)}>
                 Cancel
@@ -1879,6 +2067,26 @@ export default function FranchiseProspectsClient() {
                   </span>
                 </div>
               )}
+
+              {/* Uploaded EOI Documents */}
+              {viewEOITargetProspect.eoiData.documents && viewEOITargetProspect.eoiData.documents.length > 0 && (
+                <div className="p-3 border rounded bg-slate-50 space-y-2">
+                  <span className="text-slate-700 font-bold uppercase text-[10px] block">Uploaded EOI Documents</span>
+                  <div className="space-y-1.5">
+                    {viewEOITargetProspect.eoiData.documents.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between p-2 bg-white border rounded text-xs">
+                        <div className="flex items-center gap-2 truncate mr-2">
+                          <FileText className="h-4 w-4 text-[#095c7b] shrink-0" />
+                          <span className="font-medium text-slate-800 truncate">{doc.name}</span>
+                        </div>
+                        <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 shrink-0" onClick={() => window.open(doc.url, '_blank')}>
+                          <ExternalLink className="h-3 w-3" /> View PDF
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1907,11 +2115,11 @@ export default function FranchiseProspectsClient() {
               <div className="p-3 bg-slate-50 border rounded space-y-1.5">
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Signer Name:</span>
-                  <span className="font-semibold">{viewDeedTargetProspect.confidentialityDeed.signerName}</span>
+                  <span className="font-semibold">{viewDeedTargetProspect.confidentialityDeed.signerName || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Signer Email:</span>
-                  <span className="font-semibold">{viewDeedTargetProspect.confidentialityDeed.signerEmail}</span>
+                  <span className="font-semibold">{viewDeedTargetProspect.confidentialityDeed.signerEmail || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Signed Date:</span>
@@ -1935,6 +2143,26 @@ export default function FranchiseProspectsClient() {
                     alt="Confidentiality Deed Signature"
                     className="h-20 border rounded p-1 bg-slate-50"
                   />
+                </div>
+              )}
+
+              {/* Uploaded Deed Documents */}
+              {viewDeedTargetProspect.confidentialityDeed.documents && viewDeedTargetProspect.confidentialityDeed.documents.length > 0 && (
+                <div className="p-3 border rounded bg-slate-50 space-y-2">
+                  <span className="text-slate-700 font-bold uppercase text-[10px] block">Uploaded Deed Documents</span>
+                  <div className="space-y-1.5">
+                    {viewDeedTargetProspect.confidentialityDeed.documents.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between p-2 bg-white border rounded text-xs">
+                        <div className="flex items-center gap-2 truncate mr-2">
+                          <FileText className="h-4 w-4 text-[#095c7b] shrink-0" />
+                          <span className="font-medium text-slate-800 truncate">{doc.name}</span>
+                        </div>
+                        <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 shrink-0" onClick={() => window.open(doc.url, '_blank')}>
+                          <ExternalLink className="h-3 w-3" /> View PDF
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

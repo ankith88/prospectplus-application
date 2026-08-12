@@ -27,6 +27,8 @@ export async function POST(req: Request) {
       paymentDate = new Date().toISOString().split('T')[0],
       paymentMethod = 'EFT',
       receiptRef = '',
+      receiptUrl = '',
+      documents = [],
       notes = '',
       loggedByUid = '',
       loggedByName = '',
@@ -49,6 +51,9 @@ export async function POST(req: Request) {
     }
 
     const currentData = snap.data() || {};
+    const existingDepositDocs = currentData.depositDetails?.documents || [];
+    const mergedDocs = Array.isArray(documents) && documents.length > 0 ? documents : existingDepositDocs;
+
     const depositDetails = {
       isPaid: Boolean(isPaid),
       percentageDeposited: Number(percentageDeposited) || 5,
@@ -56,10 +61,12 @@ export async function POST(req: Request) {
       paymentDate,
       paymentMethod,
       receiptRef: receiptRef.trim(),
+      receiptUrl: receiptUrl || currentData.depositDetails?.receiptUrl || '',
       notes: notes.trim(),
       loggedByUid,
       loggedByName,
       loggedAt: new Date().toISOString(),
+      documents: mergedDocs,
     };
 
     const newNote = {

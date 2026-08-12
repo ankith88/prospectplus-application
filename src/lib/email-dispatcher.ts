@@ -64,7 +64,10 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
     const { type, senderEmail } = config;
     
     // Determine the actual active sender to route from
-    const finalSender = (customFrom && customFrom.endsWith('@mailplus.com.au')) ? customFrom : senderEmail;
+    let finalSender = (customFrom && customFrom.endsWith('@mailplus.com.au')) ? customFrom : senderEmail;
+    if (subject && subject.trim().toLowerCase().startsWith('message from customer')) {
+      finalSender = 'customerservice@mailplus.com.au';
+    }
 
     let finalCc = cc;
     if (ticketId) {

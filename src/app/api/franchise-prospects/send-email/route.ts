@@ -16,6 +16,9 @@ export async function POST(req: Request) {
       customMessage = '',
       includeBrochure = true,
       additionalAttachments = [],
+      toEmail = '',
+      ccEmail = '',
+      bccEmail = '',
       senderUid = 'system',
       senderName = 'MailPlus Operations',
     } = body;
@@ -32,9 +35,16 @@ export async function POST(req: Request) {
     }
 
     const prospect = docSnap.data();
-    if (!prospect?.email) {
+    if (!prospect) {
+      return NextResponse.json({ success: false, message: 'Prospect data missing.' }, { status: 404 });
+    }
+    const recipientEmail = (toEmail || prospect.email || '').trim();
+    if (!recipientEmail) {
       return NextResponse.json({ success: false, message: 'Prospect does not have a valid email address.' }, { status: 400 });
     }
+
+    const finalCcEmail = ccEmail !== undefined && ccEmail !== null ? ccEmail.trim() : 'michael.mcdaid@mailplus.com.au';
+    const finalBccEmail = bccEmail ? bccEmail.trim() : '';
 
     const prospectName = prospect.firstName || prospect.fullName || 'Applicant';
     const territoryText = prospect.preferredTerritory ? ` in ${prospect.preferredTerritory}` : '';
@@ -174,9 +184,10 @@ export async function POST(req: Request) {
 
     // Dispatch email
     const sendResult = await sendPhysicalEmail({
-      to: prospect.email,
+      to: recipientEmail,
       customFrom: 'greg.hart@mailplus.com.au',
-      cc: 'michael.mcdaid@mailplus.com.au',
+      cc: finalCcEmail || undefined,
+      bcc: finalBccEmail || undefined,
       subject: finalSubject,
       html: htmlContent,
       attachments: emailAttachments,

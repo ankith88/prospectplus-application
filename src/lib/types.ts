@@ -843,6 +843,42 @@ export interface PartnerLocation {
   updatedAt: string;
 }
 
+export interface FranchiseeAgreementRecord {
+  id: string;
+  fileName: string;
+  storagePath?: string;
+  downloadUrl?: string;
+  uploadedAt: string;
+  uploadedByUid?: string;
+  uploadedByName?: string;
+  extractedData?: {
+    entityName?: string;
+    acnAbn?: string;
+    registeredAddress?: string;
+    contactEmail?: string;
+    guarantors?: Array<{ name?: string; address?: string; email?: string }>;
+    manager?: { name?: string; address?: string; email?: string };
+    businessName?: string;
+    territoryName?: string;
+    premisesAddress?: string;
+    commencementDate?: string;
+    expiryDate?: string;
+    termDuration?: string;
+    renewalTerms?: string;
+    depositAmount?: number;
+    initialFranchiseFee?: string;
+    franchiseServiceFee?: string;
+    marketingLevy?: string;
+    trainingFee?: number;
+    transferFee?: number;
+    renewalFee?: string;
+    defaultInterestRate?: string;
+    specialConditions?: string[];
+    signatories?: string[];
+    executionDate?: string;
+  };
+}
+
 export interface Franchisee {
   id?: string;
   internalId: string;
@@ -873,6 +909,7 @@ export interface Franchisee {
   currentOwnerUserId?: string;
   linkedUserIds?: string[];
   linkedUserEmail?: string;
+  agreements?: FranchiseeAgreementRecord[];
   ownershipHistory?: {
     userId: string;
     ownerName?: string;
@@ -1042,9 +1079,18 @@ export interface KeyFactSheetData {
   documentDate?: string;
 }
 
+export interface ProspectDocument {
+  id: string;
+  name: string;
+  url: string;
+  uploadedAt: string;
+  size?: number;
+  type?: string;
+}
+
 export interface ConfidentialityDeedData {
   publicToken: string;
-  status: 'not_started' | 'sent' | 'signed_online';
+  status: 'not_started' | 'sent' | 'signed_online' | 'uploaded';
   sentAt?: string;
   sentToEmail?: string;
   signedAt?: string;
@@ -1053,16 +1099,18 @@ export interface ConfidentialityDeedData {
   signerAddress?: string;
   signatureDataUrl?: string;
   ipAddress?: string;
+  documents?: ProspectDocument[];
 }
 
 export interface EOIData {
   publicToken: string;
-  status: 'not_started' | 'sent' | 'signed_online';
+  status: 'not_started' | 'sent' | 'signed_online' | 'uploaded';
   sentAt?: string;
   signedAt?: string;
   signerName?: string;
   signerEmail?: string;
   signatureDataUrl?: string;
+  documents?: ProspectDocument[];
   
   // EOI Form Fields
   entityStructure?: 'SOLE TRADER' | 'PARTNERSHIP' | 'PTY LTD COMPANY' | 'LTD COMPANY';
@@ -1148,10 +1196,12 @@ export interface DepositDetails {
   paymentDate?: string;
   paymentMethod?: 'EFT' | 'Cheque' | 'Credit Card' | 'Other';
   receiptRef?: string; // e.g. 'FR DEP SMITH'
+  receiptUrl?: string;
   notes?: string;
   loggedByUid?: string;
   loggedByName?: string;
   loggedAt?: string;
+  documents?: ProspectDocument[];
 }
 
 export interface FranchiseProspect {

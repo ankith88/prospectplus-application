@@ -23,6 +23,7 @@ export async function POST(req: Request) {
       employment = '',
       message = '',
       sendBrochureImmediately = false,
+      customMessage = '',
       createdByUid = 'system',
       createdByName = 'Operations User',
     } = body;
@@ -97,6 +98,22 @@ export async function POST(req: Request) {
         const territoryText = preferredTerritory ? ` in ${preferredTerritory}` : '';
         const subject = `MailPlus Franchise Opportunity - Information Brochure${territoryText}`;
 
+        const bodyParagraphs = customMessage
+          ? customMessage
+              .split('\n')
+              .filter((p: string) => p.trim().length > 0)
+              .map((p: string) => `<p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${p.trim()}</p>`)
+              .join('')
+          : `<p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Thank you for your enquiry regarding MailPlus franchise opportunities${territoryText}.
+              </p>
+              <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                As Step 1 of our franchise review process, please find attached our official <strong>MailPlus Franchise Information Brochure</strong> which details our mobile B2B express logistics model, revenue streams, and head office support.
+              </p>
+              <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Our team will be in contact shortly to discuss your application. If you have immediate questions, feel free to call us on <strong>1300 65 65 95</strong>.
+              </p>`;
+
         const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,15 +139,7 @@ export async function POST(req: Request) {
               <h2 style="margin: 0 0 20px; font-size: 20px; font-weight: 700; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
                 Hi ${trimmedFirstName || 'Applicant'},
               </h2>
-              <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
-                Thank you for your enquiry regarding MailPlus franchise opportunities${territoryText}.
-              </p>
-              <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
-                As Step 1 of our franchise review process, please find attached our official <strong>MailPlus Franchise Information Brochure</strong> which details our mobile B2B express logistics model, revenue streams, and head office support.
-              </p>
-              <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
-                Our team will be in contact shortly to discuss your application. If you have immediate questions, feel free to call us on <strong>1300 65 65 95</strong>.
-              </p>
+              ${bodyParagraphs}
 
               <!-- Key Info Grid -->
               <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 24px 0; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; padding: 16px;">

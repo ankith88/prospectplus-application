@@ -215,6 +215,7 @@ export async function POST(req: NextRequest) {
       to: franchiseeEmail,
       subject,
       html: emailHtml,
+      customFrom: 'customerservice@mailplus.com.au',
       prospectPlusId: company.prospectPlusId
     });
 
@@ -232,7 +233,7 @@ export async function POST(req: NextRequest) {
         subject,
         bodyHtml: emailHtml,
         sentAt: new Date().toISOString(),
-        sender: 'system@mailplus.com.au',
+        sender: 'customerservice@mailplus.com.au',
         recipient: franchiseeEmail,
         status: sendResult.simulated ? 'simulated' : 'sent'
       });

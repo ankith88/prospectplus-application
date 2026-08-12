@@ -8,7 +8,15 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { prospectId, stepType, customMessage } = body;
+    const {
+      prospectId,
+      stepType,
+      customMessage = '',
+      toEmail = '',
+      ccEmail = '',
+      bccEmail = '',
+      subject: customSubject = '',
+    } = body;
 
     if (!prospectId || !stepType) {
       return NextResponse.json({ success: false, message: 'Missing required parameters' }, { status: 400 });
@@ -22,38 +30,52 @@ export async function POST(request: Request) {
     }
 
     const prospectData = prospectSnap.data() || {};
-    const recipientEmail = prospectData.email;
+    const recipientEmail = (toEmail || prospectData.email || '').trim();
     const recipientName = prospectData.fullName || prospectData.firstName || 'Valued Candidate';
     const preferredTerritory = prospectData.preferredTerritory || 'MailPlus Territory';
 
     if (!recipientEmail) {
-      return NextResponse.json({ success: false, message: 'Prospect has no email address' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Recipient email address is required' }, { status: 400 });
     }
 
-    // Default Sender & CC per business rule:
+    // Sender & CC/BCC configuration:
     const senderEmail = 'greg.hart@mailplus.com.au';
     const senderName = 'Greg Hart (MailPlus National Sales)';
-    const ccEmail = 'michael.mcdaid@mailplus.com.au';
+    const finalCcEmail = ccEmail !== undefined && ccEmail !== null ? ccEmail.trim() : 'michael.mcdaid@mailplus.com.au';
+    const finalBccEmail = bccEmail ? bccEmail.trim() : '';
 
     // Generate origin for links
     const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://prospectplus.com.au';
 
-    let subject = '';
+    let defaultSubject = '';
     let linkUrl = '';
     let emailBodyHtml = '';
+
+    const formatCustomMessage = (msg: string) => {
+      if (!msg || !msg.trim()) return '';
+      return msg
+        .split('\n')
+        .filter((p) => p.trim().length > 0)
+        .map((p) => `<p style="margin-bottom: 16px; font-size: 15px; line-height: 1.6; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${p.trim()}</p>`)
+        .join('');
+    };
 
     if (stepType === 'fact_sheet') {
       const token = prospectData.keyFactSheet?.publicToken || prospectId;
       linkUrl = `${origin}/fact-sheet/${token}`;
-      subject = `MailPlus Key Fact Sheet - Franchise Opportunity in ${preferredTerritory}`;
+      defaultSubject = `MailPlus Key Fact Sheet - Franchise Opportunity in ${preferredTerritory}`;
 
       const franchiseFee = prospectData.keyFactSheet?.franchiseFee || 35000;
       const trainingFee = prospectData.keyFactSheet?.trainingFee || 5000;
 
+      const bodyContent = customMessage
+        ? formatCustomMessage(customMessage)
+        : `<p style="margin-bottom: 16px;">Thank you for your interest in joining the MailPlus franchise network for the <strong>${preferredTerritory}</strong> territory.</p>
+           <p style="margin-bottom: 20px;">We have prepared your personalized <strong>MailPlus Key Fact Sheet</strong>, which outlines the key territory financials, franchise fees, marketing structure, and operational overview.</p>`;
+
       emailBodyHtml = `
         <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; font-weight: 700;">Hi ${recipientName},</h2>
-        <p style="margin-bottom: 16px;">Thank you for your interest in joining the MailPlus franchise network for the <strong>${preferredTerritory}</strong> territory.</p>
-        <p style="margin-bottom: 20px;">We have prepared your personalized <strong>MailPlus Key Fact Sheet</strong>, which outlines the key territory financials, franchise fees, marketing structure, and operational overview.</p>
+        ${bodyContent}
         
         <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px;">
           <tr>
@@ -66,8 +88,6 @@ export async function POST(request: Request) {
           </tr>
         </table>
 
-        ${customMessage ? `<p style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; font-style: italic; margin-bottom: 20px;">"${customMessage}"</p>` : ''}
-
         <p style="text-align: center; margin: 30px 0;">
           <a href="${linkUrl}" style="background-color: #095c7b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 15px;">View Your Key Fact Sheet &rarr;</a>
         </p>
@@ -77,14 +97,16 @@ export async function POST(request: Request) {
     } else if (stepType === 'confidentiality_deed') {
       const token = prospectData.confidentialityDeed?.publicToken || prospectId;
       linkUrl = `${origin}/confidentiality-deed/${token}`;
-      subject = `MailPlus Confidentiality Deed - Run-Along Requirement for ${preferredTerritory}`;
+      defaultSubject = `MailPlus Confidentiality Deed - Run-Along Requirement for ${preferredTerritory}`;
+
+      const bodyContent = customMessage
+        ? formatCustomMessage(customMessage)
+        : `<p style="margin-bottom: 16px;">Before we arrange your hands-on territory run-along in <strong>${preferredTerritory}</strong>, MailPlus requires all prospective buyers to sign a digital Confidentiality Deed.</p>
+           <p style="margin-bottom: 20px;">This protects confidential operational route data, client names, and financial insights you will observe during your run-along.</p>`;
 
       emailBodyHtml = `
         <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; font-weight: 700;">Hi ${recipientName},</h2>
-        <p style="margin-bottom: 16px;">Before we arrange your hands-on territory run-along in <strong>${preferredTerritory}</strong>, MailPlus requires all prospective buyers to sign a digital Confidentiality Deed.</p>
-        <p style="margin-bottom: 20px;">This protects confidential operational route data, client names, and financial insights you will observe during your run-along.</p>
-
-        ${customMessage ? `<p style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; font-style: italic; margin-bottom: 20px;">"${customMessage}"</p>` : ''}
+        ${bodyContent}
 
         <p style="text-align: center; margin: 30px 0;">
           <a href="${linkUrl}" style="background-color: #095c7b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 15px;">Sign Confidentiality Deed Online &rarr;</a>
@@ -95,14 +117,16 @@ export async function POST(request: Request) {
     } else if (stepType === 'eoi') {
       const token = prospectData.eoiData?.publicToken || prospectId;
       linkUrl = `${origin}/eoi/${token}`;
-      subject = `MailPlus Expression of Interest (EOI) Application - ${preferredTerritory}`;
+      defaultSubject = `MailPlus Expression of Interest (EOI) Application - ${preferredTerritory}`;
+
+      const bodyContent = customMessage
+        ? formatCustomMessage(customMessage)
+        : `<p style="margin-bottom: 16px;">Congratulations on progressing in the MailPlus Franchise Selection process for <strong>${preferredTerritory}</strong>!</p>
+           <p style="margin-bottom: 20px;">The next step is completing your official <strong>Expression of Interest (EOI)</strong> application form online.</p>`;
 
       emailBodyHtml = `
         <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; font-weight: 700;">Hi ${recipientName},</h2>
-        <p style="margin-bottom: 16px;">Congratulations on progressing in the MailPlus Franchise Selection process for <strong>${preferredTerritory}</strong>!</p>
-        <p style="margin-bottom: 20px;">The next step is completing your official <strong>Expression of Interest (EOI)</strong> application form online.</p>
-
-        ${customMessage ? `<p style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; font-style: italic; margin-bottom: 20px;">"${customMessage}"</p>` : ''}
+        ${bodyContent}
 
         <p style="text-align: center; margin: 30px 0;">
           <a href="${linkUrl}" style="background-color: #095c7b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 15px;">Complete & Sign EOI Form Online &rarr;</a>
@@ -114,6 +138,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Invalid stepType specified' }, { status: 400 });
     }
 
+    const finalSubject = customSubject.trim() || defaultSubject;
+
     // Standardized AGENTS.md Email Wrapper
     const fullHtml = `
       <!DOCTYPE html>
@@ -121,7 +147,7 @@ export async function POST(request: Request) {
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>${subject}</title>
+        <title>${finalSubject}</title>
       </head>
       <body style="margin: 0; padding: 0; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
         <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f4f7f8; padding: 20px 0;">
@@ -169,10 +195,11 @@ export async function POST(request: Request) {
     // Send Email via Dispatcher
     const dispatchRes = await sendPhysicalEmail({
       to: recipientEmail,
-      subject,
+      subject: finalSubject,
       html: fullHtml,
       customFrom: senderEmail,
-      cc: ccEmail,
+      cc: finalCcEmail || undefined,
+      bcc: finalBccEmail || undefined,
     });
 
     // Log Sent Email to Firestore Prospect Record
@@ -182,7 +209,9 @@ export async function POST(request: Request) {
       sentByUid: 'greg.hart',
       sentByName: 'Greg Hart (greg.hart@mailplus.com.au)',
       recipientEmail,
-      subject,
+      ccEmail: finalCcEmail,
+      bccEmail: finalBccEmail,
+      subject: finalSubject,
       templateType: stepType,
     };
 
@@ -191,7 +220,7 @@ export async function POST(request: Request) {
     // Add internal timeline note
     const noteEntry = {
       id: Math.random().toString(36).substring(2, 9),
-      text: `Sent ${stepType.replace('_', ' ').toUpperCase()} email to ${recipientEmail} (Sender: ${senderEmail}, CC: ${ccEmail}).`,
+      text: `Sent ${stepType.replace('_', ' ').toUpperCase()} email to ${recipientEmail}${finalCcEmail ? ` (CC: ${finalCcEmail})` : ''}${finalBccEmail ? ` (BCC: ${finalBccEmail})` : ''}. Subject: "${finalSubject}".`,
       createdAt: new Date().toISOString(),
       createdByName: 'Greg Hart',
       createdByUid: 'greg.hart',
@@ -212,7 +241,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Email dispatched successfully from ${senderEmail} to ${recipientEmail} (CC: ${ccEmail})`,
+      message: `Email dispatched successfully to ${recipientEmail}`,
       simulated: dispatchRes.simulated,
     });
   } catch (error: any) {
