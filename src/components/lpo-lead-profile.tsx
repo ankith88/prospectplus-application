@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight } from 'lucide-react';
+import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw } from 'lucide-react';
 import { LpoConversionWizard } from './lpo-conversion-wizard';
 
 interface LpoLeadProfileProps {
@@ -159,6 +159,47 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
 
   const statusOptions = ['New', 'Linked to Partner Location', 'Induction', 'Operations Setup', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created', 'Lost'];
 
+  const [isRecheckingPortal, setIsRecheckingPortal] = useState(false);
+
+  const handleRecheckLpoPlusStatus = async () => {
+    setIsRecheckingPortal(true);
+    try {
+      const res = await fetch('/api/lpo-leads/sync-portal-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lpoLeadId: lead.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.updatesLog && data.updatesLog.length > 0) {
+          const newSt = data.updatesLog[0].newStatus;
+          setStatus(newSt);
+          setLead((prev: any) => ({ ...prev, status: newSt }));
+          toast({
+            title: 'LPO.Plus Status Updated',
+            description: `Status updated to '${newSt}' based on live LPO.Plus database check.`,
+          });
+        } else {
+          toast({
+            title: 'Status Verified',
+            description: `LPO.Plus status is up-to-date ('${status}').`,
+          });
+        }
+      } else {
+        throw new Error(data.error || 'Failed to verify portal status');
+      }
+    } catch (err: any) {
+      console.error('Error rechecking LPO.Plus status:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Check Failed',
+        description: err.message || 'Failed to re-check status against LPO.Plus database.',
+      });
+    } finally {
+      setIsRecheckingPortal(false);
+    }
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header card */}
@@ -211,6 +252,16 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          <Button
+            onClick={handleRecheckLpoPlusStatus}
+            disabled={isRecheckingPortal}
+            variant="outline"
+            size="sm"
+            className="border-teal-600 text-teal-700 hover:bg-teal-50 font-semibold"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRecheckingPortal ? 'animate-spin' : ''}`} />
+            Re-check LPO.Plus Status
+          </Button>
           {lead.isConverted && (
             <Button
               onClick={() => setIsEditingConversion((prev) => !prev)}

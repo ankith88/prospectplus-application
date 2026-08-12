@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { collection, query, orderBy, onSnapshot, addDoc, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
@@ -15,7 +15,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Building, ArrowUpRight, Plus, Clock, CheckCircle2, XCircle, ChevronsUpDown, Check, Upload, Link2, Search } from 'lucide-react';
+import { 
+  Building, 
+  ArrowUpRight, 
+  Plus, 
+  CheckCircle2, 
+  XCircle, 
+  Upload, 
+  Search, 
+  RefreshCw, 
+  Filter, 
+  Users, 
+  Check, 
+  ShieldCheck,
+  RotateCcw,
+  SlidersHorizontal,
+  LogIn,
+  Send,
+  Clock
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -24,8 +42,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from '@/components/ui/tabs';
 
 interface LpoLead {
   id: string;
@@ -40,6 +75,7 @@ interface LpoLead {
   status: string;
   lpoCreatedDate?: any;
   createdAt?: any;
+  lastPortalSyncAt?: any;
 
   // Linkage fields
   linkedLeadId?: string | null;
@@ -51,7 +87,95 @@ interface LpoLead {
   linkedPartnerLocationName?: string | null;
   linkedNcl?: string | null;
   linkedFranchiseeName?: string | null;
+  companyNameFranchise?: string | null;
 }
+
+interface PipelineProgress {
+  currentStep: number;
+  totalSteps: number;
+  percentage: number;
+  statusLabel: string;
+  badgeClass: string;
+  isLost: boolean;
+  milestones: Array<{ name: string; completed: boolean }>;
+}
+
+const getPipelineProgress = (statusStr: string): PipelineProgress => {
+  const status = statusStr || 'New';
+  const isLost = status === 'Lost' || status.toLowerCase().includes('lost');
+
+  const milestonesList = [
+    'New',
+    'Linked to Partner Location',
+    'Induction',
+    'Operations Setup',
+    'Franchisees Assigned',
+    'SCF Sent',
+    'SCF Accepted',
+    'LPO.Plus Access Sent',
+    'LPO.Plus Logged In',
+    'Lead Created',
+  ];
+
+  let currentStep = 1;
+
+  if (isLost) {
+    currentStep = 0;
+  } else if (['Lead Created'].includes(status)) {
+    currentStep = 10;
+  } else if (['LPO.Plus Logged In', 'LPO.PLUS Sign In Email Sent', 'LPO.Plus Sign In Email Sent'].includes(status)) {
+    currentStep = 9;
+  } else if (['LPO.Plus Access Sent'].includes(status)) {
+    currentStep = 8;
+  } else if (['SCF Accepted'].includes(status)) {
+    currentStep = 7;
+  } else if (['SCF Sent'].includes(status)) {
+    currentStep = 6;
+  } else if (['Franchisees Assigned'].includes(status)) {
+    currentStep = 5;
+  } else if (['Operations Setup'].includes(status)) {
+    currentStep = 4;
+  } else if (['Induction'].includes(status)) {
+    currentStep = 3;
+  } else if (['Linked to Partner Location'].includes(status)) {
+    currentStep = 2;
+  } else {
+    currentStep = 1;
+  }
+
+  const milestones = milestonesList.map((m, idx) => ({
+    name: m,
+    completed: !isLost && currentStep >= idx + 1,
+  }));
+
+  const totalSteps = 10;
+  const percentage = isLost ? 0 : Math.round((currentStep / totalSteps) * 100);
+
+  let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+  if (isLost) {
+    badgeClass = 'bg-rose-100 text-rose-800 border-rose-200 font-bold';
+  } else if (status === 'LPO.Plus Logged In') {
+    badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold';
+  } else if (status === 'LPO.Plus Access Sent') {
+    badgeClass = 'bg-sky-100 text-sky-800 border-sky-300 font-bold';
+  } else if (status === 'SCF Accepted' || status === 'SCF Sent') {
+    badgeClass = 'bg-indigo-100 text-indigo-800 border-indigo-200 font-semibold';
+  } else if (status === 'Franchisees Assigned' || status === 'Operations Setup' || status === 'Induction') {
+    badgeClass = 'bg-amber-100 text-amber-800 border-amber-200 font-semibold';
+  } else if (status === 'Linked to Partner Location') {
+    badgeClass = 'bg-teal-100 text-teal-800 border-teal-200 font-semibold';
+  }
+
+  return {
+    currentStep,
+    totalSteps,
+    percentage,
+    statusLabel: status,
+    badgeClass,
+    isLost,
+    milestones,
+  };
+};
 
 export default function LpoLeadsListPage() {
   const { userProfile, loading: authLoading } = useAuth();
@@ -59,7 +183,16 @@ export default function LpoLeadsListPage() {
   const { toast } = useToast();
   const [leads, setLeads] = useState<LpoLead[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
+  const [isSyncingPortal, setIsSyncingPortal] = useState(false);
+
+  // Tab State: 'wip' | 'access_sent' | 'logged_in' | 'active' | 'lost'
+  const [activeTab, setActiveTab] = useState<'wip' | 'access_sent' | 'logged_in' | 'active' | 'lost'>('wip');
+
+  // Filter States
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [franchiseeFilter, setFranchiseeFilter] = useState<string>('all');
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [partnerLocations, setPartnerLocations] = useState<any[]>([]);
@@ -68,7 +201,6 @@ export default function LpoLeadsListPage() {
   const parseDateValue = (raw: any): { timestamp: number; formatted: string } => {
     if (!raw) return { timestamp: 0, formatted: '—' };
 
-    // Firestore Timestamp
     if (typeof raw.toDate === 'function') {
       const date = raw.toDate();
       return {
@@ -96,7 +228,6 @@ export default function LpoLeadsListPage() {
       const str = String(raw).trim();
       if (!str) return { timestamp: 0, formatted: '—' };
 
-      // Check DD/MM/YYYY format
       const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
       if (dmyMatch) {
         const day = parseInt(dmyMatch[1], 10);
@@ -111,7 +242,6 @@ export default function LpoLeadsListPage() {
         }
       }
 
-      // Try standard Date parsing
       const parsed = new Date(str);
       if (!isNaN(parsed.getTime())) {
         return {
@@ -136,26 +266,124 @@ export default function LpoLeadsListPage() {
     return parseDateValue(lead.createdAt);
   };
 
-  const filteredLeads = leads
-    .filter((lead) => {
-      if (!searchTerm.trim()) return true;
-      const term = searchTerm.toLowerCase().trim();
-      const formattedCreated = getLeadDateInfo(lead).formatted.toLowerCase();
-      return (
-        lead.lpoName?.toLowerCase().includes(term) ||
-        lead.lpoOwnerName?.toLowerCase().includes(term) ||
-        lead.email?.toLowerCase().includes(term) ||
-        lead.phone?.toLowerCase().includes(term) ||
-        lead.prospectPlusId?.toLowerCase().includes(term) ||
-        lead.status?.toLowerCase().includes(term) ||
-        lead.linkedLeadCompanyName?.toLowerCase().includes(term) ||
-        lead.rawCustomerName?.toLowerCase().includes(term) ||
-        lead.linkedCustomerId?.toLowerCase().includes(term) ||
-        lead.linkedPartnerLocationName?.toLowerCase().includes(term) ||
-        formattedCreated.includes(term)
-      );
-    })
-    .sort((a, b) => getLeadDateInfo(b).timestamp - getLeadDateInfo(a).timestamp);
+  // Raw lead buckets by tab
+  const wipLeadsRaw = leads.filter(
+    (l) =>
+      l.status !== 'Lost' &&
+      !l.status?.toLowerCase().includes('lost') &&
+      l.status !== 'LPO.Plus Access Sent' &&
+      l.status !== 'LPO.Plus Logged In' &&
+      l.status !== 'LPO.PLUS Sign In Email Sent' &&
+      l.status !== 'LPO.Plus Sign In Email Sent'
+  );
+  const accessSentLeadsRaw = leads.filter(
+    (l) => l.status === 'LPO.Plus Access Sent'
+  );
+  const loggedInLeadsRaw = leads.filter(
+    (l) => l.status === 'LPO.Plus Logged In' || l.status === 'LPO.PLUS Sign In Email Sent' || l.status === 'LPO.Plus Sign In Email Sent'
+  );
+  const activeLeadsRaw = leads.filter(
+    (l) => l.status !== 'Lost' && !l.status?.toLowerCase().includes('lost')
+  );
+  const lostLeadsRaw = leads.filter(
+    (l) => l.status === 'Lost' || l.status?.toLowerCase().includes('lost')
+  );
+
+  // Collect unique franchisee names for filter
+  const uniqueFranchisees = Array.from(
+    new Set(
+      leads
+        .map((l) => (l.linkedFranchiseeName || l.companyNameFranchise || '').trim())
+        .filter(Boolean)
+    )
+  ).sort();
+
+  const handleSyncPortalStatus = async () => {
+    setIsSyncingPortal(true);
+    try {
+      const res = await fetch('/api/lpo-leads/sync-portal-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          title: 'LPO.Plus Status Synced',
+          description: `Checked ${data.totalChecked} leads. Updated ${data.updatedCount} status changes (${data.loggedInCount} Logged In, ${data.accessSentCount} Access Sent).`,
+        });
+      } else {
+        throw new Error(data.error || 'Failed to sync portal status');
+      }
+    } catch (err: any) {
+      console.error('Error syncing LPO.Plus portal status:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Sync Failed',
+        description: err.message || 'Failed to sync with LPO.Plus database.',
+      });
+    } finally {
+      setIsSyncingPortal(false);
+    }
+  };
+
+  const filterLeadsList = (leadList: LpoLead[]) => {
+    return leadList
+      .filter((lead) => {
+        // 1. Status Filter
+        if (statusFilter !== 'all') {
+          if (statusFilter === 'LPO.Plus Logged In') {
+            const isLpoLoggedIn = lead.status === 'LPO.Plus Logged In' || lead.status === 'LPO.PLUS Sign In Email Sent' || lead.status === 'LPO.Plus Sign In Email Sent';
+            if (!isLpoLoggedIn) return false;
+          } else if (statusFilter === 'Lost') {
+            const isLost = lead.status === 'Lost' || lead.status?.toLowerCase().includes('lost');
+            if (!isLost) return false;
+          } else if (lead.status !== statusFilter) {
+            return false;
+          }
+        }
+
+        // 2. Franchisee Filter
+        if (franchiseeFilter !== 'all') {
+          const leadFran = (lead.linkedFranchiseeName || lead.companyNameFranchise || '').trim();
+          if (leadFran !== franchiseeFilter) return false;
+        }
+
+        // 3. Search Term
+        if (!searchTerm.trim()) return true;
+        const term = searchTerm.toLowerCase().trim();
+        const formattedCreated = getLeadDateInfo(lead).formatted.toLowerCase();
+        const franName = (lead.linkedFranchiseeName || lead.companyNameFranchise || '').toLowerCase();
+        return (
+          lead.lpoName?.toLowerCase().includes(term) ||
+          lead.lpoOwnerName?.toLowerCase().includes(term) ||
+          lead.email?.toLowerCase().includes(term) ||
+          lead.phone?.toLowerCase().includes(term) ||
+          lead.prospectPlusId?.toLowerCase().includes(term) ||
+          lead.status?.toLowerCase().includes(term) ||
+          lead.linkedLeadCompanyName?.toLowerCase().includes(term) ||
+          lead.rawCustomerName?.toLowerCase().includes(term) ||
+          lead.linkedCustomerId?.toLowerCase().includes(term) ||
+          lead.linkedPartnerLocationName?.toLowerCase().includes(term) ||
+          franName.includes(term) ||
+          formattedCreated.includes(term)
+        );
+      })
+      .sort((a, b) => getLeadDateInfo(b).timestamp - getLeadDateInfo(a).timestamp);
+  };
+
+  const filteredWipLeads = filterLeadsList(wipLeadsRaw);
+  const filteredActiveLeads = filterLeadsList(activeLeadsRaw);
+  const filteredLoggedInLeads = filterLeadsList(loggedInLeadsRaw);
+  const filteredAccessSentLeads = filterLeadsList(accessSentLeadsRaw);
+  const filteredLostLeads = filterLeadsList(lostLeadsRaw);
+
+  const hasActiveFilters = Boolean(searchTerm || statusFilter !== 'all' || franchiseeFilter !== 'all');
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setFranchiseeFilter('all');
+  };
 
   // Google Places Autocomplete & Partner selection states
   const [lat, setLat] = useState<number | null>(null);
@@ -417,421 +645,574 @@ export default function LpoLeadsListPage() {
     );
   }
 
-  return (
-    <div className="w-full max-w-full space-y-6">
-      <div className="flex justify-between items-center flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Building className="h-8 w-8 text-[#095c7b]" />
-            Participating LPOs
-          </h1>
-          <p className="text-slate-500 mt-1">Manage and track Licensed Post Office franchise leads.</p>
+  const renderLeadsTable = (leadList: LpoLead[], emptyMessage: string) => {
+    if (loadingLeads) {
+      return <div className="p-8 text-center text-slate-500">Loading leads...</div>;
+    }
+
+    if (leadList.length === 0) {
+      return (
+        <div className="p-8 text-center text-slate-500">
+          {hasActiveFilters ? 'No LPO leads match your selected filters.' : emptyMessage}
         </div>
-        <div className="flex items-center gap-3">
-          <Button asChild variant="outline" className="border-[#095c7b] text-[#095c7b] hover:bg-teal-50 font-semibold">
-            <Link href="/admin/import-lpos">
-              <Upload className="h-4 w-4 mr-2" />
-              Import LPOs
-            </Link>
-          </Button>
-          <Button 
-            onClick={() => setIsCreateOpen(true)} 
-            className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create LPO Lead
-          </Button>
-        </div>
-      </div>
+      );
+    }
 
-      <Card className="border-slate-200/80 shadow-sm">
-        <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between flex-wrap gap-4 py-4">
-          <CardTitle className="text-lg font-semibold text-slate-800">
-            Enquiries List ({filteredLeads.length})
-          </CardTitle>
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-            <Input
-              type="search"
-              placeholder="Search LPO, contact or customer..."
-              className="pl-9 bg-white h-9 text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loadingLeads ? (
-            <div className="p-8 text-center text-slate-500">Loading leads...</div>
-          ) : filteredLeads.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">No matching LPO leads found.</div>
-          ) : (
-            <Table>
-              <TableHeader className="bg-[#095c7b] hover:bg-[#095c7b]">
-                <TableRow className="hover:bg-[#095c7b]">
-                  <TableHead className="font-bold text-white w-[100px]">Lead ID</TableHead>
-                  <TableHead className="font-bold text-white min-w-[130px]">DATE CREATED</TableHead>
-                  <TableHead className="font-bold text-white min-w-[180px]">LPO Location / Owner</TableHead>
-                  <TableHead className="font-bold text-white min-w-[200px]">LINKED CUSTOMER</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[70px]">NEW</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[180px]">PARTNER LOCATION LINKED</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[100px]">INDUCTION</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[150px]">OPERATIONS SETUP</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[160px]">FRANCHISEES ASSIGNED</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[90px]">SCF SENT</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[120px]">SCF ACCEPTED</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[120px]">PORTAL ACCESS</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[140px]">PORTAL LOGGED IN</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[130px]">NETSUITE SYNCED</TableHead>
-                  <TableHead className="font-bold text-white text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLeads.map((lead) => {
-                  const isNew = true; // Always new if it exists
-                  const isPartnerLinked = ['Linked to Partner Location', 'Induction', 'Operations Setup', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isInduction = ['Induction', 'Operations Setup', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isOperationsSetup = ['Operations Setup', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isFranchiseesAssigned = ['Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isScfSent = ['SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isScfAccepted = ['SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isPortalAccess = ['LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isPortalLoggedIn = ['LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isNetsuiteSynced = ['Lead Created'].includes(lead.status);
+    return (
+      <Table>
+        <TableHeader className="bg-[#095c7b] hover:bg-[#095c7b]">
+          <TableRow className="hover:bg-[#095c7b]">
+            <TableHead className="font-bold text-white w-[100px]">Lead ID</TableHead>
+            <TableHead className="font-bold text-white min-w-[120px]">DATE CREATED</TableHead>
+            <TableHead className="font-bold text-white min-w-[180px]">LPO Location / Owner</TableHead>
+            <TableHead className="font-bold text-white min-w-[180px]">LINKED CUSTOMER</TableHead>
+            <TableHead className="font-bold text-white min-w-[160px]">LINKED FRANCHISEE</TableHead>
+            <TableHead className="font-bold text-white min-w-[240px]">PIPELINE STAGE & STATUS</TableHead>
+            <TableHead className="font-bold text-white text-right w-[80px]">Action</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {leadList.map((lead) => {
+            const progress = getPipelineProgress(lead.status);
+            const isLost = progress.isLost;
+            const isLpoLoggedIn = lead.status === 'LPO.Plus Logged In' || lead.status === 'LPO.PLUS Sign In Email Sent' || lead.status === 'LPO.Plus Sign In Email Sent';
+            const isLpoAccessSent = lead.status === 'LPO.Plus Access Sent';
+            const hasLinkedCustomer = Boolean(lead.linkedLeadId || lead.linkedLeadCompanyName || lead.rawCustomerName || lead.linkedCustomerId);
+            const franchiseeName = lead.linkedFranchiseeName || lead.companyNameFranchise || '';
 
-                  const isLost = lead.status === 'Lost' || lead.status?.toLowerCase().includes('lost');
-                  const isLpoLoggedIn = lead.status === 'LPO.Plus Logged In' || lead.status === 'LPO.PLUS Sign In Email Sent' || lead.status === 'LPO.Plus Sign In Email Sent';
-                  const hasLinkedCustomer = Boolean(lead.linkedLeadId || lead.linkedLeadCompanyName || lead.rawCustomerName || lead.linkedCustomerId);
+            return (
+              <TableRow 
+                key={lead.id} 
+                className={
+                  isLost 
+                    ? "bg-rose-50/80 hover:bg-rose-100/90 transition-colors" 
+                    : isLpoLoggedIn
+                    ? "bg-emerald-50/80 hover:bg-emerald-100/90 transition-colors"
+                    : isLpoAccessSent
+                    ? "bg-sky-50/80 hover:bg-sky-100/90 transition-colors"
+                    : "hover:bg-slate-50/50 transition-colors"
+                }
+              >
+                {/* LEAD ID */}
+                <TableCell className="font-medium text-[#095c7b] py-3.5">
+                  <Link href={`/lpo-leads/${lead.id}`} className="hover:underline">
+                    {lead.prospectPlusId}
+                  </Link>
+                </TableCell>
 
-                  return (
-                    <TableRow 
-                      key={lead.id} 
-                      className={
-                        isLost 
-                          ? "bg-rose-50/80 hover:bg-rose-100/90 transition-colors" 
-                          : isLpoLoggedIn
-                          ? "bg-emerald-50/80 hover:bg-emerald-100/90 transition-colors"
-                          : "hover:bg-slate-50/50 transition-colors"
-                      }
-                    >
-                      <TableCell className="font-medium text-[#095c7b] py-3.5">
-                        <Link href={`/lpo-leads/${lead.id}`} className="hover:underline">
-                          {lead.prospectPlusId}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-xs font-semibold text-slate-700 whitespace-nowrap py-3.5">
-                        {getLeadDateInfo(lead).formatted}
-                      </TableCell>
-                      <TableCell className="font-medium text-slate-900 py-3.5">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Link href={`/lpo-leads/${lead.id}`} className="font-bold text-slate-800 hover:text-[#095c7b] hover:underline">
-                              {lead.lpoName}
-                            </Link>
-                            {isLost && (
-                              <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100 border-rose-200 text-[10px] px-2 py-0.5 font-bold">
-                                Lost
-                              </Badge>
-                            )}
-                            {isLpoLoggedIn && !isLost && (
-                              <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-emerald-200 text-[10px] px-2 py-0.5 font-bold">
-                                LPO.Plus Logged In
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-500 mt-0.5">{lead.lpoOwnerName} &bull; {lead.email}</p>
-                        </div>
-                      </TableCell>
-                      
-                      {/* LINKED CUSTOMER */}
-                      <TableCell className="py-3.5">
-                        {hasLinkedCustomer ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-emerald-200 text-[11px] px-2 py-0.5 font-bold">
-                                Linked
-                              </Badge>
-                              {lead.linkedCustomerId && (
-                                <span className="text-[11px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-semibold">
-                                  ID: {lead.linkedCustomerId}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-sm font-bold text-slate-800">
-                              {lead.linkedLeadId ? (
-                                <Link 
-                                  href={`/leads/${lead.linkedLeadId}`} 
-                                  className="text-[#095c7b] hover:text-[#053647] hover:underline inline-flex items-center gap-1 font-bold"
-                                  target="_blank"
-                                  title={`View linked CRM lead (${lead.linkedLeadId})`}
-                                >
-                                  {lead.linkedLeadCompanyName || lead.rawCustomerName || 'Linked Customer'}
-                                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
-                                </Link>
-                              ) : (
-                                <span className="text-slate-800 font-semibold">{lead.linkedLeadCompanyName || lead.rawCustomerName}</span>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-500">
-                            Unlinked
+                {/* DATE CREATED */}
+                <TableCell className="text-xs font-semibold text-slate-700 whitespace-nowrap py-3.5">
+                  {getLeadDateInfo(lead).formatted}
+                </TableCell>
+
+                {/* LPO LOCATION / OWNER */}
+                <TableCell className="font-medium text-slate-900 py-3.5">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Link href={`/lpo-leads/${lead.id}`} className="font-bold text-slate-800 hover:text-[#095c7b] hover:underline">
+                        {lead.lpoName}
+                      </Link>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">{lead.lpoOwnerName} &bull; {lead.email}</p>
+                  </div>
+                </TableCell>
+                
+                {/* LINKED CUSTOMER */}
+                <TableCell className="py-3.5">
+                  {hasLinkedCustomer ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-emerald-200 text-[11px] px-2 py-0.5 font-bold">
+                          Linked
+                        </Badge>
+                        {lead.linkedCustomerId && (
+                          <span className="text-[11px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-semibold">
+                            ID: {lead.linkedCustomerId}
                           </span>
                         )}
-                      </TableCell>
-
-                      {/* NEW */}
-                      <TableCell className="text-center py-3.5">
-                        {lead.status === 'New' ? (
-                          <Clock className="h-4.5 w-4.5 text-slate-650 mx-auto animate-pulse" />
+                      </div>
+                      <div className="text-sm font-bold text-slate-800">
+                        {lead.linkedLeadId ? (
+                          <Link 
+                            href={`/leads/${lead.linkedLeadId}`} 
+                            className="text-[#095c7b] hover:text-[#053647] hover:underline inline-flex items-center gap-1 font-bold"
+                            target="_blank"
+                            title={`View linked CRM lead (${lead.linkedLeadId})`}
+                          >
+                            {lead.linkedLeadCompanyName || lead.rawCustomerName || 'Linked Customer'}
+                            <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+                          </Link>
                         ) : (
-                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
+                          <span className="text-slate-800 font-semibold">{lead.linkedLeadCompanyName || lead.rawCustomerName}</span>
                         )}
-                      </TableCell>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-500">
+                      Unlinked
+                    </span>
+                  )}
+                </TableCell>
 
-                      {/* PARTNER LINKED */}
-                      <TableCell className="text-center py-3.5">
-                        {isPartnerLinked ? (
-                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
-                        ) : (
-                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
-                        )}
-                      </TableCell>
+                {/* LINKED FRANCHISEE */}
+                <TableCell className="py-3.5">
+                  {franchiseeName ? (
+                    <div className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
+                      <span className="text-xs font-bold text-slate-800 bg-teal-50 text-[#095c7b] px-2 py-1 rounded border border-teal-200/80">
+                        {franchiseeName}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">Unassigned</span>
+                  )}
+                </TableCell>
 
-                      {/* INDUCTION */}
-                      <TableCell className="text-center py-3.5">
-                        {isInduction ? (
-                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
-                        ) : (
-                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
-                        )}
-                      </TableCell>
+                {/* PIPELINE STAGE & STATUS */}
+                <TableCell className="py-3.5">
+                  <Tooltip delayDuration={200}>
+                    <TooltipTrigger asChild>
+                      <div className="cursor-pointer space-y-1.5 group">
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge className={`${progress.badgeClass} text-xs px-2.5 py-0.5 border shadow-2xs`}>
+                            {progress.statusLabel}
+                          </Badge>
+                          {!isLost && (
+                            <span className="text-[11px] font-bold text-slate-500">
+                              Step {progress.currentStep}/{progress.totalSteps}
+                            </span>
+                          )}
+                        </div>
 
-                      {/* OPERATIONS SETUP */}
-                      <TableCell className="text-center py-3.5">
-                        {isOperationsSetup ? (
-                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
-                        ) : (
-                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
-                        )}
-                      </TableCell>
+                        {/* Stepper Progress Bar */}
+                        <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden flex">
+                          {isLost ? (
+                            <div className="bg-rose-500 h-full w-full" />
+                          ) : (
+                            <div 
+                              className="bg-[#095c7b] h-full transition-all duration-300 rounded-full" 
+                              style={{ width: `${progress.percentage}%` }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="bg-slate-900 text-white p-3 max-w-sm rounded-lg shadow-xl border border-slate-700">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
+                          <span className="font-bold text-xs text-teal-400 flex items-center gap-1">
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                            Pipeline Milestones
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {isLost ? 'Lost Lead' : `${progress.percentage}% Complete`}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-1 text-[11px]">
+                          {progress.milestones.map((m, idx) => (
+                            <div key={m.name} className="flex items-center gap-2">
+                              {m.completed ? (
+                                <Check className="h-3 w-3 text-emerald-400 shrink-0 font-bold" />
+                              ) : (
+                                <div className="h-3 w-3 rounded-full border border-slate-600 shrink-0" />
+                              )}
+                              <span className={m.completed ? "text-slate-100 font-medium" : "text-slate-500"}>
+                                {idx + 1}. {m.name}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TableCell>
 
-                      {/* FRANCHISEES ASSIGNED */}
-                      <TableCell className="text-center py-3.5">
-                        {isFranchiseesAssigned ? (
-                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
-                        ) : (
-                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
-                        )}
-                      </TableCell>
+                {/* ACTION */}
+                <TableCell className="text-right py-3.5">
+                  <Link 
+                    href={`/lpo-leads/${lead.id}`}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-[#095c7b] hover:text-[#053647]"
+                  >
+                    Profile
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    );
+  };
 
-                      {/* SCF SENT */}
-                      <TableCell className="text-center py-3.5">
-                        {isScfSent ? (
-                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
-                        ) : (
-                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
-                        )}
-                      </TableCell>
-
-                      {/* SCF ACCEPTED */}
-                      <TableCell className="text-center py-3.5">
-                        {isScfAccepted ? (
-                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
-                        ) : (
-                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
-                        )}
-                      </TableCell>
-
-                      {/* PORTAL ACCESS */}
-                      <TableCell className="text-center py-3.5">
-                        {isPortalAccess ? (
-                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
-                        ) : (
-                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
-                        )}
-                      </TableCell>
-
-                      {/* PORTAL LOGGED IN */}
-                      <TableCell className="text-center py-3.5">
-                        {isPortalLoggedIn ? (
-                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
-                        ) : (
-                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
-                        )}
-                      </TableCell>
-
-                      {/* NETSUITE SYNCED */}
-                      <TableCell className="text-center py-3.5">
-                        {isNetsuiteSynced ? (
-                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
-                        ) : (
-                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
-                        )}
-                      </TableCell>
-
-                      <TableCell className="text-right py-3.5">
-                        <Link 
-                          href={`/lpo-leads/${lead.id}`}
-                          className="inline-flex items-center gap-1 text-sm font-semibold text-[#095c7b] hover:text-[#053647]"
-                        >
-                          Profile
-                          <ArrowUpRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="max-w-2xl bg-white rounded-xl shadow-xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <Building className="h-5 w-5 text-[#095c7b]" />
+  return (
+    <TooltipProvider>
+      <div className="w-full max-w-full space-y-6">
+        {/* PAGE HEADER */}
+        <div className="flex justify-between items-center flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Building className="h-8 w-8 text-[#095c7b]" />
+              Participating LPOs
+            </h1>
+            <p className="text-slate-500 mt-1">Manage and track Licensed Post Office franchise leads.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleSyncPortalStatus}
+              disabled={isSyncingPortal}
+              variant="outline"
+              className="border-teal-600 text-teal-700 hover:bg-teal-50 font-semibold"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isSyncingPortal ? 'animate-spin' : ''}`} />
+              Sync LPO.Plus Status
+            </Button>
+            <Button asChild variant="outline" className="border-[#095c7b] text-[#095c7b] hover:bg-teal-50 font-semibold">
+              <Link href="/admin/import-lpos">
+                <Upload className="h-4 w-4 mr-2" />
+                Import LPOs
+              </Link>
+            </Button>
+            <Button 
+              onClick={() => setIsCreateOpen(true)} 
+              className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold"
+            >
+              <Plus className="h-4 w-4 mr-2" />
               Create LPO Lead
-            </DialogTitle>
-            <DialogDescription>
-              Add a new Licensed Post Office lead. The source will be set to "Head Office Generated".
-            </DialogDescription>
-          </DialogHeader>
+            </Button>
+          </div>
+        </div>
 
-          <form onSubmit={handleCreateLpoLead} className="space-y-4 mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="lpoName" className="font-semibold text-slate-700">LPO Location/Name *</Label>
-                <Input id="lpoName" value={lpoName} onChange={(e) => setLpoName(e.target.value)} placeholder="" required />
+        {/* SEPARATE FILTER CONTROLS SECTION */}
+        <Card className="border-slate-200/80 shadow-xs bg-slate-50/50">
+          <CardHeader className="py-3 px-4 border-b border-slate-200/60 bg-slate-100/60">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                <SlidersHorizontal className="h-4 w-4 text-[#095c7b]" />
+                Filter & Search Controls
+              </CardTitle>
+              {hasActiveFilters && (
+                <Button
+                  onClick={handleClearFilters}
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-200/60 font-semibold px-2"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {/* Search Input */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Search LPOs</Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                  <Input
+                    type="search"
+                    placeholder="Search name, owner, email, ID..."
+                    className="pl-9 bg-white h-9 text-xs"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="lpoOwnerName" className="font-semibold text-slate-700">LPO Owner Name *</Label>
-                <Input id="lpoOwnerName" value={lpoOwnerName} onChange={(e) => setLpoOwnerName(e.target.value)} required />
+
+              {/* Status Filter */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Pipeline Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="bg-white h-9 text-xs font-semibold">
+                    <Filter className="h-3.5 w-3.5 mr-1.5 text-slate-500" />
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="LPO.Plus Logged In">LPO.Plus Logged In</SelectItem>
+                    <SelectItem value="LPO.Plus Access Sent">LPO.Plus Access Sent</SelectItem>
+                    <SelectItem value="SCF Accepted">SCF Accepted</SelectItem>
+                    <SelectItem value="SCF Sent">SCF Sent</SelectItem>
+                    <SelectItem value="Franchisees Assigned">Franchisees Assigned</SelectItem>
+                    <SelectItem value="Operations Setup">Operations Setup</SelectItem>
+                    <SelectItem value="Induction">Induction</SelectItem>
+                    <SelectItem value="Linked to Partner Location">Partner Linked</SelectItem>
+                    <SelectItem value="New">New</SelectItem>
+                    <SelectItem value="Lost">Lost</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="font-semibold text-slate-700">Contact Email *</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+
+              {/* Franchisee Filter */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Linked Franchisee</Label>
+                <Select value={franchiseeFilter} onValueChange={setFranchiseeFilter}>
+                  <SelectTrigger className="bg-white h-9 text-xs font-semibold">
+                    <Users className="h-3.5 w-3.5 mr-1.5 text-slate-500" />
+                    <SelectValue placeholder="All Franchisees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Franchisees</SelectItem>
+                    {uniqueFranchisees.map((fName) => (
+                      <SelectItem key={fName} value={fName}>
+                        {fName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone" className="font-semibold text-slate-700">Contact Phone *</Label>
-                <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* TABS & TABLE CARD */}
+        <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full space-y-4">
+          <TabsList className="bg-slate-200/70 p-1 border border-slate-300/60 rounded-xl h-auto flex flex-wrap sm:inline-flex">
+            <TabsTrigger 
+              value="wip" 
+              className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-[#095c7b] data-[state=active]:shadow-xs"
+            >
+              <Clock className="h-4 w-4 mr-1.5 text-[#095c7b]" />
+              Work in Progress ({filteredWipLeads.length})
+            </TabsTrigger>
+
+            <TabsTrigger 
+              value="access_sent" 
+              className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-sky-700 data-[state=active]:shadow-xs"
+            >
+              <Send className="h-4 w-4 mr-1.5 text-sky-600" />
+              LPO.Plus Access Sent ({filteredAccessSentLeads.length})
+            </TabsTrigger>
+
+            <TabsTrigger 
+              value="logged_in" 
+              className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-emerald-700 data-[state=active]:shadow-xs"
+            >
+              <LogIn className="h-4 w-4 mr-1.5 text-emerald-600" />
+              LPO.Plus Logged In ({filteredLoggedInLeads.length})
+            </TabsTrigger>
+
+            <TabsTrigger 
+              value="active" 
+              className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-slate-800 data-[state=active]:shadow-xs"
+            >
+              <Building className="h-4 w-4 mr-1.5 text-slate-600" />
+              All Active LPOs ({filteredActiveLeads.length})
+            </TabsTrigger>
+
+            <TabsTrigger 
+              value="lost" 
+              className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-rose-700 data-[state=active]:shadow-xs"
+            >
+              <XCircle className="h-4 w-4 mr-1.5 text-rose-500" />
+              Lost LPOs ({filteredLostLeads.length})
+            </TabsTrigger>
+          </TabsList>
+
+          {/* WORK IN PROGRESS TAB CONTENT */}
+          <TabsContent value="wip">
+            <Card className="border-slate-200/80 shadow-sm border-teal-200/60">
+              <CardHeader className="bg-teal-50/50 py-3 border-b border-teal-100">
+                <CardTitle className="text-sm font-bold text-teal-900 flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-[#095c7b]" />
+                  Work in Progress Onboarding Enquiries ({filteredWipLeads.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderLeadsTable(filteredWipLeads, 'No work in progress LPO leads found.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* LPO.PLUS ACCESS SENT TAB CONTENT */}
+          <TabsContent value="access_sent">
+            <Card className="border-slate-200/80 shadow-sm border-sky-200/60">
+              <CardHeader className="bg-sky-50/50 py-3 border-b border-sky-100">
+                <CardTitle className="text-sm font-bold text-sky-800 flex items-center gap-1.5">
+                  <Send className="h-4 w-4 text-sky-600" />
+                  LPO.Plus Access Sent (Pending Login) ({filteredAccessSentLeads.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderLeadsTable(filteredAccessSentLeads, 'No LPO.Plus access sent records found.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* LPO.PLUS LOGGED IN TAB CONTENT */}
+          <TabsContent value="logged_in">
+            <Card className="border-slate-200/80 shadow-sm border-emerald-200/60">
+              <CardHeader className="bg-emerald-50/50 py-3 border-b border-emerald-100">
+                <CardTitle className="text-sm font-bold text-emerald-800 flex items-center gap-1.5">
+                  <LogIn className="h-4 w-4 text-emerald-600" />
+                  LPO.Plus Logged In Accounts ({filteredLoggedInLeads.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderLeadsTable(filteredLoggedInLeads, 'No LPO.Plus logged in accounts found.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ALL ACTIVE TAB CONTENT */}
+          <TabsContent value="active">
+            <Card className="border-slate-200/80 shadow-sm">
+              <CardContent className="p-0">
+                {renderLeadsTable(filteredActiveLeads, 'No active LPO leads found.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* LOST TAB CONTENT */}
+          <TabsContent value="lost">
+            <Card className="border-slate-200/80 shadow-sm border-rose-200/60">
+              <CardHeader className="bg-rose-50/50 py-3 border-b border-rose-100">
+                <CardTitle className="text-sm font-bold text-rose-800 flex items-center gap-1.5">
+                  <XCircle className="h-4 w-4 text-rose-600" />
+                  Lost or Inactive LPO Enquiries ({filteredLostLeads.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderLeadsTable(filteredLostLeads, 'No lost LPO leads recorded.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* CREATE LPO DIALOG */}
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogContent className="max-w-2xl bg-white rounded-xl shadow-xl p-6">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <Building className="h-5 w-5 text-[#095c7b]" />
+                Create LPO Lead
+              </DialogTitle>
+              <DialogDescription>
+                Add a new Licensed Post Office lead. The source will be set to "Head Office Generated".
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleCreateLpoLead} className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">LPO Location / Name *</Label>
+                  <Input 
+                    required 
+                    placeholder="e.g. Chatswood West LPO" 
+                    value={lpoName}
+                    onChange={(e) => setLpoName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">LPO Owner Name *</Label>
+                  <Input 
+                    required 
+                    placeholder="e.g. John Smith" 
+                    value={lpoOwnerName}
+                    onChange={(e) => setLpoOwnerName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">Email Address *</Label>
+                  <Input 
+                    required 
+                    type="email" 
+                    placeholder="e.g. john@lpo.com.au" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">Phone Number *</Label>
+                  <Input 
+                    required 
+                    placeholder="e.g. 0412 345 678" 
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="space-y-2 relative">
-                <Label htmlFor="address1" className="font-semibold text-slate-700">Street No. & Name *</Label>
-                <Input
-                  id="address1"
+
+              {/* Partner Location selector */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700">Link Partner Location (Optional)</Label>
+                <Select value={selectedPartnerLocationId} onValueChange={handlePartnerLocationChange}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Select a Partner Location..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {partnerLocations.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id}>
+                        {loc.name || loc.lpoName} ({loc.suburb || loc.city || ''})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Address Auto-complete */}
+              <div className="space-y-1.5 relative">
+                <Label className="text-xs font-semibold text-slate-700">Street Address</Label>
+                <Input 
+                  placeholder="Search address or enter manually..." 
                   value={address1}
                   onChange={(e) => handleAddressInputChange(e.target.value)}
-                  placeholder="Start typing your LPO address..."
-                  autoComplete="off"
-                  required
                 />
                 {addressPredictions.length > 0 && (
-                  <div className="absolute z-[100] mt-1 w-full bg-white border border-slate-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                    {addressPredictions.map((p) => (
-                      <div
-                        key={p.place_id}
-                        onClick={() => handleAddressPredictionSelect(p)}
-                        className="p-2.5 hover:bg-slate-100 cursor-pointer text-sm text-slate-800"
+                  <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-md border shadow-lg max-h-48 overflow-y-auto">
+                    {addressPredictions.map((pred) => (
+                      <button
+                        type="button"
+                        key={pred.place_id}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 border-b border-slate-50 last:border-0"
+                        onClick={() => handleAddressPredictionSelect(pred)}
                       >
-                        {p.description}
-                      </div>
+                        {pred.description}
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="address2" className="font-semibold text-slate-700">Unit / Level</Label>
-                <Input id="address2" value={address2} onChange={(e) => setAddress2(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-3 gap-2 md:col-span-2">
-                <div className="space-y-2">
-                  <Label htmlFor="city" className="font-semibold text-slate-700">Suburb</Label>
-                  <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="state" className="font-semibold text-slate-700">State</Label>
-                  <Input id="state" value={state} onChange={(e) => setState(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="postcode" className="font-semibold text-slate-700">Postcode</Label>
-                  <Input id="postcode" value={postcode} onChange={(e) => setPostcode(e.target.value)} />
-                </div>
-              </div>
-              <div className="md:col-span-2 space-y-2">
-                <Label htmlFor="notes" className="font-semibold text-slate-700">Notes</Label>
-                <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
-              </div>
-              <div className="md:col-span-2 space-y-2">
-                <Label htmlFor="partnerLocation" className="font-semibold text-slate-700 block">Link Partner Location (Optional)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="partnerLocation"
-                      variant="outline"
-                      role="combobox"
-                      className="w-full justify-between text-left font-medium text-slate-800 border-slate-200 hover:bg-slate-50/50"
-                    >
-                      {selectedPartnerLocationId
-                        ? partnerLocations.find((loc) => loc.id === selectedPartnerLocationId)?.name || "Select location..."
-                        : "Select Partner Location to Link directly..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[550px] p-0 bg-white border border-slate-200 rounded-lg shadow-lg z-[110]" align="start">
-                    <Command className="w-full">
-                      <CommandInput placeholder="Search Partner Location / NCL..." className="focus:ring-0 focus:border-0" />
-                      <CommandList className="max-h-[220px] overflow-y-auto">
-                        <CommandEmpty>No partner location found.</CommandEmpty>
-                        <CommandGroup>
-                          <CommandItem
-                            value="-- Do Not Link Location --"
-                            onSelect={() => handlePartnerLocationChange("")}
-                            className="cursor-pointer hover:bg-slate-100 flex items-center justify-between py-2 px-3"
-                          >
-                            <span className="text-slate-500 font-semibold">-- Do Not Link Location --</span>
-                            {!selectedPartnerLocationId && <Check className="h-4 w-4 text-[#095c7b]" />}
-                          </CommandItem>
-                          {partnerLocations.map((loc) => {
-                            const isSelected = selectedPartnerLocationId === loc.id;
-                            const internalIdStr = loc.internalId || loc.id;
-                            const searchString = `${loc.name} ${internalIdStr} ${loc.suburb || ''} ${loc.state || ''}`;
-                            return (
-                              <CommandItem
-                                key={loc.id}
-                                value={searchString}
-                                onSelect={() => handlePartnerLocationChange(loc.id)}
-                                className="cursor-pointer hover:bg-slate-100 flex items-center justify-between py-2 px-3"
-                              >
-                                <div>
-                                  <p className="font-bold text-slate-800">{loc.name} <span className="text-xs font-normal text-slate-500">(ID: {internalIdStr})</span></p>
-                                  <p className="text-xs text-slate-500 mt-0.5">{loc.address1 ? `${loc.address1}, ` : ''}{loc.suburb || loc.city}, {loc.state} {loc.postCode || loc.postcode}</p>
-                                </div>
-                                {isSelected && <Check className="h-4 w-4 text-[#095c7b] shrink-0 ml-2" />}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={creating} className="bg-[#095c7b] hover:bg-[#053647] text-white">
-                {creating ? 'Creating...' : 'Save Lead'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-700">City / Suburb</Label>
+                  <Input value={city} onChange={(e) => setCity(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-700">State</Label>
+                  <Input value={state} onChange={(e) => setState(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-700">Postcode</Label>
+                  <Input value={postcode} onChange={(e) => setPostcode(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Notes (Optional)</Label>
+                <Textarea 
+                  rows={2} 
+                  placeholder="Add any initial notes or details..." 
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3">
+                <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={creating} className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold">
+                  {creating ? 'Creating...' : 'Create Lead'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </TooltipProvider>
   );
 }
