@@ -19,7 +19,13 @@ interface LpoLeadProfileProps {
 export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
   const { userProfile } = useAuth();
   const { toast } = useToast();
-  const rawStatus = initialLead.status || 'New';
+  const [lead, setLead] = useState(initialLead);
+
+  useEffect(() => {
+    setLead(initialLead);
+  }, [initialLead]);
+
+  const rawStatus = lead?.status || initialLead.status || 'New';
   const initialStatus = (rawStatus === 'LPO.PLUS Sign In Email Sent' || rawStatus === 'LPO.Plus Sign In Email Sent') ? 'LPO.Plus Logged In' : rawStatus;
   const [status, setStatus] = useState(initialStatus);
   const [noteContent, setNoteContent] = useState('');

@@ -87,8 +87,8 @@ export default function FranchiseProspectsClient() {
   const [savingFactSheet, setSavingFactSheet] = useState(false);
   const [factSheetForm, setFactSheetForm] = useState({
     territoryName: '',
-    franchiseFee: 0,
-    trainingFee: 0,
+    franchiseFee: 0 as string | number,
+    trainingFee: 0 as string | number,
     marketingFeePercent: '2%',
     administrationFeePercent: '1.5%',
     notes: '',

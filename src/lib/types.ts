@@ -1022,6 +1022,7 @@ export interface KeyFactSheetData {
   // Section G: Marketing funds
   marketingFundContribution?: string;
   marketingFeePercent?: number | string;
+  administrationFeePercent?: number | string;
 
   // Section H: Unilateral variation
   canUnilateralVariation?: 'Yes' | 'No';

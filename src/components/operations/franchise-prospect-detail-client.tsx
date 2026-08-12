@@ -154,7 +154,7 @@ export default function FranchiseProspectDetailClient() {
 
     // Section G: Marketing funds (Empty by default)
     marketingFundContribution: '',
-    marketingFeePercent: '',
+    marketingFeePercent: '' as string | number,
 
     // Section H: Unilateral variation (Empty by default)
     canUnilateralVariation: '' as '' | 'Yes' | 'No',
@@ -404,7 +404,7 @@ export default function FranchiseProspectDetailClient() {
           otherPaymentsText: kfs.otherPaymentsText || '',
 
           marketingFundContribution: kfs.marketingFundContribution || '',
-          marketingFeePercent: kfs.marketingFeePercent || '',
+          marketingFeePercent: kfs.marketingFeePercent ?? '',
 
           canUnilateralVariation: kfs.canUnilateralVariation || '',
 
