@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Loader } from '@/components/ui/loader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,6 +38,10 @@ import {
   Mail,
   Calendar,
   Search,
+  UserX,
+  AlertTriangle,
+  RotateCcw,
+  XCircle,
 } from 'lucide-react';
 import { PresaleRecord, PresaleMainDetails, PresaleDeedOfVariation, PresalesDetails, StepStatus } from '@/lib/presale-types';
 import { encodePresaleId } from '@/lib/presale-token';
@@ -134,6 +139,17 @@ export default function DedicatedTerritoryPresalePage() {
   const [step2Status, setStep2Status] = useState<StepStatus>('Not Started');
   const [step3Status, setStep3Status] = useState<StepStatus>('Not Started');
   const [step4Status, setStep4Status] = useState<StepStatus>('Not Started');
+
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('Franchisee decided not to sell territory');
+  const [cancellationNotes, setCancellationNotes] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [cancellationMetadata, setCancellationMetadata] = useState<{
+    cancellationReason?: string;
+    cancellationNotes?: string;
+    cancelledAt?: string;
+    cancelledByName?: string;
+  }>({});
 
   const [mainDetails, setMainDetails] = useState<PresaleMainDetails>({
     franchiseeName: '',
@@ -277,6 +293,12 @@ export default function DedicatedTerritoryPresalePage() {
           setStep2Status(d.step2Status || 'Not Started');
           setStep3Status(d.step3Status || 'Not Started');
           setStep4Status(d.step4Status || 'Not Started');
+          setCancellationMetadata({
+            cancellationReason: d.cancellationReason || '',
+            cancellationNotes: d.cancellationNotes || '',
+            cancelledAt: d.cancelledAt || '',
+            cancelledByName: d.cancelledByName || '',
+          });
 
           if (d.mainDetails) {
             const rawAddr = d.mainDetails.address || d.mainDetails.streetNumberAndName;
@@ -471,6 +493,96 @@ export default function DedicatedTerritoryPresalePage() {
         toast({
           title: 'Error Saving Presale',
           description: json.message || 'Failed to save presale details.',
+          variant: 'destructive',
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelPresale = async () => {
+    setCancelling(true);
+    try {
+      const res = await fetch('/api/franchisees/presales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          franchiseeId,
+          action: 'cancel',
+          cancellationReason,
+          cancellationNotes,
+          userRole: userProfile?.activeRole || userProfile?.role || 'user',
+          userUid: userProfile?.uid || '',
+          userName: userProfile?.displayName || '',
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setStatus('Cancelled');
+        setCancellationMetadata({
+          cancellationReason,
+          cancellationNotes,
+          cancelledAt: new Date().toISOString(),
+          cancelledByName: userProfile?.displayName || '',
+        });
+        toast({
+          title: 'Franchisee Removed from Presales',
+          description: 'Presale status updated to Cancelled. Territory is no longer listed for sale.',
+        });
+        setCancelDialogOpen(false);
+      } else {
+        toast({
+          title: 'Error Removing Presale',
+          description: json.message || 'Failed to remove franchisee from presales process.',
+          variant: 'destructive',
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleReactivatePresale = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/franchisees/presales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          franchiseeId,
+          action: 'reactivate',
+          userRole: userProfile?.activeRole || userProfile?.role || 'user',
+          userUid: userProfile?.uid || '',
+          userName: userProfile?.displayName || '',
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setStatus('Step 1: Main Details');
+        setCancellationMetadata({});
+        toast({
+          title: 'Presale Process Reactivated',
+          description: 'Territory has been restored to active presales process.',
+        });
+      } else {
+        toast({
+          title: 'Error Reactivating Presale',
+          description: json.message || 'Failed to reactivate presale.',
           variant: 'destructive',
         });
       }
@@ -707,7 +819,7 @@ export default function DedicatedTerritoryPresalePage() {
             </div>
           </div>
 
-          <Badge variant="outline" className="border-slate-300 bg-white text-slate-800 font-semibold px-3 py-1 text-xs w-fit">
+          <Badge variant="outline" className={`px-3 py-1 text-xs font-semibold w-fit ${status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-300' : 'border-slate-300 bg-white text-slate-800'}`}>
             Overall Stage: {status}
           </Badge>
         </div>
@@ -724,15 +836,71 @@ export default function DedicatedTerritoryPresalePage() {
             </p>
           </div>
 
-          <Button
-            onClick={() => handleSave()}
-            disabled={saving}
-            className="bg-[#eaf143] hover:bg-[#d6dc3d] text-slate-900 font-bold text-xs gap-2 shrink-0 w-full sm:w-auto"
-          >
-            {saving ? <Loader className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-            Save Presale Process
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {status === 'Cancelled' ? (
+              <Button
+                onClick={handleReactivatePresale}
+                disabled={saving}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs gap-2 shrink-0"
+              >
+                {saving ? <Loader className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+                Re-open Presale Process
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={() => setCancelDialogOpen(true)}
+                className="bg-white/10 hover:bg-white/20 text-white border-white/30 font-semibold text-xs gap-2 shrink-0"
+              >
+                <UserX className="h-4 w-4 text-red-300" />
+                Remove from Presales (Not Selling)
+              </Button>
+            )}
+
+            <Button
+              onClick={() => handleSave()}
+              disabled={saving}
+              className="bg-[#eaf143] hover:bg-[#d6dc3d] text-slate-900 font-bold text-xs gap-2 shrink-0"
+            >
+              {saving ? <Loader className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+              Save Presale Process
+            </Button>
+          </div>
         </div>
+
+        {/* CANCELLED / REMOVED PRESALE BANNER */}
+        {status === 'Cancelled' && (
+          <div className="bg-amber-50 border border-amber-300/80 p-4 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-amber-900">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg text-amber-800 shrink-0">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-bold text-sm text-amber-950 flex items-center gap-2">
+                  Franchisee Removed from Presales Process (Not Selling Territory)
+                </h3>
+                <p className="text-xs text-amber-800">
+                  <strong>Reason:</strong> {cancellationMetadata.cancellationReason || 'Franchisee decided not to sell territory'}
+                  {cancellationMetadata.cancellationNotes && (
+                    <span> &bull; <strong>Notes:</strong> {cancellationMetadata.cancellationNotes}</span>
+                  )}
+                </p>
+                {cancellationMetadata.cancelledAt && (
+                  <p className="text-[11px] text-amber-700">
+                    Removed on {new Date(cancellationMetadata.cancelledAt).toLocaleDateString()} {cancellationMetadata.cancelledByName ? `by ${cancellationMetadata.cancelledByName}` : ''}
+                  </p>
+                )}
+              </div>
+            </div>
+            <Button
+              onClick={handleReactivatePresale}
+              disabled={saving}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-2 shrink-0 self-start sm:self-auto"
+            >
+              <RotateCcw className="h-4 w-4" /> Re-open Presale Process
+            </Button>
+          </div>
+        )}
 
         {loading ? (
           <div className="py-24 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -827,95 +995,95 @@ export default function DedicatedTerritoryPresalePage() {
                 <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* FRANCHISEE NAME */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
-                        FRANCHISEE NAME *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
+                        FRANCHISEE NAME <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         value={(mainDetails.franchiseeName && mainDetails.franchiseeName !== franchiseeId) ? mainDetails.franchiseeName : ''}
                         onChange={(e) => setMainDetails({ ...mainDetails, franchiseeName: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                         placeholder=""
                       />
                     </div>
 
                     {/* TRADING ENTITY */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
-                        TRADING ENTITY *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
+                        TRADING ENTITY <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         value={mainDetails.tradingEntity || ''}
                         onChange={(e) => setMainDetails({ ...mainDetails, tradingEntity: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                         placeholder=""
                       />
                     </div>
 
                     {/* MAIN CONTACT */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
-                        MAIN CONTACT *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
+                        MAIN CONTACT <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         value={mainDetails.mainContact || ''}
                         onChange={(e) => setMainDetails({ ...mainDetails, mainContact: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                         placeholder=""
                       />
                     </div>
 
                     {/* MOBILE NUMBER */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
-                        MOBILE NUMBER *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
+                        MOBILE NUMBER <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         value={mainDetails.mobileNumber || ''}
                         onChange={(e) => setMainDetails({ ...mainDetails, mobileNumber: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                         placeholder=""
                       />
                     </div>
 
                     {/* EMAIL */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
-                        EMAIL *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
+                        EMAIL <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         type="email"
                         value={mainDetails.email || ''}
                         onChange={(e) => setMainDetails({ ...mainDetails, email: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                         placeholder=""
                       />
                     </div>
 
                     {/* PERSONAL EMAIL */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
                         PERSONAL EMAIL
                       </span>
                       <Input
                         type="email"
                         value={mainDetails.personalEmail || ''}
                         onChange={(e) => setMainDetails({ ...mainDetails, personalEmail: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                         placeholder=""
                       />
                     </div>
 
                     {/* ABN WITH VERIFY BUTTON */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
-                        ABN *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
+                        ABN <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <div className="flex items-center flex-1 w-full pr-2">
                         <Input
                           value={mainDetails.abn || ''}
                           onChange={(e) => setMainDetails({ ...mainDetails, abn: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                           placeholder=""
                         />
                         <Button
@@ -931,67 +1099,67 @@ export default function DedicatedTerritoryPresalePage() {
                     </div>
 
                     {/* DATE LISTED FOR SALE */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
-                        DATE LISTED FOR SALE *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
+                        DATE LISTED FOR SALE <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         type="date"
                         value={mainDetails.dateListedForSale}
                         onChange={(e) => setMainDetails({ ...mainDetails, dateListedForSale: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* DATE BUSINESS STARTED */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
-                        BUSINESS STARTED *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
+                        BUSINESS STARTED <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         type="date"
                         value={mainDetails.dateBusinessStarted || ''}
                         onChange={(e) => handleDateBusinessStartedChange(e.target.value)}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* EXPIRY DATE (AUTO-CALCULATED 5 YRS) */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px] flex items-center gap-1">
-                        EXPIRY DATE (5 YRS) *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
+                        EXPIRY DATE (5 YRS) <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         type="date"
                         value={mainDetails.expiryDate || ''}
                         onChange={(e) => setMainDetails({ ...mainDetails, expiryDate: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full bg-slate-50"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* ULTIMATE EXPIRY DATE */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
                         ULTIMATE EXPIRY DATE
                       </span>
                       <Input
                         type="date"
                         value={mainDetails.ultimateExpiryDate || ''}
                         onChange={(e) => setMainDetails({ ...mainDetails, ultimateExpiryDate: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* UNLIMITED TERM OFFER */}
-                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
                         UNLIMITED TERM OFFER
                       </span>
                       <Select
                         value={mainDetails.unlimitedTermOffer || 'No'}
                         onValueChange={(val) => setMainDetails({ ...mainDetails, unlimitedTermOffer: val })}
                       >
-                        <SelectTrigger className="border-0 focus:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full">
+                        <SelectTrigger className="border-0 focus:ring-0 focus-visible:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full">
                           <SelectValue placeholder="Select Option" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1010,15 +1178,15 @@ export default function DedicatedTerritoryPresalePage() {
 
                     {/* STREET NO & NAME INPUT WITH GOOGLE DROPDOWN */}
                     <div className="relative">
-                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 sm:px-4 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap w-full sm:w-auto sm:min-w-[170px]">
-                          STREET NO & NAME *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[170px]">
+                          STREET NO & NAME <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           value={mainDetails.streetNumberAndName || ''}
                           onChange={(e) => handleStreetInputChange(e.target.value)}
                           onFocus={() => addressPredictions.length > 0 && setShowPredictions(true)}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                           placeholder=""
                         />
                       </div>
@@ -1043,40 +1211,40 @@ export default function DedicatedTerritoryPresalePage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {/* SUBURB */}
-                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap sm:min-w-[100px]">
-                          SUBURB *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 sm:min-w-[100px]">
+                          SUBURB <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           value={mainDetails.suburb || ''}
                           onChange={(e) => setMainDetails({ ...mainDetails, suburb: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                           placeholder=""
                         />
                       </div>
 
                       {/* STATE */}
-                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap sm:min-w-[80px]">
-                          STATE *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 sm:min-w-[80px]">
+                          STATE <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           value={mainDetails.state || ''}
                           onChange={(e) => setMainDetails({ ...mainDetails, state: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                           placeholder=""
                         />
                       </div>
 
                       {/* POSTCODE */}
-                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-300 whitespace-nowrap sm:min-w-[100px]">
-                          POSTCODE *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 sm:min-w-[100px]">
+                          POSTCODE <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           value={mainDetails.postcode || ''}
                           onChange={(e) => setMainDetails({ ...mainDetails, postcode: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium h-10 sm:h-11 flex-1 w-full"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                           placeholder=""
                         />
                       </div>
@@ -1354,171 +1522,171 @@ export default function DedicatedTerritoryPresalePage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     
                     {/* TERRITORY NAME */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        TERRITORY NAME *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 md:col-span-2">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        TERRITORY NAME <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.territoryName || mainDetails.tradingEntity || mainDetails.franchiseeName || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, territoryName: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-semibold"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-semibold text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* DATE BUSINESS STARTED */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        DATE BUSINESS STARTED *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        DATE BUSINESS STARTED <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.dateBusinessStarted || mainDetails.dateBusinessStarted || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, dateBusinessStarted: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* NUMBER OF OWNERS */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        NUMBER OF OWNERS *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        NUMBER OF OWNERS <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.numberOfOwners || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, numberOfOwners: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* REASON FOR SALE */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        REASON FOR SALE *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 md:col-span-2">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        REASON FOR SALE <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.reasonForSale || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, reasonForSale: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* LAST 12 MONTHS SERVICE REVENUE (EX GST) */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        LAST 12M SERVICE REVENUE *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        LAST 12M SERVICE REVENUE <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.serviceRevenue || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, serviceRevenue: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* FRANCHISE FEES ON SERVICE REVENUE */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        FRANCHISE FEES (%) *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        FRANCHISE FEES (%) <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.franchiseFeesOnServiceRevenue || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, franchiseFeesOnServiceRevenue: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* MARKETING LEVY */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        MARKETING LEVY (%) *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        MARKETING LEVY (%) <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.marketingLevy || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, marketingLevy: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* LAST 12M MAILPLUS EXPRESS REVENUE */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        LAST 12M EXPRESS REVENUE *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        LAST 12M EXPRESS REVENUE <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.expressRevenue || (presalesDetails.mpexCommission ? `Product Commission $${presalesDetails.mpexCommission}` : '')}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, expressRevenue: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* SALE PRICE */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                      <span className="bg-[#095c7b] text-white text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        SALE PRICE ($) *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 md:col-span-2">
+                      <span className="bg-[#095c7b] text-white text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        SALE PRICE ($) <span className="text-[#eaf143] font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.salePrice || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, salePrice: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-sm font-extrabold text-[#095c7b]"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-sm font-extrabold text-[#095c7b] bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* TOTAL AVERAGE DAILY RUN TIME */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        AVG DAILY RUN TIME *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 md:col-span-2">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        AVG DAILY RUN TIME <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.totalDailyRunTime || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, totalDailyRunTime: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* CURRENT MORNING SHIFT */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        CURRENT MORNING SHIFT *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        CURRENT MORNING SHIFT <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.currentMorningShift || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, currentMorningShift: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* CURRENT AFTERNOON SHIFT */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        CURRENT AFTERNOON SHIFT *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        CURRENT AFTERNOON SHIFT <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.currentAfternoonShift || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, currentAfternoonShift: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
                     {/* FRANCHISE TERM */}
-                    <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                        FRANCHISE TERM *
+                    <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 md:col-span-2">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                        FRANCHISE TERM <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Input
                         disabled={!isAdminOrOps}
                         value={presalesDetails.franchiseTerm || presalesDetails.termOnFranchiseeIM || ''}
                         onChange={(e) => setPresalesDetails({ ...presalesDetails, franchiseTerm: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 sm:h-11 px-3.5 flex-1 w-full"
                       />
                     </div>
 
@@ -1838,6 +2006,72 @@ export default function DedicatedTerritoryPresalePage() {
             >
               {sendingImEmail ? <Loader className="h-4 w-4" /> : <Send className="h-4 w-4" />}
               Confirm &amp; Send Email
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* REMOVE FROM PRESALES DIALOG */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-white border border-slate-200 shadow-2xl rounded-2xl p-6">
+          <DialogHeader className="space-y-2">
+            <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <UserX className="h-5 w-5 text-red-600" /> Remove Franchisee from Presales Process
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600">
+              Use this process when the franchisee is no longer planning to sell their territory. This will remove them from active presale lists while recording your reason for HQ records.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            {/* Reason Select */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                REASON FOR REMOVAL <span className="text-amber-500">*</span>
+              </label>
+              <Select value={cancellationReason} onValueChange={setCancellationReason}>
+                <SelectTrigger className="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg">
+                  <SelectValue placeholder="Select removal reason..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Franchisee decided not to sell territory">Franchisee decided not to sell territory</SelectItem>
+                  <SelectItem value="Operational / Performance agreement reached with HQ">Operational / Performance agreement reached with HQ</SelectItem>
+                  <SelectItem value="Presale listing expired without sale">Presale listing expired without sale</SelectItem>
+                  <SelectItem value="Territory retained by current owner">Territory retained by current owner</SelectItem>
+                  <SelectItem value="Withdrawn by MailPlus HQ">Withdrawn by MailPlus HQ</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Additional Notes */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                ADDITIONAL NOTES / COMMENTS
+              </label>
+              <Textarea
+                value={cancellationNotes}
+                onChange={(e) => setCancellationNotes(e.target.value)}
+                placeholder="Enter any additional details or background notes regarding why the franchisee is no longer selling..."
+                className="text-xs font-medium border border-slate-300 rounded-lg min-h-[90px] resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <Button
+              variant="outline"
+              onClick={() => setCancelDialogOpen(false)}
+              className="text-xs border-slate-300 text-slate-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCancelPresale}
+              disabled={cancelling}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs gap-2"
+            >
+              {cancelling ? <Loader className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+              Confirm Removal from Presales
             </Button>
           </div>
         </DialogContent>

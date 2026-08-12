@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { FranchiseProspect, ProspectEmailLog } from '@/lib/types';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/firestore';
@@ -12,12 +13,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, UserCheck, Mail, Phone, MapPin, Calendar, Clock, FileText, Plus, CheckCircle, RefreshCw, Paperclip, Send, X, History, Info } from 'lucide-react';
+import { Search, UserCheck, Mail, Phone, MapPin, Calendar, Clock, FileText, Plus, CheckCircle, RefreshCw, Paperclip, Send, X, History, Info, Copy, ExternalLink, ShieldCheck, DollarSign, PenTool, Lock, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { AccessDenied } from '@/components/access-denied';
 import { CreateUserDialog } from '@/components/admin/create-user-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { encodeProspectToken } from '@/lib/presale-token';
 
 const TERRITORY_OPTIONS = [
   { group: 'NSW', items: ['Arncliffe, NSW', 'Hunter Valley, NSW', 'Macquarie Park, NSW', 'Mascot, NSW', 'Newcastle, NSW', 'Northern Beaches, NSW', 'Waterloo, NSW'] },
@@ -78,6 +80,39 @@ export default function FranchiseProspectsClient() {
   const [includeBrochure, setIncludeBrochure] = useState(true);
   const [additionalFiles, setAdditionalFiles] = useState<Array<{ name: string; url: string; size?: number }>>([]);
   const [sendingEmail, setSendingEmail] = useState(false);
+
+  // Key Fact Sheet Modal State
+  const [isFactSheetModalOpen, setIsFactSheetModalOpen] = useState(false);
+  const [factSheetTargetProspect, setFactSheetTargetProspect] = useState<FranchiseProspect | null>(null);
+  const [savingFactSheet, setSavingFactSheet] = useState(false);
+  const [factSheetForm, setFactSheetForm] = useState({
+    territoryName: '',
+    franchiseFee: 0,
+    trainingFee: 0,
+    marketingFeePercent: '2%',
+    administrationFeePercent: '1.5%',
+    notes: '',
+  });
+
+  // Deposit Modal State
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [depositTargetProspect, setDepositTargetProspect] = useState<FranchiseProspect | null>(null);
+  const [savingDeposit, setSavingDeposit] = useState(false);
+  const [depositForm, setDepositForm] = useState({
+    isPaid: true,
+    percentageDeposited: 5,
+    amountPaid: 0,
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'EFT',
+    receiptRef: '',
+    notes: '',
+  });
+
+  // View Signed EOI & Deed Modals State
+  const [isViewEOIModalOpen, setIsViewEOIModalOpen] = useState(false);
+  const [viewEOITargetProspect, setViewEOITargetProspect] = useState<FranchiseProspect | null>(null);
+  const [isViewDeedModalOpen, setIsViewDeedModalOpen] = useState(false);
+  const [viewDeedTargetProspect, setViewDeedTargetProspect] = useState<FranchiseProspect | null>(null);
 
   const fetchProspects = async () => {
     setLoading(true);
@@ -387,14 +422,138 @@ export default function FranchiseProspectsClient() {
     }
   };
 
+  // Handle Key Fact Sheet Modal
+  const handleOpenFactSheetModal = (prospect: FranchiseProspect) => {
+    setFactSheetTargetProspect(prospect);
+    setFactSheetForm({
+      territoryName: prospect.keyFactSheet?.territoryName || prospect.preferredTerritory || '',
+      franchiseFee: prospect.keyFactSheet?.franchiseFee ?? '',
+      trainingFee: prospect.keyFactSheet?.trainingFee ?? '',
+      marketingFeePercent: prospect.keyFactSheet?.marketingFeePercent ? String(prospect.keyFactSheet.marketingFeePercent) : '',
+      administrationFeePercent: prospect.keyFactSheet?.administrationFeePercent ? String(prospect.keyFactSheet.administrationFeePercent) : '',
+      notes: prospect.keyFactSheet?.notes || '',
+    });
+    setIsFactSheetModalOpen(true);
+  };
+
+  const handleSaveFactSheet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!factSheetTargetProspect) return;
+    setSavingFactSheet(true);
+    try {
+      const payload = {
+        prospectId: factSheetTargetProspect.id,
+        territoryName: factSheetForm.territoryName,
+        franchiseFee: factSheetForm.franchiseFee,
+        trainingFee: factSheetForm.trainingFee,
+        marketingFeePercent: factSheetForm.marketingFeePercent,
+        administrationFeePercent: factSheetForm.administrationFeePercent,
+        notes: factSheetForm.notes,
+        senderUid: userProfile?.uid || 'system',
+        senderName: userProfile?.displayName || userProfile?.email || 'Operations User',
+      };
+
+      const res = await fetch('/api/franchise-prospects/fact-sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || 'Failed to save Key Fact Sheet');
+      }
+
+      toast({
+        title: 'Key Fact Sheet Saved',
+        description: 'Fact sheet prefilled and public token generated.',
+      });
+
+      setIsFactSheetModalOpen(false);
+      fetchProspects();
+    } catch (error: any) {
+      console.error('Error saving Fact Sheet:', error);
+      toast({ variant: 'destructive', title: 'Save Failed', description: error.message || 'Could not save fact sheet.' });
+    } finally {
+      setSavingFactSheet(false);
+    }
+  };
+
+  // Handle Deposit Modal
+  const handleOpenDepositModal = (prospect: FranchiseProspect) => {
+    setDepositTargetProspect(prospect);
+    setDepositForm({
+      isPaid: prospect.depositDetails?.isPaid ?? true,
+      percentageDeposited: Number(prospect.depositDetails?.percentageDeposited) || 5,
+      amountPaid: Number(prospect.depositDetails?.amountPaid) || 2000,
+      paymentDate: prospect.depositDetails?.paymentDate || new Date().toISOString().split('T')[0],
+      paymentMethod: prospect.depositDetails?.paymentMethod || 'EFT',
+      receiptRef: prospect.depositDetails?.receiptRef || `FR DEP ${prospect.lastName?.toUpperCase() || ''}`,
+      notes: prospect.depositDetails?.notes || '',
+    });
+    setIsDepositModalOpen(true);
+  };
+
+  const handleSaveDeposit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!depositTargetProspect) return;
+    setSavingDeposit(true);
+    try {
+      const payload = {
+        prospectId: depositTargetProspect.id,
+        isPaid: depositForm.isPaid,
+        percentageDeposited: depositForm.percentageDeposited,
+        amountPaid: depositForm.amountPaid,
+        paymentDate: depositForm.paymentDate,
+        paymentMethod: depositForm.paymentMethod,
+        receiptRef: depositForm.receiptRef,
+        notes: depositForm.notes,
+        loggedByUid: userProfile?.uid || 'system',
+        loggedByName: userProfile?.displayName || userProfile?.email || 'Operations User',
+      };
+
+      const res = await fetch('/api/franchise-prospects/deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || 'Failed to log deposit payment');
+      }
+
+      toast({
+        title: 'Deposit Updated',
+        description: `Deposit payment marked as ${depositForm.isPaid ? 'Paid' : 'Unpaid'}.`,
+      });
+
+      setIsDepositModalOpen(false);
+      fetchProspects();
+    } catch (error: any) {
+      console.error('Error logging deposit:', error);
+      toast({ variant: 'destructive', title: 'Save Failed', description: error.message || 'Could not save deposit.' });
+    } finally {
+      setSavingDeposit(false);
+    }
+  };
+
+  const handleCopyLink = (url: string, label: string) => {
+    navigator.clipboard.writeText(url);
+    toast({ title: 'Link Copied', description: `${label} public URL copied to clipboard.` });
+  };
+
   const handleStartConvert = (prospect: FranchiseProspect) => {
+    const eoi: any = prospect.eoiData || {};
     setPrefillUserData({
-      firstName: prospect.firstName || prospect.fullName.split(' ')[0] || '',
-      lastName: prospect.lastName || prospect.fullName.split(' ').slice(1).join(' ') || '',
+      firstName: String(prospect.firstName || prospect.fullName.split(' ')[0] || ''),
+      lastName: String(prospect.lastName || prospect.fullName.split(' ').slice(1).join(' ') || ''),
       email: prospect.email,
       mobileNumber: prospect.phone,
       phoneNumber: prospect.phone,
       role: 'Franchisee',
+      abn: String(eoi.abn || ''),
+      street: String(eoi.businessAddress || eoi.registeredAddress || ''),
     });
     setIsConvertDialogOpen(true);
   };
@@ -551,94 +710,156 @@ export default function FranchiseProspectsClient() {
                 <TableHead className="font-bold text-slate-700">Applicant Name</TableHead>
                 <TableHead className="font-bold text-slate-700">Contact Details</TableHead>
                 <TableHead className="font-bold text-slate-700">Territory / State</TableHead>
-                <TableHead className="font-bold text-slate-700">Step 1: Brochure</TableHead>
+                <TableHead className="font-bold text-slate-700">Prospect Pipeline Progress</TableHead>
                 <TableHead className="font-bold text-slate-700">Status</TableHead>
                 <TableHead className="text-right font-bold text-slate-700">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProspects.map((prospect) => (
-                <TableRow key={prospect.id} className="hover:bg-slate-50/70 transition-colors">
-                  <TableCell className="font-semibold text-slate-900">
-                    <div>{prospect.fullName}</div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-normal">
-                      <span>Source: {prospect.sourceApp || 'Website'}</span>
-                      {prospect.interest && <span className="text-[#095c7b]">• {prospect.interest}</span>}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col text-xs space-y-1">
-                      <span className="flex items-center gap-1.5 text-slate-700">
-                        <Mail className="h-3.5 w-3.5 text-[#095c7b]" />
-                        {prospect.email}
-                      </span>
-                      {prospect.phone && (
-                        <span className="flex items-center gap-1.5 text-slate-600">
-                          <Phone className="h-3.5 w-3.5 text-slate-400" />
-                          {prospect.phone}
+              {filteredProspects.map((prospect) => {
+                const kfsDone = Boolean(prospect.keyFactSheet?.publicToken);
+                const deedDone = prospect.confidentialityDeed?.status === 'signed_online';
+                const eoiDone = prospect.eoiData?.status === 'signed_online';
+                const depositDone = Boolean(prospect.depositDetails?.isPaid);
+
+                return (
+                  <TableRow key={prospect.id} className="hover:bg-slate-50/70 transition-colors">
+                    <TableCell className="font-semibold text-slate-900">
+                      <div>{prospect.fullName}</div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground font-normal">
+                        <span>Source: {prospect.sourceApp || 'Website'}</span>
+                        {prospect.interest && <span className="text-[#095c7b]">• {prospect.interest}</span>}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col text-xs space-y-1">
+                        <span className="flex items-center gap-1.5 text-slate-700">
+                          <Mail className="h-3.5 w-3.5 text-[#095c7b]" />
+                          {prospect.email}
                         </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 text-sm font-medium">
-                      <MapPin className="h-3.5 w-3.5 text-rose-500 shrink-0" />
-                      <span>{prospect.preferredTerritory || 'Unspecified'}</span>
-                      {prospect.preferredState && (
-                        <Badge variant="outline" className="ml-1 text-[10px] py-0 px-1.5">
-                          {prospect.preferredState.toUpperCase()}
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {prospect.brochureSent ? (
-                      <div className="flex flex-col gap-0.5">
-                        <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 w-fit gap-1 text-[11px]">
-                          <CheckCircle className="h-3 w-3 text-emerald-600" />
-                          Brochure Sent
-                        </Badge>
-                        {prospect.brochureSentAt && (
-                          <span className="text-[10px] text-muted-foreground">
-                            {new Date(prospect.brochureSentAt).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}
+                        {prospect.phone && (
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <Phone className="h-3.5 w-3.5 text-slate-400" />
+                            {prospect.phone}
                           </span>
                         )}
                       </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleOpenSendEmail(prospect, true)}
-                        className="h-7 text-xs text-[#095c7b] border-[#095c7b] hover:bg-[#095c7b]/10 gap-1"
-                      >
-                        <Send className="h-3 w-3" />
-                        Send Brochure
-                      </Button>
-                    )}
-                  </TableCell>
-                  <TableCell>{getStatusBadge(prospect.status)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedProspect(prospect)}
-                        className="h-8 text-xs border-slate-300"
-                      >
-                        View & Manage
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleStartConvert(prospect)}
-                        className="h-8 text-xs bg-[#095c7b] hover:bg-[#074760] text-white gap-1"
-                      >
-                        <UserCheck className="h-3.5 w-3.5" />
-                        Convert
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1 text-sm font-medium">
+                        <MapPin className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                        <span>{prospect.preferredTerritory || 'Unspecified'}</span>
+                        {prospect.preferredState && (
+                          <Badge variant="outline" className="ml-1 text-[10px] py-0 px-1.5">
+                            {prospect.preferredState.toUpperCase()}
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+
+                    {/* Step-by-Step Pipeline Progress Badges */}
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1 items-center">
+                        {/* Step 1 Fact Sheet */}
+                        <Badge
+                          variant="outline"
+                          onClick={() => handleOpenFactSheetModal(prospect)}
+                          className={`cursor-pointer text-[10px] py-0.5 px-1.5 ${
+                            kfsDone
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                              : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          1. Fact Sheet {kfsDone ? '✓' : ''}
+                        </Badge>
+
+                        {/* Step 2 Confidentiality Deed */}
+                        <Badge
+                          variant="outline"
+                          onClick={() => {
+                            if (deedDone) {
+                              setViewDeedTargetProspect(prospect);
+                              setIsViewDeedModalOpen(true);
+                            } else {
+                              const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                              const token = prospect.confidentialityDeed?.publicToken || encodeProspectToken('cd', prospect.id);
+                              handleCopyLink(`${origin}/confidentiality-deed/${token}`, 'Confidentiality Deed');
+                            }
+                          }}
+                          className={`cursor-pointer text-[10px] py-0.5 px-1.5 ${
+                            deedDone
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                              : prospect.confidentialityDeed?.status === 'sent'
+                              ? 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
+                              : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          2. Deed {deedDone ? '✓' : ''}
+                        </Badge>
+
+                        {/* Step 3 EOI */}
+                        <Badge
+                          variant="outline"
+                          onClick={() => {
+                            if (eoiDone) {
+                              setViewEOITargetProspect(prospect);
+                              setIsViewEOIModalOpen(true);
+                            } else {
+                              const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                              const token = prospect.eoiData?.publicToken || encodeProspectToken('eoi', prospect.id);
+                              handleCopyLink(`${origin}/eoi/${token}`, 'EOI Form');
+                            }
+                          }}
+                          className={`cursor-pointer text-[10px] py-0.5 px-1.5 ${
+                            eoiDone
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                              : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          3. EOI {eoiDone ? '✓' : ''}
+                        </Badge>
+
+                        {/* Step 4 Deposit */}
+                        <Badge
+                          variant="outline"
+                          onClick={() => handleOpenDepositModal(prospect)}
+                          className={`cursor-pointer text-[10px] py-0.5 px-1.5 ${
+                            depositDone
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                              : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          4. Deposit {depositDone ? `(${prospect.depositDetails?.percentageDeposited || 5}%) ✓` : ''}
+                        </Badge>
+                      </div>
+                    </TableCell>
+
+                    <TableCell>{getStatusBadge(prospect.status)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          asChild
+                          className="h-8 text-xs border-slate-300"
+                        >
+                          <Link href={`/operations/franchise-prospects/${prospect.id}`}>
+                            View & Manage
+                          </Link>
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleStartConvert(prospect)}
+                          className="h-8 text-xs bg-[#095c7b] hover:bg-[#074760] text-white gap-1"
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                          Convert
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
@@ -670,6 +891,174 @@ export default function FranchiseProspectsClient() {
               </DialogHeader>
 
               <div className="space-y-6 pt-2">
+                {/* 5-Step Franchise Prospect Pipeline Progress Stepper */}
+                {(() => {
+                  const kfsDone = Boolean(selectedProspect.keyFactSheet?.publicToken);
+                  const deedDone = selectedProspect.confidentialityDeed?.status === 'signed_online';
+                  const eoiDone = selectedProspect.eoiData?.status === 'signed_online';
+                  const depositDone = Boolean(selectedProspect.depositDetails?.isPaid);
+                  const completedCount = [kfsDone, deedDone, eoiDone, depositDone].filter(Boolean).length;
+
+                  return (
+                    <div className="p-4 bg-[#095c7b]/5 border border-[#095c7b]/20 rounded-xl space-y-3 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-[#095c7b] flex items-center gap-1.5">
+                          <FileText className="h-4 w-4" /> Franchise Prospect Pipeline Progress
+                        </h3>
+                        <span className="text-xs font-semibold text-slate-600">
+                          {completedCount} of 4 Pre-requisites Complete
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                        {/* Step 1: Fact Sheet */}
+                        <div
+                          className={`p-2.5 rounded-lg border text-xs flex flex-col justify-between transition-all ${
+                            kfsDone ? 'bg-emerald-50/80 border-emerald-300' : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between font-bold text-slate-800">
+                              <span>1. Fact Sheet</span>
+                              {kfsDone ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-0.5">{kfsDone ? 'Prefilled & Link Ready' : 'Not Started'}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenFactSheetModal(selectedProspect)}
+                            className="mt-2 text-[10px] h-6 border-slate-300 text-[#095c7b] hover:bg-[#095c7b]/10"
+                          >
+                            {kfsDone ? 'View / Edit' : 'Prefill'}
+                          </Button>
+                        </div>
+
+                        {/* Step 2: Confidentiality Deed */}
+                        <div
+                          className={`p-2.5 rounded-lg border text-xs flex flex-col justify-between transition-all ${
+                            deedDone ? 'bg-emerald-50/80 border-emerald-300' : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between font-bold text-slate-800">
+                              <span>2. Deed</span>
+                              {deedDone ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              {deedDone ? 'Digitally Signed' : selectedProspect.confidentialityDeed?.status === 'sent' ? 'Sent' : 'Not Signed'}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (deedDone) {
+                                setViewDeedTargetProspect(selectedProspect);
+                                setIsViewDeedModalOpen(true);
+                              } else {
+                                const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                                const token = selectedProspect.confidentialityDeed?.publicToken || encodeProspectToken('cd', selectedProspect.id);
+                                handleCopyLink(`${origin}/confidentiality-deed/${token}`, 'Confidentiality Deed');
+                              }
+                            }}
+                            className="mt-2 text-[10px] h-6 border-slate-300 text-[#095c7b] hover:bg-[#095c7b]/10"
+                          >
+                            {deedDone ? 'View Signed' : 'Copy Link'}
+                          </Button>
+                        </div>
+
+                        {/* Step 3: Expression of Interest */}
+                        <div
+                          className={`p-2.5 rounded-lg border text-xs flex flex-col justify-between transition-all ${
+                            eoiDone ? 'bg-emerald-50/80 border-emerald-300' : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between font-bold text-slate-800">
+                              <span>3. EOI Form</span>
+                              {eoiDone ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-0.5">{eoiDone ? 'Signed Online' : 'Not Signed'}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (eoiDone) {
+                                setViewEOITargetProspect(selectedProspect);
+                                setIsViewEOIModalOpen(true);
+                              } else {
+                                const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                                const token = selectedProspect.eoiData?.publicToken || encodeProspectToken('eoi', selectedProspect.id);
+                                handleCopyLink(`${origin}/eoi/${token}`, 'EOI Form');
+                              }
+                            }}
+                            className="mt-2 text-[10px] h-6 border-slate-300 text-[#095c7b] hover:bg-[#095c7b]/10"
+                          >
+                            {eoiDone ? 'View Form' : 'Copy Link'}
+                          </Button>
+                        </div>
+
+                        {/* Step 4: 5-10% Deposit */}
+                        <div
+                          className={`p-2.5 rounded-lg border text-xs flex flex-col justify-between transition-all ${
+                            depositDone ? 'bg-emerald-50/80 border-emerald-300' : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between font-bold text-slate-800">
+                              <span>4. Deposit</span>
+                              {depositDone ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              {depositDone ? `${selectedProspect.depositDetails?.percentageDeposited || 5}% Paid` : 'Not Paid'}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenDepositModal(selectedProspect)}
+                            className="mt-2 text-[10px] h-6 border-slate-300 text-[#095c7b] hover:bg-[#095c7b]/10"
+                          >
+                            {depositDone ? 'Edit Deposit' : 'Log Deposit'}
+                          </Button>
+                        </div>
+
+                        {/* Step 5: Convert */}
+                        <div
+                          className={`p-2.5 rounded-lg border text-xs flex flex-col justify-between transition-all ${
+                            selectedProspect.status === 'Converted'
+                              ? 'bg-emerald-50/80 border-emerald-300'
+                              : 'bg-[#095c7b]/10 border-[#095c7b]/30'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between font-bold text-slate-800">
+                              <span>5. Convert</span>
+                              {selectedProspect.status === 'Converted' ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              {selectedProspect.status === 'Converted' ? 'Converted' : 'Ready'}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              const p = selectedProspect;
+                              setSelectedProspect(null);
+                              handleStartConvert(p);
+                            }}
+                            className="mt-2 text-[10px] h-6 bg-[#095c7b] hover:bg-[#074760] text-white"
+                          >
+                            Convert
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Contact & Profile Grid matching /become-a-franchisee */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-slate-50 rounded-lg border text-sm">
                   <div>
@@ -1232,6 +1621,330 @@ export default function FranchiseProspectsClient() {
               </Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Key Fact Sheet Prefill & Link Dialog */}
+      <Dialog open={isFactSheetModalOpen} onOpenChange={setIsFactSheetModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-[#095c7b] flex items-center gap-2">
+              <FileText className="h-5 w-5" /> Prefill Key Fact Sheet (Step 1)
+            </DialogTitle>
+            <DialogDescription>
+              Configure territory facts and fees for {factSheetTargetProspect?.fullName}. This populates their public shareable Fact Sheet URL.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveFactSheet} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700">Territory Name</label>
+              <Input
+                value={factSheetForm.territoryName}
+                onChange={(e) => setFactSheetForm({ ...factSheetForm, territoryName: e.target.value })}
+                placeholder="e.g. Parramatta, NSW"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">Franchise License Fee ($)</label>
+                <Input
+                  type="number"
+                  value={factSheetForm.franchiseFee}
+                  onChange={(e) => setFactSheetForm({ ...factSheetForm, franchiseFee: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">Training Fee ($)</label>
+                <Input
+                  type="number"
+                  value={factSheetForm.trainingFee}
+                  onChange={(e) => setFactSheetForm({ ...factSheetForm, trainingFee: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">Marketing Fee Levy</label>
+                <Input
+                  value={factSheetForm.marketingFeePercent}
+                  onChange={(e) => setFactSheetForm({ ...factSheetForm, marketingFeePercent: e.target.value })}
+                  placeholder="2%"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">Administration Levy</label>
+                <Input
+                  value={factSheetForm.administrationFeePercent}
+                  onChange={(e) => setFactSheetForm({ ...factSheetForm, administrationFeePercent: e.target.value })}
+                  placeholder="1.5%"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700">Territory Notes / Financial Facts</label>
+              <textarea
+                rows={3}
+                value={factSheetForm.notes}
+                onChange={(e) => setFactSheetForm({ ...factSheetForm, notes: e.target.value })}
+                placeholder="Specific guidance or details for candidate..."
+                className="w-full p-2.5 text-xs border rounded-md"
+              />
+            </div>
+
+            {factSheetTargetProspect?.keyFactSheet?.publicToken && (
+              <div className="p-3 bg-slate-50 border rounded-md space-y-1.5">
+                <span className="text-xs font-semibold text-slate-700 block">Public Shareable Link</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/fact-sheet/${factSheetTargetProspect.keyFactSheet.publicToken}`}
+                    className="text-xs bg-white font-mono"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      handleCopyLink(
+                        `${window.location.origin}/fact-sheet/${factSheetTargetProspect.keyFactSheet?.publicToken}`,
+                        'Key Fact Sheet'
+                      )
+                    }
+                    className="shrink-0 gap-1 text-xs"
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Copy
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsFactSheetModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={savingFactSheet} className="bg-[#095c7b] hover:bg-[#074760] text-white">
+                {savingFactSheet ? <Loader className="h-4 w-4 mr-2" /> : null}
+                Save & Generate Link
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deposit Payment Dialog */}
+      <Dialog open={isDepositModalOpen} onOpenChange={setIsDepositModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-[#095c7b] flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-emerald-600" /> Log 5–10% Deposit (Step 4)
+            </DialogTitle>
+            <DialogDescription>
+              Record deposit payment received for {depositTargetProspect?.fullName}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveDeposit} className="space-y-4 pt-2">
+            <div className="p-3 bg-slate-50 border rounded-md flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-800">Deposit Payment Received?</span>
+              <input
+                type="checkbox"
+                checked={depositForm.isPaid}
+                onChange={(e) => setDepositForm({ ...depositForm, isPaid: e.target.checked })}
+                className="h-4 w-4 text-[#095c7b] rounded"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">Percentage Deposited (%)</label>
+                <Input
+                  type="number"
+                  value={depositForm.percentageDeposited}
+                  onChange={(e) => setDepositForm({ ...depositForm, percentageDeposited: Number(e.target.value) })}
+                  placeholder="5"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">Amount Paid ($)</label>
+                <Input
+                  type="number"
+                  value={depositForm.amountPaid}
+                  onChange={(e) => setDepositForm({ ...depositForm, amountPaid: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">Payment Date</label>
+                <Input
+                  type="date"
+                  value={depositForm.paymentDate}
+                  onChange={(e) => setDepositForm({ ...depositForm, paymentDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">EFT / Receipt Ref</label>
+                <Input
+                  value={depositForm.receiptRef}
+                  onChange={(e) => setDepositForm({ ...depositForm, receiptRef: e.target.value })}
+                  placeholder="e.g. FR DEP SMITH"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700">Deposit Notes</label>
+              <Input
+                value={depositForm.notes}
+                onChange={(e) => setDepositForm({ ...depositForm, notes: e.target.value })}
+                placeholder="Optional notes..."
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsDepositModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={savingDeposit} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                {savingDeposit ? <Loader className="h-4 w-4 mr-2" /> : null}
+                Save Deposit
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Signed EOI Details Dialog */}
+      <Dialog open={isViewEOIModalOpen} onOpenChange={setIsViewEOIModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-[#095c7b] flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-emerald-600" /> Signed Expression of Interest (EOI)
+            </DialogTitle>
+            <DialogDescription>
+              Submitted by {viewEOITargetProspect?.fullName} on{' '}
+              {viewEOITargetProspect?.eoiData?.signedAt
+                ? new Date(viewEOITargetProspect.eoiData.signedAt).toLocaleString('en-AU')
+                : 'N/A'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewEOITargetProspect?.eoiData && (
+            <div className="space-y-4 pt-2 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded border">
+                <div>
+                  <span className="text-slate-500 font-semibold block uppercase">Structure</span>
+                  <span className="font-bold text-slate-800">{viewEOITargetProspect.eoiData.entityStructure || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-semibold block uppercase">Entity Name</span>
+                  <span className="font-medium text-slate-800">{viewEOITargetProspect.eoiData.companyName || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-semibold block uppercase">ABN</span>
+                  <span className="font-medium text-slate-800">{viewEOITargetProspect.eoiData.abn || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-semibold block uppercase">Registered Address</span>
+                  <span className="font-medium text-slate-800">{viewEOITargetProspect.eoiData.registeredAddress || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-semibold block uppercase">Business Address</span>
+                  <span className="font-medium text-slate-800">{viewEOITargetProspect.eoiData.businessAddress || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-semibold block uppercase">Driver's License</span>
+                  <span className="font-medium text-slate-800">
+                    {viewEOITargetProspect.eoiData.driversLicence || 'N/A'} ({viewEOITargetProspect.eoiData.driversLicencePlaceOfIssue || ''})
+                  </span>
+                </div>
+              </div>
+
+              {/* Digital Signature Canvas Preview */}
+              {viewEOITargetProspect.eoiData.signatureDataUrl && (
+                <div className="p-3 border rounded bg-white space-y-1">
+                  <span className="text-slate-500 font-bold uppercase text-[10px] block">Digital Signature</span>
+                  <img
+                    src={viewEOITargetProspect.eoiData.signatureDataUrl}
+                    alt="EOI Signature"
+                    className="h-20 border rounded p-1 bg-slate-50"
+                  />
+                  <span className="text-[10px] text-slate-400">
+                    Signed by {viewEOITargetProspect.eoiData.signerName} ({viewEOITargetProspect.eoiData.signerEmail})
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setIsViewEOIModalOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Signed Confidentiality Deed Dialog */}
+      <Dialog open={isViewDeedModalOpen} onOpenChange={setIsViewDeedModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-[#095c7b] flex items-center gap-2">
+              <Lock className="h-5 w-5 text-emerald-600" /> Signed Confidentiality Deed
+            </DialogTitle>
+            <DialogDescription>
+              Executed by {viewDeedTargetProspect?.fullName} for run-along evaluation.
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewDeedTargetProspect?.confidentialityDeed && (
+            <div className="space-y-4 pt-2 text-xs">
+              <div className="p-3 bg-slate-50 border rounded space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Signer Name:</span>
+                  <span className="font-semibold">{viewDeedTargetProspect.confidentialityDeed.signerName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Signer Email:</span>
+                  <span className="font-semibold">{viewDeedTargetProspect.confidentialityDeed.signerEmail}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Signed Date:</span>
+                  <span className="font-semibold font-mono">
+                    {viewDeedTargetProspect.confidentialityDeed.signedAt
+                      ? new Date(viewDeedTargetProspect.confidentialityDeed.signedAt).toLocaleString('en-AU')
+                      : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">IP Address:</span>
+                  <span className="font-mono text-slate-600">{viewDeedTargetProspect.confidentialityDeed.ipAddress || 'unknown'}</span>
+                </div>
+              </div>
+
+              {viewDeedTargetProspect.confidentialityDeed.signatureDataUrl && (
+                <div className="p-3 border rounded bg-white space-y-1">
+                  <span className="text-slate-500 font-bold uppercase text-[10px] block">Candidate Digital Signature</span>
+                  <img
+                    src={viewDeedTargetProspect.confidentialityDeed.signatureDataUrl}
+                    alt="Confidentiality Deed Signature"
+                    className="h-20 border rounded p-1 bg-slate-50"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setIsViewDeedModalOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

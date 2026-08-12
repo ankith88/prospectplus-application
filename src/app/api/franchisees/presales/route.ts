@@ -448,7 +448,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { franchiseeId, franchiseeName, mainDetails, deedOfVariation, presalesDetails, userRole, userUid, userName } = body;
+    const { franchiseeId, franchiseeName, mainDetails, deedOfVariation, presalesDetails, userRole, userUid, userName, action, cancellationReason, cancellationNotes } = body;
 
     if (!franchiseeId) {
       return NextResponse.json({ success: false, message: 'franchiseeId is required' }, { status: 400 });
@@ -477,7 +477,13 @@ export async function POST(request: Request) {
     }
 
     let overallStatus: PresaleRecord['status'] = 'Step 1: Main Details';
-    if (step3Status === 'Completed' && step4Status === 'Completed') {
+    if (action === 'cancel' || body.status === 'Cancelled') {
+      overallStatus = 'Cancelled';
+    } else if (action === 'reactivate') {
+      overallStatus = 'Step 1: Main Details';
+    } else if (existingData.status === 'Cancelled' && !action) {
+      overallStatus = 'Cancelled';
+    } else if (step3Status === 'Completed' && step4Status === 'Completed') {
       overallStatus = 'Active Presale';
     } else if (step3Status === 'Completed') {
       overallStatus = 'Step 4: Presales Details';
@@ -543,6 +549,20 @@ export async function POST(request: Request) {
       updatedByName: userName || '',
     };
 
+    if (action === 'cancel' || body.status === 'Cancelled') {
+      payload.cancellationReason = cancellationReason || existingData.cancellationReason || 'Franchisee decided not to sell territory';
+      payload.cancellationNotes = cancellationNotes ?? existingData.cancellationNotes ?? '';
+      payload.cancelledAt = nowStr;
+      payload.cancelledByUid = userUid || '';
+      payload.cancelledByName = userName || '';
+    } else if (action === 'reactivate') {
+      payload.cancellationReason = '';
+      payload.cancellationNotes = '';
+      payload.cancelledAt = '';
+      payload.cancelledByUid = '';
+      payload.cancelledByName = '';
+    }
+
     if (!existingDoc.exists) {
       payload.createdAt = nowStr;
       payload.createdByUid = userUid || '';
@@ -553,7 +573,7 @@ export async function POST(request: Request) {
 
     // Update Franchisee document
     const franDocUpdate: Record<string, any> = {
-      isForSale: true,
+      isForSale: overallStatus !== 'Cancelled',
       presaleStatus: overallStatus,
       presaleUpdatedAt: nowStr,
       dateBusinessStarted: bizStarted || '',

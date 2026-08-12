@@ -316,6 +316,8 @@ export default function TerritoryPresalesPage() {
                           ? 'bg-emerald-600 text-white font-bold text-[11px]'
                           : presale.status === 'Step 4: Franchisee IM Confirmation'
                           ? 'bg-blue-600 text-white font-bold text-[11px]'
+                          : presale.status === 'Cancelled'
+                          ? 'bg-red-100 text-red-800 border-red-300 font-bold text-[11px]'
                           : 'bg-slate-100 text-slate-800 border-slate-300 font-semibold text-[11px]'
                       }
                     >

@@ -51,3 +51,7 @@ firestore-debug.log
 flutter_app/
 *storybook.log
 storybook-static
+
+# MS Office temp files
+~$*.docx
+

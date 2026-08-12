@@ -13,7 +13,7 @@ export function encodePresaleId(id: string | number): string {
   if (cleanId.startsWith('dov_')) return cleanId;
 
   const payload = `${SECRET_PREFIX}${cleanId}`;
-  
+
   if (typeof window !== 'undefined') {
     try {
       const b64 = btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -58,4 +58,55 @@ export function decodePresaleId(tokenOrId: string): string {
 
   // Fallback: If it's a legacy raw ID or direct lookup, return original clean ID
   return clean;
+}
+
+export function encodeProspectToken(prefix: 'kfs' | 'cd' | 'eoi', prospectId: string): string {
+  const cleanId = String(prospectId || '').trim();
+  if (!cleanId) return '';
+  const payload = `mp_${prefix}_v1_${cleanId}`;
+  if (typeof window !== 'undefined') {
+    try {
+      const b64 = btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return `${prefix}_${b64}`;
+    } catch {
+      return cleanId;
+    }
+  } else {
+    try {
+      const b64 = Buffer.from(payload).toString('base64url');
+      return `${prefix}_${b64}`;
+    } catch {
+      return cleanId;
+    }
+  }
+}
+
+export function decodeProspectToken(token: string): { prefix?: string; prospectId: string } {
+  if (!token) return { prospectId: '' };
+  const clean = String(token).trim();
+
+  const match = clean.match(/^(kfs|cd|eoi)_(.+)$/);
+  if (match) {
+    const [, prefix, rawToken] = match;
+    try {
+      let decoded = '';
+      if (typeof window !== 'undefined') {
+        const b64 = rawToken.replace(/-/g, '+').replace(/_/g, '/');
+        const padLength = (4 - (b64.length % 4)) % 4;
+        const paddedB64 = b64 + '='.repeat(padLength);
+        decoded = atob(paddedB64);
+      } else {
+        decoded = Buffer.from(rawToken, 'base64url').toString('utf8');
+      }
+
+      const expectedPrefix = `mp_${prefix}_v1_`;
+      if (decoded.startsWith(expectedPrefix)) {
+        return { prefix, prospectId: decoded.slice(expectedPrefix.length) };
+      }
+    } catch (e) {
+      console.warn('Failed to decode prospect token:', e);
+    }
+  }
+
+  return { prospectId: clean };
 }

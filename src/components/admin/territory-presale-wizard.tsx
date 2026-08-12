@@ -415,108 +415,108 @@ export function TerritoryPresaleWizard({
                   <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200/60 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* TRADING ENTITY */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
-                          TRADING ENTITY *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[140px]">
+                          TRADING ENTITY <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           value={mainDetails.tradingEntity}
                           onChange={(e) => setMainDetails({ ...mainDetails, tradingEntity: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                           placeholder="Kaypeez Pty Ltd"
                         />
                       </div>
 
                       {/* MAIN CONTACT */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
-                          MAIN CONTACT *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[140px]">
+                          MAIN CONTACT <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           value={mainDetails.mainContact}
                           onChange={(e) => setMainDetails({ ...mainDetails, mainContact: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                           placeholder="Saffat Riad"
                         />
                       </div>
 
                       {/* MOBILE NUMBER */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
-                          MOBILE NUMBER *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[140px]">
+                          MOBILE NUMBER <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           value={mainDetails.mobileNumber}
                           onChange={(e) => setMainDetails({ ...mainDetails, mobileNumber: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                           placeholder="0433168170"
                         />
                       </div>
 
                       {/* EMAIL */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
-                          EMAIL *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[140px]">
+                          EMAIL <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           type="email"
                           value={mainDetails.email}
                           onChange={(e) => setMainDetails({ ...mainDetails, email: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                           placeholder="saffat99@yahoo.com"
                         />
                       </div>
 
                       {/* PERSONAL EMAIL */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[140px]">
                           PERSONAL EMAIL
                         </span>
                         <Input
                           type="email"
                           value={mainDetails.personalEmail || ''}
                           onChange={(e) => setMainDetails({ ...mainDetails, personalEmail: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                           placeholder="personal@gmail.com"
                         />
                       </div>
 
                       {/* ABN */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
-                          ABN *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[140px]">
+                          ABN <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           value={mainDetails.abn}
                           onChange={(e) => setMainDetails({ ...mainDetails, abn: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                           placeholder="75151402845"
                         />
                       </div>
 
                       {/* DATE LISTED FOR SALE */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px]">
-                          DATE LISTED FOR SALE *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[140px]">
+                          DATE LISTED FOR SALE <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           type="date"
                           value={mainDetails.dateListedForSale}
                           onChange={(e) => setMainDetails({ ...mainDetails, dateListedForSale: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
                     </div>
 
                     {/* ADDRESS */}
-                    <div className="flex bg-white border border-slate-300 rounded shadow-sm overflow-hidden min-h-[90px]">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[140px] flex items-start pt-3">
-                        ADDRESS *
+                    <div className="flex flex-col sm:flex-row bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 min-h-[90px]">
+                      <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-start pt-3 w-full sm:w-auto sm:min-w-[140px]">
+                        ADDRESS <span className="text-amber-500 font-extrabold">*</span>
                       </span>
                       <Textarea
                         value={mainDetails.address}
                         onChange={(e) => setMainDetails({ ...mainDetails, address: e.target.value })}
-                        className="border-0 focus-visible:ring-0 text-xs font-medium resize-none min-h-[85px] p-3"
+                        className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent resize-none min-h-[85px] p-3.5 flex-1 w-full"
                         placeholder="Barton 20/ 10 Ovens St Griffith ACT 2603"
                       />
                     </div>
@@ -750,171 +750,171 @@ export function TerritoryPresaleWizard({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       
                       {/* TERRITORY NAME */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          TERRITORY NAME *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 md:col-span-2">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          TERRITORY NAME <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.territoryName || mainDetails.tradingEntity || franchiseeName || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, territoryName: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-semibold"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-semibold text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* DATE BUSINESS STARTED */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          DATE BUSINESS STARTED *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          DATE BUSINESS STARTED <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.dateBusinessStarted || mainDetails.dateBusinessStarted || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, dateBusinessStarted: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* NUMBER OF OWNERS */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          NUMBER OF OWNERS *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          NUMBER OF OWNERS <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.numberOfOwners || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, numberOfOwners: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* REASON FOR SALE */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          REASON FOR SALE *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 md:col-span-2">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          REASON FOR SALE <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.reasonForSale || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, reasonForSale: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* LAST 12 MONTHS SERVICE REVENUE (EX GST) */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          LAST 12M SERVICE REVENUE *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          LAST 12M SERVICE REVENUE <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.serviceRevenue || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, serviceRevenue: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* FRANCHISE FEES ON SERVICE REVENUE */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          FRANCHISE FEES (%) *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          FRANCHISE FEES (%) <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.franchiseFeesOnServiceRevenue || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, franchiseFeesOnServiceRevenue: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* MARKETING LEVY */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          MARKETING LEVY (%) *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          MARKETING LEVY (%) <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.marketingLevy || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, marketingLevy: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* LAST 12M MAILPLUS EXPRESS REVENUE */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          LAST 12M EXPRESS REVENUE *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          LAST 12M EXPRESS REVENUE <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.expressRevenue || (presalesDetails.mpexCommission ? `Product Commission $${presalesDetails.mpexCommission}` : '')}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, expressRevenue: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* SALE PRICE */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                        <span className="bg-[#095c7b] text-white text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          SALE PRICE ($) *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 md:col-span-2">
+                        <span className="bg-[#095c7b] text-white text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          SALE PRICE ($) <span className="text-[#eaf143] font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.salePrice || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, salePrice: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-sm font-extrabold text-[#095c7b]"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-sm font-extrabold text-[#095c7b] bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* TOTAL AVERAGE DAILY RUN TIME */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          AVG DAILY RUN TIME *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 md:col-span-2">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          AVG DAILY RUN TIME <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.totalDailyRunTime || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, totalDailyRunTime: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* CURRENT MORNING SHIFT */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          CURRENT MORNING SHIFT *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          CURRENT MORNING SHIFT <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.currentMorningShift || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, currentMorningShift: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* CURRENT AFTERNOON SHIFT */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          CURRENT AFTERNOON SHIFT *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          CURRENT AFTERNOON SHIFT <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.currentAfternoonShift || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, currentAfternoonShift: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 
                       {/* FRANCHISE TERM */}
-                      <div className="flex items-center bg-white border border-slate-300 rounded shadow-sm overflow-hidden md:col-span-2">
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold uppercase px-3 py-2 border-r border-slate-300 whitespace-nowrap min-w-[200px]">
-                          FRANCHISE TERM *
+                      <div className="flex flex-col sm:flex-row sm:items-center bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden transition-all duration-150 hover:border-slate-300 focus-within:border-[#095c7b] focus-within:ring-2 focus-within:ring-[#095c7b]/20 md:col-span-2">
+                        <span className="bg-slate-50 text-slate-600 text-[11px] font-bold tracking-wider uppercase px-3.5 py-2.5 sm:py-3 border-b sm:border-b-0 sm:border-r border-slate-200 whitespace-nowrap shrink-0 flex items-center gap-1 w-full sm:w-auto sm:min-w-[200px]">
+                          FRANCHISE TERM <span className="text-amber-500 font-extrabold">*</span>
                         </span>
                         <Input
                           disabled={!isAdminOrOps}
                           value={presalesDetails.franchiseTerm || presalesDetails.termOnFranchiseeIM || ''}
                           onChange={(e) => setPresalesDetails({ ...presalesDetails, franchiseTerm: e.target.value })}
-                          className="border-0 focus-visible:ring-0 text-xs font-medium"
+                          className="border-0 focus-visible:ring-0 focus:ring-0 rounded-none shadow-none text-xs font-medium text-slate-800 bg-transparent h-10 px-3.5 flex-1 w-full"
                         />
                       </div>
 

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3 } from 'lucide-react';
+import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight } from 'lucide-react';
 import { LpoConversionWizard } from './lpo-conversion-wizard';
 
 interface LpoLeadProfileProps {
@@ -19,14 +19,16 @@ interface LpoLeadProfileProps {
 export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
   const { userProfile } = useAuth();
   const { toast } = useToast();
-  const [lead, setLead] = useState(initialLead);
-  const [status, setStatus] = useState(initialLead.status || 'New');
+  const rawStatus = initialLead.status || 'New';
+  const initialStatus = (rawStatus === 'LPO.PLUS Sign In Email Sent' || rawStatus === 'LPO.Plus Sign In Email Sent') ? 'LPO.Plus Logged In' : rawStatus;
+  const [status, setStatus] = useState(initialStatus);
   const [noteContent, setNoteContent] = useState('');
   const [savingStatus, setSavingStatus] = useState(false);
   const [activities, setActivities] = useState<any[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [isEditingConversion, setIsEditingConversion] = useState(false);
 
+  const hasLinkedCustomer = Boolean(lead.linkedLeadId || lead.linkedLeadCompanyName || lead.rawCustomerName || lead.linkedCustomerId);
 
   // Sync real-time updates for activities/notes
   useEffect(() => {
@@ -170,6 +172,35 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
               </Badge>
             </div>
             <p className="text-slate-500 text-sm mt-1">LPO Owner: <span className="font-semibold text-slate-700">{lead.lpoOwnerName}</span></p>
+            
+            {hasLinkedCustomer && (
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100 flex-wrap text-xs">
+                <span className="text-slate-500 font-semibold flex items-center gap-1">
+                  <Link2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Linked CRM Customer:
+                </span>
+                {lead.linkedLeadId ? (
+                  <a
+                    href={`/leads/${lead.linkedLeadId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-bold text-[#095c7b] hover:underline bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
+                  >
+                    {lead.linkedLeadCompanyName || lead.rawCustomerName || 'CRM Lead'}
+                    <ArrowUpRight className="w-3 h-3" />
+                  </a>
+                ) : (
+                  <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+                    {lead.linkedLeadCompanyName || lead.rawCustomerName}
+                  </span>
+                )}
+                {lead.linkedCustomerId && (
+                  <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 font-mono text-[10px] font-bold">
+                    ID: {lead.linkedCustomerId}
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -444,6 +475,40 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                   </div>
                 </div>
               </div>
+
+              {hasLinkedCustomer && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                    <Building className="h-4 w-4 text-[#095c7b]" />
+                    Linked CRM Customer / Lead
+                  </h3>
+                  <div className="p-4 border border-blue-200/70 rounded-lg bg-blue-50/40 text-sm space-y-2">
+                    <p>
+                      <span className="text-slate-500 font-medium">Company / Name:</span>{' '}
+                      <span className="font-bold text-slate-900">{lead.linkedLeadCompanyName || lead.rawCustomerName || 'Linked Customer'}</span>
+                    </p>
+                    {lead.linkedCustomerId && (
+                      <p>
+                        <span className="text-slate-500 font-medium">Customer Entity ID:</span>{' '}
+                        <span className="font-mono font-bold text-[#095c7b]">{lead.linkedCustomerId}</span>
+                      </p>
+                    )}
+                    {lead.linkedLeadId && (
+                      <p className="pt-1">
+                        <a 
+                          href={`/leads/${lead.linkedLeadId}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-xs font-bold text-[#095c7b] hover:underline inline-flex items-center gap-1 bg-white px-2.5 py-1 rounded border border-blue-200 shadow-xs"
+                        >
+                          View CRM Lead Profile
+                          <ArrowUpRight className="h-3 w-3" />
+                        </a>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <h3 className="text-sm font-bold text-slate-700 flex items-center gap-1.5">

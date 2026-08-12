@@ -114,5 +114,10 @@ export interface PresaleRecord {
   createdByName?: string;
   updatedByUid?: string;
   updatedByName?: string;
+  cancellationReason?: string;
+  cancellationNotes?: string;
+  cancelledAt?: string;
+  cancelledByUid?: string;
+  cancelledByName?: string;
 }
 

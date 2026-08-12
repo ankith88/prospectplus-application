@@ -56,6 +56,30 @@ async function runCliImport() {
 
   console.log(`[CLI LPO Import] Parsed ${rawRows.length} rows from CSV.`);
 
+  const parseDateOnly = (rawDate?: string): string => {
+    if (!rawDate) return '';
+    const datePart = rawDate.trim().split(' ')[0];
+    const parts = datePart.split('/');
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0');
+      const month = parts[1].padStart(2, '0');
+      const year = parts[2];
+      return `${day}/${month}/${year}`;
+    }
+    return datePart;
+  };
+
+  const mapLpoStatus = (rawStatus?: string): string => {
+    if (!rawStatus) return 'New';
+    const trimmed = rawStatus.trim();
+    const lower = trimmed.toLowerCase();
+    if (lower === 'lost') return 'Lost';
+    if (lower === 'new') return 'New';
+    if (lower.includes('service agreement sent')) return 'SCF Sent';
+    if (lower.includes('lpo.plus sign in email sent')) return 'LPO.PLUS Sign In Email Sent';
+    return trimmed;
+  };
+
   const mapRowToLpo = (row: Record<string, any>) => {
     const keys = Object.keys(row);
     const getVal = (possibleHeaders: string[], colIdx?: number) => {
@@ -71,29 +95,50 @@ async function runCliImport() {
       return '';
     };
 
-    // User Column Letters:
-    // Col G: Linked Partner Location
-    // Col I: Customer ID (customerEntityId)
-    // Col K: Name of the Linked Franchisee
-    // Col N: Address Line 1
-    // Col O: Address Line 2
-    // Col T: Contact Name
-    // Col U: Contact Email
-    // Col V: Contact Phone
-    const linkedPartnerLocationName = getVal(['Linked NCL', 'Linked Partner Location'], 6);
-    const linkedCustomerId = getVal(['ID', 'Customer ID', 'customerEntityId'], 8);
-    const linkedFranchiseeName = getVal(['LPO Tier', 'Company Name / Franchise', 'Linked Franchisee'], 10);
-    const address1 = getVal(['Street No & Name', 'Address Line 1'], 13);
-    const address2 = getVal(['LPO Suburb', 'Address Line 2'], 14);
-    const lpoOwnerName = getVal(['Contact Name'], 19);
-    const email = getVal(['Email Address'], 20);
-    const phone = getVal(['Contact Number'], 21);
+    // User Column Letters & Specification:
+    // Col D (Index 3): Date Created (DD/MM/YYYY HH:MM -> DD/MM/YYYY date only)
+    // Col G (Index 6): Linked NCL / Partner Location Name
+    // Col I (Index 8): ID (Customer Entity ID)
+    // Col K (Index 10): Linked Franchisees
+    // Col M (Index 12): Status* ("Lost" -> "Lost", "New" -> "New", "Service Agreement Sent " -> "SCF Sent")
+    // Col N (Index 13): LPO Level / Unit
+    // Col O (Index 14): LPO Street No & Name
+    // Col P (Index 15): LPO Suburb
+    // Col Q (Index 16): LPO State
+    // Col R (Index 17): LPO Postcode
+    // Col S (Index 18): Notes
+    // Col T (Index 19): Contact Name
+    // Col U (Index 20): Contact Number (Phone)
+    // Col V (Index 21): Email Address
+    // Col W (Index 22): Webpage URL - Source
+    const linkedPartnerLocationName = getVal(['Linked NCL', 'Linked Partner Location', 'Col G'], 6);
+    const linkedCustomerId = getVal(['ID', 'Customer ID', 'customerEntityId', 'Col I'], 8);
+    const linkedFranchiseeName = getVal(['Linked Franchisees', 'Company Name / Franchise', 'Col K'], 10);
+
+    const levelUnit = getVal(['LPO Level / Unit', 'Col N'], 13);
+    const streetName = getVal(['LPO Street No & Name', 'Street No & Name', 'Col O'], 14);
+    const address1 = [levelUnit, streetName].filter(Boolean).join(' ');
+
+    const city = getVal(['LPO Suburb', 'Suburb', 'City', 'Col P'], 15);
+    const state = getVal(['LPO State', 'State', 'Col Q'], 16);
+    const postcode = getVal(['LPO Postcode', 'Postcode', 'Col R'], 17);
+
+    const rawStatus = getVal(['Status*', 'Status', 'status', 'Col M'], 12);
+    const status = mapLpoStatus(rawStatus);
+
+    const lpoOwnerName = getVal(['Contact Name', 'Col T'], 19);
+    const phone = getVal(['Contact Number', 'Contact Phone', 'Col U'], 20);
+    const email = getVal(['Email Address', 'Contact Email', 'Col V'], 21);
+    const source = getVal(['Webpage URL - Source', 'Source', 'Col W'], 22);
+
+    const rawDateCreated = getVal(['Date Created', 'createdDate', 'Col D'], 3);
+    const lpoCreatedDate = parseDateOnly(rawDateCreated);
 
     return {
       lpoInternalId: getVal(['Internal ID'], 0),
       inactive: getVal(['Inactive'], 1)?.toLowerCase() === 'yes',
       secondaryInternalId: getVal(['Internal ID_1'], 2),
-      lpoCreatedDate: getVal(['Date Created'], 3),
+      lpoCreatedDate,
       lpoLastModifiedDate: getVal(['Last Modified'], 4),
       lpoName: getVal(['LPO Name'], 5) || 'Unnamed LPO',
       linkedNcl: linkedPartnerLocationName,
@@ -102,28 +147,29 @@ async function runCliImport() {
       linkedCustomerId,
       companyNameFranchise: linkedFranchiseeName,
       linkedFranchiseeName,
-      lpoTier: getVal(['LPO Tier'], 10),
-      status: getVal(['Status*'], 11) || 'New',
-      poLevelTier: getVal(['PO Level / Tier'], 12),
+      lpoTier: getVal(['LPO Tier'], 11),
+      status,
+      poLevelTier: levelUnit,
       address1,
-      address2,
-      city: getVal(['LPO Suburb'], 14),
-      state: getVal(['LPO State'], 15),
-      postcode: getVal(['LPO Postcode'], 16),
-      notes: getVal(['Notes'], 17),
+      address2: levelUnit,
+      city,
+      state,
+      postcode,
+      notes: getVal(['Notes'], 18),
       lpoOwnerName,
       phone,
       email,
-      pageURL: getVal(['Page URL - S/O'], 22),
-      salesRep: getVal(['Sales Rep'], 23),
-      validationProvided: getVal(['Validation Provided'], 24),
-      leadGenerator: getVal(['Lead Generator'], 25),
-      faceToFace: getVal(['Face-to-face'], 26),
+      source,
+      pageURL: getVal(['Webpage URL - Source', 'Page URL - S/O'], 22),
+      salesRep: getVal(['LPO - Sales Rep'], 23),
+      validationProvided: getVal(['LPO - Validation Process'], 24),
+      leadGenerator: getVal(['LPO Lead Generation'], 25),
+      faceToFace: getVal(['Face-to-face - Corinne'], 26),
       confAndCall: getVal(['Conf & Call'], 27),
-      acceptedTerms: getVal(['Accepted T&C'], 28),
-      dynamicScf: getVal(['Dynamic SCF'], 29),
-      adhocBooking: getVal(['Adhoc Booking'], 30),
-      defaultPassword: getVal(['Default Password'], 31),
+      acceptedTerms: getVal(['T&C Accepted'], 27),
+      dynamicScf: getVal(['Dynamic SCF URL'], 28),
+      adhocBooking: getVal(['LPO - ADHOC Booking URL'], 29),
+      defaultPassword: getVal(['LPO Default Password'], 30),
     };
   };
 

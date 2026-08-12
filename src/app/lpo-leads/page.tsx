@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { collection, query, orderBy, onSnapshot, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { useAuth } from '@/hooks/use-auth';
@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Building, ArrowUpRight, Plus, Clock, CheckCircle2, XCircle, ChevronsUpDown, Check, Upload } from 'lucide-react';
+import { Building, ArrowUpRight, Plus, Clock, CheckCircle2, XCircle, ChevronsUpDown, Check, Upload, Link2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -38,7 +38,19 @@ interface LpoLead {
   state: string;
   postcode: string;
   status: string;
+  lpoCreatedDate?: any;
   createdAt?: any;
+
+  // Linkage fields
+  linkedLeadId?: string | null;
+  linkedLeadCompanyName?: string | null;
+  linkedCustomerId?: string | null;
+  rawCustomerName?: string | null;
+  linkStatus?: string | null;
+  linkedPartnerLocationId?: string | null;
+  linkedPartnerLocationName?: string | null;
+  linkedNcl?: string | null;
+  linkedFranchiseeName?: string | null;
 }
 
 export default function LpoLeadsListPage() {
@@ -47,10 +59,103 @@ export default function LpoLeadsListPage() {
   const { toast } = useToast();
   const [leads, setLeads] = useState<LpoLead[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [partnerLocations, setPartnerLocations] = useState<any[]>([]);
   const [selectedPartnerLocationId, setSelectedPartnerLocationId] = useState<string>('');
+
+  const parseDateValue = (raw: any): { timestamp: number; formatted: string } => {
+    if (!raw) return { timestamp: 0, formatted: '—' };
+
+    // Firestore Timestamp
+    if (typeof raw.toDate === 'function') {
+      const date = raw.toDate();
+      return {
+        timestamp: date.getTime(),
+        formatted: date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }),
+      };
+    }
+
+    if (typeof raw.seconds === 'number') {
+      const date = new Date(raw.seconds * 1000);
+      return {
+        timestamp: date.getTime(),
+        formatted: date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }),
+      };
+    }
+
+    if (raw instanceof Date) {
+      return {
+        timestamp: raw.getTime(),
+        formatted: raw.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }),
+      };
+    }
+
+    if (typeof raw === 'string' || typeof raw === 'number') {
+      const str = String(raw).trim();
+      if (!str) return { timestamp: 0, formatted: '—' };
+
+      // Check DD/MM/YYYY format
+      const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (dmyMatch) {
+        const day = parseInt(dmyMatch[1], 10);
+        const month = parseInt(dmyMatch[2], 10) - 1;
+        const year = parseInt(dmyMatch[3], 10);
+        const date = new Date(year, month, day);
+        if (!isNaN(date.getTime())) {
+          return {
+            timestamp: date.getTime(),
+            formatted: date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }),
+          };
+        }
+      }
+
+      // Try standard Date parsing
+      const parsed = new Date(str);
+      if (!isNaN(parsed.getTime())) {
+        return {
+          timestamp: parsed.getTime(),
+          formatted: parsed.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }),
+        };
+      }
+
+      return { timestamp: 0, formatted: str };
+    }
+
+    return { timestamp: 0, formatted: '—' };
+  };
+
+  const getLeadDateInfo = (lead: LpoLead) => {
+    if (lead.lpoCreatedDate) {
+      const parsed = parseDateValue(lead.lpoCreatedDate);
+      if (parsed.formatted !== '—' || parsed.timestamp > 0) {
+        return parsed;
+      }
+    }
+    return parseDateValue(lead.createdAt);
+  };
+
+  const filteredLeads = leads
+    .filter((lead) => {
+      if (!searchTerm.trim()) return true;
+      const term = searchTerm.toLowerCase().trim();
+      const formattedCreated = getLeadDateInfo(lead).formatted.toLowerCase();
+      return (
+        lead.lpoName?.toLowerCase().includes(term) ||
+        lead.lpoOwnerName?.toLowerCase().includes(term) ||
+        lead.email?.toLowerCase().includes(term) ||
+        lead.phone?.toLowerCase().includes(term) ||
+        lead.prospectPlusId?.toLowerCase().includes(term) ||
+        lead.status?.toLowerCase().includes(term) ||
+        lead.linkedLeadCompanyName?.toLowerCase().includes(term) ||
+        lead.rawCustomerName?.toLowerCase().includes(term) ||
+        lead.linkedCustomerId?.toLowerCase().includes(term) ||
+        lead.linkedPartnerLocationName?.toLowerCase().includes(term) ||
+        formattedCreated.includes(term)
+      );
+    })
+    .sort((a, b) => getLeadDateInfo(b).timestamp - getLeadDateInfo(a).timestamp);
 
   // Google Places Autocomplete & Partner selection states
   const [lat, setLat] = useState<number | null>(null);
@@ -244,13 +349,36 @@ export default function LpoLeadsListPage() {
     const q = query(collection(firestore, 'lpo_leads'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const leadsData: LpoLead[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
+      const docsToUpdate: any[] = [];
+
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        let status = data.status;
+
+        if (
+          status === 'LPO.PLUS Sign In Email Sent' ||
+          status === 'LPO.Plus Sign In Email Sent' ||
+          (typeof status === 'string' && status.toLowerCase().trim() === 'lpo.plus sign in email sent')
+        ) {
+          status = 'LPO.Plus Logged In';
+          docsToUpdate.push(docSnap.ref);
+        }
+
         leadsData.push({
-          id: doc.id,
+          id: docSnap.id,
           ...data,
+          status,
         } as LpoLead);
       });
+
+      if (docsToUpdate.length > 0) {
+        const batch = writeBatch(firestore);
+        docsToUpdate.forEach((docRef) => {
+          batch.update(docRef, { status: 'LPO.Plus Logged In' });
+        });
+        batch.commit().catch((err) => console.error('Error auto-updating LPO lead status to LPO.Plus Logged In:', err));
+      }
+
       setLeads(leadsData);
       setLoadingLeads(false);
     }, (err) => {
@@ -290,7 +418,7 @@ export default function LpoLeadsListPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="w-full max-w-full space-y-6">
       <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -317,20 +445,34 @@ export default function LpoLeadsListPage() {
       </div>
 
       <Card className="border-slate-200/80 shadow-sm">
-        <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-          <CardTitle className="text-lg font-semibold text-slate-800">Enquiries List</CardTitle>
+        <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between flex-wrap gap-4 py-4">
+          <CardTitle className="text-lg font-semibold text-slate-800">
+            Enquiries List ({filteredLeads.length})
+          </CardTitle>
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+            <Input
+              type="search"
+              placeholder="Search LPO, contact or customer..."
+              className="pl-9 bg-white h-9 text-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loadingLeads ? (
             <div className="p-8 text-center text-slate-500">Loading leads...</div>
-          ) : leads.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">No LPO leads found.</div>
+          ) : filteredLeads.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">No matching LPO leads found.</div>
           ) : (
             <Table>
               <TableHeader className="bg-[#095c7b] hover:bg-[#095c7b]">
                 <TableRow className="hover:bg-[#095c7b]">
                   <TableHead className="font-bold text-white w-[100px]">Lead ID</TableHead>
+                  <TableHead className="font-bold text-white min-w-[130px]">DATE CREATED</TableHead>
                   <TableHead className="font-bold text-white min-w-[180px]">LPO Location / Owner</TableHead>
+                  <TableHead className="font-bold text-white min-w-[200px]">LINKED CUSTOMER</TableHead>
                   <TableHead className="font-bold text-white text-center w-[70px]">NEW</TableHead>
                   <TableHead className="font-bold text-white text-center w-[180px]">PARTNER LOCATION LINKED</TableHead>
                   <TableHead className="font-bold text-white text-center w-[100px]">INDUCTION</TableHead>
@@ -345,7 +487,7 @@ export default function LpoLeadsListPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leads.map((lead) => {
+                {filteredLeads.map((lead) => {
                   const isNew = true; // Always new if it exists
                   const isPartnerLinked = ['Linked to Partner Location', 'Induction', 'Operations Setup', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
                   const isInduction = ['Induction', 'Operations Setup', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
@@ -357,22 +499,87 @@ export default function LpoLeadsListPage() {
                   const isPortalLoggedIn = ['LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
                   const isNetsuiteSynced = ['Lead Created'].includes(lead.status);
 
+                  const isLost = lead.status === 'Lost' || lead.status?.toLowerCase().includes('lost');
+                  const isLpoLoggedIn = lead.status === 'LPO.Plus Logged In' || lead.status === 'LPO.PLUS Sign In Email Sent' || lead.status === 'LPO.Plus Sign In Email Sent';
+                  const hasLinkedCustomer = Boolean(lead.linkedLeadId || lead.linkedLeadCompanyName || lead.rawCustomerName || lead.linkedCustomerId);
+
                   return (
-                    <TableRow key={lead.id} className="hover:bg-slate-50/50 transition-colors">
+                    <TableRow 
+                      key={lead.id} 
+                      className={
+                        isLost 
+                          ? "bg-rose-50/80 hover:bg-rose-100/90 transition-colors" 
+                          : isLpoLoggedIn
+                          ? "bg-emerald-50/80 hover:bg-emerald-100/90 transition-colors"
+                          : "hover:bg-slate-50/50 transition-colors"
+                      }
+                    >
                       <TableCell className="font-medium text-[#095c7b] py-3.5">
                         <Link href={`/lpo-leads/${lead.id}`} className="hover:underline">
                           {lead.prospectPlusId}
                         </Link>
                       </TableCell>
+                      <TableCell className="text-xs font-semibold text-slate-700 whitespace-nowrap py-3.5">
+                        {getLeadDateInfo(lead).formatted}
+                      </TableCell>
                       <TableCell className="font-medium text-slate-900 py-3.5">
                         <div>
-                          <Link href={`/lpo-leads/${lead.id}`} className="font-bold text-slate-800 hover:text-[#095c7b] hover:underline">
-                            {lead.lpoName}
-                          </Link>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Link href={`/lpo-leads/${lead.id}`} className="font-bold text-slate-800 hover:text-[#095c7b] hover:underline">
+                              {lead.lpoName}
+                            </Link>
+                            {isLost && (
+                              <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100 border-rose-200 text-[10px] px-2 py-0.5 font-bold">
+                                Lost
+                              </Badge>
+                            )}
+                            {isLpoLoggedIn && !isLost && (
+                              <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-emerald-200 text-[10px] px-2 py-0.5 font-bold">
+                                LPO.Plus Logged In
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-500 mt-0.5">{lead.lpoOwnerName} &bull; {lead.email}</p>
                         </div>
                       </TableCell>
                       
+                      {/* LINKED CUSTOMER */}
+                      <TableCell className="py-3.5">
+                        {hasLinkedCustomer ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-emerald-200 text-[11px] px-2 py-0.5 font-bold">
+                                Linked
+                              </Badge>
+                              {lead.linkedCustomerId && (
+                                <span className="text-[11px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-semibold">
+                                  ID: {lead.linkedCustomerId}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm font-bold text-slate-800">
+                              {lead.linkedLeadId ? (
+                                <Link 
+                                  href={`/leads/${lead.linkedLeadId}`} 
+                                  className="text-[#095c7b] hover:text-[#053647] hover:underline inline-flex items-center gap-1 font-bold"
+                                  target="_blank"
+                                  title={`View linked CRM lead (${lead.linkedLeadId})`}
+                                >
+                                  {lead.linkedLeadCompanyName || lead.rawCustomerName || 'Linked Customer'}
+                                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+                                </Link>
+                              ) : (
+                                <span className="text-slate-800 font-semibold">{lead.linkedLeadCompanyName || lead.rawCustomerName}</span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-500">
+                            Unlinked
+                          </span>
+                        )}
+                      </TableCell>
+
                       {/* NEW */}
                       <TableCell className="text-center py-3.5">
                         {lead.status === 'New' ? (

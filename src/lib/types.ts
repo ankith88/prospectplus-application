@@ -928,6 +928,231 @@ export interface ProspectEmailLog {
   error?: string;
 }
 
+export interface KeyFactSheetHistoryColumn {
+  id: string;
+  label: string;
+  occurrences: {
+    transferred?: number;
+    ceased?: number;
+    terminatedFranchisor?: number;
+    terminatedFranchisee?: number;
+    notExtended?: number;
+    boughtBack?: number;
+    acquiredByFranchisor?: number;
+  };
+}
+
+export interface KeyFactSheetData {
+  publicToken: string;
+  sentAt?: string;
+  sentByUid?: string;
+  sentByName?: string;
+  
+  // Section A: About the franchisor
+  franchisorName?: string;
+  yearsInOperation?: string;
+  financialViability?: 'Yes' | 'No';
+
+  // Section B: Major disputes
+  currentLegalProceedings?: 'Yes' | 'No';
+  finalJudgments?: 'Yes' | 'No';
+  disputeMediationPercent?: string;
+
+  // Section C: Current and past franchisees
+  franchiseeOwnedCount?: number | string;
+  corporateOwnedCount?: number | string;
+  historyColumns?: KeyFactSheetHistoryColumn[];
+  historyFy2024?: {
+    transferred?: number | string;
+    ceased?: number | string;
+    terminatedFranchisor?: number | string;
+    terminatedFranchisee?: number | string;
+    notExtended?: number | string;
+    boughtBack?: number | string;
+    acquiredByFranchisor?: number | string;
+  };
+  historyFy2023?: {
+    transferred?: number | string;
+    ceased?: number | string;
+    terminatedFranchisor?: number | string;
+    terminatedFranchisee?: number | string;
+    notExtended?: number | string;
+    boughtBack?: number | string;
+    acquiredByFranchisor?: number | string;
+  };
+  historyFy2022?: {
+    transferred?: number | string;
+    ceased?: number | string;
+    terminatedFranchisor?: number | string;
+    terminatedFranchisee?: number | string;
+    notExtended?: number | string;
+    boughtBack?: number | string;
+    acquiredByFranchisor?: number | string;
+  };
+
+  // Section D: The territory or site for the business
+  territoryName?: string;
+  territoryDetailsSelected?: string[];
+  territoryOtherDetails?: string;
+  canFranchisorChangeTerritory?: 'Yes' | 'No';
+  competitionTypesSelected?: string[];
+  canFranchiseeSellOnline?: 'Yes' | 'No';
+  leaseInterest?: 'Yes' | 'No';
+
+  // Section E: Supply of goods and services to the franchisee
+  supplierRestrictions?: 'Yes' | 'No';
+  franchisorInterestInSuppliers?: 'Yes' | 'No';
+  franchisorRebates?: 'Yes' | 'No';
+
+  // Section F: What the franchisee has to pay to operate the franchise
+  preliminaryPaymentRequired?: string;
+  setupCostsText?: string;
+  ongoingPaymentsText?: string;
+  otherPaymentsText?: string;
+  franchiseFee?: number | string;
+  trainingFee?: number | string;
+  transactionFee?: number | string;
+  vehicleCostRange?: string;
+  equipmentCostRange?: string;
+  insuranceCostRange?: string;
+  regoCostRange?: string;
+  workingCapitalRange?: string;
+  legalAccountingRange?: string;
+
+  // Section G: Marketing funds
+  marketingFundContribution?: string;
+  marketingFeePercent?: number | string;
+
+  // Section H: Unilateral variation
+  canUnilateralVariation?: 'Yes' | 'No';
+
+  // Section I: Earnings
+  historicalEarningsIncluded?: 'Yes' | 'No';
+  projectedEarningsIncluded?: 'Yes' | 'No';
+
+  // Section J: What happens at the end of the franchise agreement
+  endOfAgreementClauseDetails?: string;
+  agreementTermYears?: string;
+  renewalOptionSelected?: string[];
+  franchisorBuysUnsoldStock?: 'Yes' | 'No';
+  goodwillCompensation?: 'Yes' | 'No';
+  restraintOfTradeClause?: 'Yes' | 'No';
+  notes?: string;
+  documentDate?: string;
+}
+
+export interface ConfidentialityDeedData {
+  publicToken: string;
+  status: 'not_started' | 'sent' | 'signed_online';
+  sentAt?: string;
+  sentToEmail?: string;
+  signedAt?: string;
+  signerName?: string;
+  signerEmail?: string;
+  signerAddress?: string;
+  signatureDataUrl?: string;
+  ipAddress?: string;
+}
+
+export interface EOIData {
+  publicToken: string;
+  status: 'not_started' | 'sent' | 'signed_online';
+  sentAt?: string;
+  signedAt?: string;
+  signerName?: string;
+  signerEmail?: string;
+  signatureDataUrl?: string;
+  
+  // EOI Form Fields
+  entityStructure?: 'SOLE TRADER' | 'PARTNERSHIP' | 'PTY LTD COMPANY' | 'LTD COMPANY';
+  companyName?: string;
+  abn?: string;
+  registeredAddress?: string;
+  businessAddress?: string;
+  phoneHome?: string;
+  phoneBusiness?: string;
+  driversLicence?: string;
+  driversLicencePlaceOfIssue?: string;
+  dateOfBirth?: string;
+  maritalStatus?: string;
+  spouseName?: string;
+  spouseAge?: string;
+  childrenAges?: string;
+  spouseActiveInBusiness?: boolean;
+  ownershipPercent?: number | string;
+  otherDirectorships?: string;
+  formerAddress?: string;
+  healthStatus?: 'GOOD' | 'FAIR' | 'POOR';
+  physicalLimitations?: string;
+  qualifications?: string;
+  salesTraining?: string;
+  trustName?: string;
+  trustEstablishedDate?: string;
+  trustBeneficiaries?: string;
+  employmentHistory?: Array<{
+    occupation: string;
+    position: string;
+    company: string;
+    businessType: string;
+    address: string;
+    contactPerson: string;
+    phone: string;
+    commencementDate: string;
+    reasonLeft: string;
+    responsibilities: string;
+  }>;
+  references?: Array<{
+    name: string;
+    phone: string;
+    position: string;
+    company: string;
+    nature: string;
+  }>;
+  convictions?: string;
+  legalProceedings?: string;
+  monthlyIncome?: number | string;
+  monthlyExpenditure?: number | string;
+  totalAssets?: number | string;
+  totalLiabilities?: number | string;
+  netWorth?: number | string;
+  reasonForPurchase?: string;
+  fundingSource?: string;
+  whySuited?: string;
+  similarBusinessExperience?: boolean;
+  similarBusinessDetails?: string;
+  preparedToComply?: boolean;
+  whySuccessful?: string;
+  valuableQualities?: string;
+  fullTimeDevotion?: boolean;
+  operatingHoursDetails?: string;
+  mainStrengths?: string;
+  mainWeaknesses?: string;
+  knowsFranchiseDefinition?: boolean;
+  understandsRelationship?: boolean;
+  acceptsGuidance?: boolean;
+  knowsDefinedTerm?: boolean;
+  representationsMade?: string;
+  understandsIndependentAdvice?: boolean;
+  requiresFinance?: boolean;
+  authorizeFinanceSharing?: boolean;
+  informationStatementConfirmed?: boolean;
+  informationStatementDate?: string;
+  declarationConfirmed?: boolean;
+}
+
+export interface DepositDetails {
+  isPaid: boolean;
+  percentageDeposited?: number | string; // e.g. 5, 10
+  amountPaid?: number | string;
+  paymentDate?: string;
+  paymentMethod?: 'EFT' | 'Cheque' | 'Credit Card' | 'Other';
+  receiptRef?: string; // e.g. 'FR DEP SMITH'
+  notes?: string;
+  loggedByUid?: string;
+  loggedByName?: string;
+  loggedAt?: string;
+}
+
 export interface FranchiseProspect {
   id: string;
   firstName: string;
@@ -937,12 +1162,13 @@ export interface FranchiseProspect {
   phone: string;
   preferredState?: string;
   preferredTerritory?: string;
+  interestedTerritories?: string[];
   interest?: string;
   vehicle?: string;
   experience?: string;
   employment?: string;
   message?: string;
-  status: 'New' | 'Contacted' | 'Under Review' | 'Converted' | 'Rejected' | 'Archived';
+  status: 'New' | 'Contacted' | 'Under Review' | 'EOI Signed' | 'Converted' | 'Rejected' | 'Archived';
   brochureSent?: boolean;
   brochureSentAt?: string;
   emailLogs?: ProspectEmailLog[];
@@ -957,6 +1183,12 @@ export interface FranchiseProspect {
   sourceApp?: string;
   convertedUserId?: string;
   convertedFranchiseeId?: string;
+
+  // New Step-by-Step Prospect Pipeline Fields
+  keyFactSheet?: KeyFactSheetData;
+  confidentialityDeed?: ConfidentialityDeedData;
+  eoiData?: EOIData;
+  depositDetails?: DepositDetails;
 }
 
 export interface Operator {

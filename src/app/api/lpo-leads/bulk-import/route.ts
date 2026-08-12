@@ -207,7 +207,7 @@ export async function POST(req: NextRequest) {
         state: row.state ? String(row.state).trim() : '',
         postcode: row.postcode ? String(row.postcode).trim() : '',
         notes: row.notes ? String(row.notes).trim() : '',
-        status: row.status ? String(row.status).trim() : 'New',
+        status: (row.status && (String(row.status).trim() === 'LPO.PLUS Sign In Email Sent' || String(row.status).trim() === 'LPO.Plus Sign In Email Sent')) ? 'LPO.Plus Logged In' : (row.status ? String(row.status).trim() : 'New'),
         source: 'CSV Import',
 
         lpoInternalId,
