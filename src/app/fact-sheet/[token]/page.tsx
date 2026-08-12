@@ -142,7 +142,7 @@ export default function PublicFactSheetPage() {
   const formattedCurrentDate = getFormattedCurrentDate(kfs.documentDate, kfs.sentAt);
 
   return (
-    <div className="min-h-screen bg-[#f4f7f8] text-slate-900 py-8 px-4 sm:px-6 lg:px-8 font-sans">
+    <div className="min-h-screen bg-[#d0dfcd] text-slate-900 py-8 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Brand Banner Header */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">

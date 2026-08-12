@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { collection, query, where, getDocs, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { Lead, UserProfile } from '@/lib/types';
+import { Lead, UserProfile, Contact } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -195,6 +195,43 @@ export function getLeadCsBucketDate(lead: Lead): string | undefined {
     }
 
     return undefined;
+}
+
+export function getPrimaryContact(lead: Lead): Contact | null {
+    if (lead?.contacts && Array.isArray(lead.contacts) && lead.contacts.length > 0) {
+        return lead.contacts.find((c: any) => c.isPrimary) || lead.contacts[0];
+    }
+    return null;
+}
+
+export function getLeadContactName(lead: Lead): string {
+    if (!lead) return 'No Contact';
+    const primary = getPrimaryContact(lead);
+    if (primary?.name && primary.name.trim() && primary.name.trim().toLowerCase() !== 'n/a') {
+        return primary.name.trim();
+    }
+    if (primary?.firstName || primary?.lastName) {
+        const full = [primary.firstName, primary.lastName].filter(Boolean).join(' ').trim();
+        if (full) return full;
+    }
+    const legacyName = (lead as any).contactName || (lead as any).contact_name || (lead as any).primaryContactPerson;
+    if (typeof legacyName === 'string' && legacyName.trim() && legacyName.trim().toLowerCase() !== 'n/a') {
+        return legacyName.trim();
+    }
+    if (lead.discoveryData?.personSpokenWithName && lead.discoveryData.personSpokenWithName.trim()) {
+        return lead.discoveryData.personSpokenWithName.trim();
+    }
+    if (lead.discoveryData?.decisionMakerName && lead.discoveryData.decisionMakerName.trim()) {
+        return lead.discoveryData.decisionMakerName.trim();
+    }
+    const inbound = lead.inboundDetails as any;
+    if (inbound?.name && typeof inbound.name === 'string' && inbound.name.trim()) {
+        return inbound.name.trim();
+    }
+    if (inbound?.fullName && typeof inbound.fullName === 'string' && inbound.fullName.trim()) {
+        return inbound.fullName.trim();
+    }
+    return 'No Contact';
 }
 
 export default function CustomerSuccessDashboard() {
@@ -541,26 +578,44 @@ export default function CustomerSuccessDashboard() {
                         (selectedCs !== 'all' && selectedCs !== 'unassigned' ? l.customerSuccessAssigned === selectedCs : true)
                     );
                     
-                    // Fetch bucket_history subcollection for leads where bucketHistory array is missing
-                    const leadsWithHistory = await Promise.all(
+                    // Fetch contacts subcollection and bucket_history subcollection for leads
+                    const leadsWithDetails = await Promise.all(
                         filteredLeads.map(async (l) => {
-                            if (l.bucketHistory && Array.isArray(l.bucketHistory) && l.bucketHistory.length > 0) {
-                                return l;
-                            }
-                            try {
-                                const bhSnap = await getDocs(collection(firestore, 'leads', l.id, 'bucket_history'));
-                                if (!bhSnap.empty) {
-                                    const historyList = bhSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-                                    return { ...l, bucketHistory: historyList };
+                            let updated = { ...l };
+                            
+                            // Fetch contacts subcollection if not populated
+                            if (!updated.contacts || !Array.isArray(updated.contacts) || updated.contacts.length === 0) {
+                                try {
+                                    let cSnap = await getDocs(collection(firestore, 'leads', l.id, 'contacts'));
+                                    if (cSnap.empty) {
+                                        cSnap = await getDocs(collection(firestore, 'companies', l.id, 'contacts'));
+                                    }
+                                    if (!cSnap.empty) {
+                                        updated.contacts = cSnap.docs.map(d => ({ id: d.id, ...d.data() } as Contact));
+                                    }
+                                } catch (err) {
+                                    console.error(`Error fetching contacts for lead ${l.id}:`, err);
                                 }
-                            } catch (err) {
-                                // ignore
                             }
-                            return l;
+
+                            // Fetch bucket_history subcollection for leads where bucketHistory array is missing
+                            if (!updated.bucketHistory || !Array.isArray(updated.bucketHistory) || updated.bucketHistory.length === 0) {
+                                try {
+                                    const bhSnap = await getDocs(collection(firestore, 'leads', l.id, 'bucket_history'));
+                                    if (!bhSnap.empty) {
+                                        const historyList = bhSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+                                        updated.bucketHistory = historyList;
+                                    }
+                                } catch (err) {
+                                    // ignore
+                                }
+                            }
+
+                            return updated;
                         })
                     );
 
-                    setLeads(leadsWithHistory);
+                    setLeads(leadsWithDetails);
                 }
             } catch (error) {
                 console.error("Error fetching pipeline leads", error);
@@ -612,7 +667,15 @@ export default function CustomerSuccessDashboard() {
                 }
             }
 
-            if (searchQuery && !lead.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) && !(lead.prospectPlusId && lead.prospectPlusId.toLowerCase().includes(searchQuery.toLowerCase()))) return false;
+            if (searchQuery) {
+                const qLower = searchQuery.toLowerCase();
+                const companyMatch = lead.companyName?.toLowerCase().includes(qLower);
+                const idMatch = lead.prospectPlusId?.toLowerCase().includes(qLower);
+                const contactMatch = getLeadContactName(lead).toLowerCase().includes(qLower);
+                const phoneMatch = (lead.customerPhone || lead.contacts?.[0]?.phone || '').toLowerCase().includes(qLower);
+                const emailMatch = (lead.customerServiceEmail || lead.contacts?.[0]?.email || '').toLowerCase().includes(qLower);
+                if (!companyMatch && !idMatch && !contactMatch && !phoneMatch && !emailMatch) return false;
+            }
             if (filters.status !== 'all' && currentStatus !== filters.status) return false;
             if (filters.campaign !== 'all' && lead.campaign !== filters.campaign) return false;
             if (filters.origin !== 'all') {
@@ -1341,10 +1404,10 @@ function LeadGrid({
                     </TableHeader>
                     <TableBody>
                         {sortedLeads.map((lead) => {
-                            const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
-                            const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || 'No Contact';
-                            const phone = lead.customerPhone || primaryContact?.phone || '';
-                            const email = lead.customerServiceEmail || primaryContact?.email || '';
+                            const primaryContact = getPrimaryContact(lead);
+                            const contactName = getLeadContactName(lead);
+                            const phone = primaryContact?.phone || lead.customerPhone || '';
+                            const email = primaryContact?.email || lead.customerServiceEmail || '';
                             const address = [
                                 lead.address?.address1 || (lead as any).address1,
                                 lead.address?.street || (lead as any).street,
@@ -1624,8 +1687,8 @@ function LeadGrid({
 }
 
 function LeadCard({ lead, onCall, onClick, onEmail, onNotes, journeys = [], journeyStates = {} }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, journeys?: any[], journeyStates?: Record<string, any[]> }) {
-    const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
-    const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
+    const primaryContact = getPrimaryContact(lead);
+    const contactName = getLeadContactName(lead);
     const origin = getLeadOrigin(lead);
     
     const systemDateVal = getLeadSystemEnteredDate(lead);

@@ -119,6 +119,7 @@ export async function POST(req: Request) {
     const publicToken = token || currentData.eoiData?.publicToken || encodeProspectToken('eoi', prospectId);
 
     const fullEOIData = {
+      ...(currentData.eoiData || {}),
       publicToken,
       status: 'signed_online',
       sentAt: currentData.eoiData?.sentAt || new Date().toISOString(),

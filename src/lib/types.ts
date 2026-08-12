@@ -558,6 +558,8 @@ export interface Lead {
   commRegId?: string;
   companyDescription?: string;
   wasOutbound?: boolean;
+  wasInbound?: boolean;
+  originalBucket?: string;
   assignedToDialerAt?: string;
   leadType?: 'Product' | 'Service' | 'Service & Product' | string;
   multiSiteLocations?: Address[];
@@ -1100,6 +1102,22 @@ export interface ConfidentialityDeedData {
   signatureDataUrl?: string;
   ipAddress?: string;
   documents?: ProspectDocument[];
+
+  // Dynamic Deed Schedule Fields
+  agreementDate?: string;
+  providerName?: string;
+  providerAcn?: string;
+  providerAddress?: string;
+  providerEmail?: string;
+  providerContact?: string;
+  recipientName?: string;
+  recipientAcn?: string;
+  recipientAbn?: string;
+  recipientShortName?: string;
+  recipientAddress?: string;
+  recipientEmail?: string;
+  recipientContact?: string;
+  purpose?: string;
 }
 
 export interface EOIData {
@@ -1112,7 +1130,7 @@ export interface EOIData {
   signatureDataUrl?: string;
   documents?: ProspectDocument[];
   
-  // EOI Form Fields
+  // Section 1: Entity Structure & Company Details
   entityStructure?: 'SOLE TRADER' | 'PARTNERSHIP' | 'PTY LTD COMPANY' | 'LTD COMPANY';
   companyName?: string;
   abn?: string;
@@ -1120,24 +1138,63 @@ export interface EOIData {
   businessAddress?: string;
   phoneHome?: string;
   phoneBusiness?: string;
+  facsimileNo?: string;
+
+  // Section 2: Applicant 1 Details
+  applicant1Name?: string;
+  applicant1Position?: 'SOLE TRADER' | 'PARTNER' | 'DIRECTOR' | 'SHAREHOLDER' | string;
+  applicant1PrivateAddress?: string;
+  applicant1PhoneHome?: string;
+  applicant1PhoneBusiness?: string;
+  applicant1Email?: string;
+  applicant1DriversLicence?: string;
+  applicant1DriversLicencePlace?: string;
   driversLicence?: string;
   driversLicencePlaceOfIssue?: string;
-  dateOfBirth?: string;
-  maritalStatus?: string;
-  spouseName?: string;
-  spouseAge?: string;
-  childrenAges?: string;
-  spouseActiveInBusiness?: boolean;
-  ownershipPercent?: number | string;
-  otherDirectorships?: string;
-  formerAddress?: string;
-  healthStatus?: 'GOOD' | 'FAIR' | 'POOR';
-  physicalLimitations?: string;
-  qualifications?: string;
-  salesTraining?: string;
+  applicant1DateOfBirth?: string;
+  applicant1MaritalStatus?: string;
+  applicant1SpouseName?: string;
+  applicant1SpouseAge?: string;
+  applicant1ChildrenAges?: string;
+  applicant1SpouseActive?: boolean | string;
+  applicant1OwnershipPercent?: number | string;
+  applicant1OtherDirectorships?: string;
+  applicant1FormerAddress?: string;
+  applicant1HealthStatus?: 'GOOD' | 'FAIR' | 'POOR' | string;
+  applicant1PhysicalLimitations?: string;
+  applicant1Qualifications?: string;
+  applicant1SalesTraining?: string;
+
+  // Section 2 (cont): Applicant 2 Details (Optional)
+  hasApplicant2?: boolean;
+  applicant2Name?: string;
+  applicant2Position?: 'SOLE TRADER' | 'PARTNER' | 'DIRECTOR' | 'SHAREHOLDER' | string;
+  applicant2PrivateAddress?: string;
+  applicant2PhoneHome?: string;
+  applicant2PhoneBusiness?: string;
+  applicant2Email?: string;
+  applicant2DriversLicence?: string;
+  applicant2DriversLicencePlace?: string;
+  applicant2DateOfBirth?: string;
+  applicant2MaritalStatus?: string;
+  applicant2SpouseName?: string;
+  applicant2SpouseAge?: string;
+  applicant2ChildrenAges?: string;
+  applicant2SpouseActive?: boolean | string;
+  applicant2OwnershipPercent?: number | string;
+  applicant2OtherDirectorships?: string;
+  applicant2FormerAddress?: string;
+  applicant2HealthStatus?: 'GOOD' | 'FAIR' | 'POOR' | string;
+  applicant2PhysicalLimitations?: string;
+  applicant2Qualifications?: string;
+  applicant2SalesTraining?: string;
+
+  // Section 3: Trusts
   trustName?: string;
   trustEstablishedDate?: string;
   trustBeneficiaries?: string;
+
+  // Section 4: Employment History
   employmentHistory?: Array<{
     occupation: string;
     position: string;
@@ -1146,46 +1203,100 @@ export interface EOIData {
     address: string;
     contactPerson: string;
     phone: string;
-    commencementDate: string;
-    reasonLeft: string;
-    responsibilities: string;
+    periodOfEmployment?: string;
+    commencementDate?: string;
+    reasonLeft?: string;
+    responsibilities?: string;
   }>;
+
+  // Section 5: References
   references?: Array<{
     name: string;
     phone: string;
     position: string;
     company: string;
-    nature: string;
+    nature: string; // e.g. Trade 1, Trade 2, Personal
   }>;
+
+  // Section 6: Convictions and Legal Proceedings
+  convictionPlaceYear?: string;
+  convictionType?: string;
+  convictionPenalty?: string;
+  plaintiffName?: string;
+  defendantName?: string;
+  yearIssued?: string;
+  yearConcluded?: string;
+  subjectMatter?: string;
+  judgmentNatureQuantum?: string;
   convictions?: string;
   legalProceedings?: string;
+
+  // Section 7: Household Income & Expenditure (Monthly Breakdown)
+  incSalary?: number | string;
+  incBonus?: number | string;
+  incDividends?: number | string;
+  incRealEstate?: number | string;
+  incOther?: number | string;
+  incOtherSpecify?: string;
   monthlyIncome?: number | string;
+
+  expMortgage?: number | string;
+  expLoans?: number | string;
+  expCreditCard?: number | string;
+  expPhoneElectric?: number | string;
+  expSchoolFees?: number | string;
+  expRatesTaxes?: number | string;
+  expInsurance?: number | string;
+  expOther?: number | string;
+  expOtherSpecify?: string;
   monthlyExpenditure?: number | string;
+
+  // Section 8: Statement of Assets & Liabilities
+  astRealEstate?: number | string;
+  astCash?: number | string;
+  astBusinessNetValue?: number | string;
+  astSharesBonds?: number | string;
+  astOther?: number | string;
   totalAssets?: number | string;
+
+  liabRealEstateMortgages?: number | string;
+  liabNotesLoansInst?: number | string;
+  liabFriendsRelatives?: number | string;
+  liabOtherDebts?: number | string;
   totalLiabilities?: number | string;
   netWorth?: number | string;
+
+  // Section 9: General Enquiry by MailPlus
   reasonForPurchase?: string;
   fundingSource?: string;
   whySuited?: string;
-  similarBusinessExperience?: boolean;
+  similarBusinessExperience?: boolean | string;
   similarBusinessDetails?: string;
-  preparedToComply?: boolean;
+  preparedToComply?: boolean | string;
   whySuccessful?: string;
   valuableQualities?: string;
-  fullTimeDevotion?: boolean;
+  fullTimeDevotion?: boolean | string;
   operatingHoursDetails?: string;
   mainStrengths?: string;
   mainWeaknesses?: string;
-  knowsFranchiseDefinition?: boolean;
-  understandsRelationship?: boolean;
-  acceptsGuidance?: boolean;
-  knowsDefinedTerm?: boolean;
+  knowsFranchiseDefinition?: boolean | string;
+  franchiseDefinitionExplanation?: string;
+  understandsRelationship?: boolean | string;
+  relationshipExplanation?: string;
+  acceptsGuidance?: boolean | string;
+  knowsDefinedTerm?: boolean | string;
   representationsMade?: string;
-  understandsIndependentAdvice?: boolean;
-  requiresFinance?: boolean;
-  authorizeFinanceSharing?: boolean;
-  informationStatementConfirmed?: boolean;
+  understandsIndependentAdvice?: boolean | string;
+
+  // Section 12: Franchise Purchase & Banking Sharing
+  requiresFinance?: boolean | string;
+  authorizeFinanceSharing?: boolean | string;
+
+  // Section 13: Information Statement Confirmation
+  informationStatementConfirmed?: boolean | string;
   informationStatementDate?: string;
+
+  // Section 14: Declaration
   declarationConfirmed?: boolean;
 }
 

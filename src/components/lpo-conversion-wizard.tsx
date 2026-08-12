@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Info, X, Trash2, MapPin } from 'lucide-react';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { sendLpoConversionToNetSuite } from '@/services/netsuite';
+import { validateABN } from '@/lib/utils';
 
 // Haversine formula for calculating distance in kilometers
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -51,6 +52,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
   const [lpoOwnerName, setLpoOwnerName] = useState(lead.lpoOwnerName || '');
   const [email, setEmail] = useState(lead.email || '');
   const [phone, setPhone] = useState(lead.phone || '');
+  const [abn, setAbn] = useState(lead.abn || '');
   const [address1, setAddress1] = useState(lead.address1 || '');
   const [address2, setAddress2] = useState(lead.address2 || '');
   const [city, setCity] = useState(lead.city || '');
@@ -198,11 +200,31 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
     try {
       const docRef = doc(firestore, 'lpo_leads', lead.id);
       if (step === 1) {
+        if (!abn.trim()) {
+          toast({
+            variant: 'destructive',
+            title: 'ABN Required',
+            description: 'Please enter the Australian Business Number (ABN) to proceed.'
+          });
+          setLoading(false);
+          return;
+        }
+        if (!validateABN(abn)) {
+          toast({
+            variant: 'destructive',
+            title: 'Invalid ABN',
+            description: 'Please enter a valid 11-digit Australian Business Number (ABN).'
+          });
+          setLoading(false);
+          return;
+        }
+
         const step1Data = {
           lpoName,
           lpoOwnerName,
           email,
           phone,
+          abn: abn.trim(),
           address1,
           address2,
           city,
@@ -281,11 +303,25 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
   const handleSubmit = async () => {
     setLoading(true);
     try {
+      if (!abn.trim() || !validateABN(abn)) {
+        toast({
+          variant: 'destructive',
+          title: 'Invalid or Missing ABN',
+          description: 'A valid 11-digit Australian Business Number (ABN) is required to complete conversion.'
+        });
+        setLoading(false);
+        return;
+      }
+
       const conversionData = {
         lpoName,
         lpoOwnerName,
+        lpoContactName: lpoOwnerName,
         email,
+        lpoContactEmail: email,
         phone,
+        lpoContactPhone: phone,
+        abn: abn.trim(),
         address1,
         address2,
         city,
@@ -293,11 +329,22 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
         postcode,
         linkedPartnerLocationId: selectedPartnerLocation?.id || null,
         linkedPartnerLocationName: selectedPartnerLocation?.name || null,
+        linkedPartnerLocation: selectedPartnerLocation?.name || selectedPartnerLocation?.id || '',
         inductedByKerry,
         ampoRate: parseFloat(ampoRate) || 0,
         pmpoRate: parseFloat(pmpoRate) || 0,
         packageRate: parseFloat(packageRate) || 0,
         additionalBagRate: parseFloat(additionalBagRate) || 0,
+        servicesAndRates: {
+          ampoRate: parseFloat(ampoRate) || 0,
+          pmpoRate: parseFloat(pmpoRate) || 0,
+          packageRate: parseFloat(packageRate) || 0,
+          additionalBagRate: parseFloat(additionalBagRate) || 0,
+          inductedByKerry,
+          operatesCollectionDelivery,
+          lastDailySweepTime,
+          franchiseeAccess
+        },
         operatesCollectionDelivery,
         lastDailySweepTime,
         franchiseeAccess,
@@ -387,6 +434,25 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
                 <div className="space-y-2">
                   <Label htmlFor="phone" className="font-semibold text-slate-700">Contact Phone *</Label>
                   <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="focus-visible:ring-[#095c7b]" />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="abn" className="font-semibold text-slate-700">ABN (Australian Business Number) *</Label>
+                  <Input 
+                    id="abn" 
+                    value={abn} 
+                    placeholder="e.g. 51 824 753 556" 
+                    onChange={(e) => setAbn(e.target.value)} 
+                    className="focus-visible:ring-[#095c7b]" 
+                  />
+                  {abn.trim() ? (
+                    validateABN(abn) ? (
+                      <p className="text-xs text-emerald-600 font-medium">Valid 11-digit ABN.</p>
+                    ) : (
+                      <p className="text-xs text-rose-600 font-medium">Invalid ABN format (must be a valid 11-digit Australian Business Number).</p>
+                    )
+                  ) : (
+                    <p className="text-xs text-slate-400 font-normal">Mandatory 11-digit ABN for NetSuite integration.</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="address1" className="font-semibold text-slate-700">Address line 1</Label>

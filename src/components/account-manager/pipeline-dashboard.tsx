@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { usePerformance } from '@/hooks/use-performance';
 import { collection, query, where, getDocs, onSnapshot, collectionGroup, documentId } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { Lead, UserProfile } from '@/lib/types';
+import { Lead, UserProfile, Contact } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,43 @@ const isFranchiseeGeneratedLead = (lead: Lead): boolean => {
     ) return true;
     if (lead.createdByRole && (lead.createdByRole === 'Franchisee' || lead.createdByRole.toLowerCase() === 'franchisee')) return true;
     return false;
+};
+
+export function getPrimaryContact(lead: Lead): Contact | null {
+    if (lead?.contacts && Array.isArray(lead.contacts) && lead.contacts.length > 0) {
+        return lead.contacts.find((c: any) => c.isPrimary) || lead.contacts[0];
+    }
+    return null;
+}
+
+export function getLeadContactName(lead: Lead): string {
+    if (!lead) return 'No Contact';
+    const primary = getPrimaryContact(lead);
+    if (primary?.name && primary.name.trim() && primary.name.trim().toLowerCase() !== 'n/a') {
+        return primary.name.trim();
+    }
+    if (primary?.firstName || primary?.lastName) {
+        const full = [primary.firstName, primary.lastName].filter(Boolean).join(' ').trim();
+        if (full) return full;
+    }
+    const legacyName = (lead as any).contactName || (lead as any).contact_name || (lead as any).primaryContactPerson;
+    if (typeof legacyName === 'string' && legacyName.trim() && legacyName.trim().toLowerCase() !== 'n/a') {
+        return legacyName.trim();
+    }
+    if (lead.discoveryData?.personSpokenWithName && lead.discoveryData.personSpokenWithName.trim()) {
+        return lead.discoveryData.personSpokenWithName.trim();
+    }
+    if (lead.discoveryData?.decisionMakerName && lead.discoveryData.decisionMakerName.trim()) {
+        return lead.discoveryData.decisionMakerName.trim();
+    }
+    const inbound = lead.inboundDetails as any;
+    if (inbound?.name && typeof inbound.name === 'string' && inbound.name.trim()) {
+        return inbound.name.trim();
+    }
+    if (inbound?.fullName && typeof inbound.fullName === 'string' && inbound.fullName.trim()) {
+        return inbound.fullName.trim();
+    }
+    return 'No Contact';
 };
 
 export default function PipelineDashboard() {
@@ -240,27 +277,46 @@ export default function PipelineDashboard() {
                         }
                     });
 
-                    const fetchedLeads = filteredLeadsWithoutCompanies.map((l) => {
-                        const appts = appointmentsByLead[l.id] || [];
-                        const existingAppts = l.appointments || [];
-                        const combinedAppts = [...existingAppts];
-                        appts.forEach(appt => {
-                            if (!combinedAppts.some(ex => ex.id === appt.id)) {
-                                combinedAppts.push(appt);
-                            }
-                        });
+                    const fetchedLeads = await Promise.all(
+                        filteredLeadsWithoutCompanies.map(async (l) => {
+                            let updatedLead = { ...l };
 
-                        const tsks = tasksByLead[l.id] || [];
-                        const existingTsks = l.tasks || [];
-                        const combinedTsks = [...existingTsks];
-                        tsks.forEach(tsk => {
-                            if (!combinedTsks.some(ex => ex.id === tsk.id)) {
-                                combinedTsks.push(tsk);
+                            // Fetch contacts subcollection if missing or empty
+                            if (!updatedLead.contacts || !Array.isArray(updatedLead.contacts) || updatedLead.contacts.length === 0) {
+                                try {
+                                    let cSnap = await getDocs(collection(firestore, 'leads', l.id, 'contacts'));
+                                    if (cSnap.empty) {
+                                        cSnap = await getDocs(collection(firestore, 'companies', l.id, 'contacts'));
+                                    }
+                                    if (!cSnap.empty) {
+                                        updatedLead.contacts = cSnap.docs.map(d => ({ id: d.id, ...d.data() } as Contact));
+                                    }
+                                } catch (err) {
+                                    console.error(`Error fetching contacts for lead ${l.id}:`, err);
+                                }
                             }
-                        });
 
-                        return { ...l, appointments: combinedAppts, tasks: combinedTsks };
-                    });
+                            const appts = appointmentsByLead[l.id] || [];
+                            const existingAppts = l.appointments || [];
+                            const combinedAppts = [...existingAppts];
+                            appts.forEach(appt => {
+                                if (!combinedAppts.some(ex => ex.id === appt.id)) {
+                                    combinedAppts.push(appt);
+                                }
+                            });
+
+                            const tsks = tasksByLead[l.id] || [];
+                            const existingTsks = l.tasks || [];
+                            const combinedTsks = [...existingTsks];
+                            tsks.forEach(tsk => {
+                                if (!combinedTsks.some(ex => ex.id === tsk.id)) {
+                                    combinedTsks.push(tsk);
+                                }
+                            });
+
+                            return { ...updatedLead, appointments: combinedAppts, tasks: combinedTsks };
+                        })
+                    );
                     
                     setLeads(fetchedLeads);
                 }
@@ -1298,8 +1354,8 @@ function LeadGrid({
                 </TableHeader>
                 <TableBody>
                     {sortedLeads.map((lead) => {
-                        const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
-                        const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
+                        const primaryContact = getPrimaryContact(lead);
+                        const contactName = getLeadContactName(lead);
                         
                         // Gather unique phone numbers
                         const phoneNumbers: { label: string; phone: string }[] = [];
@@ -1316,7 +1372,6 @@ function LeadGrid({
                         const uniquePhones = Array.from(new Map(phoneNumbers.map(item => [item.phone, item])).values());
                         
                         const email = lead.customerServiceEmail || primaryContact?.email || '';
-                        const address = [lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ');
                         
                         const now = new Date();
 
@@ -1669,9 +1724,9 @@ function LeadCard({
     onEmail, 
     onNotes, 
     onAmReassign, 
-    accountManagers, 
-    canReassign, 
-    canUnassign, 
+    accountManagers = [], 
+    canReassign = false, 
+    canUnassign = false, 
     isPastSection = false, 
     isNoShowSection = false,
     isPastTaskSection = false,
@@ -1695,8 +1750,8 @@ function LeadCard({
     isFutureTaskSection?: boolean,
     isCompletedTaskSection?: boolean
 }) {
-    const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
-    const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
+    const primaryContact = getPrimaryContact(lead);
+    const contactName = getLeadContactName(lead);
     
     // Gather unique phone numbers
     const phoneNumbers: { label: string; phone: string }[] = [];

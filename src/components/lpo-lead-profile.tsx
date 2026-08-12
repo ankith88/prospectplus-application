@@ -218,7 +218,10 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                 {status}
               </Badge>
             </div>
-            <p className="text-slate-500 text-sm mt-1">LPO Owner: <span className="font-semibold text-slate-700">{lead.lpoOwnerName}</span></p>
+            <p className="text-slate-500 text-sm mt-1">
+              LPO Owner: <span className="font-semibold text-slate-700">{lead.lpoOwnerName}</span>
+              {lead.abn && <span className="ml-3 text-xs bg-slate-100 text-slate-700 font-mono px-2 py-0.5 rounded border border-slate-200">ABN: {lead.abn}</span>}
+            </p>
             
             {hasLinkedCustomer && (
               <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100 flex-wrap text-xs">

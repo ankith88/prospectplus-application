@@ -42,7 +42,8 @@ import {
   AlertTriangle,
   Globe,
   Search,
-  Sparkles
+  Sparkles,
+  Workflow
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -440,7 +441,7 @@ export default function InboundReportsClientPage({
   const [showFranchiseeTable, setShowFranchiseeTable] = useState(false);
   const [amDailyMetricMode, setAmDailyMetricMode] = useState<'by_am' | 'by_am_unique' | 'by_type' | 'combined'>('by_am_unique');
   const [amDailyViewMode, setAmDailyViewMode] = useState<'chart' | 'table'>('chart');
-  const [teamPerformanceTimeframe, setTeamPerformanceTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [teamPerformanceTimeframe, setTeamPerformanceTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [allUsers, setAllUsers] = useState<string[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [fetchProgress, setFetchProgress] = useState(15);
@@ -486,6 +487,10 @@ export default function InboundReportsClientPage({
         );
 
         const usersQuery = query(collection(firestore, 'users'));
+
+        const bucketHistoryQuery = query(
+            collectionGroup(firestore, 'bucket_history')
+        );
 
         let fetchedLeads: Lead[] = [];
         let fetchedCompanies: Lead[] = [];
@@ -566,20 +571,44 @@ export default function InboundReportsClientPage({
                 }
             }
             
-            const [snap, actSnap, compSnap, apptSnap, usersSnap] = await Promise.all([
+            const [snap, actSnap, compSnap, apptSnap, usersSnap, bhSnap] = await Promise.all([
               getDocs(leadsQuery),
               getDocs(activityQuery),
               getDocs(companiesQuery),
               getDocs(apptQuery),
-              getDocs(usersQuery)
+              getDocs(usersQuery),
+              getDocs(bucketHistoryQuery).catch(() => null)
             ]);
             setFetchProgress(70);
 
-            const rawLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
-            const rawCompanies = compSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+            const bucketHistoryMap = new Map<string, any[]>();
+            if (bhSnap && !bhSnap.empty) {
+                bhSnap.docs.forEach((doc: any) => {
+                    const data = doc.data();
+                    const parentId = doc.ref.parent?.parent?.id;
+                    if (parentId) {
+                        const list = bucketHistoryMap.get(parentId) || [];
+                        list.push({ id: doc.id, ...data });
+                        bucketHistoryMap.set(parentId, list);
+                    }
+                });
+            }
+
+            const processRawDoc = (doc: any) => {
+                const data = doc.data();
+                const history = (data.bucketHistory && Array.isArray(data.bucketHistory) && data.bucketHistory.length > 0)
+                    ? data.bucketHistory
+                    : (bucketHistoryMap.get(doc.id) || []);
+                return { id: doc.id, ...data, bucketHistory: history } as Lead;
+            };
+
+            const rawLeads = snap.docs.map(processRawDoc);
+            const rawCompanies = compSnap.docs.map(processRawDoc);
 
             const isInbound = (l: Lead) => {
                 if (l.bucket === 'inbound') return true;
+                if ((l as any).originalBucket === 'inbound' || (l as any).wasInbound === true || (l as any).wasInboundBucket === true) return true;
+                if (Array.isArray(l.bucketHistory) && l.bucketHistory.some((bh: any) => (bh.oldBucket || '').toLowerCase() === 'inbound' || (bh.newBucket || '').toLowerCase() === 'inbound')) return true;
                 if (l.inboundDetails || (l as any).inboundType) return true;
                 const sourceLower = (l.customerSource || '').toLowerCase();
                 const leadSourceLower = ((l as any).leadSource || '').toLowerCase();
@@ -2231,7 +2260,59 @@ export default function InboundReportsClientPage({
     const totalWeeklyParcelsLoggedCount = filteredLeads.filter(l => !!(l.weeklyParcels || l.discoveryData?.weeklyParcels)).length;
     const totalWeeklyParcelsLoggedPercent = totalInbound > 0 ? parseFloat(((totalWeeklyParcelsLoggedCount / totalInbound) * 100).toFixed(1)) : 0;
 
+    // Bucket Progression statistics (From Inbound Bucket to current sitting bucket)
+    const BUCKET_NAME_MAP: Record<string, { label: string; description: string }> = {
+      inbound: { label: 'Inbound', description: 'Currently active in Inbound bucket' },
+      account_manager: { label: 'Account Manager', description: 'Handed over to Account Management' },
+      field_sales: { label: 'Field Sales', description: 'Transferred to Field Sales team' },
+      customer_success: { label: 'Customer Success', description: 'Moved to Customer Success' },
+      outbound: { label: 'Outbound', description: 'Moved to Outbound calling pipeline' },
+      archived: { label: 'Archived / Closed', description: 'Moved to Archived (Lost / Unqualified)' },
+      lpo_plus: { label: 'LPO.Plus', description: 'Pushed to LPO.Plus pipeline' },
+      nurture: { label: 'Nurture', description: 'Moved to long-term Nurture' },
+      marketing: { label: 'Marketing', description: 'Re-routed to Marketing' },
+    };
+
+    const bucketProgressionCounts: Record<string, Lead[]> = {};
+
+    filteredLeads.forEach(lead => {
+      const currentBucket = (lead.bucket || (lead.fieldSales ? 'field_sales' : 'inbound')).toLowerCase();
+      if (!bucketProgressionCounts[currentBucket]) {
+        bucketProgressionCounts[currentBucket] = [];
+      }
+      bucketProgressionCounts[currentBucket].push(lead);
+    });
+
+    const totalInboundCohort = filteredLeads.length;
+
+    const bucketProgressionData = Object.entries(bucketProgressionCounts).map(([bucketKey, leads]) => {
+      const info = BUCKET_NAME_MAP[bucketKey] || { 
+        label: bucketKey.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()), 
+        description: `Sitting in ${bucketKey} bucket` 
+      };
+      const count = leads.length;
+      const percentage = totalInboundCohort > 0 ? (count / totalInboundCohort) * 100 : 0;
+      
+      const statusDist = leads.reduce((acc, l) => {
+        const s = l.customerStatus || l.status || 'Unknown';
+        acc[s] = (acc[s] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      return {
+        key: bucketKey,
+        label: info.label,
+        description: info.description,
+        count,
+        percentage,
+        statusDist,
+        leads
+      };
+    }).sort((a, b) => b.count - a.count);
+
     return {
+        totalInboundCohort,
+        bucketProgressionData,
         webpageDataList,
         topWebpagesChartData,
         trackedWebpagesCount,
@@ -4194,6 +4275,83 @@ export default function InboundReportsClientPage({
 
             {!visibleSections && (
               <>
+            {/* Inbound Lead Bucket Progression Report */}
+            <Card id="step-report-inbound-bucket-progression" className="mb-6 border shadow-sm">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                            <Workflow className="h-5 w-5 text-indigo-500" />
+                            <span>Inbound Lead Bucket Progression</span>
+                            <SectionHelp content="Tracks where leads originating from or processed in the Inbound bucket are currently sitting across all system buckets." />
+                        </CardTitle>
+                        <Button variant="outline" size="sm" onClick={() => handleExportData(
+                            stats.bucketProgressionData.map(b => ({
+                                Bucket: b.label,
+                                'Leads Count': b.count,
+                                'Percentage': b.percentage.toFixed(1) + '%',
+                                'Status Breakdown': Object.entries(b.statusDist).map(([s, c]) => `${s}: ${c}`).join(', ')
+                            })),
+                            'inbound_bucket_progression'
+                        )}>
+                            <Download className="h-4 w-4 mr-2" /> Export
+                        </Button>
+                    </div>
+                    <CardDescription>
+                        Current bucket placement and progression for all {stats.totalInboundCohort} inbound leads in the current cohort. Click a bucket to view lead details.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {stats.bucketProgressionData.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                            {stats.bucketProgressionData.map(b => (
+                                <div 
+                                    key={b.key} 
+                                    className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
+                                    onClick={() => setDrillDownData({
+                                        title: `Inbound Leads currently in ${b.label} Bucket`,
+                                        leads: b.leads
+                                    })}
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-primary transition-colors">
+                                                {b.label}
+                                            </span>
+                                            <Badge variant="secondary" className="text-xs font-medium">
+                                                {b.percentage.toFixed(1)}%
+                                            </Badge>
+                                        </div>
+                                        <h3 className="text-2xl font-bold mt-2 text-foreground">{b.count}</h3>
+                                    </div>
+                                    <div className="mt-3 space-y-2">
+                                        <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
+                                            <div 
+                                                className="bg-primary h-full rounded-full transition-all duration-500" 
+                                                style={{ width: `${Math.max(b.percentage, 2)}%` }} 
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground line-clamp-1">{b.description}</p>
+                                        
+                                        {Object.keys(b.statusDist).length > 0 && (
+                                            <div className="pt-2 border-t flex flex-wrap gap-1">
+                                                {Object.entries(b.statusDist).map(([status, sCount]) => (
+                                                    <Badge key={status} variant="outline" className="text-[10px] px-1.5 py-0 font-normal bg-muted/20 items-center gap-1">
+                                                        <span>{status}: <span className="font-semibold ml-0.5">{sCount}</span></span>
+                                                        <StatusOutcomeInfo status={status} />
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-muted-foreground italic">No bucket progression data available for this cohort.</div>
+                    )}
+                </CardContent>
+            </Card>
+
             <Card id="step-report-free-trial-journeys" className="w-full shadow-md border-primary/10">
                 <CardHeader>
                     <div className="flex items-center justify-between">

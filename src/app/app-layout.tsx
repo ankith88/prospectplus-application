@@ -616,8 +616,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   if (isSigningOut) return <FullScreenLoader message="Signing out..." />;
   if (isSigningIn) return <FullScreenLoader message="Signing in..." />;
   
-  if (isAuthPage || pathname.startsWith('/customer-request/') || pathname.startsWith('/scf/') || pathname.startsWith('/sof/') || pathname.startsWith('/lpo-opportunity/') || pathname.startsWith('/hotel-leads') || pathname.startsWith('/book/') || pathname.startsWith('/localmile-registration/') || pathname.startsWith('/deed-of-variation/')) {
-    return <main className="flex min-h-svh flex-1 flex-col bg-[#f4f7f8]">{children}</main>;
+  if (
+    isAuthPage || 
+    pathname.startsWith('/customer-request') || 
+    pathname.startsWith('/scf') || 
+    pathname.startsWith('/sof') || 
+    pathname.startsWith('/lpo-opportunity') || 
+    pathname.startsWith('/hotel-leads') || 
+    pathname.startsWith('/book') || 
+    pathname.startsWith('/localmile-registration') || 
+    pathname.startsWith('/deed-of-variation') ||
+    pathname.startsWith('/confidentiality-deed') ||
+    pathname.startsWith('/fact-sheet') ||
+    pathname.startsWith('/key-fact-sheet') ||
+    pathname.startsWith('/eoi') ||
+    pathname.startsWith('/franchisee-im')
+  ) {
+    return <main className="flex min-h-svh flex-1 flex-col bg-[#d0dfcd]">{children}</main>;
   }
 
   if (loading || isMobile === null) {

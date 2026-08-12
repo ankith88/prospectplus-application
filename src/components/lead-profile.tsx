@@ -2576,6 +2576,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         if (oldBucket === 'outbound') {
             updates.wasOutbound = true;
         }
+        if (oldBucket === 'inbound') {
+            updates.wasInbound = true;
+        }
 
         await updateLeadDetails(lead.id, lead, updates);
         if (oldBucket !== targetBucket) {
@@ -2601,7 +2604,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               bookingUrlId: newBookingUrlId, 
               bookingContactId: contactId || '',
               bucketHistory: updatedHistory,
-              wasOutbound: oldBucket === 'outbound' ? true : prev.wasOutbound
+              wasOutbound: oldBucket === 'outbound' ? true : prev.wasOutbound,
+              wasInbound: oldBucket === 'inbound' ? true : prev.wasInbound
             };
         });
 
@@ -2627,6 +2631,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         if (oldBucket === 'outbound') {
             updates.wasOutbound = true;
         }
+        if (oldBucket === 'inbound') {
+            updates.wasInbound = true;
+        }
 
         await updateLeadDetails(lead.id, lead, updates);
         await logBucketChange(lead.id, oldBucket, 'customer_success', author);
@@ -2648,7 +2655,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               bucket: 'customer_success', 
               fieldSales: false, 
               bucketHistory: updatedHistory,
-              wasOutbound: oldBucket === 'outbound' ? true : prev.wasOutbound
+              wasOutbound: oldBucket === 'outbound' ? true : prev.wasOutbound,
+              wasInbound: oldBucket === 'inbound' ? true : prev.wasInbound
             };
         });
 

@@ -243,14 +243,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             !user && 
             pathname !== '/signup' && 
             pathname !== '/signin' && 
-            !pathname.startsWith('/customer-request/') &&
-            !pathname.startsWith('/scf/') && 
-            !pathname.startsWith('/sof/') && 
-            !pathname.startsWith('/lpo-opportunity/') && 
+            !pathname.startsWith('/customer-request') &&
+            !pathname.startsWith('/scf') && 
+            !pathname.startsWith('/sof') && 
+            !pathname.startsWith('/lpo-opportunity') && 
             !pathname.startsWith('/hotel-leads') && 
-            !pathname.startsWith('/book/') && 
-            !pathname.startsWith('/localmile-registration/') &&
-            !pathname.startsWith('/deed-of-variation/')
+            !pathname.startsWith('/book') && 
+            !pathname.startsWith('/localmile-registration') &&
+            !pathname.startsWith('/deed-of-variation') &&
+            !pathname.startsWith('/confidentiality-deed') &&
+            !pathname.startsWith('/fact-sheet') &&
+            !pathname.startsWith('/key-fact-sheet') &&
+            !pathname.startsWith('/eoi') &&
+            !pathname.startsWith('/franchisee-im')
         ) {
             router.push('/signin');
         }

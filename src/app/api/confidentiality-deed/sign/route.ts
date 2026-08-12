@@ -116,6 +116,7 @@ export async function POST(req: Request) {
     const publicToken = token || currentData.confidentialityDeed?.publicToken || encodeProspectToken('cd', prospectId);
 
     const confidentialityDeedData = {
+      ...(currentData.confidentialityDeed || {}),
       publicToken,
       status: 'signed_online',
       sentAt: currentData.confidentialityDeed?.sentAt || new Date().toISOString(),

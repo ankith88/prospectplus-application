@@ -43,6 +43,7 @@ import {
   Upload,
   Paperclip,
   Download,
+  Save,
   Tag,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -190,7 +191,7 @@ export default function FranchiseProspectDetailClient() {
     customNote: '',
   });
 
-  // Step 2: Deed Email Form State
+  // Step 2: Deed Email & Schedule Form State
   const [sendingDeedEmail, setSendingDeedEmail] = useState(false);
   const [deedEmailForm, setDeedEmailForm] = useState({
     toEmail: '',
@@ -200,14 +201,130 @@ export default function FranchiseProspectDetailClient() {
     customNote: '',
   });
 
-  // Step 3: EOI Email Form State
+  const [savingDeedSchedule, setSavingDeedSchedule] = useState(false);
+  const [deedScheduleForm, setDeedScheduleForm] = useState({
+    agreementDate: '',
+    providerName: 'Mail Plus Pty Ltd',
+    providerAcn: '119 635 158',
+    providerAddress: 'Suite 3, Level 1, 2-4 Ross St, Parramatta NSW 2150',
+    providerEmail: 'greg.hart@mailplus.com.au',
+    providerContact: 'Greg Hart',
+    recipientName: '',
+    recipientAcn: '',
+    recipientAbn: '',
+    recipientShortName: '',
+    recipientAddress: '',
+    recipientEmail: '',
+    recipientContact: '',
+    purpose: 'Reviewing Confidential Information for the purpose of evaluating a MailPlus Franchise opportunity and participating in an operational run-along / site evaluation for the specified territory.',
+  });
+
+  // Step 3: EOI Email Form & Prefill State
   const [sendingEOIEmail, setSendingEOIEmail] = useState(false);
+  const [savingEOIPrefill, setSavingEOIPrefill] = useState(false);
   const [eoiEmailForm, setEOIEmailForm] = useState({
     toEmail: '',
     ccEmail: 'michael.mcdaid@mailplus.com.au',
     bccEmail: '',
     subject: '',
     customNote: '',
+  });
+
+  const [eoiPrefillForm, setEOIPrefillForm] = useState({
+    entityStructure: 'SOLE TRADER' as 'SOLE TRADER' | 'PARTNERSHIP' | 'PTY LTD COMPANY' | 'LTD COMPANY',
+    companyName: '',
+    abn: '',
+    registeredAddress: '',
+    businessAddress: '',
+    phoneHome: '',
+    phoneBusiness: '',
+    facsimileNo: '',
+
+    // Applicant 1
+    applicant1Name: '',
+    applicant1Position: 'SOLE TRADER',
+    applicant1PrivateAddress: '',
+    applicant1PhoneHome: '',
+    applicant1PhoneBusiness: '',
+    applicant1Email: '',
+    applicant1DriversLicence: '',
+    applicant1DriversLicencePlace: '',
+    applicant1DateOfBirth: '',
+    applicant1MaritalStatus: '',
+    applicant1SpouseName: '',
+    applicant1SpouseAge: '',
+    applicant1ChildrenAges: '',
+    applicant1SpouseActive: 'No',
+    applicant1OwnershipPercent: '100',
+    applicant1OtherDirectorships: '',
+    applicant1FormerAddress: '',
+    applicant1HealthStatus: 'GOOD',
+    applicant1PhysicalLimitations: '',
+    applicant1Qualifications: '',
+    applicant1SalesTraining: '',
+
+    // Applicant 2
+    hasApplicant2: false,
+    applicant2Name: '',
+    applicant2Position: 'PARTNER',
+    applicant2PrivateAddress: '',
+    applicant2PhoneHome: '',
+    applicant2PhoneBusiness: '',
+    applicant2Email: '',
+    applicant2DriversLicence: '',
+    applicant2DriversLicencePlace: '',
+    applicant2DateOfBirth: '',
+    applicant2MaritalStatus: '',
+    applicant2SpouseName: '',
+    applicant2SpouseAge: '',
+    applicant2ChildrenAges: '',
+    applicant2SpouseActive: 'No',
+    applicant2OwnershipPercent: '0',
+    applicant2OtherDirectorships: '',
+    applicant2FormerAddress: '',
+    applicant2HealthStatus: 'GOOD',
+    applicant2PhysicalLimitations: '',
+    applicant2Qualifications: '',
+    applicant2SalesTraining: '',
+
+    // Trust
+    trustName: '',
+    trustEstablishedDate: '',
+    trustBeneficiaries: '',
+
+    // Financial Prefills
+    incSalary: '', incBonus: '', incDividends: '', incRealEstate: '', incOther: '',
+    expMortgage: '', expLoans: '', expCreditCard: '', expPhoneElectric: '', expSchoolFees: '', expRatesTaxes: '', expInsurance: '', expOther: '',
+    astRealEstate: '', astCash: '', astBusinessNetValue: '', astSharesBonds: '', astOther: '',
+    liabRealEstateMortgages: '', liabNotesLoansInst: '', liabFriendsRelatives: '', liabOtherDebts: '',
+
+    // General Enquiry
+    reasonForPurchase: '',
+    fundingSource: '',
+    whySuited: '',
+    similarBusinessExperience: 'No',
+    similarBusinessDetails: '',
+    preparedToComply: 'Yes',
+    whySuccessful: '',
+    valuableQualities: '',
+    fullTimeDevotion: 'Yes',
+    operatingHoursDetails: '',
+    mainStrengths: '',
+    mainWeaknesses: '',
+    knowsFranchiseDefinition: 'Yes',
+    franchiseDefinitionExplanation: '',
+    understandsRelationship: 'Yes',
+    relationshipExplanation: '',
+    acceptsGuidance: 'Yes',
+    knowsDefinedTerm: 'Yes',
+    representationsMade: '',
+    understandsIndependentAdvice: 'Yes',
+
+    // Finance & Info Statement
+    requiresFinance: 'No',
+    authorizeFinanceSharing: 'No',
+    informationStatementConfirmed: true,
+    informationStatementDate: '',
   });
 
   // Step 4: Deposit Form State
@@ -295,6 +412,80 @@ export default function FranchiseProspectDetailClient() {
       fetchProspect();
     } catch (err) {
       toast({ variant: 'destructive', title: 'Delete Failed', description: 'Could not remove document.' });
+    }
+  };
+
+  const handleSaveDeedSchedule = async () => {
+    if (!prospect) return;
+    setSavingDeedSchedule(true);
+    try {
+      const refDoc = doc(firestore, 'franchise_prospects', prospect.id);
+      const updatedDeed: ConfidentialityDeedData = {
+        ...(prospect.confidentialityDeed || {
+          publicToken: encodeProspectToken('cd', prospect.id),
+          status: 'not_started',
+        }),
+        ...deedScheduleForm,
+      };
+
+      const newNote = {
+        id: Math.random().toString(36).substring(2, 9),
+        text: `Updated Confidentiality Deed schedule details.`,
+        createdAt: new Date().toISOString(),
+        createdByName: userProfile?.displayName || userProfile?.email || 'Operations User',
+        createdByUid: userProfile?.uid || 'system',
+      };
+
+      await updateDoc(refDoc, {
+        confidentialityDeed: updatedDeed,
+        notes: [...(prospect.notes || []), newNote],
+      });
+
+      toast({ title: 'Deed Schedule Saved', description: 'Confidentiality deed schedule updated successfully.' });
+      fetchProspect();
+    } catch (err: any) {
+      console.error('Error saving deed schedule:', err);
+      toast({ variant: 'destructive', title: 'Save Failed', description: err.message || 'Could not save deed schedule.' });
+    } finally {
+      setSavingDeedSchedule(false);
+    }
+  };
+
+  const handleSaveEOIPrefill = async () => {
+    if (!prospect) return;
+    setSavingEOIPrefill(true);
+    try {
+      const refDoc = doc(firestore, 'franchise_prospects', prospect.id);
+      const updatedEOI: EOIData = {
+        ...(prospect.eoiData || {
+          publicToken: encodeProspectToken('eoi', prospect.id),
+          status: 'not_started',
+        }),
+        ...eoiPrefillForm,
+        driversLicence: eoiPrefillForm.applicant1DriversLicence,
+        driversLicencePlaceOfIssue: eoiPrefillForm.applicant1DriversLicencePlace,
+      };
+
+      const newNote = {
+        id: Math.random().toString(36).substring(2, 9),
+        text: `Updated Expression of Interest (EOI) prefill configuration.`,
+        createdAt: new Date().toISOString(),
+        createdByName: userProfile?.displayName || userProfile?.email || 'Operations User',
+        createdByUid: userProfile?.uid || 'system',
+      };
+
+      await updateDoc(refDoc, {
+        eoiData: updatedEOI,
+        notes: [...(prospect.notes || []), newNote],
+      });
+
+      toast({ title: 'EOI Prefill Saved', description: 'EOI form dynamic fields saved successfully.' });
+      fetchProspect();
+    } catch (err: any) {
+      console.error('Error saving EOI prefill:', err);
+      toast({ variant: 'destructive', title: 'Save Failed', description: err.message || 'Could not save EOI prefill.' });
+    } finally {
+      setSavingEOIPrefill(false);
     }
   };
 
@@ -726,6 +917,140 @@ export default function FranchiseProspectDetailClient() {
           paymentMethod: data.depositDetails?.paymentMethod || 'EFT',
           receiptRef: data.depositDetails?.receiptRef || `FR DEP ${data.lastName?.toUpperCase() || ''}`,
           notes: data.depositDetails?.notes || '',
+        });
+
+        // Prefill Deed Schedule Form
+        const existingDeed: ConfidentialityDeedData = (data.confidentialityDeed || {}) as any;
+        const todayFormatted = new Date().toLocaleDateString('en-AU');
+        setDeedScheduleForm({
+          agreementDate: existingDeed.agreementDate || todayFormatted,
+          providerName: existingDeed.providerName || 'Mail Plus Pty Ltd',
+          providerAcn: existingDeed.providerAcn || '119 635 158',
+          providerAddress: existingDeed.providerAddress || 'Suite 3, Level 1, 2-4 Ross St, Parramatta NSW 2150',
+          providerEmail: existingDeed.providerEmail || 'greg.hart@mailplus.com.au',
+          providerContact: existingDeed.providerContact || 'Greg Hart',
+          recipientName: existingDeed.recipientName || data.fullName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || '',
+          recipientAcn: existingDeed.recipientAcn || '',
+          recipientAbn: existingDeed.recipientAbn || (data as any).abn || '',
+          recipientShortName: existingDeed.recipientShortName || data.firstName || '',
+          recipientAddress: existingDeed.recipientAddress || (data as any).address || '',
+          recipientEmail: existingDeed.recipientEmail || data.email || '',
+          recipientContact: existingDeed.recipientContact || data.fullName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || '',
+          purpose: existingDeed.purpose || 'Reviewing Confidential Information for the purpose of evaluating a MailPlus Franchise opportunity and participating in an operational run-along / site evaluation for the specified territory.',
+        });
+
+        // Prefill EOI Prefill Form
+        const existingEOI: Partial<EOIData> = data.eoiData || {};
+        setEOIPrefillForm({
+          entityStructure: existingEOI.entityStructure || 'SOLE TRADER',
+          companyName: existingEOI.companyName || data.fullName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || '',
+          abn: existingEOI.abn || '',
+          registeredAddress: existingEOI.registeredAddress || '',
+          businessAddress: existingEOI.businessAddress || '',
+          phoneHome: existingEOI.phoneHome || '',
+          phoneBusiness: existingEOI.phoneBusiness || data.phone || '',
+          facsimileNo: existingEOI.facsimileNo || '',
+
+          applicant1Name: existingEOI.applicant1Name || data.fullName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || '',
+          applicant1Position: existingEOI.applicant1Position || 'SOLE TRADER',
+          applicant1PrivateAddress: existingEOI.applicant1PrivateAddress || '',
+          applicant1PhoneHome: existingEOI.applicant1PhoneHome || '',
+          applicant1PhoneBusiness: existingEOI.applicant1PhoneBusiness || data.phone || '',
+          applicant1Email: existingEOI.applicant1Email || data.email || '',
+          applicant1DriversLicence: existingEOI.applicant1DriversLicence || '',
+          applicant1DriversLicencePlace: existingEOI.applicant1DriversLicencePlace || '',
+          applicant1DateOfBirth: existingEOI.applicant1DateOfBirth || '',
+          applicant1MaritalStatus: existingEOI.applicant1MaritalStatus || '',
+          applicant1SpouseName: existingEOI.applicant1SpouseName || '',
+          applicant1SpouseAge: String(existingEOI.applicant1SpouseAge || ''),
+          applicant1ChildrenAges: existingEOI.applicant1ChildrenAges || '',
+          applicant1SpouseActive: existingEOI.applicant1SpouseActive ? 'Yes' : 'No',
+          applicant1OwnershipPercent: String(existingEOI.applicant1OwnershipPercent || '100'),
+          applicant1OtherDirectorships: existingEOI.applicant1OtherDirectorships || '',
+          applicant1FormerAddress: existingEOI.applicant1FormerAddress || '',
+          applicant1HealthStatus: existingEOI.applicant1HealthStatus || 'GOOD',
+          applicant1PhysicalLimitations: existingEOI.applicant1PhysicalLimitations || '',
+          applicant1Qualifications: existingEOI.applicant1Qualifications || '',
+          applicant1SalesTraining: existingEOI.applicant1SalesTraining || '',
+
+          hasApplicant2: Boolean(existingEOI.hasApplicant2),
+          applicant2Name: existingEOI.applicant2Name || '',
+          applicant2Position: existingEOI.applicant2Position || 'PARTNER',
+          applicant2PrivateAddress: existingEOI.applicant2PrivateAddress || '',
+          applicant2PhoneHome: existingEOI.applicant2PhoneHome || '',
+          applicant2PhoneBusiness: existingEOI.applicant2PhoneBusiness || '',
+          applicant2Email: existingEOI.applicant2Email || '',
+          applicant2DriversLicence: existingEOI.applicant2DriversLicence || '',
+          applicant2DriversLicencePlace: existingEOI.applicant2DriversLicencePlace || '',
+          applicant2DateOfBirth: existingEOI.applicant2DateOfBirth || '',
+          applicant2MaritalStatus: existingEOI.applicant2MaritalStatus || '',
+          applicant2SpouseName: existingEOI.applicant2SpouseName || '',
+          applicant2SpouseAge: String(existingEOI.applicant2SpouseAge || ''),
+          applicant2ChildrenAges: existingEOI.applicant2ChildrenAges || '',
+          applicant2SpouseActive: existingEOI.applicant2SpouseActive ? 'Yes' : 'No',
+          applicant2OwnershipPercent: String(existingEOI.applicant2OwnershipPercent || '0'),
+          applicant2OtherDirectorships: existingEOI.applicant2OtherDirectorships || '',
+          applicant2FormerAddress: existingEOI.applicant2FormerAddress || '',
+          applicant2HealthStatus: existingEOI.applicant2HealthStatus || 'GOOD',
+          applicant2PhysicalLimitations: existingEOI.applicant2PhysicalLimitations || '',
+          applicant2Qualifications: existingEOI.applicant2Qualifications || '',
+          applicant2SalesTraining: existingEOI.applicant2SalesTraining || '',
+
+          trustName: existingEOI.trustName || '',
+          trustEstablishedDate: existingEOI.trustEstablishedDate || '',
+          trustBeneficiaries: existingEOI.trustBeneficiaries || '',
+
+          incSalary: String(existingEOI.incSalary || ''),
+          incBonus: String(existingEOI.incBonus || ''),
+          incDividends: String(existingEOI.incDividends || ''),
+          incRealEstate: String(existingEOI.incRealEstate || ''),
+          incOther: String(existingEOI.incOther || ''),
+
+          expMortgage: String(existingEOI.expMortgage || ''),
+          expLoans: String(existingEOI.expLoans || ''),
+          expCreditCard: String(existingEOI.expCreditCard || ''),
+          expPhoneElectric: String(existingEOI.expPhoneElectric || ''),
+          expSchoolFees: String(existingEOI.expSchoolFees || ''),
+          expRatesTaxes: String(existingEOI.expRatesTaxes || ''),
+          expInsurance: String(existingEOI.expInsurance || ''),
+          expOther: String(existingEOI.expOther || ''),
+
+          astRealEstate: String(existingEOI.astRealEstate || ''),
+          astCash: String(existingEOI.astCash || ''),
+          astBusinessNetValue: String(existingEOI.astBusinessNetValue || ''),
+          astSharesBonds: String(existingEOI.astSharesBonds || ''),
+          astOther: String(existingEOI.astOther || ''),
+
+          liabRealEstateMortgages: String(existingEOI.liabRealEstateMortgages || ''),
+          liabNotesLoansInst: String(existingEOI.liabNotesLoansInst || ''),
+          liabFriendsRelatives: String(existingEOI.liabFriendsRelatives || ''),
+          liabOtherDebts: String(existingEOI.liabOtherDebts || ''),
+
+          reasonForPurchase: existingEOI.reasonForPurchase || '',
+          fundingSource: existingEOI.fundingSource || '',
+          whySuited: existingEOI.whySuited || '',
+          similarBusinessExperience: existingEOI.similarBusinessExperience ? 'Yes' : 'No',
+          similarBusinessDetails: existingEOI.similarBusinessDetails || '',
+          preparedToComply: existingEOI.preparedToComply !== false ? 'Yes' : 'No',
+          whySuccessful: existingEOI.whySuccessful || '',
+          valuableQualities: existingEOI.valuableQualities || '',
+          fullTimeDevotion: existingEOI.fullTimeDevotion !== false ? 'Yes' : 'No',
+          operatingHoursDetails: existingEOI.operatingHoursDetails || '',
+          mainStrengths: existingEOI.mainStrengths || '',
+          mainWeaknesses: existingEOI.mainWeaknesses || '',
+          knowsFranchiseDefinition: existingEOI.knowsFranchiseDefinition !== false ? 'Yes' : 'No',
+          franchiseDefinitionExplanation: existingEOI.franchiseDefinitionExplanation || '',
+          understandsRelationship: existingEOI.understandsRelationship !== false ? 'Yes' : 'No',
+          relationshipExplanation: existingEOI.relationshipExplanation || '',
+          acceptsGuidance: existingEOI.acceptsGuidance !== false ? 'Yes' : 'No',
+          knowsDefinedTerm: existingEOI.knowsDefinedTerm !== false ? 'Yes' : 'No',
+          representationsMade: existingEOI.representationsMade || '',
+          understandsIndependentAdvice: existingEOI.understandsIndependentAdvice !== false ? 'Yes' : 'No',
+
+          requiresFinance: existingEOI.requiresFinance ? 'Yes' : 'No',
+          authorizeFinanceSharing: existingEOI.authorizeFinanceSharing ? 'Yes' : 'No',
+          informationStatementConfirmed: existingEOI.informationStatementConfirmed !== false,
+          informationStatementDate: existingEOI.informationStatementDate || new Date().toISOString().split('T')[0],
         });
 
         // Prefill Step Email Forms with defaults
@@ -1887,6 +2212,171 @@ export default function FranchiseProspectDetailClient() {
                       </div>
                     </div>
 
+                    {/* Step 2 Dynamic Deed Schedule Form */}
+                    <div className="p-4 bg-slate-50 border rounded-xl space-y-4">
+                      <div className="flex items-center justify-between border-b pb-2">
+                        <div>
+                          <span className="text-xs font-bold uppercase text-slate-800 flex items-center gap-1.5">
+                            <FileText className="h-4 w-4 text-[#095c7b]" /> Confidentiality Deed Schedule & Dynamic Fields
+                          </span>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Fields configured here dynamically populate the public online Confidentiality Deed schedule for this candidate.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={handleSaveDeedSchedule}
+                          disabled={savingDeedSchedule}
+                          className="bg-[#095c7b] hover:bg-[#074760] text-white font-bold text-xs shrink-0 gap-1.5"
+                        >
+                          {savingDeedSchedule ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                          Save Schedule Details
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        {/* Agreement Date */}
+                        <div className="space-y-1 md:col-span-2">
+                          <label className="font-semibold text-slate-700">Agreement Date:</label>
+                          <Input
+                            value={deedScheduleForm.agreementDate}
+                            onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, agreementDate: e.target.value })}
+                            placeholder="e.g. 24/06/2026 or DD/MM/YYYY"
+                            className="bg-white text-xs font-medium"
+                          />
+                        </div>
+
+                        {/* Discloser / Provider Details */}
+                        <div className="space-y-3 p-3 bg-white border rounded-lg">
+                          <span className="font-bold text-[#095c7b] text-xs block border-b pb-1">Discloser / Provider (Party 1)</span>
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">Entity Name:</label>
+                            <Input
+                              value={deedScheduleForm.providerName}
+                              onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, providerName: e.target.value })}
+                              className="bg-slate-50 text-xs"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">ACN:</label>
+                              <Input
+                                value={deedScheduleForm.providerAcn}
+                                onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, providerAcn: e.target.value })}
+                                className="bg-slate-50 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">Contact Person:</label>
+                              <Input
+                                value={deedScheduleForm.providerContact}
+                                onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, providerContact: e.target.value })}
+                                className="bg-slate-50 text-xs"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">Email:</label>
+                            <Input
+                              value={deedScheduleForm.providerEmail}
+                              onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, providerEmail: e.target.value })}
+                              className="bg-slate-50 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">Address:</label>
+                            <Input
+                              value={deedScheduleForm.providerAddress}
+                              onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, providerAddress: e.target.value })}
+                              className="bg-slate-50 text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Recipient / Candidate Details */}
+                        <div className="space-y-3 p-3 bg-white border rounded-lg">
+                          <span className="font-bold text-[#095c7b] text-xs block border-b pb-1">Recipient / Candidate (Party 2)</span>
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">Candidate / Legal Entity Name:</label>
+                            <Input
+                              value={deedScheduleForm.recipientName}
+                              onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, recipientName: e.target.value })}
+                              placeholder="e.g. John Smith"
+                              className="bg-slate-50 text-xs font-semibold"
+                            />
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">ABN:</label>
+                              <Input
+                                value={deedScheduleForm.recipientAbn}
+                                onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, recipientAbn: e.target.value })}
+                                placeholder="Optional ABN"
+                                className="bg-slate-50 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">ACN:</label>
+                              <Input
+                                value={deedScheduleForm.recipientAcn}
+                                onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, recipientAcn: e.target.value })}
+                                placeholder="Optional ACN"
+                                className="bg-slate-50 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">Short Name:</label>
+                              <Input
+                                value={deedScheduleForm.recipientShortName}
+                                onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, recipientShortName: e.target.value })}
+                                placeholder="e.g. John"
+                                className="bg-slate-50 text-xs"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">Contact Person:</label>
+                              <Input
+                                value={deedScheduleForm.recipientContact}
+                                onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, recipientContact: e.target.value })}
+                                className="bg-slate-50 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">Email:</label>
+                              <Input
+                                value={deedScheduleForm.recipientEmail}
+                                onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, recipientEmail: e.target.value })}
+                                className="bg-slate-50 text-xs"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">Residential / Business Address:</label>
+                            <Input
+                              value={deedScheduleForm.recipientAddress}
+                              onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, recipientAddress: e.target.value })}
+                              placeholder="Candidate street address"
+                              className="bg-slate-50 text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Meaning of Purpose */}
+                        <div className="space-y-1.5 md:col-span-2">
+                          <label className="font-semibold text-slate-700">Meaning of Purpose:</label>
+                          <textarea
+                            rows={3}
+                            value={deedScheduleForm.purpose}
+                            onChange={(e) => setDeedScheduleForm({ ...deedScheduleForm, purpose: e.target.value })}
+                            placeholder="Enter purpose statement..."
+                            className="w-full p-2 text-xs border rounded-lg bg-white outline-none focus:ring-2 focus:ring-[#095c7b]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     {deedDone ? (
                       <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl space-y-3">
                         <div className="flex items-center justify-between">
@@ -2145,23 +2635,193 @@ export default function FranchiseProspectDetailClient() {
                       </div>
                     </div>
 
+                    {/* EOI Dynamic Prefill & Form Config Card */}
+                    <div className="p-4 bg-slate-50 border rounded-xl space-y-4">
+                      <div className="flex items-center justify-between border-b pb-2">
+                        <div>
+                          <span className="text-xs font-bold uppercase text-[#095c7b] block">Step 3 EOI Dynamic Field Prefill & Configuration</span>
+                          <span className="text-[11px] text-slate-500">Prefill values here to prepopulate the candidate's public EOI application page.</span>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleSaveEOIPrefill}
+                          disabled={savingEOIPrefill}
+                          className="bg-[#095c7b] hover:bg-[#074760] text-white text-xs font-bold gap-1.5"
+                        >
+                          {savingEOIPrefill ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                          {savingEOIPrefill ? 'Saving...' : 'Save EOI Prefill Settings'}
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">Proposed Entity Structure</label>
+                          <select
+                            value={eoiPrefillForm.entityStructure}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, entityStructure: e.target.value as any })}
+                            className="w-full h-8 text-xs p-1 border rounded bg-white"
+                          >
+                            <option value="SOLE TRADER">Sole Trader</option>
+                            <option value="PARTNERSHIP">Partnership</option>
+                            <option value="PTY LTD COMPANY">Pty Ltd Company</option>
+                            <option value="LTD COMPANY">Ltd Company</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">Company / Applicant Name</label>
+                          <Input
+                            value={eoiPrefillForm.companyName}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, companyName: e.target.value })}
+                            className="text-xs h-8 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">ABN</label>
+                          <Input
+                            value={eoiPrefillForm.abn}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, abn: e.target.value })}
+                            className="text-xs h-8 bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">Registered Address</label>
+                          <Input
+                            value={eoiPrefillForm.registeredAddress}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, registeredAddress: e.target.value })}
+                            className="text-xs h-8 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">Business Address</label>
+                          <Input
+                            value={eoiPrefillForm.businessAddress}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, businessAddress: e.target.value })}
+                            className="text-xs h-8 bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">Applicant 1 Full Name</label>
+                          <Input
+                            value={eoiPrefillForm.applicant1Name}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, applicant1Name: e.target.value })}
+                            className="text-xs h-8 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">Applicant 1 Email</label>
+                          <Input
+                            value={eoiPrefillForm.applicant1Email}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, applicant1Email: e.target.value })}
+                            className="text-xs h-8 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">Applicant 1 Phone</label>
+                          <Input
+                            value={eoiPrefillForm.applicant1PhoneBusiness}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, applicant1PhoneBusiness: e.target.value })}
+                            className="text-xs h-8 bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">Driver's Licence No.</label>
+                          <Input
+                            value={eoiPrefillForm.applicant1DriversLicence}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, applicant1DriversLicence: e.target.value })}
+                            className="text-xs h-8 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">Licence State / Place</label>
+                          <Input
+                            value={eoiPrefillForm.applicant1DriversLicencePlace}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, applicant1DriversLicencePlace: e.target.value })}
+                            className="text-xs h-8 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block mb-1">Date of Birth</label>
+                          <Input
+                            type="date"
+                            value={eoiPrefillForm.applicant1DateOfBirth}
+                            onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, applicant1DateOfBirth: e.target.value })}
+                            className="text-xs h-8 bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Co-applicant toggle */}
+                      <div className="pt-2 border-t text-xs">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-slate-700">Co-Applicant / Partner Details</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEOIPrefillForm({ ...eoiPrefillForm, hasApplicant2: !eoiPrefillForm.hasApplicant2 })}
+                            className="h-6 text-[10px]"
+                          >
+                            {eoiPrefillForm.hasApplicant2 ? 'Remove Co-Applicant' : '+ Enable Co-Applicant Prefill'}
+                          </Button>
+                        </div>
+                        {eoiPrefillForm.hasApplicant2 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                            <div>
+                              <label className="text-[10px] text-slate-600 block mb-1">Applicant 2 Name</label>
+                              <Input
+                                value={eoiPrefillForm.applicant2Name}
+                                onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, applicant2Name: e.target.value })}
+                                className="text-xs h-8 bg-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-slate-600 block mb-1">Applicant 2 Email</label>
+                              <Input
+                                value={eoiPrefillForm.applicant2Email}
+                                onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, applicant2Email: e.target.value })}
+                                className="text-xs h-8 bg-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-slate-600 block mb-1">Applicant 2 Phone</label>
+                              <Input
+                                value={eoiPrefillForm.applicant2PhoneBusiness}
+                                onChange={(e) => setEOIPrefillForm({ ...eoiPrefillForm, applicant2PhoneBusiness: e.target.value })}
+                                className="text-xs h-8 bg-white"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     {eoiDone ? (
                       <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl space-y-3 text-xs">
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-emerald-900 flex items-center gap-1.5">
-                            <CheckCircle className="h-4 w-4 text-emerald-600" /> Candidate Has Completed & Signed EOI
+                            <CheckCircle className="h-4 w-4 text-emerald-600" /> Candidate Has Completed & Signed EOI Online
                           </span>
                           <Badge className="bg-emerald-700 text-white text-[10px]">Signed Online</Badge>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-emerald-200">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 border-t border-emerald-200">
                           <div>
                             <span className="text-slate-500 block">Applicant Name:</span>
-                            <span className="font-bold text-slate-900">{prospect.eoiData?.signerName || (prospect.eoiData as any)?.applicantName || prospect.fullName}</span>
+                            <span className="font-bold text-slate-900">{prospect.eoiData?.signerName || prospect.eoiData?.applicant1Name || prospect.fullName}</span>
                           </div>
                           <div>
                             <span className="text-slate-500 block">Entity Structure:</span>
-                            <span className="font-bold text-slate-900">{prospect.eoiData?.entityStructure || (prospect.eoiData as any)?.entityType || 'Individual'}</span>
+                            <span className="font-bold text-slate-900">{prospect.eoiData?.entityStructure || 'Individual'}</span>
                           </div>
                           <div>
                             <span className="text-slate-500 block">Company / Business Name:</span>
@@ -2172,8 +2832,8 @@ export default function FranchiseProspectDetailClient() {
                             <span className="font-bold text-slate-900">{prospect.eoiData?.abn || 'N/A'}</span>
                           </div>
                           <div>
-                            <span className="text-slate-500 block">Business Address:</span>
-                            <span className="font-bold text-slate-900">{prospect.eoiData?.businessAddress || 'N/A'}</span>
+                            <span className="text-slate-500 block">Est. Net Worth:</span>
+                            <span className="font-bold text-emerald-800">${(Number(prospect.eoiData?.netWorth) || 0).toLocaleString()}</span>
                           </div>
                           <div>
                             <span className="text-slate-500 block">Signed Timestamp:</span>
