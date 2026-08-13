@@ -669,10 +669,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewHistoryAppointments = canView('historyAppointments');
   const canViewHistoryCallsTranscripts = canView('historyCallsTranscripts');
   const activeRoleLower = (userProfile?.activeRole as string)?.toLowerCase() || '';
-  const canViewTerritoryMap = isSuperAdmin || 
+  const canViewTerritoryMap = !isFranchiseeRole && (isSuperAdmin || 
     canView('territoryMap') || 
-    ['franchisee', 'executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success'].includes(activeRoleLower);
-  const canViewFranchisees = canView('franchisees');
+    ['executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success'].includes(activeRoleLower));
+  const canViewFranchisees = !isFranchiseeRole && canView('franchisees');
   const canViewAccountManagerPipeline = canView('accountManagerPipeline');
   const canViewMultisite = isSuperAdmin || canView('multisiteReporting') || canViewAccountManagerPipeline || ['admin', 'superadmin', 'sales manager', 'account manager', 'account managers', 'customer success', 'customer service'].includes(activeRoleLower);
   const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
@@ -980,7 +980,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
 
               {/* Group 10: NETWORK */}
-              {(canViewFranchisees || canViewTerritoryMap) && (
+              {(canViewFranchisees || canViewTerritoryMap) && !isFranchiseeRole && (
                 <SidebarMenuItem>
                   <SidebarMenuButton 
                     tooltip="Network" 
@@ -1988,7 +1988,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
 
               {/* Group 10: NETWORK */}
-              {(canViewFranchisees || canViewTerritoryMap) && (
+              {(canViewFranchisees || canViewTerritoryMap) && !isFranchiseeRole && (
                 <SidebarGroup>
                   <SidebarGroupLabel 
                     onClick={() => toggleGroup('network-group')} 
@@ -2440,14 +2440,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               Select the pages you want pinned to the top of your sidebar for instant 1-click access.
             </p>
             <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-              {Array.from(new Set(Object.values(PINNABLE_ITEMS).map(i => i.category))).map(category => (
+              {Array.from(new Set(Object.values(PINNABLE_ITEMS).map(i => i.category)))
+                .filter(category => !isFranchiseeRole || category !== 'Network')
+                .map(category => (
                 <div key={category} className="space-y-2">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b pb-1">
                     {category}
                   </h4>
                   <div className="grid grid-cols-1 gap-1.5 pl-1">
                     {Object.values(PINNABLE_ITEMS)
-                      .filter(i => i.category === category)
+                      .filter(i => i.category === category && (!isFranchiseeRole || !i.href.startsWith('/admin/franchisees')))
                       .map(item => {
                         const isPinned = pinnedPaths.includes(item.href);
                         const ItemIcon = item.icon;
@@ -2494,7 +2496,9 @@ const isBlockedForUserRole = (path: string, role?: string) => {
       '/field-activity-report',
       '/field-sales',
       '/visit-notes',
-      '/capture-visit'
+      '/capture-visit',
+      '/admin/franchisees',
+      '/operations/franchise-prospects'
     ];
     if (blockedFranchiseePaths.some(p => path === p || path.startsWith(p + '/'))) {
       return true;
