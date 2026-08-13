@@ -107,7 +107,8 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
 
     useEffect(() => {
         if (!isOpen) return;
-        const cityUpper = city.trim().toUpperCase();
+        const cityTrimmed = city.trim();
+        const cityUpper = cityTrimmed.toUpperCase();
         const stateUpper = state.trim().toUpperCase();
         const zipTrimmed = zip.trim();
 
@@ -120,19 +121,19 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
 
         const matches = allFranchiseesList.filter(f =>
             f.territoryJson?.some(t =>
-                t.suburbs?.toUpperCase() === cityUpper &&
+                (t.suburbs?.toUpperCase() === cityUpper || (t.suburbs || '').toUpperCase().includes(cityUpper)) &&
                 (!stateUpper || !t.state || t.state.toUpperCase() === stateUpper) &&
                 String(t.post_code).trim() === zipTrimmed
             ) ||
             f.ausPostSuburbsJson?.some(t =>
-                t.suburbs?.toUpperCase() === cityUpper &&
+                (t.suburbs?.toUpperCase() === cityUpper || (t.suburbs || '').toUpperCase().includes(cityUpper)) &&
                 (!stateUpper || !t.state || t.state.toUpperCase() === stateUpper) &&
                 String(t.post_code).trim() === zipTrimmed
             )
         );
 
         if (matches.length === 1) {
-            const matchedName = matches[0].name || matches[0].franchiseeName || 'MailPlus Pty Ltd';
+            const matchedName = matches[0].name || (matches[0] as any).franchiseeName || 'MailPlus Pty Ltd';
             const matchedId = matches[0].internalId || matches[0].id || '435';
             setSelectedFranchiseeId(matchedId);
             setSelectedFranchiseeName(matchedName);
