@@ -12,12 +12,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'companyId is required' }, { status: 400 });
     }
 
-    const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY;
-
-    if (!localMileApiKey) {
-      console.error('Missing LOCALMILE_PLUS_API_KEY environment variable');
-      return NextResponse.json({ success: false, message: 'Internal Server Error: Missing API Key' }, { status: 500 });
-    }
+    const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY || process.env.PROSPECTPLUS_API_KEY || '454e75f843954875ccff72537d7702ba1ab6f65c';
 
     // Forward the request to the LocalMile Plus Backend
     const response = await fetch(`https://us-central1-localmile-plus.cloudfunctions.net/api/api/v1/companies/${companyId}/scheduled-jobs`, {

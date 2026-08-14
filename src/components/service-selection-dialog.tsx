@@ -1710,40 +1710,7 @@ export function ServiceSelectionDialog({
             const contactEmails = selectedContacts.map(c => c.email).filter(Boolean);
             const signupEmailsString = contactEmails.length > 0 ? contactEmails.join(', ') : (lead.customerServiceEmail || '');
 
-            // Handle LocalMile schedule creation
-            const hasLocalMileAccess = selectedContacts.some(c => c?.accessToLocalMile === 'yes');
-            if (hasLocalMileAccess) {
-              for (const s of serviceSelections) {
-                if ((s.name.toLowerCase().includes('ampo') || s.name.toLowerCase().includes('pmpo')) && values.createLocalMileSchedules?.[s.name]) {
-                  try {
-                    const freqArr = Array.isArray(s.frequency) ? s.frequency : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-                    await fetch('/api/localmile/scheduled-jobs', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        companyId: lead.id,
-                        parentId: lead.franchisee || '',
-                        startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-                        frequency: freqArr,
-                        service: s.name,
-                        accountManagerName: lead.accountManagerAssigned,
-                        customer: {
-                          company: lead.companyName,
-                          address: lead.postalAddress?.street || lead.address?.street || '',
-                          suburb: lead.postalAddress?.city || lead.address?.city || '',
-                          state: lead.postalAddress?.state || lead.address?.state || '',
-                          postcode: lead.postalAddress?.zip || lead.address?.zip || '',
-                          email: selectedContacts[0]?.email || lead.customerServiceEmail || '',
-                          phone: selectedContacts[0]?.phone || lead.customerPhone || ''
-                        }
-                      })
-                    });
-                  } catch (e) {
-                    console.error('Failed to create localmile schedule', e);
-                  }
-                }
-              }
-            }
+
 
             const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
             const defaultSenderEmail = amUser?.email || user?.email || '';

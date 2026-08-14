@@ -21,36 +21,40 @@ export async function recreditLocalMileTrial(leadId: string, jobId: string): Pro
       return { success: false, message: 'Lead not found.' };
     }
 
-    const leadData = leadSnap.data() || {};
-    const currentTrials = typeof leadData.localMileTrialsRemaining === 'number' 
-      ? leadData.localMileTrialsRemaining 
-      : 5;
-    
-    const newTrials = currentTrials + 1;
-
-    // 1. Update trials count in ProspectPlus Lead document
-    await leadRef.update({
-      localMileTrialsRemaining: newTrials,
-      updatedAt: new Date().toISOString()
-    });
-
-    // 2. Update job status in the localMileJobs subcollection
+    // 1. Update job status in the localMileJobs subcollection
     const jobDocRef = leadRef.collection('localMileJobs').doc(String(jobId));
     await jobDocRef.set({
       status: 'recredited',
       updatedAt: new Date().toISOString()
     }, { merge: true });
 
-    // 3. Log activity in CRM
+    // 2. Query all jobs in localMileJobs to calculate exact active trial count
+    const jobsSnap = await leadRef.collection('localMileJobs').get();
+    const totalJobCount = jobsSnap.docs.length;
+    const activeTrialJobsCount = jobsSnap.docs.filter(d => {
+      const st = d.data()?.status;
+      return st !== 'recredited' && st !== 'cancelled';
+    }).length;
+
+    const newTrials = Math.max(0, 5 - activeTrialJobsCount);
+
+    // 3. Update trials count & job count in ProspectPlus Lead document
+    await leadRef.update({
+      jobCount: totalJobCount,
+      localMileTrialsRemaining: newTrials,
+      updatedAt: new Date().toISOString()
+    });
+
+    // 4. Log activity in CRM
     const activityRef = leadRef.collection('activity');
     await activityRef.add({
       type: 'Update',
       date: new Date().toISOString(),
-      notes: `LocalMile Trial recredited (credit restored) for job ${jobId}. Remaining trials: ${newTrials}`,
+      notes: `LocalMile Trial recredited for job ${jobId}. Remaining trials: ${newTrials}`,
       author: 'ProspectPlus System'
     });
 
-    // 4. Sync the new count to localmile-plus backend
+    // 5. Sync the new count to localmile-plus backend
     const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY || process.env.PROSPECTPLUS_API_KEY || process.env.EXTERNAL_API_KEY || '454e75f843954875ccff72537d7702ba1ab6f65c';
     try {
       console.log(`[LocalMile Recredit] Syncing updated trial remaining count (${newTrials}) to localmile-plus for company ${leadId}...`);

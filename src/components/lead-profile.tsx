@@ -357,6 +357,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [isRecreditingId, setIsRecreditingId] = useState<string | null>(null);
     const [isPushingLpoPlus, setIsPushingLpoPlus] = useState(false);
 
+
     const handleToggleLpoPlus = async () => {
         const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
         if (isLost) {
@@ -848,9 +849,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 return bTime - aTime;
             });
             setLocalMileJobs(jobsList);
+
+            if (jobsList.length > 0) {
+                const validJobsCount = jobsList.filter(j => j.status !== 'recredited' && j.status !== 'cancelled').length;
+                const computedTrials = Math.max(0, 5 - validJobsCount);
+                const computedJobCount = jobsList.length;
+
+                if (lead.jobCount !== computedJobCount || lead.localMileTrialsRemaining !== computedTrials || !lead.hasCreatedJob) {
+                    updateDoc(doc(firestore, 'leads', lead.id), {
+                        jobCount: computedJobCount,
+                        hasCreatedJob: true,
+                        localMileTrialsRemaining: computedTrials,
+                    }).catch(err => console.warn('Failed auto-syncing lead job stats:', err));
+
+                    setLead(prev => ({
+                        ...prev,
+                        jobCount: computedJobCount,
+                        hasCreatedJob: true,
+                        localMileTrialsRemaining: computedTrials
+                    }));
+                }
+            }
         });
         return () => unsubscribe();
-    }, [lead.id]);
+    }, [lead.id, lead.jobCount, lead.localMileTrialsRemaining, lead.hasCreatedJob]);
 
     const handleRecredit = async (jobId: string) => {
         setIsRecreditingId(jobId);
@@ -4129,32 +4151,42 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </div>
 
                 {/* Row 3: Dedicated Jobs & Free Trial Activity */}
-                {(lead.localMileTrialsRemaining !== undefined || lead.status?.includes('LocalMile') || lead.customerStatus?.includes('LocalMile') || lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' || lead.jobCount !== undefined || lead.lastLocalMileJobCreatedAt !== undefined) && (
-                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                        {lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' ? (
-                            <Badge variant="outline" className="bg-emerald-100 text-emerald-900 border-emerald-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
-                                Jobs Created: {lead.jobCount?.toString() ?? '0'}
-                            </Badge>
-                        ) : (
-                            lead.status === 'LocalMile Pending' && (
-                                <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
-                                    Pending First Job
+                {(() => {
+                    const actualJobCount = localMileJobs.length > 0 ? localMileJobs.length : (lead.jobCount || 0);
+                    const validJobsCount = localMileJobs.filter(j => j.status !== 'recredited' && j.status !== 'cancelled').length;
+                    const actualTrialsRemaining = localMileJobs.length > 0 ? Math.max(0, 5 - validJobsCount) : (lead.localMileTrialsRemaining ?? 5);
+                    const hasJobs = lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' || actualJobCount > 0;
+
+                    if (!hasJobs && lead.localMileTrialsRemaining === undefined && !lead.status?.includes('LocalMile') && !lead.customerStatus?.includes('LocalMile') && lead.jobCount === undefined && !lead.lastLocalMileJobCreatedAt) {
+                        return null;
+                    }
+
+                    const regLink = userProfile?.activeRole?.toLowerCase() !== 'user'
+                        ? (lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : ''))
+                        : '';
+
+                    return (
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {hasJobs ? (
+                                <Badge variant="outline" className="bg-emerald-100 text-emerald-900 border-emerald-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
+                                    Jobs Created: {actualJobCount}
                                 </Badge>
-                            )
-                        )}
-                        <Badge variant="outline" className="bg-sky-50 text-sky-900 border-sky-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
-                            Free Trials Remaining: {lead.localMileTrialsRemaining?.toString() ?? '5'}
-                        </Badge>
-                        {lead.lastLocalMileJobCreatedAt && (
-                            <Badge variant="outline" className="bg-indigo-50 text-indigo-900 border-indigo-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
-                                Last Job Created: {safeFormatDate(lead.lastLocalMileJobCreatedAt, 'MMM d, yyyy')}
+                            ) : (
+                                lead.status === 'LocalMile Pending' && (
+                                    <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
+                                        Pending First Job
+                                    </Badge>
+                                )
+                            )}
+                            <Badge variant="outline" className="bg-sky-50 text-sky-900 border-sky-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
+                                Free Trials Remaining: {actualTrialsRemaining}
                             </Badge>
-                        )}
-                        {(() => {
-                            if (userProfile?.activeRole?.toLowerCase() === 'user') return null;
-                            const regLink = lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : '');
-                            if (!regLink) return null;
-                            return (
+                            {lead.lastLocalMileJobCreatedAt && (
+                                <Badge variant="outline" className="bg-indigo-50 text-indigo-900 border-indigo-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
+                                    Last Job Created: {safeFormatDate(lead.lastLocalMileJobCreatedAt, 'MMM d, yyyy')}
+                                </Badge>
+                            )}
+                            {regLink && (
                                 <button
                                     onClick={() => {
                                         navigator.clipboard.writeText(regLink);
@@ -4167,10 +4199,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <ExternalLink className="h-3 w-3 text-sky-700" />
                                     Reg Link
                                 </button>
-                            );
-                        })()}
-                    </div>
-                )}
+                            )}
+
+                        </div>
+                    );
+                })()}
 
                 {/* Row 4: Partner & Re-engagement Telemetry */}
                 {(ausPostParentLpoId || lead.lpoPlusOpportunity || (lead.status === 'Future Follow-up' && lead.followUpDate)) && (

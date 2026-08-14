@@ -20,6 +20,9 @@ import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
 import { updateContactSendEmail, updateContactInLead } from '@/services/firebase';
 import { isContactEmpty } from '@/lib/contact-utils';
+import { useAuth } from '@/hooks/use-auth';
+import { getPmpoServiceForLead, isDialerUser } from '@/lib/localmile-utils';
+import { Lock, Info } from 'lucide-react';
 
 interface LocalMileAccessDialogProps {
   isOpen: boolean;
@@ -34,27 +37,35 @@ export function LocalMileAccessDialog({
   lead,
   onConfirm,
 }: LocalMileAccessDialogProps) {
+  const { userProfile } = useAuth();
+  const isDialer = isDialerUser(userProfile);
+
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [serviceType, setServiceType] = useState<'Adhoc' | 'Recurring'>('Adhoc');
   const [rate, setRate] = useState<string>('15');
+  const [hasPmpo, setHasPmpo] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen && lead) {
       setSelectedContacts([]);
-      setServiceType('Adhoc');
-      setRate('15');
+      const pmpo = getPmpoServiceForLead(lead);
+      setHasPmpo(pmpo.hasPmpoService);
+      setServiceType(pmpo.serviceType);
+      setRate(String(pmpo.rate));
     }
-  }, [isOpen]);
+  }, [isOpen, lead]);
 
   useEffect(() => {
-    if (serviceType === 'Adhoc') {
-      setRate('15');
-    } else if (serviceType === 'Recurring') {
-      setRate('10');
+    if (!hasPmpo && serviceType) {
+      if (serviceType === 'Adhoc') {
+        setRate('15');
+      } else if (serviceType === 'Recurring') {
+        setRate('10');
+      }
     }
-  }, [serviceType]);
+  }, [serviceType, hasPmpo]);
 
   const handleSelectContact = (contactId: string, checked: boolean) => {
     setSelectedContacts((prev) =>
@@ -63,10 +74,10 @@ export function LocalMileAccessDialog({
   };
 
   const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isDialer) return;
     const val = e.target.value;
-    // Allow empty string or numbers
     if (val === '' || /^\d*\.?\d*$/.test(val)) {
-        setRate(val);
+      setRate(val);
     }
   };
 
@@ -86,22 +97,22 @@ export function LocalMileAccessDialog({
     }
 
     if (!rate) {
-        toast({
-            variant: 'destructive',
-            title: 'Rate Required',
-            description: 'Please enter a valid rate.',
-        });
-        return;
+      toast({
+        variant: 'destructive',
+        title: 'Rate Required',
+        description: 'Please enter a valid rate.',
+      });
+      return;
     }
 
     const numericRate = parseFloat(rate);
     if (isNaN(numericRate)) {
-        toast({
-            variant: 'destructive',
-            title: 'Invalid Rate',
-            description: 'Rate must be a valid number.',
-        });
-        return;
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Rate',
+        description: 'Rate must be a valid number.',
+      });
+      return;
     }
 
     setIsSubmitting(true);
@@ -111,16 +122,16 @@ export function LocalMileAccessDialog({
         validSelectedContacts.map((contactId) => {
           const c = lead.contacts?.find(c => c.id === contactId);
           if (c) {
-             selectedContactsInfo.push({
-               id: c.id,
-               name: c.name || '',
-               email: c.email || '',
-               phone: c.phone || '',
-             });
+            selectedContactsInfo.push({
+              id: c.id,
+              name: c.name || '',
+              email: c.email || '',
+              phone: c.phone || '',
+            });
           }
           return Promise.all([
-             updateContactSendEmail(lead.id, contactId),
-             updateContactInLead(lead.id, contactId, { accessToLocalMile: 'yes' })
+            updateContactSendEmail(lead.id, contactId),
+            updateContactInLead(lead.id, contactId, { accessToLocalMile: 'yes' })
           ]);
         })
       );
@@ -148,10 +159,79 @@ export function LocalMileAccessDialog({
             Configure LocalMile free trial and select contacts from {lead.companyName} to receive access.
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="max-h-[50vh] p-1">
+        <ScrollArea className="max-h-[60vh] p-1">
           <div className="space-y-6 py-4">
             
+            {/* Service & Rate Configuration */}
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold text-foreground">Post-Trial Service Configuration</Label>
+                {hasPmpo ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-[#095c7b]/10 px-2 py-0.5 text-xs font-semibold text-[#095c7b]">
+                    PMPO Service Rate
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    Default Rate
+                  </span>
+                )}
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Service Type</Label>
+                  <RadioGroup
+                    value={serviceType}
+                    onValueChange={(val) => isDialer && !hasPmpo && setServiceType(val as 'Adhoc' | 'Recurring')}
+                    disabled={hasPmpo || !isDialer}
+                    className="flex space-x-2"
+                  >
+                    <div className="flex items-center space-x-1">
+                      <RadioGroupItem value="Adhoc" id="trial-adhoc" disabled={hasPmpo || !isDialer} />
+                      <Label htmlFor="trial-adhoc" className="text-xs cursor-pointer">Adhoc</Label>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <RadioGroupItem value="Recurring" id="trial-recurring" disabled={hasPmpo || !isDialer} />
+                      <Label htmlFor="trial-recurring" className="text-xs cursor-pointer">Recurring</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    Post-Trial Rate ($)
+                    {!isDialer && (
+                      <Lock className="h-3 w-3 text-muted-foreground" />
+                    )}
+                  </Label>
+                  <Input
+                    type="text"
+                    value={rate}
+                    onChange={handleRateChange}
+                    readOnly={!isDialer}
+                    disabled={!isDialer}
+                    className={`h-8 text-sm ${!isDialer ? 'bg-muted cursor-not-allowed opacity-90' : ''}`}
+                    placeholder="15.00"
+                  />
+                </div>
+              </div>
+
+              {!isDialer ? (
+                <div className="flex items-start gap-1.5 text-[11px] text-muted-foreground pt-1 border-t">
+                  <Lock className="h-3 w-3 shrink-0 text-amber-600 mt-0.5" />
+                  <span>
+                    Rate is locked to the PMPO service rate. To edit this rate, please update the PMPO service in the Services / SCF tab.
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-1 border-t">
+                  <Info className="h-3 w-3 shrink-0 text-[#095c7b]" />
+                  <span>
+                    {hasPmpo ? 'Pre-filled from lead PMPO service. Editable for Dialer role.' : 'Default trial rate. Editable for Dialer role.'}
+                  </span>
+                </div>
+              )}
+            </div>
 
             <div className="space-y-3">
               <Label className="text-sm font-semibold">Select Contacts</Label>
@@ -198,3 +278,4 @@ export function LocalMileAccessDialog({
     </Dialog>
   );
 }
+

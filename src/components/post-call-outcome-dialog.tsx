@@ -33,7 +33,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail, Building } from 'lucide-react'
+import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail, Building, Lock } from 'lucide-react'
 import { logCallActivity, logActivity, addTaskToLead, updateContactSendEmail, updateContactInLead, updateLeadDetails, logBucketChange } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy'
@@ -48,6 +48,7 @@ import { isContactEmpty } from '@/lib/contact-utils'
 import { getMergedCancellationHierarchy } from '@/lib/cancellation-reasons-mapper'
 import { CallAttemptBadge } from './call-attempt-badge'
 import { triggerVictoryConfetti } from '@/lib/confetti'
+import { getPmpoServiceForLead, isDialerUser } from '@/lib/localmile-utils'
 
 
 const formSchema = z.object({
@@ -350,14 +351,26 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
   const [selectedRegisterContacts, setSelectedRegisterContacts] = useState<string[]>([]);
   const [registerServiceType, setRegisterServiceType] = useState<'Adhoc' | 'Recurring'>('Adhoc');
   const [registerRate, setRegisterRate] = useState<string>('15');
+  const [hasPmpo, setHasPmpo] = useState<boolean>(false);
 
   useEffect(() => {
-    if (registerServiceType === 'Adhoc') {
-      setRegisterRate('15');
-    } else if (registerServiceType === 'Recurring') {
-      setRegisterRate('10');
+    if (isOpen && lead) {
+      const pmpo = getPmpoServiceForLead(lead);
+      setHasPmpo(pmpo.hasPmpoService);
+      setRegisterServiceType(pmpo.serviceType);
+      setRegisterRate(String(pmpo.rate));
     }
-  }, [registerServiceType]);
+  }, [isOpen, lead]);
+
+  useEffect(() => {
+    if (!hasPmpo && registerServiceType) {
+      if (registerServiceType === 'Adhoc') {
+        setRegisterRate('15');
+      } else if (registerServiceType === 'Recurring') {
+        setRegisterRate('10');
+      }
+    }
+  }, [registerServiceType, hasPmpo]);
 
   const resetAndClose = () => {
     onClose();
@@ -2308,7 +2321,11 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                         <div className="grid grid-cols-2 gap-3 pt-1">
                           <div className="space-y-1.5">
                             <Label className="text-xs font-semibold text-slate-700">Service Type</Label>
-                            <Select value={registerServiceType} onValueChange={(val: 'Adhoc' | 'Recurring') => setRegisterServiceType(val)} disabled={userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user'}>
+                            <Select
+                              value={registerServiceType}
+                              onValueChange={(val: 'Adhoc' | 'Recurring') => !hasPmpo && setRegisterServiceType(val)}
+                              disabled={hasPmpo || !isDialerUser(userProfile)}
+                            >
                               <SelectTrigger className="bg-white text-xs h-8">
                                 <SelectValue placeholder="Select Service Type" />
                               </SelectTrigger>
@@ -2319,20 +2336,31 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                             </Select>
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-700">Rate ($)</Label>
+                            <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                              Rate ($)
+                              {!isDialerUser(userProfile) && <Lock className="h-3 w-3 text-slate-400" />}
+                            </Label>
                             <Input
                               type="text"
                               value={registerRate}
-                              disabled={userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user'}
+                              readOnly={!isDialerUser(userProfile)}
+                              disabled={!isDialerUser(userProfile)}
                               onChange={(e) => {
+                                if (!isDialerUser(userProfile)) return;
                                 const val = e.target.value;
                                 if (val === '' || /^\d*\.?\d*$/.test(val)) setRegisterRate(val);
                               }}
-                              className="bg-white text-xs h-8"
+                              className={`bg-white text-xs h-8 ${!isDialerUser(userProfile) ? 'bg-slate-100 cursor-not-allowed opacity-90' : ''}`}
                               placeholder="Rate"
                             />
                           </div>
                         </div>
+                        {!isDialerUser(userProfile) && (
+                          <div className="mt-1 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 flex items-center gap-1.5">
+                            <Info className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                            <span>Rate is locked to PMPO service rate. To edit, please update PMPO service in lead profile.</span>
+                          </div>
+                        )}
                       </div>
                     )}
 

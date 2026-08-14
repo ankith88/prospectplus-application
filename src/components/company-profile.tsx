@@ -63,7 +63,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { CancelCustomerDialog } from '@/components/cancel-customer-dialog'
 import { LogNoteDialog } from './log-note-dialog'
 import { LossReasonPicker } from './loss-reason-picker'
-import { collection, getDocs, orderBy, query, doc, getDoc, setDoc, where } from 'firebase/firestore'
+import { collection, getDocs, orderBy, query, doc, getDoc, setDoc, where, onSnapshot, updateDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { canEditSignedCustomerAddress, canFranchiseeAccessLead } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
@@ -112,9 +112,41 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.role === 'admin' || isSuperAdmin;
 
   const [company, setCompany] = useState<Lead>(initialCompany);
+  const [localMileJobs, setLocalMileJobs] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [showAllInvoices, setShowAllInvoices] = useState(false);
+
+  useEffect(() => {
+    if (!company?.id) return;
+    const q = query(collection(firestore, 'leads', company.id, 'localMileJobs'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const jobsList = snapshot.docs.map(doc => ({ ...(doc.data() as any), id: doc.id }));
+      setLocalMileJobs(jobsList);
+
+      if (jobsList.length > 0) {
+        const validJobsCount = jobsList.filter(j => j.status !== 'recredited' && j.status !== 'cancelled').length;
+        const computedTrials = Math.max(0, 5 - validJobsCount);
+        const computedJobCount = jobsList.length;
+
+        if (company.jobCount !== computedJobCount || company.localMileTrialsRemaining !== computedTrials || !company.hasCreatedJob) {
+          updateDoc(doc(firestore, 'leads', company.id), {
+            jobCount: computedJobCount,
+            hasCreatedJob: true,
+            localMileTrialsRemaining: computedTrials,
+          }).catch(err => console.warn('Failed auto-syncing company job stats:', err));
+
+          setCompany(prev => prev ? {
+            ...prev,
+            jobCount: computedJobCount,
+            hasCreatedJob: true,
+            localMileTrialsRemaining: computedTrials
+          } : prev);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [company?.id, company?.jobCount, company?.localMileTrialsRemaining, company?.hasCreatedJob]);
 
   const { recentInvoices, olderInvoices } = useMemo(() => {
     if (!invoices || invoices.length === 0) return { recentInvoices: [], olderInvoices: [] };
@@ -611,29 +643,40 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
               <p className="text-muted-foreground text-sm font-medium">{company.contacts?.length || 0} Contacts</p>
             </div>
             
-            {(company.localMileTrialsRemaining !== undefined || company.status?.includes('LocalMile') || company.customerStatus?.includes('LocalMile') || company.hasCreatedJob === true || String(company.hasCreatedJob) === 'true' || company.jobCount !== undefined || company.lastLocalMileJobCreatedAt !== undefined) && (
-                <div className="flex wrap items-center gap-x-2 gap-y-1 mt-2">
-                    {company.hasCreatedJob === true || String(company.hasCreatedJob) === 'true' ? (
-                        <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800" title={`First job created on ${company.firstJobCreatedAt ? new Date(company.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
-                            Jobs Created: {company.jobCount?.toString() ?? '0'}
-                        </Badge>
-                    ) : (
-                        company.status === 'LocalMile Pending' && (
-                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800">
-                                Pending First Job
+            {(() => {
+                const actualJobCount = localMileJobs.length > 0 ? localMileJobs.length : (company.jobCount || 0);
+                const validJobsCount = localMileJobs.filter(j => j.status !== 'recredited' && j.status !== 'cancelled').length;
+                const actualTrialsRemaining = localMileJobs.length > 0 ? Math.max(0, 5 - validJobsCount) : (company.localMileTrialsRemaining ?? 5);
+                const hasJobs = company.hasCreatedJob === true || String(company.hasCreatedJob) === 'true' || actualJobCount > 0;
+
+                if (!hasJobs && company.localMileTrialsRemaining === undefined && !company.status?.includes('LocalMile') && !company.customerStatus?.includes('LocalMile') && company.jobCount === undefined && !company.lastLocalMileJobCreatedAt) {
+                    return null;
+                }
+
+                return (
+                    <div className="flex wrap items-center gap-x-2 gap-y-1 mt-2">
+                        {hasJobs ? (
+                            <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800" title={`First job created on ${company.firstJobCreatedAt ? new Date(company.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
+                                Jobs Created: {actualJobCount}
                             </Badge>
-                        )
-                    )}
-                    <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-200">
-                        Trials Remaining: {company.localMileTrialsRemaining?.toString() ?? '5'}
-                    </Badge>
-                    {company.lastLocalMileJobCreatedAt && (
-                        <Badge variant="outline" className="bg-indigo-50 text-indigo-800 border-indigo-200">
-                            Last Job: {safeFormatDate(company.lastLocalMileJobCreatedAt, 'MMM d, h:mm a')}
+                        ) : (
+                            company.status === 'LocalMile Pending' && (
+                                <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800">
+                                    Pending First Job
+                                </Badge>
+                            )
+                        )}
+                        <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-200">
+                            Trials Remaining: {actualTrialsRemaining}
                         </Badge>
-                    )}
-                </div>
-            )}
+                        {company.lastLocalMileJobCreatedAt && (
+                            <Badge variant="outline" className="bg-indigo-50 text-indigo-800 border-indigo-200">
+                                Last Job: {safeFormatDate(company.lastLocalMileJobCreatedAt, 'MMM d, h:mm a')}
+                            </Badge>
+                        )}
+                    </div>
+                );
+            })()}
         </div>
       </header>
 

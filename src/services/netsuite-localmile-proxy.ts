@@ -315,6 +315,8 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 							console.log(`[LocalMile Proxy] Sent franchisee notification to ${franchiseeEmail} for lead ${payload.leadId}`);
 						}
 					}
+
+
 				} catch (err: any) {
 					console.error('[LocalMile Proxy Error] Background notification processing failed:', err);
 				}
