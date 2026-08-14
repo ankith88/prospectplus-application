@@ -8181,6 +8181,7 @@ function MergeDuplicatesDialog({
     onDismissed?: () => void;
 }) {
     const [selectedTargetId, setSelectedTargetId] = useState<string>(currentLead.id);
+    const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
     const [isMerging, setIsMerging] = useState(false);
     const [isDismissing, setIsDismissing] = useState(false);
     const [additionalCandidates, setAdditionalCandidates] = useState<Lead[]>([]);
@@ -8216,6 +8217,7 @@ function MergeDuplicatesDialog({
                     toast({ title: "Already Added", description: "This lead is already in the candidates list." });
                 } else {
                     setAdditionalCandidates(prev => [...prev, foundLead]);
+                    setSelectedSourceIds(prev => Array.from(new Set([...prev, foundLead.id])));
                     toast({ title: "Lead Added", description: `Added ${foundLead.companyName} (${foundLead.id}) to candidates list.` });
                     setSearchQuery('');
                 }
@@ -8237,23 +8239,58 @@ function MergeDuplicatesDialog({
         return Array.from(uniqueMap.values());
     }, [currentLead, duplicates, additionalCandidates]);
 
+    // Initialize or sync selectedSourceIds whenever allCandidates or selectedTargetId changes
+    useEffect(() => {
+        const nonMasterIds = allCandidates.map(c => c.id).filter(id => id !== selectedTargetId);
+        setSelectedSourceIds(prev => {
+            if (prev.length === 0) return nonMasterIds;
+            const filteredPrev = prev.filter(id => id !== selectedTargetId);
+            const mergedSet = new Set(filteredPrev);
+            // Ensure any newly added candidates default to checked
+            nonMasterIds.forEach(id => {
+                if (!prev.includes(id)) {
+                    mergedSet.add(id);
+                }
+            });
+            return Array.from(mergedSet);
+        });
+    }, [selectedTargetId, allCandidates]);
+
     const selectedLead = useMemo(() => allCandidates.find(c => c.id === selectedTargetId), [allCandidates, selectedTargetId]);
+
+    const toggleCandidateForMerge = (candId: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        if (candId === selectedTargetId) return;
+        setSelectedSourceIds(prev =>
+            prev.includes(candId) ? prev.filter(id => id !== candId) : [...prev, candId]
+        );
+    };
+
+    const handleSelectMaster = (masterId: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setSelectedTargetId(masterId);
+    };
 
     const handleMerge = async () => {
         if (!selectedTargetId) return;
         
-        const sourceLeadIds = allCandidates
-            .map(c => c.id)
-            .filter(id => id !== selectedTargetId);
+        const validSourceIds = selectedSourceIds.filter(id => id !== selectedTargetId);
             
-        if (sourceLeadIds.length === 0) return;
+        if (validSourceIds.length === 0) {
+            toast({
+                variant: "destructive",
+                title: "No Duplicates Selected",
+                description: "Please check at least one duplicate lead to merge into the Master lead.",
+            });
+            return;
+        }
 
         setIsMerging(true);
         try {
-            await mergeMultipleLeads(selectedTargetId, sourceLeadIds);
+            await mergeMultipleLeads(selectedTargetId, validSourceIds);
             toast({
                 title: "Merge Successful",
-                description: `Leads have been successfully merged into ${selectedLead?.companyName}. Retained status: ${selectedLead?.status || 'New'}`,
+                description: `Successfully merged ${validSourceIds.length} duplicate lead(s) into ${selectedLead?.companyName}. Master lead main fields were kept unchanged.`,
             });
             onMerged(selectedTargetId);
             onOpenChange(false);
@@ -8286,6 +8323,14 @@ function MergeDuplicatesDialog({
         }
     };
 
+    const selectedSourcesList = useMemo(() => {
+        return allCandidates.filter(c => c.id !== selectedTargetId && selectedSourceIds.includes(c.id));
+    }, [allCandidates, selectedTargetId, selectedSourceIds]);
+
+    const excludedSourcesList = useMemo(() => {
+        return allCandidates.filter(c => c.id !== selectedTargetId && !selectedSourceIds.includes(c.id));
+    }, [allCandidates, selectedTargetId, selectedSourceIds]);
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-4xl bg-card border max-h-[90vh] overflow-y-auto">
@@ -8294,7 +8339,7 @@ function MergeDuplicatesDialog({
                         <Building className="h-5 w-5" /> Compare & Merge Duplicate Leads
                     </DialogTitle>
                     <DialogDescription>
-                        Review matching lead records side-by-side below. Choose which lead record to retain as the Master. All other records will be merged into it (transferring all notes, activities, contacts, transcripts, and tasks) and deleted.
+                        Review candidate lead records below. Choose which lead to retain as Master and select which duplicate leads to merge into it. Only subcollection records (contacts, activities, notes, tasks, transcripts, and emails) will be merged — the Master lead's main collection fields will remain unchanged.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -8322,35 +8367,50 @@ function MergeDuplicatesDialog({
                         </Button>
                     </div>
 
-                    <Label className="font-bold text-sm text-slate-800">Select Lead Record to Retain (Master Record)</Label>
+                    <div className="flex items-center justify-between">
+                        <Label className="font-bold text-sm text-slate-800">Select Master Record & Choose Leads to Merge</Label>
+                        <span className="text-xs text-slate-500">
+                            {selectedSourceIds.length} of {allCandidates.length - 1} duplicate(s) selected
+                        </span>
+                    </div>
                     
                     {/* Side-by-side Comparative Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {allCandidates.map((cand) => {
-                            const isSelected = selectedTargetId === cand.id;
+                            const isMaster = selectedTargetId === cand.id;
+                            const isSourceSelected = !isMaster && selectedSourceIds.includes(cand.id);
                             const isCurrent = cand.id === currentLead.id;
                             const addr = cand.address || (cand as any);
 
                             return (
                                 <div 
                                     key={cand.id}
-                                    onClick={() => setSelectedTargetId(cand.id)}
-                                    className={`cursor-pointer rounded-xl border p-4 transition-all flex flex-col justify-between space-y-3 ${
-                                        isSelected 
+                                    className={`rounded-xl border p-4 transition-all flex flex-col justify-between space-y-3 ${
+                                        isMaster 
                                             ? 'border-[#095c7b] bg-[#095c7b]/5 ring-2 ring-[#095c7b]/30 shadow-sm' 
-                                            : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs'
+                                            : isSourceSelected
+                                            ? 'border-amber-300 bg-amber-50/40 shadow-xs'
+                                            : 'border-slate-200 bg-slate-50/60 opacity-80'
                                     }`}
                                 >
                                     <div className="space-y-2">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex items-center gap-2">
-                                                <input 
-                                                    type="radio" 
-                                                    name="selected-master-lead"
-                                                    checked={isSelected}
-                                                    onChange={() => setSelectedTargetId(cand.id)}
-                                                    className="h-4 w-4 text-[#095c7b] focus:ring-[#095c7b]"
-                                                />
+                                                {isMaster ? (
+                                                    <input 
+                                                        type="radio" 
+                                                        name="selected-master-lead"
+                                                        checked={true}
+                                                        readOnly
+                                                        className="h-4 w-4 text-[#095c7b] focus:ring-[#095c7b]"
+                                                    />
+                                                ) : (
+                                                    <Checkbox
+                                                        id={`cand-check-${cand.id}`}
+                                                        checked={isSourceSelected}
+                                                        onCheckedChange={() => toggleCandidateForMerge(cand.id)}
+                                                    />
+                                                )}
                                                 <span className="font-bold text-sm text-slate-800 line-clamp-1">{cand.companyName}</span>
                                             </div>
                                             {isCurrent && (
@@ -8372,11 +8432,37 @@ function MergeDuplicatesDialog({
                                         </div>
                                     </div>
 
-                                    <div className="pt-2 text-center">
-                                        {isSelected ? (
-                                            <Badge className="w-full justify-center bg-[#095c7b] text-white py-1">Retain as Master</Badge>
+                                    <div className="pt-2 flex flex-col gap-1.5">
+                                        {isMaster ? (
+                                            <div className="space-y-1">
+                                                <Badge className="w-full justify-center bg-[#095c7b] text-white py-1">Retain as Master</Badge>
+                                                <span className="text-[10px] text-slate-500 font-medium block text-center">Main fields remain unchanged</span>
+                                            </div>
                                         ) : (
-                                            <span className="text-[11px] text-slate-400 hover:text-slate-600 font-medium">Click to select as Master</span>
+                                            <div className="space-y-1.5">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={(e) => toggleCandidateForMerge(cand.id, e)}
+                                                    className={`w-full text-xs font-semibold ${
+                                                        isSourceSelected
+                                                            ? 'border-amber-400 bg-amber-100/70 text-amber-900 hover:bg-amber-200/70'
+                                                            : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    {isSourceSelected ? '✓ Selected to Merge' : '+ Include in Merge'}
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={(e) => handleSelectMaster(cand.id, e)}
+                                                    className="w-full text-[11px] h-7 text-slate-500 hover:text-[#095c7b] hover:bg-[#095c7b]/10"
+                                                >
+                                                    Set as Master instead
+                                                </Button>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -8385,13 +8471,21 @@ function MergeDuplicatesDialog({
                     </div>
 
                     {selectedLead && (
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-1">
-                            <p className="font-bold flex items-center gap-1">
-                                <AlertCircle className="h-4 w-4 text-amber-700" /> Merge Action Summary:
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-1.5">
+                            <p className="font-bold flex items-center gap-1 text-sm text-amber-950">
+                                <AlertCircle className="h-4 w-4 text-amber-700" /> Merge Action Summary
                             </p>
-                            <p>• Retaining lead <strong>{selectedLead.companyName}</strong> (ID: <code className="text-[10px] bg-amber-100 px-1 rounded">{selectedLead.id}</code>).</p>
-                            <p>• Final status will remain: <strong>{selectedLead.status}</strong> under bucket <strong>{selectedLead.bucket}</strong>.</p>
-                            <p>• All other {allCandidates.length - 1} lead record(s) will be merged into this lead (transferring contacts, activities, notes, tasks, transcripts, and emails) and deleted.</p>
+                            <p>• Master Lead: <strong>{selectedLead.companyName}</strong> (ID: <code className="text-[10px] bg-amber-100 px-1 rounded">{selectedLead.id}</code>). <strong>Main lead fields will remain unchanged.</strong></p>
+                            
+                            {selectedSourcesList.length > 0 ? (
+                                <p>• <strong>{selectedSourcesList.length} Duplicate Lead(s) to Merge:</strong> {selectedSourcesList.map(s => s.companyName).join(', ')}. Only subcollection records (contacts, activities, notes, tasks, transcripts, scorecards, and emails) will be transferred, and these source lead records will be deleted.</p>
+                            ) : (
+                                <p className="text-red-700 font-semibold">• No duplicate leads currently selected to merge. Please select at least one candidate lead above.</p>
+                            )}
+
+                            {excludedSourcesList.length > 0 && (
+                                <p className="text-slate-600">• <strong>{excludedSourcesList.length} Candidate Lead(s) Excluded:</strong> {excludedSourcesList.map(s => s.companyName).join(', ')}. These records will remain unchanged as separate leads.</p>
+                            )}
                         </div>
                     )}
                 </div>
@@ -8412,11 +8506,11 @@ function MergeDuplicatesDialog({
                         </Button>
                         <Button 
                             onClick={handleMerge} 
-                            disabled={isMerging || isDismissing} 
+                            disabled={isMerging || isDismissing || selectedSourceIds.filter(id => id !== selectedTargetId).length === 0} 
                             className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
                         >
                             {isMerging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Confirm Merge
+                            Confirm Merge ({selectedSourceIds.filter(id => id !== selectedTargetId).length})
                         </Button>
                     </div>
                 </DialogFooter>

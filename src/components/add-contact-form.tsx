@@ -36,7 +36,8 @@ const isValidRealEmail = (val: string | undefined | null) => {
 };
 
 const formSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
   email: z.string()
     .email("Invalid email address")
     .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." }),
@@ -58,7 +59,8 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: "",
+      firstName: "",
+      lastName: "",
       email: "",
       phone: "",
       title: "",
@@ -69,8 +71,14 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+      const firstName = values.firstName.trim();
+      const lastName = values.lastName.trim();
+      const fullName = `${firstName} ${lastName}`.trim();
+
       const contactData: Omit<Contact, 'id'> = {
-        name: values.name,
+        firstName,
+        lastName,
+        name: fullName,
         title: values.title,
         email: values.email,
         phone: values.phone || '',
@@ -108,19 +116,34 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Full Name</FormLabel>
-              <FormControl>
-                <Input placeholder="John Doe" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="firstName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>First Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="John" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="lastName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Last Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="Doe" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         <FormField
           control={form.control}
           name="title"

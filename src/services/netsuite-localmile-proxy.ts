@@ -5,6 +5,7 @@
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 import { logEmailServer, getLeadServer, getFranchiseeEmailServer } from '@/services/firebase-server';
 import { sendSms } from '@/services/sms-service';
+import { getPmpoServiceForLead } from '@/lib/localmile-utils';
 
 /**
  * @fileoverview Server action to proxy LocalMile free trial requests to NetSuite.
@@ -313,6 +314,57 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 								status: 'delivered'
 							});
 							console.log(`[LocalMile Proxy] Sent franchisee notification to ${franchiseeEmail} for lead ${payload.leadId}`);
+						}
+					}
+
+					// --- LocalMile Scheduled Job Creation (strictly after company document creation) ---
+					if (lead) {
+						try {
+							const pmpoInfo = getPmpoServiceForLead(lead);
+							if (pmpoInfo.hasPmpoService && pmpoInfo.serviceType === 'Recurring') {
+								const frequencyArray = Array.isArray(pmpoInfo.frequency)
+									? pmpoInfo.frequency
+									: (typeof pmpoInfo.frequency === 'string' && pmpoInfo.frequency !== 'Adhoc'
+										? pmpoInfo.frequency.split(',').map(f => f.trim()).filter(Boolean)
+										: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+
+								const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY || process.env.PROSPECTPLUS_API_KEY || '454e75f843954875ccff72537d7702ba1ab6f65c';
+
+								const schedPayload = {
+									parentId: "",
+									startDate: new Date().toISOString().split('T')[0],
+									frequency: frequencyArray,
+									service: 'site-to-lpo',
+									accountManagerName: payload.accountManagerName || lead.accountManagerAssigned || '',
+									customer: {
+										company: lead.companyName || '',
+										address: (lead as any).address1 || (lead as any).street || (typeof lead.address === 'object' ? lead.address?.street : lead.address) || '',
+										suburb: (lead as any).city || (typeof lead.address === 'object' ? lead.address?.city : '') || '',
+										state: (lead as any).state || (typeof lead.address === 'object' ? lead.address?.state : '') || 'NSW',
+										postcode: (lead as any).zip || (typeof lead.address === 'object' ? lead.address?.zip : '') || '',
+										email: contactEmail || lead.customerServiceEmail || '',
+										phone: contactPhone || lead.customerPhone || ''
+									}
+								};
+
+								console.log(`[LocalMile Proxy] Post-company creation: Creating PMPO scheduled_job for lead ${payload.leadId}...`, schedPayload);
+								const schedRes = await fetch(`https://us-central1-localmile-plus.cloudfunctions.net/api/api/v1/companies/${payload.leadId}/scheduled-jobs`, {
+									method: 'POST',
+									headers: {
+										'Content-Type': 'application/json',
+										'x-api-key': localMileApiKey
+									},
+									body: JSON.stringify(schedPayload)
+								});
+
+								if (schedRes.ok) {
+									console.log(`[LocalMile Proxy] Successfully created PMPO scheduled_job in LocalMile for lead ${payload.leadId}`);
+								} else {
+									console.error(`[LocalMile Proxy Error] Scheduled job creation failed: status ${schedRes.status}, error: ${await schedRes.text()}`);
+								}
+							}
+						} catch (schedErr: any) {
+							console.error('[LocalMile Proxy Error] Post-company creation scheduled_job call failed:', schedErr);
 						}
 					}
 

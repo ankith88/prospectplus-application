@@ -38,7 +38,8 @@ const isValidRealEmail = (val: string | undefined | null) => {
 };
 
 const formSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
   email: z.string()
     .email("Invalid email address")
     .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." }),
@@ -60,10 +61,15 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
   const { toast } = useToast()
   const { user } = useAuth()
 
+  const nameParts = (contact.name || '').trim().split(' ');
+  const defaultFirstName = contact.firstName || nameParts[0] || '';
+  const defaultLastName = contact.lastName || nameParts.slice(1).join(' ') || '';
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: contact.name,
+      firstName: defaultFirstName,
+      lastName: defaultLastName,
       email: contact.email,
       phone: contact.phone,
       title: contact.title,
@@ -74,11 +80,21 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+      const firstName = values.firstName.trim();
+      const lastName = values.lastName.trim();
+      const fullName = `${firstName} ${lastName}`.trim();
       const accessToLocalMile: 'yes' | 'no' = contact.accessToLocalMile || 'no';
       const accessToShipMate: 'yes' | 'no' = contact.accessToShipMate || 'no';
       const updatedContactData: Contact = { 
         ...contact, 
-        ...values,
+        firstName,
+        lastName,
+        name: fullName,
+        title: values.title,
+        email: values.email,
+        phone: values.phone,
+        isPrimary: values.isPrimary,
+        isAccountsPayable: values.isAccountsPayable,
         accessToLocalMile,
         accessToShipMate,
       };
@@ -86,7 +102,9 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
         leadId,
         contact: {
           id: contact.id,
-          name: values.name,
+          firstName,
+          lastName,
+          name: fullName,
           title: values.title,
           email: values.email,
           phone: values.phone,
@@ -103,7 +121,7 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
 
       await logActivity(leadId, {
           type: 'Update',
-          notes: `Contact details updated for ${contact.name}. Primary: ${values.isPrimary}, Accounts Payable: ${values.isAccountsPayable}`,
+          notes: `Contact details updated for ${fullName}. Primary: ${values.isPrimary}, Accounts Payable: ${values.isAccountsPayable}`,
           author: user?.displayName || 'Unknown'
       }, collectionName);
       toast({
@@ -125,19 +143,34 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <FormField
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
             control={form.control}
-            name="name"
+            name="firstName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Full Name</FormLabel>
+                <FormLabel>First Name</FormLabel>
                 <FormControl>
-                  <Input placeholder="John Doe" {...field} />
+                  <Input placeholder="John" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="lastName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Last Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="Doe" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         <FormField
           control={form.control}
           name="title"

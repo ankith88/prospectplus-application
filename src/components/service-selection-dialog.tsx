@@ -1710,6 +1710,43 @@ export function ServiceSelectionDialog({
             const contactEmails = selectedContacts.map(c => c.email).filter(Boolean);
             const signupEmailsString = contactEmails.length > 0 ? contactEmails.join(', ') : (lead.customerServiceEmail || '');
 
+            // Handle LocalMile schedule creation ONLY for confirmed existing LocalMile customers
+            const hasLocalMileAccess = lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || selectedContacts.some(c => c?.accessToLocalMile === 'yes');
+            if (hasLocalMileAccess) {
+              for (const s of serviceSelections) {
+                const isPmpo = s.name.toLowerCase().includes('pmpo') || s.name.toLowerCase().includes('outgoing mail lodgement');
+                const isRecurring = Array.isArray(s.frequency) || (typeof s.frequency === 'string' && s.frequency.toLowerCase() !== 'adhoc');
+                if (isPmpo && isRecurring) {
+                  try {
+                    const freqArr = Array.isArray(s.frequency) ? s.frequency : (typeof s.frequency === 'string' ? s.frequency.split(',').map((f: string) => f.trim()).filter(Boolean) : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                    await fetch('/api/localmile/scheduled-jobs', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        companyId: lead.id,
+                        parentId: "",
+                        startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+                        frequency: freqArr,
+                        service: 'site-to-lpo',
+                        accountManagerName: lead.accountManagerAssigned || '',
+                        customer: {
+                          company: lead.companyName || '',
+                          address: lead.postalAddress?.street || lead.address?.street || '',
+                          suburb: lead.postalAddress?.city || lead.address?.city || '',
+                          state: lead.postalAddress?.state || lead.address?.state || 'NSW',
+                          postcode: lead.postalAddress?.zip || lead.address?.zip || '',
+                          email: selectedContacts[0]?.email || lead.customerServiceEmail || '',
+                          phone: selectedContacts[0]?.phone || lead.customerPhone || ''
+                        }
+                      })
+                    });
+                  } catch (e) {
+                    console.error('Failed to create localmile schedule', e);
+                  }
+                }
+              }
+            }
+
 
 
             const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());

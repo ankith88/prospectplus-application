@@ -2582,73 +2582,17 @@ async function getLeadTasks(leadId: string): Promise<Task[]> {
 }
 
 async function mergeLeads(masterLeadId: string, duplicateLeadId: string): Promise<void> {
-    const batch = writeBatch(firestore);
-    
-    // 1. Fetch duplicate data
-    const duplicateRef = doc(firestore, 'leads', duplicateLeadId);
-    const duplicateSnap = await getDoc(duplicateRef);
-    if (!duplicateSnap.exists()) throw new Error('Duplicate lead not found');
-    
-    // 2. Fetch subcollections from duplicate
-    const contacts = await getLeadContacts(duplicateLeadId);
-    const activity = await getLeadActivity(duplicateLeadId);
-    const notes = await getLeadNotes(duplicateLeadId);
-    const transcripts = await getLeadTranscripts(duplicateLeadId);
-    const tasks = await getLeadTasks(duplicateLeadId);
-    
-    // 3. Move subcollections to master (re-mapping IDs to prevent collisions)
-    contacts.forEach(c => {
-        const { id, ...data } = c;
-        batch.set(doc(firestore, 'leads', masterLeadId, 'contacts', id), prepareForFirestore(data));
-    });
-    
-    activity.forEach(a => {
-        const { id, ...data } = a;
-        batch.set(doc(firestore, 'leads', masterLeadId, 'activity', id), prepareForFirestore(data));
-    });
-    
-    notes.forEach(n => {
-        const { id, ...data } = n;
-        batch.set(doc(firestore, 'leads', masterLeadId, 'notes', id), prepareForFirestore(data));
-    });
-    
-    transcripts.forEach(t => {
-        const { id, ...data } = t;
-        batch.set(doc(firestore, 'leads', masterLeadId, 'transcripts', id), prepareForFirestore(data));
-    });
-    
-    tasks.forEach(t => {
-        const { id, ...data } = t;
-        batch.set(doc(firestore, 'leads', masterLeadId, 'tasks', id), prepareForFirestore(data));
-    });
-    
-    // 4. Update master metadata
-    batch.update(doc(firestore, 'leads', masterLeadId), {
-        isDuplicate: false,
-        similarLeads: [],
-        contactCount: increment(contacts.length)
-    });
-    
-    // 5. Log merge activity
-    const mergeLog = {
-        type: 'Update',
-        notes: `Lead merged with duplicate ${duplicateLeadId}. All history and contacts transferred.`,
-        date: new Date().toISOString()
-    };
-    batch.set(doc(firestore, 'leads', masterLeadId, 'activity', `merge-${Date.now()}`), prepareForFirestore(mergeLog));
-    
-    // 6. Delete duplicate
-    batch.delete(duplicateRef);
-    
-    await batch.commit();
+    return mergeMultipleLeads(masterLeadId, [duplicateLeadId]);
 }
 
 async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[]): Promise<void> {
     const batch = writeBatch(firestore);
     let totalContactsCount = 0;
+    const validSourceLeadIds = sourceLeadIds.filter(id => id && id !== targetLeadId);
+
+    if (validSourceLeadIds.length === 0) return;
     
-    for (const sourceLeadId of sourceLeadIds) {
-        if (sourceLeadId === targetLeadId) continue;
+    for (const sourceLeadId of validSourceLeadIds) {
         const sourceRef = doc(firestore, 'leads', sourceLeadId);
         const sourceSnap = await getDoc(sourceRef);
         if (!sourceSnap.exists()) continue;
@@ -2665,7 +2609,8 @@ async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[])
             invoices,
             bucketHistory,
             companyInsights,
-            addresses
+            addresses,
+            scorecards
         ] = await Promise.all([
             getSubCollection<any>('leads', sourceLeadId, 'contacts', documentId()),
             getSubCollection<any>('leads', sourceLeadId, 'activity', 'date'),
@@ -2677,7 +2622,8 @@ async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[])
             getSubCollection<any>('leads', sourceLeadId, 'invoices', 'invoiceDate', 'desc'),
             getSubCollection<any>('leads', sourceLeadId, 'bucket_history', 'date', 'desc'),
             getSubCollection<any>('leads', sourceLeadId, 'company_insights', 'scannedAt', 'desc'),
-            getSubCollection<any>('leads', sourceLeadId, 'addresses', documentId())
+            getSubCollection<any>('leads', sourceLeadId, 'addresses', documentId()),
+            getSubCollection<any>('leads', sourceLeadId, 'scorecards', 'createdAt')
         ]);
         
         totalContactsCount += contacts.length;
@@ -2737,9 +2683,15 @@ async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[])
             batch.set(doc(firestore, 'leads', targetLeadId, 'addresses', `${id}-${sourceLeadId}`), prepareForFirestore(data));
         });
         
+        scorecards.forEach(sc => {
+            const { id, ...data } = sc;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'scorecards', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
         batch.delete(sourceRef);
     }
     
+    // Master main collection fields remain unchanged; update only duplicate metadata flags and contact count
     batch.update(doc(firestore, 'leads', targetLeadId), {
         isDuplicate: false,
         similarLeads: [],
@@ -2748,7 +2700,7 @@ async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[])
     
     const mergeLog = {
         type: 'Update',
-        notes: `Leads merged. Merged duplicates: ${sourceLeadIds.filter(id => id !== targetLeadId).join(', ')}. All history, activities, and notes transferred.`,
+        notes: `Leads merged. Transferred subcollections from duplicate leads: ${validSourceLeadIds.join(', ')}. Master main lead fields preserved.`,
         date: new Date().toISOString()
     };
     batch.set(doc(firestore, 'leads', targetLeadId, 'activity', `merge-${Date.now()}`), prepareForFirestore(mergeLog));

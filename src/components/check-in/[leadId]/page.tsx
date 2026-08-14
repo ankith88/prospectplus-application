@@ -50,7 +50,8 @@ const discoverySchema = z.object({
 
 
 const newContactSchema = z.object({
-    name: z.string().min(1, "Name is required."),
+    firstName: z.string().min(1, "First name is required."),
+    lastName: z.string().min(1, "Last name is required."),
     title: z.string().min(1, "Title is required."),
     email: z.string().email("A valid email is required."),
     phone: z.string().min(1, "Phone number is required."),
@@ -153,7 +154,7 @@ export default function UnifiedCheckinPage() {
     
     const newContactForm = useForm<z.infer<typeof newContactSchema>>({
         resolver: zodResolver(newContactSchema),
-        defaultValues: { name: '', title: '', email: '', phone: '' }
+        defaultValues: { firstName: '', lastName: '', title: '', email: '', phone: '' }
     });
     
     const populateFormFromAnalysis = useCallback((result: CheckinAnalysis) => {
@@ -329,8 +330,17 @@ export default function UnifiedCheckinPage() {
         if (!lead) return;
         setIsAddingContact(true);
         try {
-            const newContactId = await addContactToLead(lead.id, values);
-            const newContact: Contact = { ...values, id: newContactId };
+            const firstName = values.firstName.trim();
+            const lastName = values.lastName.trim();
+            const fullName = `${firstName} ${lastName}`.trim();
+            const payload = {
+                ...values,
+                firstName,
+                lastName,
+                name: fullName
+            };
+            const newContactId = await addContactToLead(lead.id, payload);
+            const newContact: Contact = { ...payload, id: newContactId };
             setContacts(prev => [...prev, newContact]);
             newContactForm.reset();
             toast({ title: "Success", description: "New contact added." });
@@ -586,7 +596,7 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onN
             {contacts.length > 0 ? <div className="space-y-3">{contacts.map(c => <div key={c.id} className="p-3 border rounded-md"><p className="font-semibold">{c.name} ({c.title})</p><p className="text-sm text-muted-foreground">{c.email}</p><p className="text-sm text-muted-foreground">{c.phone}</p></div>)}</div> : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
             <hr className="my-4" />
             <h4 className="font-semibold">Add New Contact</h4>
-            <Form {...form}><form onSubmit={form.handleSubmit(onAddContact)} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="title" render={({ field }) => (<FormItem><FormLabel>Job Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>)}/></div><Button type="submit" disabled={isAddingContact}>{isAddingContact ? <Loader /> : 'Add Contact'}</Button></form></Form>
+            <Form {...form}><form onSubmit={form.handleSubmit(onAddContact)} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name</FormLabel><FormControl><Input placeholder="John" {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name</FormLabel><FormControl><Input placeholder="Doe" {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="title" render={({ field }) => (<FormItem><FormLabel>Job Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>)}/></div><Button type="submit" disabled={isAddingContact}>{isAddingContact ? <Loader /> : 'Add Contact'}</Button></form></Form>
         </div>
     </StepWrapper>
 );

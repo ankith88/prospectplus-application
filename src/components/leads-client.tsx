@@ -25,7 +25,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { usePerformance } from '@/hooks/use-performance';
 import { useDialingSession } from '@/hooks/use-dialing-session'
-import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, addLeadsToMarketingList } from '@/services/firebase'
+import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, mergeMultipleLeads, addLeadsToMarketingList } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck } from 'lucide-react'
@@ -121,16 +121,42 @@ type ExpandedLeadDetails = {
 
 
 function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMerged }: { masterLead: Lead | null, similarLeads: Lead[], isOpen: boolean, onOpenChange: (open: boolean) => void, onMerged: () => void }) {
-    const [selectedDuplicateId, setSelectedDuplicateId] = useState<string>('');
+    const [selectedDuplicateIds, setSelectedDuplicateIds] = useState<string[]>([]);
     const [isMerging, setIsMerging] = useState(false);
     const { toast } = useToast();
 
+    // Default all similar leads to checked when dialog opens or similarLeads change
+    useEffect(() => {
+        if (isOpen && similarLeads.length > 0) {
+            setSelectedDuplicateIds(similarLeads.map(l => l.id));
+        } else if (!isOpen) {
+            setSelectedDuplicateIds([]);
+        }
+    }, [isOpen, similarLeads]);
+
+    const toggleLeadSelection = (leadId: string) => {
+        setSelectedDuplicateIds(prev =>
+            prev.includes(leadId) ? prev.filter(id => id !== leadId) : [...prev, leadId]
+        );
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedDuplicateIds.length === similarLeads.length) {
+            setSelectedDuplicateIds([]);
+        } else {
+            setSelectedDuplicateIds(similarLeads.map(l => l.id));
+        }
+    };
+
     const handleMerge = async () => {
-        if (!masterLead || !selectedDuplicateId) return;
+        if (!masterLead || selectedDuplicateIds.length === 0) return;
         setIsMerging(true);
         try {
-            await mergeLeads(masterLead.id, selectedDuplicateId);
-            toast({ title: "Success", description: "Leads merged successfully." });
+            await mergeMultipleLeads(masterLead.id, selectedDuplicateIds);
+            toast({ 
+                title: "Success", 
+                description: `Successfully merged ${selectedDuplicateIds.length} duplicate lead(s) into ${masterLead.companyName}. Master lead main fields remain unchanged.` 
+            });
             onMerged();
             onOpenChange(false);
         } catch (error) {
@@ -143,33 +169,55 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>Merge Potential Duplicate</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2 text-[#095c7b]">
+                        <GitMerge className="h-5 w-5" /> Merge Potential Duplicates
+                    </DialogTitle>
                     <DialogDescription>
-                        Select a lead to merge into <strong>{masterLead?.companyName}</strong>. This will transfer all history and contacts.
+                        Select duplicate lead(s) to merge into Master record <strong>{masterLead?.companyName}</strong>. 
+                        Only subcollection records (contacts, notes, activity, tasks, emails, scorecards) will be merged — 
+                        the Master lead's main collection fields will remain unchanged.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="py-4">
-                    <Label className="mb-2 block">Found Similar Lead(s)</Label>
-                    <ScrollArea className="h-48 mt-2 border rounded-md p-2">
-                        <div className="space-y-3">
+                <div className="py-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <Label className="font-semibold text-xs text-slate-700">Found Similar Lead(s)</Label>
+                        <button
+                            type="button"
+                            onClick={toggleSelectAll}
+                            className="text-xs text-[#095c7b] hover:underline font-medium"
+                        >
+                            {selectedDuplicateIds.length === similarLeads.length ? 'Deselect All' : 'Select All'}
+                        </button>
+                    </div>
+                    <ScrollArea className="h-56 border rounded-md p-2 bg-slate-50/50">
+                        <div className="space-y-2.5">
                             {similarLeads.map((lead) => {
                                 const evalRes = masterLead ? evaluateDuplicateScore(masterLead, lead) : null;
                                 const confidence = lead.duplicateConfidence || evalRes?.confidence || 'Low';
                                 const reasons = lead.duplicateMatchReasons || evalRes?.matchedCriteria || ['Company Name'];
+                                const isChecked = selectedDuplicateIds.includes(lead.id);
 
                                 return (
-                                    <div key={lead.id} className="flex items-start space-x-3 p-2.5 border rounded-md hover:bg-muted/50 transition-colors">
+                                    <div 
+                                        key={lead.id} 
+                                        onClick={() => toggleLeadSelection(lead.id)}
+                                        className={`flex items-start space-x-3 p-3 border rounded-lg cursor-pointer transition-all ${
+                                            isChecked 
+                                                ? 'border-amber-400 bg-amber-50/60 shadow-xs' 
+                                                : 'border-slate-200 bg-white hover:bg-slate-50'
+                                        }`}
+                                    >
                                         <Checkbox
                                             id={`merge-${lead.id}`}
-                                            checked={selectedDuplicateId === lead.id}
-                                            onCheckedChange={() => setSelectedDuplicateId(lead.id)}
+                                            checked={isChecked}
+                                            onCheckedChange={() => toggleLeadSelection(lead.id)}
                                             className="mt-1"
                                         />
                                         <Label htmlFor={`merge-${lead.id}`} className="font-normal flex flex-col cursor-pointer w-full space-y-1">
                                             <div className="flex items-center justify-between">
-                                                <span className="font-semibold text-sm">{lead.companyName}</span>
+                                                <span className="font-semibold text-sm text-slate-900">{lead.companyName}</span>
                                                 <Badge
                                                     variant="outline"
                                                     className={`text-[10px] px-2 py-0.5 font-medium ${
@@ -183,15 +231,15 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
                                                     {confidence} Match ({evalRes?.score ?? 50}%)
                                                 </Badge>
                                             </div>
-                                            <div className="text-xs text-slate-600 flex flex-wrap gap-x-2">
+                                            <div className="text-xs text-slate-600 flex flex-wrap gap-x-3 gap-y-0.5">
                                                 <span><strong>City:</strong> {lead.address?.city || 'N/A'}</span>
                                                 <span><strong>Phone:</strong> {lead.customerPhone || 'N/A'}</span>
                                                 <span><strong>Email:</strong> {lead.customerServiceEmail || 'N/A'}</span>
                                             </div>
-                                            <div className="text-xs text-muted-foreground pt-0.5">
+                                            <div className="text-xs text-slate-500 pt-0.5">
                                                 <span className="font-medium text-slate-700">Matched on:</span> {reasons.join(', ')}
                                             </div>
-                                            <div className="text-[11px] text-muted-foreground pt-0.5">
+                                            <div className="text-[11px] text-slate-400 pt-0.5">
                                                 Bucket: {lead.bucket || 'outbound'} | Status: {lead.status}
                                             </div>
                                         </Label>
@@ -200,11 +248,27 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
                             })}
                         </div>
                     </ScrollArea>
+
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+                        <p className="font-bold flex items-center gap-1">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-700" /> Selected for Merge ({selectedDuplicateIds.length}):
+                        </p>
+                        <p className="mt-0.5 text-[11px]">
+                            {selectedDuplicateIds.length > 0
+                                ? `The ${selectedDuplicateIds.length} checked duplicate lead(s) will have their subcollections merged into ${masterLead?.companyName} and then be deleted. Master main fields will be preserved.`
+                                : 'No duplicate leads checked. Please select at least one duplicate lead to merge.'}
+                        </p>
+                    </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="flex items-center justify-between sm:justify-end gap-2 border-t pt-3">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button onClick={handleMerge} disabled={!selectedDuplicateId || isMerging} className="bg-orange-600 hover:bg-orange-700">
-                        {isMerging ? <Loader /> : 'Merge & Consolidate'}
+                    <Button 
+                        onClick={handleMerge} 
+                        disabled={selectedDuplicateIds.length === 0 || isMerging} 
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+                    >
+                        {isMerging ? <Loader className="mr-2 h-4 w-4" /> : null}
+                        Confirm Merge ({selectedDuplicateIds.length})
                     </Button>
                 </DialogFooter>
             </DialogContent>

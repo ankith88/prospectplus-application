@@ -288,8 +288,8 @@ export async function sendContactToNetSuite(payload: NetSuiteContactPayload): Pr
 
     const name = contact.name || '';
     const nameParts = name.split(' ');
-    const firstName = nameParts[0] || '';
-    const lastName = nameParts.slice(1).join(' ');
+    const firstName = (contact.firstName || nameParts[0] || '').trim();
+    const lastName = (contact.lastName || nameParts.slice(1).join(' ') || '').trim();
 
     const params = new URLSearchParams({
         script: "2162",
@@ -299,6 +299,10 @@ export async function sendContactToNetSuite(payload: NetSuiteContactPayload): Pr
         leadID: leadId,
         firstname: firstName,
         lastname: lastName,
+        firstName: firstName,
+        lastName: lastName,
+        first_name: firstName,
+        last_name: lastName,
         name: name,
         fullname: name,
         email: contact.email || '',
@@ -924,6 +928,12 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         billzip: address.zip,
         billcountry: address.country,
         custentity_primary_contact_name: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
+        custentity_primary_contact_firstname: (contact.firstName || '').trim(),
+        custentity_primary_contact_lastname: (contact.lastName || '').trim(),
+        firstname: (contact.firstName || '').trim(),
+        lastname: (contact.lastName || '').trim(),
+        firstName: (contact.firstName || '').trim(),
+        lastName: (contact.lastName || '').trim(),
         custentity_primary_contact_title: contact.title || '',
         custentity_primary_contact_email: contact.email || '',
         custentity_primary_contact_phone: contact.phone || '',

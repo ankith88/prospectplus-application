@@ -91,6 +91,23 @@ export async function PATCH(
     cleanedUpdates.updatedAt = FieldValue.serverTimestamp();
     cleanedUpdates.syncedWithNetSuite = true;
 
+    // Handle firstName / lastName param aliases
+    const firstName = (cleanedUpdates.firstName || cleanedUpdates.firstname || cleanedUpdates.first_name || '').trim();
+    const lastName = (cleanedUpdates.lastName || cleanedUpdates.lastname || cleanedUpdates.last_name || '').trim();
+    if (firstName) cleanedUpdates.firstName = firstName;
+    if (lastName) cleanedUpdates.lastName = lastName;
+    delete cleanedUpdates.firstname;
+    delete cleanedUpdates.first_name;
+    delete cleanedUpdates.lastname;
+    delete cleanedUpdates.last_name;
+
+    if (!cleanedUpdates.name && (firstName || lastName)) {
+      const existingData = contactSnap.data() || {};
+      const fName = firstName || existingData.firstName || existingData.name?.split(' ')[0] || '';
+      const lName = lastName || existingData.lastName || existingData.name?.split(' ').slice(1).join(' ') || '';
+      cleanedUpdates.name = `${fName} ${lName}`.trim();
+    }
+
     // Perform update
     await contactRef.update(cleanedUpdates);
 

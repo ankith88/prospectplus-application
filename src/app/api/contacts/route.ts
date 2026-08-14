@@ -45,13 +45,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { id, contactId, parentId, parentType = 'leads', name, email, phone, title, isPrimary, isAccountsPayable, accessToLocalMile, accessToShipMate } = body;
+    const firstName = (body.firstName || body.firstname || body.first_name || '').trim();
+    const lastName = (body.lastName || body.lastname || body.last_name || '').trim();
+    const fullName = (body.name || `${firstName} ${lastName}`).trim();
+
+    const { id, contactId, parentId, parentType = 'leads', email, phone, title, isPrimary, isAccountsPayable, accessToLocalMile, accessToShipMate } = body;
 
     if (!parentId) {
       return NextResponse.json({ error: 'parentId is required' }, { status: 400 });
     }
-    if (!name) {
-      return NextResponse.json({ error: 'name is required' }, { status: 400 });
+    if (!fullName) {
+      return NextResponse.json({ error: 'name (or firstName/lastName) is required' }, { status: 400 });
     }
 
     const parentCollection = parentType === 'companies' ? 'companies' : 'leads';
@@ -76,7 +80,9 @@ export async function POST(req: NextRequest) {
 
     // Write contact document to subcollection
     const contactData = {
-      name,
+      name: fullName,
+      firstName: firstName || fullName.split(' ')[0] || '',
+      lastName: lastName || fullName.split(' ').slice(1).join(' ') || '',
       email: email || '',
       phone: phone || '',
       title: title || '',
@@ -110,7 +116,7 @@ export async function POST(req: NextRequest) {
     await activityRef.add({
       type: 'Update',
       date: new Date().toISOString(),
-      notes: `New contact '${name}' added via NetSuite API.${isPrimary ? ' (Primary Contact)' : ''}`,
+      notes: `New contact '${fullName}' added via NetSuite API.${isPrimary ? ' (Primary Contact)' : ''}`,
       author: 'NetSuite API'
     });
 
@@ -193,6 +199,23 @@ export async function PATCH(req: NextRequest) {
     delete cleanedUpdates.createdAt;
     cleanedUpdates.updatedAt = FieldValue.serverTimestamp();
     cleanedUpdates.syncedWithNetSuite = true;
+
+    // Handle firstName / lastName param aliases
+    const firstName = (cleanedUpdates.firstName || cleanedUpdates.firstname || cleanedUpdates.first_name || '').trim();
+    const lastName = (cleanedUpdates.lastName || cleanedUpdates.lastname || cleanedUpdates.last_name || '').trim();
+    if (firstName) cleanedUpdates.firstName = firstName;
+    if (lastName) cleanedUpdates.lastName = lastName;
+    delete cleanedUpdates.firstname;
+    delete cleanedUpdates.first_name;
+    delete cleanedUpdates.lastname;
+    delete cleanedUpdates.last_name;
+
+    if (!cleanedUpdates.name && (firstName || lastName)) {
+      const existingData = contactSnap.data() || {};
+      const fName = firstName || existingData.firstName || existingData.name?.split(' ')[0] || '';
+      const lName = lastName || existingData.lastName || existingData.name?.split(' ').slice(1).join(' ') || '';
+      cleanedUpdates.name = `${fName} ${lName}`.trim();
+    }
 
     // Perform update
     await contactRef.update(cleanedUpdates);
