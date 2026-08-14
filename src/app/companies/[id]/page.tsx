@@ -3,6 +3,8 @@
 import { notFound, useParams, useRouter } from 'next/navigation'
 import { getCompanyFromFirebase } from '@/services/firebase'
 import { LeadProfile } from '@/components/lead-profile'
+import { AccessDenied } from '@/components/access-denied'
+import { canFranchiseeAccessLead } from '@/lib/lead-permissions'
 import type { Lead, Note } from '@/lib/types'
 import React, { useEffect, useState } from 'react'
 import { Loader } from '@/components/ui/loader';
@@ -53,6 +55,7 @@ export default function CompanyProfilePage() {
 
     fetchCompany();
   }, [params, userProfile, authLoading, loadingPermissions, hasAccess]);
+
   if (authLoading || loadingPermissions || loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -62,18 +65,18 @@ export default function CompanyProfilePage() {
   }
 
   if (!hasAccess) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view this page. Please contact Ankith Ravindran if you need access.</p>
-      </div>
-    );
+    return <AccessDenied customPageName="Signed Customers" />;
   }
   
   if (error || !company) {
     notFound();
     return null;
   }
+
+  if (userProfile && !canFranchiseeAccessLead(company, userProfile)) {
+    return <AccessDenied customPageName={`Company: ${company.companyName || company.id}`} />;
+  }
   
   return <LeadProfile initialLead={company} />;
 }
+

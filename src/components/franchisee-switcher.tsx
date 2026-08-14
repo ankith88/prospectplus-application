@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
@@ -33,13 +34,13 @@ export function FranchiseeSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="flex items-center gap-2 h-9 px-3 border-[#095c7b]/30 bg-[#095c7b]/5 hover:bg-[#095c7b]/10 text-[#095c7b] font-medium text-xs rounded-full">
-          <Store className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate max-w-[140px] font-semibold">{activeName}</span>
-          <Badge className={`text-[10px] py-0 px-1.5 capitalize font-medium ${activeRole === 'owner' ? 'bg-emerald-600 text-white' : 'bg-purple-600 text-white'}`}>
+        <Button variant="outline" className="flex items-center gap-2 h-9 px-3 border-white/20 bg-white/10 hover:bg-white/20 text-white font-medium text-xs rounded-full shadow-xs transition-colors">
+          <Store className="h-3.5 w-3.5 shrink-0 text-white/90" />
+          <span className="truncate max-w-[140px] font-semibold text-white">{activeName}</span>
+          <Badge className={`text-[10px] py-0 px-1.5 capitalize font-medium ${activeRole === 'owner' ? 'bg-emerald-500 text-white border-0' : 'bg-purple-500 text-white border-0'}`}>
             {activeRole}
           </Badge>
-          <ChevronsUpDown className="h-3.5 w-3.5 opacity-60 shrink-0 ml-0.5" />
+          <ChevronsUpDown className="h-3.5 w-3.5 text-white/70 shrink-0 ml-0.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
@@ -64,6 +65,13 @@ export function FranchiseeSwitcher() {
             </DropdownMenuItem>
           );
         })}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild className="cursor-pointer text-xs font-semibold text-[#095c7b] hover:bg-[#095c7b]/5">
+          <Link href="/my-franchise" className="flex items-center gap-2 w-full">
+            <Store className="h-3.5 w-3.5" />
+            <span>View Franchise Details</span>
+          </Link>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

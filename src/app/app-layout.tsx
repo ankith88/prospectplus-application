@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown, Store } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -189,6 +189,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     if (path.startsWith('/sales-snapshot') || path.startsWith('/reports') || path.startsWith('/inbound-reporting') || path.startsWith('/multisite-reporting') || path.startsWith('/admin/lifecycle-dashboard') || path.startsWith('/account-manager/reports') || path.startsWith('/customer-success/reporting') || path.startsWith('/customer-success/cancellation-reporting') || path.startsWith('/field-activity-report') || path.startsWith('/admin/deployments')) {
       return 'analytics-reports';
     }
+    if (path.startsWith('/my-franchise')) {
+      return 'my-franchise-group';
+    }
     if (path.startsWith('/admin/franchisees')) {
       return 'network-group';
     }
@@ -292,6 +295,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/leads': { label: 'Outbound Leads', category: 'Sales & CRM', icon: Briefcase, href: '/leads' },
     '/inbound-leads': { label: 'Inbound Leads', category: 'Sales & CRM', icon: Inbox, href: '/inbound-leads' },
     '/franchisee-leads': { label: 'Franchisee Leads', category: 'Sales & CRM', icon: Briefcase, href: '/franchisee-leads' },
+    '/my-franchise': { label: 'My Franchise Profile', category: 'My Franchise', icon: Store, href: '/my-franchise' },
     '/admin/marketing/import-leads': { label: 'Import Leads', category: 'Sales & CRM', icon: PlusCircle, href: '/admin/marketing/import-leads' },
     '/franchisee-lead-verification': { label: 'Franchisee Lead Review', category: 'Sales & CRM', icon: UserCheck, href: '/franchisee-lead-verification' },
     '/admin/in-review-leads': { label: 'In Review Leads', category: 'Sales & CRM', icon: ClipboardCheck, href: '/admin/in-review-leads' },
@@ -428,7 +432,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     await signOut()
   }
 
-  const isAuthPage = pathname === '/signin' || pathname === '/signup';
+  const isAuthPage = pathname === '/signin' || pathname === '/signup' || pathname === '/reset-password' || pathname.startsWith('/reset-password') || pathname.startsWith('/__/auth/action') || pathname.startsWith('/auth/action');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -618,6 +622,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   
   if (
     isAuthPage || 
+    pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/__/auth/action') ||
+    pathname.startsWith('/auth/action') ||
     pathname.startsWith('/customer-request') || 
     pathname.startsWith('/scf') || 
     pathname.startsWith('/sof') || 
@@ -803,6 +810,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarContent>
           {state === "collapsed" && !isMobile ? (
             <SidebarMenu className="py-2 gap-2">
+              {/* MY FRANCHISE PROFILE (Top for Franchisee Role) */}
+              {isFranchiseeRole && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    tooltip="My Franchise Profile" 
+                    isActive={getActiveGroupForPath(pathname) === 'my-franchise-group'} 
+                    onClick={() => {
+                      setCollapsedGroups(prev => ({ ...prev, 'my-franchise-group': false }));
+                      toggleSidebar();
+                    }}
+                    className="hover:bg-sidebar-accent bg-[#095c7b]/20 text-[#eaf143]"
+                  >
+                    <Store className="h-4 w-4 text-[#eaf143]" />
+                    <span className="font-bold">My Franchise Profile</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
               {/* Pinned */}
               <SidebarMenuItem>
                 <SidebarMenuButton 
@@ -999,6 +1024,40 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarMenu>
           ) : (
             <>
+              {/* MY FRANCHISE (Top for Franchisee Role) */}
+              {isFranchiseeRole && (
+                <SidebarGroup className="border-b border-[#095c7b]/30 pb-2 mb-1">
+                  <SidebarGroupLabel 
+                    onClick={() => toggleGroup('my-franchise-group')} 
+                    className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel"
+                  >
+                    <span className="flex items-center gap-1.5 text-[#eaf143] font-extrabold text-xs uppercase tracking-wider">
+                      <Store className="h-4 w-4 text-[#eaf143]" />
+                      <span>My Franchise</span>
+                    </span>
+                    {isGroupCollapsed('my-franchise-group') ? (
+                      <ChevronRight className="h-3 w-3 text-white transition-transform" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-white transition-transform" />
+                    )}
+                  </SidebarGroupLabel>
+                  {!isGroupCollapsed('my-franchise-group') && (
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/my-franchise")} tooltip="My Franchise Profile" className="font-semibold text-white">
+                            <Link href="/my-franchise">
+                              <Store className="text-[#eaf143]" />
+                              <span className="font-bold">My Franchise Profile</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
+
               {/* Pinned Quick Access */}
               <SidebarGroup>
                 <SidebarGroupLabel className="cursor-pointer hover:text-white transition-colors flex items-center justify-between select-none group/glabel">
@@ -2214,6 +2273,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </div>
                   </div>
               </DropdownMenuItem>
+              {isFranchiseeRole && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/my-franchise" className="flex items-center gap-2">
+                      <Store className="h-4 w-4 text-[#095c7b]" />
+                      <span>My Franchise & Territory</span>
+                    </Link>
+                  </DropdownMenuItem>
+                </>
+              )}
               {userProfile?.assignedRoles && userProfile.assignedRoles.length > 1 && (
                 <>
                   <DropdownMenuSeparator />
@@ -2489,6 +2559,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
 const isBlockedForUserRole = (path: string, role?: string) => {
   const isFranchisee = role === 'Franchisee' || role?.toLowerCase() === 'franchisee';
+  if (!isFranchisee && (path === '/my-franchise' || path.startsWith('/my-franchise/'))) {
+    return true;
+  }
   if (isFranchisee) {
     const blockedFranchiseePaths = [
       '/reports',

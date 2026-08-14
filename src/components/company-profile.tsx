@@ -65,7 +65,8 @@ import { LogNoteDialog } from './log-note-dialog'
 import { LossReasonPicker } from './loss-reason-picker'
 import { collection, getDocs, orderBy, query, doc, getDoc, setDoc, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
-import { canEditSignedCustomerAddress } from '@/lib/lead-permissions'
+import { canEditSignedCustomerAddress, canFranchiseeAccessLead } from '@/lib/lead-permissions'
+import { AccessDenied } from '@/components/access-denied'
 import { RequestAddressChangeDialog } from '@/components/request-address-change-dialog'
 import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
 import { Badge } from './ui/badge'
@@ -103,6 +104,11 @@ const formatAddressString = (address?: Address) => {
 
 export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileProps) {
   const { user, userProfile, isSuperAdmin } = useAuth();
+
+  if (userProfile && initialCompany && !canFranchiseeAccessLead(initialCompany, userProfile)) {
+    return <AccessDenied customPageName={initialCompany.companyName ? `Company: ${initialCompany.companyName}` : 'Company Details'} />;
+  }
+
   const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.role === 'admin' || isSuperAdmin;
 
   const [company, setCompany] = useState<Lead>(initialCompany);

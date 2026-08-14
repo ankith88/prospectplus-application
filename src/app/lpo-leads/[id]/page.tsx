@@ -4,6 +4,8 @@ import { notFound, useParams } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LpoLeadProfile } from '@/components/lpo-lead-profile';
+import { AccessDenied } from '@/components/access-denied';
+import { canFranchiseeAccessLead } from '@/lib/lead-permissions';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { FullScreenLoader } from '@/components/ui/loader';
@@ -53,12 +55,7 @@ export default function LpoLeadProfilePage() {
   }
 
   if (!canView('lpoLeads')) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view the LPO Lead details.</p>
-      </div>
-    );
+    return <AccessDenied customPageName="LPO Lead Details" />;
   }
 
   if (error) {
@@ -70,5 +67,10 @@ export default function LpoLeadProfilePage() {
     return <FullScreenLoader message="Loading LPO lead details..." />;
   }
 
+  if (userProfile && !canFranchiseeAccessLead(lead, userProfile)) {
+    return <AccessDenied customPageName={`LPO Lead: ${lead.companyName || lead.id}`} />;
+  }
+
   return <LpoLeadProfile initialLead={lead} />;
 }
+

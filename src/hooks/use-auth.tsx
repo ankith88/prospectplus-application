@@ -243,6 +243,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             !user && 
             pathname !== '/signup' && 
             pathname !== '/signin' && 
+            !pathname.startsWith('/reset-password') &&
+            !pathname.startsWith('/__/auth/action') &&
+            !pathname.startsWith('/auth/action') &&
             !pathname.startsWith('/customer-request') &&
             !pathname.startsWith('/scf') && 
             !pathname.startsWith('/sof') && 
@@ -321,7 +324,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const sendPasswordReset = useCallback(async (email: string) => {
         if (!auth) throw new Error("Firebase Auth not initialized");
-        await sendPasswordResetEmail(auth, email);
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prospectplus.com.au';
+        const actionCodeSettings = {
+            url: `${origin}/reset-password`,
+            handleCodeInApp: true,
+        };
+        await sendPasswordResetEmail(auth, email, actionCodeSettings);
     }, [auth]);
     
     const signUpAndCreateProfile = useCallback(async (userData: any) => {

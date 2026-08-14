@@ -74,7 +74,8 @@ import {
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
-import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser } from '@/lib/lead-permissions'
+import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead } from '@/lib/lead-permissions'
+import { AccessDenied } from '@/components/access-denied'
 import { RequestAssignmentDialog } from '@/components/request-assignment-dialog'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
@@ -1790,6 +1791,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, userProfile, isSuperAdmin } = useAuth();
+
+  if (userProfile && lead && !canFranchiseeAccessLead(lead, userProfile)) {
+    return <AccessDenied customPageName={lead.companyName ? `Lead: ${lead.companyName}` : 'Lead Details'} />;
+  }
+
   const isActionable = isLeadActionableForUser(lead, userProfile, isSuperAdmin);
   const isUserRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.role === 'user';
   const { isSessionActive, sessionLeadIds: sessionLeads, sessionReturnUrl, endSession, trackLeadVisit, removeLeadFromSession } = useDialingSession();
@@ -7003,7 +7009,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </SelectContent>
                                 </Select>
                             ) : (
-                                ['Account Managers', 'Account Manager', 'account managers'].includes(userProfile?.activeRole || '') && (
+                                isAccountManagerUser(userProfile) && (
                                     <Button variant="outline" className="w-full bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30 hover:bg-[#095c7b]/20 font-medium mt-1" onClick={() => setIsRequestAssignmentOpen(true)}>
                                         Request Lead Assignment
                                     </Button>

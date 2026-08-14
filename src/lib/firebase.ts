@@ -14,9 +14,12 @@ const firebaseConfig = {
     messagingSenderId: "683616418101",
 };
 
+import { getAuth, Auth } from "firebase/auth";
+
 let app: FirebaseApp;
 let firestore: Firestore;
 let storage: FirebaseStorage;
+let auth: Auth;
 
 // Initialize Firebase
 if (!getApps().length) {
@@ -24,6 +27,8 @@ if (!getApps().length) {
 } else {
     app = getApp();
 }
+
+auth = getAuth(app);
 
 // In Next.js / Hot Module Replacement environments, modules can be re-evaluated,
 // causing multiple Firestore instances to initialize and fail to obtain the IndexedDb lease.
@@ -47,4 +52,4 @@ if (globalWithFirebase._firestoreInstance) {
 }
 storage = getStorage(app);
 
-export { app, firestore, storage };
+export { app, firestore, storage, auth };

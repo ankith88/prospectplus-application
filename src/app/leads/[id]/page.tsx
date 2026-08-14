@@ -3,12 +3,17 @@
 import { notFound, useParams, useRouter } from 'next/navigation'
 import { getLeadFromFirebase, getCompanyFromFirebase } from '@/services/firebase'
 import { LeadProfile } from '@/components/lead-profile'
+import { AccessDenied } from '@/components/access-denied'
+import { canFranchiseeAccessLead } from '@/lib/lead-permissions'
+import { useAuth } from '@/hooks/use-auth'
+import { FullScreenLoader } from '@/components/ui/loader'
 import type { Lead } from '@/lib/types'
 import React, { useEffect, useState } from 'react'
 
 export default function LeadProfilePage() {
   const params = useParams();
   const router = useRouter();
+  const { userProfile, loading: authLoading } = useAuth();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -50,17 +55,21 @@ export default function LeadProfilePage() {
     fetchLead();
   }, [params]);
 
-  if (error) {
+  if (authLoading || loading) {
+    return <FullScreenLoader message="Loading lead details..." />;
+  }
+
+  if (error || !lead) {
     notFound();
     return null;
   }
 
-  if (loading || !lead) {
-    // You can return a loading spinner here if you have one
-    return <div>Loading...</div>;
+  if (userProfile && !canFranchiseeAccessLead(lead, userProfile)) {
+    return <AccessDenied customPageName={`Lead: ${lead.companyName || lead.id}`} />;
   }
-  
+
   return <LeadProfile 
             initialLead={lead} 
         />;
 }
+
