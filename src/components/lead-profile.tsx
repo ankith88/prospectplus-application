@@ -77,7 +77,7 @@ import { encryptLeadId } from '@/lib/localmile-security'
 import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
 import { RequestAssignmentDialog } from '@/components/request-assignment-dialog'
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
@@ -1049,6 +1049,68 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [verifyingEmails, setVerifyingEmails] = useState<Record<string, boolean>>({});
   const [isVerifyingAllEmails, setIsVerifyingAllEmails] = useState(false);
   const [checkingShipmateId, setCheckingShipmateId] = useState<string | null>(null);
+  const autoVerifiedLeadRef = useRef<Set<string>>(new Set());
+
+  // Automatically verify unverified contact emails in the background on load
+  useEffect(() => {
+    if (!lead?.id || autoVerifiedLeadRef.current.has(lead.id)) return;
+
+    const unverifiedContacts = (lead.contacts || []).filter(
+      (c) => c.email && c.email.includes('@') && (!c.verificationStatus || c.verificationStatus === 'unknown')
+    );
+
+    if (unverifiedContacts.length === 0) return;
+
+    autoVerifiedLeadRef.current.add(lead.id);
+    const emailList = unverifiedContacts.map((c) => (c.email as string).trim());
+
+    setVerifyingEmails((prev) => {
+      const next = { ...prev };
+      emailList.forEach((e) => {
+        next[e.toLowerCase()] = true;
+      });
+      return next;
+    });
+
+    verifyEmailsClient({
+      emails: emailList,
+      leadId: lead.id,
+      forceRefresh: false, // Check Firestore cache first for instant resolution & 0 API cost
+    })
+      .then((results) => {
+        if (results && results.length > 0) {
+          setLead((prevLead) => {
+            const updatedContacts = (prevLead.contacts || []).map((c) => {
+              if (!c.email) return c;
+              const norm = c.email.toLowerCase().trim();
+              const match = results.find((r) => r.email.toLowerCase().trim() === norm);
+              if (match) {
+                return {
+                  ...c,
+                  verificationStatus: match.status,
+                  verificationScore: match.score,
+                  verifiedAt: match.verifiedAt,
+                };
+              }
+              return c;
+            });
+            return { ...prevLead, contacts: updatedContacts };
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('[LeadProfile] Background email verification failed:', err);
+      })
+      .finally(() => {
+        setVerifyingEmails((prev) => {
+          const next = { ...prev };
+          emailList.forEach((e) => {
+            delete next[e.toLowerCase()];
+          });
+          return next;
+        });
+      });
+  }, [lead?.id, lead?.contacts]);
 
   const handleCheckShipmateStatus = async (contact: Contact) => {
     if (!contact.email) return;

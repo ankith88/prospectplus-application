@@ -3,6 +3,7 @@ import { EmailVerificationResult } from '@/lib/types';
 interface VerifyEmailsParams {
   emails: string[];
   leadId?: string;
+  companyId?: string;
   contactId?: string;
   forceRefresh?: boolean;
 }
@@ -10,6 +11,7 @@ interface VerifyEmailsParams {
 export async function verifyEmailsClient({
   emails,
   leadId,
+  companyId,
   contactId,
   forceRefresh = false,
 }: VerifyEmailsParams): Promise<EmailVerificationResult[]> {
@@ -28,6 +30,7 @@ export async function verifyEmailsClient({
     body: JSON.stringify({
       emails: cleanEmails,
       leadId,
+      companyId,
       contactId,
       forceRefresh,
     }),

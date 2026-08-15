@@ -160,7 +160,8 @@ async function verifyEmailFallback(normalizedEmail: string): Promise<EmailVerifi
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { emails, leadId, contactId, forceRefresh = false } = body;
+    const { emails, leadId, companyId, contactId, forceRefresh = false } = body;
+    const targetEntityId = leadId || companyId;
 
     if (!emails || !Array.isArray(emails) || emails.length === 0) {
       return NextResponse.json(
@@ -274,15 +275,22 @@ export async function POST(req: NextRequest) {
       results.push(verificationResult);
     }
 
-    // Step 5: If leadId is provided, update lead contacts in Firestore
-    if (leadId && results.length > 0) {
+    // Step 5: If targetEntityId is provided, update lead or company contacts in Firestore
+    if (targetEntityId && results.length > 0) {
       try {
-        const leadRef = db.collection('leads').doc(leadId);
-        const leadDoc = await leadRef.get();
+        let entityRef = db.collection('leads').doc(targetEntityId);
+        let entityDoc = await entityRef.get();
+        let collectionName = 'leads';
 
-        if (leadDoc.exists) {
-          const leadData = leadDoc.data() || {};
-          const contacts = (leadData.contacts || []) as any[];
+        if (!entityDoc.exists) {
+          entityRef = db.collection('companies').doc(targetEntityId);
+          entityDoc = await entityRef.get();
+          collectionName = 'companies';
+        }
+
+        if (entityDoc.exists) {
+          const entityData = entityDoc.data() || {};
+          const contacts = (entityData.contacts || []) as any[];
 
           let updated = false;
           const updatedContacts = contacts.map((c: any) => {
@@ -302,12 +310,12 @@ export async function POST(req: NextRequest) {
           });
 
           if (updated) {
-            await leadRef.update({ contacts: updatedContacts });
+            await entityRef.update({ contacts: updatedContacts });
           }
 
           // Check subcollection contacts if present
           if (contactId) {
-            const contactSubRef = leadRef.collection('contacts').doc(contactId);
+            const contactSubRef = entityRef.collection('contacts').doc(contactId);
             const subDoc = await contactSubRef.get();
             if (subDoc.exists) {
               const subData = subDoc.data() || {};
@@ -322,8 +330,8 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-      } catch (leadUpdateErr) {
-        console.error(`[Email Verify API] Error updating lead contacts in Firestore:`, leadUpdateErr);
+      } catch (entityUpdateErr) {
+        console.error(`[Email Verify API] Error updating entity contacts in Firestore:`, entityUpdateErr);
       }
     }
 

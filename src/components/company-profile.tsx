@@ -40,8 +40,10 @@ import {
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { getOnboardingRequestByLeadId } from '@/services/onboarding-service'
 import type { OnboardingRequest } from '@/lib/types'
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData, UserProfile } from '@/lib/types'
+import { EmailVerificationBadge } from '@/components/ui/email-verification-badge'
+import { verifyEmailsClient } from '@/lib/verify-email-client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
@@ -209,6 +211,115 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [isSuburbsModalOpen, setIsSuburbsModalOpen] = useState(false);
   const [operatorMap, setOperatorMap] = useState<Record<string, string>>({});
   const [checkingShipmateId, setCheckingShipmateId] = useState<string | null>(null);
+  const [verifyingEmails, setVerifyingEmails] = useState<Record<string, boolean>>({});
+  const autoVerifiedCompanyRef = useRef<Set<string>>(new Set());
+
+  const handleVerifySingleEmail = async (contact: any) => {
+    if (!contact.email) return;
+    const normEmail = contact.email.toLowerCase().trim();
+    setVerifyingEmails((prev) => ({ ...prev, [normEmail]: true }));
+
+    try {
+      const results = await verifyEmailsClient({
+        emails: [contact.email],
+        companyId: company.id,
+        contactId: contact.id,
+        forceRefresh: true,
+      });
+
+      if (results.length > 0) {
+        const res = results[0];
+        setCompany((prev) => ({
+          ...prev,
+          contacts: (prev.contacts || []).map((c: any) => {
+            if ((c.email && c.email.toLowerCase().trim() === normEmail) || (contact.id && c.id === contact.id)) {
+              return {
+                ...c,
+                verificationStatus: res.status,
+                verificationScore: res.score,
+                verifiedAt: res.verifiedAt,
+              };
+            }
+            return c;
+          }),
+        }));
+
+        toast({
+          title: res.cached ? 'Verification Result (Cached)' : 'Email Verified',
+          description: `${contact.email} is ${res.status.toUpperCase()} (${res.score}% deliverability score).`,
+        });
+      }
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Verification Failed',
+        description: err.message || 'Could not verify email',
+      });
+    } finally {
+      setVerifyingEmails((prev) => ({ ...prev, [normEmail]: false }));
+    }
+  };
+
+  // Automatically verify unverified company contact emails in the background on load
+  useEffect(() => {
+    if (!company?.id || autoVerifiedCompanyRef.current.has(company.id)) return;
+
+    const unverifiedContacts = (company.contacts || []).filter(
+      (c: any) => c.email && c.email.includes('@') && (!c.verificationStatus || c.verificationStatus === 'unknown')
+    );
+
+    if (unverifiedContacts.length === 0) return;
+
+    autoVerifiedCompanyRef.current.add(company.id);
+    const emailList = unverifiedContacts.map((c: any) => (c.email as string).trim());
+
+    setVerifyingEmails((prev) => {
+      const next = { ...prev };
+      emailList.forEach((e) => {
+        next[e.toLowerCase()] = true;
+      });
+      return next;
+    });
+
+    verifyEmailsClient({
+      emails: emailList,
+      companyId: company.id,
+      forceRefresh: false, // Check Firestore cache first for instant resolution & 0 API cost
+    })
+      .then((results) => {
+        if (results && results.length > 0) {
+          setCompany((prev) => ({
+            ...prev,
+            contacts: (prev.contacts || []).map((c: any) => {
+              if (!c.email) return c;
+              const norm = c.email.toLowerCase().trim();
+              const match = results.find((r) => r.email.toLowerCase().trim() === norm);
+              if (match) {
+                return {
+                  ...c,
+                  verificationStatus: match.status,
+                  verificationScore: match.score,
+                  verifiedAt: match.verifiedAt,
+                };
+              }
+              return c;
+            }),
+          }));
+        }
+      })
+      .catch((err) => {
+        console.warn('[CompanyProfile] Background email verification failed:', err);
+      })
+      .finally(() => {
+        setVerifyingEmails((prev) => {
+          const next = { ...prev };
+          emailList.forEach((e) => {
+            delete next[e.toLowerCase()];
+          });
+          return next;
+        });
+      });
+  }, [company?.id, company?.contacts]);
 
   const [isEditingWebsite, setIsEditingWebsite] = useState(false);
   const [websiteValue, setWebsiteValue] = useState(initialCompany.websiteUrl || (initialCompany as any).website || '');
@@ -949,8 +1060,23 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                     ) : null}
                                 </div>
 
-                                <div className="space-y-1 pt-1 border-t text-xs">
-                                    <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-muted-foreground" />{contact.email}</div>
+                                <div className="space-y-1.5 pt-1 border-t text-xs">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                            <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+                                            <span>{contact.email}</span>
+                                        </div>
+                                        {contact.email && (
+                                            <EmailVerificationBadge
+                                                status={contact.verificationStatus}
+                                                score={contact.verificationScore}
+                                                verifiedAt={contact.verifiedAt}
+                                                onVerify={() => handleVerifySingleEmail(contact)}
+                                                loading={!!verifyingEmails[contact.email?.toLowerCase().trim()]}
+                                                size="sm"
+                                            />
+                                        )}
+                                    </div>
                                     <div className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-muted-foreground" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => handleInitiateCall(contact.phone)}><PhoneCall className="h-3 w-3" /></Button></div>
                                 </div>
                             </div>
