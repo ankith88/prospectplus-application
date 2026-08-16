@@ -3760,7 +3760,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         lead.status === 'Quote Accepted' ||
         lead.customerStatus === 'Quote Accepted' ||
         lead.scfAcceptedAt ||
-        lead.status === 'Accepted' ||
+        (lead.status as string) === 'Accepted' ||
         (lead as any).scfStatus === 'Accepted'
     );
 
