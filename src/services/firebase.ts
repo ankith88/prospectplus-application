@@ -54,7 +54,7 @@ function sanitizeData(data: any): any {
 /**
  * Removes undefined values from an object recursively to prevent Firestore errors.
  */
-function prepareForFirestore(obj: any): any {
+export function prepareForFirestore(obj: any): any {
   if (obj === undefined) return null;
   if (obj === null || typeof obj !== 'object') return obj;
 
@@ -331,8 +331,9 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
                         email: c.email || data.contactEmail || data.customerServiceEmail || '',
                         phone: c.phone || c.mobile || data.contactPhone || data.customerPhone || '',
                         mobile: c.mobile || c.phone || data.contactPhone || data.customerPhone || '',
+                        title: c.title || 'Primary Contact',
                         isPrimary: i === 0 || c.isPrimary
-                    }));
+                    } as unknown as Contact));
                 } else {
                     const legacyName = (typeof data.contactName === 'string' && data.contactName.trim().toLowerCase() !== 'n/a') ? data.contactName.trim() : (data.lpoOwnerName || data.lpoContactName || '');
                     const legacyEmail = (typeof data.contactEmail === 'string' && data.contactEmail.trim().toLowerCase() !== 'n/a') ? data.contactEmail.trim() : (data.customerServiceEmail || data.email || '');
@@ -344,8 +345,9 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
                             email: legacyEmail,
                             phone: legacyPhone,
                             mobile: legacyPhone,
+                            title: 'Primary Contact',
                             isPrimary: true
-                        } as Contact];
+                        } as unknown as Contact];
                     }
                 }
             }
