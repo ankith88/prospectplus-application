@@ -677,7 +677,8 @@ export default function LpoLeadsListPage() {
             const isLost = progress.isLost;
             const isLpoLoggedIn = lead.status === 'LPO.Plus Logged In' || lead.status === 'LPO.PLUS Sign In Email Sent' || lead.status === 'LPO.Plus Sign In Email Sent';
             const isLpoAccessSent = lead.status === 'LPO.Plus Access Sent';
-            const hasLinkedCustomer = Boolean(lead.linkedLeadId || lead.linkedLeadCompanyName || lead.rawCustomerName || lead.linkedCustomerId);
+            const targetLeadId = lead.createdParentLeadId || lead.linkedLeadId;
+            const hasLinkedCustomer = Boolean(targetLeadId || lead.linkedLeadCompanyName || lead.rawCustomerName || lead.linkedCustomerId);
             const franchiseeName = lead.linkedFranchiseeName || lead.companyNameFranchise || '';
 
             return (
@@ -732,14 +733,14 @@ export default function LpoLeadsListPage() {
                         )}
                       </div>
                       <div className="text-sm font-bold text-slate-800">
-                        {lead.linkedLeadId ? (
+                        {targetLeadId ? (
                           <Link 
-                            href={`/leads/${lead.linkedLeadId}`} 
+                            href={`/leads/${targetLeadId}`} 
                             className="text-[#095c7b] hover:text-[#053647] hover:underline inline-flex items-center gap-1 font-bold"
                             target="_blank"
-                            title={`View linked CRM lead (${lead.linkedLeadId})`}
+                            title={`View linked CRM lead (${targetLeadId})`}
                           >
-                            {lead.linkedLeadCompanyName || lead.rawCustomerName || 'Linked Customer'}
+                            {lead.lpoName || lead.linkedLeadCompanyName || lead.rawCustomerName || 'Parent Lead'}
                             <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
                           </Link>
                         ) : (

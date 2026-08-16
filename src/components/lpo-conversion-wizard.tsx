@@ -468,6 +468,10 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
         accountManagerAssigned: "Kerry O'Neill",
         salesRep: "Kerry O'Neill",
         
+        // Campaign Classification
+        campaign: 'LPO Network Onboarding',
+        campaignName: 'LPO Network Onboarding',
+
         // Hierarchy & Bucket
         parentLeadId: null,
         isParentLead: true,
