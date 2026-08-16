@@ -3819,11 +3819,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         (lead as any).scfStatus === 'Accepted'
     );
 
-    let salesItems: React.ReactNode[] = (isMailPlusPtyLtd && !isLpoLeadProcess)
+    const isChildLpoLead = Boolean(isLpoLeadProcess && (lead.isChildLead || (lead.parentLeadId && !lead.isParentLead)));
+
+    let salesItems: React.ReactNode[] = isChildLpoLead
         ? []
-        : (isMailPlusPtyLtd && isLpoLeadProcess)
-            ? (isQuoteAccepted ? [quoteItem, signupItem].filter(Boolean) : [quoteItem].filter(Boolean))
-            : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
+        : (isMailPlusPtyLtd && !isLpoLeadProcess)
+            ? []
+            : (isMailPlusPtyLtd && isLpoLeadProcess)
+                ? (isQuoteAccepted ? [quoteItem, signupItem].filter(Boolean) : [quoteItem].filter(Boolean))
+                : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
 
     if (salesItems.length === 0) return null;
 
