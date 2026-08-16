@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { doc, updateDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDocs, where, deleteDoc, deleteField } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,9 +10,19 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw, Lock } from 'lucide-react';
+import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw, Lock, Trash2, RotateCcw } from 'lucide-react';
 import { LpoConversionWizard, buildLpoServicesArray } from './lpo-conversion-wizard';
 
 interface LpoLeadProfileProps {
@@ -239,6 +249,94 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
     }
   };
 
+  // Reset CRM Leads State
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [resettingLeads, setResettingLeads] = useState(false);
+
+  const handleResetCrmLeads = async () => {
+    const targetParentId = lead.createdParentLeadId || lead.linkedLeadId;
+    if (!targetParentId) return;
+
+    setResettingLeads(true);
+    try {
+      // 1. Find all child lead IDs linked to this parent
+      const childIdsToDelete = new Set<string>(lead.createdChildLeadIds || []);
+      
+      const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', targetParentId));
+      const childSnap = await getDocs(qChild);
+      childSnap.forEach((docSnap) => {
+        childIdsToDelete.add(docSnap.id);
+      });
+
+      // 2. Delete Parent Lead Document
+      await deleteDoc(doc(firestore, 'leads', targetParentId)).catch((err) => {
+        console.warn('Parent lead document delete warning:', err);
+      });
+
+      // 3. Delete Child Lead Documents
+      let deletedChildCount = 0;
+      for (const childId of Array.from(childIdsToDelete)) {
+        await deleteDoc(doc(firestore, 'leads', childId)).catch((err) => {
+          console.warn(`Child lead document ${childId} delete warning:`, err);
+        });
+        deletedChildCount++;
+      }
+
+      // 4. Reset LPO Lead Document
+      const lpoDocRef = doc(firestore, 'lpo_leads', lead.id);
+      const resetPayload: any = {
+        isConverted: false,
+        createdParentLeadId: deleteField(),
+        createdChildLeadIds: deleteField(),
+        linkedLeadId: deleteField(),
+        linkedLeadCompanyName: deleteField(),
+        status: 'Franchisees Assigned',
+        conversionStep: 1,
+        updatedAt: serverTimestamp(),
+      };
+      await updateDoc(lpoDocRef, resetPayload);
+
+      // 5. Add Activity Log
+      await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
+        type: 'ConversionReset',
+        notes: `CRM Parent Lead (${targetParentId}) and ${deletedChildCount} Child Lead(s) were deleted from the database. Conversion status reset for re-conversion.`,
+        author: userProfile?.displayName || userProfile?.email || 'System User',
+        createdAt: serverTimestamp(),
+      });
+
+      // 6. Update local state to re-enable wizard
+      const updatedLeadState = {
+        ...lead,
+        isConverted: false,
+        createdParentLeadId: undefined,
+        createdChildLeadIds: undefined,
+        linkedLeadId: undefined,
+        linkedLeadCompanyName: undefined,
+        status: 'Franchisees Assigned',
+        conversionStep: 1,
+      };
+      setLead(updatedLeadState);
+      setStatus('Franchisees Assigned');
+      setIsEditingConversion(true);
+
+      toast({
+        title: 'CRM Leads Deleted',
+        description: `Parent lead ${targetParentId} and ${deletedChildCount} child lead(s) deleted. Conversion reset!`,
+      });
+
+      setIsResetDialogOpen(false);
+    } catch (err: any) {
+      console.error('Error resetting CRM leads:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error Resetting Leads',
+        description: err.message || 'Failed to delete CRM leads.',
+      });
+    } finally {
+      setResettingLeads(false);
+    }
+  };
+
   const handleUpdateLpoStatus = async (newStatus: string, notes: string) => {
     try {
       const docRef = doc(firestore, 'lpo_leads', lead.id);
@@ -439,23 +537,47 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                 <div className="p-4 bg-blue-50/50 rounded-lg border border-blue-150 shadow-sm flex items-center justify-between flex-wrap gap-3">
                   <div>
                     <p className="text-xs font-semibold text-slate-500">NetSuite Connected CRM Lead</p>
-                    {lead.linkedLeadId ? (
+                    {lead.linkedLeadId || lead.createdParentLeadId ? (
                       <div className="mt-1 flex items-center gap-2">
-                        <span className="text-sm font-bold text-[#095c7b]">{lead.linkedLeadCompanyName || 'CRM Lead'}</span>
-                        <Badge className="bg-[#095c7b] text-white text-[10px]">ID: {lead.linkedLeadId}</Badge>
+                        <span className="text-sm font-bold text-[#095c7b]">{lead.linkedLeadCompanyName || lead.lpoName || 'CRM Lead'}</span>
+                        <Badge className="bg-[#095c7b] text-white text-[10px]">ID: {lead.createdParentLeadId || lead.linkedLeadId}</Badge>
                       </div>
                     ) : (
                       <p className="text-sm text-slate-400 mt-1 italic">Awaiting sync / lead creation from NetSuite API</p>
                     )}
                   </div>
-                  {lead.linkedLeadId && (
+                  {(lead.linkedLeadId || lead.createdParentLeadId) && (
                     <Button asChild size="sm" className="bg-[#095c7b] hover:bg-[#053647]">
-                      <a href={`/leads/${lead.linkedLeadId}`}>
+                      <a href={`/leads/${lead.createdParentLeadId || lead.linkedLeadId}`}>
                         View CRM Lead
                       </a>
                     </Button>
                   )}
                 </div>
+
+                {/* Delete Created CRM Leads & Reset Conversion Button */}
+                {(lead.createdParentLeadId || lead.linkedLeadId) && (
+                  <div className="p-4 bg-rose-50/70 rounded-lg border border-rose-200 shadow-xs flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                        <Trash2 className="w-4 h-4 text-rose-600" />
+                        CRM Leads Management & Re-Conversion
+                      </p>
+                      <p className="text-xs text-rose-700 mt-0.5">
+                        Delete created CRM Parent & Child leads from database to restart conversion wizard from scratch.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => setIsResetDialogOpen(true)}
+                      className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                      Delete CRM Leads & Reset Wizard
+                    </Button>
+                  </div>
+                )}
 
                 {/* Linked Partner & Kerry Induction */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -915,6 +1037,43 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* DELETE CRM LEADS CONFIRMATION ALERT DIALOG */}
+      <AlertDialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <AlertDialogContent className="bg-white rounded-xl shadow-xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold text-rose-700 flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-rose-600" />
+              Delete Created CRM Leads & Reset?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-600 space-y-2">
+              <p>
+                Are you sure you want to delete the generated CRM Parent Lead (<strong className="font-mono text-slate-800">{lead.createdParentLeadId || lead.linkedLeadId}</strong>) and all associated Child Leads from the <code className="bg-slate-100 px-1 py-0.5 rounded text-rose-800">leads</code> database collection?
+              </p>
+              <p className="p-2.5 bg-rose-50 border border-rose-200 rounded text-rose-900 font-medium">
+                ⚠️ This will permanently remove the lead records and reset this LPO Lead state so you can re-run the 4-step Conversion Wizard from Step 1 with updated rates and franchisee assignments.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-2">
+            <AlertDialogCancel disabled={resettingLeads}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetCrmLeads}
+              disabled={resettingLeads}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
+            >
+              {resettingLeads ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting Leads...
+                </>
+              ) : (
+                'Yes, Delete Leads & Reset'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
