@@ -520,6 +520,11 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
         campaign: 'LPO Network Onboarding',
         campaignName: 'LPO Network Onboarding',
 
+        // Lead Type & LPO Linking
+        leadType: 'Service',
+        lpoLeadId: lead.id,
+        lpoLeadName: lpoName || lead.lpoName || 'LPO Lead',
+
         // Hierarchy & Bucket
         parentLeadId: null,
         isParentLead: true,

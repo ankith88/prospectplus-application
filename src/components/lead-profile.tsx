@@ -5080,7 +5080,34 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                      <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-muted-foreground" />Local LPO Mapping</CardTitle>
                      <CardDescription>Manage My Post Business account status and view the automatically linked LPO based on the lead's address. <span className="text-destructive font-medium text-xs">Account information is mandatory.</span></CardDescription>
                   </CardHeader>
-                  <CardContent className="pt-6 space-y-4">
+                <CardContent className="pt-6 space-y-4">
+                      {/* Linked LPO Lead info box if converted from LPO lead */}
+                      {(lead.lpoLeadId || lead.linkedLpoLeadId || lead.lpoLeadName) && (
+                          <div className="p-4 bg-teal-50/70 rounded-lg border border-teal-200/80 space-y-2 shadow-2xs">
+                              <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                                      <Building className="h-4 w-4 text-[#095c7b]" />
+                                      Linked LPO Onboarding Lead
+                                  </span>
+                                  {(lead.lpoLeadId || lead.linkedLpoLeadId) && (
+                                      <Badge className="bg-[#095c7b] text-white text-[10px] font-mono">
+                                          ID: {lead.lpoLeadId || lead.linkedLpoLeadId}
+                                      </Badge>
+                                  )}
+                              </div>
+                              <div className="flex items-center justify-between pt-1">
+                                  <a 
+                                      href={`/lpo-leads/${lead.lpoLeadId || lead.linkedLpoLeadId}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-sm font-bold text-slate-800 hover:text-[#095c7b] hover:underline flex items-center gap-1"
+                                  >
+                                      {lead.lpoLeadName || lead.lpoName || 'View Linked LPO Lead Profile'}
+                                      <ArrowUpRight className="h-3.5 w-3.5 text-[#095c7b]" />
+                                  </a>
+                              </div>
+                          </div>
+                      )}
                       <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
                           <div className="flex flex-col gap-1">
                               <span className="text-sm font-semibold">
