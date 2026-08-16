@@ -1090,93 +1090,11 @@ export async function prospectWebsiteTool(input: { leadId: string; websiteUrl: s
  * Logs the full payload for integration debugging.
  */
 export async function sendLpoConversionToNetSuite(leadId: string, conversionData: any): Promise<{ success: boolean; message: string }> {
-  console.log(`[NetSuite LPO Conversion API] Sending conversion data for LPO lead ID ${leadId} to NetSuite:`, JSON.stringify(conversionData, null, 2));
+  console.log(`[LPO Conversion] Conversion data for LPO lead ID ${leadId} processed locally (NetSuite API 2673 discontinued):`, JSON.stringify(conversionData, null, 2));
   
-  const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
-
-  const lpoName = conversionData.lpoName || '';
-  const lpoContactName = conversionData.lpoContactName || conversionData.lpoOwnerName || '';
-  const lpoContactEmail = conversionData.lpoContactEmail || conversionData.email || '';
-  const lpoContactPhone = conversionData.lpoContactPhone || conversionData.phone || '';
-  const abn = conversionData.abn || '';
-  
-  const linkedPartnerLocation = typeof conversionData.linkedPartnerLocation === 'string'
-    ? conversionData.linkedPartnerLocation
-    : (conversionData.linkedPartnerLocationName || conversionData.linkedPartnerLocationId || '');
-
-  const servicesAndRatesObj = conversionData.servicesAndRates || {
-    ampoRate: conversionData.ampoRate ?? 0,
-    pmpoRate: conversionData.pmpoRate ?? 0,
-    packageRate: conversionData.packageRate ?? 0,
-    additionalBagRate: conversionData.additionalBagRate ?? 0,
-    inductedByKerry: conversionData.inductedByKerry,
-    operatesCollectionDelivery: conversionData.operatesCollectionDelivery,
-    lastDailySweepTime: conversionData.lastDailySweepTime,
-    franchiseeAccess: conversionData.franchiseeAccess
+  return {
+    success: true,
+    message: "LPO Lead conversion details saved locally."
   };
-  const servicesAndRatesStr = typeof servicesAndRatesObj === 'string' ? servicesAndRatesObj : JSON.stringify(servicesAndRatesObj);
-
-  let linkedFranchiseesStr = '';
-  if (Array.isArray(conversionData.linkedFranchisees)) {
-    linkedFranchiseesStr = conversionData.linkedFranchisees
-      .map((f: any) => (typeof f === 'string' ? f : (f.franchiseeId || f.id || '')))
-      .filter(Boolean)
-      .join(',');
-  } else if (typeof conversionData.linkedFranchisees === 'string') {
-    linkedFranchiseesStr = conversionData.linkedFranchisees;
-  }
-
-  const params = new URLSearchParams({
-    script: "2673",
-    deploy: "1",
-    compid: "1048144",
-    "ns-at": "AAEJ7tMQZFZd81mk0aFwsJ19hQ1x3lN-aGrsyfQgfTiiSQIM50w",
-    leadId: leadId,
-    lpoName: lpoName,
-    lpoContactName: lpoContactName,
-    lpoContactEmail: lpoContactEmail,
-    lpoContactPhone: lpoContactPhone,
-    abn: abn,
-    custentity_abn: abn,
-    linkedPartnerLocation: linkedPartnerLocation,
-    servicesAndRates: servicesAndRatesStr,
-    linkedFranchisees: linkedFranchiseesStr,
-    ampoRate: String(conversionData.ampoRate ?? ''),
-    pmpoRate: String(conversionData.pmpoRate ?? ''),
-    packageRate: String(conversionData.packageRate ?? ''),
-    additionalBagRate: String(conversionData.additionalBagRate ?? '')
-  });
-
-  const url = `${baseUrl}?${params.toString()}`;
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, 15000);
-
-    const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`[NetSuite LPO Conversion API Error] Status: ${response.status}, Body: ${errorBody}`);
-      return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
-    }
-
-    const responseText = await response.text();
-    console.log(`[NetSuite LPO Conversion API] Success response for lead ${leadId}:`, responseText);
-    return {
-      success: true,
-      message: "LPO Lead conversion synced with NetSuite."
-    };
-  } catch (error: any) {
-    if (error.name === 'AbortError') {
-      console.error(`[NetSuite LPO Conversion API] Request timed out for lead ${leadId}`);
-      return { success: false, message: 'The request to NetSuite timed out.' };
-    }
-    console.error(`[NetSuite LPO Conversion API] Error:`, error);
-    return { success: false, message: error.message || 'Failed to sync with NetSuite.' };
-  }
 }
 

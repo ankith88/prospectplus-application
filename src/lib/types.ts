@@ -1,4 +1,4 @@
-export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing' | 'lpo_plus' | 'in_review' | 'multisite' | '' | 'blank' | 'unassigned' | (string & {});
+export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing' | 'lpo_plus' | 'lpo_network' | 'in_review' | 'multisite' | '' | 'blank' | 'unassigned' | (string & {});
 
 export interface BucketHistory {
   id: string;

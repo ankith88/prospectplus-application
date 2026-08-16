@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { collection, doc, getDocs, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -43,6 +44,7 @@ interface LpoConversionWizardProps {
 }
 
 export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProps) {
+  const router = useRouter();
   const { toast } = useToast();
   const [step, setStep] = useState(lead.conversionStep || 1);
   const [loading, setLoading] = useState(false);
@@ -313,6 +315,116 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
         return;
       }
 
+      // Generate ProspectPlus ID
+      const timestampSuffix = Date.now().toString().slice(-5);
+      const parentProspectPlusId = `MP-LPO-${timestampSuffix}`;
+
+      // Split contact name
+      const nameParts = (lpoOwnerName || '').trim().split(' ');
+      const firstName = nameParts[0] || 'LPO';
+      const lastName = nameParts.slice(1).join(' ') || 'Owner';
+
+      const primaryContact = {
+        id: `contact-${Date.now()}-1`,
+        name: lpoOwnerName || 'LPO Contact',
+        firstName,
+        lastName,
+        email: email || '',
+        phone: phone || '',
+        title: 'LPO Owner / Manager',
+        isPrimary: true,
+        syncedWithNetSuite: false
+      };
+
+      const leadAddress = {
+        address1: address1 || '',
+        street: address2 ? `${address1} ${address2}`.trim() : (address1 || ''),
+        city: city || '',
+        state: state || '',
+        zip: postcode || '',
+        country: 'Australia',
+        lat: lat ?? undefined,
+        lng: lng ?? undefined,
+        partnerLocationId: selectedPartnerLocation?.id || undefined,
+        partnerLocationName: selectedPartnerLocation?.name || undefined
+      };
+
+      const parentLeadPayload = {
+        prospectPlusId: parentProspectPlusId,
+        companyName: lpoName || lead.lpoName || 'LPO Lead',
+        abn: abn.trim(),
+        websiteUrl: lead.websiteUrl || '',
+        industryCategory: 'Postal / Retail Services',
+        customerPhone: phone || '',
+        customerServiceEmail: email || '',
+        contacts: [primaryContact],
+        address: leadAddress,
+        city: city || '',
+        state: state || '',
+        zip: postcode || '',
+        latitude: lat ?? undefined,
+        longitude: lng ?? undefined,
+        
+        // Assigned to MailPlus Pty Ltd (435)
+        franchisee: 'MailPlus Pty Ltd',
+        franchisee_id: '435',
+        franchiseeInternalId: '435',
+        
+        // Hierarchy & Bucket
+        parentLeadId: null,
+        isParentLead: true,
+        isChildLead: false,
+        bucket: 'lpo_network' as const,
+        source: 'LPO Lead Conversion',
+        leadSource: 'LPO Expressions of Interest',
+
+        // Agreed rates & operations setup
+        ampoRate: parseFloat(ampoRate) || 0,
+        pmpoRate: parseFloat(pmpoRate) || 0,
+        packageRate: parseFloat(packageRate) || 0,
+        additionalBagRate: parseFloat(additionalBagRate) || 0,
+        operatesCollectionDelivery: operatesCollectionDelivery || 'Yes',
+        lastDailySweepTime: lastDailySweepTime || '02:00 pm',
+        franchiseeAccess: franchiseeAccess || 'Car Park',
+        inductedByKerry: inductedByKerry || 'Yes',
+
+        status: 'New' as const,
+        syncedWithNetSuite: false,
+        netSuiteSyncStatus: 'pending',
+        dateLeadEntered: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      };
+
+      // 1. Create Parent Lead Document in 'leads' collection
+      const parentLeadDocRef = await addDoc(collection(firestore, 'leads'), parentLeadPayload);
+      const parentLeadId = parentLeadDocRef.id;
+
+      // 2. Create Child Lead Documents in 'leads' collection for each linked franchisee
+      const createdChildLeadIds: string[] = [];
+      for (const linkedZee of linkedFranchisees) {
+        const childProspectPlusId = `MP-LPO-${Math.floor(10000 + Math.random() * 90000)}`;
+        const zeeName = linkedZee.name || 'Linked Franchisee';
+        const zeeId = linkedZee.franchiseeId || '435';
+
+        const childLeadPayload = {
+          ...parentLeadPayload,
+          prospectPlusId: childProspectPlusId,
+          companyName: `${lpoName || lead.lpoName || 'LPO Lead'} - ${zeeName}`,
+          parentLeadId: parentLeadId,
+          isParentLead: false,
+          isChildLead: true,
+          franchisee: zeeName,
+          franchisee_id: zeeId,
+          franchiseeInternalId: zeeId,
+          status: 'New' as const,
+          createdAt: new Date().toISOString(),
+        };
+
+        const childDocRef = await addDoc(collection(firestore, 'leads'), childLeadPayload);
+        createdChildLeadIds.push(childDocRef.id);
+      }
+
+      // 3. Update LPO Lead Document
       const conversionData = {
         lpoName,
         lpoOwnerName,
@@ -357,31 +469,35 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
           faceToFaceIntroHeld: f.faceToFaceIntroHeld
         })),
         isConverted: true,
-        status: 'Franchisees Assigned', // Update status to Franchisees Assigned on conversion
+        createdParentLeadId: parentLeadId,
+        createdChildLeadIds,
+        status: 'Franchisees Assigned',
         convertedAt: new Date().toISOString()
       };
 
-      // 1. Update LPO Lead Document
       const docRef = doc(firestore, 'lpo_leads', lead.id);
       await updateDoc(docRef, conversionData);
 
-      // 2. Add Activity Log
+      // 4. Add Activity Log to LPO Lead
       await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
         type: 'StatusChange',
-        notes: `LPO Lead converted. Linked to partner location ${selectedPartnerLocation?.name || 'none'} and status updated to 'Franchisees Assigned'.`,
+        notes: `LPO Lead converted. Created Parent Lead (ID: ${parentLeadId}) assigned to MailPlus Pty Ltd (435) and ${createdChildLeadIds.length} Child Lead(s) under 'LPO Network' bucket.`,
         author: 'System User',
         createdAt: serverTimestamp()
       });
 
-      // 3. Send payload to NetSuite Mock API
+      // 5. Local logging (NetSuite 2673 API discontinued)
       await sendLpoConversionToNetSuite(lead.id, conversionData);
 
       toast({
-        title: 'Conversion Saved',
-        description: 'LPO lead has been successfully converted and synced.'
+        title: 'Conversion Complete',
+        description: `Created Parent Lead & ${createdChildLeadIds.length} Child Lead(s) in 'LPO Network' bucket. Redirecting...`
       });
 
       onSuccess({ id: lead.id, ...conversionData });
+
+      // 6. Redirect user to newly created Parent Lead profile page
+      router.push(`/leads/${parentLeadId}`);
     } catch (err) {
       console.error('Error submitting LPO lead conversion:', err);
       toast({

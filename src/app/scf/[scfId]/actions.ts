@@ -42,97 +42,62 @@ export async function acceptScfAction(leadId: string, scfId: string) {
     if (leadSnap.exists) {
       const leadData = leadSnap.data();
       
-      const commRegId = leadData?.commRegId || "";
-      const payload1 = {
-        operation: "signCustomerSCF",
-        requestParams: { comRegId: commRegId }
-      };
-      const nsUrl1 = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc&requestData=${encodeURIComponent(JSON.stringify(payload1))}`;
-      
-      try {
-        console.log(`[SCF Accept] Calling NetSuite Script 1900 for Lead ${leadId} with commRegId: ${commRegId}...`);
-        console.log(`[SCF Accept] Request URL: ${nsUrl1}`);
-        const response1 = await fetch(nsUrl1, { method: "GET" });
-        const text1 = await response1.text();
-        console.log(`[SCF Accept] NetSuite Script 1900 Response Status: ${response1.status}`);
-        console.log(`[SCF Accept] NetSuite Script 1900 Response Body: ${text1}`);
+      // Guard against calling NetSuite APIs for leads that are not synced yet with NetSuite
+      const isSyncedWithNetSuite = leadData?.syncedWithNetSuite === true && Boolean(leadData?.internalid || leadData?.netsuiteId);
+
+      if (isSyncedWithNetSuite) {
+        const commRegId = leadData?.commRegId || "";
+        const payload1 = {
+          operation: "signCustomerSCF",
+          requestParams: { comRegId: commRegId }
+        };
+        const nsUrl1 = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc&requestData=${encodeURIComponent(JSON.stringify(payload1))}`;
         
-        const isScript1900Success = response1.ok && (
-          text1.includes('Commencement Register signed successfully.') || 
-          text1.includes('comRegId') || 
-          text1.includes('scriptlet.nl')
-        );
-
-        if (isScript1900Success) {
-          console.log(`[SCF Accept] Commencement Register signed! Calling NetSuite Script 2514 (Sign Up Outcome)...`);
+        try {
+          console.log(`[SCF Accept] Calling NetSuite Script 1900 for Lead ${leadId} with commRegId: ${commRegId}...`);
+          const response1 = await fetch(nsUrl1, { method: "GET" });
+          const text1 = await response1.text();
+          console.log(`[SCF Accept] NetSuite Script 1900 Response Status: ${response1.status}`);
           
-          const salesRep = leadData?.accountManagerAssigned || '';
-          const leadInternalId = leadData?.internalid || leadId;
-          const nsUrl2 = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2514&deploy=1&compid=1048144&ns-at=AAEJ7tMQJhlGIUNNmxKFwd5sprCqoBuWrh_H7J14_qzpLd1ajvg&salesRep=${encodeURIComponent(salesRep)}&outcome=${encodeURIComponent('Sign Up')}&leadId=${encodeURIComponent(leadInternalId)}`;
-          
-          console.log(`[SCF Accept] Calling NetSuite Script 2514 (Sign Up Outcome)...`);
-          console.log(`[SCF Accept] Request URL: ${nsUrl2}`);
-          const response2 = await fetch(nsUrl2, { method: "GET" });
-          const text2 = await response2.text();
-          console.log(`[SCF Accept] NetSuite Script 2514 Response Status: ${response2.status}`);
-          console.log(`[SCF Accept] NetSuite Script 2514 Response Body: ${text2}`);
+          const isScript1900Success = response1.ok && (
+            text1.includes('Commencement Register signed successfully.') || 
+            text1.includes('comRegId') || 
+            text1.includes('scriptlet.nl')
+          );
 
-          // Status update AFTER NetSuite APIs complete
-          const currentStatus = leadData?.status || leadData?.customerStatus || '';
-          const isCompanyOrSignedCustomer = 
-            leadData?.leadType === 'Company' ||
-            ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(currentStatus);
-
-          console.log(`[SCF Accept] NetSuite API calls completed. Updating Lead status (isCompanyOrSignedCustomer: ${isCompanyOrSignedCustomer})...`);
-          if (!isCompanyOrSignedCustomer) {
-            await leadRef.update({ 
-              status: 'Quote Accepted', 
-              customerStatus: 'Quote Accepted',
-              scfAcceptedAt: nowStr
-            });
-          } else {
-            await leadRef.update({ 
-              scfAcceptedAt: nowStr
-            });
+          if (isScript1900Success) {
+            console.log(`[SCF Accept] Commencement Register signed! Calling NetSuite Script 2514 (Sign Up Outcome)...`);
+            
+            const salesRep = leadData?.accountManagerAssigned || '';
+            const leadInternalId = leadData?.internalid || leadData?.netsuiteId || leadId;
+            const nsUrl2 = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2514&deploy=1&compid=1048144&ns-at=AAEJ7tMQJhlGIUNNmxKFwd5sprCqoBuWrh_H7J14_qzpLd1ajvg&salesRep=${encodeURIComponent(salesRep)}&outcome=${encodeURIComponent('Sign Up')}&leadId=${encodeURIComponent(leadInternalId)}`;
+            
+            const response2 = await fetch(nsUrl2, { method: "GET" });
+            console.log(`[SCF Accept] NetSuite Script 2514 Response Status: ${response2.status}`);
           }
-        } else {
-          console.warn(`[SCF Accept] NetSuite Script 1900 response did not contain success message. Body: ${text1}`);
-          const currentStatus = leadData?.status || leadData?.customerStatus || '';
-          const isCompanyOrSignedCustomer = 
-            leadData?.leadType === 'Company' ||
-            ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(currentStatus);
-
-          if (!isCompanyOrSignedCustomer) {
-            await leadRef.update({ 
-              status: 'Quote Accepted',
-              customerStatus: 'Quote Accepted',
-              scfAcceptedAt: nowStr
-            });
-          } else {
-            await leadRef.update({ 
-              scfAcceptedAt: nowStr
-            });
-          }
+        } catch (nsErr) {
+          console.error(`[SCF Accept] Error calling NetSuite scriptlets:`, nsErr);
         }
-      } catch (err) {
-        console.error("[SCF Accept] NetSuite API calls failed with error:", err);
-        // Fallback status update
-        const currentStatus = leadData?.status || leadData?.customerStatus || '';
-        const isCompanyOrSignedCustomer = 
-          leadData?.leadType === 'Company' ||
-          ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(currentStatus);
+      } else {
+        console.log(`[SCF Accept] Lead ${leadId} is not synced with NetSuite (syncedWithNetSuite: ${leadData?.syncedWithNetSuite}). Skipping NetSuite Scriptlets 1900 & 2514.`);
+      }
 
-        if (!isCompanyOrSignedCustomer) {
-          await leadRef.update({ 
-            status: 'Quote Accepted',
-            customerStatus: 'Quote Accepted',
-            scfAcceptedAt: nowStr
-          });
-        } else {
-          await leadRef.update({ 
-            scfAcceptedAt: nowStr
-          });
-        }
+      // Status update in Firestore
+      const currentStatus = leadData?.status || leadData?.customerStatus || '';
+      const isCompanyOrSignedCustomer = 
+        leadData?.leadType === 'Company' ||
+        ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(currentStatus);
+
+      if (!isCompanyOrSignedCustomer) {
+        await leadRef.update({ 
+          status: 'Quote Accepted', 
+          customerStatus: 'Quote Accepted',
+          scfAcceptedAt: nowStr
+        });
+      } else {
+        await leadRef.update({ 
+          scfAcceptedAt: nowStr
+        });
       }
     }
 
