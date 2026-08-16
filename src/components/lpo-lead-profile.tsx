@@ -476,32 +476,9 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
               }}
             />
           )}
-          {/* Add Staff Note */}
-          <Card className="border-slate-200/80 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-slate-800">Add Staff Note</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleAddNote} className="space-y-4">
-                <Textarea
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                  placeholder="Record an interaction, call details, or follow-up notes..."
-                  rows={4}
-                  className="w-100 border-slate-200 focus-visible:ring-[#095c7b]"
-                />
-                <div className="flex justify-end">
-                  <Button type="submit" className="bg-[#095c7b] hover:bg-[#053647] text-white">
-                    <Send className="h-4 w-4 mr-2" />
-                    Save Note
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
         </div>
 
-        {/* Activity Timeline */}
+        {/* Activity Timeline & Enquiry Info Column */}
         <div className="space-y-6">
           <Card className="border-slate-200/80 shadow-sm">
             <CardHeader>
@@ -634,6 +611,30 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                   </span>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Add Staff Note Card */}
+          <Card className="border-slate-200/80 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-slate-800">Add Staff Note</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAddNote} className="space-y-4">
+                <Textarea
+                  value={noteContent}
+                  onChange={(e) => setNoteContent(e.target.value)}
+                  placeholder="Record an interaction, call details, or follow-up notes..."
+                  rows={4}
+                  className="w-full border-slate-200 focus-visible:ring-[#095c7b]"
+                />
+                <div className="flex justify-end">
+                  <Button type="submit" className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold">
+                    <Send className="h-4 w-4 mr-2" />
+                    Save Note
+                  </Button>
+                </div>
+              </form>
             </CardContent>
           </Card>
 
