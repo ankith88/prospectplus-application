@@ -3861,15 +3861,45 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 );
             })()}
             {isLpoLeadProcess && (
-                <Button
-                    variant="outline"
-                    onClick={handleSyncLpoNetSuite}
-                    disabled={isSyncingLpoNetSuite}
-                    className="border-sky-600 text-sky-700 hover:bg-sky-50 font-semibold shadow-sm"
-                >
-                    <Sparkles className={`mr-2 h-4 w-4 text-sky-600 ${isSyncingLpoNetSuite ? 'animate-spin' : ''}`} />
-                    {isSyncingLpoNetSuite ? 'Syncing NetSuite...' : 'Sync NetSuite (LPO Hierarchy)'}
-                </Button>
+                <>
+                    <Button
+                        variant="outline"
+                        onClick={handleSyncLpoNetSuite}
+                        disabled={isSyncingLpoNetSuite}
+                        className="border-sky-600 text-sky-700 hover:bg-sky-50 font-semibold shadow-sm"
+                    >
+                        <Sparkles className={`mr-2 h-4 w-4 text-sky-600 ${isSyncingLpoNetSuite ? 'animate-spin' : ''}`} />
+                        {isSyncingLpoNetSuite ? 'Syncing NetSuite...' : 'Sync NetSuite (LPO Hierarchy)'}
+                    </Button>
+
+                    {isSyncingLpoNetSuite && (
+                        <div className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center text-white p-6 transition-all duration-300">
+                            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-8 max-w-lg w-full shadow-2xl flex flex-col items-center text-center space-y-5">
+                                <div className="relative flex items-center justify-center">
+                                    <div className="absolute inset-0 rounded-full bg-sky-500/20 animate-ping"></div>
+                                    <div className="h-16 w-16 rounded-full bg-sky-950 border border-sky-500/40 flex items-center justify-center">
+                                        <Loader2 className="h-9 w-9 text-sky-400 animate-spin" />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <h3 className="text-xl font-bold text-slate-100 tracking-tight">Syncing NetSuite & Converting Lead Hierarchy</h3>
+                                    <p className="text-sm text-slate-300 leading-relaxed">
+                                        Submitting Parent Lead & Child Leads to NetSuite API, linking Child Leads under Parent Customer ID, and re-keying all Firestore documents to numeric NetSuite IDs...
+                                    </p>
+                                </div>
+                                <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700">
+                                    <div className="bg-gradient-to-r from-sky-500 to-blue-600 h-full animate-pulse w-full rounded-full"></div>
+                                </div>
+                                <div className="bg-amber-950/60 border border-amber-500/40 rounded-xl p-3.5 w-full">
+                                    <p className="text-xs text-amber-300 font-medium flex items-center justify-center gap-2">
+                                        <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0" />
+                                        Action Locked: Please wait for NetSuite creation and numeric ID conversion to complete before sending quotes or modifying lead details.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
             {isSaleDealsVisible(userProfile) && (
                 <TooltipProvider>

@@ -1050,8 +1050,9 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         
         try {
             const jsonResponse = JSON.parse(responseBody);
-            if (jsonResponse.success && jsonResponse.leadID) {
-                 return { success: true, leadId: String(jsonResponse.leadID), message: jsonResponse.message || 'Lead created in NetSuite.' };
+            const returnedId = jsonResponse.leadID || jsonResponse.leadId || jsonResponse.internalid || jsonResponse.id;
+            if (jsonResponse.success && returnedId) {
+                 return { success: true, leadId: String(returnedId), message: jsonResponse.message || 'Lead created in NetSuite.' };
             } else {
                 return { success: false, message: jsonResponse.message || 'An unknown error occurred in NetSuite.' };
             }

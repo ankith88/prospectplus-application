@@ -77,20 +77,24 @@ export async function rekeyLeadToNetSuite(leadId: string): Promise<RekeyResult> 
   // 3. Resolve parent NetSuite ID if child of multi-site or LPO lead
   let parentNetSuiteId: string | undefined = undefined;
   if (data.parentLeadId) {
-    try {
-      const pSnapLeads = await db.collection('leads').doc(data.parentLeadId).get();
-      if (pSnapLeads.exists) {
-        const pData = pSnapLeads.data() || {};
-        parentNetSuiteId = pData.internalid || pData.netsuiteId || pData.prospectPlusId || pSnapLeads.id;
-      } else {
-        const pSnapCompanies = await db.collection('companies').doc(data.parentLeadId).get();
-        if (pSnapCompanies.exists) {
-          const pData = pSnapCompanies.data() || {};
-          parentNetSuiteId = pData.internalid || pData.netsuiteId || pData.prospectPlusId || pSnapCompanies.id;
+    if (/^\d+$/.test(String(data.parentLeadId))) {
+      parentNetSuiteId = String(data.parentLeadId);
+    } else {
+      try {
+        const pSnapLeads = await db.collection('leads').doc(data.parentLeadId).get();
+        if (pSnapLeads.exists) {
+          const pData = pSnapLeads.data() || {};
+          parentNetSuiteId = pData.internalid || pData.netsuiteId || (pData.id && /^\d+$/.test(String(pData.id)) ? String(pData.id) : undefined) || pData.prospectPlusId || pSnapLeads.id;
+        } else {
+          const pSnapCompanies = await db.collection('companies').doc(data.parentLeadId).get();
+          if (pSnapCompanies.exists) {
+            const pData = pSnapCompanies.data() || {};
+            parentNetSuiteId = pData.internalid || pData.netsuiteId || (pData.id && /^\d+$/.test(String(pData.id)) ? String(pData.id) : undefined) || pData.prospectPlusId || pSnapCompanies.id;
+          }
         }
+      } catch (e) {
+        console.warn('Failed to resolve parent NetSuite ID for re-keying:', e);
       }
-    } catch (e) {
-      console.warn('Failed to resolve parent NetSuite ID for re-keying:', e);
     }
   }
 
