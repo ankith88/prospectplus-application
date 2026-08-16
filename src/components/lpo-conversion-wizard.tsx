@@ -18,10 +18,34 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Info, X, Trash2, MapPin } from 'lucide-react';
+import { Info, X, Trash2, MapPin, AlertTriangle } from 'lucide-react';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { sendLpoConversionToNetSuite } from '@/services/netsuite';
 import { validateABN } from '@/lib/utils';
+
+// Helper to extract suburb mappings from franchisee record
+function getFranchiseeSuburbs(fran: any): any[] {
+  if (!fran) return [];
+  if (Array.isArray(fran.ausPostSuburbsJson) && fran.ausPostSuburbsJson.length > 0) {
+    return fran.ausPostSuburbsJson;
+  }
+  if (Array.isArray(fran.territoryJson) && fran.territoryJson.length > 0) {
+    return fran.territoryJson;
+  }
+  if (typeof fran.ausPostSuburbsRaw === 'string' && fran.ausPostSuburbsRaw.trim()) {
+    try {
+      const parsed = JSON.parse(fran.ausPostSuburbsRaw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (e) {}
+  }
+  if (typeof fran.custentity_ap_suburbs_json === 'string' && fran.custentity_ap_suburbs_json.trim()) {
+    try {
+      const parsed = JSON.parse(fran.custentity_ap_suburbs_json);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (e) {}
+  }
+  return [];
+}
 
 // Haversine formula for calculating distance in kilometers
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -169,21 +193,50 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
   }, [lat, lng, postcode, city, lead]);
 
   const handleLinkFranchisees = () => {
+    const unmappedNames: string[] = [];
+
     const updated = selectedFranchiseeIds.map((id) => {
       const existing = linkedFranchisees.find((lf) => lf.franchiseeId === id);
-      if (existing) return existing;
       const original = franchisees.find((f) => f.id === id);
+      const suburbs = getFranchiseeSuburbs(original || existing);
+      const franName = original?.name || original?.mainContact || existing?.name || 'Unknown Franchisee';
+
+      if (suburbs.length === 0 && !unmappedNames.includes(franName)) {
+        unmappedNames.push(franName);
+      }
+
+      if (existing) {
+        return {
+          ...existing,
+          ausPostSuburbsJson: suburbs
+        };
+      }
+
       return {
         franchiseeId: id,
-        name: original?.name || original?.mainContact || 'Unknown Franchisee',
+        name: franName,
         introducedToProgram: 'Yes',
         agreedToCommercials: 'Yes',
         canReturnBeforeCutoff: 'Yes',
         faceToFaceIntroHeld: 'Yes',
-        ausPostSuburbsJson: original?.ausPostSuburbsJson || [],
+        ausPostSuburbsJson: suburbs,
       };
     });
+
     setLinkedFranchisees(updated);
+
+    if (unmappedNames.length > 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing Suburb Mappings',
+        description: `Warning: The following franchisee(s) have NO suburb mappings assigned: ${unmappedNames.join(', ')}`
+      });
+    } else if (selectedFranchiseeIds.length > 0) {
+      toast({
+        title: 'Franchisees Linked',
+        description: `Successfully linked ${selectedFranchiseeIds.length} franchisee(s) with active suburb mappings.`
+      });
+    }
   };
 
   const handleUpdateFranchiseeField = (franchiseeId: string, field: string, value: string) => {
@@ -848,79 +901,97 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {linkedFranchisees.map((fran) => (
-                        <TableRow key={fran.franchiseeId}>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteLinkedFranchisee(fran.franchiseeId)}
-                              className="text-rose-500 hover:text-rose-700 hover:bg-rose-50"
-                            >
-                              <Trash2 className="h-4.5 w-4.5" />
-                            </Button>
-                          </TableCell>
-                          <TableCell className="font-semibold text-slate-800">{fran.name}</TableCell>
-                          
-                          <TableCell>
-                            <select
-                              value={fran.introducedToProgram}
-                              onChange={(e) => handleUpdateFranchiseeField(fran.franchiseeId, 'introducedToProgram', e.target.value)}
-                              className="border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 font-medium text-slate-800 focus:outline-none"
-                            >
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </TableCell>
+                      {linkedFranchisees.map((fran) => {
+                        const fullFran = franchisees.find(f => f.id === fran.franchiseeId);
+                        const suburbs = getFranchiseeSuburbs(fullFran || fran);
+                        const hasSuburbs = suburbs.length > 0;
 
-                          <TableCell>
-                            <select
-                              value={fran.agreedToCommercials}
-                              onChange={(e) => handleUpdateFranchiseeField(fran.franchiseeId, 'agreedToCommercials', e.target.value)}
-                              className="border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 font-medium text-slate-800 focus:outline-none"
-                            >
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </TableCell>
+                        return (
+                          <TableRow key={fran.franchiseeId}>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteLinkedFranchisee(fran.franchiseeId)}
+                                className="text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                              >
+                                <Trash2 className="h-4.5 w-4.5" />
+                              </Button>
+                            </TableCell>
+                            <TableCell className="font-semibold text-slate-800">
+                              <div>{fran.name}</div>
+                              {hasSuburbs ? (
+                                <Badge variant="secondary" className="mt-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-medium flex items-center gap-1 w-fit">
+                                  <MapPin className="h-3 w-3 text-emerald-600" />
+                                  {suburbs.length} Suburb(s) Mapped
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive" className="mt-1 bg-amber-50 text-amber-900 border border-amber-300 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                                  <AlertTriangle className="h-3 w-3 text-amber-600" />
+                                  No Suburb Mappings Assigned
+                                </Badge>
+                              )}
+                            </TableCell>
+                            
+                            <TableCell>
+                              <select
+                                value={fran.introducedToProgram}
+                                onChange={(e) => handleUpdateFranchiseeField(fran.franchiseeId, 'introducedToProgram', e.target.value)}
+                                className="border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 font-medium text-slate-800 focus:outline-none"
+                              >
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                              </select>
+                            </TableCell>
 
-                          <TableCell>
-                            <select
-                              value={fran.canReturnBeforeCutoff}
-                              onChange={(e) => handleUpdateFranchiseeField(fran.franchiseeId, 'canReturnBeforeCutoff', e.target.value)}
-                              className="border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 font-medium text-slate-800 focus:outline-none"
-                            >
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </TableCell>
+                            <TableCell>
+                              <select
+                                value={fran.agreedToCommercials}
+                                onChange={(e) => handleUpdateFranchiseeField(fran.franchiseeId, 'agreedToCommercials', e.target.value)}
+                                className="border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 font-medium text-slate-800 focus:outline-none"
+                              >
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                              </select>
+                            </TableCell>
 
-                          <TableCell>
-                            <select
-                              value={fran.faceToFaceIntroHeld}
-                              onChange={(e) => handleUpdateFranchiseeField(fran.franchiseeId, 'faceToFaceIntroHeld', e.target.value)}
-                              className="border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 font-medium text-slate-800 focus:outline-none"
-                            >
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </TableCell>
+                            <TableCell>
+                              <select
+                                value={fran.canReturnBeforeCutoff}
+                                onChange={(e) => handleUpdateFranchiseeField(fran.franchiseeId, 'canReturnBeforeCutoff', e.target.value)}
+                                className="border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 font-medium text-slate-800 focus:outline-none"
+                              >
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                              </select>
+                            </TableCell>
 
-                          <TableCell className="text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const fullFran = franchisees.find(f => f.id === fran.franchiseeId);
-                                setSuburbViewFranchisee(fullFran || fran);
-                              }}
-                              className="border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/5"
-                            >
-                              VIEW
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                            <TableCell>
+                              <select
+                                value={fran.faceToFaceIntroHeld}
+                                onChange={(e) => handleUpdateFranchiseeField(fran.franchiseeId, 'faceToFaceIntroHeld', e.target.value)}
+                                className="border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 font-medium text-slate-800 focus:outline-none"
+                              >
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                              </select>
+                            </TableCell>
+
+                            <TableCell className="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSuburbViewFranchisee(fullFran || fran);
+                                }}
+                                className="border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/5"
+                              >
+                                VIEW SUBURBS
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -965,7 +1036,8 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
         <Dialog open={!!suburbViewFranchisee} onOpenChange={() => setSuburbViewFranchisee(null)}>
           <DialogContent className="max-w-2xl bg-white p-6 rounded-xl shadow-xl z-[70]">
             <DialogHeader>
-              <DialogTitle className="text-lg font-bold text-slate-900">
+              <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-[#095c7b]" />
                 Mapped Suburbs - {suburbViewFranchisee.name || suburbViewFranchisee.mainContact}
               </DialogTitle>
               <DialogDescription>
@@ -973,33 +1045,50 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
               </DialogDescription>
             </DialogHeader>
 
-            <div className="mt-4 max-h-[300px] overflow-y-auto">
-              {!suburbViewFranchisee.ausPostSuburbsJson || suburbViewFranchisee.ausPostSuburbsJson.length === 0 ? (
-                <p className="text-sm text-slate-500 py-4 text-center">No AusPost suburbs mapped for this franchisee.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="font-semibold">Suburb</TableHead>
-                      <TableHead className="font-semibold">Post Code</TableHead>
-                      <TableHead className="font-semibold">State</TableHead>
-                      <TableHead className="font-semibold">Primary Op</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {suburbViewFranchisee.ausPostSuburbsJson.map((sub: any, idx: number) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium text-slate-800">{sub.suburbs}</TableCell>
-                        <TableCell className="text-slate-600">{sub.post_code}</TableCell>
-                        <TableCell className="text-slate-600">{sub.state}</TableCell>
-                        <TableCell className="text-slate-500">
-                          {Array.isArray(sub.primary_op) ? sub.primary_op.join(', ') : sub.primary_op}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+            <div className="mt-4 max-h-[350px] overflow-y-auto">
+              {(() => {
+                const subs = getFranchiseeSuburbs(suburbViewFranchisee);
+                if (subs.length === 0) {
+                  return (
+                    <div className="p-6 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-2">
+                      <AlertTriangle className="h-8 w-8 text-amber-600 mx-auto" />
+                      <p className="font-bold text-amber-900 text-sm">No Suburb Mappings Assigned</p>
+                      <p className="text-xs text-amber-700">This franchisee currently does not have any Australia Post suburbs mapped to their territory.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div>
+                    <div className="mb-3 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-semibold flex items-center justify-between">
+                      <span>Total Mapped Suburbs: <strong>{subs.length}</strong></span>
+                      <Badge className="bg-emerald-600 text-white">Active Territory</Badge>
+                    </div>
+                    <Table>
+                      <TableHeader className="bg-slate-100">
+                        <TableRow>
+                          <TableHead className="font-semibold text-slate-700">Suburb</TableHead>
+                          <TableHead className="font-semibold text-slate-700">Post Code</TableHead>
+                          <TableHead className="font-semibold text-slate-700">State</TableHead>
+                          <TableHead className="font-semibold text-slate-700">Primary Op</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {subs.map((sub: any, idx: number) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-medium text-slate-800">{sub.suburbs || sub.suburb || sub.name || '—'}</TableCell>
+                            <TableCell className="text-slate-600">{sub.post_code || sub.postcode || sub.zip || '—'}</TableCell>
+                            <TableCell className="text-slate-600">{sub.state || '—'}</TableCell>
+                            <TableCell className="text-slate-500 text-xs">
+                              {Array.isArray(sub.primary_op) ? sub.primary_op.join(', ') : (sub.primary_op || '—')}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="mt-6 flex justify-end">
