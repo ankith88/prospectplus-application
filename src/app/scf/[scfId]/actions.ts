@@ -74,6 +74,35 @@ export async function acceptScfAction(leadId: string, scfId: string) {
             
             const response2 = await fetch(nsUrl2, { method: "GET" });
             console.log(`[SCF Accept] NetSuite Script 2514 Response Status: ${response2.status}`);
+
+            // If LPO process lead, also sync NetSuite Scriptlets 1900 & 2514 for all child leads
+            const isLpoProcess = Boolean(
+              leadData?.isParentLead ||
+              leadData?.bucket === 'lpo_network' ||
+              leadData?.source === 'LPO Lead Conversion' ||
+              leadData?.leadSource === 'LPO Expressions of Interest'
+            );
+
+            if (isLpoProcess) {
+              try {
+                const childSnaps = await adminDb.collection('leads').where('parentLeadId', '==', leadId).get();
+                for (const cDoc of childSnaps.docs) {
+                  const cData = cDoc.data();
+                  const cNsId = cData.internalid || cData.netsuiteId || (cDoc.id && /^\d+$/.test(cDoc.id) ? cDoc.id : null);
+                  if (cNsId) {
+                    if (cData.commRegId) {
+                      const cPayload1 = { operation: "signCustomerSCF", requestParams: { comRegId: cData.commRegId } };
+                      const cNsUrl1 = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc&requestData=${encodeURIComponent(JSON.stringify(cPayload1))}`;
+                      await fetch(cNsUrl1, { method: "GET" }).catch(err => console.error(`Child Script 1900 error (${cDoc.id}):`, err));
+                    }
+                    const cNsUrl2 = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2514&deploy=1&compid=1048144&ns-at=AAEJ7tMQJhlGIUNNmxKFwd5sprCqoBuWrh_H7J14_qzpLd1ajvg&salesRep=${encodeURIComponent(salesRep)}&outcome=${encodeURIComponent('Sign Up')}&leadId=${encodeURIComponent(cNsId)}`;
+                    await fetch(cNsUrl2, { method: "GET" }).catch(err => console.error(`Child Script 2514 error (${cDoc.id}):`, err));
+                  }
+                }
+              } catch (childSyncErr) {
+                console.warn('[SCF Accept] Error syncing child leads with NetSuite API 1900/2514:', childSyncErr);
+              }
+            }
           }
         } catch (nsErr) {
           console.error(`[SCF Accept] Error calling NetSuite scriptlets:`, nsErr);

@@ -278,6 +278,81 @@ export function ServiceSelectionDialog({
     return ccList.join(', ');
   };
 
+  const triggerNetSuiteQuoteForChildLeads = async (
+    parentLead: Lead,
+    quotePayload: {
+      operation: string;
+      services: any[];
+      commDateVal: string;
+      amNameVal: string;
+      salesRepId: string;
+      contactIdVal: string;
+      salesRecordIdVal: string;
+      createShipMateAccount?: boolean;
+    }
+  ) => {
+    try {
+      const parentId = parentLead.isParentLead ? parentLead.id : (parentLead.parentLeadId || parentLead.id);
+      const childDocs: any[] = [];
+
+      const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentId));
+      const childSnap = await getDocs(qChild);
+      childSnap.docs.forEach(d => childDocs.push({ id: d.id, ...d.data() }));
+
+      if (parentLead.createdChildLeadIds && Array.isArray(parentLead.createdChildLeadIds)) {
+        for (const cId of parentLead.createdChildLeadIds) {
+          if (!childDocs.some(cd => cd.id === cId)) {
+            try {
+              const cSnap = await getDoc(doc(firestore, 'leads', cId));
+              if (cSnap.exists()) {
+                childDocs.push({ id: cSnap.id, ...cSnap.data() });
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      console.log(`[LPO Child NetSuite 1900] Triggering API 1900 for ${childDocs.length} child lead(s) of parent ${parentId}`);
+
+      for (const child of childDocs) {
+        const childNsId = child.netsuiteId || child.internalid || (child.id && /^\d+$/.test(String(child.id)) ? String(child.id) : null);
+        if (childNsId) {
+          console.log(`[LPO Child NetSuite 1900 Call] Child ${child.id} -> NetSuite Customer ID: ${childNsId}`);
+
+          submitServiceQuote({
+            operation: quotePayload.operation,
+            customerId: String(childNsId),
+            contactId: quotePayload.contactIdVal,
+            salesRecordId: child.salesRecordInternalId || quotePayload.salesRecordIdVal,
+            salesRepId: quotePayload.salesRepId,
+            services: quotePayload.services,
+            commDate: quotePayload.commDateVal,
+            accountManagerName: quotePayload.amNameVal,
+            createShipMateAccount: quotePayload.createShipMateAccount,
+          })
+            .then(async (nsRes) => {
+              console.log(`[LPO Child NetSuite 1900 Response] Child ${child.id} (${childNsId}):`, nsRes);
+              if (nsRes.success && nsRes.commRegId && nsRes.dynamicScfUrl) {
+                await updateLeadCommReg(child.id, nsRes.commRegId, nsRes.dynamicScfUrl);
+              }
+              await logActivity(child.id, {
+                type: 'Update',
+                notes: `NetSuite API 1900 quote sync triggered for LPO child lead (NetSuite Customer ID: ${childNsId}).`,
+                author: 'System'
+              });
+            })
+            .catch(async (err) => {
+              console.error(`[LPO Child NetSuite 1900 Error] Child ${child.id}:`, err);
+            });
+        } else {
+          console.warn(`[LPO Child NetSuite 1900 Skip] Child Lead ${child.id} does not have a numeric NetSuite ID yet.`);
+        }
+      }
+    } catch (err) {
+      console.error('Error triggering NetSuite API 1900 for LPO child leads:', err);
+    }
+  };
+
   useEffect(() => {
     setLocalLead(lead);
   }, [lead]);
@@ -1536,6 +1611,19 @@ export function ServiceSelectionDialog({
                   author: 'System'
                });
             });
+
+          if (isLpoProcessLead) {
+             triggerNetSuiteQuoteForChildLeads(lead, {
+                operation: opName,
+                services: servicesToPassToQuote,
+                commDateVal: commDateVal,
+                amNameVal: amNameVal,
+                salesRepId: salesRepId,
+                contactIdVal: contactIdVal,
+                salesRecordIdVal: salesRecordIdVal,
+                createShipMateAccount: values.createShipMateAccount || undefined,
+             });
+          }
         }
 
         // Map selected products with precalculated fuel surcharges to save directly on SCF document
