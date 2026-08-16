@@ -323,18 +323,30 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
             ]);
 
             let finalContacts = contacts;
-            if (contacts.length === 0 && (data.contactName || data.contactEmail || data.contactPhone)) {
-                const legacyName = typeof data.contactName === 'string' && data.contactName.trim().toLowerCase() !== 'n/a' ? data.contactName.trim() : '';
-                const legacyEmail = typeof data.contactEmail === 'string' && data.contactEmail.trim().toLowerCase() !== 'n/a' ? data.contactEmail.trim() : '';
-                const legacyPhone = typeof data.contactPhone === 'string' && data.contactPhone.trim().toLowerCase() !== 'n/a' ? data.contactPhone.trim() : '';
-                if (legacyName || legacyEmail || legacyPhone) {
-                    finalContacts = [{
-                        id: 'legacy-primary-contact',
-                        name: legacyName || 'Primary Contact',
-                        email: legacyEmail,
-                        phone: legacyPhone,
-                        isPrimary: true
-                    } as Contact];
+            if (contacts.length === 0) {
+                if (data.contacts && Array.isArray(data.contacts) && data.contacts.length > 0) {
+                    finalContacts = data.contacts.map((c: any, i: number) => ({
+                        id: c.id || `contact-${i}`,
+                        name: c.name || data.contactName || data.lpoOwnerName || 'Primary Contact',
+                        email: c.email || data.contactEmail || data.customerServiceEmail || '',
+                        phone: c.phone || c.mobile || data.contactPhone || data.customerPhone || '',
+                        mobile: c.mobile || c.phone || data.contactPhone || data.customerPhone || '',
+                        isPrimary: i === 0 || c.isPrimary
+                    }));
+                } else {
+                    const legacyName = (typeof data.contactName === 'string' && data.contactName.trim().toLowerCase() !== 'n/a') ? data.contactName.trim() : (data.lpoOwnerName || data.lpoContactName || '');
+                    const legacyEmail = (typeof data.contactEmail === 'string' && data.contactEmail.trim().toLowerCase() !== 'n/a') ? data.contactEmail.trim() : (data.customerServiceEmail || data.email || '');
+                    const legacyPhone = (typeof data.contactPhone === 'string' && data.contactPhone.trim().toLowerCase() !== 'n/a') ? data.contactPhone.trim() : (data.customerPhone || data.phone || '');
+                    if (legacyName || legacyEmail || legacyPhone) {
+                        finalContacts = [{
+                            id: 'primary-contact',
+                            name: legacyName || 'Primary Contact',
+                            email: legacyEmail,
+                            phone: legacyPhone,
+                            mobile: legacyPhone,
+                            isPrimary: true
+                        } as Contact];
+                    }
                 }
             }
 

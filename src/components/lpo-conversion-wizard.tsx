@@ -551,9 +551,30 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
         createdAt: new Date().toISOString(),
       };
 
+      // Prepare contacts list to copy
+      const contactsToCopy = (lead.contacts && Array.isArray(lead.contacts) && lead.contacts.length > 0)
+        ? lead.contacts
+        : [primaryContact];
+
       // 1. Create Parent Lead Document in 'leads' collection
-      const parentLeadDocRef = await addDoc(collection(firestore, 'leads'), parentLeadPayload);
+      const parentLeadDocRef = await addDoc(collection(firestore, 'leads'), prepareForFirestore({
+        ...parentLeadPayload,
+        contactCount: contactsToCopy.length
+      }));
       const parentLeadId = parentLeadDocRef.id;
+
+      // 1b. Create contacts subcollection under leads/{parentLeadId}/contacts
+      for (const contactObj of contactsToCopy) {
+        await addDoc(
+          collection(firestore, 'leads', parentLeadId, 'contacts'),
+          prepareForFirestore({
+            ...contactObj,
+            isPrimary: true,
+            syncedWithNetSuite: false,
+            createdAt: new Date().toISOString()
+          })
+        );
+      }
 
       // 2. Create Child Lead Documents in 'leads' collection for each linked franchisee
       const createdChildLeadIds: string[] = [];
@@ -573,11 +594,26 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
           franchisee_id: zeeId,
           franchiseeInternalId: zeeId,
           status: 'New' as const,
+          contactCount: contactsToCopy.length,
           createdAt: new Date().toISOString(),
         };
 
-        const childDocRef = await addDoc(collection(firestore, 'leads'), childLeadPayload);
-        createdChildLeadIds.push(childDocRef.id);
+        const childDocRef = await addDoc(collection(firestore, 'leads'), prepareForFirestore(childLeadPayload));
+        const childLeadId = childDocRef.id;
+        createdChildLeadIds.push(childLeadId);
+
+        // 2b. Create contacts subcollection under leads/{childLeadId}/contacts
+        for (const contactObj of contactsToCopy) {
+          await addDoc(
+            collection(firestore, 'leads', childLeadId, 'contacts'),
+            prepareForFirestore({
+              ...contactObj,
+              isPrimary: true,
+              syncedWithNetSuite: false,
+              createdAt: new Date().toISOString()
+            })
+          );
+        }
       }
 
       // 3. Update LPO Lead Document
