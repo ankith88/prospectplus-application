@@ -1493,21 +1493,53 @@ async function updateLeadStatus(
         }
         await updateDoc(leadRef, updates);
 
-        // If this is an LPO Parent Lead and status is Quote Accepted, sync to child leads
-        if (status === 'Quote Accepted' && (leadData?.isParentLead || leadData?.bucket === 'lpo_network' || leadData?.source === 'LPO Lead Conversion' || leadData?.leadSource === 'LPO Expressions of Interest')) {
+        // Synchronize status across LPO Parent and Child leads hierarchy
+        const isLpoLeadProcess = Boolean(
+            leadData?.isParentLead ||
+            leadData?.isChildLead ||
+            leadData?.bucket === 'lpo_network' ||
+            leadData?.source === 'LPO Lead Conversion' ||
+            leadData?.leadSource === 'LPO Expressions of Interest' ||
+            leadData?.lpoLeadId ||
+            leadData?.parentLeadId
+        );
+
+        if (isLpoLeadProcess) {
             try {
-                const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', leadId));
-                const childSnap = await getDocs(qChild);
-                for (const childDoc of childSnap.docs) {
-                    await updateDoc(doc(firestore, 'leads', childDoc.id), {
-                        status: 'Quote Accepted',
-                        customerStatus: 'Quote Accepted',
-                        scfAcceptedAt: now,
-                        updatedAt: new Date()
-                    }).catch(err => console.warn('Child lead status sync warning:', err));
+                const syncPayload: any = {
+                    status: status,
+                    customerStatus: status,
+                    statusReason: reason || '',
+                    updatedAt: new Date()
+                };
+                if (updates.quoteSentAt) syncPayload.quoteSentAt = updates.quoteSentAt;
+                if (updates.signedUpAt) syncPayload.signedUpAt = updates.signedUpAt;
+                if (updates.scfAcceptedAt) syncPayload.scfAcceptedAt = updates.scfAcceptedAt;
+                if (updates.trialStartedAt) syncPayload.trialStartedAt = updates.trialStartedAt;
+
+                let parentIdToSync = leadData?.isParentLead ? leadId : leadData?.parentLeadId;
+                
+                if (!parentIdToSync && !leadData?.isParentLead) {
+                    const qFindParent = query(collection(firestore, 'leads'), where('createdChildLeadIds', 'array-contains', leadId));
+                    const pSnap = await getDocs(qFindParent);
+                    if (!pSnap.empty) parentIdToSync = pSnap.docs[0].id;
+                }
+
+                if (parentIdToSync) {
+                    if (parentIdToSync !== leadId) {
+                        await updateDoc(doc(firestore, 'leads', parentIdToSync), syncPayload).catch(err => console.warn('Parent lead status sync warning:', err));
+                    }
+
+                    const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentIdToSync));
+                    const childSnap = await getDocs(qChild);
+                    for (const childDoc of childSnap.docs) {
+                        if (childDoc.id !== leadId) {
+                            await updateDoc(doc(firestore, 'leads', childDoc.id), syncPayload).catch(err => console.warn('Child lead status sync warning:', err));
+                        }
+                    }
                 }
             } catch (syncErr) {
-                console.warn('Error syncing Quote Accepted status to child leads:', syncErr);
+                console.warn('Error syncing LPO lead status across hierarchy:', syncErr);
             }
         }
 

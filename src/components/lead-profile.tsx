@@ -3756,10 +3756,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenuItem>
     ) : null;
 
+    const isQuoteAccepted = Boolean(
+        lead.status === 'Quote Accepted' ||
+        lead.customerStatus === 'Quote Accepted' ||
+        lead.scfAcceptedAt ||
+        lead.status === 'Accepted' ||
+        (lead as any).scfStatus === 'Accepted'
+    );
+
     let salesItems: React.ReactNode[] = (isMailPlusPtyLtd && !isLpoLeadProcess)
         ? []
         : (isMailPlusPtyLtd && isLpoLeadProcess)
-            ? [quoteItem].filter(Boolean)
+            ? (isQuoteAccepted ? [quoteItem, signupItem].filter(Boolean) : [quoteItem].filter(Boolean))
             : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
 
     if (salesItems.length === 0) return null;

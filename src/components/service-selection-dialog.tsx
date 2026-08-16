@@ -203,6 +203,50 @@ export function ServiceSelectionDialog({
   const [bankSearchQuery, setBankSearchQuery] = useState<string>('');
   const [h2hAddress, setH2hAddress] = useState<any | null>(null);
 
+  const resolveLpoCcEmails = async (baseCc: string) => {
+    let ccList = baseCc ? baseCc.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const isLpoProcessLead = Boolean(
+      lead?.isParentLead ||
+      lead?.isChildLead ||
+      lead?.bucket === 'lpo_network' ||
+      (lead as any)?.source === 'LPO Lead Conversion' ||
+      lead?.leadSource === 'LPO Expressions of Interest'
+    );
+
+    if (!isLpoProcessLead || !lead?.id) return baseCc;
+
+    try {
+      const parentId = lead.isParentLead ? lead.id : lead.parentLeadId;
+      if (!parentId) return baseCc;
+
+      const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentId));
+      const childSnap = await getDocs(qChild);
+
+      const franSnap = await getDocs(collection(firestore, 'franchisees'));
+      const franchiseesList = franSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+      childSnap.docs.forEach(docSnap => {
+        const childData = docSnap.data();
+        const childZeeId = childData.franchisee_id || childData.franchiseeInternalId;
+        const childZeeName = childData.franchisee;
+
+        const matchedZee = franchiseesList.find(f =>
+          (childZeeId && (String(f.id) === String(childZeeId) || String(f.internalid) === String(childZeeId))) ||
+          (childZeeName && f.name?.toLowerCase().trim() === childZeeName?.toLowerCase().trim())
+        );
+
+        const emailFound = matchedZee?.email || childData.franchiseeEmail || childData.customerServiceEmail;
+        if (emailFound && !ccList.includes(emailFound)) {
+          ccList.push(emailFound);
+        }
+      });
+    } catch (err) {
+      console.warn('Error resolving child franchisee CC emails for LPO lead:', err);
+    }
+
+    return ccList.join(', ');
+  };
+
   useEffect(() => {
     setLocalLead(lead);
   }, [lead]);
@@ -1535,11 +1579,12 @@ export function ServiceSelectionDialog({
                   
                   const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
                   const defaultSenderEmail = amUser?.email || user?.email || '';
+                  const lpoCcEmails = await resolveLpoCcEmails(franchiseeEmail);
 
                   setSelectedTemplate('custom');
                   setEmailPreviewData({
                       to: data.contactEmail,
-                      cc: franchiseeEmail,
+                      cc: lpoCcEmails,
                       bcc: '',
                       subject: '',
                       html: '<p>Hi,</p><p><br></p>',
@@ -1751,11 +1796,12 @@ export function ServiceSelectionDialog({
 
             const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
             const defaultSenderEmail = amUser?.email || user?.email || '';
+            const lpoCcEmails = await resolveLpoCcEmails(franchiseeEmail);
 
             setSelectedTemplate('custom');
             setEmailPreviewData({
                 to: signupEmailsString,
-                cc: franchiseeEmail,
+                cc: lpoCcEmails,
                 bcc: '',
                 subject: '',
                 html: '<p>Hi,</p><p><br></p>',
