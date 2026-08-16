@@ -23,6 +23,54 @@ import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { sendLpoConversionToNetSuite } from '@/services/netsuite';
 import { validateABN } from '@/lib/utils';
 
+// Helper to construct standard ServiceSelection[] array from LPO rate fields
+export function buildLpoServicesArray(ampoRate: any, pmpoRate: any, packageRate: any, additionalBagRate: any) {
+  const am = parseFloat(String(ampoRate)) || 0;
+  const pm = parseFloat(String(pmpoRate)) || 0;
+  const pkg = parseFloat(String(packageRate)) || 0;
+  const add = parseFloat(String(additionalBagRate)) || 0;
+
+  const services: any[] = [];
+  if (am > 0) {
+    services.push({
+      id: 'lpo-am-collection',
+      name: 'AM LPO Sweep & Collection',
+      frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+      rate: am,
+      quantity: 1,
+    });
+  }
+  if (pm > 0) {
+    services.push({
+      id: 'lpo-pm-collection',
+      name: 'PM LPO Sweep & Collection',
+      frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+      rate: pm,
+      quantity: 1,
+    });
+  }
+  if (pkg > 0) {
+    services.push({
+      id: 'lpo-package-delivery',
+      name: 'LPO Parcel / Package Delivery',
+      frequency: 'Adhoc',
+      rate: pkg,
+      quantity: 1,
+    });
+  }
+  if (add > 0) {
+    services.push({
+      id: 'lpo-additional-bag',
+      name: 'LPO Additional Mail Bag Service',
+      frequency: 'Adhoc',
+      rate: add,
+      quantity: 1,
+    });
+  }
+
+  return services;
+}
+
 // Helper to determine initial wizard step from lead status or conversionStep
 function getInitialStep(lead: any): number {
   if (!lead) return 1;
@@ -485,6 +533,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
         pmpoRate: parseFloat(pmpoRate) || 0,
         packageRate: parseFloat(packageRate) || 0,
         additionalBagRate: parseFloat(additionalBagRate) || 0,
+        services: buildLpoServicesArray(ampoRate, pmpoRate, packageRate, additionalBagRate),
         operatesCollectionDelivery: operatesCollectionDelivery || 'Yes',
         lastDailySweepTime: lastDailySweepTime || '02:00 pm',
         franchiseeAccess: franchiseeAccess || 'Car Park',

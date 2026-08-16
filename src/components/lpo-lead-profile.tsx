@@ -9,8 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw } from 'lucide-react';
-import { LpoConversionWizard } from './lpo-conversion-wizard';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw, Lock } from 'lucide-react';
+import { LpoConversionWizard, buildLpoServicesArray } from './lpo-conversion-wizard';
 
 interface LpoLeadProfileProps {
   initialLead: any;
@@ -34,6 +37,24 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [isEditingConversion, setIsEditingConversion] = useState(false);
 
+  // Service Rate Editing State
+  const [isEditRatesOpen, setIsEditRatesOpen] = useState(false);
+  const [editAmpo, setEditAmpo] = useState(String(lead?.ampoRate ?? '0'));
+  const [editPmpo, setEditPmpo] = useState(String(lead?.pmpoRate ?? '0'));
+  const [editPackage, setEditPackage] = useState(String(lead?.packageRate ?? '0'));
+  const [editAddBag, setEditAddBag] = useState(String(lead?.additionalBagRate ?? '0'));
+  const [savingRates, setSavingRates] = useState(false);
+
+  useEffect(() => {
+    if (lead) {
+      setEditAmpo(String(lead.ampoRate ?? '0'));
+      setEditPmpo(String(lead.pmpoRate ?? '0'));
+      setEditPackage(String(lead.packageRate ?? '0'));
+      setEditAddBag(String(lead.additionalBagRate ?? '0'));
+    }
+  }, [lead]);
+
+  const isScfAccepted = ['SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In'].includes(lead?.status || status);
   const hasLinkedCustomer = Boolean(lead.linkedLeadId || lead.linkedLeadCompanyName || lead.rawCustomerName || lead.linkedCustomerId);
 
   // Sync real-time updates for activities/notes
@@ -114,6 +135,107 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
         title: 'Error',
         description: 'Failed to add staff note.',
       });
+    }
+  };
+
+  const handleSaveServiceRates = async () => {
+    if (isScfAccepted) {
+      toast({
+        variant: 'destructive',
+        title: 'Editing Locked',
+        description: 'Service rates cannot be updated after SCF has been accepted.'
+      });
+      return;
+    }
+
+    setSavingRates(true);
+    try {
+      const am = parseFloat(editAmpo) || 0;
+      const pm = parseFloat(editPmpo) || 0;
+      const pkg = parseFloat(editPackage) || 0;
+      const add = parseFloat(editAddBag) || 0;
+
+      const newServices = buildLpoServicesArray(am, pm, pkg, add);
+
+      // 1. Update LPO Lead Document in 'lpo_leads'
+      const lpoDocRef = doc(firestore, 'lpo_leads', lead.id);
+      const updatedData = {
+        ampoRate: am,
+        pmpoRate: pm,
+        packageRate: pkg,
+        additionalBagRate: add,
+        servicesAndRates: {
+          ...(lead.servicesAndRates || {}),
+          ampoRate: am,
+          pmpoRate: pm,
+          packageRate: pkg,
+          additionalBagRate: add
+        },
+        updatedAt: serverTimestamp()
+      };
+      await updateDoc(lpoDocRef, updatedData);
+
+      // 2. Sync to linked CRM Leads (Parent Lead & Child Leads)
+      const targetParentId = lead.createdParentLeadId || lead.linkedLeadId;
+      if (targetParentId) {
+        // Update Parent Lead
+        const parentRef = doc(firestore, 'leads', targetParentId);
+        await updateDoc(parentRef, {
+          ampoRate: am,
+          pmpoRate: pm,
+          packageRate: pkg,
+          additionalBagRate: add,
+          services: newServices,
+          updatedAt: serverTimestamp()
+        }).catch((err) => console.warn('Warning updating parent lead rates:', err));
+
+        // Update Child Leads if any
+        if (lead.createdChildLeadIds && Array.isArray(lead.createdChildLeadIds)) {
+          for (const childId of lead.createdChildLeadIds) {
+            const childRef = doc(firestore, 'leads', childId);
+            await updateDoc(childRef, {
+              ampoRate: am,
+              pmpoRate: pm,
+              packageRate: pkg,
+              additionalBagRate: add,
+              services: newServices,
+              updatedAt: serverTimestamp()
+            }).catch((err) => console.warn('Warning updating child lead rates:', err));
+          }
+        }
+      }
+
+      // 3. Add activity log entry
+      await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
+        type: 'RateUpdate',
+        notes: `Agreed service rates updated: AM PO ($${am}), PM PO ($${pm}), Package ($${pkg}), Add. Bag ($${add}). Synchronized to CRM leads collection.`,
+        author: userProfile?.displayName || userProfile?.email || 'System User',
+        createdAt: serverTimestamp()
+      });
+
+      setLead((prev: any) => ({
+        ...prev,
+        ampoRate: am,
+        pmpoRate: pm,
+        packageRate: pkg,
+        additionalBagRate: add
+      }));
+
+      toast({
+        title: 'Service Rates Updated',
+        description: 'Agreed rates and CRM services array successfully updated and synchronized.'
+      });
+
+      setIsEditRatesOpen(false);
+    } catch (err) {
+      console.error('Error updating service rates:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update service rates.'
+      });
+    } finally {
+      setSavingRates(false);
     }
   };
 
@@ -356,10 +478,26 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
 
                 {/* Agreed Rates */}
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                    <DollarSign className="w-4 h-4 text-emerald-600" />
-                    Agreed Rates (Ex GST)
-                  </h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                      <DollarSign className="w-4 h-4 text-emerald-600" />
+                      Agreed Rates (Ex GST)
+                    </h4>
+                    {isScfAccepted ? (
+                      <Badge variant="outline" className="text-[10px] text-slate-500 border-slate-200 bg-slate-50 font-semibold px-2 py-0.5">
+                        <Lock className="w-3 h-3 mr-1 text-slate-400" /> Rates Locked (SCF Accepted)
+                      </Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setIsEditRatesOpen(true)}
+                        className="border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/10 text-xs font-bold py-1 h-7"
+                      >
+                        <Edit3 className="w-3 h-3 mr-1" /> Edit Rates
+                      </Button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-center">
                       <p className="text-xs text-slate-500 font-medium">AMPO Rate</p>
@@ -685,6 +823,98 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
           </Card>
         </div>
       </div>
+
+      {/* EDIT SERVICE RATES DIALOG */}
+      <Dialog open={isEditRatesOpen} onOpenChange={setIsEditRatesOpen}>
+        <DialogContent className="max-w-md bg-white rounded-xl shadow-xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-emerald-600" />
+              Update Service Rates & Sync
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Modify agreed service rates for this LPO lead. Saving will automatically update and synchronize the services and rates on all linked CRM lead records.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">AMPO Rate ($ / sweep)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editAmpo}
+                  onChange={(e) => setEditAmpo(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">PMPO Rate ($ / sweep)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editPmpo}
+                  onChange={(e) => setEditPmpo(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Package Rate ($ / parcel)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editPackage}
+                  onChange={(e) => setEditPackage(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Add. Bag Rate ($ / bag)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editAddBag}
+                  onChange={(e) => setEditAddBag(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 rounded-lg border border-amber-200/80 text-xs text-amber-900 flex items-start gap-2">
+              <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>Note: Service rates can only be modified <strong>before</strong> the Service Commencement Form (SCF) is accepted.</span>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setIsEditRatesOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveServiceRates}
+              disabled={savingRates}
+              className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold"
+            >
+              {savingRates ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Saving & Syncing...
+                </>
+              ) : (
+                'Save & Sync Service Rates'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
