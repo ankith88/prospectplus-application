@@ -509,27 +509,49 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
               <CardDescription>Details submitted by LPO owner</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50/50">
-                  <Mail className="h-5 w-5 text-slate-400" />
-                  <div>
+              {/* LPO Overview */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">LPO Details</p>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-600 text-xs font-medium">LPO Name:</span>
+                  <span className="font-bold text-slate-900 text-sm text-right">{lead.lpoName || '—'}</span>
+                </div>
+                {lead.lpoOwnerName && (
+                  <div className="flex items-center justify-between gap-2 border-t border-slate-200/50 pt-1.5">
+                    <span className="text-slate-600 text-xs font-medium">LPO Owner:</span>
+                    <span className="font-semibold text-slate-800 text-xs text-right">{lead.lpoOwnerName}</span>
+                  </div>
+                )}
+                {lead.abn && (
+                  <div className="flex items-center justify-between gap-2 border-t border-slate-200/50 pt-1.5">
+                    <span className="text-slate-600 text-xs font-medium">ABN:</span>
+                    <span className="font-mono font-semibold text-slate-800 text-xs text-right">{lead.abn}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Contact Information (Single Column with break-all to prevent overflow) */}
+              <div className="grid grid-cols-1 gap-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50/70 border border-slate-100 min-w-0 overflow-hidden">
+                  <Mail className="h-5 w-5 text-slate-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500 font-medium">Contact Email</p>
                     {userProfile?.activeRole === 'user' ? (
-                      <span className="text-sm font-semibold text-slate-800">
+                      <span className="text-xs font-semibold text-slate-800 break-all block">
                         {lead.email}
                       </span>
                     ) : (
-                      <a href={`mailto:${lead.email}`} className="text-sm font-semibold text-[#095c7b] hover:underline">
+                      <a href={`mailto:${lead.email}`} className="text-xs font-semibold text-[#095c7b] hover:underline break-all block">
                         {lead.email}
                       </a>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50/50">
-                  <Phone className="h-5 w-5 text-slate-400" />
-                  <div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50/70 border border-slate-100 min-w-0 overflow-hidden">
+                  <Phone className="h-5 w-5 text-slate-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500 font-medium">Contact Phone</p>
-                    <a href={`tel:${lead.phone}`} className="text-sm font-semibold text-[#095c7b] hover:underline">
+                    <a href={`tel:${lead.phone}`} className="text-xs font-semibold text-[#095c7b] hover:underline break-all block">
                       {lead.phone}
                     </a>
                   </div>
