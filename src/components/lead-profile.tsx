@@ -1412,6 +1412,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [ausPostLpoCompany, setAusPostLpoCompany] = useState<Lead | null>(null);
   const [lpoConnectActive, setLpoConnectActive] = useState<boolean>(false);
   const [isAusPostLoading, setIsAusPostLoading] = useState(false);
+  const [linkedLpoDoc, setLinkedLpoDoc] = useState<{ id: string; lpoName: string; status?: string } | null>(null);
   const [activeTab, setActiveTab] = useState('profile');
 
   // Quick template email states
@@ -2397,6 +2398,84 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     };
     fetchAusPostMapping();
   }, [lead.address, lead.franchisee_id]);
+
+  useEffect(() => {
+    if (!lead?.id) return;
+    const fetchLinkedLpoLead = async () => {
+      try {
+        // 1. Direct field check
+        const directId = lead.lpoLeadId || lead.linkedLpoLeadId;
+        if (directId) {
+          const docSnap = await getDoc(doc(firestore, 'lpo_leads', directId));
+          if (docSnap.exists()) {
+            setLinkedLpoDoc({
+              id: docSnap.id,
+              lpoName: docSnap.data().lpoName || docSnap.data().companyName || 'LPO Lead',
+              status: docSnap.data().status
+            });
+            return;
+          }
+        }
+
+        // 2. Query lpo_leads where createdParentLeadId == lead.id
+        const q1 = query(collection(firestore, 'lpo_leads'), where('createdParentLeadId', '==', lead.id));
+        const snap1 = await getDocs(q1);
+        if (!snap1.empty) {
+          const d = snap1.docs[0];
+          setLinkedLpoDoc({
+            id: d.id,
+            lpoName: d.data().lpoName || d.data().companyName || 'LPO Lead',
+            status: d.data().status
+          });
+          return;
+        }
+
+        // 3. Query lpo_leads where createdChildLeadIds array-contains lead.id
+        const q2 = query(collection(firestore, 'lpo_leads'), where('createdChildLeadIds', 'array-contains', lead.id));
+        const snap2 = await getDocs(q2);
+        if (!snap2.empty) {
+          const d = snap2.docs[0];
+          setLinkedLpoDoc({
+            id: d.id,
+            lpoName: d.data().lpoName || d.data().companyName || 'LPO Lead',
+            status: d.data().status
+          });
+          return;
+        }
+
+        // 4. Query lpo_leads where linkedLeadId == lead.id
+        const q3 = query(collection(firestore, 'lpo_leads'), where('linkedLeadId', '==', lead.id));
+        const snap3 = await getDocs(q3);
+        if (!snap3.empty) {
+          const d = snap3.docs[0];
+          setLinkedLpoDoc({
+            id: d.id,
+            lpoName: d.data().lpoName || d.data().companyName || 'LPO Lead',
+            status: d.data().status
+          });
+          return;
+        }
+
+        // 5. Query lpo_leads where createdParentLeadId == lead.parentLeadId (for child leads)
+        if (lead.parentLeadId) {
+          const q4 = query(collection(firestore, 'lpo_leads'), where('createdParentLeadId', '==', lead.parentLeadId));
+          const snap4 = await getDocs(q4);
+          if (!snap4.empty) {
+            const d = snap4.docs[0];
+            setLinkedLpoDoc({
+              id: d.id,
+              lpoName: d.data().lpoName || d.data().companyName || 'LPO Lead',
+              status: d.data().status
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching linked LPO lead document:', err);
+      }
+    };
+    fetchLinkedLpoLead();
+  }, [lead?.id, lead?.lpoLeadId, lead?.linkedLpoLeadId, lead?.parentLeadId]);
 
   const handleCallLogged = async (newStatus?: LeadStatus, outcome?: string) => {
     if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
@@ -5081,33 +5160,48 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                      <CardDescription>Manage My Post Business account status and view the automatically linked LPO based on the lead's address. <span className="text-destructive font-medium text-xs">Account information is mandatory.</span></CardDescription>
                   </CardHeader>
                 <CardContent className="pt-6 space-y-4">
-                      {/* Linked LPO Lead info box if converted from LPO lead */}
-                      {(lead.lpoLeadId || lead.linkedLpoLeadId || lead.lpoLeadName) && (
-                          <div className="p-4 bg-teal-50/70 rounded-lg border border-teal-200/80 space-y-2 shadow-2xs">
-                              <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
-                                      <Building className="h-4 w-4 text-[#095c7b]" />
-                                      Linked LPO Onboarding Lead
-                                  </span>
-                                  {(lead.lpoLeadId || lead.linkedLpoLeadId) && (
-                                      <Badge className="bg-[#095c7b] text-white text-[10px] font-mono">
-                                          ID: {lead.lpoLeadId || lead.linkedLpoLeadId}
-                                      </Badge>
-                                  )}
+                      {/* Linked LPO Lead info box if converted from LPO lead or linked to LPO process */}
+                      {(() => {
+                          const lpoId = linkedLpoDoc?.id || lead.lpoLeadId || lead.linkedLpoLeadId || (lead.companyName?.includes('LPO') || lead.isParentLead || lead.bucket === 'lpo_network' ? ausPostParentLpoId : null);
+                          const lpoName = linkedLpoDoc?.lpoName || lead.lpoLeadName || lead.lpoName || (lpoId === ausPostParentLpoId ? ausPostLpoName : null) || (lpoId ? `LPO Lead (${lpoId})` : null);
+                          const lpoStatus = linkedLpoDoc?.status;
+
+                          if (!lpoId && !lpoName) return null;
+
+                          return (
+                              <div className="p-4 bg-teal-50/90 rounded-xl border-2 border-teal-200 space-y-2 shadow-sm mb-2">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                                          <Building className="h-4 w-4 text-[#095c7b]" />
+                                          Linked LPO Onboarding Lead
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                          {lpoStatus && (
+                                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold text-xs">
+                                                  {lpoStatus}
+                                              </Badge>
+                                          )}
+                                          {lpoId && (
+                                              <Badge className="bg-[#095c7b] text-white text-xs font-mono px-2 py-0.5">
+                                                  LPO ID: {lpoId}
+                                              </Badge>
+                                          )}
+                                      </div>
+                                  </div>
+                                  <div className="flex items-center justify-between pt-1">
+                                      <a 
+                                          href={lpoId ? `/lpo-leads/${lpoId}` : `/lpo-leads`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="text-base font-bold text-slate-900 hover:text-[#095c7b] hover:underline flex items-center gap-1.5"
+                                      >
+                                          {lpoName || 'View Linked LPO Lead Profile'}
+                                          <ArrowUpRight className="h-4 w-4 text-[#095c7b]" />
+                                      </a>
+                                  </div>
                               </div>
-                              <div className="flex items-center justify-between pt-1">
-                                  <a 
-                                      href={`/lpo-leads/${lead.lpoLeadId || lead.linkedLpoLeadId}`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-sm font-bold text-slate-800 hover:text-[#095c7b] hover:underline flex items-center gap-1"
-                                  >
-                                      {lead.lpoLeadName || lead.lpoName || 'View Linked LPO Lead Profile'}
-                                      <ArrowUpRight className="h-3.5 w-3.5 text-[#095c7b]" />
-                                  </a>
-                              </div>
-                          </div>
-                      )}
+                          );
+                      })()}
                       <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
                           <div className="flex flex-col gap-1">
                               <span className="text-sm font-semibold">
