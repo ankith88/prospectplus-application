@@ -55,6 +55,7 @@ import {
   Clock,
   CheckCircle2,
   ExternalLink,
+  ArrowUpRight,
   FileText,
   Loader2,
   ArrowRight,
