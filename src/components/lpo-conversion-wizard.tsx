@@ -317,6 +317,12 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
           updatedAt: serverTimestamp()
         };
         await updateDoc(docRef, step1Data);
+        await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
+          type: 'StepProgress',
+          notes: `Step 1 completed: Linked to Partner Location "${selectedPartnerLocation?.name || 'Partner Location'}" (ABN: ${abn.trim()}). Status updated to "Linked to Partner Location".`,
+          author: 'System User',
+          createdAt: serverTimestamp()
+        });
         onSuccess({ id: lead.id, ...step1Data });
       } else if (step === 2) {
         const step2Data = {
@@ -330,6 +336,12 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
           updatedAt: serverTimestamp()
         };
         await updateDoc(docRef, step2Data);
+        await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
+          type: 'StepProgress',
+          notes: `Step 2 completed: Onboarding status recorded (Inducted by Kerry: ${inductedByKerry}, AM PO: $${ampoRate}, PM PO: $${pmpoRate}). Status updated to "Induction".`,
+          author: 'System User',
+          createdAt: serverTimestamp()
+        });
         onSuccess({ id: lead.id, ...step2Data });
       } else if (step === 3) {
         const step3Data = {
@@ -341,6 +353,12 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
           updatedAt: serverTimestamp()
         };
         await updateDoc(docRef, step3Data);
+        await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
+          type: 'StepProgress',
+          notes: `Step 3 completed: Operations setup recorded (Collection & Delivery: ${operatesCollectionDelivery}, Sweep Time: ${lastDailySweepTime}). Status updated to "Operations Setup".`,
+          author: 'System User',
+          createdAt: serverTimestamp()
+        });
         onSuccess({ id: lead.id, ...step3Data });
       }
       setStep((s: number) => s + 1);
@@ -403,20 +421,15 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
       const lastName = nameParts.slice(1).join(' ') || 'Owner';
 
       const primaryContact = {
-        id: `contact-${Date.now()}-1`,
-        name: lpoOwnerName || 'LPO Contact',
-        firstName,
-        lastName,
-        email: email || '',
-        phone: phone || '',
-        title: 'LPO Owner / Manager',
+        name: lpoOwnerName || lead.lpoOwnerName || 'LPO Owner',
+        email: email || lead.email || '',
+        phone: phone || lead.phone || '',
+        mobile: phone || lead.phone || '',
         isPrimary: true,
-        syncedWithNetSuite: false
       };
 
       const leadAddress = {
-        address1: address1 || '',
-        street: address2 ? `${address1} ${address2}`.trim() : (address1 || ''),
+        street: [address1, address2].filter(Boolean).join(', ') || '',
         city: city || '',
         state: state || '',
         zip: postcode || '',
@@ -447,6 +460,13 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
         franchisee: 'MailPlus Pty Ltd',
         franchisee_id: '435',
         franchiseeInternalId: '435',
+
+        // Lead Assigned to Kerry O'Neill
+        assignedTo: "Kerry O'Neill",
+        assignedToName: "Kerry O'Neill",
+        assignedToEmail: "kerry.oneill@mailplus.com.au",
+        accountManagerAssigned: "Kerry O'Neill",
+        salesRep: "Kerry O'Neill",
         
         // Hierarchy & Bucket
         parentLeadId: null,

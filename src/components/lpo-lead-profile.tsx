@@ -535,36 +535,45 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                 </div>
               </div>
 
-              {hasLinkedCustomer && (
+              {(hasLinkedCustomer || lead.createdParentLeadId || lead.linkedLeadId) && (
                 <div className="space-y-3">
                   <h3 className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
                     <Building className="h-4 w-4 text-[#095c7b]" />
-                    Linked CRM Customer / Lead
+                    Linked CRM Lead & Quotes
                   </h3>
-                  <div className="p-4 border border-blue-200/70 rounded-lg bg-blue-50/40 text-sm space-y-2">
-                    <p>
-                      <span className="text-slate-500 font-medium">Company / Name:</span>{' '}
-                      <span className="font-bold text-slate-900">{lead.linkedLeadCompanyName || lead.rawCustomerName || 'Linked Customer'}</span>
-                    </p>
-                    {lead.linkedCustomerId && (
-                      <p>
-                        <span className="text-slate-500 font-medium">Customer Entity ID:</span>{' '}
-                        <span className="font-mono font-bold text-[#095c7b]">{lead.linkedCustomerId}</span>
-                      </p>
-                    )}
-                    {lead.linkedLeadId && (
-                      <p className="pt-1">
-                        <a 
-                          href={`/leads/${lead.linkedLeadId}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="text-xs font-bold text-[#095c7b] hover:underline inline-flex items-center gap-1 bg-white px-2.5 py-1 rounded border border-blue-200 shadow-xs"
-                        >
-                          View CRM Lead Profile
-                          <ArrowUpRight className="h-3 w-3" />
-                        </a>
-                      </p>
-                    )}
+                  <div className="p-4 border border-blue-200/80 rounded-xl bg-blue-50/50 text-xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 text-sm">{lead.lpoName || lead.linkedLeadCompanyName || lead.rawCustomerName || 'LPO Parent Lead'}</span>
+                      <Badge className="bg-[#095c7b] text-white text-[10px] font-semibold">LPO Network</Badge>
+                    </div>
+                    <div className="space-y-1 text-slate-600">
+                      <p><span className="text-slate-500 font-medium">Assigned Account Manager:</span> <strong className="text-slate-900 font-semibold">Kerry O'Neill</strong></p>
+                      <p><span className="text-slate-500 font-medium">Assigned Franchisee:</span> <strong className="text-slate-800">MailPlus Pty Ltd (435)</strong></p>
+                      {lead.linkedCustomerId && (
+                        <p><span className="text-slate-500 font-medium">Customer Entity ID:</span> <span className="font-mono font-bold text-[#095c7b]">{lead.linkedCustomerId}</span></p>
+                      )}
+                    </div>
+                    <div className="pt-2 border-t border-blue-200/60 flex items-center gap-2 flex-wrap">
+                      <a 
+                        href={`/leads/${lead.createdParentLeadId || lead.linkedLeadId}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-xs font-bold text-[#095c7b] hover:bg-[#095c7b]/10 bg-white px-3 py-1.5 rounded-lg border border-[#095c7b]/30 inline-flex items-center gap-1 shadow-xs transition-colors"
+                      >
+                        View CRM Lead Profile
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </a>
+                      <a 
+                        href={`/leads/${lead.createdParentLeadId || lead.linkedLeadId}?tab=scf`} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-xs font-bold text-emerald-800 hover:bg-emerald-100 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-300 inline-flex items-center gap-1 shadow-xs transition-colors"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                        Send Quote / Create SCF
+                        <ArrowUpRight className="h-3.5 w-3.5 text-emerald-600" />
+                      </a>
+                    </div>
                   </div>
                 </div>
               )}
