@@ -1097,7 +1097,7 @@ export default function LpoLeadsListPage() {
             <form onSubmit={handleCreateLpoLead} className="space-y-4 mt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-700">LPO Location / Name *</Label>
+                  <Label className="text-xs font-semibold text-slate-700">LPO Location / Name <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <Input 
                     required 
                     placeholder="e.g. Chatswood West LPO" 
@@ -1106,7 +1106,7 @@ export default function LpoLeadsListPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-700">LPO Owner Name *</Label>
+                  <Label className="text-xs font-semibold text-slate-700">LPO Owner Name <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <Input 
                     required 
                     placeholder="e.g. John Smith" 
@@ -1115,7 +1115,7 @@ export default function LpoLeadsListPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-700">Email Address *</Label>
+                  <Label className="text-xs font-semibold text-slate-700">Email Address <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <Input 
                     required 
                     type="email" 
@@ -1125,7 +1125,7 @@ export default function LpoLeadsListPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-700">Phone Number *</Label>
+                  <Label className="text-xs font-semibold text-slate-700">Phone Number <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <Input 
                     required 
                     placeholder="e.g. 0412 345 678" 

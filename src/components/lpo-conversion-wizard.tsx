@@ -536,23 +536,23 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm">
                 <div className="space-y-2">
-                  <Label htmlFor="lpoName" className="font-semibold text-slate-700">LPO Name *</Label>
+                  <Label htmlFor="lpoName" className="font-semibold text-slate-700">LPO Name <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <Input id="lpoName" value={lpoName} onChange={(e) => setLpoName(e.target.value)} className="focus-visible:ring-[#095c7b]" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lpoOwner" className="font-semibold text-slate-700">LPO Owner Name *</Label>
+                  <Label htmlFor="lpoOwner" className="font-semibold text-slate-700">LPO Owner Name <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <Input id="lpoOwner" value={lpoOwnerName} onChange={(e) => setLpoOwnerName(e.target.value)} className="focus-visible:ring-[#095c7b]" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="font-semibold text-slate-700">Contact Email *</Label>
+                  <Label htmlFor="email" className="font-semibold text-slate-700">Contact Email <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="focus-visible:ring-[#095c7b]" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone" className="font-semibold text-slate-700">Contact Phone *</Label>
+                  <Label htmlFor="phone" className="font-semibold text-slate-700">Contact Phone <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="focus-visible:ring-[#095c7b]" />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="abn" className="font-semibold text-slate-700">ABN (Australian Business Number) *</Label>
+                  <Label htmlFor="abn" className="font-semibold text-slate-700">ABN (Australian Business Number) <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <Input 
                     id="abn" 
                     value={abn} 
@@ -580,15 +580,15 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
                 </div>
                 <div className="grid grid-cols-3 gap-2 md:col-span-2">
                   <div className="space-y-2">
-                    <Label htmlFor="city" className="font-semibold text-slate-700">Suburb *</Label>
+                    <Label htmlFor="city" className="font-semibold text-slate-700">Suburb <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                     <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} className="focus-visible:ring-[#095c7b]" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="state" className="font-semibold text-slate-700">State *</Label>
+                    <Label htmlFor="state" className="font-semibold text-slate-700">State <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                     <Input id="state" value={state} onChange={(e) => setState(e.target.value)} className="focus-visible:ring-[#095c7b]" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="postcode" className="font-semibold text-slate-700">Postcode *</Label>
+                    <Label htmlFor="postcode" className="font-semibold text-slate-700">Postcode <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                     <Input id="postcode" value={postcode} onChange={(e) => setPostcode(e.target.value)} className="focus-visible:ring-[#095c7b]" />
                   </div>
                 </div>
@@ -678,7 +678,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
           {step === 2 && (
             <div className="space-y-6">
               <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-3">
-                <Label className="font-semibold text-slate-700 block">Has the LPO been Inducted by Kerry? *</Label>
+                <Label className="font-semibold text-slate-700 block">Has the LPO been Inducted by Kerry? <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                 <select
                   value={inductedByKerry}
                   onChange={(e) => setInductedByKerry(e.target.value)}
@@ -707,7 +707,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
                       <TableCell className="text-slate-500 text-xs">One-Way: LPO Pickup & Site Delivery</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                          <span className="text-rose-500 font-bold">$*</span>
+                          <span className="text-rose-500 font-bold">$</span>
                           <input
                             type="text"
                             value={ampoRate}
@@ -725,7 +725,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
                       <TableCell className="text-slate-500 text-xs">One-Way: Site Pickup & LPO Lodgement</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                          <span className="text-rose-500 font-bold">$*</span>
+                          <span className="text-rose-500 font-bold">$</span>
                           <input
                             type="text"
                             value={pmpoRate}
@@ -743,7 +743,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
                       <TableCell className="text-slate-500 text-xs">Round Trip: Site ↔ LPO Pickup & Delivery</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                          <span className="text-rose-500 font-bold">$*</span>
+                          <span className="text-rose-500 font-bold">$</span>
                           <input
                             type="text"
                             value={packageRate}
@@ -761,7 +761,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
                       <TableCell className="text-slate-500 text-xs">—</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                          <span className="text-rose-500 font-bold">$*</span>
+                          <span className="text-rose-500 font-bold">$</span>
                           <input
                             type="text"
                             value={additionalBagRate}
@@ -786,7 +786,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
             <div className="space-y-6">
               <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
                 <div className="space-y-2">
-                  <Label className="font-semibold text-slate-700">Does the LPO currently operate it's own collection and delivery service? *</Label>
+                  <Label className="font-semibold text-slate-700">Does the LPO currently operate it's own collection and delivery service? <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <select
                     value={operatesCollectionDelivery}
                     onChange={(e) => setOperatesCollectionDelivery(e.target.value)}
@@ -799,7 +799,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="sweepTime" className="font-semibold text-slate-700">Last Daily Sweep Time for Red Van *</Label>
+                    <Label htmlFor="sweepTime" className="font-semibold text-slate-700">Last Daily Sweep Time for Red Van <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                     <Input id="sweepTime" value={lastDailySweepTime} onChange={(e) => setLastDailySweepTime(e.target.value)} placeholder="02:00 pm" className="focus-visible:ring-[#095c7b]" />
                   </div>
                   <div className="space-y-2">
@@ -817,7 +817,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
               {/* Franchisee Link Form */}
               <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
                 <div className="space-y-2">
-                  <Label className="font-semibold text-slate-700">Select MailPlus Franchisees *</Label>
+                  <Label className="font-semibold text-slate-700">Select MailPlus Franchisees <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                   <MultiSelectCombobox
                     options={franchisees.map(f => ({ value: f.id, label: f.name || f.mainContact || 'Unknown' }))}
                     selected={selectedFranchiseeIds}
