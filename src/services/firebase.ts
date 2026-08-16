@@ -3747,15 +3747,37 @@ export async function syncLpoHierarchyWithNetSuite(parentLeadId: string): Promis
 
         for (const [leadId, item] of Array.from(allLeadsMap.entries())) {
             const lData = item.data;
+            const rawContactName = lData.contactName || lData.lpoOwnerName || (lData.contacts && lData.contacts[0]?.name) || 'Primary Contact';
+            const nameParts = rawContactName.trim().split(' ');
+            const firstName = nameParts[0] || 'Primary';
+            const lastName = nameParts.slice(1).join(' ') || 'Contact';
+
+            const contactObj = {
+                firstName: firstName,
+                lastName: lastName,
+                title: lData.contactTitle || (lData.contacts && lData.contacts[0]?.title) || 'Primary Contact',
+                email: lData.contactEmail || lData.customerServiceEmail || lData.email || (lData.contacts && lData.contacts[0]?.email) || '',
+                phone: lData.contactPhone || lData.customerPhone || lData.phone || (lData.contacts && lData.contacts[0]?.phone) || ''
+            };
+
+            const addressObj = lData.address || {
+                street: lData.street || lData.address1 || '',
+                address1: lData.address1 || lData.street || '',
+                city: lData.city || lData.suburb || '',
+                state: lData.state || '',
+                zip: lData.zip || lData.postcode || '',
+                country: 'Australia'
+            };
+
             const nsPayload = {
-                leadId: leadId,
                 companyName: lData.companyName || lData.lpoName || 'LPO Lead',
-                contactName: lData.contactName || lData.lpoOwnerName || 'Primary Contact',
-                contactEmail: lData.contactEmail || lData.customerServiceEmail || lData.email || '',
-                contactPhone: lData.contactPhone || lData.customerPhone || lData.phone || '',
-                address: lData.address || {},
-                franchisee: lData.franchisee || '',
-                franchisee_id: lData.franchisee_id || lData.franchiseeInternalId || '',
+                customerServiceEmail: contactObj.email,
+                customerPhone: contactObj.phone,
+                abn: lData.abn || '',
+                address: addressObj,
+                contact: contactObj,
+                franchiseeName: lData.franchisee || '',
+                franchiseeInternalId: lData.franchisee_id || lData.franchiseeInternalId || '',
                 leadType: 'Service',
                 source: 'LPO Lead Conversion',
                 leadSource: 'LPO Expressions of Interest',
