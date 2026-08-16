@@ -947,13 +947,13 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         params.append('parentCustomer', effectiveParentId);
     }
 
-    if (address.address1) {
+    if (address?.address1) {
         params.append('billaddr2', address.address1);
     }
-    if (address.lat) {
+    if (address?.lat) {
         params.append('custentity_addr_lat', String(address.lat));
     }
-    if (address.lng) {
+    if (address?.lng) {
         params.append('custentity_addr_long', String(address.lng));
     }
     if (initialNotes) {
