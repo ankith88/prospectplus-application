@@ -18,10 +18,28 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Info, X, Trash2, MapPin, AlertTriangle } from 'lucide-react';
+import { Info, X, Trash2, MapPin, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { sendLpoConversionToNetSuite } from '@/services/netsuite';
 import { validateABN } from '@/lib/utils';
+
+// Helper to determine initial wizard step from lead status or conversionStep
+function getInitialStep(lead: any): number {
+  if (typeof lead?.conversionStep === 'number' && lead.conversionStep >= 1 && lead.conversionStep <= 4) {
+    return lead.conversionStep;
+  }
+  const status = (lead?.status || '').trim();
+  if (['Franchisees Assigned', 'Franchisee Readiness', 'Completed'].includes(status)) {
+    return 4;
+  }
+  if (['Operations Setup', 'Operations Overview', 'Operations'].includes(status)) {
+    return 3;
+  }
+  if (['Induction', 'Service Selection', 'Onboarding Status'].includes(status)) {
+    return 2;
+  }
+  return 1;
+}
 
 // Helper to extract suburb mappings from franchisee record
 function getFranchiseeSuburbs(fran: any): any[] {
@@ -70,7 +88,7 @@ interface LpoConversionWizardProps {
 export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [step, setStep] = useState(lead.conversionStep || 1);
+  const [step, setStep] = useState(() => getInitialStep(lead));
   const [loading, setLoading] = useState(false);
 
   // Step 1: LPO Lead info & Partner location linking
@@ -566,19 +584,72 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
   return (
     <div className="w-full bg-[#f4f7f8] overflow-hidden shadow-sm rounded-2xl border border-slate-200/80">
       
-      {/* Sage-green theme wrapping */}
-      <div className="bg-[#eef6ed] p-6 border-b border-[#095c7b]/10 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-[#095c7b] bg-[#095c7b]/10 px-3 py-1 rounded-full">
-            Step {step} of 4
-          </span>
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-1.5">
-            {step === 1 && 'LPO Information'}
-            {step === 2 && 'Onboarding Status'}
-            {step === 3 && 'Operations Overview'}
-            {step === 4 && 'Franchisee Information & Readiness'}
-            <Info className="h-4.5 w-4.5 text-[#095c7b] cursor-pointer" />
-          </h2>
+      {/* Interactive Stepper Navigation Bar */}
+      <div className="bg-[#eef6ed] p-5 border-b border-[#095c7b]/10 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              {step === 1 && 'Step 1: LPO Information & Location'}
+              {step === 2 && 'Step 2: Onboarding & Service Rates'}
+              {step === 3 && 'Step 3: Operations Overview'}
+              {step === 4 && 'Step 4: Franchisee Linkage & Readiness'}
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Click any step pill below to jump directly to that step for editing.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 bg-white/70 backdrop-blur px-3 py-1 rounded-full border border-slate-200 text-xs font-semibold text-[#095c7b]">
+            <Info className="h-4 w-4" />
+            <span>Active Progress: Step {getInitialStep(lead)} of 4</span>
+          </div>
+        </div>
+
+        {/* 4-Step Pill Navigation Bar */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1">
+          {[
+            { num: 1, title: 'LPO Information', desc: 'Owner, ABN, Address' },
+            { num: 2, title: 'Onboarding & Rates', desc: 'Induction & Pricing' },
+            { num: 3, title: 'Operations', desc: 'Sweep & Access' },
+            { num: 4, title: 'Franchisees', desc: 'Readiness Checklist' }
+          ].map((s) => {
+            const isActive = step === s.num;
+            const initialProgress = getInitialStep(lead);
+            const isCompleted = s.num < initialProgress || (s.num < 4 && (lead?.conversionStep || 1) > s.num);
+
+            return (
+              <button
+                key={s.num}
+                type="button"
+                onClick={() => setStep(s.num)}
+                className={`p-3 rounded-xl border text-left transition-all duration-150 relative overflow-hidden group ${
+                  isActive
+                    ? 'bg-[#095c7b] text-white border-[#095c7b] shadow-md ring-2 ring-[#095c7b]/20'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/90 shadow-sm hover:border-[#095c7b]/40'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                    isActive
+                      ? 'bg-white/20 text-white'
+                      : 'bg-slate-100 text-slate-600 group-hover:bg-[#095c7b]/10 group-hover:text-[#095c7b]'
+                  }`}>
+                    Step {s.num}
+                  </span>
+                  {isCompleted && !isActive && (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  )}
+                  {isActive && (
+                    <span className="w-2 h-2 rounded-full bg-[#eaf143] animate-pulse" />
+                  )}
+                </div>
+                <div className="font-bold text-xs mt-2 line-clamp-1">{s.title}</div>
+                <div className={`text-[10px] line-clamp-1 mt-0.5 ${isActive ? 'text-slate-200' : 'text-slate-400'}`}>
+                  {s.desc}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
