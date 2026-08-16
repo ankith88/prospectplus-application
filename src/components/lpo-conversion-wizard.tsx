@@ -25,19 +25,26 @@ import { validateABN } from '@/lib/utils';
 
 // Helper to determine initial wizard step from lead status or conversionStep
 function getInitialStep(lead: any): number {
-  if (typeof lead?.conversionStep === 'number' && lead.conversionStep >= 1 && lead.conversionStep <= 4) {
-    return lead.conversionStep;
-  }
-  const status = (lead?.status || '').trim();
-  if (['Franchisees Assigned', 'Franchisee Readiness', 'Completed'].includes(status)) {
+  if (!lead) return 1;
+
+  // Check salesProcess and status fields first with case-insensitive matching
+  const statusStr = (lead.salesProcess || lead.status || lead.stage || '').toLowerCase().trim();
+
+  if (statusStr.includes('franchisee') || statusStr.includes('readiness') || statusStr.includes('completed')) {
     return 4;
   }
-  if (['Operations Setup', 'Operations Overview', 'Operations'].includes(status)) {
+  if (statusStr.includes('operation')) {
     return 3;
   }
-  if (['Induction', 'Service Selection', 'Onboarding Status'].includes(status)) {
+  if (statusStr.includes('induction') || statusStr.includes('service') || statusStr.includes('rate') || statusStr.includes('onboarding')) {
     return 2;
   }
+
+  // Fallback to conversionStep if present
+  if (typeof lead.conversionStep === 'number' && lead.conversionStep >= 1 && lead.conversionStep <= 4) {
+    return lead.conversionStep;
+  }
+
   return 1;
 }
 
