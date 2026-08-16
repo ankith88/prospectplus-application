@@ -203,6 +203,8 @@ export function ServiceSelectionDialog({
   const [bankSearchQuery, setBankSearchQuery] = useState<string>('');
   const [h2hAddress, setH2hAddress] = useState<any | null>(null);
 
+  const [lpoChildFranchiseeEmails, setLpoChildFranchiseeEmails] = useState<string>('');
+
   const resolveLpoCcEmails = async (baseCc: string) => {
     let ccList = baseCc ? baseCc.split(',').map(s => s.trim()).filter(Boolean) : [];
     const isLpoProcessLead = Boolean(
@@ -210,36 +212,65 @@ export function ServiceSelectionDialog({
       lead?.isChildLead ||
       lead?.bucket === 'lpo_network' ||
       (lead as any)?.source === 'LPO Lead Conversion' ||
-      lead?.leadSource === 'LPO Expressions of Interest'
+      lead?.leadSource === 'LPO Expressions of Interest' ||
+      lead?.lpoLeadId ||
+      lead?.parentLeadId
     );
 
     if (!isLpoProcessLead || !lead?.id) return baseCc;
 
     try {
-      const parentId = lead.isParentLead ? lead.id : lead.parentLeadId;
-      if (!parentId) return baseCc;
+      const parentId = lead.isParentLead ? lead.id : (lead.parentLeadId || lead.id);
+      const childDocs: any[] = [];
 
-      const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentId));
-      const childSnap = await getDocs(qChild);
+      if (parentId) {
+        const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentId));
+        const childSnap = await getDocs(qChild);
+        childSnap.docs.forEach(d => childDocs.push({ id: d.id, ...d.data() }));
+      }
+
+      const createdChildIds = lead.createdChildLeadIds || [];
+      if (Array.isArray(createdChildIds)) {
+        for (const childId of createdChildIds) {
+          if (!childDocs.some(d => d.id === childId)) {
+            try {
+              const cSnap = await getDoc(doc(firestore, 'leads', childId));
+              if (cSnap.exists()) childDocs.push({ id: cSnap.id, ...cSnap.data() });
+            } catch (e) {}
+          }
+        }
+      }
 
       const franSnap = await getDocs(collection(firestore, 'franchisees'));
       const franchiseesList = franSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
-      childSnap.docs.forEach(docSnap => {
-        const childData = docSnap.data();
-        const childZeeId = childData.franchisee_id || childData.franchiseeInternalId;
-        const childZeeName = childData.franchisee;
+      for (const childData of childDocs) {
+        if (childData.id === lead.id) continue;
 
-        const matchedZee = franchiseesList.find(f =>
-          (childZeeId && (String(f.id) === String(childZeeId) || String(f.internalid) === String(childZeeId))) ||
-          (childZeeName && f.name?.toLowerCase().trim() === childZeeName?.toLowerCase().trim())
-        );
+        let emailFound = childData.franchiseeEmail;
 
-        const emailFound = matchedZee?.email || childData.franchiseeEmail || childData.customerServiceEmail;
+        if (!emailFound) {
+          const childZeeId = childData.franchisee_id || childData.franchiseeInternalId;
+          const childZeeName = childData.franchisee;
+
+          const matchedZee = franchiseesList.find(f =>
+            (childZeeId && (String(f.id) === String(childZeeId) || String(f.internalid) === String(childZeeId) || String(f.internalId) === String(childZeeId))) ||
+            (childZeeName && f.name?.toLowerCase().trim() === childZeeName?.toLowerCase().trim())
+          );
+
+          if (matchedZee?.email) {
+            emailFound = matchedZee.email;
+          }
+        }
+
+        if (!emailFound && childData.customerServiceEmail && childData.customerServiceEmail.includes('@mailplus.com.au')) {
+          emailFound = childData.customerServiceEmail;
+        }
+
         if (emailFound && !ccList.includes(emailFound)) {
           ccList.push(emailFound);
         }
-      });
+      }
     } catch (err) {
       console.warn('Error resolving child franchisee CC emails for LPO lead:', err);
     }
@@ -250,6 +281,20 @@ export function ServiceSelectionDialog({
   useEffect(() => {
     setLocalLead(lead);
   }, [lead]);
+
+  useEffect(() => {
+    if (isOpen && lead) {
+      resolveLpoCcEmails(franchiseeEmail).then(resolvedCc => {
+        if (resolvedCc) {
+          setLpoChildFranchiseeEmails(resolvedCc);
+          setEmailPreviewData(prev => ({
+            ...prev,
+            cc: resolvedCc
+          }));
+        }
+      });
+    }
+  }, [isOpen, lead, franchiseeEmail]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -2104,6 +2149,11 @@ export function ServiceSelectionDialog({
                       placeholder="e.g. manager@mailplus.com.au"
                     />
                     <div className="flex flex-col gap-1 mt-1">
+                      {lpoChildFranchiseeEmails && !emailPreviewData.cc.includes(lpoChildFranchiseeEmails) && (
+                        <p className="text-xs text-muted-foreground cursor-pointer hover:underline" onClick={() => setEmailPreviewData(prev => ({...prev, cc: prev.cc ? `${prev.cc}, ${lpoChildFranchiseeEmails}` : lpoChildFranchiseeEmails}))}>
+                          Suggestion (LPO Child Franchisees): <span className="font-semibold text-primary">{lpoChildFranchiseeEmails}</span>
+                        </p>
+                      )}
                       {franchiseeEmail && !emailPreviewData.cc.includes(franchiseeEmail) && (
                         <p className="text-xs text-muted-foreground cursor-pointer hover:underline" onClick={() => setEmailPreviewData(prev => ({...prev, cc: prev.cc ? `${prev.cc}, ${franchiseeEmail}` : franchiseeEmail}))}>
                           Suggestion (Franchisee): <span className="font-semibold text-primary">{franchiseeEmail}</span>

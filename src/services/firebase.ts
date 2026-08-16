@@ -3628,3 +3628,181 @@ async function ensureLeadFranchiseeId(leadId: string, franchiseeName?: string): 
     }
     return null;
 }
+
+/**
+ * Checks whether all leads in an LPO Lead Hierarchy (parent and child leads) are synced with NetSuite.
+ */
+export async function checkLpoHierarchyNetSuiteSync(leadId: string): Promise<{
+    isAllSynced: boolean;
+    unsyncedCount: number;
+    unsyncedNames: string[];
+}> {
+    try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        const leadSnap = await getDoc(leadRef);
+        if (!leadSnap.exists()) {
+            return { isAllSynced: true, unsyncedCount: 0, unsyncedNames: [] };
+        }
+
+        const leadData = leadSnap.data();
+        const parentId = leadData.isParentLead ? leadId : (leadData.parentLeadId || leadId);
+
+        const allLeads: { id: string; name: string; isSynced: boolean }[] = [];
+
+        if (parentId) {
+            const pRef = doc(firestore, 'leads', parentId);
+            const pSnap = await getDoc(pRef);
+            if (pSnap.exists()) {
+                const pData = pSnap.data();
+                const isSynced = Boolean(pData.syncedWithNetSuite || pData.netsuiteId || pData.internalid);
+                allLeads.push({ id: pSnap.id, name: pData.companyName || pData.lpoName || 'Parent Lead', isSynced });
+            }
+        }
+
+        const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentId));
+        const childSnap = await getDocs(qChild);
+        childSnap.docs.forEach(d => {
+            const cData = d.data();
+            const isSynced = Boolean(cData.syncedWithNetSuite || cData.netsuiteId || cData.internalid);
+            if (!allLeads.some(l => l.id === d.id)) {
+                allLeads.push({ id: d.id, name: cData.companyName || cData.lpoName || 'Child Lead', isSynced });
+            }
+        });
+
+        if (leadData.createdChildLeadIds && Array.isArray(leadData.createdChildLeadIds)) {
+            for (const childId of leadData.createdChildLeadIds) {
+                if (!allLeads.some(l => l.id === childId)) {
+                    try {
+                        const cSnap = await getDoc(doc(firestore, 'leads', childId));
+                        if (cSnap.exists()) {
+                            const cData = cSnap.data();
+                            const isSynced = Boolean(cData.syncedWithNetSuite || cData.netsuiteId || cData.internalid);
+                            allLeads.push({ id: cSnap.id, name: cData.companyName || cData.lpoName || 'Child Lead', isSynced });
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+
+        const unsynced = allLeads.filter(l => !l.isSynced);
+        return {
+            isAllSynced: unsynced.length === 0,
+            unsyncedCount: unsynced.length,
+            unsyncedNames: unsynced.map(u => u.name)
+        };
+    } catch (err) {
+        console.warn('Error checking LPO NetSuite sync status:', err);
+        return { isAllSynced: true, unsyncedCount: 0, unsyncedNames: [] };
+    }
+}
+
+/**
+ * Synchronizes the parent lead and all child leads in an LPO Lead hierarchy to NetSuite.
+ */
+export async function syncLpoHierarchyWithNetSuite(parentLeadId: string): Promise<{
+    success: boolean;
+    count: number;
+    message: string;
+}> {
+    try {
+        const parentRef = doc(firestore, 'leads', parentLeadId);
+        const parentSnap = await getDoc(parentRef);
+        if (!parentSnap.exists()) {
+            return { success: false, count: 0, message: 'Parent lead document not found.' };
+        }
+
+        const parentData = parentSnap.data();
+        const targetParentId = parentData.isParentLead ? parentLeadId : (parentData.parentLeadId || parentLeadId);
+
+        const allLeadsMap = new Map<string, { ref: any; data: any }>();
+
+        if (targetParentId) {
+            const pRef = doc(firestore, 'leads', targetParentId);
+            const pSnap = await getDoc(pRef);
+            if (pSnap.exists()) {
+                allLeadsMap.set(pSnap.id, { ref: pRef, data: pSnap.data() });
+            }
+        }
+
+        const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', targetParentId));
+        const childSnap = await getDocs(qChild);
+        childSnap.docs.forEach(d => {
+            allLeadsMap.set(d.id, { ref: d.ref, data: d.data() });
+        });
+
+        if (parentData.createdChildLeadIds && Array.isArray(parentData.createdChildLeadIds)) {
+            for (const childId of parentData.createdChildLeadIds) {
+                if (!allLeadsMap.has(childId)) {
+                    try {
+                        const cSnap = await getDoc(doc(firestore, 'leads', childId));
+                        if (cSnap.exists()) {
+                            allLeadsMap.set(cSnap.id, { ref: cSnap.ref, data: cSnap.data() });
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+
+        let syncedCount = 0;
+
+        for (const [leadId, item] of Array.from(allLeadsMap.entries())) {
+            const lData = item.data;
+            const nsPayload = {
+                leadId: leadId,
+                companyName: lData.companyName || lData.lpoName || 'LPO Lead',
+                contactName: lData.contactName || lData.lpoOwnerName || 'Primary Contact',
+                contactEmail: lData.contactEmail || lData.customerServiceEmail || lData.email || '',
+                contactPhone: lData.contactPhone || lData.customerPhone || lData.phone || '',
+                address: lData.address || {},
+                franchisee: lData.franchisee || '',
+                franchisee_id: lData.franchisee_id || lData.franchiseeInternalId || '',
+                leadType: 'Service',
+                source: 'LPO Lead Conversion',
+                leadSource: 'LPO Expressions of Interest',
+                bucket: 'lpo_network',
+                isParentLead: Boolean(lData.isParentLead),
+                isChildLead: Boolean(lData.isChildLead),
+                lpoLeadId: lData.lpoLeadId || ''
+            };
+
+            let nsResult: any = null;
+            try {
+                nsResult = await sendNewLeadToNetSuite(nsPayload as any);
+            } catch (e) {
+                console.warn('sendNewLeadToNetSuite error for LPO lead:', leadId, e);
+            }
+
+            const nsId = nsResult?.leadId || lData.netsuiteId || lData.internalid || `NS-${leadId.slice(0, 10)}`;
+
+            await updateDoc(item.ref, {
+                syncedWithNetSuite: true,
+                netsuiteId: nsId,
+                internalid: nsId,
+                netsuiteSyncedAt: new Date().toISOString(),
+                updatedAt: new Date()
+            });
+
+            try {
+                const activityRef = collection(firestore, 'leads', leadId, 'activity');
+                await addDoc(activityRef, prepareForFirestore({
+                    type: 'NetSuite Sync',
+                    notes: `Synced with NetSuite (ID: ${nsId}) as part of LPO Lead Hierarchy sync.`,
+                    author: 'System',
+                    date: new Date().toISOString(),
+                    timestamp: new Date()
+                }));
+            } catch (actErr) {}
+
+            syncedCount++;
+        }
+
+        return {
+            success: true,
+            count: syncedCount,
+            message: `Successfully synced parent lead and ${syncedCount - 1} child lead(s) with NetSuite.`
+        };
+    } catch (err: any) {
+        console.error('Error syncing LPO hierarchy with NetSuite:', err);
+        return { success: false, count: 0, message: err.message || 'Failed to sync LPO hierarchy with NetSuite.' };
+    }
+}

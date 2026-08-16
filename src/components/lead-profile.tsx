@@ -185,6 +185,7 @@ import { TaggedAddress } from '@/lib/types'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail, recreateLocalMileCode } from '@/services/netsuite-localmile-proxy'
 import { recreditLocalMileTrial } from '@/services/localmile-recredit-action'
+import { checkLpoHierarchyNetSuiteSync, syncLpoHierarchyWithNetSuite } from '@/services/firebase'
 import { SmsDialog } from '@/components/sms-dialog'
 import { AddToMarketingListDialog } from './leads-client'
 import { MoveToNurtureDialog } from '@/components/marketing/move-to-nurture-dialog'
@@ -435,6 +436,38 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             });
         } finally {
             setIsPushingLpoPlus(false);
+        }
+    };
+
+    const [isSyncingLpoNetSuite, setIsSyncingLpoNetSuite] = useState(false);
+
+    const handleSyncLpoNetSuite = async () => {
+        if (!lead?.id) return;
+        setIsSyncingLpoNetSuite(true);
+        try {
+            const parentId = lead.isParentLead ? lead.id : (lead.parentLeadId || lead.id);
+            const result = await syncLpoHierarchyWithNetSuite(parentId);
+            if (result.success) {
+                toast({
+                    title: 'NetSuite Sync Successful',
+                    description: result.message
+                });
+                await refreshLead(true);
+            } else {
+                toast({
+                    variant: 'destructive',
+                    title: 'NetSuite Sync Failed',
+                    description: result.message
+                });
+            }
+        } catch (err: any) {
+            toast({
+                variant: 'destructive',
+                title: 'NetSuite Sync Error',
+                description: err.message || 'Failed to sync with NetSuite.'
+            });
+        } finally {
+            setIsSyncingLpoNetSuite(false);
         }
     };
 
@@ -3696,7 +3729,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         <DropdownMenuItem 
           key="quote" 
           disabled={userProfile?.activeRole === 'user'} 
-          onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); })); }}
+          onSelect={(e) => { 
+            e.preventDefault(); 
+            requireLeadType(() => checkPrimary(async () => { 
+              if (isLpoLeadProcess) {
+                const syncCheck = await checkLpoHierarchyNetSuiteSync(lead.id);
+                if (!syncCheck.isAllSynced) {
+                  toast({
+                    variant: 'destructive',
+                    title: 'NetSuite Sync Required',
+                    description: `Quote process cannot be initiated. The parent lead and all associated child leads must be synced with NetSuite first (${syncCheck.unsyncedCount} unsynced). Please click 'Sync NetSuite (LPO Hierarchy)'.`,
+                  });
+                  return;
+                }
+              }
+              await ensureFranchiseeIdField(); 
+              setServiceSelectionMode('Quote'); 
+              setIsServiceSelectionOpen(true); 
+            })); 
+          }}
         >
             <Briefcase className="mr-2 h-4 w-4" />Quote
         </DropdownMenuItem>
@@ -3805,6 +3856,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                 );
             })()}
+            {isLpoLeadProcess && (
+                <Button
+                    variant="outline"
+                    onClick={handleSyncLpoNetSuite}
+                    disabled={isSyncingLpoNetSuite}
+                    className="border-sky-600 text-sky-700 hover:bg-sky-50 font-semibold shadow-sm"
+                >
+                    <Sparkles className={`mr-2 h-4 w-4 text-sky-600 ${isSyncingLpoNetSuite ? 'animate-spin' : ''}`} />
+                    {isSyncingLpoNetSuite ? 'Syncing NetSuite...' : 'Sync NetSuite (LPO Hierarchy)'}
+                </Button>
+            )}
             {isSaleDealsVisible(userProfile) && (
                 <TooltipProvider>
                     <Tooltip>
