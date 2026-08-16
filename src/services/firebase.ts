@@ -1479,6 +1479,24 @@ async function updateLeadStatus(
         }
         await updateDoc(leadRef, updates);
 
+        // If this is an LPO Parent Lead and status is Quote Accepted, sync to child leads
+        if (status === 'Quote Accepted' && (leadData?.isParentLead || leadData?.bucket === 'lpo_network' || leadData?.source === 'LPO Lead Conversion' || leadData?.leadSource === 'LPO Expressions of Interest')) {
+            try {
+                const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', leadId));
+                const childSnap = await getDocs(qChild);
+                for (const childDoc of childSnap.docs) {
+                    await updateDoc(doc(firestore, 'leads', childDoc.id), {
+                        status: 'Quote Accepted',
+                        customerStatus: 'Quote Accepted',
+                        scfAcceptedAt: now,
+                        updatedAt: new Date()
+                    }).catch(err => console.warn('Child lead status sync warning:', err));
+                }
+            } catch (syncErr) {
+                console.warn('Error syncing Quote Accepted status to child leads:', syncErr);
+            }
+        }
+
         const isDataMgmt = options?.isDataManagement || options?.source === 'data_management' || (reason && reason.toLowerCase().includes('data management'));
         let logNotes = reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}`;
         if (isDataMgmt) {

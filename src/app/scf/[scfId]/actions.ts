@@ -99,6 +99,46 @@ export async function acceptScfAction(leadId: string, scfId: string) {
           scfAcceptedAt: nowStr
         });
       }
+
+      // Propagate Quote Accepted status to all child leads if this is part of the LPO process
+      const isLpoProcessLead = Boolean(
+        leadData?.isParentLead ||
+        leadData?.bucket === 'lpo_network' ||
+        leadData?.source === 'LPO Lead Conversion' ||
+        leadData?.leadSource === 'LPO Expressions of Interest'
+      );
+
+      if (isLpoProcessLead) {
+        // 1. Sync Quote Accepted status to all Child Leads where parentLeadId == leadId
+        const childSnap = await adminDb.collection('leads').where('parentLeadId', '==', leadId).get();
+        if (!childSnap.empty) {
+          const batch = adminDb.batch();
+          childSnap.docs.forEach((docSnap) => {
+            batch.update(docSnap.ref, {
+              status: 'Quote Accepted',
+              customerStatus: 'Quote Accepted',
+              scfAcceptedAt: nowStr,
+              updatedAt: nowStr
+            });
+          });
+          await batch.commit();
+          console.log(`[SCF Accept] Synchronized 'Quote Accepted' status to ${childSnap.size} child leads for parent ${leadId}.`);
+        }
+
+        // 2. Sync status to corresponding lpo_leads document
+        const lpoSnap = await adminDb.collection('lpo_leads').where('createdParentLeadId', '==', leadId).get();
+        if (!lpoSnap.empty) {
+          for (const lpoDoc of lpoSnap.docs) {
+            await lpoDoc.ref.update({ status: 'SCF Accepted', updatedAt: nowStr });
+            await lpoDoc.ref.collection('activity').add({
+              type: 'StatusChange',
+              notes: `Quote / SCF accepted by customer. Synchronized 'Quote Accepted' to parent lead (${leadId}) and all child leads.`,
+              author: 'Customer (Online Acceptance)',
+              createdAt: nowStr
+            });
+          }
+        }
+      }
     }
 
     // Send email to Franchisee & Account Manager

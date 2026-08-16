@@ -3382,6 +3382,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const isFieldSales = userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Field Sales Admin';
   const isDialer = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers' || userProfile?.activeRole === 'Customer Service';
   const isMailPlusPtyLtd = lead.franchisee?.toLowerCase() === 'mailplus pty ltd';
+  const isLpoLeadProcess = Boolean(
+    lead.isParentLead ||
+    lead.isChildLead ||
+    lead.bucket === 'lpo_network' ||
+    lead.source === 'LPO Lead Conversion' ||
+    lead.leadSource === 'LPO Expressions of Interest' ||
+    lead.isLpoLead
+  );
 
   let showSchedule = false;
   let showProcessLead = false;
@@ -3668,7 +3676,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenuItem>
     ) : null;
 
-    let salesItems: React.ReactNode[] = isMailPlusPtyLtd ? [] : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
+    let salesItems: React.ReactNode[] = (isMailPlusPtyLtd && !isLpoLeadProcess)
+        ? []
+        : (isMailPlusPtyLtd && isLpoLeadProcess)
+            ? [quoteItem].filter(Boolean)
+            : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
 
     if (salesItems.length === 0) return null;
 
@@ -4350,7 +4362,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         );
       })()}
 
-      {lead.franchisee?.toLowerCase() === 'mailplus pty ltd' && (
+      {lead.franchisee?.toLowerCase() === 'mailplus pty ltd' && !isLpoLeadProcess && (
           <Alert className="bg-orange-50 border-orange-200 text-orange-800">
               <Info className="h-4 w-4 !text-orange-800" />
               <AlertTitle>Notice</AlertTitle>
