@@ -449,10 +449,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             const result = await syncLpoHierarchyWithNetSuite(parentId);
             if (result.success) {
                 toast({
-                    title: 'NetSuite Sync Successful',
+                    title: 'NetSuite Sync & Conversion Successful',
                     description: result.message
                 });
-                await refreshLead(true);
+                if (result.newParentDocId && result.newParentDocId !== lead.id) {
+                    router.push(`/leads/${result.newParentDocId}`);
+                } else {
+                    await refreshLead(true);
+                }
             } else {
                 toast({
                     variant: 'destructive',

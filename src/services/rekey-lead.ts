@@ -63,31 +63,34 @@ export async function rekeyLeadToNetSuite(leadId: string): Promise<RekeyResult> 
     }
   });
 
+  const rawName = primaryContact?.name || data.contactName || data.lpoOwnerName || 'Primary Contact';
+  const nameParts = rawName.trim().split(' ');
+
   const contactInfo = {
-    firstName: primaryContact?.firstName || primaryContact?.name?.split(' ')[0] || '',
-    lastName: primaryContact?.name?.split(' ').slice(1).join(' ') || '',
+    firstName: primaryContact?.firstName || nameParts[0] || 'Primary',
+    lastName: primaryContact?.lastName || nameParts.slice(1).join(' ') || 'Contact',
     title: primaryContact?.title || 'Primary Contact',
-    email: primaryContact?.email || data.customerServiceEmail || '',
-    phone: primaryContact?.phone || data.customerPhone || '',
+    email: primaryContact?.email || data.contactEmail || data.customerServiceEmail || data.email || '',
+    phone: primaryContact?.phone || primaryContact?.mobile || data.contactPhone || data.customerPhone || data.phone || '',
   };
 
-  // 3. Resolve parent NetSuite ID if child of multi-site
+  // 3. Resolve parent NetSuite ID if child of multi-site or LPO lead
   let parentNetSuiteId: string | undefined = undefined;
   if (data.parentLeadId) {
     try {
       const pSnapLeads = await db.collection('leads').doc(data.parentLeadId).get();
       if (pSnapLeads.exists) {
         const pData = pSnapLeads.data() || {};
-        parentNetSuiteId = pData.internalid || pData.prospectPlusId || pSnapLeads.id;
+        parentNetSuiteId = pData.internalid || pData.netsuiteId || pData.prospectPlusId || pSnapLeads.id;
       } else {
         const pSnapCompanies = await db.collection('companies').doc(data.parentLeadId).get();
         if (pSnapCompanies.exists) {
           const pData = pSnapCompanies.data() || {};
-          parentNetSuiteId = pData.internalid || pData.prospectPlusId || pSnapCompanies.id;
+          parentNetSuiteId = pData.internalid || pData.netsuiteId || pData.prospectPlusId || pSnapCompanies.id;
         }
       }
     } catch (e) {
-      console.warn('Failed to resolve parent NetSuite ID for multi-site re-keying:', e);
+      console.warn('Failed to resolve parent NetSuite ID for re-keying:', e);
     }
   }
 
@@ -101,22 +104,29 @@ export async function rekeyLeadToNetSuite(leadId: string): Promise<RekeyResult> 
   };
 
   const netSuitePayload = {
-    companyName: data.companyName || 'Unknown Company',
+    companyName: data.companyName || data.lpoName || 'Unknown Company',
     websiteUrl: data.websiteUrl,
-    customerPhone: data.customerPhone,
-    customerServiceEmail: data.customerServiceEmail,
+    customerPhone: contactInfo.phone || data.customerPhone,
+    customerServiceEmail: contactInfo.email || data.customerServiceEmail,
     abn: data.abn,
     address,
     contact: contactInfo,
-    campaign: data.campaign || 'Bulk Import',
-    bucket: data.bucket || 'outbound',
+    campaign: data.campaign || 'LPO Network Onboarding',
+    bucket: data.bucket || 'lpo_network',
     dialerAssigned: data.dialerAssigned,
     salesRepAssigned: data.salesRepAssigned,
     fieldRepAssigned: data.fieldRepAssigned,
     accountManagerAssigned: data.accountManagerAssigned,
     franchiseeName: data.franchisee,
-    parentLeadId: parentNetSuiteId,
-    parentId: parentNetSuiteId,
+    franchiseeInternalId: data.franchisee_id || data.franchiseeInternalId,
+    parentLeadId: parentNetSuiteId || data.parentLeadId,
+    parentId: parentNetSuiteId || data.parentLeadId,
+    leadType: data.leadType || 'Service',
+    source: data.source || 'LPO Lead Conversion',
+    leadSource: data.leadSource || 'LPO Expressions of Interest',
+    isParentLead: Boolean(data.isParentLead),
+    isChildLead: Boolean(data.isChildLead),
+    lpoLeadId: data.lpoLeadId || '',
   };
 
   // 5. Call NetSuite Scriptlet 2194
