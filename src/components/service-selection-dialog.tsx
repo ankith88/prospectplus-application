@@ -1532,22 +1532,7 @@ export function ServiceSelectionDialog({
 
         // If Quote or Resell mode, trigger NetSuite Quote API in background
         if (mode === 'Quote' || mode === 'Resell') {
-          const existingScfsForQuote = await getScfRecords(lead.id);
-          const latestScfForQuote = (existingScfsForQuote && existingScfsForQuote.length > 0) ? existingScfsForQuote[0] : null;
-          const priorServicesListForQuote = (latestScfForQuote && latestScfForQuote.services && latestScfForQuote.services.length > 0)
-            ? latestScfForQuote.services
-            : (lead?.services || []);
-
-          const priorServiceNamesForQuote = new Set(priorServicesListForQuote.map((s: any) => (s.name || (s as any).service || '').toLowerCase().trim()));
-          const newlyAddedServicesForQuote = mappedServices.filter(s => !priorServiceNamesForQuote.has((s.name || (s as any).service || '').toLowerCase().trim()));
-
-          const hasPriorQuote = (existingScfsForQuote && existingScfsForQuote.length > 0) || 
-                                !!lead.commRegId || 
-                                ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won'].includes(lead.status || '');
-
-          const servicesToPassToQuote = hasPriorQuote 
-            ? (newlyAddedServicesForQuote.length > 0 ? newlyAddedServicesForQuote : []) 
-            : mappedServices;
+          const servicesToPassToQuote = mappedServices;
 
           const expectedPayloadQuote = {
             operation: opName,
@@ -1802,24 +1787,8 @@ export function ServiceSelectionDialog({
             }
 
             // 1. Call NetSuite APIs first
-           try {
-             // Check if any NEW services were added during signup that were NOT present in the prior quote/SCF
-             const latestScf = (existingScfs && existingScfs.length > 0) ? existingScfs[0] : null;
-             const priorServicesList = (latestScf && latestScf.services && latestScf.services.length > 0)
-               ? latestScf.services
-               : (lead?.services || []);
-             
-             const priorServiceNames = new Set(priorServicesList.map((s: any) => (s.name || (s as any).service || '').toLowerCase().trim()));
-             const newlyAddedServices = mappedServices.filter(s => !priorServiceNames.has((s.name || (s as any).service || '').toLowerCase().trim()));
-
-             const hasPriorQuote = (existingScfs && existingScfs.length > 0) || 
-                                   !!lead.commRegId || 
-                                   ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won'].includes(lead.status || '');
-             
-             // If prior quote exists, pass ONLY newly added services (if any). If no prior quote exists, pass all mappedServices.
-             const signupServices = hasPriorQuote 
-               ? (newlyAddedServices.length > 0 ? newlyAddedServices : []) 
-               : mappedServices;
+            try {
+              const signupServices = mappedServices;
 
              const nsResponse = await submitServiceQuote({
                operation: 'signCustomer',
