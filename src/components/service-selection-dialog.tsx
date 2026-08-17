@@ -1591,23 +1591,25 @@ export function ServiceSelectionDialog({
                if (nsResponse.requestData) console.log(`Executed JSON Payload:\n`, nsResponse.requestData);
                console.groupEnd();
 
-               if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
-                  await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
-                  console.log(`[NetSuite Sync Success] Updated commRegId ${nsResponse.commRegId} for lead ${lead.id}`);
+               if (nsResponse.success) {
+                  if (nsResponse.commRegId && nsResponse.dynamicScfUrl) {
+                     await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
+                     console.log(`[NetSuite Sync Success] Updated commRegId ${nsResponse.commRegId} for lead ${lead.id}`);
+                  }
                } else {
-                  console.error(`[NetSuite Sync Warning] NetSuite response message:`, nsResponse.message);
+                  console.warn(`[NetSuite Sync Warning] NetSuite response message:`, nsResponse.message);
                   await logActivity(lead.id, {
                      type: 'Update',
-                     notes: `Background NetSuite Sync failed: ${nsResponse.message || 'Unknown error'}`,
+                     notes: `Background NetSuite Sync status: ${nsResponse.message || 'Unknown status'}`,
                      author: 'System'
                   });
                }
             })
             .catch(async (err) => {
-               console.error(`❌ [NetSuite API 1900 Error]`, err);
+               console.warn(`[NetSuite API 1900 Warning]`, err);
                await logActivity(lead.id, {
                   type: 'Update',
-                  notes: `Background NetSuite Sync error: ${err.message || err}`,
+                  notes: `Background NetSuite Sync notice: ${err.message || err}`,
                   author: 'System'
                });
             });
