@@ -320,7 +320,7 @@ export function ServiceSelectionDialog({
           console.log(`[LPO Child NetSuite 1900 Call] Child ${child.id} -> NetSuite Customer ID: ${childNsId}`);
 
           submitServiceQuote({
-            operation: quotePayload.operation,
+            operation: quotePayload.operation as any,
             customerId: String(childNsId),
             contactId: quotePayload.contactIdVal,
             salesRecordId: child.salesRecordInternalId || quotePayload.salesRecordIdVal,
@@ -1362,6 +1362,16 @@ export function ServiceSelectionDialog({
 
   const handleConfirm = async (values: FormValues) => {
     if (!lead) return;
+
+    const isLpoProcessLead = Boolean(
+      lead.isParentLead ||
+      lead.isChildLead ||
+      lead.bucket === 'lpo_network' ||
+      (lead as any).source === 'LPO Lead Conversion' ||
+      lead.leadSource === 'LPO Expressions of Interest' ||
+      lead.lpoLeadId ||
+      lead.parentLeadId
+    );
 
     setIsSubmitting(true);
     setSubmittingProgress(10);
