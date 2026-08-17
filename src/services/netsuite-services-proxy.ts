@@ -108,12 +108,17 @@ export interface QuoteServicePayload {
 export async function submitServiceQuote(payload: QuoteServicePayload): Promise<NetSuiteResponse> {
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc";
     
-    const { operation = "quoteCustomer", accountManagerName = "", ...restPayload } = payload;
+    const { operation = "quoteCustomer", accountManagerName = "", contactId, ...restPayload } = payload;
     
     const resolvedId = (accountManagerName && AM_SALES_REP_ID_MAP[accountManagerName]) || payload.accountManagerId || payload.salesRepId || "";
 
+    // NetSuite API 1900 requires purely numeric contact IDs
+    const rawContactId = String(contactId || "").trim();
+    const safeNumericContactId = /^\d+$/.test(rawContactId) ? rawContactId : "";
+
     const requestParams = {
         ...restPayload,
+        contactId: safeNumericContactId,
         salesRepId: resolvedId,
         accountManagerId: resolvedId,
         accountManagerName: accountManagerName,

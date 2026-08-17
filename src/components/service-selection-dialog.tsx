@@ -1507,7 +1507,11 @@ export function ServiceSelectionDialog({
 
         const opName = (mode === 'Quote' || mode === 'Resell') ? 'quoteCustomer' : 'signCustomer';
         const customerIdVal = (lead as any).internalid || lead.id;
-        const contactIdVal = values.selectedContactId || "";
+        
+        const rawSelContactId = values.selectedContactId || (values.selectedContactIds && values.selectedContactIds.length > 0 ? values.selectedContactIds[0] : "");
+        const matchedContactObj = contacts.find(c => String(c.id || '').trim() === String(rawSelContactId).trim());
+        const candidateContactId = matchedContactObj?.netsuiteId || matchedContactObj?.internalid || (matchedContactObj as any)?.internalId || rawSelContactId;
+        const contactIdVal = (candidateContactId && /^\d+$/.test(String(candidateContactId).trim())) ? String(candidateContactId).trim() : "";
         const salesRecordIdVal = lead.salesRecordInternalId || "";
         const commDateVal = values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "";
         const amNameVal = lead.accountManagerAssigned || "";
@@ -1793,7 +1797,7 @@ export function ServiceSelectionDialog({
              const nsResponse = await submitServiceQuote({
                operation: 'signCustomer',
                customerId: (lead as any).internalid || lead.id,
-               contactId: values.selectedContactId || "",
+               contactId: contactIdVal,
                salesRecordId: lead.salesRecordInternalId || "",
                salesRepId: salesRepId,
                services: signupServices,
