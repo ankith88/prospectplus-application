@@ -164,15 +164,13 @@ export async function rekeyLeadToNetSuite(leadId: string): Promise<RekeyResult> 
       ...data,
       id: newNumericId,
       internalid: newNumericId,
-      internalId: newNumericId,
-      netsuiteId: newNumericId,
-      salesRecordInternalId: newNumericId,
       syncedWithNetSuite: true,
       netSuiteSyncStatus: 'synced',
       netSuiteSyncError: null,
       netSuiteSyncAttemptedAt: new Date().toISOString(),
       updatedAt: FieldValue.serverTimestamp(),
       ...(data.prospectPlusId ? {} : { prospectPlusId: `MP${newNumericId}` }),
+      ...(nsResult.salesRecordInternalId ? { salesRecordInternalId: nsResult.salesRecordInternalId } : {}),
     };
 
     const batch = db.batch();

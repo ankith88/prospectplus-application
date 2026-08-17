@@ -223,7 +223,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           internalid: data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.salesRecordInternalId || '')),
           internalId: data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.salesRecordInternalId || '')),
           entityId: data['customerEntityId'] || data['entityId'] || '',
-          salesRecordInternalId: data.salesRecordInternalId || data.internalid || data.internalId || data.netsuiteId || (docSnapshot.id && /^\d+$/.test(docSnapshot.id) ? docSnapshot.id : undefined),
+          salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           customerStatus: data.customerStatus,
@@ -404,7 +404,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           internalid: data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.salesRecordInternalId || '')),
           internalId: data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.salesRecordInternalId || '')),
           entityId: data['customerEntityId'] || data['entityId'] || '',
-          salesRecordInternalId: data.salesRecordInternalId || data.internalid || data.internalId || data.netsuiteId || (docSnapshot.id && /^\d+$/.test(docSnapshot.id) ? docSnapshot.id : undefined),
+          salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           customerStatus: data.customerStatus,
@@ -587,7 +587,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           internalid: data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.salesRecordInternalId || '')),
           internalId: data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.salesRecordInternalId || '')),
           entityId: data['customerEntityId'] || data['entityId'] || '',
-          salesRecordInternalId: data.salesRecordInternalId || data.internalid || data.internalId || data.netsuiteId || (doc.id && /^\d+$/.test(doc.id) ? doc.id : undefined),
+          salesRecordInternalId: data.salesRecordInternalId,
           companyName: data.companyName || data.company || data.name || data.customerName || 'Unknown Company',
           status: safeGetStatus(data.customerStatus),
           customerStatus: data.customerStatus,
@@ -732,7 +732,7 @@ function subscribeLeadsFromFirebase(
           internalid: data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.salesRecordInternalId || '')),
           internalId: data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.salesRecordInternalId || '')),
           entityId: data['customerEntityId'] || data['entityId'] || '',
-          salesRecordInternalId: data.salesRecordInternalId || data.internalid || data.internalId || data.netsuiteId || (doc.id && /^\d+$/.test(doc.id) ? doc.id : undefined),
+          salesRecordInternalId: data.salesRecordInternalId,
           companyName: data.companyName || 'Unknown Company',
           status: safeGetStatus(data.customerStatus),
           customerStatus: data.customerStatus,
@@ -849,7 +849,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     internalid: data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.salesRecordInternalId || '')),
                     internalId: data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : (data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : (data.salesRecordInternalId || '')),
                     entityId: data['customerEntityId'] || data['entityId'] || '',
-                    salesRecordInternalId: data.salesRecordInternalId || data.internalid || data.internalId || data.netsuiteId || (doc.id && /^\d+$/.test(doc.id) ? doc.id : undefined),
+                    salesRecordInternalId: data.salesRecordInternalId,
                     companyName: data.companyName || data.company || data.name || data.customerName || 'Unknown Company',
                     status: safeGetStatus(data.customerStatus),
                     customerStatus: data.customerStatus,
@@ -927,7 +927,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
             return {
                 id: doc.id,
                 entityId: data['customerEntityId'] || data['entityId'] || '',
-                salesRecordInternalId: data.salesRecordInternalId || data.internalid || data.internalId || data.netsuiteId || (doc.id && /^\d+$/.test(doc.id) ? doc.id : undefined),
+                salesRecordInternalId: data.salesRecordInternalId,
                 companyName: data.companyName || 'Unknown Company',
                 status: safeGetStatus(data.customerStatus),
                 customerStatus: data.customerStatus,
@@ -992,7 +992,7 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
             return {
                 id: doc.id,
                 entityId: data.entityId || data.customerEntityId || '',
-                salesRecordInternalId: data.salesRecordInternalId || data.internalid || data.internalId || data.netsuiteId || (doc.id && /^\d+$/.test(doc.id) ? doc.id : undefined),
+                salesRecordInternalId: data.salesRecordInternalId,
                 companyName: data.companyName || 'Unknown Company',
                 dialerAssigned: data.dialerAssigned,
                 assignedToDialerAt: data.assignedToDialerAt,
@@ -3777,8 +3777,6 @@ export async function syncLpoHierarchyWithNetSuite(parentLeadId: string): Promis
                     syncedWithNetSuite: true,
                     netsuiteId: newChildId,
                     internalid: newChildId,
-                    internalId: newChildId,
-                    salesRecordInternalId: newChildId,
                     updatedAt: new Date()
                 });
             } catch (e) {}
@@ -3794,8 +3792,6 @@ export async function syncLpoHierarchyWithNetSuite(parentLeadId: string): Promis
                 syncedWithNetSuite: true,
                 netsuiteId: newParentId,
                 internalid: newParentId,
-                internalId: newParentId,
-                salesRecordInternalId: newParentId,
                 updatedAt: new Date()
             });
         } catch (e) {}
