@@ -205,17 +205,18 @@ export function ServiceSelectionDialog({
 
   const [lpoChildFranchiseeEmails, setLpoChildFranchiseeEmails] = useState<string>('');
 
+  const isLpoProcessLead = Boolean(
+    lead?.isParentLead ||
+    lead?.isChildLead ||
+    lead?.bucket === 'lpo_network' ||
+    (lead as any)?.source === 'LPO Lead Conversion' ||
+    lead?.leadSource === 'LPO Expressions of Interest' ||
+    lead?.lpoLeadId ||
+    lead?.parentLeadId
+  );
+
   const resolveLpoCcEmails = async (baseCc: string) => {
     let ccList = baseCc ? baseCc.split(',').map(s => s.trim()).filter(Boolean) : [];
-    const isLpoProcessLead = Boolean(
-      lead?.isParentLead ||
-      lead?.isChildLead ||
-      lead?.bucket === 'lpo_network' ||
-      (lead as any)?.source === 'LPO Lead Conversion' ||
-      lead?.leadSource === 'LPO Expressions of Interest' ||
-      lead?.lpoLeadId ||
-      lead?.parentLeadId
-    );
 
     if (!isLpoProcessLead || !lead?.id) return baseCc;
 
@@ -1273,7 +1274,7 @@ export function ServiceSelectionDialog({
         return;
       }
       const hasAmpo = values.selectedServices.some(s => s.toLowerCase().includes('ampo'));
-      if (hasAmpo && !localLead?.postalAddress?.street && !lead.postalAddress?.street) {
+      if (!isLpoProcessLead && hasAmpo && !localLead?.postalAddress?.street && !lead.postalAddress?.street) {
         toast({
           variant: 'destructive',
           title: 'Postal Address Required',
@@ -3284,7 +3285,7 @@ export function ServiceSelectionDialog({
                             </div>
                         )}
 
-                        {selectionType !== 'products' && hasAmpoService && localLead && (
+                        {!isLpoProcessLead && selectionType !== 'products' && hasAmpoService && localLead && (
                             <div className={cn("border-2 rounded-lg p-4 transition-all duration-300", (localLead.postalAddress?.street || localLead.postalAddress?.address1) ? "border-primary/20 bg-card" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
                                 <div className="flex items-center gap-2 mb-2">
                                     <Inbox className="w-5 h-5 text-primary" />
