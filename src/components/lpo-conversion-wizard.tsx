@@ -35,7 +35,7 @@ export function buildLpoServicesArray(ampoRate: any, pmpoRate: any, packageRate:
   if (am > 0) {
     services.push({
       id: 'lpo-am-collection',
-      name: 'AM LPO Sweep & Collection',
+      name: 'AMPO',
       frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
       rate: am,
       quantity: 1,
@@ -44,7 +44,7 @@ export function buildLpoServicesArray(ampoRate: any, pmpoRate: any, packageRate:
   if (pm > 0) {
     services.push({
       id: 'lpo-pm-collection',
-      name: 'PM LPO Sweep & Collection',
+      name: 'PMPO',
       frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
       rate: pm,
       quantity: 1,
@@ -53,7 +53,7 @@ export function buildLpoServicesArray(ampoRate: any, pmpoRate: any, packageRate:
   if (pkg > 0) {
     services.push({
       id: 'lpo-package-delivery',
-      name: 'LPO Parcel / Package Delivery',
+      name: 'Package: AMPO & PMPO',
       frequency: 'Adhoc',
       rate: pkg,
       quantity: 1,
@@ -62,7 +62,7 @@ export function buildLpoServicesArray(ampoRate: any, pmpoRate: any, packageRate:
   if (add > 0) {
     services.push({
       id: 'lpo-additional-bag',
-      name: 'LPO Additional Mail Bag Service',
+      name: 'Additional Mail Bag',
       frequency: 'Adhoc',
       rate: add,
       quantity: 1,
