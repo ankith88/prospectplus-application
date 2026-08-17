@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarWidget } from '@/components/ui/calendar';
 import { Loader } from '@/components/ui/loader';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { addDays, startOfDay, isBefore, format } from 'date-fns';
@@ -84,6 +85,7 @@ export default function FranchiseeHomeClient() {
   const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
   const [selectedSlot, setSelectedSlot] = useState<string>('10:00 AM');
   const [bookingNotes, setBookingNotes] = useState<string>('');
+  const [additionalEmails, setAdditionalEmails] = useState<string>('');
   const [isSubmittingBooking, setIsSubmittingBooking] = useState<boolean>(false);
   const [bookingSuccess, setBookingSuccess] = useState<boolean>(false);
   const [confirmedJoinUrl, setConfirmedJoinUrl] = useState<string | null>(null);
@@ -414,7 +416,8 @@ export default function FranchiseeHomeClient() {
           userEmail: user?.email || userProfile?.email || 'franchisee@mailplus.com.au',
           userName: userProfile?.displayName || user?.displayName || 'Franchisee User',
           userId: user?.uid || '',
-          notes: bookingNotes
+          notes: bookingNotes,
+          additionalEmails
         })
       });
 
@@ -1079,6 +1082,18 @@ export default function FranchiseeHomeClient() {
                     <div className="text-slate-600 text-[11px]">Territory: {activeFranName}</div>
                   </div>
                 </div>
+              </div>
+
+              {/* Additional Attendees */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700">Additional Attendee Emails (Optional):</Label>
+                <Input
+                  type="text"
+                  placeholder="e.g. colleague@mailplus.com.au, manager@mailplus.com.au (separated by commas)"
+                  value={additionalEmails}
+                  onChange={(e) => setAdditionalEmails(e.target.value)}
+                  className="text-xs h-9 bg-white"
+                />
               </div>
 
               {/* Optional Notes */}

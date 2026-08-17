@@ -118,4 +118,25 @@ export function isMultisiteCampaign(campaign?: string | null): boolean {
   return c.includes('multi site') || c.includes('multisite') || c === 'multisite' || c === 'multi-site';
 }
 
+export function isMultiSiteBucket(leadOrBucket?: string | { bucket?: string | null; campaign?: string | null } | null): boolean {
+  if (!leadOrBucket) return false;
+  if (typeof leadOrBucket === 'string') {
+    const b = leadOrBucket.toLowerCase().replace(/[-_]/g, ' ').trim();
+    return b.includes('multi site') || b.includes('multisite') || b === 'multisite' || b === 'multi-site';
+  }
+  const bucket = (leadOrBucket.bucket || '').toLowerCase().replace(/[-_]/g, ' ').trim();
+  const campaign = (leadOrBucket.campaign || '').toLowerCase().replace(/[-_]/g, ' ').trim();
+  return (
+    bucket.includes('multi site') ||
+    bucket.includes('multisite') ||
+    bucket === 'multisite' ||
+    bucket === 'multi-site' ||
+    campaign.includes('multi site') ||
+    campaign.includes('multisite') ||
+    campaign === 'multisite' ||
+    campaign === 'multi-site'
+  );
+}
+
+
 

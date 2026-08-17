@@ -37,6 +37,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { firestore } from '@/lib/firebase'
 import { collection, getDocs, doc, getDoc, query, where, collectionGroup } from 'firebase/firestore'
 import { evaluateDuplicateScore } from '@/lib/duplicate-detector'
+import { isMultiSiteBucket } from '@/lib/constants'
 import { useToast } from '@/hooks/use-toast'
 import { MapModal } from '@/components/map-modal'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
@@ -125,14 +126,18 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
     const [isMerging, setIsMerging] = useState(false);
     const { toast } = useToast();
 
+    const filteredSimilarLeads = useMemo(() => {
+        return similarLeads.filter(l => !isMultiSiteBucket(l));
+    }, [similarLeads]);
+
     // Default all similar leads to checked when dialog opens or similarLeads change
     useEffect(() => {
-        if (isOpen && similarLeads.length > 0) {
-            setSelectedDuplicateIds(similarLeads.map(l => l.id));
+        if (isOpen && filteredSimilarLeads.length > 0) {
+            setSelectedDuplicateIds(filteredSimilarLeads.map(l => l.id));
         } else if (!isOpen) {
             setSelectedDuplicateIds([]);
         }
-    }, [isOpen, similarLeads]);
+    }, [isOpen, filteredSimilarLeads]);
 
     const toggleLeadSelection = (leadId: string) => {
         setSelectedDuplicateIds(prev =>
@@ -141,10 +146,10 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
     };
 
     const toggleSelectAll = () => {
-        if (selectedDuplicateIds.length === similarLeads.length) {
+        if (selectedDuplicateIds.length === filteredSimilarLeads.length) {
             setSelectedDuplicateIds([]);
         } else {
-            setSelectedDuplicateIds(similarLeads.map(l => l.id));
+            setSelectedDuplicateIds(filteredSimilarLeads.map(l => l.id));
         }
     };
 
@@ -188,12 +193,12 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
                             onClick={toggleSelectAll}
                             className="text-xs text-[#095c7b] hover:underline font-medium"
                         >
-                            {selectedDuplicateIds.length === similarLeads.length ? 'Deselect All' : 'Select All'}
+                            {selectedDuplicateIds.length === filteredSimilarLeads.length ? 'Deselect All' : 'Select All'}
                         </button>
                     </div>
                     <ScrollArea className="h-56 border rounded-md p-2 bg-slate-50/50">
                         <div className="space-y-2.5">
-                            {similarLeads.map((lead) => {
+                            {filteredSimilarLeads.map((lead) => {
                                 const evalRes = masterLead ? evaluateDuplicateScore(masterLead, lead) : null;
                                 const confidence = lead.duplicateConfidence || evalRes?.confidence || 'Low';
                                 const reasons = lead.duplicateMatchReasons || evalRes?.matchedCriteria || ['Company Name'];
@@ -2247,13 +2252,14 @@ export default function LeadsClientPage({
                                                         {!isFranchisee && (
                                                           <DropdownMenuItem onClick={() => handleStartDialing(leads, lead.id)}>Start dialing from here</DropdownMenuItem>
                                                         )}
-                                                        {lead.isDuplicate && (
+                                                        {lead.isDuplicate && !isMultiSiteBucket(lead) && (
                                                             <DropdownMenuItem onClick={() => {
                                                                  setMasterLeadForMerge(lead);
                                                                  let matches = allLeads.filter(l => l.id !== lead.id && lead.similarLeads?.includes(l.id));
                                                                  if (matches.length === 0) {
                                                                      matches = allLeads.filter(l => l.id !== lead.id && evaluateDuplicateScore(lead, l).isMatch);
                                                                  }
+                                                                 matches = matches.filter(l => !isMultiSiteBucket(l));
                                                                  setSimilarLeadsForMerge(matches);
                                                                  setIsMergeDialogOpen(true);
                                                             }} className="text-orange-600 focus:text-orange-600 font-semibold">

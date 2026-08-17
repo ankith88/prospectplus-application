@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const { bookingUrlId, amId, slot, meetingType, rescheduleAppointmentId, firstName, lastName, phone, email } = await req.json();
+    const { bookingUrlId, amId, slot, meetingType, rescheduleAppointmentId, firstName, lastName, phone, email, additionalEmails } = await req.json();
 
     if (!bookingUrlId || !amId || !slot || !meetingType) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
@@ -82,6 +82,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Process additional attendee emails
+    let parsedAdditionalEmails: string[] = [];
+    if (Array.isArray(additionalEmails)) {
+      parsedAdditionalEmails = additionalEmails
+        .map((e: any) => String(e).trim().toLowerCase())
+        .filter((e: string) => e.includes('@') && e !== contactEmail.toLowerCase());
+    } else if (typeof additionalEmails === 'string' && additionalEmails.trim()) {
+      parsedAdditionalEmails = additionalEmails
+        .split(/[,;\s]+/)
+        .map((e: string) => e.trim().toLowerCase())
+        .filter((e: string) => e.includes('@') && e !== contactEmail.toLowerCase());
+    }
+    parsedAdditionalEmails = Array.from(new Set(parsedAdditionalEmails));
+
     // 2. Get AM Info
     const userRef = db.collection('users').doc(amId);
     const userSnap = await userRef.get();
@@ -103,11 +117,28 @@ export async function POST(req: NextRequest) {
 
     const meetingSubject = `${lead.companyName} x ${amUserDisplayName}`;
 
+    const attendeesList = [
+      ...(contactEmail ? [{
+        emailAddress: {
+          address: contactEmail,
+          name: contactName
+        },
+        type: 'required'
+      }] : []),
+      ...parsedAdditionalEmails.map(addEmail => ({
+        emailAddress: {
+          address: addEmail,
+          name: addEmail
+        },
+        type: 'required'
+      }))
+    ];
+
     const event = {
       subject: meetingSubject,
       body: {
         contentType: 'HTML',
-        content: `Booking scheduled via ProspectPlus.<br>Lead: ${lead.companyName}<br>Meeting Type: ${meetingType === 'teams' ? 'Microsoft Teams' : 'Phone Call'}`
+        content: `Booking scheduled via ProspectPlus.<br>Lead: ${lead.companyName}<br>Meeting Type: ${meetingType === 'teams' ? 'Microsoft Teams' : 'Phone Call'}${parsedAdditionalEmails.length > 0 ? `<br>Additional Attendees: ${parsedAdditionalEmails.join(', ')}` : ''}`
       },
       start: {
         dateTime: startDate.toISOString(),
@@ -117,15 +148,7 @@ export async function POST(req: NextRequest) {
         dateTime: endDate.toISOString(),
         timeZone: 'UTC'
       },
-      attendees: [
-        {
-          emailAddress: {
-            address: contactEmail,
-            name: contactName
-          },
-          type: 'required'
-        }
-      ],
+      attendees: attendeesList,
       isOnlineMeeting: meetingType === 'teams',
       onlineMeetingProvider: meetingType === 'teams' ? 'teamsForBusiness' : 'unknown'
     };
@@ -183,8 +206,9 @@ export async function POST(req: NextRequest) {
         </div>
       `;
 
+      const allRecipients = Array.from(new Set([contactEmail, ...parsedAdditionalEmails].filter(Boolean)));
       await sendPhysicalEmail({
-        to: contactEmail,
+        to: allRecipients.join(','),
         subject: meetingSubject,
         html: emailHtml,
         customFrom: amUser.email,
@@ -202,6 +226,7 @@ export async function POST(req: NextRequest) {
       eventId: createdEvent.id,
       joinUrl: createdEvent.onlineMeeting?.joinUrl || '',
       appointmentStatus: 'Pending',
+      additionalEmails: parsedAdditionalEmails,
       createdAt: new Date().toISOString(),
       timezone: amTz,
       notes: ''

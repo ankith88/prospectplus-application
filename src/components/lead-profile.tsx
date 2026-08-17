@@ -85,6 +85,7 @@ import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName } from '@/lib/duplicate-detector'
+import { isMultiSiteBucket } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -4344,7 +4345,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
             Refresh Data
           </Button>
-          {!isCompanyProfile && (
+          {!isCompanyProfile && !isMultiSiteBucket(lead) && (
             <Button
               variant="outline"
               size="sm"
@@ -4401,9 +4402,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                       <Button size="sm" variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold" onClick={handleDismissDuplicate}>
                           Not a Duplicate
                       </Button>
-                      <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white border-transparent font-semibold" onClick={() => setIsMergeDialogOpen(true)}>
-                          Resolve & Merge
-                      </Button>
+                      {!isMultiSiteBucket(lead) && (
+                          <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white border-transparent font-semibold" onClick={() => setIsMergeDialogOpen(true)}>
+                              Resolve & Merge
+                          </Button>
+                      )}
                   </div>
               </AlertDescription>
           </Alert>
@@ -6610,6 +6613,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </div>
                                     {a.type && <div className="text-xs text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{a.type === 'teams' ? 'Microsoft Teams Meeting' : 'Phone Call'}</div>}
                                     {a.joinUrl && userProfile?.activeRole !== 'user' && <div><a href={a.joinUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium">Join Meeting</a></div>}
+                                    {Array.isArray((a as any).additionalEmails) && (a as any).additionalEmails.length > 0 && (
+                                         <div className="text-xs text-muted-foreground mt-0.5">
+                                             <span className="font-semibold text-foreground">Additional Attendees:</span> {(a as any).additionalEmails.join(', ')}
+                                         </div>
+                                     )}
                                     {a.notes && <div className="mt-1 p-2 bg-background border rounded text-xs text-muted-foreground whitespace-pre-wrap"><span className="font-semibold text-foreground">Notes:</span> {a.notes}</div>}
                                 </div>
                             );
@@ -8792,7 +8800,9 @@ function MergeDuplicatesDialog({
             }
 
             if (foundLead) {
-                if (foundLead.id === currentLead.id) {
+                if (isMultiSiteBucket(foundLead)) {
+                    toast({ variant: "destructive", title: "Cannot Add MultiSite Lead", description: "Leads in the Multi Site bucket cannot be merged." });
+                } else if (foundLead.id === currentLead.id) {
                     toast({ title: "Same Lead", description: "This is already the current lead." });
                 } else if (allCandidates.some(c => c.id === foundLead.id)) {
                     toast({ title: "Already Added", description: "This lead is already in the candidates list." });
@@ -8816,7 +8826,11 @@ function MergeDuplicatesDialog({
     const allCandidates = useMemo(() => {
         const combined = [currentLead, ...duplicates, ...additionalCandidates];
         const uniqueMap = new Map<string, Lead>();
-        combined.forEach(c => uniqueMap.set(c.id, c));
+        combined.forEach(c => {
+            if (!isMultiSiteBucket(c)) {
+                uniqueMap.set(c.id, c);
+            }
+        });
         return Array.from(uniqueMap.values());
     }, [currentLead, duplicates, additionalCandidates]);
 

@@ -15,8 +15,23 @@ export async function POST(req: NextRequest) {
       userEmail,
       userName,
       userId,
-      notes
+      notes,
+      additionalEmails
     } = body;
+
+    // Process additional attendee emails
+    let parsedAdditionalEmails: string[] = [];
+    if (Array.isArray(additionalEmails)) {
+      parsedAdditionalEmails = additionalEmails
+        .map((e: any) => String(e).trim().toLowerCase())
+        .filter((e: string) => e.includes('@') && e !== userEmail.toLowerCase());
+    } else if (typeof additionalEmails === 'string' && additionalEmails.trim()) {
+      parsedAdditionalEmails = additionalEmails
+        .split(/[,;\s]+/)
+        .map((e: string) => e.trim().toLowerCase())
+        .filter((e: string) => e.includes('@') && e !== userEmail.toLowerCase());
+    }
+    parsedAdditionalEmails = Array.from(new Set(parsedAdditionalEmails));
 
     if (!date || !timeSlot || !userEmail) {
       return NextResponse.json(
@@ -76,6 +91,7 @@ export async function POST(req: NextRequest) {
       franchiseeEmail: userEmail,
       franchiseeUserName: userName || 'Franchisee',
       notes: notes || '1-on-1 ProspectPlus Training Session with Aleyna Harnett via Microsoft Teams',
+      additionalEmails: parsedAdditionalEmails,
       reminderEmailSent: false,
       createdAt: new Date().toISOString()
     };
@@ -193,8 +209,8 @@ export async function POST(req: NextRequest) {
 </html>
 `;
 
-    // Send confirmation to franchisee and Aleyna
-    const recipients = [userEmail, 'aleyna.harnett@mailplus.com.au'].filter(Boolean);
+    // Send confirmation to franchisee, Aleyna, and additional attendees
+    const recipients = Array.from(new Set([userEmail, 'aleyna.harnett@mailplus.com.au', ...parsedAdditionalEmails].filter(Boolean)));
     await sendPhysicalEmail({
       to: recipients.join(','),
       subject: `Confirmed: ProspectPlus Training Session with Aleyna on ${formattedDate} (${timeSlot})`,

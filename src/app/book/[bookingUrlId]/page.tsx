@@ -44,6 +44,7 @@ export default function BookingPage() {
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   
   const [meetingType, setMeetingType] = useState<'phone' | 'teams'>('phone');
+  const [additionalEmails, setAdditionalEmails] = useState('');
   const [isBooking, setIsBooking] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isCancelled, setIsCancelled] = useState(false);
@@ -117,6 +118,7 @@ export default function BookingPage() {
           slot: selectedSlot,
           meetingType,
           rescheduleAppointmentId,
+          additionalEmails,
           ...(isGeneralBooking ? { firstName, lastName, phone, email } : {})
         })
       });
@@ -449,6 +451,25 @@ export default function BookingPage() {
                     </Label>
                   </div>
                 </RadioGroup>
+
+                {meetingType === 'teams' && (
+                  <div className="space-y-2 mb-8 animate-in fade-in duration-200">
+                    <Label htmlFor="additionalEmails" className="text-sm font-semibold text-[#2c5046]">
+                      Additional Attendees Email(s) (Optional)
+                    </Label>
+                    <input
+                      id="additionalEmails"
+                      type="text"
+                      value={additionalEmails}
+                      onChange={(e) => setAdditionalEmails(e.target.value)}
+                      placeholder="e.g. colleague@company.com, manager@company.com"
+                      className="w-full h-12 px-4 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#095c7b] focus:border-[#095c7b] bg-white text-slate-800 text-sm"
+                    />
+                    <p className="text-xs text-slate-500">
+                      Separate multiple email addresses with commas. All attendees will receive calendar invitations and meeting links.
+                    </p>
+                  </div>
+                )}
 
                 <Button 
                   className="w-full h-14 text-lg font-bold bg-[#095c7b] hover:bg-[#095c7b]/90 text-white rounded-xl shadow-lg hover:shadow-xl transition-all"
