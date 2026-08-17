@@ -193,7 +193,7 @@ export default function FranchiseeHomeClient() {
     return new Set(leads.map((l) => l.id));
   }, [leads]);
 
-  // Calculate territory lead metrics
+  // Calculate territory lead metrics & distribution breakdown
   const metrics = useMemo(() => {
     const total = leads.length;
     const quotesSent = leads.filter(
@@ -202,21 +202,122 @@ export default function FranchiseeHomeClient() {
     const activeTrials = leads.filter((l) => l.status === 'Qualified' || l.status === 'LPO Review').length;
     const wonLeads = leads.filter((l) => l.status === 'Won').length;
 
-    // Account manager assigned
-    const amSet = new Set(leads.map((l) => l.accountManagerAssigned).filter(Boolean));
-    const assignedAM = amSet.size > 0 ? Array.from(amSet)[0] : 'Luke Forbes';
-
     return {
       total,
       quotesSent,
       activeTrials,
       wonLeads,
-      assignedAM
     };
   }, [leads]);
 
-  // Filter appointments specifically linked ONLY to this franchisee's leads/companies OR Aleyna training
+  // Detailed distribution of leads based on requested categories
+  const leadDistribution = useMemo(() => {
+    const quoteSentAccepted = leads.filter((l) =>
+      ['Quote Sent', 'Quote Accepted'].includes(l.status as string)
+    ).length;
+
+    const localMileTrial = leads.filter(
+      (l) =>
+        ['Trialing LocalMile', 'LocalMile Pending', 'LocalMile Opportunity', 'LocalMile Trial'].includes(l.status as string) ||
+        ((l as any).trialType || '').toLowerCase().includes('localmile')
+    ).length;
+
+    const shipMateTrial = leads.filter(
+      (l) =>
+        ['Trialing ShipMate', 'ShipMate Trial', 'Free Trial'].includes(l.status as string) ||
+        ((l as any).trialType || '').toLowerCase().includes('shipmate')
+    ).length;
+
+    const workInProgress = leads.filter((l) =>
+      [
+        'In Progress',
+        'Contacted',
+        'Connected',
+        'In Qualification',
+        'Qualified',
+        'Pre Qualified',
+        'Reschedule',
+        'Future Follow-up',
+        'High Touch'
+      ].includes(l.status as string)
+    ).length;
+
+    const hotPriorityLeads = leads.filter(
+      (l) =>
+        ['Hot Lead', 'Priority Lead', 'Priority Field Lead'].includes(l.status as string) ||
+        (l as any).priority === 'High' ||
+        (l as any).isHot === true
+    ).length;
+
+    const newLeads = leads.filter(
+      (l) => ['New', 'New Lead', 'Uncontacted'].includes(l.status as string) || !l.status
+    ).length;
+
+    return {
+      quoteSentAccepted,
+      localMileTrial,
+      shipMateTrial,
+      workInProgress,
+      hotPriorityLeads,
+      newLeads
+    };
+  }, [leads]);
+
+  // Current Month Performance Snapshot (High level view of current month only)
+  const currentMonthSnapshot = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const monthName = now.toLocaleString('en-AU', { month: 'long', year: 'numeric' });
+
+    // Filter leads created or active in current month
+    const thisMonthLeads = leads.filter((l) => {
+      const dateVal = (l as any).createdAt || (l as any).created_at || (l as any).updatedAt || (l as any).updated_at;
+      if (!dateVal) return false;
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return false;
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+
+    const pool = thisMonthLeads.length > 0 ? thisMonthLeads : leads;
+    const totalLeads = pool.length;
+    const wonLeads = pool.filter((l) => l.status === 'Won').length;
+    const inDiscussion = pool.filter((l) =>
+      ['In Progress', 'Contacted', 'Pre Qualified', 'Quote Sent', 'Quote Accepted', 'Qualified'].includes(l.status as string)
+    ).length;
+    const quotesSent = pool.filter((l) =>
+      ['Quote Sent', 'Quote Accepted'].includes(l.status as string)
+    ).length;
+
+    const conversionRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
+
+    return {
+      monthName,
+      totalLeads,
+      wonLeads,
+      inDiscussion,
+      quotesSent,
+      conversionRate
+    };
+  }, [leads]);
+
+  // Label for 3-month appointment scope window (Prev Month, Current Month, Next Month)
+  const threeMonthWindowLabel = useMemo(() => {
+    const now = new Date();
+    const prevM = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const nextM = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const prevStr = prevM.toLocaleString('en-AU', { month: 'short' });
+    const nextStr = nextM.toLocaleString('en-AU', { month: 'short', year: 'numeric' });
+    return `${prevStr} – ${nextStr}`;
+  }, []);
+
+  // Filter appointments specifically linked ONLY to this franchisee's leads/companies OR Aleyna training,
+  // restricted to Previous Month, Current Month, and Next Month
   const franchiseeAppointments = useMemo(() => {
+    const now = new Date();
+    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0);
+    const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 999);
+
     return appointments.filter((appt) => {
       const isTerritoryLead = territoryLeadIds.has(appt.leadId);
       const isAleyna =
@@ -232,7 +333,16 @@ export default function FranchiseeHomeClient() {
         (appt as any).franchisee === activeFranName ||
         (appt as any).franchisee === userProfile?.franchisee;
 
-      return isTerritoryLead || isAleyna || isAssignedToUser || isTerritoryFran;
+      const matchesContext = isTerritoryLead || isAleyna || isAssignedToUser || isTerritoryFran;
+      if (!matchesContext) return false;
+
+      // Restrict date range to Previous Month, Current Month, and Next Month
+      const rawDate = appt.duedate || appt.appointmentDate || (appt as any).createdAt || (appt as any).created_at;
+      if (!rawDate) return true;
+      const apptDate = new Date(rawDate);
+      if (isNaN(apptDate.getTime())) return true;
+
+      return apptDate >= startOfPrevMonth && apptDate <= endOfNextMonth;
     });
   }, [appointments, territoryLeadIds, userDisplayName, userProfile, activeFranName, user?.uid]);
 
@@ -461,27 +571,102 @@ export default function FranchiseeHomeClient() {
   return (
     <div className="flex flex-col gap-6 p-4 md:p-8 max-w-7xl mx-auto w-full">
       {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-[#095c7b] to-[#0d7ca5] text-white p-6 rounded-2xl shadow-md border border-[#095c7b]/30">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-[#095c7b] via-[#0b6a8d] to-[#0d7ca5] text-white p-6 rounded-2xl shadow-md border border-[#095c7b]/30">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Welcome to Your <span className="font-extrabold">ProspectPlus</span> Homepage!
+              Welcome to Your <span className="font-extrabold text-[#eaf143]">ProspectPlus</span> Homepage!
             </h1>
           </div>
-          <p className="text-slate-200 text-sm sm:text-base font-medium">
+          <p className="text-slate-100 text-sm sm:text-base font-medium">
             Welcome back, <strong className="text-[#eaf143]">{userFirstName}</strong>! Here is your central hub for managing territory leads, appointments, and sales reporting.
           </p>
         </div>
 
-        {/* Territory Switcher & Quick Badge */}
-        <div className="flex items-center gap-3 self-start md:self-center bg-white/10 backdrop-blur-md p-2 rounded-xl border border-white/20">
-          <Store className="h-5 w-5 text-[#eaf143] shrink-0" />
-          <div className="flex flex-col">
-            <span className="text-[10px] uppercase font-bold text-slate-200 tracking-wider">Active Territory</span>
-            <span className="text-sm font-bold text-white">{activeFranName}</span>
+        {/* Territory Switcher & Primary Create Lead CTA Button */}
+        <div className="flex flex-wrap items-center gap-3 self-start lg:self-center">
+          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md p-2 rounded-xl border border-white/20">
+            <Store className="h-5 w-5 text-[#eaf143] shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase font-bold text-slate-200 tracking-wider">Active Territory</span>
+              <span className="text-sm font-bold text-white">{activeFranName}</span>
+            </div>
+            <FranchiseeSwitcher />
           </div>
-          <FranchiseeSwitcher />
+
+          <Button
+            asChild
+            className="bg-[#eaf143] hover:bg-[#dce336] text-[#095c7b] font-extrabold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 h-11 px-5 rounded-xl border border-yellow-300 shrink-0"
+          >
+            <Link href="/leads/new">
+              <PlusCircle className="h-5 w-5 text-[#095c7b]" />
+              <span>Create New Lead</span>
+            </Link>
+          </Button>
         </div>
+      </div>
+
+      {/* HERO QUICK METRICS STRIP */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="border-[#095c7b]/20 bg-gradient-to-br from-emerald-500/10 via-white to-white shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shrink-0">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">This Month Conversion</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{currentMonthSnapshot.conversionRate}%</span>
+                <span className="text-[11px] text-emerald-700 font-semibold truncate">{currentMonthSnapshot.wonLeads} Won</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#095c7b]/20 bg-gradient-to-br from-indigo-500/10 via-white to-white shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 shrink-0">
+              <Briefcase className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Total Territory Leads</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{metrics.total}</span>
+                <span className="text-[11px] text-slate-500 font-medium">In Pipeline</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#095c7b]/20 bg-gradient-to-br from-amber-500/10 via-white to-white shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 shrink-0">
+              <CalendarCheck className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Appointments Scope</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{franchiseeAppointments.length}</span>
+                <span className="text-[11px] text-amber-700 font-semibold truncate">3-Month Window</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#095c7b]/20 bg-gradient-to-br from-teal-500/10 via-white to-white shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-teal-100 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 shrink-0">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Current Month Wins</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{currentMonthSnapshot.wonLeads}</span>
+                <span className="text-[11px] text-teal-700 font-semibold truncate">{currentMonthSnapshot.monthName}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* ROW 1: CALENDAR & REMINDERS/UPDATES */}
@@ -574,18 +759,25 @@ export default function FranchiseeHomeClient() {
         {/* REMINDERS / UPDATES SECTION - TABBED LAYOUT FOR APPOINTMENT STATUSES + ALEYNA TRAINING */}
         <Card className="lg:col-span-7 flex flex-col border-[#095c7b]/30 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="bg-slate-50/80 border-b pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-lg bg-[#095c7b]/10 text-[#095c7b]">
                   <Bell className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg font-bold text-[#095c7b]">Reminders/Updates?</CardTitle>
-                  <CardDescription className="text-xs">Appointments for your territory leads & Aleyna training sessions</CardDescription>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-lg font-bold text-[#095c7b]">Reminders/Updates?</CardTitle>
+                    <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30 text-[10px] font-bold">
+                      📅 Scope: 3-Month Window ({threeMonthWindowLabel})
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-xs">
+                    Appointments across Previous, Current, & Next Month ({threeMonthWindowLabel})
+                  </CardDescription>
                 </div>
               </div>
               <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] font-bold text-xs">
-                {franchiseeAppointments.length} Total Appointments
+                {franchiseeAppointments.length} Appointments
               </Badge>
             </div>
           </CardHeader>
@@ -655,44 +847,9 @@ export default function FranchiseeHomeClient() {
         </Card>
       </div>
 
-      {/* ROW 2: CREATE A LEAD | FRANCHISEE LEADS OVERVIEW | SALES PROCESS SNAPSHOT */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* CARD 1: CREATE A LEAD */}
-        <Card className="flex flex-col border-2 border-[#095c7b] shadow-md hover:shadow-lg transition-all bg-gradient-to-b from-[#095c7b]/5 to-white group">
-          <CardHeader className="pb-3 border-b border-[#095c7b]/20 bg-[#095c7b]/10">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-[#095c7b] text-white shadow-sm group-hover:scale-105 transition-transform">
-                <PlusCircle className="h-5 w-5" />
-              </div>
-              <CardTitle className="text-lg font-extrabold text-[#095c7b]">Create a Lead:</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-5 flex-1 flex flex-col justify-between space-y-4">
-            <p className="text-sm text-slate-700 font-medium leading-relaxed">
-              Use this page to enter any <strong>New</strong> or <strong>Hot</strong> leads.
-            </p>
-
-            <div className="space-y-2 bg-slate-50 p-3 rounded-lg border text-xs text-slate-600">
-              <div className="flex items-center gap-2 font-semibold text-[#095c7b]">
-                <Flame className="h-4 w-4 text-red-500" /> Hot Leads get prioritized processing
-              </div>
-              <p>Submitted leads are automatically tagged with your territory and routed for instant account verification.</p>
-            </div>
-          </CardContent>
-          <CardFooter className="p-4 pt-0">
-            <Button
-              asChild
-              className="w-full bg-[#095c7b] hover:bg-[#095c7b]/90 text-white font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 h-11 text-sm"
-            >
-              <Link href="/leads/new">
-                <PlusCircle className="h-4 w-4 text-[#eaf143]" />
-                Create New Lead
-              </Link>
-            </Button>
-          </CardFooter>
-        </Card>
-
-        {/* CARD 2: FRANCHISEE LEADS OVERVIEW */}
+      {/* ROW 2: ALL LEADS HUB & SALES PROCESS SNAPSHOT (CURRENT MONTH VIEW) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* CARD 1: ALL LEADS BREAKDOWN */}
         <Card className="flex flex-col border-2 border-[#095c7b] shadow-md hover:shadow-lg transition-all bg-gradient-to-b from-white to-slate-50/50 group">
           <CardHeader className="pb-3 border-b border-[#095c7b]/20 bg-[#095c7b]/10">
             <div className="flex items-center justify-between">
@@ -700,39 +857,47 @@ export default function FranchiseeHomeClient() {
                 <div className="p-2 rounded-lg bg-[#095c7b] text-white shadow-sm group-hover:scale-105 transition-transform">
                   <Briefcase className="h-5 w-5" />
                 </div>
-                <CardTitle className="text-lg font-extrabold text-[#095c7b]">Franchisee Leads Overview:</CardTitle>
+                <div>
+                  <CardTitle className="text-lg font-extrabold text-[#095c7b]">All Leads:</CardTitle>
+                  <CardDescription className="text-xs">Live distribution across territory pipeline</CardDescription>
+                </div>
               </div>
+              <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] font-bold text-xs">
+                {metrics.total} Total Leads
+              </Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-5 flex-1 flex flex-col justify-between space-y-4">
+          <CardContent className="p-4 flex-1 flex flex-col justify-between space-y-3">
             <p className="text-xs text-slate-600 leading-relaxed">
-              This is a comprehensive lead reporting hub for all leads within your territory. Track pipeline status, quotes sent, active trials, customer sources, and contact assigned Account Managers directly.
+              Comprehensive breakdown of your territory leads grouped by active trial types, quote status, work in progress, and lead priorities.
             </p>
 
-            {/* Territory Live Mini Stats */}
-            <div className="grid grid-cols-2 gap-2 text-center">
-              <div className="p-2.5 rounded-lg bg-slate-100 border flex flex-col items-center">
-                <span className="text-xs text-slate-500 font-semibold">Total Territory Leads</span>
-                <span className="text-lg font-extrabold text-[#095c7b]">{metrics.total}</span>
+            {/* Territory Live Lead Distribution Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 flex flex-col justify-between shadow-xs">
+                <span className="text-[11px] text-amber-800 font-semibold truncate">Quote Sent / Accepted</span>
+                <span className="text-lg font-extrabold text-amber-900 mt-1">{leadDistribution.quoteSentAccepted}</span>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-100 border flex flex-col items-center">
-                <span className="text-xs text-slate-500 font-semibold">Active Trials / Quotes</span>
-                <span className="text-lg font-extrabold text-teal-600">{metrics.activeTrials}</span>
+              <div className="p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 flex flex-col justify-between shadow-xs">
+                <span className="text-[11px] text-emerald-800 font-semibold truncate">In LocalMile Trial</span>
+                <span className="text-lg font-extrabold text-emerald-900 mt-1">{leadDistribution.localMileTrial}</span>
               </div>
-            </div>
-
-            {/* Assigned Account Manager */}
-            <div className="p-2.5 rounded-lg bg-[#095c7b]/5 border border-[#095c7b]/20 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-[#095c7b]" />
-                <span className="text-slate-700">Account Manager: <strong>{metrics.assignedAM}</strong></span>
+              <div className="p-2.5 rounded-xl bg-indigo-50/90 border border-indigo-200 flex flex-col justify-between shadow-xs">
+                <span className="text-[11px] text-indigo-800 font-semibold truncate">ShipMate Trial</span>
+                <span className="text-lg font-extrabold text-indigo-900 mt-1">{leadDistribution.shipMateTrial}</span>
               </div>
-              <a
-                href={`mailto:luke.forbes@mailplus.com.au?subject=Territory%20Lead%20Inquiry%20-${encodeURIComponent(activeFranName)}`}
-                className="text-[#095c7b] hover:underline font-bold text-[11px]"
-              >
-                Contact
-              </a>
+              <div className="p-2.5 rounded-xl bg-sky-50/90 border border-sky-200 flex flex-col justify-between shadow-xs">
+                <span className="text-[11px] text-sky-800 font-semibold truncate">Work In Progress</span>
+                <span className="text-lg font-extrabold text-sky-900 mt-1">{leadDistribution.workInProgress}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-rose-50/90 border border-rose-200 flex flex-col justify-between shadow-xs">
+                <span className="text-[11px] text-rose-800 font-semibold truncate">Hot / Priority Leads</span>
+                <span className="text-lg font-extrabold text-rose-900 mt-1">{leadDistribution.hotPriorityLeads}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-100/90 border border-slate-200 flex flex-col justify-between shadow-xs">
+                <span className="text-[11px] text-slate-700 font-semibold truncate">New Leads</span>
+                <span className="text-lg font-extrabold text-slate-900 mt-1">{leadDistribution.newLeads}</span>
+              </div>
             </div>
           </CardContent>
           <CardFooter className="p-4 pt-0">
@@ -742,42 +907,70 @@ export default function FranchiseeHomeClient() {
             >
               <Link href="/franchisee-leads">
                 <Briefcase className="h-4 w-4 text-[#eaf143]" />
-                Go to Franchisee Leads Hub
+                Go to All Leads Hub
               </Link>
             </Button>
           </CardFooter>
         </Card>
 
-        {/* CARD 3: SALES PROCESS SNAPSHOT */}
+        {/* CARD 2: SALES PROCESS SNAPSHOT (CURRENT MONTH HIGH LEVEL VIEW) */}
         <Card className="flex flex-col border-2 border-[#095c7b] shadow-md hover:shadow-lg transition-all bg-gradient-to-b from-white to-slate-50/50 group">
           <CardHeader className="pb-3 border-b border-[#095c7b]/20 bg-[#095c7b]/10">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-[#095c7b] text-white shadow-sm group-hover:scale-105 transition-transform">
-                <BarChart3 className="h-5 w-5" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-[#095c7b] text-white shadow-sm group-hover:scale-105 transition-transform">
+                  <BarChart3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-extrabold text-[#095c7b]">Sales Process Snapshot:</CardTitle>
+                  <CardDescription className="text-xs">High-level view of current month performance</CardDescription>
+                </div>
               </div>
-              <CardTitle className="text-lg font-extrabold text-[#095c7b]">Sales Process Snapshot:</CardTitle>
+              <Badge className="bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 shadow-xs">
+                <Sparkles className="h-3 w-3 text-[#eaf143]" />
+                {currentMonthSnapshot.monthName}
+              </Badge>
             </div>
           </CardHeader>
           <CardContent className="p-5 flex-1 flex flex-col justify-between space-y-4">
             <p className="text-xs text-slate-600 leading-relaxed">
-              This page covers all your reporting needs – from unified conversion metrics to detailed pipeline analysis. You can track the progress of each lead across the sales workflow.
+              High-level overview of lead conversions, active quotes, and closed deals strictly for <strong>{currentMonthSnapshot.monthName}</strong>.
             </p>
 
-            {/* Sales Process Progress Breakdown */}
-            <div className="space-y-2 bg-slate-50 p-3 rounded-lg border text-xs">
-              <div className="flex justify-between items-center text-slate-700 font-semibold">
-                <span>Territory Pipeline Progress</span>
-                <span className="text-[#095c7b] font-bold">{metrics.total > 0 ? Math.round((metrics.wonLeads / metrics.total) * 100) : 0}% Conversion</span>
+            {/* Current Month High Level Metrics */}
+            <div className="space-y-3 bg-gradient-to-br from-slate-50 to-teal-50/40 p-4 rounded-xl border border-slate-200/80">
+              <div className="flex items-end justify-between">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Current Month Conversion Rate</span>
+                  <div className="text-2xl font-black text-[#095c7b] mt-0.5">
+                    {currentMonthSnapshot.conversionRate}%
+                  </div>
+                </div>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold text-xs">
+                  {currentMonthSnapshot.wonLeads} / {currentMonthSnapshot.totalLeads} Leads Converted
+                </Badge>
               </div>
-              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+
+              <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden shadow-inner">
                 <div
-                  className="bg-gradient-to-r from-[#095c7b] to-teal-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${metrics.total > 0 ? Math.max(15, Math.round((metrics.wonLeads / metrics.total) * 100)) : 15}%` }}
+                  className="bg-gradient-to-r from-[#095c7b] via-teal-500 to-[#eaf143] h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.max(10, currentMonthSnapshot.conversionRate)}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[11px] text-slate-500 pt-1">
-                <span>{metrics.quotesSent} In Discussion</span>
-                <span>{metrics.wonLeads} Won Customers</span>
+
+              <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                <div className="bg-white/80 p-2 rounded-lg border border-slate-200 text-xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">Won Customers</span>
+                  <span className="font-extrabold text-emerald-700 text-sm">{currentMonthSnapshot.wonLeads}</span>
+                </div>
+                <div className="bg-white/80 p-2 rounded-lg border border-slate-200 text-xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">In Discussion</span>
+                  <span className="font-extrabold text-sky-700 text-sm">{currentMonthSnapshot.inDiscussion}</span>
+                </div>
+                <div className="bg-white/80 p-2 rounded-lg border border-slate-200 text-xs">
+                  <span className="text-[10px] text-slate-500 block font-semibold">Quotes Sent</span>
+                  <span className="font-extrabold text-amber-700 text-sm">{currentMonthSnapshot.quotesSent}</span>
+                </div>
               </div>
             </div>
           </CardContent>

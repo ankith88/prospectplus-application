@@ -47,25 +47,36 @@ import {
 } from 'lucide-react';
 
 // Status Classification Helpers
-const ACTIONED_STATUSES: LeadStatus[] = [
-  'Contacted', 'In Progress', 'Connected', 'In Qualification', 'High Touch', 
-  'Qualified', 'Pre Qualified', 'Priority Lead', 'Hot Lead', 'Priority Field Lead',
-  'Reschedule', 'Future Follow-up'
-];
-
-const QUOTE_STATUSES: LeadStatus[] = [
+// Status Classification Helpers
+const QUOTE_SENT_ACCEPTED_STATUSES: string[] = [
   'Quote Sent', 'Quote Accepted'
 ];
 
-const TRIAL_STATUSES: LeadStatus[] = [
-  'Free Trial', 'Trialing LocalMile', 'Trialing ShipMate', 'LocalMile Pending', 'LocalMile Opportunity'
+const LOCALMILE_TRIAL_STATUSES: string[] = [
+  'Trialing LocalMile', 'LocalMile Pending', 'LocalMile Opportunity', 'LocalMile Trial'
 ];
 
-const WON_STATUSES: LeadStatus[] = [
+const SHIPMATE_TRIAL_STATUSES: string[] = [
+  'Trialing ShipMate', 'ShipMate Trial', 'Free Trial'
+];
+
+const WORK_IN_PROGRESS_STATUSES: string[] = [
+  'In Progress', 'Contacted', 'Connected', 'In Qualification', 'Qualified', 'Pre Qualified', 'Reschedule', 'Future Follow-up', 'High Touch'
+];
+
+const HOT_PRIORITY_STATUSES: string[] = [
+  'Hot Lead', 'Priority Lead', 'Priority Field Lead'
+];
+
+const NEW_STATUSES: string[] = [
+  'New', 'New Lead', 'Uncontacted'
+];
+
+const WON_STATUSES: string[] = [
   'Won', 'Customer Opportunity'
 ];
 
-const LOST_STATUSES: LeadStatus[] = [
+const LOST_STATUSES: string[] = [
   'Lost', 'Lost Customer', 'Unqualified', 'Out of Territory'
 ];
 
@@ -82,7 +93,6 @@ export default function FranchiseeLeadsClientPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<string>('all');
   const [selectedSpecificStatus, setSelectedSpecificStatus] = useState<string>('all');
-  const [selectedAm, setSelectedAm] = useState<string>('all');
   const [selectedLeadSource, setSelectedLeadSource] = useState<string>('all'); // all, inbound, outbound
   const [selectedBucket, setSelectedBucket] = useState<string>('all');
   const [selectedCustomerSource, setSelectedCustomerSource] = useState<string>('all');
@@ -94,13 +104,6 @@ export default function FranchiseeLeadsClientPage() {
   // Sorting State
   const [sortField, setSortField] = useState<keyof Lead | 'bucket' | 'customerSource'>('companyName');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-
-  // Contact Account Manager Dialog State
-  const [contactDialogOpen, setContactDialogOpen] = useState<boolean>(false);
-  const [activeLeadForContact, setActiveLeadForContact] = useState<Lead | null>(null);
-  const [amEmailSubject, setAmEmailSubject] = useState<string>('');
-  const [amEmailBody, setAmEmailBody] = useState<string>('');
-  const [sendingEmail, setSendingEmail] = useState<boolean>(false);
 
   // Outbound Status Info Dialog State
   const [outboundInfoDialogOpen, setOutboundInfoDialogOpen] = useState<boolean>(false);
@@ -162,26 +165,49 @@ export default function FranchiseeLeadsClientPage() {
   // Reset to page 1 whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategoryTab, selectedSpecificStatus, selectedAm, selectedLeadSource, selectedBucket, selectedCustomerSource, pageSize]);
+  }, [searchQuery, selectedCategoryTab, selectedSpecificStatus, selectedLeadSource, selectedBucket, selectedCustomerSource, pageSize]);
 
-  // Metric counts and reporting summary
+  // Metric counts and distribution breakdown
   const metrics = useMemo(() => {
     const total = leads.length;
-    const actioned = leads.filter(l => ACTIONED_STATUSES.includes(l.status as LeadStatus)).length;
-    const quote = leads.filter(l => QUOTE_STATUSES.includes(l.status as LeadStatus)).length;
-    const trial = leads.filter(l => TRIAL_STATUSES.includes(l.status as LeadStatus)).length;
-    const lost = leads.filter(l => LOST_STATUSES.includes(l.status as LeadStatus)).length;
-    
-    const inboundCount = leads.filter(l => 
-      (l as any).bucket === 'inbound' || 
-      (l as any).leadSource === 'Inbound' || 
-      (l as any).inboundType || 
-      (l.customerSource || '').toLowerCase().includes('inbound') || 
-      (l.customerSource || '').toLowerCase().includes('website')
-    ).length;
-    const outboundCount = total - inboundCount;
 
-    return { total, actioned, quote, trial, lost, inboundCount, outboundCount };
+    const quoteSentAccepted = leads.filter(l =>
+      QUOTE_SENT_ACCEPTED_STATUSES.includes(l.status as LeadStatus)
+    ).length;
+
+    const localMileTrial = leads.filter(l =>
+      LOCALMILE_TRIAL_STATUSES.includes(l.status as LeadStatus) ||
+      ((l as any).trialType || '').toLowerCase().includes('localmile')
+    ).length;
+
+    const shipMateTrial = leads.filter(l =>
+      SHIPMATE_TRIAL_STATUSES.includes(l.status as LeadStatus) ||
+      ((l as any).trialType || '').toLowerCase().includes('shipmate')
+    ).length;
+
+    const workInProgress = leads.filter(l =>
+      WORK_IN_PROGRESS_STATUSES.includes(l.status as LeadStatus)
+    ).length;
+
+    const hotPriorityLeads = leads.filter(l =>
+      HOT_PRIORITY_STATUSES.includes(l.status as LeadStatus) ||
+      (l as any).priority === 'High' ||
+      (l as any).isHot === true
+    ).length;
+
+    const newLeads = leads.filter(l =>
+      NEW_STATUSES.includes(l.status as LeadStatus) || !l.status
+    ).length;
+
+    return {
+      total,
+      quoteSentAccepted,
+      localMileTrial,
+      shipMateTrial,
+      workInProgress,
+      hotPriorityLeads,
+      newLeads
+    };
   }, [leads]);
 
   // Dynamic unique list of Customer Sources for filtering
@@ -206,16 +232,6 @@ export default function FranchiseeLeadsClientPage() {
       }
     });
     return Array.from(bSet).sort();
-  }, [leads]);
-
-  // Unique Account Managers found across leads
-  const amList = useMemo(() => {
-    const amSet = new Set<string>();
-    leads.forEach(l => {
-      const am = l.accountManagerAssigned || l.salesRepAssigned || l.dialerAssigned || (l as any).allocatedTo;
-      if (am && am !== 'Unassigned') amSet.add(am);
-    });
-    return Array.from(amSet).sort();
   }, [leads]);
 
   // Unique statuses found across leads
@@ -256,14 +272,22 @@ export default function FranchiseeLeadsClientPage() {
       }
 
       // 2. Category Tab Filter
-      if (selectedCategoryTab === 'actioned') {
-        if (!ACTIONED_STATUSES.includes(lead.status as LeadStatus)) return false;
-      } else if (selectedCategoryTab === 'quote') {
-        if (!QUOTE_STATUSES.includes(lead.status as LeadStatus)) return false;
-      } else if (selectedCategoryTab === 'trial') {
-        if (!TRIAL_STATUSES.includes(lead.status as LeadStatus)) return false;
-      } else if (selectedCategoryTab === 'lost') {
-        if (!LOST_STATUSES.includes(lead.status as LeadStatus)) return false;
+      if (selectedCategoryTab === 'quote') {
+        if (!QUOTE_SENT_ACCEPTED_STATUSES.includes(lead.status as LeadStatus)) return false;
+      } else if (selectedCategoryTab === 'localmile') {
+        const isLM = LOCALMILE_TRIAL_STATUSES.includes(lead.status as LeadStatus) || ((lead as any).trialType || '').toLowerCase().includes('localmile');
+        if (!isLM) return false;
+      } else if (selectedCategoryTab === 'shipmate') {
+        const isSM = SHIPMATE_TRIAL_STATUSES.includes(lead.status as LeadStatus) || ((lead as any).trialType || '').toLowerCase().includes('shipmate');
+        if (!isSM) return false;
+      } else if (selectedCategoryTab === 'wip') {
+        if (!WORK_IN_PROGRESS_STATUSES.includes(lead.status as LeadStatus)) return false;
+      } else if (selectedCategoryTab === 'hot') {
+        const isHot = HOT_PRIORITY_STATUSES.includes(lead.status as LeadStatus) || (lead as any).priority === 'High' || (lead as any).isHot === true;
+        if (!isHot) return false;
+      } else if (selectedCategoryTab === 'new') {
+        const isNew = NEW_STATUSES.includes(lead.status as LeadStatus) || !lead.status;
+        if (!isNew) return false;
       }
 
       // 3. Specific Status Dropdown
@@ -271,13 +295,7 @@ export default function FranchiseeLeadsClientPage() {
         return false;
       }
 
-      // 4. Account Manager Filter
-      if (selectedAm !== 'all') {
-        const am = lead.accountManagerAssigned || lead.salesRepAssigned || lead.dialerAssigned || (lead as any).allocatedTo;
-        if (am !== selectedAm) return false;
-      }
-
-      // 5. Lead Type Filter (Inbound vs Outbound)
+      // 4. Lead Type Filter (Inbound vs Outbound)
       if (selectedLeadSource === 'inbound') {
         const isInbound = (lead as any).bucket === 'inbound' || (lead as any).leadSource === 'Inbound' || !!(lead as any).inboundType || (lead.customerSource || '').toLowerCase().includes('inbound') || (lead.customerSource || '').toLowerCase().includes('website');
         if (!isInbound) return false;
@@ -286,13 +304,13 @@ export default function FranchiseeLeadsClientPage() {
         if (isInbound) return false;
       }
 
-      // 6. Bucket Dropdown Filter
+      // 5. Bucket Dropdown Filter
       if (selectedBucket !== 'all') {
         const b = (lead as any).bucket || (lead as any).salesRepBucket || '';
         if (b.toLowerCase() !== selectedBucket.toLowerCase()) return false;
       }
 
-      // 7. Customer Source Dropdown Filter
+      // 6. Customer Source Dropdown Filter
       if (selectedCustomerSource !== 'all') {
         const src = lead.customerSource || (lead as any).leadSource || (lead as any).source || '';
         if (src.toLowerCase() !== selectedCustomerSource.toLowerCase()) return false;
@@ -300,7 +318,7 @@ export default function FranchiseeLeadsClientPage() {
 
       return true;
     });
-  }, [leads, searchQuery, selectedCategoryTab, selectedSpecificStatus, selectedAm, selectedLeadSource, selectedBucket, selectedCustomerSource]);
+  }, [leads, searchQuery, selectedCategoryTab, selectedSpecificStatus, selectedLeadSource, selectedBucket, selectedCustomerSource]);
 
   // Sorted Leads
   const sortedLeads = useMemo(() => {
@@ -352,19 +370,9 @@ export default function FranchiseeLeadsClientPage() {
     setSearchQuery('');
     setSelectedCategoryTab('all');
     setSelectedSpecificStatus('all');
-    setSelectedAm('all');
     setSelectedLeadSource('all');
     setSelectedBucket('all');
     setSelectedCustomerSource('all');
-  };
-
-  // Helper to open Contact AM Dialog
-  const handleOpenContactAm = (lead: Lead) => {
-    setActiveLeadForContact(lead);
-    const leadAmName = lead.accountManagerAssigned || lead.salesRepAssigned || lead.dialerAssigned || (lead as any).allocatedTo || 'Account Manager';
-    setAmEmailSubject(`Inquiry regarding Lead: ${lead.companyName} (${lead.id})`);
-    setAmEmailBody(`Hi ${leadAmName},\n\nI am contacting you regarding the lead "${lead.companyName}" (ID: ${lead.id}) assigned to ${franchiseeName || 'our franchise'}.\n\nCould you please provide an update on this lead?\n\nThank you!`);
-    setContactDialogOpen(true);
   };
 
   // Helper to check if a lead is in the Outbound bucket
@@ -547,78 +555,16 @@ export default function FranchiseeLeadsClientPage() {
     );
   };
 
-  // Resolve assigned user object for lead
-  const getAssignedUserForLead = (lead: Lead | null) => {
-    if (!lead) return null;
-    const amName = lead.accountManagerAssigned || lead.salesRepAssigned || lead.dialerAssigned || (lead as any).allocatedTo;
-    if (!amName || amName === 'Unassigned') return null;
 
-    const matched = users.find(u => {
-      const uName = (u.displayName || `${u.firstName || ''} ${u.lastName || ''}`).toLowerCase().trim();
-      const targetName = amName.toLowerCase().trim();
-      return uName === targetName || u.email?.toLowerCase().trim() === targetName;
-    });
-
-    return matched || { displayName: amName, email: undefined, phoneNumber: undefined, mobileNumber: undefined, activeRole: undefined };
-  };
-
-  // Send Direct Email to AM
-  const handleSendAmEmail = async () => {
-    if (!activeLeadForContact) return;
-    const amUser = getAssignedUserForLead(activeLeadForContact);
-    const targetEmail = amUser?.email;
-
-    if (!targetEmail) {
-      toast({
-        title: 'Email Address Not Found',
-        description: 'Unable to locate an email address for the assigned Account Manager. Please use your standard mail client.',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    try {
-      setSendingEmail(true);
-      const response = await fetch('/api/campaigns/send-direct', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          toEmail: targetEmail,
-          subject: amEmailSubject,
-          bodyHtml: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">${amEmailBody.replace(/\n/g, '<br/>')}</div>`,
-          leadId: activeLeadForContact.id,
-          senderName: userProfile?.displayName || userProfile?.email || 'Franchisee User'
-        })
-      });
-
-      if (response.ok) {
-        toast({
-          title: 'Message Sent!',
-          description: `Your message has been emailed directly to ${amUser?.displayName || targetEmail}.`
-        });
-        setContactDialogOpen(false);
-      } else {
-        throw new Error('Failed to send email via API');
-      }
-    } catch (err) {
-      console.error('Error sending AM email:', err);
-      window.location.href = `mailto:${targetEmail}?subject=${encodeURIComponent(amEmailSubject)}&body=${encodeURIComponent(amEmailBody)}`;
-      toast({
-        title: 'Opened Mail Client',
-        description: 'Direct email dispatch failed, opening your default email application instead.'
-      });
-      setContactDialogOpen(false);
-    } finally {
-      setSendingEmail(false);
-    }
-  };
 
   // Status Badge Color Helper
   const getStatusBadgeVariant = (status: string) => {
-    if (QUOTE_STATUSES.includes(status as LeadStatus)) return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800';
-    if (TRIAL_STATUSES.includes(status as LeadStatus)) return 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800';
-    if (WON_STATUSES.includes(status as LeadStatus)) return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800';
-    if (ACTIONED_STATUSES.includes(status as LeadStatus)) return 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800';
+    if (QUOTE_SENT_ACCEPTED_STATUSES.includes(status as LeadStatus)) return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800';
+    if (LOCALMILE_TRIAL_STATUSES.includes(status as LeadStatus)) return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800';
+    if (SHIPMATE_TRIAL_STATUSES.includes(status as LeadStatus)) return 'bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800';
+    if (WORK_IN_PROGRESS_STATUSES.includes(status as LeadStatus)) return 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800';
+    if (HOT_PRIORITY_STATUSES.includes(status as LeadStatus)) return 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800';
+    if (WON_STATUSES.includes(status as LeadStatus)) return 'bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800';
     if (LOST_STATUSES.includes(status as LeadStatus)) return 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800';
     return 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700';
   };
@@ -660,11 +606,9 @@ export default function FranchiseeLeadsClientPage() {
     return <FullScreenLoader message="Loading Franchisee Leads Overview..." />;
   }
 
-  const activeAmUser = getAssignedUserForLead(activeLeadForContact);
   const activeFiltersCount = [
     selectedCategoryTab !== 'all',
     selectedSpecificStatus !== 'all',
-    selectedAm !== 'all',
     selectedLeadSource !== 'all',
     selectedBucket !== 'all',
     selectedCustomerSource !== 'all',
@@ -678,7 +622,7 @@ export default function FranchiseeLeadsClientPage() {
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-white">
-              Franchisee Leads Overview
+              All Leads
             </h1>
             {franchiseeName && (
               <Badge className="bg-teal-500/20 text-teal-300 border-teal-500/30 text-xs sm:text-sm font-semibold px-2.5 py-0.5 sm:px-3 sm:py-1">
@@ -687,7 +631,7 @@ export default function FranchiseeLeadsClientPage() {
             )}
           </div>
           <p className="text-slate-300 text-xs sm:text-sm md:text-base max-w-3xl leading-relaxed">
-            Comprehensive lead reporting hub for your franchise. Track pipeline status, quotes sent, active trials, customer sources, and contact assigned Account Managers directly.
+            Comprehensive lead reporting hub for your franchise. Track lead distribution across Quote Sent/Accepted, In LocalMile Trial, ShipMate Trial, Work In Progress, Hot Leads/Priority Leads, and New leads.
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -714,97 +658,107 @@ export default function FranchiseeLeadsClientPage() {
         </div>
       </div>
 
-      {/* KPI Performance Reporting Banner */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 md:gap-4">
-        {/* Total Leads */}
-        <Card 
-          onClick={() => setSelectedCategoryTab('all')}
-          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'all' ? 'border-l-slate-800 ring-2 ring-slate-400/20 bg-slate-50 dark:bg-slate-900' : 'border-l-slate-400'}`}
-        >
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-              <span>Total Leads</span>
-              <Briefcase className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
-            </div>
-            <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
-              {metrics.total}
-            </div>
-            <div className="text-xs text-slate-500 mt-1 flex items-center gap-1 flex-wrap">
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200">
-                {metrics.inboundCount} Inbound
-              </Badge>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-purple-50 text-purple-700 border-purple-200">
-                {metrics.outboundCount} Outbound
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Actioned / Active */}
-        <Card 
-          onClick={() => setSelectedCategoryTab('actioned')}
-          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'actioned' ? 'border-l-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/30' : 'border-l-blue-500'}`}
-        >
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">
-              <span>Active / Actioned</span>
-              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
-            </div>
-            <div className="text-xl sm:text-2xl font-bold text-blue-950 dark:text-blue-100">
-              {metrics.actioned}
-            </div>
-            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">In progress & follow-ups</p>
-          </CardContent>
-        </Card>
-
-        {/* Quotes Sent */}
+      {/* KPI Performance Reporting Banner - 6 Requested Lead Distribution Categories */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 md:gap-4">
+        {/* Quote Sent / Accepted */}
         <Card 
           onClick={() => setSelectedCategoryTab('quote')}
           className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'quote' ? 'border-l-amber-600 ring-2 ring-amber-500/20 bg-amber-50/50 dark:bg-amber-950/30' : 'border-l-amber-500'}`}
         >
           <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">
-              <span>Quotes Sent</span>
+              <span>Quote Sent / Accepted</span>
               <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500" />
             </div>
             <div className="text-xl sm:text-2xl font-bold text-amber-950 dark:text-amber-100">
-              {metrics.quote}
+              {metrics.quoteSentAccepted}
             </div>
-            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Pending sign-up</p>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Quotes & acceptance</p>
           </CardContent>
         </Card>
 
-        {/* Free Trial */}
+        {/* In LocalMile Trial */}
         <Card 
-          onClick={() => setSelectedCategoryTab('trial')}
-          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'trial' ? 'border-l-purple-600 ring-2 ring-purple-500/20 bg-purple-50/50 dark:bg-purple-950/30' : 'border-l-purple-500'}`}
+          onClick={() => setSelectedCategoryTab('localmile')}
+          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'localmile' ? 'border-l-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/30' : 'border-l-emerald-500'}`}
         >
           <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">
-              <span>Free Trials</span>
-              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500" />
+            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">
+              <span>LocalMile Trial</span>
+              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500" />
             </div>
-            <div className="text-xl sm:text-2xl font-bold text-purple-950 dark:text-purple-100">
-              {metrics.trial}
+            <div className="text-xl sm:text-2xl font-bold text-emerald-950 dark:text-emerald-100">
+              {metrics.localMileTrial}
             </div>
-            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Trialing accounts</p>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Trialing LocalMile</p>
           </CardContent>
         </Card>
 
-        {/* Lost / Closed */}
+        {/* ShipMate Trial */}
         <Card 
-          onClick={() => setSelectedCategoryTab('lost')}
-          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 col-span-2 sm:col-span-1 ${selectedCategoryTab === 'lost' ? 'border-l-rose-600 ring-2 ring-rose-500/20 bg-rose-50/50 dark:bg-rose-950/30' : 'border-l-rose-400'}`}
+          onClick={() => setSelectedCategoryTab('shipmate')}
+          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'shipmate' ? 'border-l-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/30' : 'border-l-indigo-500'}`}
+        >
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">
+              <span>ShipMate Trial</span>
+              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-500" />
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-indigo-950 dark:text-indigo-100">
+              {metrics.shipMateTrial}
+            </div>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Trialing ShipMate</p>
+          </CardContent>
+        </Card>
+
+        {/* Work In Progress */}
+        <Card 
+          onClick={() => setSelectedCategoryTab('wip')}
+          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'wip' ? 'border-l-sky-600 ring-2 ring-sky-500/20 bg-sky-50/50 dark:bg-sky-950/30' : 'border-l-sky-500'}`}
+        >
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-sky-600 dark:text-sky-400 uppercase tracking-wider mb-1">
+              <span>Work In Progress</span>
+              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-500" />
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-sky-950 dark:text-sky-100">
+              {metrics.workInProgress}
+            </div>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">In qualification/contacted</p>
+          </CardContent>
+        </Card>
+
+        {/* Hot Leads / Priority Leads */}
+        <Card 
+          onClick={() => setSelectedCategoryTab('hot')}
+          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'hot' ? 'border-l-rose-600 ring-2 ring-rose-500/20 bg-rose-50/50 dark:bg-rose-950/30' : 'border-l-rose-500'}`}
         >
           <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-1">
-              <span>Lost / Closed</span>
-              <HelpCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-400" />
+              <span>Hot / Priority Leads</span>
+              <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-500" />
             </div>
             <div className="text-xl sm:text-2xl font-bold text-rose-950 dark:text-rose-100">
-              {metrics.lost}
+              {metrics.hotPriorityLeads}
             </div>
-            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Archived or lost</p>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">High priority focus</p>
+          </CardContent>
+        </Card>
+
+        {/* New Leads */}
+        <Card 
+          onClick={() => setSelectedCategoryTab('new')}
+          className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'new' ? 'border-l-slate-700 ring-2 ring-slate-400/20 bg-slate-50 dark:bg-slate-900' : 'border-l-slate-400'}`}
+        >
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+              <span>New Leads</span>
+              <Briefcase className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
+              {metrics.newLeads}
+            </div>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Newly submitted</p>
           </CardContent>
         </Card>
       </div>
@@ -824,31 +778,57 @@ export default function FranchiseeLeadsClientPage() {
                 All Leads ({metrics.total})
               </Button>
               <Button
-                variant={selectedCategoryTab === 'actioned' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedCategoryTab('actioned')}
-                className={`shrink-0 text-xs ${selectedCategoryTab === 'actioned' ? 'bg-blue-600 text-white' : ''}`}
-              >
-                <Clock className="h-3.5 w-3.5 mr-1.5" />
-                Active / Actioned ({metrics.actioned})
-              </Button>
-              <Button
                 variant={selectedCategoryTab === 'quote' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setSelectedCategoryTab('quote')}
                 className={`shrink-0 text-xs ${selectedCategoryTab === 'quote' ? 'bg-amber-600 text-white' : ''}`}
               >
                 <FileText className="h-3.5 w-3.5 mr-1.5" />
-                Quote Sent ({metrics.quote})
+                Quote Sent/Accepted ({metrics.quoteSentAccepted})
               </Button>
               <Button
-                variant={selectedCategoryTab === 'trial' ? 'default' : 'outline'}
+                variant={selectedCategoryTab === 'localmile' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setSelectedCategoryTab('trial')}
-                className={`shrink-0 text-xs ${selectedCategoryTab === 'trial' ? 'bg-purple-600 text-white' : ''}`}
+                onClick={() => setSelectedCategoryTab('localmile')}
+                className={`shrink-0 text-xs ${selectedCategoryTab === 'localmile' ? 'bg-emerald-600 text-white' : ''}`}
               >
                 <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                Free Trial ({metrics.trial})
+                LocalMile Trial ({metrics.localMileTrial})
+              </Button>
+              <Button
+                variant={selectedCategoryTab === 'shipmate' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategoryTab('shipmate')}
+                className={`shrink-0 text-xs ${selectedCategoryTab === 'shipmate' ? 'bg-indigo-600 text-white' : ''}`}
+              >
+                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                ShipMate Trial ({metrics.shipMateTrial})
+              </Button>
+              <Button
+                variant={selectedCategoryTab === 'wip' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategoryTab('wip')}
+                className={`shrink-0 text-xs ${selectedCategoryTab === 'wip' ? 'bg-sky-600 text-white' : ''}`}
+              >
+                <Clock className="h-3.5 w-3.5 mr-1.5" />
+                Work In Progress ({metrics.workInProgress})
+              </Button>
+              <Button
+                variant={selectedCategoryTab === 'hot' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategoryTab('hot')}
+                className={`shrink-0 text-xs ${selectedCategoryTab === 'hot' ? 'bg-rose-600 text-white' : ''}`}
+              >
+                <TrendingUp className="h-3.5 w-3.5 mr-1.5" />
+                Hot / Priority ({metrics.hotPriorityLeads})
+              </Button>
+              <Button
+                variant={selectedCategoryTab === 'new' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategoryTab('new')}
+                className={`shrink-0 text-xs ${selectedCategoryTab === 'new' ? 'bg-slate-700 text-white' : ''}`}
+              >
+                New ({metrics.newLeads})
               </Button>
             </div>
 
@@ -866,7 +846,7 @@ export default function FranchiseeLeadsClientPage() {
           </div>
 
           {/* Filter Dropdowns Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Search Input */}
             <div className="relative sm:col-span-2 lg:col-span-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -878,7 +858,7 @@ export default function FranchiseeLeadsClientPage() {
               />
             </div>
 
-            {/* Bucket Filter (Requested Feature) */}
+            {/* Bucket Filter */}
             <div>
               <Select value={selectedBucket} onValueChange={setSelectedBucket}>
                 <SelectTrigger className="text-sm">
@@ -893,7 +873,7 @@ export default function FranchiseeLeadsClientPage() {
               </Select>
             </div>
 
-            {/* Customer Source Filter (Requested Feature) */}
+            {/* Customer Source Filter */}
             <div>
               <Select value={selectedCustomerSource} onValueChange={setSelectedCustomerSource}>
                 <SelectTrigger className="text-sm">
@@ -903,36 +883,6 @@ export default function FranchiseeLeadsClientPage() {
                   <SelectItem value="all">All Customer Sources</SelectItem>
                   {availableCustomerSources.map(src => (
                     <SelectItem key={src} value={src}>{src}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Specific Status Select */}
-            <div>
-              <Select value={selectedSpecificStatus} onValueChange={setSelectedSpecificStatus}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="All Specific Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  {availableStatuses.map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Account Manager Select */}
-            <div>
-              <Select value={selectedAm} onValueChange={setSelectedAm}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="All Account Managers" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Account Managers</SelectItem>
-                  {amList.map(am => (
-                    <SelectItem key={am} value={am}>{am}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -953,7 +903,7 @@ export default function FranchiseeLeadsClientPage() {
                 </Badge>
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                Click "Status Info" for Outbound bucket leads or "Contact AM" for Account Manager bucket leads.
+                View and manage leads in your franchise territory.
               </CardDescription>
             </div>
 
@@ -1016,22 +966,19 @@ export default function FranchiseeLeadsClientPage() {
                       </Button>
                     </TableHead>
 
-                    {/* Bucket (Requested Column) */}
+                    {/* Bucket */}
                     <TableHead className="min-w-[150px]">
                       <Button variant="ghost" size="sm" onClick={() => handleSort('bucket')} className="font-semibold text-xs text-slate-700 dark:text-slate-300 p-0 hover:bg-transparent">
                         Bucket <ArrowUpDown className="ml-1.5 h-3 w-3" />
                       </Button>
                     </TableHead>
 
-                    {/* Customer Source (Requested Column from customerSource) */}
+                    {/* Customer Source */}
                     <TableHead className="min-w-[160px]">
                       <Button variant="ghost" size="sm" onClick={() => handleSort('customerSource')} className="font-semibold text-xs text-slate-700 dark:text-slate-300 p-0 hover:bg-transparent">
                         Customer Source <ArrowUpDown className="ml-1.5 h-3 w-3" />
                       </Button>
                     </TableHead>
-
-                    {/* Assigned AM / Rep */}
-                    <TableHead className="min-w-[180px]">Assigned AM / Rep</TableHead>
 
                     {/* Location */}
                     <TableHead className="min-w-[160px]">Location</TableHead>
@@ -1042,7 +989,6 @@ export default function FranchiseeLeadsClientPage() {
                 </TableHeader>
                 <TableBody>
                   {paginatedLeads.map((lead) => {
-                    const amName = lead.accountManagerAssigned || lead.salesRepAssigned || lead.dialerAssigned || (lead as any).allocatedTo || 'Unassigned';
                     const cityState = [lead.address?.city || lead.city, lead.address?.state || lead.state].filter(Boolean).join(', ');
 
                     const contactName = (lead as any).contactPerson || (lead as any).contactFirstName || lead.contacts?.[0]?.name || '';
@@ -1080,26 +1026,9 @@ export default function FranchiseeLeadsClientPage() {
                           {getBucketBadge(lead)}
                         </TableCell>
 
-                        {/* Customer Source Column (from customerSource) */}
+                        {/* Customer Source Column */}
                         <TableCell className="py-3.5">
                           {getCustomerSourceDisplay(lead)}
-                        </TableCell>
-
-                        {/* Assigned Account Manager */}
-                        <TableCell className="py-3.5">
-                          <div className="flex items-center gap-2">
-                            <div className="h-7 w-7 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 font-semibold text-xs shrink-0">
-                              {amName !== 'Unassigned' ? amName.charAt(0).toUpperCase() : '?'}
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-xs font-medium text-slate-900 dark:text-slate-200 truncate">
-                                {amName}
-                              </span>
-                              <span className="text-[10px] text-slate-500 truncate">
-                                {lead.accountManagerAssigned ? 'Account Mgr' : (lead.salesRepAssigned ? 'Sales Rep' : 'Assigned Staff')}
-                              </span>
-                            </div>
-                          </div>
                         </TableCell>
 
                         {/* Location */}
@@ -1117,7 +1046,7 @@ export default function FranchiseeLeadsClientPage() {
                         {/* Actions */}
                         <TableCell className="py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {isOutboundBucketLead(lead) ? (
+                            {isOutboundBucketLead(lead) && (
                               /* Status Info Button for Outbound Bucket Leads */
                               <Button
                                 size="sm"
@@ -1129,19 +1058,7 @@ export default function FranchiseeLeadsClientPage() {
                                 <HelpCircle className="h-3.5 w-3.5 mr-1 text-amber-600 dark:text-amber-400 shrink-0" />
                                 Status Info
                               </Button>
-                            ) : isAccountManagerBucketLead(lead) ? (
-                              /* Contact AM Button - ONLY for Account Manager Bucket Leads */
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleOpenContactAm(lead)}
-                                title={`Contact ${amName}`}
-                                className="h-8 text-xs font-medium border-teal-200 text-teal-700 hover:bg-teal-50 hover:border-teal-300 dark:border-teal-800 dark:text-teal-300 dark:hover:bg-teal-950/50"
-                              >
-                                <Mail className="h-3.5 w-3.5 mr-1 text-teal-600 dark:text-teal-400 shrink-0" />
-                                Contact AM
-                              </Button>
-                            ) : null}
+                            )}
 
                             {/* View Profile */}
                             <Button
@@ -1244,123 +1161,7 @@ export default function FranchiseeLeadsClientPage() {
         </CardContent>
       </Card>
 
-      {/* Contact Account Manager Dialog Modal */}
-      <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
-        <DialogContent className="w-[calc(100vw-32px)] sm:max-w-[550px] p-6 max-h-[90vh] overflow-y-auto overflow-x-hidden">
-          <DialogHeader className="space-y-1 min-w-0">
-            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-              <Mail className="h-5 w-5 text-teal-600 shrink-0" />
-              <span className="truncate">Contact Account Manager</span>
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 truncate">
-              Reach out to the assigned representative for lead <strong className="text-slate-700 dark:text-slate-300">{activeLeadForContact?.companyName}</strong>.
-            </DialogDescription>
-          </DialogHeader>
 
-          {activeLeadForContact && (
-            <div className="space-y-5 py-2 w-full min-w-0 overflow-hidden">
-              {/* AM Profile Card */}
-              <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full min-w-0">
-                <div className="flex items-center gap-3 min-w-0 flex-1 w-full sm:w-auto">
-                  <div className="h-10 w-10 shrink-0 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
-                    {(activeAmUser?.displayName || activeLeadForContact.accountManagerAssigned || 'A').charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                      {activeAmUser?.displayName || activeLeadForContact.accountManagerAssigned || activeLeadForContact.salesRepAssigned || 'Assigned Representative'}
-                    </h4>
-                    <div className="text-xs text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5 min-w-0">
-                      <span className="shrink-0">{activeAmUser?.activeRole || 'Account Manager'}</span>
-                      {activeAmUser?.email && (
-                        <>
-                          <span className="shrink-0">•</span>
-                          <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400 truncate max-w-[180px] sm:max-w-[220px]">{activeAmUser.email}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Direct Call or Mailto Buttons */}
-                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                  {activeAmUser?.email && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
-                      className="text-xs flex-1 sm:flex-none min-w-0"
-                    >
-                      <a href={`mailto:${activeAmUser.email}?subject=${encodeURIComponent(amEmailSubject)}`}>
-                        <ExternalLink className="h-3.5 w-3.5 mr-1 shrink-0" />
-                        <span>Open Email</span>
-                      </a>
-                    </Button>
-                  )}
-                  {(activeAmUser?.mobileNumber || activeAmUser?.phoneNumber) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
-                      className="text-xs flex-1 sm:flex-none min-w-0"
-                    >
-                      <a href={`tel:${activeAmUser.mobileNumber || activeAmUser.phoneNumber}`}>
-                        <Phone className="h-3.5 w-3.5 mr-1 text-emerald-600 shrink-0" />
-                        <span>Call</span>
-                      </a>
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Compose Message Form */}
-              <div className="space-y-3 w-full min-w-0">
-                <div className="w-full min-w-0">
-                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Subject Line
-                  </Label>
-                  <Input
-                    value={amEmailSubject}
-                    onChange={e => setAmEmailSubject(e.target.value)}
-                    className="mt-1 text-sm font-medium w-full min-w-0"
-                    placeholder="Enter email subject..."
-                  />
-                </div>
-
-                <div className="w-full min-w-0">
-                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Message Body
-                  </Label>
-                  <Textarea
-                    rows={5}
-                    value={amEmailBody}
-                    onChange={e => setAmEmailBody(e.target.value)}
-                    className="mt-1 text-sm font-sans w-full min-w-0 resize-y"
-                    placeholder="Type your message to the Account Manager..."
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter className="flex flex-col sm:flex-row gap-2 w-full min-w-0 pt-2">
-            <Button
-              variant="outline"
-              onClick={() => setContactDialogOpen(false)}
-              className="w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSendAmEmail}
-              disabled={sendingEmail || !amEmailBody.trim()}
-              className="w-full sm:w-auto bg-teal-600 hover:bg-teal-500 text-white font-semibold"
-            >
-              <Send className={`h-4 w-4 mr-2 ${sendingEmail ? 'animate-pulse' : ''}`} />
-              {sendingEmail ? 'Sending Email...' : 'Send Direct Message'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Outbound Lead Status Info Dialog Modal */}
       <Dialog open={outboundInfoDialogOpen} onOpenChange={setOutboundInfoDialogOpen}>

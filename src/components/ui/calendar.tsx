@@ -91,7 +91,7 @@ function Calendar({
           defaultClassNames.range_end
         ),
         today: cn(
-          "rounded-md bg-muted text-foreground data-[selected=true]:rounded-none",
+          "rounded-md bg-[#eaf143] text-[#095c7b] font-extrabold",
           defaultClassNames.today
         ),
         outside: cn(
@@ -149,7 +149,10 @@ function CalendarDayButton({
       data-slot="calendar-day-button"
       className={cn(
         buttonVariants({ variant, size: "icon" }),
-        "h-8 w-8 sm:h-9 sm:w-9 p-0 font-normal transition-none active:scale-100 min-w-0 data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground data-[selected=true]:opacity-100 data-[today=true]:not-data-[selected=true]:bg-accent data-[today=true]:not-data-[selected=true]:text-accent-foreground text-xs sm:text-sm",
+        "h-8 w-8 sm:h-9 sm:w-9 p-0 font-normal transition-none active:scale-100 min-w-0 text-xs sm:text-sm",
+        "data-[selected=true]:bg-[#095c7b] data-[selected=true]:text-white data-[selected=true]:opacity-100",
+        "data-[today=true]:bg-[#eaf143] data-[today=true]:text-[#095c7b] data-[today=true]:font-extrabold data-[today=true]:shadow-sm",
+        "data-[today=true]:data-[selected=true]:bg-[#eaf143] data-[today=true]:data-[selected=true]:text-[#095c7b] data-[today=true]:data-[selected=true]:ring-2 data-[today=true]:data-[selected=true]:ring-[#095c7b]",
         className
       )}
       {...props}
