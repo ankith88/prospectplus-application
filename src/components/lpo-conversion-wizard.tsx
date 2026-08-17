@@ -25,47 +25,45 @@ import { sendLpoConversionToNetSuite } from '@/services/netsuite';
 import { validateABN } from '@/lib/utils';
 
 // Helper to construct standard ServiceSelection[] array from LPO rate fields
-export function buildLpoServicesArray(ampoRate: any, pmpoRate: any, packageRate: any, additionalBagRate: any) {
+export function buildLpoServicesArray(ampoRate: any, pmpoRate: any, packageRate: any, additionalBagRate: any, startDate?: string) {
   const am = parseFloat(String(ampoRate)) || 0;
   const pm = parseFloat(String(pmpoRate)) || 0;
   const pkg = parseFloat(String(packageRate)) || 0;
   const add = parseFloat(String(additionalBagRate)) || 0;
 
+  const todayStr = startDate || new Date().toISOString().split('T')[0];
+
   const services: any[] = [];
   if (am > 0) {
     services.push({
-      id: 'lpo-am-collection',
-      name: 'AMPO',
+      startDate: todayStr,
       frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
       rate: am,
-      quantity: 1,
+      name: 'AMPO',
     });
   }
   if (pm > 0) {
     services.push({
-      id: 'lpo-pm-collection',
-      name: 'PMPO',
+      startDate: todayStr,
       frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
       rate: pm,
-      quantity: 1,
+      name: 'PMPO',
     });
   }
   if (pkg > 0) {
     services.push({
-      id: 'lpo-package-delivery',
-      name: 'Package: AMPO & PMPO',
+      startDate: todayStr,
       frequency: 'Adhoc',
       rate: pkg,
-      quantity: 1,
+      name: 'Package: AMPO & PMPO',
     });
   }
   if (add > 0) {
     services.push({
-      id: 'lpo-additional-bag',
-      name: 'Additional Mail Bag',
+      startDate: todayStr,
       frequency: 'Adhoc',
       rate: add,
-      quantity: 1,
+      name: 'Additional Mail Bag',
     });
   }
 
