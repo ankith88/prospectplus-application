@@ -294,8 +294,7 @@ export async function POST(
       dateRegistrationSent: nowIso,
       registrationSentAt: nowIso,
       ...(!isOutbound ? {
-        bucket: 'customer_success',
-        customerSuccessAssigned: 'Belinda Urbani'
+        bucket: 'account_manager'
       } : {}),
       updatedAt: FieldValue.serverTimestamp()
     });

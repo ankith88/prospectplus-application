@@ -36,12 +36,13 @@ import {
   Loader2,
   Check,
   XCircle,
+  AlertTriangle,
 } from 'lucide-react'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { getOnboardingRequestByLeadId } from '@/services/onboarding-service'
 import type { OnboardingRequest } from '@/lib/types'
 import React, { useState, useEffect, useMemo, useRef } from 'react'
-import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData, UserProfile } from '@/lib/types'
+import type { Lead, LeadStatus, Note, Address, Invoice, VisitNote, DiscoveryData, UserProfile } from '@/lib/types'
 import { EmailVerificationBadge } from '@/components/ui/email-verification-badge'
 import { verifyEmailsClient } from '@/lib/verify-email-client'
 import { Button } from '@/components/ui/button'
@@ -65,7 +66,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { CancelCustomerDialog } from '@/components/cancel-customer-dialog'
 import { LogNoteDialog } from './log-note-dialog'
 import { LossReasonPicker } from './loss-reason-picker'
-import { collection, getDocs, orderBy, query, doc, getDoc, setDoc, where, onSnapshot, updateDoc } from 'firebase/firestore'
+import { collection, getDocs, orderBy, query, doc, getDoc, setDoc, where, onSnapshot, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { canEditSignedCustomerAddress, canFranchiseeAccessLead } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
@@ -197,8 +198,160 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         .catch(err => console.error('Error fetching onboarding request for company:', err));
     }
   }, [company?.id]);
-  
-  // Address Request states & Notify Upsell state
+
+  // LPO.Plus Provisioning state & Suburb Validation
+  const [isProvisioningLpoPlus, setIsProvisioningLpoPlus] = useState(false);
+  const [lpoSuburbs, setLpoSuburbs] = useState<any[]>([]);
+  const [loadingLpoSuburbs, setLoadingLpoSuburbs] = useState(false);
+
+  const isLpoParentAccount = Boolean(
+    company?.isParentLead ||
+    company?.bucket === 'lpo_network' ||
+    company?.bucket === 'lpo_plus' ||
+    (company as any)?.source === 'LPO Lead Conversion' ||
+    company?.leadSource === 'LPO Expressions of Interest' ||
+    company?.lpoLeadId ||
+    (company as any)?.linkedLpoLeadId
+  );
+
+  useEffect(() => {
+    if (!company?.id || !isLpoParentAccount) return;
+
+    async function checkLpoSuburbs() {
+      setLoadingLpoSuburbs(true);
+      try {
+        const franchiseeIds = new Set<string>();
+        if (company.franchisee_id) franchiseeIds.add(String(company.franchisee_id));
+        if ((company as any).franchiseeInternalId) franchiseeIds.add(String((company as any).franchiseeInternalId));
+
+        // Find child leads/companies belonging to this parent account
+        const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', company.id));
+        const childSnap = await getDocs(qChild);
+        childSnap.forEach(docSnap => {
+          const d = docSnap.data();
+          if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
+          if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
+        });
+
+        // Query franchisees EXCLUSIVELY for ausPostSuburbsJson
+        const extractedSuburbs: any[] = [];
+        for (const fId of Array.from(franchiseeIds)) {
+          const fDoc = await getDoc(doc(firestore, 'franchisees', fId));
+          let fData = fDoc.exists() ? fDoc.data() : null;
+          if (!fData) {
+            const qF = query(collection(firestore, 'franchisees'), where('internalId', '==', fId));
+            const qFSnap = await getDocs(qF);
+            if (!qFSnap.empty) fData = qFSnap.docs[0].data();
+          }
+
+          if (fData?.ausPostSuburbsJson) {
+            let parsed = fData.ausPostSuburbsJson;
+            if (typeof parsed === 'string') {
+              try { parsed = JSON.parse(parsed); } catch (e) {}
+            }
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              extractedSuburbs.push(...parsed);
+            }
+          }
+        }
+        setLpoSuburbs(extractedSuburbs);
+      } catch (err) {
+        console.error('Error checking LPO franchisee suburbs:', err);
+      } finally {
+        setLoadingLpoSuburbs(false);
+      }
+    }
+
+    checkLpoSuburbs();
+  }, [company?.id, isLpoParentAccount]);
+
+  const handleProvisionLpoPlus = async () => {
+    if (!company || lpoSuburbs.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Suburbs Required',
+        description: 'Linked franchisee does not have active Australia Post suburb mappings (ausPostSuburbsJson).'
+      });
+      return;
+    }
+
+    setIsProvisioningLpoPlus(true);
+    try {
+      const primaryContact = company.contacts?.find((c: any) => c.isPrimary) || company.contacts?.[0];
+      const nameParts = (primaryContact?.name || company.companyName || 'LPO Contact').trim().split(' ');
+      const firstName = primaryContact?.firstName || nameParts[0] || 'LPO';
+      const lastName = primaryContact?.lastName || nameParts.slice(1).join(' ') || 'Contact';
+      const email = primaryContact?.email || company.customerServiceEmail || '';
+      const phone = primaryContact?.phone || company.customerPhone || '';
+
+      const res = await fetch('/api/lpo-plus/provision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          netsuiteId: company.id, // Document ID matches Parent Lead / Company Doc ID in ProspectPlus!
+          lpoName: company.companyName,
+          contactFirstName: firstName,
+          contactLastName: lastName,
+          contactEmail: email,
+          contactPhone: phone,
+          defaultPassword: 'MailPlus2026!',
+          address1: company.address?.address1 || '',
+          street: company.address?.street || company.street || '',
+          city: company.address?.city || company.city || '',
+          state: company.address?.state || company.state || '',
+          zip: company.address?.zip || company.zip || '',
+          latitude: company.address?.lat ?? company.latitude ?? '',
+          longitude: company.address?.lng ?? company.longitude ?? '',
+          ampoRate: (company as any).ampoRate || '0',
+          pmpoRate: (company as any).pmpoRate || '0',
+          packageRate: (company as any).packageRate || '0',
+          additionalBagRate: (company as any).additionalBagRate || '0',
+          territorySuburbs: lpoSuburbs
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        const compRef = doc(firestore, 'companies', company.id);
+        const leadRef = doc(firestore, 'leads', company.id);
+        const updatedFields = {
+          lpoPlusStatus: 'Provisioned',
+          defaultPassword: 'MailPlus2026!',
+          lpoPlusProvisionedAt: new Date().toISOString(),
+          status: 'LPO.Plus Access Sent' as LeadStatus
+        };
+
+        await Promise.all([
+          setDoc(compRef, updatedFields, { merge: true }),
+          setDoc(leadRef, updatedFields, { merge: true })
+        ]);
+
+        await addDoc(collection(firestore, 'companies', company.id, 'activity'), {
+          type: 'LpoPlusProvision',
+          notes: `LPO.Plus account created. Auth User (UID: ${data.authId}) and 'lpo' document (${company.id}) created in lpoconnect DB. Welcome email dispatched to ${email}.`,
+          author: userProfile?.displayName || userProfile?.email || 'System User',
+          createdAt: new Date().toISOString()
+        });
+
+        setCompany(prev => ({ ...prev, ...updatedFields }));
+        toast({
+          title: 'LPO.Plus Account Created',
+          description: `Auth user and documents created in LPO.Plus DB. Welcome email sent to ${email}.`,
+        });
+      } else {
+        throw new Error(data.error || 'Provisioning failed');
+      }
+    } catch (err: any) {
+      console.error('Error creating LPO.Plus account:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Provisioning Error',
+        description: err.message || 'Failed to create LPO.Plus account.',
+      });
+    } finally {
+      setIsProvisioningLpoPlus(false);
+    }
+  };
   const [isNotifyUpsellDialogOpen, setIsNotifyUpsellDialogOpen] = useState(false);
   const [isReqAddressDialogOpen, setIsReqAddressDialogOpen] = useState(false);
 
@@ -809,6 +962,130 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         <DetailItem icon={Clipboard} label="Cancellation Reason" value={company.cancellationReason} />
                     </div>
                 </CardContent>
+            </Card>
+          )}
+          {isLpoParentAccount && (
+            <Card className="border-[#095c7b]/30 bg-gradient-to-r from-slate-50 via-sky-50/20 to-white shadow-sm">
+              <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
+                    <Key className="w-4 h-4 text-[#095c7b]" />
+                    LPO.PLUS Account & Access Credentials
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    LPO.PLUS Portal access and sign-in details for this participating LPO contact.
+                  </p>
+                </div>
+                {company.lpoPlusStatus === 'Provisioned' || company.defaultPassword ? (
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold px-2.5 py-1">
+                    <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> LPO.Plus Access Active
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 font-semibold px-2.5 py-1">
+                    Not Created Yet
+                  </Badge>
+                )}
+              </CardHeader>
+
+              <CardContent className="pt-4">
+                {company.lpoPlusStatus === 'Provisioned' || company.defaultPassword ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-3.5 rounded-lg border border-slate-200">
+                      <div>
+                        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground block">
+                          Portal Sign-In URL
+                        </span>
+                        <a
+                          href="https://lpo.plus/signin"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold text-[#095c7b] hover:underline flex items-center gap-1 mt-0.5"
+                        >
+                          https://lpo.plus/signin <ExternalLink className="w-3 h-3 inline" />
+                        </a>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground block">
+                          Username (Email)
+                        </span>
+                        <span className="text-xs font-semibold text-foreground mt-0.5 block">
+                          {company.contacts?.[0]?.email || company.customerServiceEmail || 'N/A'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground block">
+                          Default Password
+                        </span>
+                        <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
+                          {company.defaultPassword || 'MailPlus2026!'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <p className="text-xs text-slate-500 italic">
+                        Account created in <code>lpoconnect</code> DB (Doc ID: <strong>{company.id}</strong>).
+                      </p>
+                      <CopyButton
+                        textToCopy={`Portal: https://lpo.plus/signin\nUsername: ${company.contacts?.[0]?.email || company.customerServiceEmail || ''}\nPassword: ${company.defaultPassword || 'MailPlus2026!'}`}
+                        label="Copy Sign-in Details"
+                        variant="outline"
+                        size="sm"
+                        className="border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {loadingLpoSuburbs ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-[#095c7b]" />
+                        Checking linked franchisee Australia Post suburb mappings...
+                      </div>
+                    ) : lpoSuburbs.length === 0 ? (
+                      <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-900 py-2.5">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertTitle className="font-bold text-xs uppercase tracking-wider text-amber-900">
+                          Cannot Create LPO.Plus Account
+                        </AlertTitle>
+                        <AlertDescription className="text-xs text-amber-800 mt-1">
+                          The linked franchisee(s) do not have active Australia Post suburb mappings (<code>ausPostSuburbsJson</code>) assigned. Please assign Australia Post suburb mappings to the franchisee first before creating the LPO.Plus account.
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200">
+                        <div>
+                          <p className="text-xs text-slate-700 font-medium">
+                            Ready to create LPO.Plus Account with <strong>{lpoSuburbs.length}</strong> Australia Post suburb mapping(s) from linked franchisee(s).
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Document ID in <code>lpoconnect</code> database will match Parent Lead ID: <strong>{company.id}</strong>.
+                          </p>
+                        </div>
+                        <Button
+                          onClick={handleProvisionLpoPlus}
+                          disabled={isProvisioningLpoPlus}
+                          className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold text-sm shadow-sm shrink-0"
+                        >
+                          {isProvisioningLpoPlus ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Creating LPO.Plus Account...
+                            </>
+                          ) : (
+                            <>
+                              <Key className="w-4 h-4 mr-2 text-[#EAF044]" />
+                              Create LPO.Plus Account
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
             </Card>
           )}
 

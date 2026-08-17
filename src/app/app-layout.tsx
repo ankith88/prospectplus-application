@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown, Store } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown, Store, Home } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -295,6 +295,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/leads': { label: 'Outbound Leads', category: 'Sales & CRM', icon: Briefcase, href: '/leads' },
     '/inbound-leads': { label: 'Inbound Leads', category: 'Sales & CRM', icon: Inbox, href: '/inbound-leads' },
     '/franchisee-leads': { label: 'Franchisee Leads', category: 'Sales & CRM', icon: Briefcase, href: '/franchisee-leads' },
+    '/franchisee-home': { label: 'Franchisee Home', category: 'My Franchise', icon: Home, href: '/franchisee-home' },
     '/my-franchise': { label: 'My Franchise Profile', category: 'My Franchise', icon: Store, href: '/my-franchise' },
     '/admin/marketing/import-leads': { label: 'Import Leads', category: 'Sales & CRM', icon: PlusCircle, href: '/admin/marketing/import-leads' },
     '/franchisee-lead-verification': { label: 'Franchisee Lead Review', category: 'Sales & CRM', icon: UserCheck, href: '/franchisee-lead-verification' },
@@ -1044,6 +1045,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   {!isGroupCollapsed('my-franchise-group') && (
                     <SidebarGroupContent>
                       <SidebarMenu>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/franchisee-home")} tooltip="Franchisee Home" className="font-semibold text-white">
+                            <Link href="/franchisee-home">
+                              <Home className="text-[#eaf143]" />
+                              <span className="font-bold">Franchisee Home</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
                         <SidebarMenuItem>
                           <SidebarMenuButton asChild isActive={isActive("/my-franchise")} tooltip="My Franchise Profile" className="font-semibold text-white">
                             <Link href="/my-franchise">

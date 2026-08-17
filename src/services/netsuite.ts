@@ -903,11 +903,13 @@ interface NewLeadData {
   parentLeadId?: string;
   parentId?: string;
   parentCustomer?: string;
+  lpoLeadId?: string;
+  linkedLpoLeadId?: string;
   pageUrl?: string;
 }
 
-export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees, selectedServiceOption, parentLeadId, parentId, parentCustomer, pageUrl } = payload;
+export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; salesRecordInternalId?: string; message: string; }> {
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees, selectedServiceOption, parentLeadId, parentId, parentCustomer, lpoLeadId, linkedLpoLeadId, pageUrl } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -945,6 +947,14 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         params.append('parent_id', effectiveParentId);
         params.append('custentity_parent_id', effectiveParentId);
         params.append('parentCustomer', effectiveParentId);
+    }
+
+    const effectiveLpoLeadId = lpoLeadId || linkedLpoLeadId;
+    if (effectiveLpoLeadId) {
+        params.append('custentity_lpo_lead_id', effectiveLpoLeadId);
+        params.append('lpoLeadId', effectiveLpoLeadId);
+        params.append('lpo_lead_id', effectiveLpoLeadId);
+        params.append('custentity_lpo_lead', effectiveLpoLeadId);
     }
 
     if (address?.address1) {

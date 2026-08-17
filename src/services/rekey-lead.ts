@@ -98,6 +98,32 @@ export async function rekeyLeadToNetSuite(leadId: string): Promise<RekeyResult> 
     }
   }
 
+  // 3b. Resolve LPO Lead ID if available
+  let resolvedLpoLeadId: string | undefined = data.lpoLeadId || data.linkedLpoLeadId;
+  if (!resolvedLpoLeadId && data.parentLeadId) {
+    try {
+      const pSnapLeads = await db.collection('leads').doc(data.parentLeadId).get();
+      if (pSnapLeads.exists) {
+        const pData = pSnapLeads.data() || {};
+        resolvedLpoLeadId = pData.lpoLeadId || pData.linkedLpoLeadId;
+      }
+    } catch (e) {}
+  }
+  if (!resolvedLpoLeadId) {
+    try {
+      const targetParentId = data.isParentLead ? leadId : (data.parentLeadId || leadId);
+      const lpoSnap1 = await db.collection('lpo_leads').where('createdParentLeadId', '==', targetParentId).limit(1).get();
+      if (!lpoSnap1.empty) {
+        resolvedLpoLeadId = lpoSnap1.docs[0].id;
+      } else {
+        const lpoSnap2 = await db.collection('lpo_leads').where('createdChildLeadIds', 'array-contains', leadId).limit(1).get();
+        if (!lpoSnap2.empty) {
+          resolvedLpoLeadId = lpoSnap2.docs[0].id;
+        }
+      }
+    } catch (e) {}
+  }
+
   // 4. Construct NetSuite payload
   const address: Address = data.address || {
     street: (data as any).street || '',
@@ -130,7 +156,8 @@ export async function rekeyLeadToNetSuite(leadId: string): Promise<RekeyResult> 
     leadSource: data.leadSource || 'LPO Expressions of Interest',
     isParentLead: Boolean(data.isParentLead),
     isChildLead: Boolean(data.isChildLead),
-    lpoLeadId: data.lpoLeadId || '',
+    lpoLeadId: resolvedLpoLeadId || '',
+    linkedLpoLeadId: resolvedLpoLeadId || '',
   };
 
   // 5. Call NetSuite Scriptlet 2194
@@ -212,6 +239,52 @@ export async function rekeyLeadToNetSuite(leadId: string): Promise<RekeyResult> 
       await deleteBatch.commit();
     } catch (cleanupErr) {
       console.warn(`Original alphanumeric doc cleanup warning for ${leadId}:`, cleanupErr);
+    }
+
+    // Update corresponding lpo_leads document(s) with new numeric ID
+    try {
+      const lpoDocsMap = new Map<string, FirebaseFirestore.DocumentReference>();
+
+      // 1. Check by createdParentLeadId == leadId
+      const lpoSnap1 = await db.collection('lpo_leads').where('createdParentLeadId', '==', leadId).get();
+      lpoSnap1.docs.forEach((doc) => lpoDocsMap.set(doc.id, doc.ref));
+
+      // 2. Check by linkedLeadId == leadId
+      const lpoSnap2 = await db.collection('lpo_leads').where('linkedLeadId', '==', leadId).get();
+      lpoSnap2.docs.forEach((doc) => lpoDocsMap.set(doc.id, doc.ref));
+
+      // 3. Check by createdChildLeadIds array-contains leadId
+      const lpoSnap3 = await db.collection('lpo_leads').where('createdChildLeadIds', 'array-contains', leadId).get();
+      lpoSnap3.docs.forEach((doc) => lpoDocsMap.set(doc.id, doc.ref));
+
+      // 4. Direct lpoLeadId reference if present
+      if (resolvedLpoLeadId) {
+        lpoDocsMap.set(resolvedLpoLeadId, db.collection('lpo_leads').doc(resolvedLpoLeadId));
+      }
+
+      for (const [lpoId, lpoRef] of lpoDocsMap.entries()) {
+        const lpoSnap = await lpoRef.get();
+        if (lpoSnap.exists) {
+          const lpoData = lpoSnap.data() || {};
+          const updates: any = { updatedAt: FieldValue.serverTimestamp() };
+
+          if (data.isParentLead || lpoData.createdParentLeadId === leadId || lpoData.linkedLeadId === leadId) {
+            updates.createdParentLeadId = newNumericId;
+            updates.linkedLeadId = newNumericId;
+          }
+
+          if (Array.isArray(lpoData.createdChildLeadIds)) {
+            const updatedChildIds = lpoData.createdChildLeadIds.map((cId: string) => (cId === leadId ? newNumericId : cId));
+            updates.createdChildLeadIds = updatedChildIds;
+          }
+
+          await lpoRef.update(updates).catch((e) => {
+            console.warn(`Failed to update lpo_leads doc ${lpoId} during rekeying:`, e);
+          });
+        }
+      }
+    } catch (lpoErr) {
+      console.warn(`Warning updating lpo_leads during rekeying for lead ${leadId}:`, lpoErr);
     }
 
     return {

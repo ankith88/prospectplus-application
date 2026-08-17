@@ -1055,8 +1055,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                         dateRegistrationSent: nowIso,
                         registrationSentAt: nowIso,
                         ...(!isOutbound ? {
-                            bucket: 'customer_success',
-                            customerSuccessAssigned: 'Belinda Urbani'
+                            bucket: 'account_manager',
                         } : {}),
                         localMileTrialsRemaining: 5
                     })

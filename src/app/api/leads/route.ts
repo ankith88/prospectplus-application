@@ -473,8 +473,7 @@ export async function POST(req: NextRequest) {
               customerStatus: 'LocalMile Opportunity',
               serviceType: 'Adhoc',
               rate: 15,
-              bucket: 'customer_success',
-              customerSuccessAssigned: 'Belinda Urbani',
+              bucket: 'account_manager',
               localMileTrialsRemaining: 5
             }, { merge: true });
 

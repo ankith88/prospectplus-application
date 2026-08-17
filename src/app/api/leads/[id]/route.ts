@@ -101,13 +101,11 @@ export async function PATCH(
     const currentBucket = existingData.bucket || (existingData.fieldSales ? 'field_sales' : 'outbound');
 
     if (isLocalMilePending) {
-      updateData.bucket = 'customer_success';
-      updateData.customerSuccessAssigned = 'Belinda Urbani';
+      updateData.bucket = 'account_manager';
       if (!existingData.dateLocalmileAccepted) updateData.dateLocalmileAccepted = new Date().toISOString();
       if (!existingData.localMileAcceptedAt) updateData.localMileAcceptedAt = new Date().toISOString();
     } else if (isLocalMileOpportunity && currentBucket !== 'outbound') {
-      updateData.bucket = 'customer_success';
-      updateData.customerSuccessAssigned = 'Belinda Urbani';
+      updateData.bucket = 'account_manager';
     }
 
     // Perform update

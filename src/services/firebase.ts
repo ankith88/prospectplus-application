@@ -1485,12 +1485,10 @@ async function updateLeadStatus(
         } else if (status === 'LocalMile Opportunity') {
             updates.trialStartedAt = now;
             if (currentBucket !== 'outbound') {
-                updates.bucket = 'customer_success';
-                updates.customerSuccessAssigned = 'Belinda Urbani';
+                updates.bucket = 'account_manager';
             }
         } else if (status === 'LocalMile Pending') {
-            updates.bucket = 'customer_success';
-            updates.customerSuccessAssigned = 'Belinda Urbani';
+            updates.bucket = 'account_manager';
         }
         await updateDoc(leadRef, updates);
 
@@ -1549,7 +1547,7 @@ async function updateLeadStatus(
         if (isDataMgmt) {
             logNotes = `Status changed to ${status} via Data Management${reason ? ` (${reason})` : ''}`;
         } else if (status === 'LocalMile Pending') {
-            logNotes += ' - Moved to Customer Success & Assigned to Belinda Urbani';
+            logNotes += ' - Moved to Account Manager';
         }
         await logActivity(leadId, { 
             type: 'Update', 
@@ -1853,13 +1851,11 @@ async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLea
                 if (!dataToSave.dateRegistrationSent) dataToSave.dateRegistrationSent = now;
                 if (!dataToSave.registrationSentAt) dataToSave.registrationSentAt = now;
                 if (currentBucket !== 'outbound') {
-                    dataToSave.bucket = 'customer_success';
-                    dataToSave.customerSuccessAssigned = 'Belinda Urbani';
+                    dataToSave.bucket = 'account_manager';
                 }
             }
         } else if (statusVal === 'LocalMile Pending') {
-            dataToSave.bucket = 'customer_success';
-            dataToSave.customerSuccessAssigned = 'Belinda Urbani';
+            dataToSave.bucket = 'account_manager';
             if (!dataToSave.dateLocalmileAccepted) dataToSave.dateLocalmileAccepted = now;
             if (!dataToSave.localMileAcceptedAt) dataToSave.localMileAcceptedAt = now;
         }
@@ -3796,30 +3792,43 @@ export async function syncLpoHierarchyWithNetSuite(parentLeadId: string): Promis
             });
         } catch (e) {}
 
-        // 4. Update linked lpo_leads document if exists
+        // 4. Update linked lpo_leads document if exists with new numeric IDs
         try {
+            const lpoIdsToUpdate = new Set<string>();
+
             const qLpo1 = query(collection(firestore, 'lpo_leads'), where('createdParentLeadId', '==', targetParentId));
             const lpoSnap1 = await getDocs(qLpo1);
-            lpoSnap1.docs.forEach(async (lpoDoc) => {
-                await updateDoc(lpoDoc.ref, {
-                    createdParentLeadId: newParentId,
-                    createdChildLeadIds: newChildIds,
-                    updatedAt: new Date()
-                });
-            });
+            lpoSnap1.docs.forEach(d => lpoIdsToUpdate.add(d.id));
 
             if (newParentId !== targetParentId) {
                 const qLpo2 = query(collection(firestore, 'lpo_leads'), where('createdParentLeadId', '==', newParentId));
                 const lpoSnap2 = await getDocs(qLpo2);
-                lpoSnap2.docs.forEach(async (lpoDoc) => {
-                    await updateDoc(lpoDoc.ref, {
+                lpoSnap2.docs.forEach(d => lpoIdsToUpdate.add(d.id));
+            }
+
+            const qLpo3 = query(collection(firestore, 'lpo_leads'), where('linkedLeadId', '==', targetParentId));
+            const lpoSnap3 = await getDocs(qLpo3);
+            lpoSnap3.docs.forEach(d => lpoIdsToUpdate.add(d.id));
+
+            if (parentData.lpoLeadId) lpoIdsToUpdate.add(parentData.lpoLeadId);
+            if (parentData.linkedLpoLeadId) lpoIdsToUpdate.add(parentData.linkedLpoLeadId);
+
+            for (const lpoId of Array.from(lpoIdsToUpdate)) {
+                try {
+                    const lpoRef = doc(firestore, 'lpo_leads', lpoId);
+                    await updateDoc(lpoRef, {
                         createdParentLeadId: newParentId,
                         createdChildLeadIds: newChildIds,
+                        linkedLeadId: newParentId,
                         updatedAt: new Date()
                     });
-                });
+                } catch (e) {
+                    console.warn(`Failed to update lpo_leads document ${lpoId} in syncLpoHierarchyWithNetSuite:`, e);
+                }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.warn('Error updating lpo_leads in syncLpoHierarchyWithNetSuite:', e);
+        }
 
         return {
             success: true,

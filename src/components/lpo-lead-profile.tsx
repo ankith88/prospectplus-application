@@ -22,8 +22,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw, Lock, Trash2, RotateCcw } from 'lucide-react';
+import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw, Lock, Trash2, RotateCcw, Copy, Key, ExternalLink } from 'lucide-react';
 import { LpoConversionWizard, buildLpoServicesArray } from './lpo-conversion-wizard';
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 
 interface LpoLeadProfileProps {
   initialLead: any;
@@ -246,6 +247,131 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
       });
     } finally {
       setSavingRates(false);
+    }
+  };
+
+  // Franchisee Resolution & Editing State
+  const [isEditFranchiseesOpen, setIsEditFranchiseesOpen] = useState(false);
+  const [allFranchisees, setAllFranchisees] = useState<any[]>([]);
+  const [selectedFranchiseeNames, setSelectedFranchiseeNames] = useState<string[]>([]);
+  const [savingFranchisees, setSavingFranchisees] = useState(false);
+
+  const getResolvedFranchisees = (leadData: any): string[] => {
+    if (!leadData) return [];
+    const names: string[] = [];
+
+    if (leadData.linkedFranchisees && Array.isArray(leadData.linkedFranchisees) && leadData.linkedFranchisees.length > 0) {
+      leadData.linkedFranchisees.forEach((f: any) => {
+        if (typeof f === 'string' && f.trim()) names.push(f.trim());
+        else if (typeof f === 'object' && f) {
+          const n = f.name || f.franchiseeName || f.companyName || f.label || f.title;
+          if (n && typeof n === 'string' && n.trim()) names.push(n.trim());
+        }
+      });
+    }
+
+    if (leadData.franchisees && Array.isArray(leadData.franchisees) && leadData.franchisees.length > 0) {
+      leadData.franchisees.forEach((f: any) => {
+        if (typeof f === 'string' && f.trim()) names.push(f.trim());
+        else if (typeof f === 'object' && f) {
+          const n = f.name || f.franchiseeName || f.companyName || f.label || f.title;
+          if (n && typeof n === 'string' && n.trim()) names.push(n.trim());
+        }
+      });
+    }
+
+    const directFields = [
+      leadData.linkedFranchiseeName,
+      leadData.companyNameFranchise,
+      leadData.franchiseeName,
+      leadData.franchisee,
+      leadData.assignedFranchisee,
+      leadData.assignedFranchiseeName
+    ];
+
+    directFields.forEach((val) => {
+      if (val && typeof val === 'string' && val.trim()) {
+        val.split(',').forEach((s) => {
+          if (s.trim()) names.push(s.trim());
+        });
+      }
+    });
+
+    return Array.from(new Set(names));
+  };
+
+  const handleOpenEditFranchisees = async () => {
+    setSelectedFranchiseeNames(getResolvedFranchisees(lead));
+    setIsEditFranchiseesOpen(true);
+    if (allFranchisees.length === 0) {
+      try {
+        const snap = await getDocs(collection(firestore, 'franchisees'));
+        const list: any[] = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data();
+          const fName = data.name || data.mainContact || docSnap.id;
+          list.push({ id: docSnap.id, name: fName, ...data });
+        });
+        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        setAllFranchisees(list);
+      } catch (err) {
+        console.error('Error fetching franchisees:', err);
+      }
+    }
+  };
+
+  const handleSaveFranchisees = async () => {
+    setSavingFranchisees(true);
+    try {
+      const linkedFranchiseesPayload = selectedFranchiseeNames.map((name) => {
+        const matchingDoc = allFranchisees.find((f) => (f.name || f.mainContact) === name);
+        return {
+          franchiseeId: matchingDoc?.id || name,
+          name: name,
+        };
+      });
+
+      const combinedName = selectedFranchiseeNames.join(', ');
+      const lpoDocRef = doc(firestore, 'lpo_leads', lead.id);
+
+      const updatePayload: any = {
+        linkedFranchisees: linkedFranchiseesPayload,
+        linkedFranchiseeName: combinedName || null,
+        companyNameFranchise: combinedName || null,
+        updatedAt: serverTimestamp(),
+      };
+
+      await updateDoc(lpoDocRef, updatePayload);
+
+      await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
+        type: 'FranchiseeUpdate',
+        notes: `Linked Franchisee assignment updated to: "${combinedName || 'Unassigned'}"`,
+        author: userProfile?.displayName || userProfile?.email || 'System User',
+        createdAt: serverTimestamp(),
+      });
+
+      setLead((prev: any) => ({
+        ...prev,
+        linkedFranchisees: linkedFranchiseesPayload,
+        linkedFranchiseeName: combinedName || null,
+        companyNameFranchise: combinedName || null,
+      }));
+
+      toast({
+        title: 'Franchisee Assignment Updated',
+        description: `Linked franchisee(s) set to: ${combinedName || 'Unassigned'}.`,
+      });
+
+      setIsEditFranchiseesOpen(false);
+    } catch (err) {
+      console.error('Error updating franchisee assignment:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update franchisee assignment.',
+      });
+    } finally {
+      setSavingFranchisees(false);
     }
   };
 
@@ -555,6 +681,68 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                   )}
                 </div>
 
+                {/* LPO.PLUS Account & Access Credentials */}
+                <div className="p-4 bg-teal-50/50 rounded-xl border border-teal-200/80 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-[#095c7b] text-white rounded-md">
+                        <Key className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-800">LPO.PLUS Account & Access Credentials</h4>
+                        <p className="text-xs text-slate-500">Provisioned in mp-lpo-connect / lpoconnect database</p>
+                      </div>
+                    </div>
+                    <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-xs font-semibold">
+                      {status}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                    <div className="p-2.5 bg-white rounded-lg border border-slate-200/80">
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Sign-In Portal</p>
+                      <a
+                        href="https://lpo.plus/signin"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-bold text-[#095c7b] hover:underline flex items-center gap-1 mt-0.5"
+                      >
+                        https://lpo.plus/signin
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-lg border border-slate-200/80">
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Username (Email)</p>
+                      <p className="text-xs font-mono font-bold text-slate-800 truncate mt-0.5">{lead.email}</p>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-lg border border-slate-200/80 flex items-center justify-between">
+                      <div>
+                        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Default Password</p>
+                        <p className="text-xs font-mono font-bold text-[#095c7b] mt-0.5">{lead.defaultPassword || 'MailPlus2026!'}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const credText = `LPO.PLUS Credentials:\nPortal: https://lpo.plus/signin\nUsername: ${lead.email}\nPassword: ${lead.defaultPassword || 'MailPlus2026!'}`;
+                          navigator.clipboard.writeText(credText);
+                          toast({
+                            title: 'Credentials Copied',
+                            description: 'LPO.PLUS sign-in details copied to clipboard.',
+                          });
+                        }}
+                        className="h-8 px-2 text-slate-600 hover:text-[#095c7b] hover:bg-slate-100"
+                        title="Copy Credentials"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Delete Created CRM Leads & Reset Conversion Button */}
                 {(lead.createdParentLeadId || lead.linkedLeadId) && (
                   <div className="p-4 bg-rose-50/70 rounded-lg border border-rose-200 shadow-xs flex items-center justify-between flex-wrap gap-3">
@@ -664,15 +852,25 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
 
                 {/* Linked Franchisees */}
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                    <UserCheck className="w-4 h-4 text-emerald-600" />
-                    Linked Franchisees
-                  </h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                      <UserCheck className="w-4 h-4 text-emerald-600" />
+                      Linked Franchisees
+                    </h4>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleOpenEditFranchisees}
+                      className="border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/10 text-xs font-bold py-1 h-7"
+                    >
+                      <Edit3 className="w-3 h-3 mr-1" /> Edit Franchisees
+                    </Button>
+                  </div>
                   <div className="flex gap-2 flex-wrap">
-                    {lead.linkedFranchisees && lead.linkedFranchisees.length > 0 ? (
-                      lead.linkedFranchisees.map((fran: any) => (
-                        <Badge key={fran.franchiseeId} className="bg-[#095c7b] hover:bg-[#095c7b] text-white py-1.5 px-3 text-xs rounded-full">
-                          {fran.name}
+                    {getResolvedFranchisees(lead).length > 0 ? (
+                      getResolvedFranchisees(lead).map((fName) => (
+                        <Badge key={fName} className="bg-[#095c7b] hover:bg-[#095c7b] text-white py-1.5 px-3 text-xs rounded-full">
+                          {fName}
                         </Badge>
                       ))
                     ) : (
@@ -1074,6 +1272,63 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* EDIT LINKED FRANCHISEES DIALOG */}
+      <Dialog open={isEditFranchiseesOpen} onOpenChange={setIsEditFranchiseesOpen}>
+        <DialogContent className="max-w-md bg-white rounded-xl shadow-xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-[#095c7b]" />
+              Assign / Edit Linked Franchisees
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Select the franchisee(s) linked to this Licensed Post Office (LPO) lead.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700">Select Franchisees</Label>
+              <MultiSelectCombobox
+                options={allFranchisees.map((f) => ({
+                  label: f.name || f.mainContact || f.id,
+                  value: f.name || f.mainContact || f.id,
+                }))}
+                selected={selectedFranchiseeNames}
+                onSelectedChange={setSelectedFranchiseeNames}
+                placeholder="Choose linked franchisees..."
+              />
+            </div>
+
+            {selectedFranchiseeNames.length > 0 && (
+              <div className="p-3 bg-teal-50/70 rounded-lg border border-teal-200/80 text-xs text-teal-900">
+                <p className="font-semibold">Selected ({selectedFranchiseeNames.length}):</p>
+                <p className="mt-0.5 text-teal-800 font-medium">{selectedFranchiseeNames.join(', ')}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button variant="outline" onClick={() => setIsEditFranchiseesOpen(false)} disabled={savingFranchisees}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveFranchisees}
+              disabled={savingFranchisees}
+              className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold"
+            >
+              {savingFranchisees ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Franchisee Assignment'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

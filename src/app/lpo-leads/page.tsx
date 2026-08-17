@@ -78,6 +78,8 @@ interface LpoLead {
   lastPortalSyncAt?: any;
 
   // Linkage fields
+  createdParentLeadId?: string | null;
+  createdChildLeadIds?: string[] | null;
   linkedLeadId?: string | null;
   linkedLeadCompanyName?: string | null;
   linkedCustomerId?: string | null;
@@ -88,6 +90,12 @@ interface LpoLead {
   linkedNcl?: string | null;
   linkedFranchiseeName?: string | null;
   companyNameFranchise?: string | null;
+  franchisee?: string | null;
+  franchiseeName?: string | null;
+  assignedFranchisee?: string | null;
+  assignedFranchiseeName?: string | null;
+  linkedFranchisees?: any[] | null;
+  franchisees?: any[] | null;
 }
 
 interface PipelineProgress {
@@ -197,6 +205,7 @@ export default function LpoLeadsListPage() {
   const [creating, setCreating] = useState(false);
   const [partnerLocations, setPartnerLocations] = useState<any[]>([]);
   const [selectedPartnerLocationId, setSelectedPartnerLocationId] = useState<string>('');
+  const [crmLeadsMap, setCrmLeadsMap] = useState<Map<string, any>>(new Map());
 
   const parseDateValue = (raw: any): { timestamp: number; formatted: string } => {
     if (!raw) return { timestamp: 0, formatted: '—' };
@@ -289,11 +298,102 @@ export default function LpoLeadsListPage() {
     (l) => l.status === 'Lost' || l.status?.toLowerCase().includes('lost')
   );
 
+  const partnerLocationsMap = React.useMemo(() => {
+    const map = new Map<string, any>();
+    partnerLocations.forEach((loc) => {
+      if (loc.id) map.set(loc.id, loc);
+      if (loc.name) map.set(String(loc.name).toLowerCase().trim(), loc);
+    });
+    return map;
+  }, [partnerLocations]);
+
+  const getLeadFranchiseeName = (lead: LpoLead): string => {
+    if (!lead) return '';
+
+    // 1. Direct string fields on lead
+    if (lead.linkedFranchiseeName && typeof lead.linkedFranchiseeName === 'string' && lead.linkedFranchiseeName.trim()) {
+      return lead.linkedFranchiseeName.trim();
+    }
+    if (lead.companyNameFranchise && typeof lead.companyNameFranchise === 'string' && lead.companyNameFranchise.trim()) {
+      return lead.companyNameFranchise.trim();
+    }
+    if (lead.franchiseeName && typeof lead.franchiseeName === 'string' && lead.franchiseeName.trim()) {
+      return lead.franchiseeName.trim();
+    }
+    if (lead.franchisee && typeof lead.franchisee === 'string' && lead.franchisee.trim()) {
+      return lead.franchisee.trim();
+    }
+    if (lead.assignedFranchisee && typeof lead.assignedFranchisee === 'string' && lead.assignedFranchisee.trim()) {
+      return lead.assignedFranchisee.trim();
+    }
+    if (lead.assignedFranchiseeName && typeof lead.assignedFranchiseeName === 'string' && lead.assignedFranchiseeName.trim()) {
+      return lead.assignedFranchiseeName.trim();
+    }
+
+    // 2. Linked franchisees array
+    const zeesArray = lead.linkedFranchisees || lead.franchisees;
+    if (Array.isArray(zeesArray) && zeesArray.length > 0) {
+      const names = zeesArray
+        .map((f: any) => {
+          if (!f) return '';
+          if (typeof f === 'string') return f.trim();
+          if (typeof f === 'object') {
+            return (f.name || f.franchiseeName || f.companyName || f.label || f.title || f.franchiseeId || '').trim();
+          }
+          return '';
+        })
+        .filter(Boolean);
+
+      if (names.length > 0) {
+        return Array.from(new Set(names)).join(', ');
+      }
+    }
+
+    // 3. Check linked partner location
+    const partnerId = lead.linkedPartnerLocationId;
+    const partnerName = lead.linkedPartnerLocationName;
+
+    let partner = partnerId ? partnerLocationsMap.get(partnerId) : undefined;
+    if (!partner && partnerName) {
+      partner = partnerLocationsMap.get(partnerName.toLowerCase().trim());
+    }
+
+    if (partner) {
+      const partnerFran =
+        partner.franchisee ||
+        partner.franchiseeName ||
+        partner.assignedFranchisee ||
+        partner.companyNameFranchise ||
+        partner.linkedFranchiseeName;
+      if (typeof partnerFran === 'string' && partnerFran.trim()) {
+        return partnerFran.trim();
+      }
+      if (Array.isArray(partnerFran) && partnerFran.length > 0) {
+        const pNames = partnerFran.map((f: any) => (typeof f === 'string' ? f : f.name || '')).filter(Boolean);
+        if (pNames.length > 0) return pNames.join(', ');
+      }
+    }
+
+    // 4. Check linked CRM lead / customer
+    const targetLeadId = lead.createdParentLeadId || lead.linkedLeadId || lead.linkedCustomerId;
+    if (targetLeadId && crmLeadsMap.has(targetLeadId)) {
+      const crmLead = crmLeadsMap.get(targetLeadId);
+      if (crmLead) {
+        const crmFran = crmLead.franchisee || crmLead.franchiseeName || crmLead.assignedFranchisee || crmLead.companyNameFranchise;
+        if (typeof crmFran === 'string' && crmFran.trim()) {
+          return crmFran.trim();
+        }
+      }
+    }
+
+    return '';
+  };
+
   // Collect unique franchisee names for filter
   const uniqueFranchisees = Array.from(
     new Set(
       leads
-        .map((l) => (l.linkedFranchiseeName || l.companyNameFranchise || '').trim())
+        .map((l) => getLeadFranchiseeName(l))
         .filter(Boolean)
     )
   ).sort();
@@ -344,15 +444,15 @@ export default function LpoLeadsListPage() {
 
         // 2. Franchisee Filter
         if (franchiseeFilter !== 'all') {
-          const leadFran = (lead.linkedFranchiseeName || lead.companyNameFranchise || '').trim();
-          if (leadFran !== franchiseeFilter) return false;
+          const leadFran = getLeadFranchiseeName(lead);
+          if (!leadFran.toLowerCase().includes(franchiseeFilter.toLowerCase())) return false;
         }
 
         // 3. Search Term
         if (!searchTerm.trim()) return true;
         const term = searchTerm.toLowerCase().trim();
         const formattedCreated = getLeadDateInfo(lead).formatted.toLowerCase();
-        const franName = (lead.linkedFranchiseeName || lead.companyNameFranchise || '').toLowerCase();
+        const franName = getLeadFranchiseeName(lead).toLowerCase();
         return (
           lead.lpoName?.toLowerCase().includes(term) ||
           lead.lpoOwnerName?.toLowerCase().includes(term) ||
@@ -514,6 +614,9 @@ export default function LpoLeadsListPage() {
       const prospectPlusId = `MPxLPO${randomStr}`;
 
       const selectedPartner = partnerLocations.find((l) => l.id === selectedPartnerLocationId);
+      const partnerFranName = selectedPartner
+        ? (selectedPartner.franchisee || selectedPartner.franchiseeName || selectedPartner.assignedFranchisee || selectedPartner.companyNameFranchise || selectedPartner.linkedFranchiseeName || null)
+        : null;
 
       const newLeadData = {
         prospectPlusId,
@@ -533,6 +636,8 @@ export default function LpoLeadsListPage() {
         conversionStep: selectedPartner ? 2 : 1,
         linkedPartnerLocationId: selectedPartner ? selectedPartner.id : null,
         linkedPartnerLocationName: selectedPartner ? selectedPartner.name : null,
+        linkedFranchiseeName: partnerFranName,
+        companyNameFranchise: partnerFranName,
         source: 'Head Office Generated',
         createdBy: userProfile?.displayName || userProfile?.email || 'System User',
         createdById: userProfile?.uid || null,
@@ -627,7 +732,24 @@ export default function LpoLeadsListPage() {
       }
     };
 
+    const fetchCrmLeads = async () => {
+      try {
+        const snap = await getDocs(collection(firestore, 'leads'));
+        const map = new Map<string, any>();
+        snap.forEach((docSnap) => {
+          const data = docSnap.data();
+          map.set(docSnap.id, data);
+          if (data.customerEntityId) map.set(String(data.customerEntityId).trim(), data);
+          if (data.prospectPlusId) map.set(String(data.prospectPlusId).trim(), data);
+        });
+        setCrmLeadsMap(map);
+      } catch (err) {
+        console.error('Error fetching CRM leads:', err);
+      }
+    };
+
     fetchPartners();
+    fetchCrmLeads();
 
     return () => unsubscribe();
   }, [authLoading, loadingPermissions, canView]);
@@ -679,7 +801,7 @@ export default function LpoLeadsListPage() {
             const isLpoAccessSent = lead.status === 'LPO.Plus Access Sent';
             const targetLeadId = lead.createdParentLeadId || lead.linkedLeadId;
             const hasLinkedCustomer = Boolean(targetLeadId || lead.linkedLeadCompanyName || lead.rawCustomerName || lead.linkedCustomerId);
-            const franchiseeName = lead.linkedFranchiseeName || lead.companyNameFranchise || '';
+            const franchiseeName = getLeadFranchiseeName(lead);
 
             return (
               <TableRow 

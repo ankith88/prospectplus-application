@@ -1,4 +1,4 @@
-import { adminDb } from '@/services/firebase-server';
+import { Firestore as GoogleFirestore } from '@google-cloud/firestore';
 
 export interface LpoPlusProvisionPayload {
   netsuiteId: string;
@@ -7,6 +7,7 @@ export interface LpoPlusProvisionPayload {
   contactLastName: string;
   contactEmail: string;
   contactPhone: string;
+  defaultPassword?: string;
   address1?: string;
   street?: string;
   city?: string;
@@ -21,11 +22,17 @@ export interface LpoPlusProvisionPayload {
   territorySuburbs?: any[];
 }
 
+// Dedicated Firestore instance targeting project mp-lpo-connect, database lpoconnect
+const lpoConnectDb = new GoogleFirestore({
+  projectId: 'mp-lpo-connect',
+  databaseId: 'lpoconnect',
+});
+
 /**
- * Provisions an LPO.Plus account in Firestore and sends the Welcome to LPO.PLUS onboarding email.
+ * Provisions an LPO.Plus account in Firebase Auth and lpoconnect Firestore database.
  * Derived from NetSuite script mp_ss2.0_sync_lpo_to_firebase.js.
  */
-export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload): Promise<{ success: boolean; message: string }> {
+export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload): Promise<{ success: boolean; authId?: string; message: string }> {
   try {
     const {
       netsuiteId,
@@ -34,6 +41,7 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
       contactLastName,
       contactEmail,
       contactPhone,
+      defaultPassword = 'MailPlus2026!',
       address1 = '',
       street = '',
       city = '',
@@ -54,9 +62,47 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
 
     console.log(`[LPO.Plus Provisioning] Provisioning account for LPO #${netsuiteId} (${lpoName}) for contact ${contactEmail}...`);
 
-    // 1. Create or Update User Document in 'users' collection
-    const userDocId = `lpo-user-${netsuiteId}`;
-    await adminDb.collection('users').doc(userDocId).set({
+    // 1. Create Authenticated User in Firebase Auth via Identity Toolkit API
+    let authID = '';
+    try {
+      const authResponse = await fetch(
+        "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyDklo95QYbj4PGZeKAqRBBzCfFKc9CFoXs",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: contactEmail,
+            password: defaultPassword,
+            returnSecureToken: true
+          })
+        }
+      );
+
+      const authData = await authResponse.json();
+
+      if (authResponse.ok && authData.localId) {
+        authID = authData.localId;
+        console.log(`[LPO.Plus Auth] Successfully created Authenticated User UID: ${authID}`);
+      } else if (authData?.error?.message === 'EMAIL_EXISTS') {
+        console.warn(`[LPO.Plus Auth] User with email ${contactEmail} already exists. Searching existing user document...`);
+        const userSnap = await lpoConnectDb.collection('users').where('email', '==', contactEmail).limit(1).get();
+        if (!userSnap.empty) {
+          authID = userSnap.docs[0].id;
+        } else {
+          // Fallback deterministic document ID if auth exists but user doc missing
+          authID = `user-${netsuiteId}`;
+        }
+      } else {
+        console.error(`[LPO.Plus Auth Error] ${JSON.stringify(authData)}`);
+        authID = `user-${netsuiteId}`;
+      }
+    } catch (authErr) {
+      console.error("[LPO.Plus Auth Exception]", authErr);
+      authID = `user-${netsuiteId}`;
+    }
+
+    // 2. Create or Update User Document in 'users' collection of lpoconnect DB (Doc ID = authID)
+    await lpoConnectDb.collection('users').doc(authID).set({
       first_name: contactFirstName || 'LPO',
       last_name: contactLastName || 'Contact',
       email: contactEmail,
@@ -66,10 +112,24 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
       updatedAt: new Date().toISOString()
     }, { merge: true });
 
-    // 2. Create or Update LPO Document in 'lpo' collection
-    await adminDb.collection('lpo').doc(String(netsuiteId)).set({
+    console.log(`[LPO.Plus Firestore] Created/updated 'users' document ID: ${authID}`);
+
+    // 3. Formulate territory suburb strings format ("Suburb, STATE Postcode")
+    const formattedTerritory: string[] = territorySuburbs.map((sub: any) => {
+      if (typeof sub === 'string') return sub;
+      const subName = sub.suburbs || sub.suburb || sub.name || '';
+      const subState = sub.state || '';
+      const subPostcode = sub.post_code || sub.postcode || sub.zip || '';
+      return `${subName}, ${subState} ${subPostcode}`.trim();
+    });
+
+    // Clean company name (split by " - " if present)
+    const cleanLpoName = lpoName.split(' - ')[0].trim();
+
+    // 4. Create or Update LPO Document in 'lpo' collection of lpoconnect DB (Doc ID = netsuiteId)
+    const lpoData: Record<string, any> = {
       lpo_id: String(netsuiteId),
-      name: lpoName,
+      name: cleanLpoName,
       address1: address1,
       street: street,
       city: city,
@@ -78,62 +138,80 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
       zip: zip,
       latitude: String(latitude || ''),
       longitude: String(longitude || ''),
-      franchiseeTerritoryJSON: territorySuburbs,
+      franchiseeTerritoryJSON: formattedTerritory,
       lpoServiceAMPORate: String(ampoRate),
       lpoServicePMPORate: String(pmpoRate),
       lpoServiceAMPOPMPORate: String(packageRate),
       lpoServiceAdditionalLPOBagRate: String(additionalBagRate),
       provisionedAt: new Date().toISOString()
-    }, { merge: true });
+    };
 
-    // 3. Send "Welcome to LPO.PLUS" Email
+    await lpoConnectDb.collection('lpo').doc(String(netsuiteId)).set(lpoData, { merge: true });
+
+    console.log(`[LPO.Plus Firestore] Created/updated 'lpo' document ID: ${netsuiteId}`);
+
+    // 5. Send "Welcome to LPO.PLUS" Email with Default Password
     const year = new Date().getFullYear();
     const emailToLPOSubject = "Welcome to LPO.PLUS";
-    const emailToLPOBody = `
-<!DOCTYPE html>
+    const emailToLPOBody = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <style>
-    .email-container { font-family: 'Fraunces', serif, sans-serif; max-width:600px; margin:0 auto; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid #f0f0f0; }
-    .header { background-color:#095c7b; padding:40px 20px; text-align:center; }
+    .email-container { font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width:600px; margin:0 auto; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid #e2e8f0; }
+    .header { background-color:#095c7b; padding:35px 20px; text-align:center; }
     .header h1 { color:#ffffff; margin:0; font-size:24px; font-weight:300; letter-spacing:1px; }
     .header span { color:#EAF044; font-weight:bold; }
-    .content { padding:40px 30px; color:#333333; line-height:1.6; }
-    .greeting { font-size:18px; margin-bottom:20px; color:#095c7b; font-weight:bold; }
-    .instruction-box { background-color:#f8fafb; border-radius:8px; padding:25px; margin:30px 0; border-left:4px solid #EAF044; }
-    .button-container { text-align:center; margin:40px 0; }
-    .btn-primary { background-color:#095c7b; color:#ffffff; padding:16px 32px; text-decoration:none; font-weight:bold; border-radius:8px; display:inline-block; text-transform:uppercase; }
-    .footer { background-color:#f4f7f8; padding:30px; text-align:center; font-size:12px; color:#999; }
-    .footer p { margin:5px 0; }
+    .content { padding:35px 30px; color:#2d3748; line-height:1.6; font-size:14px; }
+    .greeting { font-size:18px; margin-bottom:16px; color:#095c7b; font-weight:bold; }
+    .credentials-box { background-color:#f8fafb; border-radius:8px; padding:20px; margin:24px 0; border:1px solid #e2e8f0; border-left:4px solid #095c7b; }
+    .cred-row { margin-bottom:8px; font-size:14px; }
+    .cred-label { font-weight:bold; color:#4a5568; display:inline-block; width:140px; }
+    .cred-val { color:#095c7b; font-weight:bold; font-family:monospace; background:#eef6ed; padding:2px 8px; border-radius:4px; }
+    .instruction-box { background-color:#fffdf0; border-radius:8px; padding:20px; margin:24px 0; border:1px solid #f6e05e; border-left:4px solid #EAF044; }
+    .button-container { text-align:center; margin:30px 0; }
+    .btn-primary { background-color:#095c7b; color:#ffffff; padding:14px 28px; text-decoration:none; font-weight:bold; border-radius:8px; display:inline-block; text-transform:uppercase; font-size:14px; letter-spacing:0.5px; }
+    .footer { background-color:#f8fafb; padding:25px 20px; text-align:center; border-top:1px solid #edf2f7; font-size:12px; color:#718096; }
+    .footer p { margin:4px 0; }
   </style>
 </head>
 <body>
   <div class="email-container">
-    <div class="header"><h1>lpo<span>.plus</span></h1></div>
+    <div class="header">
+      <img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" width="135" style="display: inline-block; vertical-align: middle; border: 0; max-height: 42px; width: auto;" />
+      <h1 style="margin-top:10px; color:#ffffff;">lpo<span style="color:#EAF044;">.plus</span></h1>
+    </div>
     <div class="content">
       <div class="greeting">Welcome to lpo.<i>plus</i></div>
       <p>Hello ${contactFirstName || 'LPO Partner'},</p>
       <p>Your access to the <b>lpo.<i>plus</i></b> logistics management suite has been successfully provisioned. You can now manage your manifests, job requests, and client communications all in one place.</p>
+      
+      <div class="credentials-box">
+        <p style="margin-top:0; margin-bottom:12px; color:#095c7b; font-weight:bold; font-size:15px;">Your Account Access Credentials:</p>
+        <div class="cred-row"><span class="cred-label">Portal Sign In:</span> <a href="https://lpo.plus/signin" style="color:#095c7b; text-decoration:underline;">https://lpo.plus/signin</a></div>
+        <div class="cred-row"><span class="cred-label">Username (Email):</span> <span class="cred-val">${contactEmail}</span></div>
+        <div class="cred-row" style="margin-bottom:0;"><span class="cred-label">Default Password:</span> <span class="cred-val">${defaultPassword}</span></div>
+      </div>
+
       <div class="instruction-box">
-        <p style="margin-top:0;color:#095c7b;font-weight:600;">First-Time Login Instructions:</p>
-        <p>To ensure your account is secure, please follow these steps for your initial sign-in:</p>
-        <ol style="padding-left:20px;">
-          <li>Click the <strong>Sign In</strong> button below.</li>
-          <li>On the login screen, click the <strong>"Forgot Password"</strong> link.</li>
-          <li>Enter your email address (<code>${contactEmail}</code>) to receive a secure password reset link.</li>
-          <li>Follow the prompts to set your new permanent password.</li>
+        <p style="margin-top:0; color:#095c7b; font-weight:bold;">First-Time Sign In Instructions:</p>
+        <ol style="padding-left:20px; margin-bottom:0;">
+          <li>Click the <strong>Sign In to LPO.PLUS</strong> button below.</li>
+          <li>Enter your username (<code>${contactEmail}</code>) and default password (<code>${defaultPassword}</code>).</li>
+          <li>Alternatively, click <strong>"Forgot Password"</strong> on the sign-in screen to set a custom password.</li>
         </ol>
       </div>
+
       <div class="button-container">
         <a href="https://lpo.plus/signin" class="btn-primary">Sign In to LPO.PLUS</a>
       </div>
-      <p>If you have any trouble accessing your account, please contact Kerry O'Neill for assistance.</p>
-      <div class="footer">
-        <p><strong>lpo.plus</strong> | Local logistics, made simple.</p>
-        <p>Powered by MailPlus Australia</p>
-        <p style="margin-top:15px;">&copy; ${year} lpo.plus. All rights reserved.</p>
-      </div>
+
+      <p>If you have any questions or require assistance, please contact Kerry O'Neill or the MailPlus support team.</p>
+    </div>
+    <div class="footer">
+      <p><strong style="color:#4a5568;">MailPlus</strong> | Business logistics, made simple.</p>
+      <p>Powered by MailPlus Australia</p>
+      <p style="margin-top:12px; font-size:11px; color:#a0aec0;">&copy; ${year} LPO.PLUS. All rights reserved.</p>
     </div>
   </div>
 </body>
@@ -166,7 +244,8 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
 
     return {
       success: true,
-      message: `LPO.Plus account provisioned for LPO #${netsuiteId}.`
+      authId: authID,
+      message: `LPO.Plus account provisioned for LPO #${netsuiteId} with Auth ID ${authID}.`
     };
   } catch (error: any) {
     console.error("[LPO.Plus Provisioning Error] Exception:", error);

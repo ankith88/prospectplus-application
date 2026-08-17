@@ -672,7 +672,7 @@ export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProp
       // 4. Add Activity Log to LPO Lead
       await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
         type: 'StatusChange',
-        notes: `LPO Lead converted. Created Parent Lead (ID: ${parentLeadId}) assigned to MailPlus Pty Ltd (435) and ${createdChildLeadIds.length} Child Lead(s) under 'LPO Network' bucket.`,
+        notes: `LPO Lead converted. Created Parent Lead (ID: ${parentLeadId}) assigned to MailPlus Pty Ltd (435) and ${createdChildLeadIds.length} Child Lead(s).`,
         author: 'System User',
         createdAt: serverTimestamp()
       });

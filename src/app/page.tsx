@@ -70,7 +70,7 @@ export default function HomePage() {
           break;
         case 'Franchisee':
         case 'franchisee':
-          router.replace('/leads/new');
+          router.replace('/franchisee-home');
           break;
         case 'Lead Gen Admin':
         case 'Dashback':

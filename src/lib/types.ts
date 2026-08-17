@@ -527,8 +527,13 @@ export interface Lead {
   contactCount?: number
   address?: Address
   state?: string;
+  street?: string;
+  zip?: string;
   latitude?: number;
   longitude?: number;
+  lpoPlusStatus?: string;
+  lpoPlusProvisionedAt?: string;
+  defaultPassword?: string;
   franchisee?: string;
   franchisee_id?: string;
   websiteUrl?: string;
