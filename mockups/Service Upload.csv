@@ -1,0 +1,103 @@
+﻿Internal ID,Name,NetSuite Item,Service Category,NetSuite Item ID
+158,On Demand Delivery,On Demand Delivery,Services,10914
+157,LocalMile Trial,LocalMile Trial,Services,10913
+156,Excess Weight Handling,Excess Weight Handling,Extras (Custom Price),10911
+155,Additional LPO Bag,Additional LPO Bag,Extras,10910
+154,Fixed Charges 2,Fixed Charges 2,Services,67
+153,Package: AMPO & H2H,Package: Pickup from PO & Hand to Hand Delivery,Services,79
+152,Package: AMPO 2 PO Box,Package: Pickup & Delivery from 2 PO,Services,78
+151,Package: AMPO & PMPO 3,Package: Pickup from PO & Lodge Outgoing Mail 3,Services,10794
+150,Package: AMPO & PMPO 2,Package: Pickup from PO & Lodge Outgoing Mail 2,Services,10793
+103,CB 4,Counter Banking 4,Services,71
+102,CB 3,Counter Banking 3,Services,70
+101,CB 2,Counter Banking 2,Services,68
+100,EB 3,Express Banking 3,Services,90
+99,EB 2,Express Banking 2,Services,69
+98,H2H 35,Hand to Hand Deliveries 35,Services,8940
+97,H2H 34,Hand to Hand Deliveries 34,Services,8939
+96,H2H 33,Hand to Hand Deliveries 33,Services,8938
+95,H2H 32,Hand to Hand Deliveries 32,Services,8937
+94,H2H 31,Hand to Hand Deliveries 31,Services,8936
+93,H2H 30,Hand to Hand Deliveries 30,Services,8935
+92,H2H 29,Hand to Hand Deliveries 29,Services,8934
+91,H2H 28,Hand to Hand Deliveries 28,Services,8933
+90,H2H 27,Hand to Hand Deliveries 27,Services,8932
+89,H2H 26,Hand to Hand Deliveries 26,Services,8931
+88,H2H 25,Hand to Hand Deliveries 25,Services,8930
+87,H2H 24,Hand to Hand Deliveries 24,Services,8929
+86,H2H 23,Hand to Hand Deliveries 23,Services,8928
+85,H2H 22,Hand to Hand Deliveries 22,Services,8927
+84,H2H 21,Hand to Hand Deliveries 21,Services,8926
+83,H2H 20,Hand to Hand Deliveries 20,Services,8925
+82,H2H 19,Hand to Hand Deliveries 19,Services,8924
+81,H2H 18,Hand to Hand Deliveries 18,Services,8923
+80,H2H 17,Hand to Hand Deliveries 17,Services,8922
+79,H2H 16,Hand to Hand Deliveries 16,Services,8921
+78,H2H 15,Hand to Hand Deliveries 15,Services,8920
+77,H2H 14,Hand to Hand Deliveries 14,Services,8919
+76,H2H 13,Hand to Hand Deliveries 13,Services,8918
+75,H2H 12,Hand to Hand Deliveries 12,Services,8917
+74,H2H 11,Hand to Hand Deliveries 11,Services,8916
+73,H2H 10,Hand to Hand Deliveries 10,Services,8621
+72,H2H 9,Hand to Hand Deliveries 9,Services,8620
+71,H2H 8,Hand to Hand Deliveries 8,Services,8619
+70,H2H 7,Hand to Hand Deliveries 7,Services,8618
+69,H2H 6,Hand to Hand Deliveries 6,Services,8617
+68,H2H 5,Hand to Hand Deliveries 5,Services,58
+67,H2H 4,Hand to Hand Deliveries 4,Services,57
+66,H2H 3,Hand to Hand Deliveries 3,Services,56
+65,H2H 2,Hand to Hand Deliveries 2,Services,55
+64,PMPO 7,Outgoing Mail Lodgement 7,Services,95
+63,PMPO 6,Outgoing Mail Lodgement 6,Services,94
+62,PMPO 5,Outgoing Mail Lodgement 5,Services,93
+61,PMPO 4,Outgoing Mail Lodgement 4,Services,92
+60,PMPO 3,Outgoing Mail Lodgement 3,Services,91
+59,PMPO 2,Outgoing Mail Lodgement 2,Services,73
+58,AMPO 10,Pick up and Delivery from PO 10,Services,8912
+57,AMPO 9,Pick up and Delivery from PO 9,Services,8911
+56,AMPO 8,Pick up and Delivery from PO 8,Services,8910
+55,AMPO 7,Pick up and Delivery from PO 7,Services,8909
+54,AMPO 6,Pick up and Delivery from PO 6,Services,8908
+53,AMPO 5,Pick up and Delivery from PO 5,Services,8907
+52,AMPO 4,Pick up and Delivery from PO 4,Services,72
+51,AMPO 3,Pick up and Delivery from PO 3,Services,61
+50,AMPO 2,Pick up and Delivery from PO 2,Services,60
+49,CB: > 10 Bags,Counter Banking > 10 bags,Services,9576
+48,"Package: AMPO, PMPO & EB","Package: Pickup from PO, Lodge Outgoing Mail & Express Bank",Services,77
+47,Package: AMPO & PMPO,Package: Pickup from PO & Lodge Outgoing Mail,Services,76
+42,Package: AMST & AMPO,Package: Pick Up and Delivery of Street & PO,Services,9223
+40,Package: PMPO & EB,Package: Lodge Outgoing Mail & Express Banking,Services,88
+38,Neopost Package: Monthly PM Service(s) - 1 Flute per Service,Neopost Package: Monthly PM Service(s) - 1 Flute per Service,Services,7889
+37,Neopost Package: 2 AM and 2 PM Service - 3 Flute per Service,Neopost Package: 2 AM and 2 PM Service - 3 Flute per Service,Services,7670
+36,Neopost Package: 2 AM and 2 PM Service - 2 Flute per Service,Neopost Package: 2 AM and 2 PM Service - 2 Flute per Service,Services,7666
+35,Neopost Package: 2 AM and 2 PM Service - 1 Flute per Service,Neopost Package: 2 AM and 2 PM Service - 1 Flute per Service,Services,7662
+34,Neopost Package: 1 AM and 1 PM Service - 3 Flutes per Day,Neopost Package: 1 AM and 1 PM Service - 3 Flutes per Day,Services,7673
+33,Neopost Package: 1 AM and 1 PM Service - 3 Flute per Service,Neopost Package: 1 AM and 1 PM Service - 3 Flute per Service,Services,7668
+32,Neopost Package: 1 AM and 1 PM Service - 2 Flute per Service,Neopost Package: 1 AM and 1 PM Service - 2 Flute per Service,Services,7664
+31,Neopost Package: 1 AM and 1 PM Service - 1 Flute per Service,Neopost Package: 1 AM and 1 PM Service - 1 Flute per Service,Services,7660
+30,Fixed Charges,Fixed Charges,Services,66
+29,On Demand Pickup Additional Item,On Demand Pickup Additional Item - Sendle,Services,9233
+28,On Demand Pickup,On Demand Pickup - Sendle,Services,9232
+27,Mail Scan Per Minute,Mail Scan Per Minute,Extras,8989
+25,Mail Redirection,Mail Redirection,Services,8985
+24,MP Parcel Pickup,MP Parcel Pickup,Services,8981
+23,Signature Item,Signature Item Collected,Extras,8780
+22,Account Admin Fee,Account Admin Fee,Extras (Custom Price),8729
+20,Mail Processing,Mail Processing,Services,8727
+19,MB,Machine Banking,Services,8624
+18,BILLPay,Bill Payment in Specified Institution,Services,8623
+17,Discount,Discount,Extras (Custom Price),97
+16,COGS (no GST),COGS (no GST),Extras (Custom Price),44
+15,COGS (GST),COGS (GST),Extras (Custom Price),108
+14,Waiting Time,Waiting Time,Extras,37
+13,Parcel Collection,Parcel Collection,Extras (Custom Price),32
+12,Registered Mail,Registered Mail Collected,Extras,33
+11,Weight Charges,Weight Charges,Extras,34
+10,Goods Delivery,Goods Delivery,Services,106
+9,H2H,Hand to Hand Deliveries,Services,35
+8,CB: Petty Cash,Counter Banking : Petty Cash,Services,54
+7,CB,Counter Banking,Services,30
+6,EB,Express Banking,Services,31
+4,PMPO,Outgoing Mail Lodgement,Services,27
+3,AMStreet,Pickup and Delivery of Street Addressed Mail,Services,138
+1,AMPO,Pick up and Delivery from PO,Services,24

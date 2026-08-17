@@ -14,9 +14,9 @@ export function BulkImportServices() {
   const { toast } = useToast();
 
   const downloadSampleCSV = () => {
-    const headers = ['Internal ID', 'Name', 'NetSuite Item'];
+    const headers = ['Internal ID', 'Name', 'NetSuite Item', 'Service Category', 'NetSuite Item ID'];
     const sampleRows = [
-      ['2001', 'AMPO', 'Mail Processing Fee']
+      ['2001', 'AMPO', 'Pick up and Delivery from PO', 'Services', '24']
     ];
 
     const csvContent = [
@@ -49,9 +49,11 @@ export function BulkImportServices() {
       complete: async (results) => {
         try {
           const services = results.data.map((row: any) => ({
-            id: row['Internal ID'],
-            code: row['Name'],
-            netsuiteItemName: row['NetSuite Item'],
+            id: row['Internal ID'] || row['id'],
+            code: row['Name'] || row['code'],
+            netsuiteItemName: row['NetSuite Item'] || row['netsuiteItemName'],
+            category: row['Service Category'] || row['category'],
+            netsuiteItemId: row['NetSuite Item ID'] || row['netsuiteItemId'] || row['NetSuite Item Id'],
           }));
 
           // Basic validation

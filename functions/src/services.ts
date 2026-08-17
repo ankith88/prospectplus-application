@@ -100,18 +100,16 @@ export const bulkImportServices = functions
       importedIds.add(String(service.id));
 
       const docRef = db.collection("services").doc(String(service.id));
-      const category = categorizeService(service.code, service.netsuiteItemName);
+      const category = service.category || categorizeService(service.code, service.netsuiteItemName);
 
       currentBatch.set(docRef, {
         id: String(service.id),
         code: service.code,
         netsuiteItemName: service.netsuiteItemName,
+        netsuiteItemId: service.netsuiteItemId ? String(service.netsuiteItemId) : null,
         category,
         isActive: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        // Use set with merge: true so createdAt is only set if doc doesn't exist. We handle createdAt separately or just rely on updatedAt for existing ones. 
-        // Actually, set with merge will overwrite fields but leave others intact.
-        // We'll set createdAt using a trick or just updating the document.
       }, { merge: true });
 
       currentBatchCount++;
