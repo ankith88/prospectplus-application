@@ -174,7 +174,7 @@ export async function rekeyLeadToNetSuite(leadId: string): Promise<RekeyResult> 
     };
 
     const batch = db.batch();
-    batch.set(newRef, updatedData);
+    batch.set(newRef, updatedData, { merge: true });
 
     // Copy all subcollections dynamically
     const subcollections = await sourceRef.listCollections();
