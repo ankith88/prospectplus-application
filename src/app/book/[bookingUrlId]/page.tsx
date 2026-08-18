@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { format, isBefore, startOfDay } from 'date-fns';
+import { isWeekendOrPublicHoliday } from '@/lib/australian-holidays';
 import { Phone, Video, Calendar as CalendarIcon, CheckCircle2, Clock, Globe } from 'lucide-react';
 
 interface AvailableSlot {
@@ -309,7 +310,7 @@ export default function BookingPage() {
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
-                    disabled={(date) => isBefore(startOfDay(date), startOfDay(new Date())) || date.getDay() === 0 || date.getDay() === 6}
+                    disabled={(date) => isBefore(startOfDay(date), startOfDay(new Date())) || isWeekendOrPublicHoliday(date)}
                     className="p-0 bg-transparent rounded-lg"
                     classNames={{
                       head_cell: "text-slate-500 font-medium w-10 h-10 text-sm",

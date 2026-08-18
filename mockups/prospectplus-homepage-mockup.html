@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProspectPlus — Franchisee Homepage (Revised Copy Mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#025D7C;
+    --teal-mid:#1d6b8c;
+    --teal-dark:#023a4e;
+    --sage:#CFE0CE;
+    --sage-bg:#dfe8dc;
+    --lime:#E3F046;
+    --ink:#1d3a47;
+    --muted:#5b7280;
+    --card:#fbfdfa;
+    --card-head:#eef4ec;
+    --border:#b9cdbd;
+    --border-soft:#d5e1d4;
+    --red:#c0392b;
+    --amber-bg:#fdf3d7;
+    --amber-ink:#8a6d1a;
+    --green:#1e7d4f;
+    --r:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--sage-bg);color:var(--ink);padding:28px 22px 48px;line-height:1.5;}
+  .page{max-width:1240px;margin:0 auto;}
+  h1,h2,h3{font-family:'Source Serif 4',serif;color:var(--teal);}
+  .btn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;background:var(--teal);color:#fff;border:none;border-radius:30px;padding:14px 22px;font-family:'DM Sans',sans-serif;font-size:.95rem;font-weight:600;cursor:pointer;}
+  .btn .ic{color:var(--lime);}
+  .btn.ghost{background:var(--sage);color:var(--teal-dark);}
+  .badge{font-size:.72rem;font-weight:700;padding:4px 12px;border-radius:20px;white-space:nowrap;}
+  .badge.red{background:var(--red);color:#fff;}
+  .badge.teal{background:var(--teal);color:#fff;}
+  .badge.amber{background:var(--amber-bg);color:var(--amber-ink);}
+  .badge.pill{background:var(--sage);color:var(--teal-dark);}
+
+  /* Header banner */
+  .hero{background:linear-gradient(120deg,var(--teal-mid),var(--teal-dark));color:#fff;border-radius:20px;padding:34px 38px;display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap;margin-bottom:26px;}
+  .hero h1{color:#fff;font-size:2.1rem;font-weight:700;margin-bottom:8px;}
+  .hero p{opacity:.94;font-size:1rem;max-width:640px;}
+  .hero p b{color:var(--lime);font-weight:600;}
+  .terr{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:16px;}
+  .terr .lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;opacity:.8;}
+  .terr .val{font-weight:700;font-size:.95rem;}
+  .terr .owner{background:rgba(255,255,255,.92);color:var(--teal-dark);border-radius:10px;padding:8px 14px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:.88rem;}
+  .terr .owner .tag{background:#bfe8c8;color:#1e6b3a;font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:12px;}
+
+  /* Rows */
+  .row-2{display:grid;grid-template-columns:5fr 7fr;gap:22px;margin-bottom:26px;}
+  .row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px;margin-bottom:26px;}
+  .row-vt{display:grid;grid-template-columns:5fr 7fr;gap:22px;margin-bottom:26px;}
+
+  .card{background:var(--card);border:1.5px solid var(--teal);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;}
+  .card-head{background:var(--card-head);padding:18px 22px;display:flex;align-items:center;gap:13px;border-bottom:1px solid var(--border-soft);}
+  .card-head h2{font-size:1.25rem;flex:1;}
+  .card-head .sub{font-size:.83rem;color:var(--muted);margin-top:2px;font-family:'DM Sans',sans-serif;}
+  .card-head .icon{width:40px;height:40px;border-radius:50%;background:var(--teal);color:var(--lime);display:flex;align-items:center;justify-content:center;font-size:1.05rem;flex-shrink:0;}
+  .card-body{padding:20px 22px;flex:1;display:flex;flex-direction:column;gap:16px;}
+  .viewall{color:var(--teal);font-weight:600;font-size:.9rem;text-decoration:none;white-space:nowrap;}
+
+  /* Calendar */
+  .cal{border:1px solid var(--border-soft);border-radius:12px;padding:16px;background:#fff;}
+  .cal h3{text-align:center;font-family:'DM Sans',sans-serif;color:var(--ink);font-size:1rem;margin-bottom:12px;font-weight:700;}
+  .cal table{width:100%;border-collapse:collapse;font-size:.85rem;text-align:center;}
+  .cal th{color:var(--muted);font-weight:600;padding:5px 0;}
+  .cal td{padding:7px 0;color:var(--ink);}
+  .cal td.dim{color:#b6c4bb;}
+  .cal td.today span{background:var(--sage);border-radius:8px;padding:5px 9px;font-weight:700;}
+  .sched-h{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+  .sched-h .cnt{border:1px solid var(--border);border-radius:16px;padding:3px 12px;letter-spacing:.03em;}
+  .empty{border:1px solid var(--border-soft);border-radius:12px;padding:14px 16px;font-size:.9rem;color:var(--muted);display:flex;gap:9px;align-items:center;background:#fff;}
+
+  /* Reminder items */
+  .rem{border:1px solid var(--border-soft);border-radius:12px;background:#fff;padding:16px 18px;}
+  .rem-top{display:flex;align-items:flex-start;gap:10px;}
+  .rem-top .em{font-size:1rem;}
+  .rem-top h3{font-size:1.05rem;flex:1;}
+  .rem p{font-size:.9rem;color:var(--ink);margin:8px 0 12px;}
+  .rem-foot{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border-soft);padding-top:10px;font-size:.85rem;color:var(--muted);}
+  .rem-foot a{color:var(--teal);font-weight:700;text-decoration:none;}
+  .tip{background:var(--card-head);border:1px solid var(--border-soft);border-radius:12px;padding:13px 16px;font-size:.88rem;display:flex;gap:9px;align-items:flex-start;}
+  .tip b{font-weight:700;}
+
+  /* Stats */
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .stat{background:#f1f5f0;border-radius:12px;padding:14px;text-align:center;}
+  .stat .lbl{font-size:.82rem;color:var(--muted);font-weight:600;}
+  .stat .num{font-size:1.7rem;font-weight:700;color:var(--teal-dark);}
+  .stat .num.green{color:var(--green);}
+  .am{background:#f1f5f0;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-size:.9rem;}
+  .am a{color:var(--teal);font-weight:700;text-decoration:none;}
+
+  .callout{border:1px solid var(--border-soft);border-radius:12px;padding:14px 16px;background:#fff;}
+  .callout h4{font-size:.92rem;color:var(--ink);margin-bottom:5px;}
+  .callout p{font-size:.86rem;color:var(--muted);}
+  .spacer{flex:1;}
+
+  /* Pipeline */
+  .pipe{background:#f1f5f0;border-radius:12px;padding:16px;}
+  .pipe-top{display:flex;justify-content:space-between;font-size:.9rem;font-weight:700;margin-bottom:10px;}
+  .bar{height:7px;background:#d9e2d8;border-radius:6px;overflow:hidden;margin-bottom:10px;}
+  .bar i{display:block;height:100%;width:6%;background:linear-gradient(90deg,var(--teal),#3aa08a);border-radius:6px;}
+  .pipe-foot{display:flex;justify-content:space-between;font-size:.83rem;color:var(--muted);}
+
+  /* Video */
+  .player{background:#0d1b2a;border-radius:14px;min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#fff;}
+  .play{width:64px;height:64px;border-radius:50%;background:var(--teal);color:var(--lime);display:flex;align-items:center;justify-content:center;font-size:1.4rem;}
+  .player span{font-weight:600;font-size:.95rem;}
+  .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+  /* Trainer */
+  .trainer{border:1px solid var(--border-soft);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px;background:#fff;flex-wrap:wrap;}
+  .avatar{width:56px;height:56px;border-radius:50%;background:var(--teal);border:3px solid var(--lime);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:1.1rem;}
+  .trainer .who{flex:1;min-width:200px;}
+  .trainer .who b{font-family:'Source Serif 4',serif;font-size:1.05rem;color:var(--ink);}
+  .trainer .who .role{color:var(--teal);font-size:.88rem;font-weight:600;}
+  .trainer .who .email{color:var(--muted);font-size:.83rem;}
+  .teams{border:1px solid #9db8e8;color:#2456b3;background:#eef3fd;font-size:.83rem;font-weight:700;border-radius:20px;padding:7px 14px;white-space:nowrap;}
+
+  footer{text-align:center;font-size:.85rem;color:var(--muted);margin-top:12px;}
+
+  @media(max-width:960px){
+    .row-2,.row-3,.row-vt{grid-template-columns:1fr;}
+    .hero{padding:26px;}
+    .hero h1{font-size:1.6rem;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="hero">
+    <div>
+      <h1>Your ProspectPlus Homepage</h1>
+      <p>Welcome back, <b>Tanvi</b>. Manage your territory leads, appointments and sales reporting from here.</p>
+    </div>
+    <div class="terr">
+      <div>
+        <div class="lbl">Active Territory</div>
+        <div class="val">&#127978; Alexandria</div>
+      </div>
+      <div class="owner">&#127978; Alexandria <span class="tag">Owner</span> &#8645;</div>
+    </div>
+  </div>
+
+  <!-- CALENDAR + REMINDERS -->
+  <div class="row-2">
+
+    <div class="card">
+      <div class="card-head">
+        <div class="icon">&#128197;</div>
+        <div style="flex:1">
+          <h2>Calendar</h2>
+          <div class="sub">Scheduled appointments and follow-ups</div>
+        </div>
+        <a class="viewall" href="#">View all &rsaquo;</a>
+      </div>
+      <div class="card-body">
+        <div class="cal">
+          <h3>August 2026</h3>
+          <table>
+            <tr><th>Su</th><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th></tr>
+            <tr><td class="dim">26</td><td class="dim">27</td><td class="dim">28</td><td class="dim">29</td><td class="dim">30</td><td class="dim">31</td><td>1</td></tr>
+            <tr><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td></tr>
+            <tr><td>9</td><td>10</td><td>11</td><td>12</td><td>13</td><td>14</td><td>15</td></tr>
+            <tr><td>16</td><td class="today"><span>17</span></td><td>18</td><td>19</td><td>20</td><td>21</td><td>22</td></tr>
+            <tr><td>23</td><td>24</td><td>25</td><td>26</td><td>27</td><td>28</td><td>29</td></tr>
+            <tr><td>30</td><td>31</td><td class="dim">1</td><td class="dim">2</td><td class="dim">3</td><td class="dim">4</td><td class="dim">5</td></tr>
+          </table>
+        </div>
+        <div class="sched-h">
+          <span>Schedule (17/08/2026)</span>
+          <span class="cnt">0 events</span>
+        </div>
+        <div class="empty">&#9432; No meetings or tasks scheduled for this date.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="icon">&#128276;</div>
+        <div style="flex:1">
+          <h2>Reminders &amp; Updates</h2>
+          <div class="sub">Platform notices, territory tasks and lead updates</div>
+        </div>
+        <span class="badge amber">3 Active</span>
+      </div>
+      <div class="card-body">
+
+        <div class="rem">
+          <div class="rem-top">
+            <span class="em">&#128293;</span>
+            <h3>2 hot leads</h3>
+            <span class="badge red">Hot</span>
+          </div>
+          <p>New hot leads in your territory are ready for follow-up.</p>
+          <div class="rem-foot"><span>Just now</span><a href="#">View leads &rarr;</a></div>
+        </div>
+
+        <div class="rem">
+          <div class="rem-top">
+            <span class="em">&#128200;</span>
+            <h3>Territory Pipeline Status</h3>
+            <span class="badge teal">Territory Overview</span>
+          </div>
+          <p>You have 826 leads across your territory, including 10 active trials and quotes.</p>
+          <div class="rem-foot"><span>Updated today</span><a href="#">View pipeline &rarr;</a></div>
+        </div>
+
+        <div class="rem">
+          <div class="rem-top">
+            <span class="em">&#10024;</span>
+            <h3>ProspectPlus Support &amp; Training</h3>
+            <span class="badge teal">Training</span>
+          </div>
+          <p>Need help with lead reviews or onboarding? Book a 1-on-1 Teams session with Aleyna Harnett.</p>
+          <div class="rem-foot"><span>Available daily</span><a href="#">Book session &rarr;</a></div>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="tip">&#9889; <span><b>Tip</b>: Use <b>Create a Lead</b> below to submit hot leads straight to your territory queue.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- THREE CARDS -->
+  <div class="row-3">
+
+    <div class="card">
+      <div class="card-head">
+        <div class="icon">&#8853;</div>
+        <h2>Create a Lead</h2>
+      </div>
+      <div class="card-body">
+        <p style="font-size:.93rem;">Submit new or hot leads for your territory.</p>
+        <div class="spacer"></div>
+        <div class="callout">
+          <h4>&#128293; Hot leads are prioritised</h4>
+          <p>Leads are automatically tagged to your territory and routed for account verification.</p>
+        </div>
+        <button class="btn"><span class="ic">&#8853;</span> Create New Lead</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="icon">&#128188;</div>
+        <h2>Franchisee Leads Overview</h2>
+      </div>
+      <div class="card-body">
+        <p style="font-size:.93rem;">Track every lead in your territory — pipeline status, quotes, active trials, lead sources and assigned Account Managers.</p>
+        <div class="stats">
+          <div class="stat"><div class="lbl">Total Territory Leads</div><div class="num">826</div></div>
+          <div class="stat"><div class="lbl">Active Trials / Quotes</div><div class="num green">10</div></div>
+        </div>
+        <div class="am"><span>&#128100; Account Manager: <b>Kerina Helliwell</b></span><a href="#">Contact</a></div>
+        <div class="spacer"></div>
+        <button class="btn"><span class="ic">&#128188;</span> Open Leads Hub</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="icon">&#128202;</div>
+        <h2>Sales Process Snapshot</h2>
+      </div>
+      <div class="card-body">
+        <p style="font-size:.93rem;">See conversion metrics and pipeline analysis, and track each lead's progress through the sales process.</p>
+        <div class="spacer"></div>
+        <div class="pipe">
+          <div class="pipe-top"><span>Territory Pipeline Progress</span><span>0% Conversion</span></div>
+          <div class="bar"><i></i></div>
+          <div class="pipe-foot"><span>10 In Discussion</span><span>0 Won Customers</span></div>
+        </div>
+        <button class="btn"><span class="ic">&#128202;</span> View Snapshot</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIDEO + TRAINING -->
+  <div class="row-vt">
+
+    <div class="card">
+      <div class="card-head">
+        <div class="icon">&#127909;</div>
+        <h2>How to Use ProspectPlus</h2>
+        <span class="badge pill">Training Video</span>
+      </div>
+      <div class="card-body">
+        <p style="font-size:.93rem;">A step-by-step walkthrough of your dashboard — submitting leads, reading your pipeline and understanding your conversion metrics.</p>
+        <div class="player">
+          <div class="play">&#9654;</div>
+          <span>Watch the ProspectPlus overview</span>
+        </div>
+        <div class="btn-row">
+          <button class="btn"><span class="ic">&#9654;</span> Watch Video</button>
+          <button class="btn ghost">Open in New Tab &#8599;</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="icon">&#128101;</div>
+        <h2>Questions or need more training?</h2>
+      </div>
+      <div class="card-body">
+        <div class="trainer">
+          <div class="avatar">AH</div>
+          <div class="who">
+            <b>Aleyna Harnett</b>
+            <div class="role">Lead Generation &amp; Territory Training Specialist</div>
+            <div class="email">aleyna.harnett@mailplus.com.au</div>
+          </div>
+          <span class="teams">&#127909; Via Microsoft Teams</span>
+        </div>
+        <p style="font-size:.93rem;">Book a 1-on-1 Teams session to walk through your territory leads, pipeline management, or any ProspectPlus questions.</p>
+        <div class="spacer"></div>
+        <button class="btn"><span class="ic">&#128197;</span> Book a Session with Aleyna</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>&copy; 2026 MailPlus. All rights reserved.</footer>
+
+</div>
+</body>
+</html>

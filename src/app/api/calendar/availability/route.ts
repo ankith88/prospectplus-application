@@ -3,6 +3,7 @@ import { getGraphClient } from '@/services/microsoft-graph';
 import { adminApp } from '@/lib/firebase-admin';
 import { addDays, addMinutes, format, isAfter, isBefore, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { Lead, UserProfile } from '@/lib/types';
+import { isWeekendOrPublicHoliday } from '@/lib/australian-holidays';
 
 export const dynamic = 'force-dynamic';
 
@@ -146,6 +147,14 @@ export async function GET(req: NextRequest) {
         });
       }
 
+      // Rule: Can't make bookings on weekends or Sydney, Australia public holidays
+      if (isWeekendOrPublicHoliday(date)) {
+        return NextResponse.json({
+          slots: [],
+          error: 'Bookings cannot be made on weekends or Sydney public holidays. Please select another date.'
+        });
+      }
+
       const dayOfWeek = format(date, 'EEEE');
 
       const defaultWorkingHours = {
@@ -197,15 +206,22 @@ export async function GET(req: NextRequest) {
           });
 
           if (scheduleResponse?.value?.[0]?.scheduleItems) {
-            busyBlocks = scheduleResponse.value[0].scheduleItems.map((item: any) => {
-              const startStr =
-                item.start.dateTime.endsWith('Z') || item.start.timeZone !== 'UTC'
-                  ? item.start.dateTime
-                  : `${item.start.dateTime}Z`;
-              const endStr =
-                item.end.dateTime.endsWith('Z') || item.end.timeZone !== 'UTC'
-                  ? item.end.dateTime
-                  : `${item.end.dateTime}Z`;
+            // Filter out items marked as 'free' so transparent/informational items do not block availability
+            const nonFreeItems = scheduleResponse.value[0].scheduleItems.filter(
+              (item: any) => item.status && item.status.toLowerCase() !== 'free'
+            );
+
+            busyBlocks = nonFreeItems.map((item: any) => {
+              let startStr = item.start.dateTime;
+              let endStr = item.end.dateTime;
+
+              if (item.start.timeZone === 'UTC' && !startStr.endsWith('Z')) {
+                startStr = `${startStr}Z`;
+              }
+              if (item.end.timeZone === 'UTC' && !endStr.endsWith('Z')) {
+                endStr = `${endStr}Z`;
+              }
+
               return {
                 start: new Date(startStr),
                 end: new Date(endStr)

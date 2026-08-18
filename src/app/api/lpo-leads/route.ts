@@ -78,53 +78,109 @@ export async function POST(req: NextRequest) {
     const leadId = docRef.id;
 
     // Send confirmation email
-    const origin = req.nextUrl.origin;
-    const profileUrl = `${origin}/lpo-leads/${leadId}`;
+    const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://prospectplus.com.au';
+    const baseUrl = origin.replace(/\/$/, '');
+    const profileUrl = `${baseUrl}/lpo-leads/${leadId}`;
 
-    const emailHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #103d39; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; background-color: #ffffff;">
-        <div style="text-align: center; margin-bottom: 24px;">
-          <img src="https://mailplus.com.au/wp-content/uploads/2023/01/MailPlus-Logo.png" alt="MailPlus Logo" style="max-height: 48px;" />
-        </div>
-        <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; text-align: center;">New LPO Lead Received</h2>
-        <p style="font-size: 15px; line-height: 1.5; text-align: center;">
-          A new LPO Owner enquiry has been submitted. Here are the details of the lead:
-        </p>
-        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
-          <tbody>
-            <tr style="border-bottom: 1px solid #edf2f7;">
-              <td style="padding: 10px 0; font-weight: bold; width: 140px;">LPO Location/Name</td>
-              <td style="padding: 10px 0;">${lpoName}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #edf2f7;">
-              <td style="padding: 10px 0; font-weight: bold;">LPO Owner Name</td>
-              <td style="padding: 10px 0;">${lpoOwnerName}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #edf2f7;">
-              <td style="padding: 10px 0; font-weight: bold;">Contact Email</td>
-              <td style="padding: 10px 0;"><a href="mailto:${email}" style="color: #095c7b; text-decoration: none;">${email}</a></td>
-            </tr>
-            <tr style="border-bottom: 1px solid #edf2f7;">
-              <td style="padding: 10px 0; font-weight: bold;">Contact Phone</td>
-              <td style="padding: 10px 0;"><a href="tel:${phone}" style="color: #095c7b; text-decoration: none;">${phone}</a></td>
-            </tr>
-            <tr style="border-bottom: 1px solid #edf2f7;">
-              <td style="padding: 10px 0; font-weight: bold;">Address</td>
-              <td style="padding: 10px 0;">${address1 ? address1 + ', ' : ''}${address2}, ${city} ${state} ${postcode}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #edf2f7;">
-              <td style="padding: 10px 0; font-weight: bold;">Notes</td>
-              <td style="padding: 10px 0; white-space: pre-wrap;">${notes || 'No notes provided.'}</td>
-            </tr>
-          </tbody>
+    const emailHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New LPO Lead: ${lpoName}</title>
+</head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0; width: 100%;">
+    <tr>
+      <td align="center">
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(9, 92, 123, 0.06);">
+          
+          <!-- Body Text & Content Row -->
+          <tr>
+            <td style="padding: 40px 30px; color: #2d3748; font-size: 15px; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              
+              <h2 style="color: #095c7b; margin: 0 0 16px; font-size: 20px; text-align: center; font-weight: 700;">New LPO Lead Received</h2>
+              
+              <p style="margin: 0 0 20px; font-size: 15px; color: #2d3748; text-align: center;">
+                A new LPO Owner enquiry has been submitted. Here are the details of the lead:
+              </p>
+              
+              <!-- Lead Details Box Table -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-size: 14px; color: #2d3748;">
+                      <tr style="border-bottom: 1px solid #edf2f7;">
+                        <td width="140" style="padding: 8px 0; font-weight: 700; color: #4a5568;">LPO Location/Name:</td>
+                        <td style="padding: 8px 0; font-weight: 600; color: #095c7b;">${lpoName}</td>
+                      </tr>
+                      <tr style="border-bottom: 1px solid #edf2f7;">
+                        <td style="padding: 8px 0; font-weight: 700; color: #4a5568;">LPO Owner Name:</td>
+                        <td style="padding: 8px 0;">${lpoOwnerName}</td>
+                      </tr>
+                      <tr style="border-bottom: 1px solid #edf2f7;">
+                        <td style="padding: 8px 0; font-weight: 700; color: #4a5568;">Contact Email:</td>
+                        <td style="padding: 8px 0;"><a href="mailto:${email}" style="color: #095c7b; text-decoration: underline;">${email}</a></td>
+                      </tr>
+                      <tr style="border-bottom: 1px solid #edf2f7;">
+                        <td style="padding: 8px 0; font-weight: 700; color: #4a5568;">Contact Phone:</td>
+                        <td style="padding: 8px 0;"><a href="tel:${phone}" style="color: #095c7b; text-decoration: underline;">${phone}</a></td>
+                      </tr>
+                      <tr style="border-bottom: 1px solid #edf2f7;">
+                        <td style="padding: 8px 0; font-weight: 700; color: #4a5568;">Address:</td>
+                        <td style="padding: 8px 0;">${address1 ? address1 + ', ' : ''}${address2 ? address2 + ', ' : ''}${city} ${state} ${postcode}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; font-weight: 700; color: #4a5568; vertical-align: top;">Notes:</td>
+                        <td style="padding: 8px 0; white-space: pre-wrap;">${notes || 'No notes provided.'}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Call to Action Button Table -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 25px 0 10px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="${profileUrl}" target="_blank" style="background-color: #095c7b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 30px; font-weight: 700; font-size: 15px; display: inline-block; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                      View LPO Lead Profile &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Navy Banner with Logo per AGENTS.md -->
+          <tr>
+            <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+              <img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" width="135" style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;" />
+            </td>
+          </tr>
+
+          <!-- Footer per AGENTS.md -->
+          <tr>
+            <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+              <p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+              </p>
+              <p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Powered by MailPlus Australia
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+                &copy; 2026 MailPlus. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
         </table>
-        <div style="text-align: center; margin: 32px 0 16px;">
-          <a href="${profileUrl}" style="background-color: #095c7b; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 30px; font-weight: bold; font-size: 15px; display: inline-block;">
-            View LPO Lead Profile
-          </a>
-        </div>
-      </div>
-    `;
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
     try {
       await sendPhysicalEmail({

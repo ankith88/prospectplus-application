@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { addDays, startOfDay, isBefore, format } from 'date-fns';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { isWeekendOrPublicHoliday } from '@/lib/australian-holidays';
 
 import {
   Dialog,
@@ -56,7 +57,12 @@ import {
   ListTodo,
   XCircle,
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  FileText,
+  Search,
+  Building2,
+  Play,
+  ArrowUpRight
 } from 'lucide-react';
 
 interface AvailableSlot {
@@ -76,6 +82,10 @@ export default function FranchiseeHomeClient() {
   // Selected date on calendar widget
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isVideoOpen, setIsVideoOpen] = useState(false);
+
+  // Quick View Pop-Up Modal State
+  const [activeQuickViewModal, setActiveQuickViewModal] = useState<'won' | 'quotes' | 'trials' | 'appointments' | null>(null);
+  const [quickViewSearch, setQuickViewSearch] = useState<string>('');
 
   // Booking Modal States - Earliest booking date is TOMORROW (no same-day or past)
   const tomorrow = useMemo(() => addDays(startOfDay(new Date()), 1), []);
@@ -301,6 +311,75 @@ export default function FranchiseeHomeClient() {
     };
   }, [leads]);
 
+  // Metric 1: Leads Won / Signed Up This Month
+  const wonLeadsThisMonth = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    return leads.filter((l) => {
+      const statusStr = (l.status || '').toLowerCase();
+      const custStatusStr = ((l as any).customerStatus || '').toLowerCase();
+      const isWon =
+        statusStr === 'won' ||
+        statusStr === 'signed' ||
+        statusStr === 'converted' ||
+        custStatusStr === 'won' ||
+        custStatusStr === 'signed' ||
+        !!(l as any).signedUpAt ||
+        !!(l as any).wonAt;
+
+      if (!isWon) return false;
+
+      const dateVal =
+        (l as any).signedUpAt ||
+        (l as any).wonAt ||
+        (l as any).dateWon ||
+        (l as any).updatedAt ||
+        (l as any).updated_at ||
+        (l as any).createdAt ||
+        (l as any).created_at;
+
+      if (!dateVal) return true;
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return true;
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+  }, [leads]);
+
+  // Metric 2: Quotes Sent Leads
+  const quotesSentLeads = useMemo(() => {
+    return leads.filter((l) => {
+      const statusStr = (l.status || '').toLowerCase();
+      return (
+        statusStr.includes('quote') ||
+        statusStr === 'proposal sent' ||
+        statusStr === 'in discussion' ||
+        !!(l as any).quoteSentAt ||
+        !!(l as any).quotesSent
+      );
+    });
+  }, [leads]);
+
+  // Metric 3: Trials (ShipMate or LocalMile) Leads
+  const trialLeads = useMemo(() => {
+    return leads.filter((l) => {
+      const statusStr = (l.status || '').toLowerCase();
+      const trialTypeStr = ((l as any).trialType || '').toLowerCase();
+      const isShipmate = (l as any).shipmateStatus === 'Activated' || trialTypeStr.includes('shipmate');
+      const isLocalmile = trialTypeStr.includes('localmile');
+
+      return (
+        statusStr.includes('trial') ||
+        statusStr.includes('localmile') ||
+        statusStr.includes('shipmate') ||
+        statusStr === 'free trial' ||
+        isShipmate ||
+        isLocalmile
+      );
+    });
+  }, [leads]);
+
   // Label for 3-month appointment scope window (Prev Month, Current Month, Next Month)
   const threeMonthWindowLabel = useMemo(() => {
     const now = new Date();
@@ -380,6 +459,24 @@ export default function FranchiseeHomeClient() {
         (a as any).isTraining === true
     );
   }, [franchiseeAppointments]);
+
+  // Quick View Items filter for Metric Card Pop-ups
+  const quickViewItems = useMemo(() => {
+    let baseList: any[] = [];
+    if (activeQuickViewModal === 'won') baseList = wonLeadsThisMonth;
+    else if (activeQuickViewModal === 'quotes') baseList = quotesSentLeads;
+    else if (activeQuickViewModal === 'trials') baseList = trialLeads;
+    else if (activeQuickViewModal === 'appointments') baseList = franchiseeAppointments;
+
+    if (!quickViewSearch.trim()) return baseList;
+    const q = quickViewSearch.toLowerCase().trim();
+    return baseList.filter((item) => {
+      const companyName = (item.companyName || item.leadName || '').toLowerCase();
+      const contactName = (item.contactName || item.contactPerson || item.assignedTo || '').toLowerCase();
+      const status = (item.status || item.appointmentStatus || '').toLowerCase();
+      return companyName.includes(q) || contactName.includes(q) || status.includes(q);
+    });
+  }, [activeQuickViewModal, wonLeadsThisMonth, quotesSentLeads, trialLeads, franchiseeAppointments, quickViewSearch]);
 
   // Agenda appointments for selected date on home calendar widget
   const dayAppointments = useMemo(() => {
@@ -574,12 +671,12 @@ export default function FranchiseeHomeClient() {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-[#095c7b] via-[#0b6a8d] to-[#0d7ca5] text-white p-6 rounded-2xl shadow-md border border-[#095c7b]/30">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Welcome to Your <span className="font-extrabold text-[#eaf143]">ProspectPlus</span> Homepage!
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+              Your ProspectPlus Homepage
             </h1>
           </div>
           <p className="text-slate-100 text-sm sm:text-base font-medium">
-            Welcome back, <strong className="text-[#eaf143]">{userFirstName}</strong>! Here is your central hub for managing territory leads, appointments, and sales reporting.
+            Welcome back, <strong className="text-[#eaf143]">{userFirstName}</strong>. Manage your territory leads, appointments and sales reporting from here.
           </p>
         </div>
 
@@ -608,61 +705,89 @@ export default function FranchiseeHomeClient() {
 
       {/* HERO QUICK METRICS STRIP */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card className="border-[#095c7b]/20 bg-gradient-to-br from-emerald-500/10 via-white to-white shadow-sm hover:shadow-md transition-shadow">
+        {/* CARD 1: LEADS WON / SIGNED UP THIS MONTH */}
+        <Card
+          onClick={() => {
+            setQuickViewSearch('');
+            setActiveQuickViewModal('won');
+          }}
+          className="border-[#095c7b]/20 bg-gradient-to-br from-emerald-500/10 via-white to-white shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-emerald-500/50 hover:scale-[1.01]"
+        >
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shrink-0">
-              <TrendingUp className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">This Month Conversion</p>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{currentMonthSnapshot.conversionRate}%</span>
-                <span className="text-[11px] text-emerald-700 font-semibold truncate">{currentMonthSnapshot.wonLeads} Won</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-[#095c7b]/20 bg-gradient-to-br from-indigo-500/10 via-white to-white shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 shrink-0">
-              <Briefcase className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Total Territory Leads</p>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{metrics.total}</span>
-                <span className="text-[11px] text-slate-500 font-medium">In Pipeline</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-[#095c7b]/20 bg-gradient-to-br from-amber-500/10 via-white to-white shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 shrink-0">
-              <CalendarCheck className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Appointments Scope</p>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{franchiseeAppointments.length}</span>
-                <span className="text-[11px] text-amber-700 font-semibold truncate">3-Month Window</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-[#095c7b]/20 bg-gradient-to-br from-teal-500/10 via-white to-white shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-teal-100 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 shrink-0">
               <CheckCircle2 className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Current Month Wins</p>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Leads Won / Signed Up</p>
               <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{currentMonthSnapshot.wonLeads}</span>
-                <span className="text-[11px] text-teal-700 font-semibold truncate">{currentMonthSnapshot.monthName}</span>
+                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{wonLeadsThisMonth.length}</span>
+                <span className="text-[11px] text-emerald-700 font-semibold truncate">{currentMonthSnapshot.monthName}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* CARD 2: QUOTES SENT */}
+        <Card
+          onClick={() => {
+            setQuickViewSearch('');
+            setActiveQuickViewModal('quotes');
+          }}
+          className="border-[#095c7b]/20 bg-gradient-to-br from-amber-500/10 via-white to-white shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-amber-500/50 hover:scale-[1.01]"
+        >
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 shrink-0">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Quotes Sent</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{quotesSentLeads.length}</span>
+                <span className="text-[11px] text-amber-700 font-semibold truncate">Active Quotes</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* CARD 3: TRIALS (SHIPMATE OR LOCALMILE) */}
+        <Card
+          onClick={() => {
+            setQuickViewSearch('');
+            setActiveQuickViewModal('trials');
+          }}
+          className="border-[#095c7b]/20 bg-gradient-to-br from-indigo-500/10 via-white to-white shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-indigo-500/50 hover:scale-[1.01]"
+        >
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 shrink-0">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Trials (ShipMate/LocalMile)</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{trialLeads.length}</span>
+                <span className="text-[11px] text-indigo-700 font-semibold truncate">ShipMate & LocalMile</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* CARD 4: APPOINTMENTS */}
+        <Card
+          onClick={() => {
+            setQuickViewSearch('');
+            setActiveQuickViewModal('appointments');
+          }}
+          className="border-[#095c7b]/20 bg-gradient-to-br from-teal-500/10 via-white to-white shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-teal-500/50 hover:scale-[1.01]"
+        >
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-teal-100 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 shrink-0">
+              <CalendarCheck className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Appointments</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{franchiseeAppointments.length}</span>
+                <span className="text-[11px] text-teal-700 font-semibold truncate">3-Month Window</span>
               </div>
             </div>
           </CardContent>
@@ -766,7 +891,7 @@ export default function FranchiseeHomeClient() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <CardTitle className="text-lg font-bold text-[#095c7b]">Reminders/Updates?</CardTitle>
+                    <CardTitle className="text-lg font-bold text-[#095c7b]">Appointments</CardTitle>
                     <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30 text-[10px] font-bold">
                       📅 Scope: 3-Month Window ({threeMonthWindowLabel})
                     </Badge>
@@ -991,120 +1116,113 @@ export default function FranchiseeHomeClient() {
       {/* ROW 3: LINK TO LOOM VIDEO | BOOK TRAINING SESSION WITH ALEYNA */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="book-session">
         {/* LINK TO LOOM VIDEO (Bottom Left - 5 cols) */}
-        <Card className="lg:col-span-5 flex flex-col border-2 border-[#095c7b] shadow-md hover:shadow-lg transition-all bg-gradient-to-b from-white to-slate-50/50">
-          <CardHeader className="pb-3 border-b border-[#095c7b]/20 bg-[#095c7b]/10">
+        <Card className="lg:col-span-5 flex flex-col border border-[#095c7b]/20 shadow-sm hover:shadow-md transition-all bg-white overflow-hidden rounded-2xl">
+          <CardHeader className="pb-3 border-b border-slate-100 bg-[#f4f8f7]">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-[#095c7b] text-white shadow-sm">
-                  <Video className="h-5 w-5" />
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-full bg-[#095c7b] text-white shadow-xs">
+                  <Video className="h-4 w-4" />
                 </div>
-                <CardTitle className="text-lg font-extrabold text-[#095c7b]">Link to Loom Video</CardTitle>
+                <CardTitle className="text-lg font-bold text-[#095c7b]">How to Use ProspectPlus</CardTitle>
               </div>
-              <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] font-semibold text-xs">
+              <Badge variant="outline" className="bg-[#d9ebd9] text-[#2c5234] border-none font-medium text-xs py-1 px-3 rounded-full">
                 Training Video
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="p-5 flex-1 flex flex-col justify-between space-y-4">
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Watch our step-by-step Loom walkthrough video on navigating your franchisee dashboard, submitting new leads, and interpreting sales conversion metrics.
+            <p className="text-sm text-slate-700 leading-relaxed font-medium">
+              A step-by-step walkthrough of your dashboard — submitting leads, reading your pipeline and understanding your conversion metrics.
             </p>
 
             {/* Video Thumbnail / Preview Container */}
             <div
               onClick={() => setIsVideoOpen(true)}
-              className="relative w-full aspect-video rounded-xl bg-slate-900 overflow-hidden cursor-pointer group shadow-inner border border-slate-700 flex items-center justify-center"
+              className="relative w-full aspect-video rounded-2xl bg-[#0b192c] overflow-hidden cursor-pointer group shadow-inner border border-slate-800 flex flex-col items-center justify-center p-4"
             >
-              {/* Background gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent opacity-80 group-hover:opacity-60 transition-opacity" />
-
-              <div className="relative z-10 flex flex-col items-center gap-2 text-white">
-                <div className="p-3.5 rounded-full bg-[#095c7b] text-[#eaf143] shadow-lg group-hover:scale-110 transition-transform">
-                  <PlayCircle className="h-8 w-8 fill-[#095c7b]" />
+              <div className="flex flex-col items-center gap-3 text-white">
+                <div className="p-3.5 rounded-full bg-[#095c7b] text-[#eaf143] shadow-md group-hover:scale-110 transition-transform flex items-center justify-center">
+                  <Play className="h-6 w-6 fill-[#eaf143] text-[#eaf143] ml-0.5" />
                 </div>
-                <span className="font-bold text-xs tracking-wide group-hover:text-[#eaf143] transition-colors">
-                  Click to Watch ProspectPlus Overview
+                <span className="font-bold text-sm text-white group-hover:text-[#eaf143] transition-colors text-center">
+                  Watch the ProspectPlus overview
                 </span>
               </div>
             </div>
           </CardContent>
-          <CardFooter className="p-4 pt-0 flex gap-2">
+          <CardFooter className="p-5 pt-0 flex gap-3">
             <Button
               onClick={() => setIsVideoOpen(true)}
-              className="flex-1 bg-[#095c7b] hover:bg-[#095c7b]/90 text-white font-bold flex items-center justify-center gap-2 h-10 text-xs"
+              className="flex-1 bg-[#095c7b] hover:bg-[#074861] text-white font-extrabold shadow-sm transition-all flex items-center justify-center gap-2 h-12 rounded-full text-sm"
             >
-              <PlayCircle className="h-4 w-4 text-[#eaf143]" />
-              Watch Video Modal
+              <Play className="h-4 w-4 fill-[#eaf143] text-[#eaf143]" />
+              Watch Video
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               asChild
-              className="border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/10 font-bold flex items-center justify-center gap-1.5 h-10 text-xs"
+              className="flex-1 bg-[#d9ebd9] hover:bg-[#cbe3cb] text-[#095c7b] font-extrabold shadow-none transition-all flex items-center justify-center gap-1.5 h-12 rounded-full text-sm border-none"
             >
               <a
                 href="https://www.loom.com/share/e7a2b97c41bf4d0aa9d2a6773347b594"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Open in Loom <ExternalLink className="h-3.5 w-3.5" />
+                Open in New Tab <ArrowUpRight className="h-4 w-4" />
               </a>
             </Button>
           </CardFooter>
         </Card>
 
         {/* BOOK SESSION WITH ALEYNA (Bottom Right - 7 cols) */}
-        <Card className="lg:col-span-7 flex flex-col border-2 border-[#095c7b] shadow-md hover:shadow-lg transition-all bg-gradient-to-b from-white to-slate-50/50">
-          <CardHeader className="pb-3 border-b border-[#095c7b]/20 bg-[#095c7b]/10">
+        <Card className="lg:col-span-7 flex flex-col border border-[#095c7b]/20 shadow-sm hover:shadow-md transition-all bg-white overflow-hidden rounded-2xl">
+          <CardHeader className="pb-3 border-b border-slate-100 bg-[#f4f8f7]">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-[#095c7b] text-white shadow-sm">
-                  <Users className="h-5 w-5" />
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-full bg-[#095c7b] text-white shadow-xs">
+                  <Users className="h-4 w-4" />
                 </div>
-                <CardTitle className="text-lg font-extrabold text-[#095c7b]">
-                  Have any questions or need further training?
+                <CardTitle className="text-lg font-bold text-[#095c7b]">
+                  Questions or need more training?
                 </CardTitle>
               </div>
             </div>
           </CardHeader>
           <CardContent className="p-5 flex-1 flex flex-col justify-between space-y-4">
-            <p className="text-sm font-semibold text-slate-800 leading-snug">
-              Book a session with Aleyna through here:
-            </p>
-
             {/* Specialist Profile Card */}
-            <div className="p-4 rounded-xl border bg-gradient-to-r from-slate-50 to-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+            <div className="p-4 rounded-2xl border border-slate-200 bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
               <div className="flex items-center gap-3.5">
-                <div className="h-12 w-12 rounded-full bg-[#095c7b] text-white flex items-center justify-center font-bold text-lg border-2 border-[#eaf143] shadow-sm shrink-0">
+                <div className="h-12 w-12 rounded-full bg-[#095c7b] text-white flex items-center justify-center font-bold text-lg border-2 border-[#eaf143] shadow-xs shrink-0">
                   AH
                 </div>
                 <div>
-                  <h4 className="font-extrabold text-sm text-slate-900">Aleyna Harnett</h4>
-                  <p className="text-xs text-[#095c7b] font-medium">Lead Generation & Territory Training Specialist</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">aleyna.harnett@mailplus.com.au</p>
+                  <h4 className="font-bold text-base text-slate-900">Aleyna Harnett</h4>
+                  <p className="text-xs text-[#095c7b] font-bold">Lead Generation & Territory Training Specialist</p>
+                  <p className="text-xs text-slate-500 mt-0.5">aleyna.harnett@mailplus.com.au</p>
                 </div>
               </div>
 
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 text-xs font-bold py-1 px-2.5 flex items-center gap-1">
+              <Badge variant="outline" className="bg-blue-50/80 text-blue-700 border-blue-300 text-xs font-bold py-1.5 px-3 rounded-full flex items-center gap-1.5 shrink-0">
                 <Video className="h-3.5 w-3.5 text-blue-600" />
-                Microsoft Teams Only
+                Via Microsoft Teams
               </Badge>
             </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Schedule a dedicated 1-on-1 Microsoft Teams video session to walk through territory leads, review pipeline management, or get answers to any questions about ProspectPlus.
+            <p className="text-sm text-slate-700 leading-relaxed font-medium">
+              Book a 1-on-1 Teams session to walk through your territory leads, pipeline management, or any ProspectPlus questions.
             </p>
           </CardContent>
-          <CardFooter className="p-4 pt-0">
+          <CardFooter className="p-5 pt-0">
             <Button
               onClick={() => {
                 setBookingSuccess(false);
                 setBookingDate(tomorrow);
                 setIsBookingOpen(true);
               }}
-              className="w-full bg-[#095c7b] hover:bg-[#095c7b]/90 text-white font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 h-11 text-sm"
+              className="w-full bg-[#095c7b] hover:bg-[#074861] text-white font-extrabold shadow-sm transition-all flex items-center justify-center gap-2 h-12 rounded-full text-sm"
             >
-              <CalendarIcon className="h-4 w-4 text-[#eaf143]" />
-              Book Training Session with Aleyna
+              <CalendarIcon className="h-4.5 w-4.5 text-[#eaf143]" />
+              Book a Session with Aleyna
             </Button>
           </CardFooter>
         </Card>
@@ -1208,7 +1326,7 @@ export default function FranchiseeHomeClient() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold text-slate-700">Select Date:</Label>
-                    <span className="text-[10px] text-amber-600 font-semibold">(Future dates only)</span>
+                    <span className="text-[10px] text-amber-600 font-semibold">(Weekdays only, excl. public holidays)</span>
                   </div>
                   <div className="border rounded-xl p-1 bg-slate-50/50 flex justify-center">
                     <CalendarWidget
@@ -1217,7 +1335,7 @@ export default function FranchiseeHomeClient() {
                       onSelect={(d) => {
                         if (d) setBookingDate(d);
                       }}
-                      disabled={(date) => isBefore(date, startOfDay(addDays(new Date(), 1)))}
+                      disabled={(date) => isBefore(date, startOfDay(addDays(new Date(), 1))) || isWeekendOrPublicHoliday(date)}
                       className="rounded-md"
                     />
                   </div>
@@ -1322,6 +1440,190 @@ export default function FranchiseeHomeClient() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* QUICK VIEW POP-UP DIALOG MODAL FOR METRIC CARDS */}
+      <Dialog
+        open={activeQuickViewModal !== null}
+        onOpenChange={(open) => {
+          if (!open) setActiveQuickViewModal(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl w-full p-6 bg-white rounded-2xl max-h-[85vh] flex flex-col">
+          {activeQuickViewModal && (() => {
+            let title = '';
+            let subtitle = '';
+            let icon = null;
+            let badgeBg = '';
+
+            if (activeQuickViewModal === 'won') {
+              title = `Leads Won / Signed Up (${currentMonthSnapshot.monthName})`;
+              subtitle = `Territory leads won or signed up in ${currentMonthSnapshot.monthName}`;
+              icon = <CheckCircle2 className="h-5 w-5 text-emerald-600" />;
+              badgeBg = 'bg-emerald-100 text-emerald-800';
+            } else if (activeQuickViewModal === 'quotes') {
+              title = 'Quotes Sent Leads';
+              subtitle = 'Territory leads with active quotes or proposals sent';
+              icon = <FileText className="h-5 w-5 text-amber-600" />;
+              badgeBg = 'bg-amber-100 text-amber-800';
+            } else if (activeQuickViewModal === 'trials') {
+              title = 'Trials (ShipMate & LocalMile)';
+              subtitle = 'Territory leads currently on active ShipMate or LocalMile trials';
+              icon = <TrendingUp className="h-5 w-5 text-indigo-600" />;
+              badgeBg = 'bg-indigo-100 text-indigo-800';
+            } else if (activeQuickViewModal === 'appointments') {
+              title = 'Territory Appointments';
+              subtitle = `Scheduled appointments across 3-month window (${threeMonthWindowLabel})`;
+              icon = <CalendarCheck className="h-5 w-5 text-teal-600" />;
+              badgeBg = 'bg-teal-100 text-teal-800';
+            }
+
+            return (
+              <>
+                <DialogHeader className="pb-3 border-b">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-slate-100">{icon}</div>
+                      <div>
+                        <DialogTitle className="text-lg font-bold text-slate-900">{title}</DialogTitle>
+                        <DialogDescription className="text-xs text-slate-500">{subtitle}</DialogDescription>
+                      </div>
+                    </div>
+                    <Badge variant="secondary" className={`font-bold text-xs ${badgeBg}`}>
+                      {quickViewItems.length} {activeQuickViewModal === 'appointments' ? 'Appointments' : 'Leads'}
+                    </Badge>
+                  </div>
+
+                  {/* Search Bar */}
+                  <div className="relative mt-3">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      type="text"
+                      placeholder={`Search ${activeQuickViewModal === 'appointments' ? 'appointments or leads' : 'company, contact or status'}...`}
+                      value={quickViewSearch}
+                      onChange={(e) => setQuickViewSearch(e.target.value)}
+                      className="pl-9 text-xs h-9 bg-slate-50 border-slate-200"
+                    />
+                  </div>
+                </DialogHeader>
+
+                {/* Body Content List */}
+                <div className="flex-1 overflow-y-auto py-3 space-y-2.5 pr-1 max-h-[55vh]">
+                  {loadingData ? (
+                    <div className="py-12 flex justify-center">
+                      <Loader />
+                    </div>
+                  ) : quickViewItems.length === 0 ? (
+                    <div className="py-12 flex flex-col items-center justify-center text-center space-y-2 border-2 border-dashed rounded-xl bg-slate-50/50">
+                      <Building2 className="h-8 w-8 text-slate-400" />
+                      <p className="text-xs font-semibold text-slate-600">No matching records found</p>
+                      <p className="text-[11px] text-slate-400">
+                        {quickViewSearch ? 'Try a different search term.' : 'There are currently no records in this section.'}
+                      </p>
+                    </div>
+                  ) : activeQuickViewModal === 'appointments' ? (
+                    quickViewItems.map((appt: any) => {
+                      const leadCompanyName = appt.leadName || leadsMap.get(appt.leadId) || 'Scheduled Appointment';
+                      const isTeams = appt.isTeams || appt.type === 'Teams Training Session' || appt.meetingType === 'teams';
+                      const status = appt.appointmentStatus || 'Scheduled';
+
+                      const apptDate = appt.duedate ? new Date(appt.duedate) : appt.appointmentDate ? new Date(appt.appointmentDate) : null;
+                      let dateFormatted = 'N/A';
+                      if (apptDate && !isNaN(apptDate.getTime())) {
+                        dateFormatted = `${apptDate.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })}${appt.starttime ? ` at ${appt.starttime}` : ''}`;
+                      }
+
+                      return (
+                        <div
+                          key={appt.id}
+                          className="p-3.5 rounded-xl border bg-white hover:border-[#095c7b]/40 transition-all shadow-xs flex items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2 rounded-lg bg-[#095c7b]/10 text-[#095c7b] shrink-0">
+                              {isTeams ? <Video className="h-4 w-4 text-blue-600" /> : <CalendarIcon className="h-4 w-4" />}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-slate-900 truncate">{leadCompanyName}</h4>
+                              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3 text-[#095c7b]" /> {dateFormatted}
+                                </span>
+                                <span>•</span>
+                                <span>Host: {appt.assignedTo || 'Aleyna Harnett'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge variant="outline" className="text-[10px] font-semibold">
+                              {status}
+                            </Badge>
+                            {appt.leadId && (
+                              <Button variant="ghost" size="sm" asChild className="h-8 text-xs text-[#095c7b] font-bold">
+                                <Link href={`/leads/${appt.leadId}`} className="flex items-center gap-1">
+                                  View Lead <ChevronRight className="h-3.5 w-3.5" />
+                                </Link>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    quickViewItems.map((lead: any) => {
+                      const contactName = lead.contactPerson || lead.contactName || (lead.firstName ? `${lead.firstName || ''} ${lead.lastName || ''}`.trim() : null);
+                      const contactPhone = lead.phone || lead.customerPhone;
+                      const contactEmail = lead.email || lead.customerServiceEmail;
+                      const location = [lead.suburb, lead.state].filter(Boolean).join(', ');
+
+                      return (
+                        <div
+                          key={lead.id}
+                          className="p-3.5 rounded-xl border bg-white hover:border-[#095c7b]/40 transition-all shadow-xs flex items-center justify-between gap-3 text-xs group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2 rounded-lg bg-[#095c7b]/10 text-[#095c7b] shrink-0">
+                              <Building2 className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-slate-900 group-hover:text-[#095c7b] transition-colors truncate">
+                                  {lead.companyName}
+                                </h4>
+                                {lead.status && (
+                                  <Badge className="bg-[#095c7b]/10 text-[#095c7b] text-[10px] font-bold shrink-0">
+                                    {lead.status}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-slate-500">
+                                {contactName && <span>Contact: <strong>{contactName}</strong></span>}
+                                {contactPhone && <span>Phone: {contactPhone}</span>}
+                                {contactEmail && <span className="truncate max-w-[200px]">Email: {contactEmail}</span>}
+                                {location && <span>Location: {location}</span>}
+                              </div>
+                            </div>
+                          </div>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            asChild
+                            className="h-8 text-xs border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/10 font-bold shrink-0"
+                          >
+                            <Link href={`/leads/${lead.id}`} className="flex items-center gap-1">
+                              View Lead <ChevronRight className="h-3.5 w-3.5" />
+                            </Link>
+                          </Button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

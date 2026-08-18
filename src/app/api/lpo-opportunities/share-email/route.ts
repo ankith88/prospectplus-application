@@ -49,8 +49,9 @@ export async function POST(req: NextRequest) {
 
     // Construct encrypted public URL
     const encryptedToken = encryptLeadId(docSnap.id);
-    const origin = req.nextUrl.origin;
-    const publicUrl = `${origin}/lpo-opportunity/${encodeURIComponent(encryptedToken)}`;
+    const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://prospectplus.com.au';
+    const baseUrl = origin.replace(/\/$/, '');
+    const publicUrl = `${baseUrl}/lpo-opportunity/${encodeURIComponent(encryptedToken)}`;
 
     // Build Email HTML per AGENTS.md rules
     const emailSubject = subject || `Shared LPO Opportunity: ${companyName}`;
