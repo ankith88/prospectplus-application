@@ -3645,6 +3645,9 @@ export default function AMReportsDashboard() {
                             const activeStatusKeys = Array.from(allActiveStatusesSet);
 
                             const STATUS_BAR_COLORS: Record<string, string> = {
+                                'Hot Leads': '#f43f5e',
+                                'Hot Lead': '#f43f5e',
+                                'Priority Lead': '#f43f5e',
                                 'Appointment Booked': '#095c7b',
                                 'Quote Sent': '#f97316',
                                 'Follow Up': '#3b82f6',

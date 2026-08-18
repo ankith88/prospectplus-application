@@ -14,6 +14,8 @@ export function LeadStatusBadge({ status, showInfoTooltip }: LeadStatusBadgeProp
     const trimmed = status.trim();
     if (trimmed === 'SUSPECT-Unqualified' || trimmed === 'SUSPECT - Unqualified' || trimmed.toUpperCase() === 'SUSPECT-UNQUALIFIED' || trimmed.toUpperCase() === 'SUSPECT - UNQUALIFIED') {
       displayStatus = 'New';
+    } else if (trimmed === 'Priority Lead' || trimmed === 'Priority Field Lead' || trimmed === 'Hot Lead') {
+      displayStatus = 'Hot Leads';
     }
   }
 
@@ -22,6 +24,7 @@ export function LeadStatusBadge({ status, showInfoTooltip }: LeadStatusBadgeProp
     New: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-800",
 
     // Priority / Hot (Crimson Red / Pulse)
+    'Hot Leads': "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 animate-pulse font-semibold",
     'Hot Lead': "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 animate-pulse font-semibold",
     'Priority Lead': "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 animate-pulse font-semibold",
     'Priority Field Lead': "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 animate-pulse font-semibold",

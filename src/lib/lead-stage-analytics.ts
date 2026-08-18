@@ -68,6 +68,16 @@ export function formatBucketLabel(bucketKey?: string): string {
     .join(' ');
 }
 
+export function normalizeStatusLabel(statusName?: string): string {
+  if (!statusName) return 'New';
+  const clean = statusName.trim();
+  if (clean === 'Priority Lead' || clean === 'Priority Field Lead' || clean === 'Hot Lead') {
+    return 'Hot Leads';
+  }
+  if (clean === 'Signed') return 'Won';
+  return clean;
+}
+
 /**
  * Determines whether a lead has transferred from a different initial origin bucket
  * to its current bucket (returns true IF AND ONLY IF initial origin bucket !== current bucket).
@@ -248,7 +258,8 @@ export function getAmEntryDate(lead: Lead): Date | null {
  * Calculate stage durations and key milestone dates for a single lead
  */
 export function calculateLeadStageDurations(lead: Lead, now: Date = new Date()): StageDurationMetrics {
-  const currentStatus = lead.customerStatus || lead.status || 'New';
+  const rawStatus = lead.customerStatus || lead.status || 'New';
+  const currentStatus = normalizeStatusLabel(rawStatus);
   const sourceStr = (lead.customerSource || (lead as any).source || lead.leadSource || '').toLowerCase().trim();
   const isWebsiteSource = sourceStr === 'website';
   
@@ -310,7 +321,7 @@ export function calculateLeadStageDurations(lead: Lead, now: Date = new Date()):
   let lastStatusChangeDate: Date | null = null;
   if (lead.statusHistory && Array.isArray(lead.statusHistory) && lead.statusHistory.length > 0) {
     const sortedHistory = [...lead.statusHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const match = sortedHistory.find(s => s.newStatus === currentStatus);
+    const match = sortedHistory.find(s => normalizeStatusLabel(s.newStatus) === currentStatus);
     if (match) {
       lastStatusChangeDate = safeParseDate(match.date);
     } else if (sortedHistory[0]) {
@@ -459,7 +470,8 @@ export function calculateAmStageMetrics(
     }
     const amMetrics = amMap[amName];
 
-    const status = lead.customerStatus || lead.status || 'New';
+    const rawStatus = lead.customerStatus || lead.status || 'New';
+    const status = normalizeStatusLabel(rawStatus);
     const isWon = status === 'Won' || status === 'Signed' || status === 'Quote Accepted' || status === 'Closed Won';
     const isQuoteSent = status === 'Quote Sent' || isWon;
     const isApptBooked = status === 'Appointment Booked' || isQuoteSent;

@@ -784,7 +784,7 @@ export default function InboundReportsClientPage({
             normalizedCustomerStatus.includes('signed') ||
             normalizedCustomerStatus.includes('out of territory') ||
             normalizedCustomerStatus.includes('future follow');
-        const isHotLead = lead.customerStatus === 'Hot Lead';
+        const isHotLead = ['Hot Lead', 'Priority Lead', 'Priority Field Lead'].includes(lead.customerStatus || lead.status || '');
         
         // Collect all activity dates
         let activityDates: Date[] = [];
@@ -829,7 +829,7 @@ export default function InboundReportsClientPage({
     const avgResponseTime = leadsWithResponseTime > 0 ? totalResponseTime / leadsWithResponseTime : 0;
 
     const wonLeads = filteredLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed');
-    const hotLeadsCount = filteredLeads.filter(l => l.customerStatus === 'Hot Lead').length;
+    const hotLeadsCount = filteredLeads.filter(l => ['Hot Lead', 'Priority Lead', 'Priority Field Lead'].includes(l.customerStatus || l.status || '')).length;
     
     const wonCount = wonLeads.length;
     const quoteSentCount = filteredLeads.filter(l => l.customerStatus === 'Quote Sent').length;
@@ -2695,7 +2695,7 @@ export default function InboundReportsClientPage({
                     }
                     onClick={() => setDrillDownData({ 
                         title: "Hot Leads", 
-                        leads: filteredLeads.filter(l => l.customerStatus === 'Hot Lead') 
+                        leads: filteredLeads.filter(l => ['Hot Lead', 'Priority Lead', 'Priority Field Lead'].includes(l.customerStatus || l.status || '')) 
                     })}
                     helpContent="Inbound leads categorized with 'Hot Lead' customer status. Overdue leads are hot leads where the last activity (or lead entry) was more than 8 business hours ago."
                 />

@@ -2,6 +2,7 @@
 
 export const STATUS_COLORS: Record<string, string> = {
   // Priority / Hot Leads (Crimson/Rose)
+  'Hot Leads': '#f43f5e',
   'Hot Lead': '#f43f5e',
   'Priority Lead': '#f43f5e',
   'Priority Field Lead': '#f43f5e',

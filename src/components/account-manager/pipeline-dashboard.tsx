@@ -1375,6 +1375,7 @@ interface GroupedLeads {
 
 const STATUS_ORDER: { [status: string]: number } = {
     'New': 10,
+    'Hot Leads': 20,
     'Priority Lead': 20,
     'Hot Lead': 21,
     'High Touch': 22,

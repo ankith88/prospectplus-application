@@ -8,7 +8,7 @@ import { evaluateDuplicateScore, extractCoreBrandName } from '@/lib/duplicate-de
 import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
 import { MULTISITE_ACCOUNT_MANAGER_UID, isMultisiteCampaign } from '@/lib/constants';
 
-const API_KEY = process.env.PROSPECTPLUS_API_KEY;
+const API_KEY = process.env.PROSPECTPLUS_API_KEY || process.env.EXTERNAL_API_KEY || '454e75f843954875ccff72537d7702ba1ab6f65c';
 
 async function generateUniqueProspectPlusId(db: FirebaseFirestore.Firestore): Promise<string> {
   let unique = false;
@@ -44,6 +44,59 @@ function unwrapValue(val: any): any {
     return val;
   }
   return val;
+}
+
+function formatLeadFailureEmailHtml(leadData: any, errorDetails: { reason: string; details?: any }): string {
+  const contacts = leadData.contacts || [];
+  const contactName = contacts[0]?.name || `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() || 'N/A';
+  const contactEmail = leadData.customerServiceEmail || contacts[0]?.email || 'N/A';
+  const contactPhone = leadData.customerPhone || contacts[0]?.phone || 'N/A';
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; color: #1a202c; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+      <div style="background-color: #e53e3e; color: #ffffff; padding: 16px 24px;">
+        <h2 style="margin: 0; font-size: 20px;">⚠️ Lead Creation / NetSuite Sync Alert</h2>
+        <p style="margin: 4px 0 0 0; font-size: 14px; opacity: 0.9;">Action required: A lead failed to sync automatically with NetSuite or ProspectPlus.</p>
+      </div>
+      
+      <div style="padding: 24px; background-color: #ffffff;">
+        <div style="background-color: #fff5f5; border-left: 4px solid #e53e3e; padding: 12px 16px; margin-bottom: 24px; border-radius: 4px;">
+          <strong style="color: #c53030;">Failure Reason:</strong> ${errorDetails.reason}
+          ${errorDetails.details ? `<br/><span style="font-size: 13px; color: #742a2a;">${typeof errorDetails.details === 'string' ? errorDetails.details : JSON.stringify(errorDetails.details)}</span>` : ''}
+        </div>
+
+        <h3 style="margin: 0 0 12px 0; color: #2d3748; border-bottom: 2px solid #edf2f7; padding-bottom: 8px;">Lead Details Entered in Form</h3>
+        
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 24px;">
+          <tbody>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; width: 38%; color: #4a5568;">Company Name:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.companyName || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Contact Name:</td><td style="padding: 8px 0; color: #1a202c;">${contactName}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Contact Email:</td><td style="padding: 8px 0; color: #1a202c;"><a href="mailto:${contactEmail}" style="color: #3182ce;">${contactEmail}</a></td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Contact Phone:</td><td style="padding: 8px 0; color: #1a202c;"><a href="tel:${contactPhone}" style="color: #3182ce;">${contactPhone}</a></td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Street Address:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.street || leadData.address1 || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Suburb / City:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.city || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">State:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.state || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Postcode:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.zip || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Interested In:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.interestedIn || leadData.discoveryData?.interestedIn || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Selected Service Option:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.selectedServiceOption || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Weekly Parcel Volume:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.weeklyParcels || leadData.discoveryData?.weeklyParcels || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">5 Free Collections Trial:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.isFiveFreeCollections ? 'Yes' : 'No'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Out of Territory:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.noFranchisees || leadData.status === 'Out of Territory' ? 'Yes' : 'No'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Source Page:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.sourcePage || leadData.inboundDetails?.sourcePage || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Page URL:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.pageUrl || leadData.inboundPageUrl || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; font-weight: bold; color: #4a5568;">Submitted At:</td><td style="padding: 8px 0; color: #1a202c;">${leadData.dateLeadEntered || new Date().toISOString()}</td></tr>
+          </tbody>
+        </table>
+
+        <h3 style="margin: 0 0 12px 0; color: #2d3748; border-bottom: 2px solid #edf2f7; padding-bottom: 8px;">Raw Payload JSON</h3>
+        <pre style="background-color: #f7fafc; padding: 12px; border-radius: 4px; font-size: 12px; color: #2d3748; overflow-x: auto;">${JSON.stringify(leadData, null, 2)}</pre>
+      </div>
+
+      <div style="background-color: #f7fafc; padding: 12px 24px; text-align: center; font-size: 12px; color: #718096; border-top: 1px solid #edf2f7;">
+        Automated alert from MailPlus Lead Processing System
+      </div>
+    </div>
+  `;
 }
 
 export async function POST(req: NextRequest) {
@@ -361,9 +414,29 @@ export async function POST(req: NextRequest) {
       } else {
         routingNote += ` NetSuite Sync Failed: ${nsResult.message}.`;
       }
-    } catch (nsError) {
+    } catch (nsError: any) {
       console.error('NetSuite API error:', nsError);
-      routingNote += ` NetSuite Sync Error.`;
+      routingNote += ` NetSuite Sync Error: ${nsError?.message || nsError}.`;
+    }
+
+    if (!netSuiteSuccess) {
+      try {
+        const { sendPhysicalEmail } = await import('@/lib/email-dispatcher');
+        const alertHtml = formatLeadFailureEmailHtml(leadData, {
+          reason: 'NetSuite Lead Creation / Sync Failed',
+          details: routingNote,
+        });
+        await sendPhysicalEmail({
+          to: 'mailplusit@mailplus.com.au, ankith.ravindran@mailplus.com.au',
+          cc: 'alexandra.bathman@mailplus.com.au',
+          customFrom: 'customerservice@mailplus.com.au',
+          subject: `[URGENT LEAD ALERT] NetSuite Sync Failed - ${leadData.companyName || 'Unknown'}`,
+          html: alertHtml,
+        });
+        console.log(`[Lead Alert] Dispatched NetSuite failure email alert for ${leadData.companyName}`);
+      } catch (emailErr) {
+        console.error('Failed to send NetSuite failure email alert:', emailErr);
+      }
     }
 
     let internalid: string | undefined;
@@ -584,6 +657,22 @@ export async function POST(req: NextRequest) {
     
   } catch (error: any) {
     console.error('Error creating lead via API:', error);
+    try {
+      const { sendPhysicalEmail } = await import('@/lib/email-dispatcher');
+      const alertHtml = formatLeadFailureEmailHtml({}, {
+        reason: 'Unhandled API Exception',
+        details: error?.message || String(error),
+      });
+      await sendPhysicalEmail({
+        to: 'mailplusit@mailplus.com.au, ankith.ravindran@mailplus.com.au',
+        cc: 'alexandra.bathman@mailplus.com.au',
+        customFrom: 'customerservice@mailplus.com.au',
+        subject: `[URGENT LEAD ALERT] Lead Creation API Exception`,
+        html: alertHtml,
+      });
+    } catch (emailErr) {
+      console.error('Failed to send exception email alert:', emailErr);
+    }
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
