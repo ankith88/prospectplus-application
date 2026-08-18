@@ -2052,9 +2052,20 @@ export default function ReportsClientPage({
       marketing: { label: 'Marketing', description: 'Re-routed to Marketing' },
     };
 
+    // Only include leads that were ever in the outbound bucket (current bucket is outbound, wasOutbound flag is true, or bucketHistory includes outbound)
+    const outboundProgressionLeads = baseFilteredLeads.filter(lead => {
+      const currentBucket = (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase();
+      const isCurrentlyOutbound = currentBucket === 'outbound';
+      const wasOutboundFlag = lead.wasOutbound === true;
+      const wasInBucketHistory = Array.isArray(lead.bucketHistory) && lead.bucketHistory.some((bh: any) => 
+        (bh.oldBucket || '').toLowerCase() === 'outbound' || (bh.newBucket || '').toLowerCase() === 'outbound'
+      );
+      return isCurrentlyOutbound || wasOutboundFlag || wasInBucketHistory;
+    });
+
     const bucketProgressionCounts: Record<string, Lead[]> = {};
 
-    baseFilteredLeads.forEach(lead => {
+    outboundProgressionLeads.forEach(lead => {
       const currentBucket = (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase();
       if (!bucketProgressionCounts[currentBucket]) {
         bucketProgressionCounts[currentBucket] = [];
@@ -2062,7 +2073,7 @@ export default function ReportsClientPage({
       bucketProgressionCounts[currentBucket].push(lead);
     });
 
-    const totalOutboundCohort = baseFilteredLeads.length;
+    const totalOutboundCohort = outboundProgressionLeads.length;
 
     const bucketProgressionData = Object.entries(bucketProgressionCounts).map(([bucketKey, leads]) => {
       const info = BUCKET_NAME_MAP[bucketKey] || { 
