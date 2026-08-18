@@ -268,14 +268,26 @@ export async function POST(req: NextRequest) {
     };
 
     const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+    const oldStatus = lead.customerStatus || lead.status || 'New';
     const updates: any = {
       appointments: FieldValue.arrayUnion(appointmentData),
       outcome: rescheduleAppointmentId ? 'Appointment Rescheduled' : 'Appointment Booked',
       status: 'Appointment Booked',
       customerStatus: 'Appointment Booked',
       lastOutcomeAt: new Date().toISOString(),
-      timeline: FieldValue.arrayUnion(timelineEntry)
+      timeline: FieldValue.arrayUnion(timelineEntry),
+      statusHistory: FieldValue.arrayUnion({
+        id: `sh-${Date.now()}`,
+        oldStatus: oldStatus,
+        newStatus: 'Appointment Booked',
+        date: new Date().toISOString(),
+        author: 'Appointment Booking System'
+      })
     };
+
+    if (!lead.initialAppointmentBucket && oldBucket !== 'account_manager') {
+      updates.initialAppointmentBucket = oldBucket;
+    }
 
     if (oldBucket !== 'account_manager') {
       updates.bucket = 'account_manager';

@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info, CheckCircle, AlertTriangle, MapPin } from 'lucide-react';
+import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info, CheckCircle, AlertTriangle, MapPin, Store } from 'lucide-react';
 import { MultiSelectCombobox, type Option } from '../ui/multi-select-combobox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -41,6 +41,7 @@ import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 import { calculatePrevMonthRealizationCohort, type ExtendedInvoice } from '@/lib/mrr-realization';
 import { PrevMonthCohortWidget } from '@/components/prev-month-cohort-widget';
+import { getLeadInitialBucket, calculateAmStageMetrics, calculateLeadStageDurations, type AmStageMetrics } from '@/lib/lead-stage-analytics';
 
 import { AnimatedNumber } from '@/components/ui/animated-number';
 
@@ -730,6 +731,10 @@ export default function AMReportsDashboard() {
             return true;
         });
     }, [leads, appliedFranchisee, appliedBucket, appliedLeadType, appliedStatus, appliedLeadEnteredDateRange, appliedActivityDateRange, appliedAm, accountManagers]);
+
+    const amStageAnalytics = useMemo(() => {
+        return calculateAmStageMetrics(displayedLeads, accountManagers, appliedAm);
+    }, [displayedLeads, accountManagers, appliedAm]);
 
     const amFilteredLeads = useMemo(() => {
         return leads.filter(lead => {
@@ -1985,6 +1990,7 @@ export default function AMReportsDashboard() {
                     <TabsTrigger value="effort" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Effort vs Outcome</TabsTrigger>
                     <TabsTrigger value="breakdown" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Activity Breakdown</TabsTrigger>
                     <TabsTrigger value="outcomes" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Status Outcomes</TabsTrigger>
+                    <TabsTrigger value="stage_durations" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Stage Durations & Velocity</TabsTrigger>
                     <TabsTrigger value="appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Appointments</TabsTrigger>
                 </TabsList>
                 
@@ -3500,6 +3506,268 @@ export default function AMReportsDashboard() {
                     </Card>
                 </TabsContent>
 
+                <TabsContent value="stage_durations" className="flex-1 mt-0 space-y-6">
+                    {/* Top KPI Cards focused strictly on stage durations */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <StatCard
+                            title="Avg Appt Booked Duration"
+                            value={amStageAnalytics.summary.avgDaysInAppointmentBooked !== null ? `${amStageAnalytics.summary.avgDaysInAppointmentBooked} days` : 'N/A'}
+                            icon={CalendarIconLucide}
+                            description="Average days before Quote Sent"
+                            helpContent="Average days a lead sits in Appointment Booked status before moving to Quote Sent."
+                        />
+                        <StatCard
+                            title="Avg Quote Sent Duration"
+                            value={amStageAnalytics.summary.avgDaysInQuoteSent !== null ? `${amStageAnalytics.summary.avgDaysInQuoteSent} days` : 'N/A'}
+                            icon={FileText}
+                            description="Average days before Signed / Accepted"
+                            helpContent="Average days a lead sits in Quote Sent status before customer signs."
+                        />
+                        <StatCard
+                            title="Active Pipeline Leads"
+                            value={amStageAnalytics.summary.activeLeads}
+                            icon={Users}
+                            description="Leads currently in active status"
+                            helpContent="Total count of leads currently active in the Account Manager pipeline (excluding Won and Lost)."
+                        />
+                        <StatCard
+                            title="Stale Leads (>14 Days)"
+                            value={amStageAnalytics.summary.staleLeads.length}
+                            icon={AlertTriangle}
+                            description="Leads waiting >14 days in current status"
+                            helpContent="Active leads that have remained in their current status for longer than 14 days."
+                        />
+                    </div>
+
+                    {/* AM Comparison Table for Days in Stage / Status */}
+                    {(() => {
+                        const activeAmList = Object.values(amStageAnalytics.byAm)
+                            .filter(a => a.totalLeads > 0 && a.amName !== 'All Account Managers');
+
+                        const allActiveStatusesSet = new Set<string>();
+                        activeAmList.forEach(a => {
+                            Object.keys(a.avgDaysByStatus || {}).forEach(st => allActiveStatusesSet.add(st));
+                        });
+
+                        const activeStatuses = Array.from(allActiveStatusesSet);
+
+                        return (
+                            <Card className="border-[#095c7b]/10 shadow-sm">
+                                <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
+                                    <div>
+                                        <CardTitle className="text-lg text-[#095c7b] flex items-center gap-2">
+                                            <span>Account Manager Stage Durations (Days in Status)</span>
+                                            <SectionHelp content="Average number of days active leads stay in each stage/status per Account Manager (excluding Won and Lost)." />
+                                        </CardTitle>
+                                        <CardDescription>Number of days leads stay at each active status by Account Manager (excluding Lost and Won/Signed)</CardDescription>
+                                    </div>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="text-xs text-[#095c7b] border-[#095c7b]/20"
+                                        onClick={() => {
+                                            handleExportData(
+                                                displayedLeads, 
+                                                "am_stage_durations"
+                                            );
+                                        }}
+                                    >
+                                        <Download className="h-3.5 w-3.5 mr-1" /> Export Stage Data
+                                    </Button>
+                                </CardHeader>
+                                <CardContent className="p-0 overflow-x-auto">
+                                    <Table>
+                                        <TableHeader className="bg-slate-50">
+                                            <TableRow>
+                                                <TableHead className="font-bold text-[#095c7b]">Account Manager</TableHead>
+                                                <TableHead className="font-bold text-[#095c7b] text-center">Active Leads</TableHead>
+                                                {activeStatuses.map(st => (
+                                                    <TableHead key={st} className="font-bold text-[#095c7b] text-center">
+                                                        Avg {st} (Days)
+                                                    </TableHead>
+                                                ))}
+                                                <TableHead className="font-bold text-[#095c7b] text-center">Stale Leads (&gt;14d)</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {activeAmList.map(am => (
+                                                <TableRow 
+                                                    key={am.amName}
+                                                    className="hover:bg-slate-50 cursor-pointer transition-colors"
+                                                    onClick={() => {
+                                                        const amLeads = displayedLeads.filter(l => (l.accountManagerAssigned || 'Unassigned AM') === am.amName);
+                                                        setDrillDownData({
+                                                            title: `Stage Durations for ${am.amName}`,
+                                                            leads: amLeads
+                                                        });
+                                                    }}
+                                                >
+                                                    <TableCell className="font-bold text-[#095c7b]">{am.amName}</TableCell>
+                                                    <TableCell className="text-center font-medium">{am.activeLeads}</TableCell>
+                                                    {activeStatuses.map(st => {
+                                                        const avgDays = am.avgDaysByStatus[st];
+                                                        return (
+                                                            <TableCell key={st} className="text-center font-semibold text-slate-700">
+                                                                {avgDays !== undefined ? `${avgDays} d` : '-'}
+                                                            </TableCell>
+                                                        );
+                                                    })}
+                                                    <TableCell className="text-center">
+                                                        {am.staleLeads.length > 0 ? (
+                                                            <Badge variant="destructive" className="font-bold">
+                                                                {am.staleLeads.length} leads
+                                                            </Badge>
+                                                        ) : (
+                                                            <span className="text-slate-400 text-xs">0</span>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </CardContent>
+                            </Card>
+                        );
+                    })()}
+
+                    {/* Chart & Stale Leads Section */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Grouped Bar Chart across ALL Active Statuses */}
+                        {(() => {
+                            const activeAmList = Object.values(amStageAnalytics.byAm)
+                                .filter(a => a.totalLeads > 0 && a.amName !== 'All Account Managers');
+
+                            const allActiveStatusesSet = new Set<string>();
+                            activeAmList.forEach(a => {
+                                Object.keys(a.avgDaysByStatus || {}).forEach(st => allActiveStatusesSet.add(st));
+                            });
+
+                            const activeStatusKeys = Array.from(allActiveStatusesSet);
+
+                            const STATUS_BAR_COLORS: Record<string, string> = {
+                                'Appointment Booked': '#095c7b',
+                                'Quote Sent': '#f97316',
+                                'Follow Up': '#3b82f6',
+                                'In Progress': '#8b5cf6',
+                                'Work in Progress': '#8b5cf6',
+                                'Nurture': '#10b981',
+                                'Email Brush Off': '#ec4899',
+                                'Contacted': '#06b6d4',
+                                'Qualified': '#14b8a6',
+                                'Trialing': '#f59e0b',
+                                'LocalMile Opportunity': '#6366f1',
+                            };
+                            const PALETTE = ['#095c7b', '#f97316', '#3b82f6', '#8b5cf6', '#10b981', '#ec4899', '#06b6d4', '#f59e0b', '#6366f1'];
+
+                            const chartData = activeAmList.map(a => {
+                                const item: Record<string, any> = {
+                                    name: a.amName.split(' ')[0],
+                                    fullName: a.amName,
+                                };
+                                activeStatusKeys.forEach(st => {
+                                    item[st] = a.avgDaysByStatus[st] ?? 0;
+                                });
+                                return item;
+                            });
+
+                            return (
+                                <Card className="border-[#095c7b]/10 shadow-sm">
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-base text-[#095c7b]">Stage Duration Comparison (Days)</CardTitle>
+                                        <CardDescription>Average days spent in ALL active pipeline statuses per AM (excluding Won & Lost)</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="h-[300px] pt-4">
+                                        {activeStatusKeys.length > 0 && chartData.length > 0 ? (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart
+                                                    data={chartData}
+                                                    margin={{ top: 10, right: 30, left: 10, bottom: 30 }}
+                                                >
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                                                    <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} label={{ value: 'Avg Days', angle: -90, position: 'insideLeft' }} />
+                                                    <Tooltip 
+                                                        formatter={(value: any, name: any) => [`${value} days`, `${name}`]}
+                                                        cursor={{ fill: 'rgba(9, 92, 123, 0.05)' }}
+                                                    />
+                                                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px' }} />
+                                                    {activeStatusKeys.map((st, idx) => (
+                                                        <Bar 
+                                                            key={st} 
+                                                            dataKey={st} 
+                                                            name={st} 
+                                                            fill={STATUS_BAR_COLORS[st] || PALETTE[idx % PALETTE.length]} 
+                                                            radius={[4, 4, 0, 0]} 
+                                                        />
+                                                    ))}
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        ) : (
+                                            <div className="h-full flex items-center justify-center text-xs text-slate-500">
+                                                No active status duration metrics available for the selected view.
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            );
+                        })()}
+
+                        {/* Stale Leads Alert Table */}
+                        <Card className="border-[#095c7b]/10 shadow-sm flex flex-col">
+                            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-base text-[#095c7b] flex items-center gap-2">
+                                        <AlertTriangle className="h-4 w-4 text-amber-500" />
+                                        Stale Leads (&gt;14 Days in Status)
+                                    </CardTitle>
+                                    <CardDescription>Leads waiting in their current status longer than expected</CardDescription>
+                                </div>
+                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 font-bold">
+                                    {amStageAnalytics.summary.staleLeads.length} Total Stale
+                                </Badge>
+                            </CardHeader>
+                            <CardContent className="p-0 flex-1 overflow-y-auto max-h-[300px]">
+                                {amStageAnalytics.summary.staleLeads.length > 0 ? (
+                                    <Table>
+                                        <TableHeader className="bg-slate-50">
+                                            <TableRow>
+                                                <TableHead className="text-xs font-bold text-[#095c7b]">Lead Company</TableHead>
+                                                <TableHead className="text-xs font-bold text-[#095c7b]">AM</TableHead>
+                                                <TableHead className="text-xs font-bold text-[#095c7b]">Status</TableHead>
+                                                <TableHead className="text-xs font-bold text-[#095c7b] text-right">Days Waiting</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {amStageAnalytics.summary.staleLeads.slice(0, 15).map(({ lead, daysInStatus, status }) => (
+                                                <TableRow key={lead.id} className="hover:bg-slate-50">
+                                                    <TableCell className="font-bold text-[#095c7b] text-xs">
+                                                        {lead.companyName}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs text-slate-600">
+                                                        {lead.accountManagerAssigned || 'Unassigned'}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">
+                                                        <Badge variant="outline" className="text-[10px] bg-slate-100">
+                                                            {status}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs font-bold text-rose-600 text-right">
+                                                        {daysInStatus} days
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center p-8 text-xs text-slate-500">
+                                        No stale leads exceeding 14 days in status!
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </TabsContent>
+
                 <TabsContent value="appointments" className="flex-1 mt-0">
                     {/* Overdue Pending Appointments Alert Box */}
                     {appointmentMetrics.overduePending.length > 0 && (
@@ -3758,6 +4026,81 @@ export default function AMReportsDashboard() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    {/* Appointment Initial Bucket Origin Breakdown Card */}
+                    <Card className="border-[#095c7b]/10 shadow-sm mt-6 mb-6">
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg text-[#095c7b] flex items-center gap-2">
+                                    <Store className="h-5 w-5 text-[#095c7b]" />
+                                    <span>Appointment Initial Bucket Origin Breakdown</span>
+                                    <SectionHelp content="Shows which bucket leads originally came from before being assigned an appointment and moved to Account Manager." />
+                                </CardTitle>
+                                <CardDescription>Initial pre-appointment bucket breakdown per Account Manager</CardDescription>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0 overflow-x-auto">
+                            <Table>
+                                <TableHeader className="bg-slate-50">
+                                    <TableRow>
+                                        <TableHead className="font-bold text-[#095c7b]">Account Manager</TableHead>
+                                        <TableHead className="font-bold text-[#095c7b] text-center">Total Booked</TableHead>
+                                        <TableHead className="font-bold text-[#095c7b] text-center">Outbound</TableHead>
+                                        <TableHead className="font-bold text-[#095c7b] text-center">Inbound</TableHead>
+                                        <TableHead className="font-bold text-[#095c7b] text-center">Field Sales</TableHead>
+                                        <TableHead className="font-bold text-[#095c7b] text-center">Marketing / Nurture</TableHead>
+                                        <TableHead className="font-bold text-[#095c7b] text-center">LPO / Other</TableHead>
+                                        <TableHead className="font-bold text-[#095c7b] text-center">Overall Origin Win Rate</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {Object.values(amStageAnalytics.byAm).filter(a => a.totalLeads > 0).map(am => {
+                                        const ob = am.originBreakdown;
+                                        const outboundCount = ob['Outbound']?.total || 0;
+                                        const inboundCount = ob['Inbound']?.total || 0;
+                                        const fieldSalesCount = ob['Field Sales']?.total || 0;
+                                        const marketingCount = (ob['Marketing']?.total || 0) + (ob['Nurture']?.total || 0);
+                                        const lpoCount = (ob['LPO']?.total || 0) + (ob['Customer Success']?.total || 0);
+                                        
+                                        return (
+                                            <TableRow key={am.amName} className="hover:bg-slate-50">
+                                                <TableCell className="font-bold text-[#095c7b]">{am.amName}</TableCell>
+                                                <TableCell className="text-center font-bold">{am.totalLeads}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-semibold">
+                                                        {outboundCount}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold">
+                                                        {inboundCount}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold">
+                                                        {fieldSalesCount}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 font-semibold">
+                                                        {marketingCount}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-semibold">
+                                                        {lpoCount}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center font-bold text-emerald-600">
+                                                    {am.overallConversionRate}%
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
                 </TabsContent>
             </Tabs>
 

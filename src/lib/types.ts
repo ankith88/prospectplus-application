@@ -8,6 +8,14 @@ export interface BucketHistory {
   author: string;
 }
 
+export interface StatusHistory {
+  id: string;
+  oldStatus?: string;
+  newStatus: string;
+  date: string;
+  author?: string;
+}
+
 export interface InboundDetails {
   formId?: string;
   utmSource?: string;
@@ -665,6 +673,8 @@ export interface Lead {
   jobCount?: number;
   potentialFranchisees?: string[];
   bucketHistory?: BucketHistory[];
+  statusHistory?: StatusHistory[];
+  initialAppointmentBucket?: string;
   companyInsights?: CompanyInsight[];
   postalAddress?: Address;
   billingAddressType?: 'site' | 'postal' | 'custom' | string;

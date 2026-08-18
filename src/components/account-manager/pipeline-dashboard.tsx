@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Table as TableIcon, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal, Calendar, ListChecks, ListTodo, CheckCircle2 } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Table as TableIcon, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal, Calendar, ListChecks, ListTodo, CheckCircle2, Users } from 'lucide-react';
 import { parseISO, startOfDay, format } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { logActivity, updateLeadDetails } from '@/services/firebase';
@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { parseDateString, getLeadDisplayDateValue, getLeadDisplayDateLabel } from '@/lib/utils';
+import { getLeadInitialBucket, formatBucketLabel, isLeadTransferred } from '@/lib/lead-stage-analytics';
 import { AmQueueView } from './am-queue-view';
 import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
 
@@ -133,7 +134,9 @@ export default function PipelineDashboard() {
         dateEnteredFrom: '',
         dateEnteredTo: '',
         weeklyParcels: '',
-        selectedServiceOption: 'all'
+        selectedServiceOption: 'all',
+        originBucket: 'all',
+        onlyBucketShifted: false
     });
     
     const [searchQuery, setSearchQuery] = useState('');
@@ -357,8 +360,8 @@ export default function PipelineDashboard() {
         return Array.from(franchisees).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
     }, [leads]);
 
-    // Apply Advanced Filters and Search
-    const filteredLeads = useMemo(() => {
+    // Active leads belonging to current AM pipeline
+    const baseAmPipelineLeads = useMemo(() => {
         const amNames = new Set(accountManagers.map(getAmName));
         return leads.filter(lead => {
             // Must be assigned to the account_manager or inbound bucket (where source is Website)
@@ -379,8 +382,19 @@ export default function PipelineDashboard() {
                 }
             }
 
+            if (selectedAm !== 'all' && lead.accountManagerAssigned !== selectedAm) {
+                return false;
+            }
+
+            return true;
+        });
+    }, [leads, accountManagers, isAdmin, selectedAm]);
+
+    // Apply Advanced Filters and Search
+    const filteredLeads = useMemo(() => {
+        return baseAmPipelineLeads.filter(lead => {
             if (searchQuery && !lead.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) && !(lead.prospectPlusId && lead.prospectPlusId.toLowerCase().includes(searchQuery.toLowerCase()))) return false;
-            if (filters.status !== 'all' && currentStatus !== filters.status) return false;
+            if (filters.status !== 'all' && (lead.customerStatus || lead.status) !== filters.status) return false;
             if (filters.campaign !== 'all' && lead.campaign !== filters.campaign) return false;
             if (filters.appointmentStatus !== 'all') {
                 const hasMatchingAppt = lead.appointments?.some(a => {
@@ -462,9 +476,56 @@ export default function PipelineDashboard() {
                     return false;
                 }
             }
+
+            if (filters.originBucket && filters.originBucket !== 'all') {
+                const initialOrigin = getLeadInitialBucket(lead);
+                if (initialOrigin !== filters.originBucket) return false;
+            }
+
+            if (filters.onlyBucketShifted) {
+                if (!isLeadTransferred(lead)) return false;
+            }
+
             return true;
         });
-    }, [leads, filters, searchQuery, accountManagers, isAdmin, selectedAm]);
+    }, [baseAmPipelineLeads, filters, searchQuery]);
+
+    const [showAmOriginBreakdown, setShowAmOriginBreakdown] = useState(false);
+
+    const originBreakdown = useMemo(() => {
+        const counts: Record<string, number> = {};
+        baseAmPipelineLeads.forEach(lead => {
+            if (isLeadTransferred(lead)) {
+                const origin = getLeadInitialBucket(lead);
+                counts[origin] = (counts[origin] || 0) + 1;
+            }
+        });
+        return counts;
+    }, [baseAmPipelineLeads]);
+
+    const totalTransferredCount = useMemo(() => {
+        return Object.values(originBreakdown).reduce((sum, count) => sum + count, 0);
+    }, [originBreakdown]);
+
+    const amOriginBreakdown = useMemo(() => {
+        const result: Record<string, { total: number; origins: Record<string, number> }> = {};
+        baseAmPipelineLeads.forEach(lead => {
+            if (!isLeadTransferred(lead)) return; // Exclude matching origin & current bucket leads
+
+            const amName = lead.accountManagerAssigned || 'Unassigned';
+            if (!result[amName]) {
+                result[amName] = { total: 0, origins: {} };
+            }
+            result[amName].total += 1;
+            const origin = getLeadInitialBucket(lead);
+            result[amName].origins[origin] = (result[amName].origins[origin] || 0) + 1;
+        });
+        return result;
+    }, [baseAmPipelineLeads]);
+
+    const getTransferredCount = (leadList: Lead[]) => {
+        return leadList.filter(isLeadTransferred).length;
+    };
 
     // Segmentation Logic
 
@@ -720,6 +781,116 @@ export default function PipelineDashboard() {
                 </div>
             </div>
 
+            <Card className="mb-6 border-[#095c7b]/15 bg-gradient-to-r from-slate-900 via-[#095c7b] to-slate-900 text-white p-4 shadow-md rounded-xl">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h3 className="text-base font-bold flex items-center gap-2 text-white">
+                            <Store className="h-5 w-5 text-sky-400" />
+                            Leads Transferred Metrics
+                        </h3>
+                        <p className="text-xs text-slate-200 mt-0.5">
+                            Original initial bucket of leads that transferred into the Account Manager pipeline
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            variant={filters.onlyBucketShifted ? 'secondary' : 'outline'}
+                            size="sm"
+                            className={filters.onlyBucketShifted ? 'bg-amber-400 text-slate-950 font-bold text-xs shadow-sm' : 'bg-white/10 text-amber-300 border-amber-300/40 hover:bg-white/20 text-xs font-semibold'}
+                            onClick={() => setFilters(prev => ({ ...prev, onlyBucketShifted: !prev.onlyBucketShifted }))}
+                        >
+                            ⚡ Transferred Leads Only ({totalTransferredCount})
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={filters.originBucket === 'all' && !filters.onlyBucketShifted ? 'secondary' : 'outline'}
+                            size="sm"
+                            className={filters.originBucket === 'all' && !filters.onlyBucketShifted ? 'bg-white text-[#095c7b] font-bold text-xs' : 'bg-white/10 text-white border-white/20 hover:bg-white/20 text-xs'}
+                            onClick={() => setFilters(prev => ({ ...prev, originBucket: 'all', onlyBucketShifted: false }))}
+                        >
+                            All Transferred ({totalTransferredCount})
+                        </Button>
+                        {Object.entries(originBreakdown).map(([origin, count]) => (
+                            <Button
+                                key={origin}
+                                type="button"
+                                variant={filters.originBucket === origin ? 'secondary' : 'outline'}
+                                size="sm"
+                                className={filters.originBucket === origin ? 'bg-sky-400 text-slate-950 font-bold text-xs' : 'bg-white/10 text-white border-white/20 hover:bg-white/20 text-xs'}
+                                onClick={() => setFilters(prev => ({ ...prev, originBucket: filters.originBucket === origin ? 'all' : origin, onlyBucketShifted: false }))}
+                            >
+                                {origin}: <span className="ml-1 font-extrabold">{count}</span>
+                            </Button>
+                        ))}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="bg-sky-500/20 text-sky-200 border-sky-400/40 hover:bg-sky-500/30 text-xs font-semibold ml-1"
+                            onClick={() => setShowAmOriginBreakdown(prev => !prev)}
+                        >
+                            <Users className="h-3.5 w-3.5 mr-1" />
+                            {showAmOriginBreakdown ? 'Hide AM Breakdown' : 'AM Breakdown 👥'}
+                        </Button>
+                    </div>
+                </div>
+
+                {showAmOriginBreakdown && (
+                    <div className="mt-4 pt-3 border-t border-white/20">
+                        <div className="bg-slate-950/70 p-3 rounded-lg border border-white/10 text-xs overflow-x-auto">
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-bold text-sky-300 flex items-center gap-1.5 text-xs">
+                                    <Users className="h-4 w-4 text-sky-400" />
+                                    Transferred Origin Leads Assigned per Account Manager
+                                </h4>
+                                <span className="text-[11px] text-slate-300">
+                                    Excludes leads originating directly in Account Manager bucket
+                                </span>
+                            </div>
+                            <Table>
+                                <TableHeader className="bg-slate-900/90">
+                                    <TableRow className="border-slate-800">
+                                        <TableHead className="text-sky-200 font-bold text-xs">Account Manager</TableHead>
+                                        <TableHead className="text-center text-sky-200 font-bold text-xs">Total Transferred</TableHead>
+                                        {Object.keys(originBreakdown).map(origin => (
+                                            <TableHead key={origin} className="text-center text-sky-200 font-bold text-xs">{origin}</TableHead>
+                                        ))}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {Object.entries(amOriginBreakdown).length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={2 + Object.keys(originBreakdown).length} className="text-center text-slate-400 py-3">
+                                                No transferred leads found.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        Object.entries(amOriginBreakdown).map(([amName, data]) => (
+                                            <TableRow key={amName} className="hover:bg-slate-800/50 border-slate-800/60">
+                                                <TableCell className="font-semibold text-white">{amName}</TableCell>
+                                                <TableCell className="text-center font-bold text-amber-300">{data.total}</TableCell>
+                                                {Object.keys(originBreakdown).map(origin => (
+                                                    <TableCell key={origin} className="text-center text-slate-200 font-medium">
+                                                        {data.origins[origin] ? (
+                                                            <Badge variant="outline" className="bg-sky-500/20 text-sky-200 border-sky-400/40 text-[10px] font-bold">
+                                                                {data.origins[origin]}
+                                                            </Badge>
+                                                        ) : (
+                                                            <span className="text-slate-500">0</span>
+                                                        )}
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
+                )}
+            </Card>
+
             <StatusOutcomeBanner className="mb-6" />
 
             <Collapsible className="mb-6" id="step-pipeline-filters">
@@ -740,6 +911,21 @@ export default function PipelineDashboard() {
                     </div>
                     <CollapsibleContent>
                         <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-12 gap-4 items-end pb-4 pt-0">
+                            <div className="space-y-2">
+                                <Label htmlFor="originBucketFilter" className="text-xs font-semibold text-[#095c7b]">Initial Origin</Label>
+                                <Select value={filters.originBucket} onValueChange={(val) => setFilters({...filters, originBucket: val})}>
+                                    <SelectTrigger id="originBucketFilter" className="bg-white"><SelectValue placeholder="All Origins" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Origins</SelectItem>
+                                        <SelectItem value="Outbound">Outbound</SelectItem>
+                                        <SelectItem value="Inbound">Inbound</SelectItem>
+                                        <SelectItem value="Field Sales">Field Sales</SelectItem>
+                                        <SelectItem value="Marketing">Marketing</SelectItem>
+                                        <SelectItem value="Nurture">Nurture</SelectItem>
+                                        <SelectItem value="LPO">LPO</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                             <div className="space-y-2">
                                 <Label htmlFor="status" className="text-xs font-semibold text-[#095c7b]">Lead Status</Label>
                                 <Select value={filters.status} onValueChange={(val) => setFilters({...filters, status: val})}>
@@ -839,7 +1025,7 @@ export default function PipelineDashboard() {
                                      variant="outline" 
                                      size="icon"
                                      className="border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0"
-                                     onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '', appointmentDateFrom: '', appointmentDateTo: '', dateEnteredFrom: '', dateEnteredTo: '', weeklyParcels: '', selectedServiceOption: 'all' })}
+                                     onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '', appointmentDateFrom: '', appointmentDateTo: '', dateEnteredFrom: '', dateEnteredTo: '', weeklyParcels: '', selectedServiceOption: 'all', originBucket: 'all', onlyBucketShifted: false })}
                                      title="Clear Filters"
                                  >
                                      <X className="h-4 w-4" />
@@ -861,65 +1047,88 @@ export default function PipelineDashboard() {
                 />
             </div>
             
+            {/* View Mode & Sort Controls Strip */}
+            <div className="bg-white/80 p-2 rounded-xl border border-white/60 mb-4 flex flex-col sm:flex-row justify-between items-center gap-3 shadow-xs shrink-0">
+                <div id="step-pipeline-views" className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-1 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
+                    <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
+                    <Button
+                        size="sm"
+                        variant={viewMode === 'queue' ? 'default' : 'ghost'}
+                        className={`h-7 px-3 rounded-md gap-1.5 text-xs ${
+                            viewMode === 'queue' 
+                                ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                        }`}
+                        onClick={() => setViewMode('queue')}
+                        title="Priority Queue View"
+                    >
+                        <ListChecks className="h-3.5 w-3.5" />
+                        <span className="inline">Queue</span>
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant={viewMode === 'table' ? 'default' : 'ghost'}
+                        className={`h-7 px-3 rounded-md gap-1.5 text-xs ${
+                            viewMode === 'table' 
+                                ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                        }`}
+                        onClick={() => setViewMode('table')}
+                        title="List Tracker View"
+                    >
+                        <TableIcon className="h-3.5 w-3.5" />
+                        <span className="inline">List</span>
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant={viewMode === 'accordion' ? 'default' : 'ghost'}
+                        className={`h-7 px-3 rounded-md gap-1.5 text-xs ${
+                            viewMode === 'accordion' 
+                                ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                        }`}
+                        onClick={() => setViewMode('accordion')}
+                        title="Accordion Groups View"
+                    >
+                        <List className="h-3.5 w-3.5" />
+                        <span className="inline">Groups</span>
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                        className={`h-7 px-3 rounded-md gap-1.5 text-xs ${
+                            viewMode === 'grid' 
+                                ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                        }`}
+                        onClick={() => setViewMode('grid')}
+                        title="Flat Grid View"
+                    >
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                        <span className="inline">Grid</span>
+                    </Button>
+                </div>
+
+                <div id="step-pipeline-sort" className="flex items-center gap-2 w-full sm:w-auto px-1">
+                    <ArrowUpDown className="h-3.5 w-3.5 text-[#095c7b]/60 shrink-0" />
+                    <span className="text-[10px] font-bold text-[#095c7b]/75 uppercase tracking-wider shrink-0 hidden sm:inline">Sort</span>
+                    <Select value={sortBy} onValueChange={(val) => setSortBy(val as any)}>
+                        <SelectTrigger className="h-8 w-full sm:w-[170px] text-xs bg-white border-[#095c7b]/20 text-[#095c7b] focus:ring-0">
+                            <SelectValue placeholder="Sort by..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="dateLeadEntered" className="text-xs">Date Lead Entered</SelectItem>
+                            <SelectItem value="companyName" className="text-xs">Company</SelectItem>
+                            <SelectItem value="franchisee" className="text-xs">Franchisee</SelectItem>
+                            <SelectItem value="weeklyParcels" className="text-xs">Weekly Parcels</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
             {viewMode === 'queue' ? (
                 <div className="flex-1 flex flex-col h-full overflow-hidden">
-                    <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
-                        <div className="text-sm font-bold text-[#095c7b] px-3 flex items-center gap-2">
-                            <ListChecks className="h-5 w-5" />
-                            <span>AM Priority Queue</span>
-                            <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none ml-1">
-                                {filteredLeads.length} active leads
-                            </Badge>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
-                            <div className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
-                                <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
-                                <Button
-                                    size="sm"
-                                    variant="default"
-                                    className="h-7 px-2.5 rounded-md gap-1.5 text-xs bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm"
-                                    onClick={() => setViewMode('queue')}
-                                    title="Priority Queue View"
-                                >
-                                    <ListChecks className="h-3.5 w-3.5" />
-                                    <span className="inline">Queue</span>
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2.5 rounded-md gap-1.5 text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
-                                    onClick={() => setViewMode('table')}
-                                    title="List Tracker View"
-                                >
-                                    <TableIcon className="h-3.5 w-3.5" />
-                                    <span className="inline">List</span>
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2.5 rounded-md gap-1.5 text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
-                                    onClick={() => setViewMode('accordion')}
-                                    title="Accordion Groups View"
-                                >
-                                    <List className="h-3.5 w-3.5" />
-                                    <span className="inline">Groups</span>
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2.5 rounded-md gap-1.5 text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
-                                    onClick={() => setViewMode('grid')}
-                                    title="Flat Grid View"
-                                >
-                                    <LayoutGrid className="h-3.5 w-3.5" />
-                                    <span className="inline">Grid</span>
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 overflow-y-auto">
+                    <div className="flex-1 bg-white/50 rounded-xl border border-white/60 p-4 overflow-y-auto">
                         <AmQueueView 
                             leads={filteredLeads}
                             appointments={leads.flatMap(l => l.appointments || [])}
@@ -933,116 +1142,97 @@ export default function PipelineDashboard() {
                 </div>
             ) : (
                 <Tabs defaultValue="appointments" className="flex-1 flex flex-col h-full overflow-hidden">
-                    <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
-                        <TabsList id="step-retention-segments" className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
-                            <TabsTrigger value="appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Appointments <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{pastPendingAppointmentsLeads.length + todayAppointmentsLeads.length + futureAppointmentsLeads.length + noShowAppointmentsLeads.length}</Badge>
+                    <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0">
+                        <TabsList id="step-retention-segments" className="bg-transparent overflow-x-auto flex w-full justify-start">
+                            <TabsTrigger value="appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                Appointments <Badge variant="secondary" className="ml-1 bg-[#eaf143] text-[#095c7b]">{pastPendingAppointmentsLeads.length + todayAppointmentsLeads.length + futureAppointmentsLeads.length + noShowAppointmentsLeads.length}</Badge>
+                                {getTransferredCount([...pastPendingAppointmentsLeads, ...todayAppointmentsLeads, ...futureAppointmentsLeads, ...noShowAppointmentsLeads]) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount([...pastPendingAppointmentsLeads, ...todayAppointmentsLeads, ...futureAppointmentsLeads, ...noShowAppointmentsLeads])} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
-                            <TabsTrigger value="tasks" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Tasks & Reminders <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{pastPendingTasksLeads.length + todayTasksLeads.length + futureTasksLeads.length + completedTasksLeads.length}</Badge>
+                            <TabsTrigger value="tasks" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                Tasks & Reminders <Badge variant="secondary" className="ml-1 bg-[#eaf143] text-[#095c7b]">{pastPendingTasksLeads.length + todayTasksLeads.length + futureTasksLeads.length + completedTasksLeads.length}</Badge>
+                                {getTransferredCount([...pastPendingTasksLeads, ...todayTasksLeads, ...futureTasksLeads, ...completedTasksLeads]) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount([...pastPendingTasksLeads, ...todayTasksLeads, ...futureTasksLeads, ...completedTasksLeads])} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
-                            <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Priority <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{priorityLeads.length}</Badge>
+                            <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                Priority <Badge variant="secondary" className="ml-1 bg-slate-200 text-slate-800">{priorityLeads.length}</Badge>
+                                {getTransferredCount(priorityLeads) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount(priorityLeads)} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
-                            <TabsTrigger value="new" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                New <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{newLeads.length}</Badge>
+                            <TabsTrigger value="new" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                New <Badge variant="secondary" className="ml-1 bg-slate-200 text-slate-800">{newLeads.length}</Badge>
+                                {getTransferredCount(newLeads) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount(newLeads)} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
-                            <TabsTrigger value="wip" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Work in Progress <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{wipLeads.length}</Badge>
+                            <TabsTrigger value="wip" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                Work in Progress <Badge variant="secondary" className="ml-1 bg-slate-200 text-slate-800">{wipLeads.length}</Badge>
+                                {getTransferredCount(wipLeads) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount(wipLeads)} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
-                            <TabsTrigger value="quotes-out" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Quotes Out <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{quotesOut.length}</Badge>
+                            <TabsTrigger value="quotes-out" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                Quotes Out <Badge variant="secondary" className="ml-1 bg-slate-200 text-slate-800">{quotesOut.length}</Badge>
+                                {getTransferredCount(quotesOut) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount(quotesOut)} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
-                            <TabsTrigger value="quotes-accepted" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Quote Accepted <Badge variant="secondary" className="ml-2 bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">{quotesAccepted.length}</Badge>
+                            <TabsTrigger value="quotes-accepted" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                Quote Accepted <Badge variant="secondary" className="ml-1 bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">{quotesAccepted.length}</Badge>
+                                {getTransferredCount(quotesAccepted) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount(quotesAccepted)} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
-                            <TabsTrigger value="product-pending" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Product Pending <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{productPending.length}</Badge>
+                            <TabsTrigger value="product-pending" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                Product Pending <Badge variant="secondary" className="ml-1 bg-slate-200 text-slate-800">{productPending.length}</Badge>
+                                {getTransferredCount(productPending) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount(productPending)} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
-                            <TabsTrigger value="localmile" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                LocalMile <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{localMilePending.length}</Badge>
+                            <TabsTrigger value="localmile" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                LocalMile <Badge variant="secondary" className="ml-1 bg-slate-200 text-slate-800">{localMilePending.length}</Badge>
+                                {getTransferredCount(localMilePending) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount(localMilePending)} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
-                            <TabsTrigger value="out-of-territory" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Out of Territory <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{outOfTerritoryLeads.length}</Badge>
+                            <TabsTrigger value="out-of-territory" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                Out of Territory <Badge variant="secondary" className="ml-1 bg-slate-200 text-slate-800">{outOfTerritoryLeads.length}</Badge>
+                                {getTransferredCount(outOfTerritoryLeads) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount(outOfTerritoryLeads)} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
-                            <TabsTrigger value="future-follow-up" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                                Future Follow-up <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{futureFollowUpLeads.length}</Badge>
+                            <TabsTrigger value="future-follow-up" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
+                                Future Follow-up <Badge variant="secondary" className="ml-1 bg-slate-200 text-slate-800">{futureFollowUpLeads.length}</Badge>
+                                {getTransferredCount(futureFollowUpLeads) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-amber-100/90 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                        {getTransferredCount(futureFollowUpLeads)} transferred
+                                    </Badge>
+                                )}
                             </TabsTrigger>
                         </TabsList>
-
-                        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
-                            <div id="step-pipeline-views" className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
-                                <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2.5 rounded-md gap-1.5 text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
-                                    onClick={() => setViewMode('queue')}
-                                    title="Priority Queue View"
-                                >
-                                    <ListChecks className="h-3.5 w-3.5" />
-                                    <span className="inline">Queue</span>
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant={viewMode === 'table' ? 'default' : 'ghost'}
-                                    className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
-                                        viewMode === 'table' 
-                                            ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
-                                            : 'text-[#095c7b] hover:bg-[#095c7b]/10'
-                                    }`}
-                                    onClick={() => setViewMode('table')}
-                                    title="List Tracker View"
-                                >
-                                    <TableIcon className="h-3.5 w-3.5" />
-                                    <span className="inline">List</span>
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant={viewMode === 'accordion' ? 'default' : 'ghost'}
-                                    className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
-                                        viewMode === 'accordion' 
-                                            ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
-                                            : 'text-[#095c7b] hover:bg-[#095c7b]/10'
-                                    }`}
-                                    onClick={() => setViewMode('accordion')}
-                                    title="Accordion Groups View"
-                                >
-                                    <List className="h-3.5 w-3.5" />
-                                    <span className="inline">Groups</span>
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                                    className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
-                                        viewMode === 'grid' 
-                                            ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
-                                            : 'text-[#095c7b] hover:bg-[#095c7b]/10'
-                                    }`}
-                                    onClick={() => setViewMode('grid')}
-                                    title="Flat Grid View"
-                                >
-                                    <LayoutGrid className="h-3.5 w-3.5" />
-                                    <span className="inline">Grid</span>
-                                </Button>
-                            </div>
-
-                            <div id="step-pipeline-sort" className="flex items-center gap-1.5 w-full sm:w-auto">
-                                <ArrowUpDown className="h-3.5 w-3.5 text-[#095c7b]/60 shrink-0" />
-                                <span className="text-[10px] font-bold text-[#095c7b]/75 uppercase tracking-wider shrink-0 hidden sm:inline">Sort</span>
-                                <Select value={sortBy} onValueChange={(val) => setSortBy(val as any)}>
-                                    <SelectTrigger className="h-8 w-full sm:w-[150px] text-xs bg-white border-[#095c7b]/20 text-[#095c7b] focus:ring-0">
-                                        <SelectValue placeholder="Sort by..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="dateLeadEntered" className="text-xs">Date Lead Entered</SelectItem>
-                                        <SelectItem value="companyName" className="text-xs">Company</SelectItem>
-                                        <SelectItem value="franchisee" className="text-xs">Franchisee</SelectItem>
-                                        <SelectItem value="weeklyParcels" className="text-xs">Weekly Parcels</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
                     </div>
 
                     <div className="flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 overflow-y-auto">
@@ -1496,6 +1686,24 @@ function LeadGrid({
                                                     {lead.bucket === 'field_sales' ? 'Field Sales' : lead.bucket}
                                                 </Badge>
                                             )}
+                                            {(() => {
+                                                 const isTransferred = isLeadTransferred(lead);
+                                                 const origin = getLeadInitialBucket(lead);
+                                                 const currentBucketName = formatBucketLabel(lead.bucket || 'account_manager');
+                                                 return (
+                                                     <Badge 
+                                                         variant="outline" 
+                                                         className={`text-[10px] uppercase shrink-0 border font-semibold ${
+                                                             isTransferred 
+                                                                 ? 'bg-amber-100/90 text-amber-900 border-amber-300 font-bold' 
+                                                                 : 'bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30'
+                                                         }`}
+                                                         title={isTransferred ? `Transferred from ${origin} to ${currentBucketName}` : `Origin: ${origin}`}
+                                                     >
+                                                         {isTransferred ? `Origin: ${origin} → ${currentBucketName}` : `Origin: ${origin}`}
+                                                     </Badge>
+                                                 );
+                                             })()}
                                             {isFranchiseeGeneratedLead(lead) && (
                                                 <Badge 
                                                     variant="outline" 

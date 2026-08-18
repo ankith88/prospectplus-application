@@ -20,7 +20,7 @@ import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely, unlin
 import type { UserProfile, AdminApprovalRequest, Franchisee } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
-import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle, Trash2, Unlink } from 'lucide-react';
+import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { CreateUserDialog } from './create-user-dialog';
@@ -49,6 +49,13 @@ export function UserManagementTable() {
   const [isToggling, setIsToggling] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState<string | null>(null);
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
+  
+  // Direct Password Reset State
+  const [userToResetPassword, setUserToResetPassword] = useState<UserProfile | null>(null);
+  const [resetPasswordInput, setResetPasswordInput] = useState('');
+  const [selectedEmailType, setSelectedEmailType] = useState<'welcome' | 'password_reset' | 'none'>('welcome');
+  const [isDirectResetting, setIsDirectResetting] = useState(false);
+  const [showPasswordText, setShowPasswordText] = useState(false);
   
   const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -280,6 +287,57 @@ export function UserManagementTable() {
         toast({ variant: 'destructive', title: 'Error', description: error.message || `Could not send reset email.` });
     } finally {
         setIsSendingReset(null);
+    }
+  };
+
+  const generateRandomPassword = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let pass = "";
+    for (let i = 0; i < 12; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return pass;
+  };
+
+  const handleDirectPasswordReset = async () => {
+    if (!userToResetPassword || !resetPasswordInput.trim()) return;
+    if (resetPasswordInput.trim().length < 6) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Password',
+        description: 'Password must be at least 6 characters long.',
+      });
+      return;
+    }
+    setIsDirectResetting(true);
+    try {
+      const response = await fetch('/api/admin/users/reset-password-direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userToResetPassword.email,
+          newPassword: resetPasswordInput.trim(),
+          emailType: selectedEmailType,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to reset password.');
+      }
+      toast({
+        title: 'Password Reset Successful',
+        description: data.message || `Password for ${userToResetPassword.email} updated successfully.`,
+      });
+      setUserToResetPassword(null);
+      setResetPasswordInput('');
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Password Reset Failed',
+        description: error.message || 'Could not reset user password.',
+      });
+    } finally {
+      setIsDirectResetting(false);
     }
   };
 
@@ -764,9 +822,24 @@ export function UserManagementTable() {
                           className="h-8 w-8" 
                           onClick={() => handleSendResetEmail(user.email)} 
                           disabled={isSendingReset === user.email}
-                          title="Send Password Reset Email"
+                          title="Send Password Reset Link Email"
                         >
                             {isSendingReset === user.email ? <Loader className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30" 
+                          onClick={() => {
+                            setUserToResetPassword(user);
+                            const defaultPass = generateRandomPassword();
+                            setResetPasswordInput(defaultPass);
+                            setShowPasswordText(true);
+                            setSelectedEmailType('welcome');
+                          }}
+                          title="Reset Password & Send Welcome Email"
+                        >
+                            <Key className="h-4 w-4" />
                         </Button>
                         <Button 
                           variant={user.disabled ? "secondary" : "outline"} 
@@ -1172,6 +1245,99 @@ export function UserManagementTable() {
                     {isUpdating ? <Loader /> : 'Save Changes'}
                 </Button>
             </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Direct Password Reset & Welcome Email Dialog */}
+      <Dialog open={!!userToResetPassword} onOpenChange={(open) => !open && setUserToResetPassword(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-primary">
+              <Key className="h-5 w-5 text-amber-600" /> Reset Password & Send Credentials
+            </DialogTitle>
+            <DialogDescription>
+              Directly reset the Firebase Auth password for{' '}
+              <strong className="text-foreground">{userToResetPassword?.displayName || userToResetPassword?.email}</strong> ({userToResetPassword?.email}).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-password-input">New Password</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="new-password-input"
+                    type={showPasswordText ? "text" : "password"}
+                    placeholder="Enter new password (min 6 chars)"
+                    value={resetPasswordInput}
+                    onChange={(e) => setResetPasswordInput(e.target.value)}
+                    className="pr-10 font-mono"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground"
+                    onClick={() => setShowPasswordText(!showPasswordText)}
+                  >
+                    {showPasswordText ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const generated = generateRandomPassword();
+                    setResetPasswordInput(generated);
+                    setShowPasswordText(true);
+                  }}
+                  title="Generate Random Password"
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" /> Generate
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <Label>Notification Email Type</Label>
+              <Select value={selectedEmailType} onValueChange={(val: 'welcome' | 'password_reset' | 'none') => setSelectedEmailType(val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select notification email type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="welcome">
+                    🎉 Welcome to Prospect+ Email
+                  </SelectItem>
+                  <SelectItem value="password_reset">
+                    🔒 Password Reset Notice Email
+                  </SelectItem>
+                  <SelectItem value="none">
+                    🚫 Do Not Send Email
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground pt-1">
+                {selectedEmailType === 'welcome' && 'Sends the standard "Welcome to Prospect+" account creation email with login credentials.'}
+                {selectedEmailType === 'password_reset' && 'Sends a "Password Reset Notice" email informing the user that an admin updated their password.'}
+                {selectedEmailType === 'none' && 'Resets password in Firebase Auth without sending an email notification.'}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUserToResetPassword(null)} disabled={isDirectResetting}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDirectPasswordReset}
+              disabled={isDirectResetting || !resetPasswordInput.trim()}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {isDirectResetting ? <Loader className="h-4 w-4 mr-2" /> : <Key className="h-4 w-4 mr-2" />}
+              Reset Password & Send Email
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
