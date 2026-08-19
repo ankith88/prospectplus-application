@@ -40,7 +40,8 @@ import { parseDateString } from '@/lib/utils';
 type LifecycleType = 'localmile' | 'shipmate' | 'quotes';
 
 export default function LifecycleDashboard() {
-  const { userProfile, loading } = useAuth();
+  const { userProfile } = useAuth();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { toast } = useToast();
   
   const [lifecycle, setLifecycle] = useState<LifecycleType>('localmile');
@@ -396,20 +397,22 @@ export default function LifecycleDashboard() {
             />
           </div>
           
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-600">Franchisee</label>
-            <Select value={selectedFranchisee} onValueChange={setSelectedFranchisee}>
-              <SelectTrigger className="bg-slate-50 border-[#095c7b]/20">
-                <SelectValue placeholder="All Franchisees" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Franchisees</SelectItem>
-                {uniqueFranchisees.map(f => (
-                  <SelectItem key={f} value={f}>{f}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {!isFranchisee && (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-600">Franchisee</label>
+              <Select value={selectedFranchisee} onValueChange={setSelectedFranchisee}>
+                <SelectTrigger className="bg-slate-50 border-[#095c7b]/20">
+                  <SelectValue placeholder="All Franchisees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Franchisees</SelectItem>
+                  {uniqueFranchisees.map(f => (
+                    <SelectItem key={f} value={f}>{f}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-600">Assigned Representative</label>

@@ -479,7 +479,7 @@ export default function LeadsClientPage({
   const { user, userProfile, isSuperAdmin, loading: authLoading } = useAuth();
   const { isSessionActive, startSession, endSession } = useDialingSession();
   const { toast } = useToast();
-  const isFranchisee = userProfile?.activeRole === 'Franchisee';
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
 
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
@@ -2007,36 +2007,40 @@ export default function LeadsClientPage({
                                 placeholder="Select statuses..."
                             />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="franchisee">Franchisee</Label>
-                             <MultiSelectCombobox
-                                options={uniqueFranchisees}
-                                selected={filters.franchisee}
-                                onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
-                                placeholder="Select franchisees..."
-                            />
-                        </div>
-                         <div className="space-y-2">
-                            <Label htmlFor="campaign">Campaign</Label>
-                             <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
-                                <SelectTrigger id="campaign-select">
-                                    <SelectValue placeholder="Select a campaign" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Campaigns</SelectItem>
-                                    {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="source">Source</Label>
-                            <MultiSelectCombobox
-                                options={uniqueSources}
-                                selected={filters.source}
-                                onSelectedChange={(selected) => handleFilterChange('source', selected)}
-                                placeholder="Select sources..."
-                            />
-                        </div>
+                        {!isFranchisee && (
+                            <>
+                                <div className="space-y-2">
+                                    <Label htmlFor="franchisee">Franchisee</Label>
+                                     <MultiSelectCombobox
+                                        options={uniqueFranchisees}
+                                        selected={filters.franchisee}
+                                        onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                                        placeholder="Select franchisees..."
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="campaign">Campaign</Label>
+                                     <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
+                                        <SelectTrigger id="campaign-select">
+                                            <SelectValue placeholder="Select a campaign" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Campaigns</SelectItem>
+                                            {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="source">Source</Label>
+                                    <MultiSelectCombobox
+                                        options={uniqueSources}
+                                        selected={filters.source}
+                                        onSelectedChange={(selected) => handleFilterChange('source', selected)}
+                                        placeholder="Select sources..."
+                                    />
+                                </div>
+                            </>
+                        )}
                         <div className="space-y-2">
                             <Label htmlFor="dateLeadEntered">Date Lead Entered</Label>
                             <Popover>

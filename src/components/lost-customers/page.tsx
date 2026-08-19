@@ -78,6 +78,7 @@ export default function LostCustomersComponent() {
   const itemsPerPage = 10;
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { canView, loadingPermissions } = usePermissions();
   const { toast } = useToast();
 
@@ -586,14 +587,16 @@ export default function LostCustomersComponent() {
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Franchisee</label>
-              <Input
-                placeholder="Filter by franchisee..."
-                value={draftFilters.franchisee}
-                onChange={(e) => handleFilterChange('franchisee', e.target.value)}
-              />
-            </div>
+            {!isFranchisee && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Franchisee</label>
+                <Input
+                  placeholder="Filter by franchisee..."
+                  value={draftFilters.franchisee}
+                  onChange={(e) => handleFilterChange('franchisee', e.target.value)}
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-sm font-medium">Cancellation Reason / Theme</label>
               <Input

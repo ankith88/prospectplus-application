@@ -31,6 +31,7 @@ export default function MarketingListsClient() {
   const [selectedList, setSelectedList] = useState<string | null>(null)
   const { toast } = useToast()
   const { userProfile } = useAuth()
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   
   const [renamingList, setRenamingList] = useState<string | null>(null)
   const [newListName, setNewListName] = useState('')
@@ -439,19 +440,21 @@ export default function MarketingListsClient() {
             </div>
 
             {/* Franchisee Filter */}
-            <div className="w-[180px]">
-              <Select value={franchiseeFilter} onValueChange={setFranchiseeFilter}>
-                <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="All Franchisees" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Franchisees</SelectItem>
-                  {uniqueFilterOptions.franchisees.map(fran => (
-                    <SelectItem key={fran} value={fran}>{fran}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!isFranchisee && (
+              <div className="w-[180px]">
+                <Select value={franchiseeFilter} onValueChange={setFranchiseeFilter}>
+                  <SelectTrigger className="h-9 bg-white">
+                    <SelectValue placeholder="All Franchisees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Franchisees</SelectItem>
+                    {uniqueFilterOptions.franchisees.map(fran => (
+                      <SelectItem key={fran} value={fran}>{fran}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* AM Filter */}
             <div className="w-[180px]">

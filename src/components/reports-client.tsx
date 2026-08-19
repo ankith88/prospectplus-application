@@ -433,6 +433,7 @@ export default function ReportsClientPage({
   
   const router = useRouter();
   const { userProfile, user, loading: authLoading } = useAuth();
+  const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { toast } = useToast();
 
   const isUserOnlyRole = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user';
@@ -2568,7 +2569,7 @@ export default function ReportsClientPage({
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
                     <div className="space-y-2"><Label>Assigned To (Dialer)</Label><MultiSelectCombobox options={dialerOptionsUI} selected={filters.dialerAssigned} onSelectedChange={(val) => handleFilterChange('dialerAssigned', val)} placeholder="Select users..." /></div>
                     <div className="space-y-2"><Label>Account Manager</Label><MultiSelectCombobox options={amOptions} selected={filters.appointmentAssignedTo} onSelectedChange={(val) => handleFilterChange('appointmentAssignedTo', val)} placeholder="Select AMs..." /></div>
-                    {userProfile?.activeRole !== 'Franchisee' && (
+                    {!isFranchiseeRole && (
                         <div className="space-y-2"><Label>Franchisee</Label><MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..." /></div>
                     )}
                     <div className="space-y-2">
@@ -2584,22 +2585,24 @@ export default function ReportsClientPage({
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="space-y-2">
-                        <Label>Campaign</Label>
-                        <Select value={filters.campaign} onValueChange={(val) => handleFilterChange('campaign', val)}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="All Campaigns" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Campaigns</SelectItem>
-                                {availableCampaigns.map((c) => (
-                                    <SelectItem key={c.id} value={c.name}>
-                                        {c.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    {!isFranchiseeRole && (
+                        <div className="space-y-2">
+                            <Label>Campaign</Label>
+                            <Select value={filters.campaign} onValueChange={(val) => handleFilterChange('campaign', val)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All Campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {availableCampaigns.map((c) => (
+                                        <SelectItem key={c.id} value={c.name}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                     <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptions} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
                     <div className="space-y-2">
                         <Label>Activity Date Range Preset</Label>

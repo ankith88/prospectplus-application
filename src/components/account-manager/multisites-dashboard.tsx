@@ -71,6 +71,7 @@ export const parseTaskDate = (task: any): Date | null => {
 
 export function MultiSitesDashboard() {
     const { userProfile, loading, isSuperAdmin } = useAuth();
+    const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
     const { toast } = useToast();
     const { setPageName, setIsCustom } = usePerformance();
 
@@ -1497,19 +1498,21 @@ export function MultiSitesDashboard() {
                         </div>
 
                         {/* Franchisee Filter */}
-                        <div>
-                            <Select value={franchiseeFilter} onValueChange={setFranchiseeFilter}>
-                                <SelectTrigger className="bg-white text-xs md:text-sm">
-                                    <SelectValue placeholder="All Franchisees" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Franchisees</SelectItem>
-                                    {franchiseesList.map(fr => (
-                                        <SelectItem key={fr} value={fr}>{fr}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {!isFranchisee && (
+                            <div>
+                                <Select value={franchiseeFilter} onValueChange={setFranchiseeFilter}>
+                                    <SelectTrigger className="bg-white text-xs md:text-sm">
+                                        <SelectValue placeholder="All Franchisees" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Franchisees</SelectItem>
+                                        {franchiseesList.map(fr => (
+                                            <SelectItem key={fr} value={fr}>{fr}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
 
                         {/* State Filter */}
                         <div>

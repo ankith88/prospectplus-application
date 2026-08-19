@@ -191,7 +191,8 @@ export default function LeadsMapClient() {
         hasVisitNote: 'all' as 'all' | 'yes' | 'no',
     });
     
-    const { userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
+    const { userProfile, user, savedRoutes, setSavedRoutes } = useAuth();
+    const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
@@ -852,40 +853,44 @@ export default function LeadsMapClient() {
                                     <Label>Company Name</Label>
                                     <Input value={mapFilters.companyName} onChange={e => handleMapFilterChange('companyName', e.target.value)} />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Franchisee</Label>
-                                    <MultiSelectCombobox options={uniqueFranchisees} selected={mapFilters.franchisee} onSelectedChange={(val) => handleMapFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Status</Label>
-                                    <MultiSelectCombobox options={statusOptions} selected={mapFilters.status} onSelectedChange={(val) => handleMapFilterChange('status', val)} placeholder="Select statuses..."/>
-                                </div>
+                                {!isFranchisee && (
+                                     <div className="space-y-2">
+                                         <Label>Franchisee</Label>
+                                         <MultiSelectCombobox options={uniqueFranchisees} selected={mapFilters.franchisee} onSelectedChange={(val) => handleMapFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
+                                     </div>
+                                 )}
                                  <div className="space-y-2">
-                                    <Label>Assigned Dialer</Label>
-                                    <MultiSelectCombobox options={uniqueDialers} selected={mapFilters.dialerAssigned} onSelectedChange={(val) => handleMapFilterChange('dialerAssigned', val)} placeholder="Select dialers..."/>
-                                </div>
-                                 <div className="space-y-2">
-                                    <Label>Lead Type</Label>
-                                    <Select value={mapFilters.leadType} onValueChange={(v) => handleMapFilterChange('leadType', v)}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Items</SelectItem>
-                                            <SelectItem value="customers">Signed Customers</SelectItem>
-                                            <SelectItem value="leads">Leads</SelectItem>
-                                            <SelectItem value="lost_customers">Lost Customers</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Campaign</Label>
-                                    <Select value={mapFilters.campaign} onValueChange={(v) => handleMapFilterChange('campaign', v)}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Campaigns</SelectItem>
-                                            {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                     <Label>Status</Label>
+                                     <MultiSelectCombobox options={statusOptions} selected={mapFilters.status} onSelectedChange={(val) => handleMapFilterChange('status', val)} placeholder="Select statuses..."/>
+                                 </div>
+                                  <div className="space-y-2">
+                                     <Label>Assigned Dialer</Label>
+                                     <MultiSelectCombobox options={uniqueDialers} selected={mapFilters.dialerAssigned} onSelectedChange={(val) => handleMapFilterChange('dialerAssigned', val)} placeholder="Select dialers..."/>
+                                 </div>
+                                  <div className="space-y-2">
+                                     <Label>Lead Type</Label>
+                                     <Select value={mapFilters.leadType} onValueChange={(v) => handleMapFilterChange('leadType', v)}>
+                                         <SelectTrigger><SelectValue /></SelectTrigger>
+                                         <SelectContent>
+                                             <SelectItem value="all">All Items</SelectItem>
+                                             <SelectItem value="customers">Signed Customers</SelectItem>
+                                             <SelectItem value="leads">Leads</SelectItem>
+                                             <SelectItem value="lost_customers">Lost Customers</SelectItem>
+                                         </SelectContent>
+                                     </Select>
+                                 </div>
+                                 {!isFranchisee && (
+                                     <div className="space-y-2">
+                                         <Label>Campaign</Label>
+                                         <Select value={mapFilters.campaign} onValueChange={(v) => handleMapFilterChange('campaign', v)}>
+                                             <SelectTrigger><SelectValue /></SelectTrigger>
+                                             <SelectContent>
+                                                 <SelectItem value="all">All Campaigns</SelectItem>
+                                                 {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                             </SelectContent>
+                                         </Select>
+                                     </div>
+                                 )}
                                 <div className="space-y-2">
                                     <Label>State</Label>
                                     <MultiSelectCombobox options={uniqueStates} selected={mapFilters.state} onSelectedChange={(val) => handleMapFilterChange('state', val)} placeholder="Select states..."/>

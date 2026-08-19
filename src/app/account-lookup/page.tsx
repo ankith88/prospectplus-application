@@ -85,16 +85,21 @@ export default function AccountLookupPage() {
     setLoading(true);
     const controller = new AbortController();
 
+    const getAuthHeaders = async () => {
+      const reqHeaders: Record<string, string> = {};
+      if (user) {
+        const idToken = await user.getIdToken();
+        reqHeaders['Authorization'] = `Bearer ${idToken}`;
+        if (userProfile?.activeRole) {
+          reqHeaders['X-Active-Role'] = userProfile.activeRole;
+        }
+      }
+      return reqHeaders;
+    };
+
     const fetchData = async () => {
       try {
-        let headers: HeadersInit = {};
-        if (user) {
-          const idToken = await user.getIdToken();
-          headers['Authorization'] = `Bearer ${idToken}`;
-          if (userProfile?.activeRole) {
-            headers['X-Active-Role'] = userProfile.activeRole;
-          }
-        }
+        const headers = await getAuthHeaders();
 
         // 1. Fetch Accounts & Tickets
         const res = await fetch(`/api/account-lookup?q=${encodeURIComponent(trimmedQuery)}&type=${searchType}`, {
@@ -121,24 +126,27 @@ export default function AccountLookupPage() {
     // 2. Fetch Package (only if searchType is 'all' or 'package')
     if (searchType === 'all' || searchType === 'package') {
       setSearchingPackage(true);
-      fetch(`/api/packages/lookup?id=${encodeURIComponent(trimmedQuery)}`, {
-        signal: controller.signal,
-      })
-        .then((res) => {
-          if (res.ok) return res.json();
-          return null;
+      getAuthHeaders().then((headers) => {
+        fetch(`/api/packages/lookup?id=${encodeURIComponent(trimmedQuery)}`, {
+          signal: controller.signal,
+          headers,
         })
-        .then((data) => {
-          setPackageResult(data);
-        })
-        .catch((err) => {
-          if (err.name !== 'AbortError') {
-            console.error('Package lookup failed:', err);
-          }
-        })
-        .finally(() => {
-          setSearchingPackage(false);
-        });
+          .then((res) => {
+            if (res.ok) return res.json();
+            return null;
+          })
+          .then((data) => {
+            setPackageResult(data);
+          })
+          .catch((err) => {
+            if (err.name !== 'AbortError') {
+              console.error('Package lookup failed:', err);
+            }
+          })
+          .finally(() => {
+            setSearchingPackage(false);
+          });
+      });
     } else {
       setPackageResult(null);
       setSearchingPackage(false);

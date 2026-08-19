@@ -187,6 +187,7 @@ const getPipelineProgress = (statusStr: string): PipelineProgress => {
 
 export default function LpoLeadsListPage() {
   const { userProfile, loading: authLoading } = useAuth();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { canView, loadingPermissions } = usePermissions();
   const { toast } = useToast();
   const [leads, setLeads] = useState<LpoLead[]>([]);
@@ -1069,23 +1070,25 @@ export default function LpoLeadsListPage() {
               </div>
 
               {/* Franchisee Filter */}
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-700">Linked Franchisee</Label>
-                <Select value={franchiseeFilter} onValueChange={setFranchiseeFilter}>
-                  <SelectTrigger className="bg-white h-9 text-xs font-semibold">
-                    <Users className="h-3.5 w-3.5 mr-1.5 text-slate-500" />
-                    <SelectValue placeholder="All Franchisees" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Franchisees</SelectItem>
-                    {uniqueFranchisees.map((fName) => (
-                      <SelectItem key={fName} value={fName}>
-                        {fName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {!isFranchisee && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-700">Linked Franchisee</Label>
+                  <Select value={franchiseeFilter} onValueChange={setFranchiseeFilter}>
+                    <SelectTrigger className="bg-white h-9 text-xs font-semibold">
+                      <Users className="h-3.5 w-3.5 mr-1.5 text-slate-500" />
+                      <SelectValue placeholder="All Franchisees" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Franchisees</SelectItem>
+                      {uniqueFranchisees.map((fName) => (
+                        <SelectItem key={fName} value={fName}>
+                          {fName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

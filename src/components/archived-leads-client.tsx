@@ -163,6 +163,7 @@ export default function ArchivedLeadsClientPage() {
   const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>({ key: 'lastActivityDate', direction: 'descending' });
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedDetails, setExpandedDetails] = useState<Record<string, ExpandedLeadDetails>>({});
@@ -890,7 +891,7 @@ export default function ArchivedLeadsClientPage() {
                                 placeholder="Select AMs..."
                             />
                         </div>
-                        {userProfile?.activeRole !== 'Franchisee' && (
+                        {!isFranchisee && (
                             <div className="space-y-2">
                                 <Label>Franchisee</Label>
                                 <MultiSelectCombobox

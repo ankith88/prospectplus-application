@@ -35,6 +35,7 @@ export default function CheckinsClientPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { userProfile, loading: authLoading } = useAuth();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { toast } = useToast();
 
   const [filters, setFilters] = useState({
@@ -316,10 +317,12 @@ export default function CheckinsClientPage() {
                                 <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(selected) => handleFilterChange('user', selected)} placeholder="Select users..." />
                             </div>
                         )}
-                        <div className="space-y-2">
-                            <Label htmlFor="franchisee">Franchisee</Label>
-                            <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(selected) => handleFilterChange('franchisee', selected)} placeholder="Select franchisees..." />
-                        </div>
+                        {!isFranchisee && (
+                            <div className="space-y-2">
+                                <Label htmlFor="franchisee">Franchisee</Label>
+                                <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(selected) => handleFilterChange('franchisee', selected)} placeholder="Select franchisees..." />
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
                             <MultiSelectCombobox options={statusOptions} selected={filters.status} onSelectedChange={(selected) => handleFilterChange('status', selected)} placeholder="Select statuses..." />

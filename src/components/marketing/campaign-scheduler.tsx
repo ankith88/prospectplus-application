@@ -61,7 +61,11 @@ interface Campaign {
   smsTemplateIds?: string[];
 }
 
+import { useAuth } from '@/hooks/use-auth';
+
 export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: () => void }) {
+  const { userProfile } = useAuth();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -925,20 +929,22 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                               </Select>
                             </div>
 
-                            <div className="space-y-1">
-                              <label className="text-[10px] uppercase font-bold text-slate-500">Franchisee</label>
-                              <Select value={filterFranchisee} onValueChange={setFilterFranchisee}>
-                                <SelectTrigger className="bg-white text-xs h-9">
-                                  <SelectValue placeholder="All Franchisees" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">All Franchisees</SelectItem>
-                                  {uniqueFranchisees.map(f => (
-                                    <SelectItem key={f} value={f}>{f}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
+                            {!isFranchisee && (
+                              <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Franchisee</label>
+                                <Select value={filterFranchisee} onValueChange={setFilterFranchisee}>
+                                  <SelectTrigger className="bg-white text-xs h-9">
+                                    <SelectValue placeholder="All Franchisees" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">All Franchisees</SelectItem>
+                                    {uniqueFranchisees.map(f => (
+                                      <SelectItem key={f} value={f}>{f}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
 
                             <div className="space-y-1">
                               <label className="text-[10px] uppercase font-bold text-slate-500">Marketing List</label>

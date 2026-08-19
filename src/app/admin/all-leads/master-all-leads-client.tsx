@@ -154,6 +154,7 @@ function isLeadActiveLpo(lead: any): boolean {
 
 export function MasterAllLeadsClient() {
   const { userProfile, isSuperAdmin, loading: authLoading } = useAuth()
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { toast } = useToast()
   const router = useRouter()
 
@@ -976,20 +977,22 @@ export function MasterAllLeadsClient() {
             </div>
 
             {/* 2. Customer Source */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium">Customer Source</Label>
-              <Select value={filterSource} onValueChange={setFilterSource}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="All Sources" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Sources</SelectItem>
-                  {uniqueSources.map(src => (
-                    <SelectItem key={src} value={src}>{src}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!isFranchisee && (
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Customer Source</Label>
+                <Select value={filterSource} onValueChange={setFilterSource}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="All Sources" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Sources</SelectItem>
+                    {uniqueSources.map(src => (
+                      <SelectItem key={src} value={src}>{src}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* 3. Bucket */}
             <div className="space-y-1">
@@ -1031,21 +1034,23 @@ export function MasterAllLeadsClient() {
             </div>
 
             {/* 4b. Franchisee */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium">Franchisee</Label>
-              <Select value={filterFranchisee} onValueChange={setFilterFranchisee}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="All Franchisees" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Franchisees</SelectItem>
-                  <SelectItem value="UNASSIGNED">Unassigned / None</SelectItem>
-                  {uniqueFranchisees.map(f => (
-                    <SelectItem key={f} value={f}>{f}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!isFranchisee && (
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Franchisee</Label>
+                <Select value={filterFranchisee} onValueChange={setFilterFranchisee}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="All Franchisees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Franchisees</SelectItem>
+                    <SelectItem value="UNASSIGNED">Unassigned / None</SelectItem>
+                    {uniqueFranchisees.map(f => (
+                      <SelectItem key={f} value={f}>{f}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* 4c. Active LPO Filter */}
             <div className="space-y-1">

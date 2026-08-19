@@ -1520,7 +1520,7 @@ export function NewLeadForm() {
                     ) : (
                       <div className="p-3 border border-blue-300 bg-blue-50 text-blue-900 rounded-md text-xs font-semibold flex items-center gap-2">
                         <span className="flex h-2.5 w-2.5 rounded-full bg-blue-600 flex-shrink-0" />
-                        <span>📋 <strong>Outbound Lead Mode</strong>: Defaulted to Outbound Bucket. Assigned to Aleyna Harnett for review on the Verification Page.</span>
+                        <span>📋 <strong>Outbound Lead Mode</strong>: Defaulted to Outbound Bucket.</span>
                       </div>
                     )}
                   </div>

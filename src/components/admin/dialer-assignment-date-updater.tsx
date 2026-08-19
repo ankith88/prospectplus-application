@@ -32,7 +32,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { cn, parseDateString } from '@/lib/utils';
 
+import { useAuth } from '@/hooks/use-auth';
+
 export function DialerAssignmentDateUpdater() {
+  const { userProfile } = useAuth();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const [items, setItems] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -254,15 +258,17 @@ export function DialerAssignmentDateUpdater() {
         </div>
 
         {/* Franchisee */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Franchisee</label>
-          <MultiSelectCombobox
-            options={uniqueFranchisees}
-            selected={franchiseeFilter}
-            onSelectedChange={setFranchiseeFilter}
-            placeholder="Select Franchisees"
-          />
-        </div>
+        {!isFranchisee && (
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Franchisee</label>
+            <MultiSelectCombobox
+              options={uniqueFranchisees}
+              selected={franchiseeFilter}
+              onSelectedChange={setFranchiseeFilter}
+              placeholder="Select Franchisees"
+            />
+          </div>
+        )}
 
         {/* Lead Bucket */}
         <div className="space-y-2">

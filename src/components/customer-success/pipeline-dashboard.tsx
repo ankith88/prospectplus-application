@@ -459,6 +459,7 @@ export default function CustomerSuccessDashboard() {
     };
 
     const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'super user';
+    const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
     const isCs = userProfile?.activeRole === 'Customer Success';
     const canAssignCs = isAdmin;
     
@@ -840,31 +841,35 @@ export default function CustomerSuccessDashboard() {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="origin">Original Bucket / Source</Label>
-                                    <Select value={filters.origin} onValueChange={(val) => setFilters({...filters, origin: val})}>
-                                        <SelectTrigger id="origin"><SelectValue placeholder="All Sources" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Sources</SelectItem>
-                                            <SelectItem value="outbound">Outbound Team</SelectItem>
-                                            <SelectItem value="inbound">Inbound (Website)</SelectItem>
-                                            <SelectItem value="field_sales">Field Sales</SelectItem>
-                                            <SelectItem value="account_manager">Account Manager</SelectItem>
-                                            <SelectItem value="franchisee">Franchisee Generated</SelectItem>
-                                            <SelectItem value="multisite">MultiSite</SelectItem>
-                                            <SelectItem value="marketing">Marketing / Nurture</SelectItem>
-                                            <SelectItem value="customer_success">Customer Success Direct</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="campaign">Campaign</Label>
-                                    <Input id="campaign" placeholder="e.g. MultiSite" value={filters.campaign === 'all' ? '' : filters.campaign} onChange={(e) => setFilters({...filters, campaign: e.target.value || 'all'})} />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="franchisee">Franchisee</Label>
-                                    <Input id="franchisee" placeholder="Filter by Franchisee" value={filters.franchisee} onChange={(e) => setFilters({...filters, franchisee: e.target.value})} />
-                                </div>
+                                {!isFranchiseeRole && (
+                                    <>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="origin">Original Bucket / Source</Label>
+                                            <Select value={filters.origin} onValueChange={(val) => setFilters({...filters, origin: val})}>
+                                                <SelectTrigger id="origin"><SelectValue placeholder="All Sources" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All Sources</SelectItem>
+                                                    <SelectItem value="outbound">Outbound Team</SelectItem>
+                                                    <SelectItem value="inbound">Inbound (Website)</SelectItem>
+                                                    <SelectItem value="field_sales">Field Sales</SelectItem>
+                                                    <SelectItem value="account_manager">Account Manager</SelectItem>
+                                                    <SelectItem value="franchisee">Franchisee Generated</SelectItem>
+                                                    <SelectItem value="multisite">MultiSite</SelectItem>
+                                                    <SelectItem value="marketing">Marketing / Nurture</SelectItem>
+                                                    <SelectItem value="customer_success">Customer Success Direct</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="campaign">Campaign</Label>
+                                            <Input id="campaign" placeholder="e.g. MultiSite" value={filters.campaign === 'all' ? '' : filters.campaign} onChange={(e) => setFilters({...filters, campaign: e.target.value || 'all'})} />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="franchisee">Franchisee</Label>
+                                            <Input id="franchisee" placeholder="Filter by Franchisee" value={filters.franchisee} onChange={(e) => setFilters({...filters, franchisee: e.target.value})} />
+                                        </div>
+                                    </>
+                                )}
                                 <div className="grid grid-cols-2 gap-2">
                                     <div className="grid gap-2">
                                         <Label htmlFor="state">State</Label>

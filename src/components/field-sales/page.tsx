@@ -205,6 +205,7 @@ export default function FieldSalesPage() {
 
   const router = useRouter();
   const { user, userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { toast } = useToast();
 
   const hasAccess = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.activeRole);
@@ -771,24 +772,28 @@ export default function FieldSalesPage() {
                             placeholder="Select statuses..."
                         />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="franchisee">Franchisee</Label>
-                         <MultiSelectCombobox
-                            options={uniqueFranchisees}
-                            selected={filters.franchisee}
-                            onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
-                            placeholder="Select franchisees..."
-                        />
-                    </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="source">Source</Label>
-                        <MultiSelectCombobox
-                            options={uniqueSources}
-                            selected={filters.source}
-                            onSelectedChange={(selected) => handleFilterChange('source', selected)}
-                            placeholder="Select sources..."
-                        />
-                    </div>
+                    {!isFranchisee && (
+                        <>
+                            <div className="space-y-2">
+                                <Label htmlFor="franchisee">Franchisee</Label>
+                                 <MultiSelectCombobox
+                                    options={uniqueFranchisees}
+                                    selected={filters.franchisee}
+                                    onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                                    placeholder="Select franchisees..."
+                                />
+                            </div>
+                             <div className="space-y-2">
+                                <Label htmlFor="source">Source</Label>
+                                <MultiSelectCombobox
+                                    options={uniqueSources}
+                                    selected={filters.source}
+                                    onSelectedChange={(selected) => handleFilterChange('source', selected)}
+                                    placeholder="Select sources..."
+                                />
+                            </div>
+                        </>
+                    )}
                     <div className="space-y-2">
                         <Label htmlFor="dateLeadEntered">Date Lead Entered</Label>
                         <Popover>

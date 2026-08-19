@@ -82,6 +82,7 @@ const LOST_STATUSES: string[] = [
 
 export default function FranchiseeLeadsClientPage() {
   const { userProfile, loading: authLoading } = useAuth();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { toast } = useToast();
 
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -874,19 +875,21 @@ export default function FranchiseeLeadsClientPage() {
             </div>
 
             {/* Customer Source Filter */}
-            <div>
-              <Select value={selectedCustomerSource} onValueChange={setSelectedCustomerSource}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="All Customer Sources" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Customer Sources</SelectItem>
-                  {availableCustomerSources.map(src => (
-                    <SelectItem key={src} value={src}>{src}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!isFranchisee && (
+              <div>
+                <Select value={selectedCustomerSource} onValueChange={setSelectedCustomerSource}>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="All Customer Sources" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Customer Sources</SelectItem>
+                    {availableCustomerSources.map(src => (
+                      <SelectItem key={src} value={src}>{src}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

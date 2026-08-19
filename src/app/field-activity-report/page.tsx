@@ -619,13 +619,13 @@ export default function FieldActivityReportPage() {
           </CardHeader>
           <CollapsibleContent>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-              {userProfile?.activeRole !== 'Field Sales' && userProfile?.activeRole !== 'Franchisee' && (
+              {userProfile?.activeRole !== 'Field Sales' && !isFranchisee && (
                 <div className="space-y-2">
                     <Label>Captured By</Label>
                     <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(val) => handleFilterChange('user', val)} placeholder="Select users..."/>
                 </div>
               )}
-              {userProfile?.activeRole !== 'Franchisee' && (
+              {!isFranchisee && (
                   <div className="space-y-2">
                       <Label>Franchisee</Label>
                       <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..."/>

@@ -127,6 +127,7 @@ function safeFormatDate(val: any, outputFormat = 'dd/MM/yyyy'): string {
 
 export function InReviewLeadsClient() {
   const { userProfile, isSuperAdmin, loading: authLoading } = useAuth()
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { toast } = useToast()
   const router = useRouter()
 
@@ -598,38 +599,42 @@ export function InReviewLeadsClient() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="franchisee">Franchisee</Label>
-              <MultiSelectCombobox
-                options={uniqueFranchisees}
-                selected={filters.franchisee}
-                onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
-                placeholder="Select franchisees..."
-              />
-            </div>
+            {!isFranchisee && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="franchisee">Franchisee</Label>
+                  <MultiSelectCombobox
+                    options={uniqueFranchisees}
+                    selected={filters.franchisee}
+                    onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                    placeholder="Select franchisees..."
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="campaign">Campaign</Label>
-              <Select value={filters.campaign} onValueChange={(val) => handleFilterChange('campaign', val)}>
-                <SelectTrigger id="campaign-select">
-                  <SelectValue placeholder="Select campaign" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Campaigns</SelectItem>
-                  {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="campaign">Campaign</Label>
+                  <Select value={filters.campaign} onValueChange={(val) => handleFilterChange('campaign', val)}>
+                    <SelectTrigger id="campaign-select">
+                      <SelectValue placeholder="Select campaign" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Campaigns</SelectItem>
+                      {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="source">Source</Label>
-              <MultiSelectCombobox
-                options={uniqueSources}
-                selected={filters.source}
-                onSelectedChange={(selected) => handleFilterChange('source', selected)}
-                placeholder="Select customer sources..."
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="source">Source</Label>
+                  <MultiSelectCombobox
+                    options={uniqueSources}
+                    selected={filters.source}
+                    onSelectedChange={(selected) => handleFilterChange('source', selected)}
+                    placeholder="Select customer sources..."
+                  />
+                </div>
+              </>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="dateLeadEntered">Date Lead Entered</Label>

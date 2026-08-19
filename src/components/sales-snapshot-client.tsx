@@ -1369,22 +1369,24 @@ export default function SalesSnapshotClient() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Campaign</Label>
-                  <Select value={filters.campaign} onValueChange={(val) => setFilters(prev => ({ ...prev, campaign: val }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Campaigns" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Campaigns</SelectItem>
-                      {availableCampaigns.map((c) => (
-                        <SelectItem key={c.id} value={c.name}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!isFranchisee && (
+                  <div className="space-y-2">
+                    <Label>Campaign</Label>
+                    <Select value={filters.campaign} onValueChange={(val) => setFilters(prev => ({ ...prev, campaign: val }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Campaigns" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Campaigns</SelectItem>
+                        {availableCampaigns.map((c) => (
+                          <SelectItem key={c.id} value={c.name}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Quick Date Range Preset</Label>
@@ -1447,10 +1449,12 @@ export default function SalesSnapshotClient() {
                   <MultiSelectCombobox options={bucketOptions} selected={filters.bucket} onSelectedChange={(val) => setFilters(prev => ({ ...prev, bucket: val }))} placeholder="All Buckets" />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Franchisee</Label>
-                  <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => setFilters(prev => ({ ...prev, franchisee: val }))} placeholder="All Franchisees" />
-                </div>
+                {!isFranchisee && (
+                  <div className="space-y-2">
+                    <Label>Franchisee</Label>
+                    <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => setFilters(prev => ({ ...prev, franchisee: val }))} placeholder="All Franchisees" />
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Account Manager</Label>

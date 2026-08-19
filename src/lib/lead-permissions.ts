@@ -151,6 +151,12 @@ export function canEditSignedCustomerAddress(
   ].includes(roleLower);
 }
 
+export function isFranchiseeRole(userProfile: Partial<UserProfile> | null | undefined): boolean {
+  if (!userProfile) return false;
+  const role = userProfile.activeRole || userProfile.role || '';
+  return role.toLowerCase().trim() === 'franchisee';
+}
+
 export function canFranchiseeAccessLead(
   lead: Lead | null | undefined,
   userProfile: UserProfile | null | undefined

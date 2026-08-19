@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 
 function formatToDDMMYYYY(dateVal: string | number | Date) {
   if (!dateVal) return 'Unknown';
@@ -34,6 +35,56 @@ export async function GET(request: Request) {
 
   try {
     const db = getFirestore(adminApp);
+
+    // Authenticate user & check franchisee restriction
+    const authHeader = request.headers.get('Authorization');
+    const activeRoleHeader = request.headers.get('X-Active-Role');
+    let isFranchisee = false;
+    const userFranchiseeNames = new Set<string>();
+    const userFranchiseeIds = new Set<string>();
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const idToken = authHeader.substring(7);
+      try {
+        const decodedToken = await getAuth(adminApp).verifyIdToken(idToken);
+        const uid = decodedToken.uid;
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (userDoc.exists) {
+          const userProfile = userDoc.data() || {};
+          const role = activeRoleHeader || userProfile.activeRole || userProfile.role || '';
+          isFranchisee = role.toLowerCase().trim() === 'franchisee';
+
+          if (userProfile.franchisee) userFranchiseeNames.add(userProfile.franchisee.trim().toLowerCase());
+          if (userProfile.franchiseeName) userFranchiseeNames.add(userProfile.franchiseeName.trim().toLowerCase());
+          if (userProfile.franchiseeId) userFranchiseeIds.add(String(userProfile.franchiseeId).trim().toLowerCase());
+          if (userProfile.franchiseeInternalId) userFranchiseeIds.add(String(userProfile.franchiseeInternalId).trim().toLowerCase());
+          if (userProfile.activeFranchiseeId) userFranchiseeIds.add(String(userProfile.activeFranchiseeId).trim().toLowerCase());
+
+          if (Array.isArray(userProfile.linkedFranchiseeIds)) {
+            userProfile.linkedFranchiseeIds.forEach((id: any) => {
+              if (id !== undefined && id !== null && String(id).trim()) {
+                userFranchiseeIds.add(String(id).trim().toLowerCase());
+              }
+            });
+          }
+          if (Array.isArray(userProfile.linkedFranchisees)) {
+            userProfile.linkedFranchisees.forEach((item: any) => {
+              if (typeof item === 'string' && item.trim()) {
+                userFranchiseeNames.add(item.trim().toLowerCase());
+              } else if (typeof item === 'object' && item !== null) {
+                if (item.franchiseeName) userFranchiseeNames.add(String(item.franchiseeName).trim().toLowerCase());
+                if (item.name) userFranchiseeNames.add(String(item.name).trim().toLowerCase());
+                if (item.franchiseeId) userFranchiseeIds.add(String(item.franchiseeId).trim().toLowerCase());
+                if (item.franchiseeInternalId) userFranchiseeIds.add(String(item.franchiseeInternalId).trim().toLowerCase());
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error('ID Token verification failed in package lookup API:', err);
+      }
+    }
+
     const packagesRef = db.collection('packages');
     
     // Search by code (barcode), order_number, or connote_number
@@ -54,6 +105,16 @@ export async function GET(request: Request) {
     }
     
     const pkg = pkgDoc.data();
+
+    if (isFranchisee) {
+      const pFranName = (pkg.franchisee || pkg.franchiseeName || pkg.sender_franchisee || pkg.receiver_franchisee || '').toString().trim().toLowerCase();
+      const pFranId = (pkg.franchisee_id || pkg.franchiseeId || pkg.franchiseeInternalId || '').toString().trim().toLowerCase();
+      const isMatch = (pFranName && (userFranchiseeNames.has(pFranName) || userFranchiseeIds.has(pFranName))) ||
+                      (pFranId && (userFranchiseeIds.has(pFranId) || userFranchiseeNames.has(pFranId)));
+      if (!isMatch) {
+        return NextResponse.json({ error: 'Package not found' }, { status: 404 });
+      }
+    }
     const barcode = pkg.code || identifier;
 
     // 1. Fetch real-time status from Protechly API

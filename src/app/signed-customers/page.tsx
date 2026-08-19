@@ -93,6 +93,7 @@ export default function SignedCustomersPage() {
   const [sortConfig, setSortConfig] = useState<{ key: SortableCompanyKeys; direction: 'ascending' | 'descending' } | null>(null);
   const router = useRouter();
   const { user, userProfile, isSuperAdmin, loading: authLoading } = useAuth();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.role === 'admin' || isSuperAdmin;
   const { canView, loadingPermissions } = usePermissions();
   const { toast } = useToast();
@@ -1138,15 +1139,17 @@ export default function SignedCustomersPage() {
                         <Label htmlFor="companyName">Company Name</Label>
                         <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
                     </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="franchisee">Franchisee</Label>
-                         <MultiSelectCombobox
-                            options={uniqueFranchisees}
-                            selected={filters.franchisee}
-                            onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
-                            placeholder="Select franchisees..."
-                        />
-                    </div>
+                    {!isFranchisee && (
+                      <div className="space-y-2">
+                          <Label htmlFor="franchisee">Franchisee</Label>
+                           <MultiSelectCombobox
+                              options={uniqueFranchisees}
+                              selected={filters.franchisee}
+                              onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                              placeholder="Select franchisees..."
+                          />
+                      </div>
+                    )}
                      <div className="space-y-2">
                         <Label htmlFor="prospected-status">Prospected Status</Label>
                         <Select value={filters.prospectedStatus} onValueChange={(value) => handleFilterChange('prospectedStatus', value)}>

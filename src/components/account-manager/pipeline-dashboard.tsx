@@ -112,6 +112,7 @@ export function getLeadContactName(lead: Lead): string {
 
 export default function PipelineDashboard() {
     const { userProfile, loading, isSuperAdmin } = useAuth();
+    const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
     
     const [leads, setLeads] = useState<Lead[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
@@ -941,16 +942,18 @@ export default function PipelineDashboard() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="campaign" className="text-xs font-semibold text-[#095c7b]">Campaign</Label>
-                                <Select value={filters.campaign} onValueChange={(val) => setFilters({...filters, campaign: val})}>
-                                    <SelectTrigger id="campaign" className="bg-white"><SelectValue placeholder="All Campaigns" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Campaigns</SelectItem>
-                                        {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            {!isFranchiseeRole && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="campaign" className="text-xs font-semibold text-[#095c7b]">Campaign</Label>
+                                    <Select value={filters.campaign} onValueChange={(val) => setFilters({...filters, campaign: val})}>
+                                        <SelectTrigger id="campaign" className="bg-white"><SelectValue placeholder="All Campaigns" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Campaigns</SelectItem>
+                                            {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 <Label htmlFor="appointmentStatus" className="text-xs font-semibold text-[#095c7b]">Appointment Status</Label>
                                 <Select value={filters.appointmentStatus} onValueChange={(val) => setFilters({...filters, appointmentStatus: val})}>
@@ -981,16 +984,18 @@ export default function PipelineDashboard() {
                                 <Label htmlFor="dateEnteredTo" className="text-xs font-semibold text-[#095c7b]">Date Entered To</Label>
                                 <Input id="dateEnteredTo" type="date" className="bg-white" value={filters.dateEnteredTo} onChange={(e) => setFilters({...filters, dateEnteredTo: e.target.value})} />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="franchisee" className="text-xs font-semibold text-[#095c7b]">Franchisee</Label>
-                                <Select value={filters.franchisee || 'all'} onValueChange={(val) => setFilters({...filters, franchisee: val === 'all' ? '' : val})}>
-                                    <SelectTrigger id="franchisee" className="bg-white"><SelectValue placeholder="All Franchisees" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Franchisees</SelectItem>
-                                        {uniqueFranchisees.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            {!isFranchiseeRole && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="franchisee" className="text-xs font-semibold text-[#095c7b]">Franchisee</Label>
+                                    <Select value={filters.franchisee || 'all'} onValueChange={(val) => setFilters({...filters, franchisee: val === 'all' ? '' : val})}>
+                                        <SelectTrigger id="franchisee" className="bg-white"><SelectValue placeholder="All Franchisees" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Franchisees</SelectItem>
+                                            {uniqueFranchisees.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 <Label htmlFor="state" className="text-xs font-semibold text-[#095c7b]">State</Label>
                                 <Input id="state" placeholder="State" className="bg-white" value={filters.state} onChange={(e) => setFilters({...filters, state: e.target.value})} />

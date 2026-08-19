@@ -152,6 +152,7 @@ const parseDurationToMinutes = (durationStr?: string): number => {
 
 export default function AMReportsDashboard() {
     const { userProfile, loading } = useAuth();
+    const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
     
     const [leads, setLeads] = useState<Lead[]>([]);
     const [invoices, setInvoices] = useState<ExtendedInvoice[]>([]);
@@ -1828,15 +1829,17 @@ export default function AMReportsDashboard() {
                                 )}
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label className="text-xs text-slate-500">Franchisee</Label>
-                            <MultiSelectCombobox 
-                                options={franchiseeOptions} 
-                                selected={selectedFranchisee} 
-                                onSelectedChange={setSelectedFranchisee} 
-                                placeholder="All Franchisees..." 
-                            />
-                        </div>
+                        {!isFranchiseeRole && (
+                            <div className="space-y-2">
+                                <Label className="text-xs text-slate-500">Franchisee</Label>
+                                <MultiSelectCombobox 
+                                    options={franchiseeOptions} 
+                                    selected={selectedFranchisee} 
+                                    onSelectedChange={setSelectedFranchisee} 
+                                    placeholder="All Franchisees..." 
+                                />
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <Label className="text-xs text-slate-500">Bucket</Label>
                             <MultiSelectCombobox 
@@ -1855,22 +1858,24 @@ export default function AMReportsDashboard() {
                                 placeholder="All Statuses..." 
                             />
                         </div>
-                        <div className="space-y-2">
-                            <Label className="text-xs text-slate-500">Campaign</Label>
-                            <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
-                                <SelectTrigger className="h-9 bg-white text-xs">
-                                    <SelectValue placeholder="All Campaigns" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Campaigns</SelectItem>
-                                    {availableCampaigns.map((c) => (
-                                        <SelectItem key={c.id} value={c.name}>
-                                            {c.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {!isFranchiseeRole && (
+                            <div className="space-y-2">
+                                <Label className="text-xs text-slate-500">Campaign</Label>
+                                <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
+                                    <SelectTrigger className="h-9 bg-white text-xs">
+                                        <SelectValue placeholder="All Campaigns" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Campaigns</SelectItem>
+                                        {availableCampaigns.map((c) => (
+                                            <SelectItem key={c.id} value={c.name}>
+                                                {c.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                     </div>
                     <div className="flex justify-between items-center pt-2">
                         <Button variant="ghost" onClick={clearFilters} className="h-9 text-xs"><X className="mr-2 h-3 w-3"/> Clear Filters</Button>

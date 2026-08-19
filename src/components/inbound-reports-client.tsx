@@ -360,6 +360,7 @@ export default function InboundReportsClientPage({
   const { toast } = useToast();
   const { canView, loadingPermissions } = usePermissions();
   const isSuperAdmin = userProfile?.email?.endsWith('@mailplus.com.au') || (userProfile?.activeRole as string) === 'superadmin';
+  const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const hasAccess = canView('inboundReporting') || isSuperAdmin;
   const { setLoadTime, setPageName, setIsCustom } = usePerformance();
 
@@ -2597,22 +2598,24 @@ export default function InboundReportsClientPage({
                             placeholder="Select AMs..." 
                         />
                     </div>
-                    <div className="space-y-2">
-                        <Label>Campaign</Label>
-                        <Select value={filters.campaign} onValueChange={(val) => handleFilterChange('campaign', val)}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="All Campaigns" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Campaigns</SelectItem>
-                                {availableCampaigns.map((c) => (
-                                    <SelectItem key={c.id} value={c.name}>
-                                        {c.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    {!isFranchiseeRole && (
+                        <div className="space-y-2">
+                            <Label>Campaign</Label>
+                            <Select value={filters.campaign} onValueChange={(val) => handleFilterChange('campaign', val)}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All Campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {availableCampaigns.map((c) => (
+                                        <SelectItem key={c.id} value={c.name}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <Label>Status</Label>
                         <MultiSelectCombobox 
@@ -2622,24 +2625,28 @@ export default function InboundReportsClientPage({
                             placeholder="Select statuses..." 
                         />
                     </div>
-                    <div className="space-y-2">
-                        <Label>Lead Source</Label>
-                        <MultiSelectCombobox 
-                            options={sourceOptions} 
-                            selected={filters.source} 
-                            onSelectedChange={(val) => handleFilterChange('source', val)} 
-                            placeholder="Select sources..." 
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Franchisee</Label>
-                        <MultiSelectCombobox 
-                            options={franchiseeOptions} 
-                            selected={filters.franchisee} 
-                            onSelectedChange={(val) => handleFilterChange('franchisee', val)} 
-                            placeholder="Select franchisees..." 
-                        />
-                    </div>
+                    {!isFranchiseeRole && (
+                        <>
+                            <div className="space-y-2">
+                                <Label>Lead Source</Label>
+                                <MultiSelectCombobox 
+                                    options={sourceOptions} 
+                                    selected={filters.source} 
+                                    onSelectedChange={(val) => handleFilterChange('source', val)} 
+                                    placeholder="Select sources..." 
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Franchisee</Label>
+                                <MultiSelectCombobox 
+                                    options={franchiseeOptions} 
+                                    selected={filters.franchisee} 
+                                    onSelectedChange={(val) => handleFilterChange('franchisee', val)} 
+                                    placeholder="Select franchisees..." 
+                                />
+                            </div>
+                        </>
+                    )}
                 </div>
                 <div className="flex justify-between items-center pt-2">
                     <Button variant="ghost" onClick={clearFilters} className="h-9 text-xs"><X className="mr-2 h-4 w-4"/> Clear Filters</Button>

@@ -28,6 +28,7 @@ import { Search, Filter, Shuffle } from 'lucide-react'
 
 export function UnassignedLeadsClient() {
   const { userProfile, isSuperAdmin, loading: authLoading } = useAuth()
+  const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { canView, loadingPermissions } = usePermissions()
   const router = useRouter()
 
@@ -207,22 +208,26 @@ export function UnassignedLeadsClient() {
                 onChange={e => setSearchCompanyName(e.target.value)} 
               />
             </div>
-            <div className="flex items-center gap-2 max-w-sm flex-1">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              <Input 
-                placeholder="Filter by Franchisee..." 
-                value={filterFranchisee} 
-                onChange={e => setFilterFranchisee(e.target.value)} 
-              />
-            </div>
-            <div className="flex items-center gap-2 max-w-sm flex-1">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              <Input 
-                placeholder="Filter by Lead Source..." 
-                value={filterSource} 
-                onChange={e => setFilterSource(e.target.value)} 
-              />
-            </div>
+            {!isFranchisee && (
+              <>
+                <div className="flex items-center gap-2 max-w-sm flex-1">
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Filter by Franchisee..." 
+                    value={filterFranchisee} 
+                    onChange={e => setFilterFranchisee(e.target.value)} 
+                  />
+                </div>
+                <div className="flex items-center gap-2 max-w-sm flex-1">
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Filter by Lead Source..." 
+                    value={filterSource} 
+                    onChange={e => setFilterSource(e.target.value)} 
+                  />
+                </div>
+              </>
+            )}
           </div>
           
           <div className="bg-muted/50 p-4 rounded-md border flex flex-wrap gap-4 items-end justify-between">
