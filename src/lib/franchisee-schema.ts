@@ -89,7 +89,7 @@ export const FranchiseeUserSchema = z.object({
   bankAccount: BankAccountSchema.optional(),
   linkedFranchiseeIds: z.array(z.string()).optional(),
   role: z.string().optional().default('Franchisee'),
-});
+}).passthrough();
 
 export const FranchiseeSchema = z.object({
   internalId: z.string().or(z.number()).transform(val => String(val)),
@@ -137,7 +137,7 @@ export const FranchiseeSchema = z.object({
   starTrackLodgementPoints: z.array(z.any()).or(z.string()).nullable().optional(),
   mpExpressLodgementPoints: z.array(z.any()).or(z.string()).nullable().optional(),
   users: z.array(FranchiseeUserSchema).optional(),
-});
+}).passthrough();
 
 export const UpdateFranchiseeSchema = z.object({
   name: z.string().nullable().optional(),
@@ -184,7 +184,7 @@ export const UpdateFranchiseeSchema = z.object({
   starTrackLodgementPoints: z.array(z.any()).or(z.string()).nullable().optional(),
   mpExpressLodgementPoints: z.array(z.any()).or(z.string()).nullable().optional(),
   users: z.array(FranchiseeUserSchema).optional(),
-});
+}).passthrough();
 
 export const OperatorSchema = z.object({
   internalId: z.string().or(z.number()).transform(val => String(val)),

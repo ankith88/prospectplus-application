@@ -180,6 +180,19 @@ export async function syncFranchiseeUsers(
       };
     }
 
+    // Merge any unknown/custom fields provided in userInput into updatedUserObj
+    const knownKeys = new Set([
+      'uid', 'email', 'password', 'firstName', 'lastName', 'displayName',
+      'personalEmail', 'dateOfBirth', 'nextOfKin', 'businessStartDate',
+      'address', 'abn', 'typeOfOwner', 'bankAccountName', 'bsbNumber',
+      'bankAccountNumber', 'bankAccount', 'linkedFranchiseeIds', 'role'
+    ]);
+    for (const [key, value] of Object.entries(userInput)) {
+      if (!knownKeys.has(key) && value !== undefined) {
+        updatedUserObj[key] = value;
+      }
+    }
+
     if (!existingDoc.exists) {
       updatedUserObj.createdAt = nowStr;
     }
