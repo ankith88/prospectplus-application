@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { doc, getDoc, getDocs, collection, query, where, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Franchisee, Operator } from '@/lib/types';
-import { getAllFranchisees, getOperatorsForFranchisee } from '@/services/firebase';
+import { getAllFranchisees, getOperatorsForFranchisee, getLpoParentsForFranchisee } from '@/services/firebase';
 import { Autocomplete } from '@react-google-maps/api';
 import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { Loader } from '@/components/ui/loader';
@@ -50,6 +50,7 @@ export default function SuburbMappingClient() {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [depots, setDepots] = useState<any[]>([]);
   const [linkedLPOs, setLinkedLPOs] = useState<{ id: string; companyName: string }[]>([]);
+  const [loadingLPOs, setLoadingLPOs] = useState(false);
   
   const [loadingData, setLoadingData] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -118,14 +119,19 @@ export default function SuburbMappingClient() {
         setOperators(ops);
       });
       
-      // Query linked LPOs (companies collection where linkedLPOFranchisees contains franchisee ID)
-      const qId = query(collection(firestore, 'companies'), where('linkedLPOFranchisees', 'array-contains', franchisee.internalId));
-      getDocs(qId).then(snap => {
-        const lpos = snap.docs.map(doc => ({ id: doc.id, companyName: doc.data().companyName || doc.id }));
-        setLinkedLPOs(lpos);
-      }).catch(err => {
-        console.error('Failed to load linked LPOs:', err);
-      });
+      // Load linked LPO Parents for this franchisee
+      setLoadingLPOs(true);
+      getLpoParentsForFranchisee(franchisee)
+        .then(lpos => {
+          setLinkedLPOs(lpos);
+        })
+        .catch(err => {
+          console.error('Failed to load linked LPOs:', err);
+          setLinkedLPOs([]);
+        })
+        .finally(() => {
+          setLoadingLPOs(false);
+        });
       
       // Set mapped suburb lists
       setMainTerritory(parseSuburbList(franchisee.territoryJson));
@@ -437,10 +443,17 @@ export default function SuburbMappingClient() {
     else if (type === 'aus_post') setAusPostSuburbs(updater(ausPostSuburbs));
   };
 
-  const handleUpdateLPOParent = (index: number, parentId: string) => {
-    const updated = [...ausPostSuburbs];
-    updated[index] = { ...updated[index], parent_lpo_id: parentId };
-    setAusPostSuburbs(updated);
+  const handleUpdateLPOParent = (index: number, type: string, parentId: string) => {
+    const updater = (list: SuburbItem[]) => {
+      const updated = [...list];
+      updated[index] = { ...updated[index], parent_lpo_id: parentId };
+      return updated;
+    };
+    if (type === 'main') setMainTerritory(updater(mainTerritory));
+    else if (type === 'star_track') setStarTrackSuburbs(updater(starTrackSuburbs));
+    else if (type === 'tge') setTgeSuburbs(updater(tgeSuburbs));
+    else if (type === 'iron_mountain') setIronMountainSuburbs(updater(ironMountainSuburbs));
+    else if (type === 'aus_post') setAusPostSuburbs(updater(ausPostSuburbs));
   };
 
   const handleUpdateNextDay = (index: number, type: string, nextDay: boolean) => {
@@ -748,14 +761,19 @@ export default function SuburbMappingClient() {
                     </TableCell>
                     {type === 'aus_post' && (
                       <TableCell>
-                        {linkedLPOs.length === 0 ? (
+                        {loadingLPOs ? (
+                          <div className="flex items-center space-x-2 text-xs text-slate-400">
+                            <Loader className="w-3.5 h-3.5 animate-spin" />
+                            <span>Loading LPO parents...</span>
+                          </div>
+                        ) : linkedLPOs.length === 0 ? (
                           <span className="text-xs text-slate-400 italic">No linked LPO parents found</span>
                         ) : (
                           <Select
                             value={item.parent_lpo_id || 'none'}
-                            onValueChange={(val) => handleUpdateLPOParent(index, val === 'none' ? '' : val)}
+                            onValueChange={(val) => handleUpdateLPOParent(index, type, val === 'none' ? '' : val)}
                           >
-                            <SelectTrigger className="w-48 bg-white border border-slate-200 text-xs">
+                            <SelectTrigger className="w-56 bg-white border border-slate-200 text-xs">
                               <SelectValue placeholder="Select Parent..." />
                             </SelectTrigger>
                             <SelectContent>

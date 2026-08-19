@@ -12,7 +12,8 @@ export default function TerritoryMapPage() {
   const activeRoleLower = (userProfile?.activeRole as string)?.toLowerCase() || '';
   const isAllowed = isSuperAdmin || 
     canView('territoryMap') || 
-    ['admin', 'superadmin', 'franchisee', 'executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success'].includes(activeRoleLower);
+    ['admin', 'superadmin', 'franchisee', 'executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success', 'operations', 'operations manager'].includes(activeRoleLower) ||
+    activeRoleLower.includes('operations');
 
   if (loading || loadingPermissions) {
     return (

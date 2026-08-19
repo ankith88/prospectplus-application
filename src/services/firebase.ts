@@ -1789,6 +1789,44 @@ async function logCsCallActivity(
 async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string }, collectionName: 'leads' | 'companies' = 'leads'): Promise<void> {
     await addDoc(collection(firestore, collectionName, leadId, 'notes'), { ...noteData, syncedWithNetSuite: false });
     await logActivity(leadId, { type: 'Update', notes: `Note added: ${noteData.content.substring(0, 100)}...`, date: noteData.date }, collectionName);
+
+    try {
+        const leadRef = doc(firestore, collectionName, leadId);
+        const leadSnap = await getDoc(leadRef);
+        if (leadSnap.exists()) {
+            const lData = leadSnap.data() || {};
+            const targetParentId = lData.createdParentLeadId || lData.parentLeadId || lData.linkedLeadId || leadId;
+            const lpoId = lData.lpoLeadId || lData.linkedLpoLeadId;
+
+            const lpoIdsToUpdate = new Set<string>();
+            if (lpoId) lpoIdsToUpdate.add(lpoId);
+
+            if (targetParentId) {
+                const q1 = query(collection(firestore, 'lpo_leads'), where('createdParentLeadId', '==', targetParentId));
+                const s1 = await getDocs(q1);
+                s1.docs.forEach(d => lpoIdsToUpdate.add(d.id));
+
+                const q2 = query(collection(firestore, 'lpo_leads'), where('linkedLeadId', '==', targetParentId));
+                const s2 = await getDocs(q2);
+                s2.docs.forEach(d => lpoIdsToUpdate.add(d.id));
+            }
+
+            const q3 = query(collection(firestore, 'lpo_leads'), where('createdChildLeadIds', 'array-contains', leadId));
+            const s3 = await getDocs(q3);
+            s3.docs.forEach(d => lpoIdsToUpdate.add(d.id));
+
+            for (const resolvedLpoId of Array.from(lpoIdsToUpdate)) {
+                await addDoc(collection(firestore, 'lpo_leads', resolvedLpoId, 'activity'), {
+                    type: 'Note',
+                    notes: `Note added on Lead (${lData.companyName || leadId}): ${noteData.content}`,
+                    author: noteData.author || 'System User',
+                    createdAt: noteData.date || new Date().toISOString()
+                });
+            }
+        }
+    } catch (err) {
+        console.warn('Could not sync note to linked lpo_leads:', err);
+    }
 }
 
 async function updateNoteActivity(leadId: string, noteId: string, content: string, collectionName: 'leads' | 'companies' = 'leads'): Promise<void> {
@@ -3845,3 +3883,152 @@ export async function syncLpoHierarchyWithNetSuite(parentLeadId: string): Promis
         };
     }
 }
+
+/**
+ * Fetches all LPO Parent leads linked to a given franchisee.
+ * Finds leads in the 'lpo_network' bucket where the linked franchisee matches the selected franchisee,
+ * and extracts the Parent LPO Lead from those child LPO leads (or direct parent LPO leads).
+ */
+export async function getLpoParentsForFranchisee(
+  franchisee: { internalId: string; name?: string; code?: string }
+): Promise<{ id: string; companyName: string }[]> {
+  if (!franchisee || !franchisee.internalId) return [];
+
+  const fId = String(franchisee.internalId).trim();
+  const fName = franchisee.name ? franchisee.name.trim() : '';
+  const fCode = franchisee.code ? franchisee.code.trim() : '';
+
+  const parentMap = new Map<string, string>(); // Map<parentLpoId, companyName>
+
+  const addParent = (id: string, name?: string) => {
+    if (!id) return;
+    const cleanId = String(id).trim();
+    if (!cleanId) return;
+    const existingName = parentMap.get(cleanId);
+    if (!existingName || existingName === cleanId) {
+      parentMap.set(cleanId, (name && name.trim()) ? name.trim() : cleanId);
+    }
+  };
+
+  try {
+    // 1. Query 'leads' collection for bucket == 'lpo_network' or 'LPO Network'
+    const qLpoNet1 = query(collection(firestore, 'leads'), where('bucket', '==', 'lpo_network'));
+    const qLpoNet2 = query(collection(firestore, 'leads'), where('bucket', '==', 'LPO Network'));
+
+    const [snap1, snap2] = await Promise.all([
+      getDocs(qLpoNet1).catch(() => ({ docs: [] })),
+      getDocs(qLpoNet2).catch(() => ({ docs: [] }))
+    ]);
+
+    const uniqueLeadDocsMap = new Map<string, any>();
+    [...snap1.docs, ...snap2.docs].forEach(d => uniqueLeadDocsMap.set(d.id, d.data()));
+
+    // Also check leads with franchiseeInternalId matching fId directly
+    const qFranLeads = query(collection(firestore, 'leads'), where('franchiseeInternalId', '==', fId));
+    const snapFran = await getDocs(qFranLeads).catch(() => ({ docs: [] }));
+    snapFran.docs.forEach(d => {
+      const data = d.data();
+      const b = String(data.bucket || '').toLowerCase();
+      if (b === 'lpo_network' || data.isLpoLead || data.lpoLeadId || data.parentLpoId || data.parentLeadId) {
+        uniqueLeadDocsMap.set(d.id, data);
+      }
+    });
+
+    const missingParentIds = new Set<string>();
+
+    // Process all matching LPO leads
+    for (const [leadId, data] of Array.from(uniqueLeadDocsMap.entries())) {
+      // Check if this lead is linked to the selected franchisee
+      const isLinkedToFranchisee =
+        String(data.franchiseeInternalId || '').trim() === fId ||
+        String(data.franchisee_id || '').trim() === fId ||
+        (fName && String(data.franchisee || '').trim().toLowerCase() === fName.toLowerCase()) ||
+        (fCode && String(data.franchisee || '').trim().toLowerCase() === fCode.toLowerCase()) ||
+        (Array.isArray(data.linkedFranchiseeIds) && data.linkedFranchiseeIds.some((id: any) => String(id).trim() === fId)) ||
+        (Array.isArray(data.linkedFranchisees) && data.linkedFranchisees.some((lf: any) => String(lf.franchiseeId || lf.id || '').trim() === fId || (fName && String(lf.name || '').trim().toLowerCase() === fName.toLowerCase()))) ||
+        (Array.isArray(data.linkedLPOFranchisees) && data.linkedLPOFranchisees.some((id: any) => String(id).trim() === fId));
+
+      if (!isLinkedToFranchisee) continue;
+
+      // Extract Parent LPO Lead ID
+      const parentLeadId = data.parentLeadId || data.ausPostParentLpoId || data.linkedLpoLeadId || data.lpoLeadId || (data.isParentLead ? leadId : null);
+
+      if (parentLeadId) {
+        const pIdStr = String(parentLeadId).trim();
+        if (uniqueLeadDocsMap.has(pIdStr)) {
+          const parentData = uniqueLeadDocsMap.get(pIdStr);
+          const pName = parentData.companyName || parentData.lpoName || parentData.name || pIdStr;
+          addParent(pIdStr, pName);
+        } else {
+          const fallbackName = data.lpoLeadName || data.lpoName || (data.companyName ? data.companyName.replace(/\s*-\s*.*$/, '') : null);
+          addParent(pIdStr, fallbackName || pIdStr);
+          missingParentIds.add(pIdStr);
+        }
+      } else if (data.isParentLead || !data.isChildLead) {
+        const pName = data.companyName || data.lpoName || data.name || leadId;
+        addParent(leadId, pName);
+      }
+    }
+
+    // 2. Also check 'lpo_leads' collection
+    const snapLpoLeads = await getDocs(collection(firestore, 'lpo_leads')).catch(() => ({ docs: [] }));
+    snapLpoLeads.docs.forEach(d => {
+      const data = d.data();
+      const lpoFranList = data.linkedFranchisees || [];
+      const matchesFran = lpoFranList.some((lf: any) => String(lf.franchiseeId || '').trim() === fId || (fName && String(lf.name || '').trim().toLowerCase() === fName.toLowerCase()));
+      if (matchesFran) {
+        const parentId = data.createdParentLeadId || data.linkedLeadId || d.id;
+        const pName = data.lpoName || data.companyName || d.id;
+        addParent(parentId, pName);
+        if (data.createdParentLeadId && !uniqueLeadDocsMap.has(data.createdParentLeadId)) {
+          missingParentIds.add(data.createdParentLeadId);
+        }
+      }
+    });
+
+    // 3. Also check 'companies' collection for linkedLPOFranchisees
+    const qComp = query(collection(firestore, 'companies'), where('linkedLPOFranchisees', 'array-contains', fId));
+    const snapComp = await getDocs(qComp).catch(() => ({ docs: [] }));
+    snapComp.docs.forEach(d => {
+      const data = d.data();
+      const pName = data.companyName || data.name || d.id;
+      addParent(d.id, pName);
+    });
+
+    // Fetch missing parent lead details in parallel
+    if (missingParentIds.size > 0) {
+      await Promise.all(
+        Array.from(missingParentIds).map(async (pId) => {
+          try {
+            const pDoc = await getDoc(doc(firestore, 'leads', pId));
+            if (pDoc.exists()) {
+              const pData = pDoc.data();
+              const pName = pData?.companyName || pData?.lpoName || pData?.name;
+              if (pName) addParent(pId, pName);
+            } else {
+              const cDoc = await getDoc(doc(firestore, 'companies', pId));
+              if (cDoc.exists()) {
+                const cData = cDoc.data();
+                const cName = cData?.companyName || cData?.name;
+                if (cName) addParent(pId, cName);
+              }
+            }
+          } catch (err) {
+            console.error(`Error fetching parent LPO lead details for ${pId}:`, err);
+          }
+        })
+      );
+    }
+  } catch (err) {
+    console.error('Error fetching LPO parents for franchisee:', err);
+  }
+
+  const result = Array.from(parentMap.entries()).map(([id, companyName]) => ({
+    id,
+    companyName
+  }));
+
+  result.sort((a, b) => a.companyName.localeCompare(b.companyName));
+  return result;
+}
+

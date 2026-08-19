@@ -14,8 +14,6 @@ export function LeadStatusBadge({ status, showInfoTooltip }: LeadStatusBadgeProp
     const trimmed = status.trim();
     if (trimmed === 'SUSPECT-Unqualified' || trimmed === 'SUSPECT - Unqualified' || trimmed.toUpperCase() === 'SUSPECT-UNQUALIFIED' || trimmed.toUpperCase() === 'SUSPECT - UNQUALIFIED') {
       displayStatus = 'New';
-    } else if (trimmed === 'Priority Lead' || trimmed === 'Priority Field Lead' || trimmed === 'Hot Lead') {
-      displayStatus = 'Hot Leads';
     }
   }
 

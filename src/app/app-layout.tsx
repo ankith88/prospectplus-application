@@ -192,7 +192,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     if (path.startsWith('/my-franchise')) {
       return 'my-franchise-group';
     }
-    if (path.startsWith('/admin/franchisees')) {
+    if (path.startsWith('/admin/franchisees') || path.startsWith('/operations/franchise-prospects')) {
       return 'network-group';
     }
     return null;
@@ -371,7 +371,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
     // Network
     '/admin/franchisees/directory': { label: 'Franchisees Directory', category: 'Network', icon: Building, href: '/admin/franchisees/directory' },
+    '/admin/franchisees/presales': { label: 'Territory Presales', category: 'Network', icon: Tag, href: '/admin/franchisees/presales' },
+    '/operations/franchise-prospects': { label: 'Franchise Prospects', category: 'Network', icon: UserCheck, href: '/operations/franchise-prospects' },
+    '/admin/franchisees/operators': { label: 'Operators Directory', category: 'Network', icon: Users, href: '/admin/franchisees/operators' },
     '/admin/franchisees/territory-map': { label: 'Franchisee Territory Map', category: 'Network', icon: Map, href: '/admin/franchisees/territory-map' },
+    '/admin/franchisees/suburb-mapping': { label: 'Suburb & Lodgement Mapping', category: 'Network', icon: MapPin, href: '/admin/franchisees/suburb-mapping' },
   };
 
   const toggleExpand = (key: string) => {
@@ -677,10 +681,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewHistoryAppointments = canView('historyAppointments');
   const canViewHistoryCallsTranscripts = canView('historyCallsTranscripts');
   const activeRoleLower = (userProfile?.activeRole as string)?.toLowerCase() || '';
+  const isOperationsRole = activeRoleLower === 'operations' || activeRoleLower.includes('operations') || activeRoleLower === 'operations manager';
   const canViewTerritoryMap = !isFranchiseeRole && (isSuperAdmin || 
     canView('territoryMap') || 
-    ['executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success'].includes(activeRoleLower));
-  const canViewFranchisees = !isFranchiseeRole && canView('franchisees');
+    ['executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success', 'operations', 'operations manager'].includes(activeRoleLower) ||
+    isOperationsRole);
+  const canViewFranchisees = !isFranchiseeRole && (canView('franchisees') || isOperationsRole);
   const canViewAccountManagerPipeline = canView('accountManagerPipeline');
   const canViewMultisite = isSuperAdmin || canView('multisiteReporting') || canViewAccountManagerPipeline || ['admin', 'superadmin', 'sales manager', 'account manager', 'account managers', 'customer success', 'customer service'].includes(activeRoleLower);
   const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
@@ -691,7 +697,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewLpoLeads = canView('lpoLeads');
   const canAccessAsk = !!userProfile?.uid && ALLOWED_ASK_UIDS.includes(userProfile.uid);
   const activeRoleStr = userProfile?.activeRole as string;
-  const canViewFranchiseProspects = isSuperAdmin || ['admin', 'super user', 'Operations', 'operations'].includes(activeRoleStr);
+  const canViewFranchiseProspects = isSuperAdmin || ['admin', 'super user', 'Operations', 'operations', 'Operations Manager', 'operations manager'].includes(activeRoleStr) || isOperationsRole;
   const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Outbound Admin' || activeRoleStr === 'Lead Gen Admin';
   const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
   const canViewInReviewLeads = Boolean(isSuperAdmin);

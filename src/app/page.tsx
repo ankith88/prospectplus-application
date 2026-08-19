@@ -24,6 +24,16 @@ export default function HomePage() {
       const lowerRole = activeRole.toLowerCase().trim();
 
       if (
+        activeRole === 'Operations' ||
+        lowerRole === 'operations' ||
+        lowerRole === 'operations manager' ||
+        lowerRole.includes('operations')
+      ) {
+        router.replace('/account-lookup');
+        return;
+      }
+
+      if (
         activeRole === 'Customer Service' ||
         lowerRole === 'customer service' ||
         lowerRole === 'customer_service' ||

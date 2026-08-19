@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { doc, updateDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDocs, where, deleteDoc, deleteField } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDocs, where, deleteDoc, deleteField } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
+import { logActivity } from '@/services/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -91,31 +92,55 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
   }, [lead.id]);
 
   const handleStatusChange = async (newStatus: string) => {
+    if (newStatus === 'Lost') {
+      const confirmLost = window.confirm(
+        'Marking this LPO Lead as Lost will update all linked parent and child leads/companies to Lost, disable LPO.Plus account access, and send an email notification to Fiona Harrison & Michael McDaid.\n\nDo you wish to proceed?'
+      );
+      if (!confirmLost) return;
+    }
+
     setSavingStatus(true);
     try {
-      const docRef = doc(firestore, 'lpo_leads', lead.id);
-      await updateDoc(docRef, { status: newStatus });
-      
-      // Log status change activity
-      await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
-        type: 'StatusChange',
-        notes: `Status updated from "${status}" to "${newStatus}"`,
-        author: userProfile?.displayName || userProfile?.email || 'System User',
-        createdAt: serverTimestamp(),
-      });
+      if (newStatus === 'Lost') {
+        const res = await fetch('/api/lpo-leads/mark-lost', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lpoLeadId: lead.id,
+            updatedBy: userProfile?.displayName || userProfile?.email || 'System User'
+          })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to process Lost status');
+        }
+      } else {
+        const docRef = doc(firestore, 'lpo_leads', lead.id);
+        await updateDoc(docRef, { status: newStatus });
+        
+        // Log status change activity
+        await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
+          type: 'StatusChange',
+          notes: `Status updated from "${status}" to "${newStatus}"`,
+          author: userProfile?.displayName || userProfile?.email || 'System User',
+          createdAt: serverTimestamp(),
+        });
+      }
 
       setStatus(newStatus);
       setLead((prev: any) => ({ ...prev, status: newStatus }));
       toast({
-        title: 'Status Updated',
-        description: `Lead status changed to ${newStatus}.`,
+        title: newStatus === 'Lost' ? 'LPO Lead & Linked Records Marked Lost' : 'Status Updated',
+        description: newStatus === 'Lost'
+          ? 'LPO Lead and all linked parent/child leads marked as Lost. LPO.Plus access disabled & email notification sent to Fiona & Michael.'
+          : `Lead status changed to ${newStatus}.`,
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating status:', err);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to update lead status.',
+        description: err.message || 'Failed to update lead status.',
       });
     } finally {
       setSavingStatus(false);
@@ -127,17 +152,57 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
     if (!noteContent.trim()) return;
 
     try {
+      const authorName = userProfile?.displayName || userProfile?.email || 'System User';
+      const nowIso = new Date().toISOString();
+      const content = noteContent.trim();
+
       await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
         type: 'Note',
-        notes: noteContent.trim(),
-        author: userProfile?.displayName || userProfile?.email || 'System User',
+        notes: content,
+        author: authorName,
         createdAt: serverTimestamp(),
       });
+
+      const targetParentId = lead.createdParentLeadId || lead.linkedLeadId || lead.parentLeadId;
+      const childIds: string[] = Array.isArray(lead.createdChildLeadIds) ? lead.createdChildLeadIds : [];
+      const crmLeadIdsToSync = new Set<string>();
+      if (targetParentId) crmLeadIdsToSync.add(targetParentId);
+      childIds.forEach(id => crmLeadIdsToSync.add(id));
+
+      for (const crmId of Array.from(crmLeadIdsToSync)) {
+        try {
+          const lRef = doc(firestore, 'leads', crmId);
+          const lSnap = await getDoc(lRef);
+          if (lSnap.exists()) {
+            await addDoc(collection(firestore, 'leads', crmId, 'notes'), {
+              content: `LPO Lead Note: ${content}`,
+              author: authorName,
+              date: nowIso,
+              syncedWithNetSuite: false
+            });
+            await logActivity(crmId, { type: 'Update', notes: `LPO Note added: ${content.substring(0, 100)}...`, date: nowIso }, 'leads');
+          } else {
+            const cRef = doc(firestore, 'companies', crmId);
+            const cSnap = await getDoc(cRef);
+            if (cSnap.exists()) {
+              await addDoc(collection(firestore, 'companies', crmId, 'notes'), {
+                content: `LPO Lead Note: ${content}`,
+                author: authorName,
+                date: nowIso,
+                syncedWithNetSuite: false
+              });
+              await logActivity(crmId, { type: 'Update', notes: `LPO Note added: ${content.substring(0, 100)}...`, date: nowIso }, 'companies');
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not sync LPO note to CRM lead ${crmId}:`, e);
+        }
+      }
 
       setNoteContent('');
       toast({
         title: 'Note Added',
-        description: 'Staff note successfully recorded.',
+        description: 'Staff note successfully recorded and synced to linked CRM lead records.',
       });
     } catch (err) {
       console.error('Error adding note:', err);
@@ -465,28 +530,46 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
 
   const handleUpdateLpoStatus = async (newStatus: string, notes: string) => {
     try {
-      const docRef = doc(firestore, 'lpo_leads', lead.id);
-      await updateDoc(docRef, { status: newStatus });
-      
-      await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
-        type: 'StatusChange',
-        notes,
-        author: userProfile?.displayName || userProfile?.email || 'System User',
-        createdAt: serverTimestamp(),
-      });
+      if (newStatus === 'Lost') {
+        const res = await fetch('/api/lpo-leads/mark-lost', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lpoLeadId: lead.id,
+            lossReason: notes,
+            updatedBy: userProfile?.displayName || userProfile?.email || 'System User'
+          })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to process Lost status');
+        }
+      } else {
+        const docRef = doc(firestore, 'lpo_leads', lead.id);
+        await updateDoc(docRef, { status: newStatus });
+        
+        await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
+          type: 'StatusChange',
+          notes,
+          author: userProfile?.displayName || userProfile?.email || 'System User',
+          createdAt: serverTimestamp(),
+        });
+      }
 
       setLead((prev: any) => ({ ...prev, status: newStatus }));
       setStatus(newStatus);
       toast({
-        title: 'Status Updated',
-        description: `Status changed to ${newStatus}.`,
+        title: newStatus === 'Lost' ? 'LPO Lead & Linked Records Marked Lost' : 'Status Updated',
+        description: newStatus === 'Lost'
+          ? 'LPO Lead and linked records marked as Lost. LPO.Plus access disabled & email notification sent to Fiona & Michael.'
+          : `Status changed to ${newStatus}.`,
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating LPO status:', err);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to update status.',
+        description: err.message || 'Failed to update status.',
       });
     }
   };

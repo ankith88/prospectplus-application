@@ -255,3 +255,85 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
     };
   }
 }
+
+/**
+ * Disables an LPO.Plus account in Firebase Auth and lpoconnect Firestore database when marked as Lost.
+ */
+export async function disableLpoPlusAccount(netsuiteId: string, contactEmail?: string): Promise<{ success: boolean; message: string }> {
+  try {
+    if (!netsuiteId && !contactEmail) {
+      return { success: false, message: 'netsuiteId or contactEmail required' };
+    }
+
+    console.log(`[LPO.Plus Disable] Disabling LPO.Plus account for LPO ID #${netsuiteId} (${contactEmail || 'No email'})...`);
+
+    let userAuthId = '';
+    const userQuerySnaps: any[] = [];
+
+    if (contactEmail) {
+      const qEmail = await lpoConnectDb.collection('users').where('email', '==', contactEmail).get();
+      qEmail.docs.forEach(d => userQuerySnaps.push(d));
+    }
+    if (netsuiteId) {
+      const qLpo = await lpoConnectDb.collection('users').where('lpo_id', '==', String(netsuiteId)).get();
+      qLpo.docs.forEach(d => userQuerySnaps.push(d));
+      
+      try {
+        const docDirect = await lpoConnectDb.collection('users').doc(String(netsuiteId)).get();
+        if (docDirect.exists) userQuerySnaps.push(docDirect);
+      } catch (e) {}
+    }
+
+    const updatedUserDocIds = new Set<string>();
+    for (const uDoc of userQuerySnaps) {
+      if (!updatedUserDocIds.has(uDoc.id)) {
+        updatedUserDocIds.add(uDoc.id);
+        userAuthId = uDoc.id;
+        await lpoConnectDb.collection('users').doc(uDoc.id).set({
+          disabled: true,
+          status: 'Disabled',
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    }
+
+    if (userAuthId && !userAuthId.startsWith('user-')) {
+      try {
+        await fetch(
+          "https://identitytoolkit.googleapis.com/v1/accounts:update?key=AIzaSyDklo95QYbj4PGZeKAqRBBzCfFKc9CFoXs",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              localId: userAuthId,
+              disableUser: true
+            })
+          }
+        );
+      } catch (e) {
+        console.warn(`[LPO.Plus Auth Disable Warning]`, e);
+      }
+    }
+
+    if (netsuiteId) {
+      try {
+        await lpoConnectDb.collection('lpo').doc(String(netsuiteId)).set({
+          disabled: true,
+          status: 'Lost',
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (e) {}
+    }
+
+    return {
+      success: true,
+      message: `LPO.Plus account disabled for #${netsuiteId}`
+    };
+  } catch (error: any) {
+    console.error(`[LPO.Plus Disable Error]`, error);
+    return {
+      success: false,
+      message: error.message || 'Failed to disable LPO.Plus account.'
+    };
+  }
+}

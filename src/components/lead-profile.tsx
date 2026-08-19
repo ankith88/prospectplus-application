@@ -2538,19 +2538,37 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       setLoadingLpoSuburbs(true);
       try {
         const franchiseeIds = new Set<string>();
+        const parentLpoId = (lead as any).ausPostParentLpoId || lead.lpoLeadId || lead.linkedLpoLeadId || lead.id;
+
         if (lead.franchisee_id) franchiseeIds.add(String(lead.franchisee_id));
         if ((lead as any).franchiseeInternalId) franchiseeIds.add(String((lead as any).franchiseeInternalId));
 
         // Find child leads belonging to this parent account
-        const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', lead.id));
-        const childSnap = await getDocs(qChild);
-        childSnap.forEach(docSnap => {
+        const qChild1 = query(collection(firestore, 'leads'), where('parentLeadId', '==', lead.id));
+        const childSnap1 = await getDocs(qChild1);
+        childSnap1.forEach(docSnap => {
           const d = docSnap.data();
-          if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
-          if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
+          const childLpoId = d.ausPostParentLpoId || d.lpoLeadId || d.linkedLpoLeadId || d.lpoId;
+          const matchesParentLpo = !childLpoId || childLpoId === lead.id || childLpoId === parentLpoId || String(childLpoId) === String(lead.id);
+          if (matchesParentLpo) {
+            if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
+            if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
+          }
         });
 
-        // Query franchisees EXCLUSIVELY for ausPostSuburbsJson
+        const qChild2 = query(collection(firestore, 'leads'), where('createdParentLeadId', '==', lead.id));
+        const childSnap2 = await getDocs(qChild2);
+        childSnap2.forEach(docSnap => {
+          const d = docSnap.data();
+          const childLpoId = d.ausPostParentLpoId || d.lpoLeadId || d.linkedLpoLeadId || d.lpoId;
+          const matchesParentLpo = !childLpoId || childLpoId === lead.id || childLpoId === parentLpoId || String(childLpoId) === String(lead.id);
+          if (matchesParentLpo) {
+            if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
+            if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
+          }
+        });
+
+        // Query franchisees EXCLUSIVELY for ausPostSuburbsJson / ausPostTerritoryJson
         const extractedSuburbs: any[] = [];
         for (const fId of Array.from(franchiseeIds)) {
           const fDoc = await getDoc(doc(firestore, 'franchisees', fId));
@@ -2561,13 +2579,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             if (!qFSnap.empty) fData = qFSnap.docs[0].data();
           }
 
-          if (fData?.ausPostSuburbsJson) {
-            let parsed = fData.ausPostSuburbsJson;
-            if (typeof parsed === 'string') {
-              try { parsed = JSON.parse(parsed); } catch (e) {}
+          if (fData) {
+            let suburbs = fData.ausPostSuburbsJson || fData.ausPostTerritoryJson;
+            if (typeof suburbs === 'string') {
+              try { suburbs = JSON.parse(suburbs); } catch (e) {}
             }
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              extractedSuburbs.push(...parsed);
+            if (Array.isArray(suburbs) && suburbs.length > 0) {
+              const matchingSuburbs = suburbs.filter((s: any) => {
+                if (!s.parent_lpo_id) return true;
+                return String(s.parent_lpo_id) === String(lead.id) || String(s.parent_lpo_id) === String(parentLpoId);
+              });
+              extractedSuburbs.push(...(matchingSuburbs.length > 0 ? matchingSuburbs : suburbs));
             }
           }
         }
@@ -2629,8 +2651,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
       const data = await res.json();
       if (data.success) {
-        const compRef = doc(firestore, 'companies', lead.id);
-        const leadRef = doc(firestore, 'leads', lead.id);
+        const targetCollection = isCompanyProfile ? 'companies' : 'leads';
+        const docRef = doc(firestore, targetCollection, lead.id);
         const updatedFields = {
           lpoPlusStatus: 'Provisioned',
           defaultPassword: 'MailPlus2026!',
@@ -2638,17 +2660,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           status: 'LPO.Plus Access Sent' as LeadStatus
         };
 
-        await Promise.all([
-          setDoc(compRef, updatedFields, { merge: true }),
-          setDoc(leadRef, updatedFields, { merge: true })
-        ]);
+        await setDoc(docRef, updatedFields, { merge: true });
 
-        await addDoc(collection(firestore, 'leads', lead.id, 'activity'), {
-          type: 'LpoPlusProvision',
-          notes: `LPO.Plus account created. Auth User (UID: ${data.authId}) and 'lpo' document (${lead.id}) created in lpoconnect DB. Welcome email dispatched to ${email}.`,
-          author: userProfile?.displayName || userProfile?.email || 'System User',
-          createdAt: new Date().toISOString()
-        });
+        try {
+          const counterpartCollection = isCompanyProfile ? 'leads' : 'companies';
+          const counterpartRef = doc(firestore, counterpartCollection, lead.id);
+          const counterpartSnap = await getDoc(counterpartRef);
+          if (counterpartSnap.exists()) {
+            await updateDoc(counterpartRef, updatedFields);
+          }
+        } catch (e) {}
+
+        await logActivity(
+          lead.id,
+          {
+            type: 'Update',
+            notes: `LPO.Plus account created. Auth User (UID: ${data.authId}) and 'lpo' document (${lead.id}) created in lpoconnect DB. Welcome email dispatched to ${email}.`,
+            author: userProfile?.displayName || userProfile?.email || 'System User',
+          },
+          targetCollection
+        );
 
         setLead(prev => ({ ...prev!, ...updatedFields }));
         toast({
@@ -3651,6 +3682,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const isLeadGenAdmin = userProfile?.activeRole === 'Lead Gen Admin';
   const isFieldSales = userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Field Sales Admin';
   const isDialer = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers' || userProfile?.activeRole === 'Customer Service';
+  const isOperationsRole = Boolean(
+    userProfile?.activeRole && (
+      userProfile.activeRole.toLowerCase() === 'operations' ||
+      userProfile.activeRole.toLowerCase().includes('operations') ||
+      userProfile.activeRole.toLowerCase() === 'operations manager'
+    )
+  ) || Boolean(
+    userProfile?.assignedRoles?.some((r: string) => r.toLowerCase().includes('operations'))
+  );
   const isMailPlusPtyLtd = lead.franchisee?.toLowerCase() === 'mailplus pty ltd';
   const isLpoLeadProcess = Boolean(
     lead.isParentLead ||
@@ -3694,6 +3734,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       showSchedule = true;
       showProcessLead = false;
       showCall = true;
+      showNote = true;
+      showCheckIn = false;
+  } else if (isOperationsRole) {
+      showSales = true;
+      showSchedule = true;
+      showProcessLead = true;
+      showCall = false;
       showNote = true;
       showCheckIn = false;
   }
@@ -3870,7 +3917,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       );
     }
 
-    if (!showSales || lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed') return null;
+    if (!showSales) return null;
+
+    const isLeadWonOrSigned = lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed';
 
     const signupItem = (
       <DropdownMenuItem 
@@ -3974,7 +4023,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const isChildLpoLead = Boolean(isLpoLeadProcess && (lead.isChildLead || (lead.parentLeadId && !lead.isParentLead)));
 
-    let salesItems: React.ReactNode[] = isChildLpoLead
+    let salesItems: React.ReactNode[] = (isChildLpoLead || isLeadWonOrSigned)
         ? []
         : (isMailPlusPtyLtd && !isLpoLeadProcess)
             ? []
@@ -3982,11 +4031,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 ? (isQuoteAccepted ? [quoteItem, signupItem].filter(Boolean) : [quoteItem].filter(Boolean))
                 : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
 
-    if (salesItems.length === 0) return null;
+    const isLpoNetworkBucket = lead.bucket === 'lpo_network' || (lead.bucket as string)?.toLowerCase() === 'lpo_network' || lead.bucket === 'LPO Network' || isLpoLeadProcess;
+    const hasSalesItems = salesItems.length > 0;
+    const canShowLpoPlus = userProfile?.activeRole !== 'user' && !isLeadWonOrSigned && !isLpoNetworkBucket;
+
+    const isNumericLeadId = /^\d+$/.test(lead.id);
+    const isLeadSyncedWithNetSuite = isNumericLeadId || Boolean(lead.syncedWithNetSuite || (lead as any).netsuiteId || (lead as any).internalid);
+    const canAccessNetSuiteSync = isAdmin || isSuperAdmin || isAdminUser || isOperationsRole;
+    const showNetSuiteSyncBtn = isLpoLeadProcess && canAccessNetSuiteSync && !isNumericLeadId && !isLeadSyncedWithNetSuite;
+
+    if (!hasSalesItems && !showNetSuiteSyncBtn && !canShowLpoPlus) return null;
 
     return (
         <div className="flex flex-wrap items-center gap-2">
-            {userProfile?.activeRole !== 'user' && (() => {
+            {canShowLpoPlus && (() => {
                 const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
                 const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
                 const isPushEligible = lpoConnectActive && !isTrialingLocalMile && !isLost && (lead.hasMyPostBusinessAccount === 'No' && lead.parcelVolumeGreaterThan20 === 'Yes');
@@ -4017,7 +4075,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                 );
             })()}
-            {isLpoLeadProcess && (
+            {showNetSuiteSyncBtn && (
                 <>
                     <Button
                         variant="outline"
@@ -4058,7 +4116,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                 </>
             )}
-            {isSaleDealsVisible(userProfile) && (
+            {isSaleDealsVisible(userProfile) && hasSalesItems && isNumericLeadId && (
                 <TooltipProvider>
                     <Tooltip>
                         <TooltipTrigger asChild>
@@ -4288,7 +4346,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       {(() => {
         const isAlphanumericId = !/^\d+$/.test(lead.id);
         const isSyncFailed = lead.netSuiteSyncStatus === 'failed';
-        const showBanner = isAlphanumericId || isSyncFailed;
+        const isLpoNetwork = lead.bucket === 'lpo_network' || (lead.bucket as string)?.toLowerCase() === 'lpo_network' || lead.bucket === 'LPO Network' || isLpoLeadProcess;
+        const showBanner = (isAlphanumericId || isSyncFailed) && !isLpoNetwork;
 
         if (!showBanner) return null;
 
@@ -4345,7 +4404,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
             Refresh Data
           </Button>
-          {!isCompanyProfile && !isMultiSiteBucket(lead) && (
+          {!isCompanyProfile && !isMultiSiteBucket(lead) && lead.bucket !== 'lpo_network' && (
             <Button
               variant="outline"
               size="sm"
@@ -4390,7 +4449,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Alert>
       )}
 
-      {duplicateLeads.length > 0 && !isDismissed && (
+      {duplicateLeads.length > 0 && !isDismissed && lead.bucket !== 'lpo_network' && (
           <Alert className="bg-amber-50 border-amber-200 text-amber-900 shadow-sm">
               <AlertCircle className="h-4 w-4 !text-amber-800" />
               <AlertTitle className="font-bold">Duplicate Leads Detected</AlertTitle>
@@ -4472,7 +4531,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <LeadStatusBadge status={
                         (lead.customerStatus?.trim() === 'SUSPECT-Unqualified' || lead.customerStatus?.trim() === 'SUSPECT - Unqualified' || lead.customerStatus?.trim().toUpperCase() === 'SUSPECT-UNQUALIFIED')
                             ? 'New'
-                            : (lead.customerStatus?.toLowerCase().includes('hot lead') ? 'Hot Lead' : (lead.customerStatus || lead.status) as LeadStatus)
+                            : ((lead.customerStatus || lead.status) as LeadStatus)
                     } />
 
                     {/* Interactive Lead Type Badge Dropdown */}
@@ -4508,6 +4567,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <Badge variant="outline" className="bg-[#095c7b]/5 text-[#095c7b] border-[#095c7b]/20 font-semibold shadow-sm text-xs">
                         {(() => {
                             const b = lead.bucket?.toLowerCase().replace(/ /g, '_');
+                            if (b === 'lpo_network' || isLpoLeadProcess) {
+                                return `LPO Network • AM: ${lead.accountManagerAssigned || lead.salesRepAssigned || 'Unassigned'}`;
+                            }
                             if (b === 'multisite') {
                                 return `MultiSite • AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
                             }
@@ -4635,7 +4697,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30 font-semibold text-xs">LPO.Plus Opportunity</Badge>
                         )}
 
-                        {ausPostParentLpoId && (
+                        {ausPostParentLpoId && lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
                             <Badge 
                                 variant="outline" 
                                 className={cn(
@@ -4836,7 +4898,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 {localMileJobs.length > 0 && (
                     <TabsTrigger id="step-tab-trial-jobs" value="trial-jobs" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Trial Jobs</TabsTrigger>
                 )}
-                <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery & AI Insights</TabsTrigger>
+                {lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
+                  <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery & AI Insights</TabsTrigger>
+                )}
                 {userProfile?.activeRole?.toLowerCase() !== 'user' && (
                   <TabsTrigger id="step-tab-quotes" value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
                 )}
@@ -5467,8 +5531,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                           );
                       })()}
 
-                      {isLpoParentLeadDoc && (
-                        <Card className="border-[#095c7b]/30 bg-gradient-to-r from-slate-50 via-sky-50/20 to-white shadow-sm mb-4">
+                      {(() => {
+                        const isLeadSignedUp = (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed' || lead.status === 'Won' || lead.customerStatus === 'Won' || lead.lpoPlusStatus === 'Provisioned' || Boolean(lead.defaultPassword);
+
+                        if (!isLpoParentLeadDoc || !isLeadSignedUp) return null;
+
+                        return (
+                          <Card className="border-[#095c7b]/30 bg-gradient-to-r from-slate-50 via-sky-50/20 to-white shadow-sm mb-4">
                           <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
                             <div>
                               <CardTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
@@ -5590,134 +5659,141 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             )}
                           </CardContent>
                         </Card>
-                      )}
-                      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
-                          <div className="flex flex-col gap-1">
-                              <span className="text-sm font-semibold">
-                                  Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
-                              </span>
-                          </div>
-                          <Select value={lead.hasMyPostBusinessAccount || ""} onValueChange={handleMyPostBusinessChange}>
-                              <SelectTrigger className="w-[100px]">
-                                  <SelectValue placeholder="Select" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  <SelectItem value="Yes">Yes</SelectItem>
-                                  <SelectItem value="No">No</SelectItem>
-                              </SelectContent>
-                          </Select>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
-                          <div className="flex flex-col gap-1">
-                              <span className="text-sm font-semibold">
-                                  Parcel/Mail Volume &gt; 20 per day: {lead.parcelVolumeGreaterThan20 || 'Unknown'}
-                              </span>
-                          </div>
-                          <Select value={lead.parcelVolumeGreaterThan20 || ""} onValueChange={handleParcelVolumeChange}>
-                              <SelectTrigger className="w-[100px]">
-                                  <SelectValue placeholder="Select" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  <SelectItem value="Yes">Yes</SelectItem>
-                                  <SelectItem value="No">No</SelectItem>
-                              </SelectContent>
-                          </Select>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
-                          <div className="flex flex-col gap-1 min-w-[180px]">
-                              <span className="text-sm font-semibold">
-                                  Current Couriers: {lead.currentCarrier || 'None/Unknown'}
-                              </span>
-                          </div>
-                          <div className="w-full sm:w-[280px]">
-                              <MultiSelectCombobox
-                                  options={COURIER_OPTIONS}
-                                  selected={parseCarriers(lead.currentCarrier)}
-                                  onSelectedChange={handleCurrentCarrierChange}
-                                  placeholder="Select Courier(s)..."
-                              />
-                          </div>
-                      </div>
-                      <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
-                          <DetailItem 
-                              icon={MapPin} 
-                              label="Designated LPO (Franchisee)" 
-                              value={isAusPostLoading ? 'Loading...' : (ausPostParentLpoId ? (
-                                  <Link href={`/companies/${ausPostParentLpoId}`} className="text-primary hover:underline font-semibold">
-                                      {ausPostParentLpoId}{ausPostLpoName ? ` - ${ausPostLpoName}` : ''}
-                                  </Link>
-                              ) : 'Not Matched')}
-                          />
-                          
-                          {ausPostParentLpoId && !isAusPostLoading && (
-                              <div className="flex items-center gap-2 pt-1 text-xs">
-                                  <span className="text-muted-foreground font-medium">LPO-Connect Status:</span>
-                                  {lpoConnectActive ? (
-                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold">
-                                          Active / Connected
-                                      </Badge>
-                                  ) : (
-                                      <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
-                                          Inactive / Not Logged In
-                                      </Badge>
-                                  )}
-                              </div>
-                          )}
+                        );
+                      })()}
+                      {lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
+                         <>
+                           <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
+                               <div className="flex flex-col gap-1">
+                                   <span className="text-sm font-semibold">
+                                       Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
+                                   </span>
+                               </div>
+                               <Select value={lead.hasMyPostBusinessAccount || ""} onValueChange={handleMyPostBusinessChange}>
+                                   <SelectTrigger className="w-[100px]">
+                                       <SelectValue placeholder="Select" />
+                                   </SelectTrigger>
+                                   <SelectContent>
+                                       <SelectItem value="Yes">Yes</SelectItem>
+                                       <SelectItem value="No">No</SelectItem>
+                                   </SelectContent>
+                               </Select>
+                           </div>
+                           <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
+                               <div className="flex flex-col gap-1">
+                                   <span className="text-sm font-semibold">
+                                       Parcel/Mail Volume &gt; 20 per day: {lead.parcelVolumeGreaterThan20 || 'Unknown'}
+                                   </span>
+                               </div>
+                               <Select value={lead.parcelVolumeGreaterThan20 || ""} onValueChange={handleParcelVolumeChange}>
+                                   <SelectTrigger className="w-[100px]">
+                                       <SelectValue placeholder="Select" />
+                                   </SelectTrigger>
+                                   <SelectContent>
+                                       <SelectItem value="Yes">Yes</SelectItem>
+                                       <SelectItem value="No">No</SelectItem>
+                                   </SelectContent>
+                               </Select>
+                           </div>
+                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
+                               <div className="flex flex-col gap-1 min-w-[180px]">
+                                   <span className="text-sm font-semibold">
+                                       Current Couriers: {lead.currentCarrier || 'None/Unknown'}
+                                   </span>
+                               </div>
+                               <div className="w-full sm:w-[280px]">
+                                   <MultiSelectCombobox
+                                       options={COURIER_OPTIONS}
+                                       selected={parseCarriers(lead.currentCarrier)}
+                                       onSelectedChange={handleCurrentCarrierChange}
+                                       placeholder="Select Courier(s)..."
+                                   />
+                               </div>
+                           </div>
+                         </>
+                       )}
+                      {lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
+                        <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
+                            <DetailItem 
+                                icon={MapPin} 
+                                label="Designated LPO (Franchisee)" 
+                                value={isAusPostLoading ? 'Loading...' : (ausPostParentLpoId ? (
+                                    <Link href={`/companies/${ausPostParentLpoId}`} className="text-primary hover:underline font-semibold">
+                                        {ausPostParentLpoId}{ausPostLpoName ? ` - ${ausPostLpoName}` : ''}
+                                    </Link>
+                                ) : 'Not Matched')}
+                            />
+                            
+                            {ausPostParentLpoId && !isAusPostLoading && (
+                                <div className="flex items-center gap-2 pt-1 text-xs">
+                                    <span className="text-muted-foreground font-medium">LPO-Connect Status:</span>
+                                    {lpoConnectActive ? (
+                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold">
+                                            Active / Connected
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
+                                            Inactive / Not Logged In
+                                        </Badge>
+                                    )}
+                                </div>
+                            )}
 
-                          {ausPostParentLpoId && !isAusPostLoading && ausPostLpoCompany && (
-                              <div className="pt-3 border-t border-muted-foreground/20 space-y-2 text-xs">
-                                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">LPO Contact Details</span>
-                                  {ausPostLpoCompany.customerPhone && (
-                                      <DetailItem 
-                                          icon={Phone} 
-                                          label="LPO Phone" 
-                                          value={ausPostLpoCompany.customerPhone} 
-                                          copyable 
-                                          callable 
-                                          leadId={lead.id} 
-                                      />
-                                  )}
-                                  {ausPostLpoCompany.customerServiceEmail && (
-                                      <DetailItem 
-                                          icon={Mail} 
-                                          label="LPO Email" 
-                                          value={ausPostLpoCompany.customerServiceEmail} 
-                                          copyable 
-                                          emailClickable 
-                                      />
-                                  )}
-                                  {ausPostLpoCompany.contacts && ausPostLpoCompany.contacts.length > 0 && (
-                                      <div className="space-y-1.5 pt-1">
-                                          <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block">Key Contacts</span>
-                                          <div className="max-h-[150px] overflow-y-auto space-y-2 pr-1">
-                                              {ausPostLpoCompany.contacts.map((contact) => (
-                                                  <div key={contact.id} className="bg-background/85 p-2 rounded border text-xs space-y-1">
-                                                      <div className="flex items-center justify-between">
-                                                          <span className="font-semibold text-foreground">{contact.name}</span>
-                                                          {contact.isPrimary && (
-                                                              <span className="px-1.5 py-0.25 text-[9px] font-medium bg-primary/10 text-primary rounded-full">Primary</span>
-                                                          )}
-                                                      </div>
-                                                      {contact.phone && (
-                                                          <div className="flex items-center gap-1 text-muted-foreground">
-                                                              <Phone className="h-3 w-3" />
-                                                              <span>{contact.phone}</span>
-                                                          </div>
-                                                      )}
-                                                      {contact.email && (
-                                                          <div className="flex items-center gap-1 text-muted-foreground">
-                                                              <Mail className="h-3 w-3" />
-                                                              <span>{contact.email}</span>
-                                                          </div>
-                                                      )}
-                                                  </div>
-                                              ))}
-                                          </div>
-                                      </div>
-                                  )}
-                              </div>
-                          )}
-                      </div>
+                            {ausPostParentLpoId && !isAusPostLoading && ausPostLpoCompany && (
+                                <div className="pt-3 border-t border-muted-foreground/20 space-y-2 text-xs">
+                                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">LPO Contact Details</span>
+                                    {ausPostLpoCompany.customerPhone && (
+                                        <DetailItem 
+                                            icon={Phone} 
+                                            label="LPO Phone" 
+                                            value={ausPostLpoCompany.customerPhone} 
+                                            copyable 
+                                            callable 
+                                            leadId={lead.id} 
+                                        />
+                                    )}
+                                    {ausPostLpoCompany.customerServiceEmail && (
+                                        <DetailItem 
+                                            icon={Mail} 
+                                            label="LPO Email" 
+                                            value={ausPostLpoCompany.customerServiceEmail} 
+                                            copyable 
+                                            emailClickable 
+                                        />
+                                    )}
+                                    {ausPostLpoCompany.contacts && ausPostLpoCompany.contacts.length > 0 && (
+                                        <div className="space-y-1.5 pt-1">
+                                            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block">Key Contacts</span>
+                                            <div className="max-h-[150px] overflow-y-auto space-y-2 pr-1">
+                                                {ausPostLpoCompany.contacts.map((contact) => (
+                                                    <div key={contact.id} className="bg-background/85 p-2 rounded border text-xs space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="font-semibold text-foreground">{contact.name}</span>
+                                                            {contact.isPrimary && (
+                                                                <span className="px-1.5 py-0.25 text-[9px] font-medium bg-primary/10 text-primary rounded-full">Primary</span>
+                                                            )}
+                                                        </div>
+                                                        {contact.phone && (
+                                                            <div className="flex items-center gap-1 text-muted-foreground">
+                                                                <Phone className="h-3 w-3" />
+                                                                <span>{contact.phone}</span>
+                                                            </div>
+                                                        )}
+                                                        {contact.email && (
+                                                            <div className="flex items-center gap-1 text-muted-foreground">
+                                                                <Mail className="h-3 w-3" />
+                                                                <span>{contact.email}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                      )}
                   </CardContent>
                 </Card>
                 
@@ -7321,7 +7397,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </Button>
                         </>
                     )}
-                    {(!isCompanyProfile && (showCall || showProcessLead)) && (
+                    {(!isCompanyProfile && (showCall || showProcessLead) && lead.bucket !== 'lpo_network' && !isLpoLeadProcess) && (
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -7384,7 +7460,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
 
-            {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+            {userProfile?.activeRole?.toLowerCase() !== 'user' && lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
               <Card className="border-sky-200 bg-sky-50/10 shadow-sm">
                 <CardHeader className="pb-3 border-b border-sky-100">
                     <CardTitle className="flex items-center gap-2 text-lg text-sky-900 font-bold">
@@ -7555,6 +7631,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <div className="flex flex-col gap-1">
                             <span className="text-sm font-bold text-foreground">
                                 Current Bucket: {
+                                    lead.bucket === 'lpo_network' ? 'LPO Network' :
+                                    lead.bucket === 'multisite' ? 'MultiSite' :
                                     lead.bucket === 'inbound' ? 'Inbound' :
                                     lead.bucket === 'account_manager' ? 'Account Manager' :
                                     lead.bucket === 'customer_success' ? 'Customer Success' :
@@ -7565,23 +7643,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 }
                             </span>
                             <span className="text-xs text-muted-foreground font-medium">
-                                {lead.bucket === 'multisite'
-                                    ? 'This lead is managed in the MultiSite bucket.'
-                                    : lead.bucket === 'inbound' 
-                                        ? 'This lead came through an inbound channel and is awaiting processing.' 
-                                        : lead.bucket === 'account_manager'
-                                            ? 'This lead is managed by an Account Manager.'
-                                            : lead.bucket === 'customer_success'
-                                                ? 'This lead is managed by the Customer Success team.'
-                                                : lead.bucket === 'nurture'
-                                                    ? 'This lead is in the nurture campaign.'
-                                                    : lead.bucket === 'marketing'
-                                                        ? 'This lead is in the marketing campaign.'
-                                                        : lead.bucket === 'lpo_plus'
-                                                            ? 'This lead is in the LPO.Plus bucket.'
-                                                            : lead.fieldSales 
-                                                                ? 'This lead is currently routed to the field sales team.' 
-                                                                : 'This lead is currently routed to the outbound dialing team.'}
+                                {lead.bucket === 'lpo_network'
+                                    ? 'This lead is managed in the LPO Network bucket.'
+                                    : lead.bucket === 'multisite'
+                                        ? 'This lead is managed in the MultiSite bucket.'
+                                        : lead.bucket === 'inbound' 
+                                            ? 'This lead came through an inbound channel and is awaiting processing.' 
+                                            : lead.bucket === 'account_manager'
+                                                ? 'This lead is managed by an Account Manager.'
+                                                : lead.bucket === 'customer_success'
+                                                    ? 'This lead is managed by the Customer Success team.'
+                                                    : lead.bucket === 'nurture'
+                                                        ? 'This lead is in the nurture campaign.'
+                                                        : lead.bucket === 'marketing'
+                                                            ? 'This lead is in the marketing campaign.'
+                                                            : lead.bucket === 'lpo_plus'
+                                                                ? 'This lead is in the LPO.Plus bucket.'
+                                                                : lead.fieldSales 
+                                                                    ? 'This lead is currently routed to the field sales team.' 
+                                                                    : 'This lead is currently routed to the outbound dialing team.'}
                             </span>
                         </div>
                         {canChangeBucket(userProfile, isSuperAdmin) ? (
@@ -7590,6 +7670,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <SelectValue placeholder="Select bucket" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="lpo_network">LPO Network</SelectItem>
                                     <SelectItem value="in_review">In Review</SelectItem>
                                     <SelectItem value="multisite">MultiSite</SelectItem>
                                     <SelectItem value="inbound">Inbound</SelectItem>
@@ -7604,7 +7685,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </Select>
                         ) : (
                             <Badge variant="secondary" className="w-max bg-primary/10 text-primary">
-                                {lead.bucket === 'multisite' ? 'MultiSite Bucket' : lead.bucket === 'in_review' ? 'In Review Bucket' : lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.bucket === 'lpo_plus' ? 'LPO.Plus Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                                {lead.bucket === 'lpo_network' ? 'LPO Network Bucket' : lead.bucket === 'multisite' ? 'MultiSite Bucket' : lead.bucket === 'in_review' ? 'In Review Bucket' : lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.bucket === 'lpo_plus' ? 'LPO.Plus Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
                             </Badge>
                         )}
                     </div>

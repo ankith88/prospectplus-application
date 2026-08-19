@@ -748,7 +748,7 @@ export function ServiceSelectionDialog({
 
       if (lead?.services && lead.services.length > 0) {
         initialSelectedServices = lead.services.map(s => s.name);
-        initialFrequencies = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.frequency }), {});
+        initialFrequencies = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: isLpoProcessLead ? 'Adhoc' : s.frequency }), {});
         initialRates = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.rate }), {});
         if (lead.services[0]?.startDate) {
             startDate = new Date(lead.services[0].startDate);
@@ -1510,7 +1510,7 @@ export function ServiceSelectionDialog({
         
         const rawSelContactId = values.selectedContactId || (values.selectedContactIds && values.selectedContactIds.length > 0 ? values.selectedContactIds[0] : "");
         const matchedContactObj = contacts.find(c => String(c.id || '').trim() === String(rawSelContactId).trim());
-        const candidateContactId = matchedContactObj?.netsuiteId || matchedContactObj?.internalid || (matchedContactObj as any)?.internalId || rawSelContactId;
+        const candidateContactId = (matchedContactObj as any)?.netsuiteId || (matchedContactObj as any)?.internalid || (matchedContactObj as any)?.internalId || rawSelContactId;
         const contactIdVal = (candidateContactId && /^\d+$/.test(String(candidateContactId).trim())) ? String(candidateContactId).trim() : "";
         const salesRecordIdVal = lead.salesRecordInternalId || "";
         const commDateVal = values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "";
@@ -2745,7 +2745,7 @@ export function ServiceSelectionDialog({
                                           onValueChange={(val) => {
                                               const newName = getSuffixedName(val, field.value || []);
                                               field.onChange([...(field.value || []), newName]);
-                                              form.setValue(`frequencies.${newName}`, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                                              form.setValue(`frequencies.${newName}`, isLpoProcessLead ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
                                           }}
                                       >
                                           <SelectTrigger className="w-[300px] bg-card">

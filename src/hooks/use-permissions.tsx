@@ -48,8 +48,8 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   historyAppointments: ['Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee
   historyCallsTranscripts: ['Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee/Field Sales Admin
   checkIns: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
-  franchisees: ['Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success', 'customer success', 'customer_success', 'Customer Service', 'customer service', 'customer_service', 'Sales Manager'],
-  territoryMap: ['superadmin', 'admin', 'Franchisee', 'franchisee', 'Executive', 'executive', 'Outbound Admin', 'outbound admin', 'Customer Service', 'customer service', 'customer_service', 'Customer Success', 'customer success', 'customer_success'],
+  franchisees: ['Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success', 'customer success', 'customer_success', 'Customer Service', 'customer service', 'customer_service', 'Sales Manager', 'Operations', 'operations'],
+  territoryMap: ['superadmin', 'admin', 'Franchisee', 'franchisee', 'Executive', 'executive', 'Outbound Admin', 'outbound admin', 'Customer Service', 'customer service', 'customer_service', 'Customer Success', 'customer success', 'customer_success', 'Operations', 'operations'],
   topBarcodesUsers: ['superadmin', 'Marketing Manager', 'Customer Service', 'Customer Success', 'Sales Manager', 'Account Managers', 'Account Manager'],
   lpoLeads: ['superadmin', 'operations', 'admin'],
   franchiseeVerification: ['admin', 'superadmin'],
@@ -102,22 +102,24 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
                 }
 
                 const currentTerritoryMap: string[] = currentFeatures.territoryMap || DEFAULT_ROLE_ACCESS.territoryMap;
-                if (!currentTerritoryMap.includes('Customer Service') || !currentTerritoryMap.includes('Customer Success')) {
+                if (!currentTerritoryMap.includes('Customer Service') || !currentTerritoryMap.includes('Customer Success') || !currentTerritoryMap.includes('Operations')) {
                     currentFeatures.territoryMap = Array.from(new Set([
                         ...currentTerritoryMap,
                         'Customer Service', 'customer service', 'customer_service',
                         'Customer Success', 'customer success', 'customer_success',
-                        'Franchisee', 'franchisee', 'Executive', 'executive', 'Outbound Admin', 'outbound admin'
+                        'Franchisee', 'franchisee', 'Executive', 'executive', 'Outbound Admin', 'outbound admin',
+                        'Operations', 'operations'
                     ]));
                     needsUpdate = true;
                 }
 
                 const currentFranchisees: string[] = currentFeatures.franchisees || DEFAULT_ROLE_ACCESS.franchisees;
-                if (!currentFranchisees.includes('Customer Service') || !currentFranchisees.includes('Customer Success')) {
+                if (!currentFranchisees.includes('Customer Service') || !currentFranchisees.includes('Customer Success') || !currentFranchisees.includes('Operations')) {
                     currentFeatures.franchisees = Array.from(new Set([
                         ...currentFranchisees,
                         'Customer Service', 'customer service', 'customer_service',
-                        'Customer Success', 'customer success', 'customer_success'
+                        'Customer Success', 'customer success', 'customer_success',
+                        'Operations', 'operations'
                     ]));
                     needsUpdate = true;
                 }
@@ -205,7 +207,15 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
     // Territory map override
     if (feature === 'territoryMap') {
       const roleLower = userProfile.activeRole.toLowerCase();
-      if (['admin', 'superadmin', 'franchisee', 'executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success'].includes(roleLower)) {
+      if (['admin', 'superadmin', 'franchisee', 'executive', 'outbound admin', 'customer service', 'customer_service', 'customer success', 'customer_success', 'operations'].includes(roleLower) || roleLower.includes('operations')) {
+        return true;
+      }
+    }
+
+    // Franchisees override
+    if (feature === 'franchisees') {
+      const roleLower = userProfile.activeRole.toLowerCase();
+      if (['admin', 'superadmin', 'operations'].includes(roleLower) || roleLower.includes('operations')) {
         return true;
       }
     }

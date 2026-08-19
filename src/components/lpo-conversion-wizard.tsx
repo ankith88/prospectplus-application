@@ -37,7 +37,7 @@ export function buildLpoServicesArray(ampoRate: any, pmpoRate: any, packageRate:
   if (am > 0) {
     services.push({
       startDate: todayStr,
-      frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+      frequency: 'Adhoc',
       rate: am,
       name: 'AMPO',
     });
@@ -45,7 +45,7 @@ export function buildLpoServicesArray(ampoRate: any, pmpoRate: any, packageRate:
   if (pm > 0) {
     services.push({
       startDate: todayStr,
-      frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+      frequency: 'Adhoc',
       rate: pm,
       name: 'PMPO',
     });

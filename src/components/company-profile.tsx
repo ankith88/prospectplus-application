@@ -221,19 +221,37 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       setLoadingLpoSuburbs(true);
       try {
         const franchiseeIds = new Set<string>();
+        const parentLpoId = (company as any).ausPostParentLpoId || company.lpoLeadId || company.linkedLpoLeadId || company.id;
+
         if (company.franchisee_id) franchiseeIds.add(String(company.franchisee_id));
         if ((company as any).franchiseeInternalId) franchiseeIds.add(String((company as any).franchiseeInternalId));
 
         // Find child leads/companies belonging to this parent account
-        const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', company.id));
-        const childSnap = await getDocs(qChild);
-        childSnap.forEach(docSnap => {
+        const qChild1 = query(collection(firestore, 'leads'), where('parentLeadId', '==', company.id));
+        const childSnap1 = await getDocs(qChild1);
+        childSnap1.forEach(docSnap => {
           const d = docSnap.data();
-          if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
-          if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
+          const childLpoId = d.ausPostParentLpoId || d.lpoLeadId || d.linkedLpoLeadId || d.lpoId;
+          const matchesParentLpo = !childLpoId || childLpoId === company.id || childLpoId === parentLpoId || String(childLpoId) === String(company.id);
+          if (matchesParentLpo) {
+            if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
+            if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
+          }
         });
 
-        // Query franchisees EXCLUSIVELY for ausPostSuburbsJson
+        const qChild2 = query(collection(firestore, 'leads'), where('createdParentLeadId', '==', company.id));
+        const childSnap2 = await getDocs(qChild2);
+        childSnap2.forEach(docSnap => {
+          const d = docSnap.data();
+          const childLpoId = d.ausPostParentLpoId || d.lpoLeadId || d.linkedLpoLeadId || d.lpoId;
+          const matchesParentLpo = !childLpoId || childLpoId === company.id || childLpoId === parentLpoId || String(childLpoId) === String(company.id);
+          if (matchesParentLpo) {
+            if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
+            if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
+          }
+        });
+
+        // Query franchisees EXCLUSIVELY for ausPostSuburbsJson / ausPostTerritoryJson
         const extractedSuburbs: any[] = [];
         for (const fId of Array.from(franchiseeIds)) {
           const fDoc = await getDoc(doc(firestore, 'franchisees', fId));
@@ -244,13 +262,17 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             if (!qFSnap.empty) fData = qFSnap.docs[0].data();
           }
 
-          if (fData?.ausPostSuburbsJson) {
-            let parsed = fData.ausPostSuburbsJson;
-            if (typeof parsed === 'string') {
-              try { parsed = JSON.parse(parsed); } catch (e) {}
+          if (fData) {
+            let suburbs = fData.ausPostSuburbsJson || fData.ausPostTerritoryJson;
+            if (typeof suburbs === 'string') {
+              try { suburbs = JSON.parse(suburbs); } catch (e) {}
             }
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              extractedSuburbs.push(...parsed);
+            if (Array.isArray(suburbs) && suburbs.length > 0) {
+              const matchingSuburbs = suburbs.filter((s: any) => {
+                if (!s.parent_lpo_id) return true;
+                return String(s.parent_lpo_id) === String(company.id) || String(s.parent_lpo_id) === String(parentLpoId);
+              });
+              extractedSuburbs.push(...(matchingSuburbs.length > 0 ? matchingSuburbs : suburbs));
             }
           }
         }
@@ -321,17 +343,24 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
           status: 'LPO.Plus Access Sent' as LeadStatus
         };
 
-        await Promise.all([
-          setDoc(compRef, updatedFields, { merge: true }),
-          setDoc(leadRef, updatedFields, { merge: true })
-        ]);
+        await setDoc(compRef, updatedFields, { merge: true });
 
-        await addDoc(collection(firestore, 'companies', company.id, 'activity'), {
-          type: 'LpoPlusProvision',
-          notes: `LPO.Plus account created. Auth User (UID: ${data.authId}) and 'lpo' document (${company.id}) created in lpoconnect DB. Welcome email dispatched to ${email}.`,
-          author: userProfile?.displayName || userProfile?.email || 'System User',
-          createdAt: new Date().toISOString()
-        });
+        try {
+          const leadSnap = await getDoc(leadRef);
+          if (leadSnap.exists()) {
+            await updateDoc(leadRef, updatedFields);
+          }
+        } catch (e) {}
+
+        await logActivity(
+          company.id,
+          {
+            type: 'Update',
+            notes: `LPO.Plus account created. Auth User (UID: ${data.authId}) and 'lpo' document (${company.id}) created in lpoconnect DB. Welcome email dispatched to ${email}.`,
+            author: userProfile?.displayName || userProfile?.email || 'System User',
+          },
+          'companies'
+        );
 
         setCompany(prev => ({ ...prev, ...updatedFields }));
         toast({
@@ -866,10 +895,13 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             <h1 className="text-3xl font-bold">{company.companyName}</h1>
             <div className="flex wrap items-center gap-x-2 gap-y-1 mt-1">
               <LeadStatusBadge status={company.status} />
+              {company.bucket === 'lpo_network' && (
+                  <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">LPO Network</Badge>
+              )}
               {company.bucket === 'inbound' && (
                   <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Inbound</Badge>
               )}
-              {(company.bucket === 'outbound' || (!company.bucket && !company.fieldSales)) && (
+              {(company.bucket === 'outbound' || (!company.bucket && company.bucket !== 'lpo_network' && !company.fieldSales)) && (
                   <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">Outbound</Badge>
               )}
               {(company.bucket === 'field_sales' || (!company.bucket && company.fieldSales)) && (
@@ -964,8 +996,12 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 </CardContent>
             </Card>
           )}
-          {isLpoParentAccount && (
-            <Card className="border-[#095c7b]/30 bg-gradient-to-r from-slate-50 via-sky-50/20 to-white shadow-sm">
+          {(() => {
+            const isSignedUp = (company.status as string) === 'Signed' || (company.customerStatus as string) === 'Signed' || company.status === 'Won' || company.customerStatus === 'Won' || (company.status as string) === 'Active' || (company.customerStatus as string) === 'Active' || company.lpoPlusStatus === 'Provisioned' || Boolean(company.defaultPassword);
+            if (!isLpoParentAccount || !isSignedUp) return null;
+
+            return (
+              <Card className="border-[#095c7b]/30 bg-gradient-to-r from-slate-50 via-sky-50/20 to-white shadow-sm">
               <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
@@ -1087,7 +1123,8 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 )}
               </CardContent>
             </Card>
-          )}
+            );
+          })()}
 
           <Card>
              <CardHeader className="pb-4 border-b">
