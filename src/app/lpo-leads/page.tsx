@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { collection, query, orderBy, onSnapshot, addDoc, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, getDocs, serverTimestamp, writeBatch, doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { useGoogleMapsScript } from '@/hooks/use-google-maps';
 import { useAuth } from '@/hooks/use-auth';
@@ -32,7 +32,10 @@ import {
   SlidersHorizontal,
   LogIn,
   Send,
-  Clock
+  Clock,
+  FileCheck,
+  Ban,
+  CheckSquare
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -73,6 +76,7 @@ interface LpoLead {
   state: string;
   postcode: string;
   status: string;
+  notUsingLpoPlus?: boolean;
   lpoCreatedDate?: any;
   createdAt?: any;
   lastPortalSyncAt?: any;
@@ -111,6 +115,7 @@ interface PipelineProgress {
 const getPipelineProgress = (statusStr: string): PipelineProgress => {
   const status = statusStr || 'New';
   const isLost = status === 'Lost' || status.toLowerCase().includes('lost');
+  const isNotUsing = status === 'Not Using LPO.Plus' || status.toLowerCase().includes('not using');
 
   const milestonesList = [
     'New',
@@ -120,6 +125,7 @@ const getPipelineProgress = (statusStr: string): PipelineProgress => {
     'Franchisees Assigned',
     'SCF Sent',
     'SCF Accepted',
+    'Signed',
     'LPO.Plus Access Sent',
     'LPO.Plus Logged In',
     'Lead Created',
@@ -127,13 +133,15 @@ const getPipelineProgress = (statusStr: string): PipelineProgress => {
 
   let currentStep = 1;
 
-  if (isLost) {
+  if (isLost || isNotUsing) {
     currentStep = 0;
   } else if (['Lead Created'].includes(status)) {
-    currentStep = 10;
+    currentStep = 11;
   } else if (['LPO.Plus Logged In', 'LPO.PLUS Sign In Email Sent', 'LPO.Plus Sign In Email Sent'].includes(status)) {
-    currentStep = 9;
+    currentStep = 10;
   } else if (['LPO.Plus Access Sent'].includes(status)) {
+    currentStep = 9;
+  } else if (['Signed'].includes(status)) {
     currentStep = 8;
   } else if (['SCF Accepted'].includes(status)) {
     currentStep = 7;
@@ -153,23 +161,29 @@ const getPipelineProgress = (statusStr: string): PipelineProgress => {
 
   const milestones = milestonesList.map((m, idx) => ({
     name: m,
-    completed: !isLost && currentStep >= idx + 1,
+    completed: !isLost && !isNotUsing && currentStep >= idx + 1,
   }));
 
-  const totalSteps = 10;
-  const percentage = isLost ? 0 : Math.round((currentStep / totalSteps) * 100);
+  const totalSteps = 11;
+  const percentage = isLost || isNotUsing ? 0 : Math.round((currentStep / totalSteps) * 100);
 
   let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
   if (isLost) {
     badgeClass = 'bg-rose-100 text-rose-800 border-rose-200 font-bold';
+  } else if (isNotUsing) {
+    badgeClass = 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
+  } else if (status === 'Signed') {
+    badgeClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
   } else if (status === 'LPO.Plus Logged In') {
     badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold';
   } else if (status === 'LPO.Plus Access Sent') {
     badgeClass = 'bg-sky-100 text-sky-800 border-sky-300 font-bold';
-  } else if (status === 'SCF Accepted' || status === 'SCF Sent') {
-    badgeClass = 'bg-indigo-100 text-indigo-800 border-indigo-200 font-semibold';
+  } else if (status === 'SCF Accepted') {
+    badgeClass = 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold';
+  } else if (status === 'SCF Sent') {
+    badgeClass = 'bg-blue-100 text-blue-900 border-blue-300 font-semibold';
   } else if (status === 'Franchisees Assigned' || status === 'Operations Setup' || status === 'Induction') {
-    badgeClass = 'bg-amber-100 text-amber-800 border-amber-200 font-semibold';
+    badgeClass = 'bg-amber-50 text-amber-800 border-amber-200 font-semibold';
   } else if (status === 'Linked to Partner Location') {
     badgeClass = 'bg-teal-100 text-teal-800 border-teal-200 font-semibold';
   }
@@ -194,8 +208,8 @@ export default function LpoLeadsListPage() {
   const [loadingLeads, setLoadingLeads] = useState(true);
   const [isSyncingPortal, setIsSyncingPortal] = useState(false);
 
-  // Tab State: 'wip' | 'access_sent' | 'logged_in' | 'active' | 'lost'
-  const [activeTab, setActiveTab] = useState<'wip' | 'access_sent' | 'logged_in' | 'active' | 'lost'>('wip');
+  // Tab State: 'wip' | 'scf_sent' | 'scf_accepted' | 'signed' | 'access_sent' | 'logged_in' | 'not_using_lpo_plus' | 'active' | 'lost'
+  const [activeTab, setActiveTab] = useState<'wip' | 'scf_sent' | 'scf_accepted' | 'signed' | 'access_sent' | 'logged_in' | 'not_using_lpo_plus' | 'active' | 'lost'>('wip');
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -276,24 +290,54 @@ export default function LpoLeadsListPage() {
     return parseDateValue(lead.createdAt);
   };
 
+  // Helper function to check if lead/company is Signed
+  const isLeadOrLinkedSigned = (l: LpoLead): boolean => {
+    if (l.status === 'Signed') return true;
+    const targetLeadId = l.createdParentLeadId || l.linkedLeadId;
+    if (targetLeadId && crmLeadsMap.has(targetLeadId)) {
+      const crmData = crmLeadsMap.get(targetLeadId);
+      const st = (crmData?.status || crmData?.customerStatus || '').toLowerCase();
+      if (st === 'signed' || st === 'won' || st === 'customer' || st === 'signed customer') {
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Raw lead buckets by tab
   const wipLeadsRaw = leads.filter(
     (l) =>
       l.status !== 'Lost' &&
       !l.status?.toLowerCase().includes('lost') &&
+      !l.notUsingLpoPlus &&
+      l.status !== 'SCF Sent' &&
+      l.status !== 'SCF Accepted' &&
+      !isLeadOrLinkedSigned(l) &&
       l.status !== 'LPO.Plus Access Sent' &&
       l.status !== 'LPO.Plus Logged In' &&
       l.status !== 'LPO.PLUS Sign In Email Sent' &&
       l.status !== 'LPO.Plus Sign In Email Sent'
   );
+  const scfSentLeadsRaw = leads.filter(
+    (l) => l.status === 'SCF Sent' && !l.notUsingLpoPlus
+  );
+  const scfAcceptedLeadsRaw = leads.filter(
+    (l) => l.status === 'SCF Accepted' && !isLeadOrLinkedSigned(l) && !l.notUsingLpoPlus
+  );
+  const signedLeadsRaw = leads.filter(
+    (l) => isLeadOrLinkedSigned(l) && !l.notUsingLpoPlus
+  );
   const accessSentLeadsRaw = leads.filter(
-    (l) => l.status === 'LPO.Plus Access Sent'
+    (l) => l.status === 'LPO.Plus Access Sent' && !l.notUsingLpoPlus
   );
   const loggedInLeadsRaw = leads.filter(
-    (l) => l.status === 'LPO.Plus Logged In' || l.status === 'LPO.PLUS Sign In Email Sent' || l.status === 'LPO.Plus Sign In Email Sent'
+    (l) => (l.status === 'LPO.Plus Logged In' || l.status === 'LPO.PLUS Sign In Email Sent' || l.status === 'LPO.Plus Sign In Email Sent') && !l.notUsingLpoPlus
+  );
+  const notUsingLpoPlusLeadsRaw = leads.filter(
+    (l) => l.status === 'Not Using LPO.Plus' || l.notUsingLpoPlus === true
   );
   const activeLeadsRaw = leads.filter(
-    (l) => l.status !== 'Lost' && !l.status?.toLowerCase().includes('lost')
+    (l) => l.status !== 'Lost' && !l.status?.toLowerCase().includes('lost') && !l.notUsingLpoPlus
   );
   const lostLeadsRaw = leads.filter(
     (l) => l.status === 'Lost' || l.status?.toLowerCase().includes('lost')
@@ -472,10 +516,50 @@ export default function LpoLeadsListPage() {
       .sort((a, b) => getLeadDateInfo(b).timestamp - getLeadDateInfo(a).timestamp);
   };
 
+  const handleToggleNotUsingLpoPlus = async (lead: LpoLead) => {
+    const isCurrentlyNotUsing = lead.status === 'Not Using LPO.Plus' || lead.notUsingLpoPlus === true;
+    const newNotUsingState = !isCurrentlyNotUsing;
+    const newStatus = newNotUsingState ? 'Not Using LPO.Plus' : 'New';
+
+    try {
+      const docRef = doc(firestore, 'lpo_leads', lead.id);
+      await updateDoc(docRef, {
+        notUsingLpoPlus: newNotUsingState,
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+
+      await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
+        type: 'StatusChange',
+        notes: newNotUsingState
+          ? 'Marked as NOT using the LPO.Plus system.'
+          : 'Re-enabled LPO.Plus system usage. Status reset to New.',
+        author: userProfile?.displayName || userProfile?.email || 'System User',
+        createdAt: serverTimestamp()
+      });
+
+      toast({
+        title: newNotUsingState ? 'Marked as Not Using LPO.Plus' : 'LPO.Plus System Re-enabled',
+        description: `LPO lead ${lead.lpoName} status updated to ${newStatus}.`,
+      });
+    } catch (err: any) {
+      console.error('Error toggling LPO.Plus status:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: err.message || 'Failed to update LPO lead.',
+      });
+    }
+  };
+
   const filteredWipLeads = filterLeadsList(wipLeadsRaw);
-  const filteredActiveLeads = filterLeadsList(activeLeadsRaw);
-  const filteredLoggedInLeads = filterLeadsList(loggedInLeadsRaw);
+  const filteredScfSentLeads = filterLeadsList(scfSentLeadsRaw);
+  const filteredScfAcceptedLeads = filterLeadsList(scfAcceptedLeadsRaw);
+  const filteredSignedLeads = filterLeadsList(signedLeadsRaw);
   const filteredAccessSentLeads = filterLeadsList(accessSentLeadsRaw);
+  const filteredLoggedInLeads = filterLeadsList(loggedInLeadsRaw);
+  const filteredNotUsingLeads = filterLeadsList(notUsingLpoPlusLeadsRaw);
+  const filteredActiveLeads = filterLeadsList(activeLeadsRaw);
   const filteredLostLeads = filterLeadsList(lostLeadsRaw);
 
   const hasActiveFilters = Boolean(searchTerm || statusFilter !== 'all' || franchiseeFilter !== 'all');
@@ -952,14 +1036,30 @@ export default function LpoLeadsListPage() {
                 </TableCell>
 
                 {/* ACTION */}
-                <TableCell className="text-right py-3.5">
-                  <Link 
-                    href={`/lpo-leads/${lead.id}`}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-[#095c7b] hover:text-[#053647]"
-                  >
-                    Profile
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </Link>
+                <TableCell className="text-right py-3.5 whitespace-nowrap">
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleToggleNotUsingLpoPlus(lead)}
+                      title={lead.status === 'Not Using LPO.Plus' || lead.notUsingLpoPlus ? "Re-enable LPO.Plus system" : "Mark as Not Using LPO.Plus system"}
+                      className={`h-7 px-2 text-xs font-semibold ${
+                        lead.status === 'Not Using LPO.Plus' || lead.notUsingLpoPlus
+                          ? "text-amber-800 bg-amber-100 hover:bg-amber-200"
+                          : "text-slate-500 hover:text-amber-700 hover:bg-amber-50"
+                      }`}
+                    >
+                      <Ban className="h-3.5 w-3.5 mr-1" />
+                      {lead.status === 'Not Using LPO.Plus' || lead.notUsingLpoPlus ? "Not Using LPO.Plus" : "Mark Not Using"}
+                    </Button>
+                    <Link 
+                      href={`/lpo-leads/${lead.id}`}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-[#095c7b] hover:text-[#053647]"
+                    >
+                      Profile
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
                 </TableCell>
               </TableRow>
             );
@@ -1055,10 +1155,12 @@ export default function LpoLeadsListPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="LPO.Plus Logged In">LPO.Plus Logged In</SelectItem>
-                    <SelectItem value="LPO.Plus Access Sent">LPO.Plus Access Sent</SelectItem>
+                    <SelectItem value="Signed">Signed</SelectItem>
                     <SelectItem value="SCF Accepted">SCF Accepted</SelectItem>
                     <SelectItem value="SCF Sent">SCF Sent</SelectItem>
+                    <SelectItem value="LPO.Plus Logged In">LPO.Plus Logged In</SelectItem>
+                    <SelectItem value="LPO.Plus Access Sent">LPO.Plus Access Sent</SelectItem>
+                    <SelectItem value="Not Using LPO.Plus">Not Using LPO.Plus</SelectItem>
                     <SelectItem value="Franchisees Assigned">Franchisees Assigned</SelectItem>
                     <SelectItem value="Operations Setup">Operations Setup</SelectItem>
                     <SelectItem value="Induction">Induction</SelectItem>
@@ -1105,6 +1207,30 @@ export default function LpoLeadsListPage() {
             </TabsTrigger>
 
             <TabsTrigger 
+              value="scf_sent" 
+              className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-blue-800 data-[state=active]:shadow-xs"
+            >
+              <Send className="h-4 w-4 mr-1.5 text-blue-600" />
+              SCF Sent ({filteredScfSentLeads.length})
+            </TabsTrigger>
+
+            <TabsTrigger 
+              value="scf_accepted" 
+              className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-indigo-800 data-[state=active]:shadow-xs"
+            >
+              <FileCheck className="h-4 w-4 mr-1.5 text-indigo-600" />
+              SCF Accepted ({filteredScfAcceptedLeads.length})
+            </TabsTrigger>
+
+            <TabsTrigger 
+              value="signed" 
+              className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-purple-800 data-[state=active]:shadow-xs"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-1.5 text-purple-600" />
+              Signed ({filteredSignedLeads.length})
+            </TabsTrigger>
+
+            <TabsTrigger 
               value="access_sent" 
               className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-sky-700 data-[state=active]:shadow-xs"
             >
@@ -1118,6 +1244,14 @@ export default function LpoLeadsListPage() {
             >
               <LogIn className="h-4 w-4 mr-1.5 text-emerald-600" />
               LPO.Plus Logged In ({filteredLoggedInLeads.length})
+            </TabsTrigger>
+
+            <TabsTrigger 
+              value="not_using_lpo_plus" 
+              className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-amber-800 data-[state=active]:shadow-xs"
+            >
+              <Ban className="h-4 w-4 mr-1.5 text-amber-600" />
+              Not Using LPO.Plus ({filteredNotUsingLeads.length})
             </TabsTrigger>
 
             <TabsTrigger 
@@ -1152,6 +1286,51 @@ export default function LpoLeadsListPage() {
             </Card>
           </TabsContent>
 
+          {/* SCF SENT TAB CONTENT */}
+          <TabsContent value="scf_sent">
+            <Card className="border-slate-200/80 shadow-sm border-blue-200/60">
+              <CardHeader className="bg-blue-50/50 py-3 border-b border-blue-100">
+                <CardTitle className="text-sm font-bold text-blue-900 flex items-center gap-1.5">
+                  <Send className="h-4 w-4 text-blue-600" />
+                  SCF Sent LPO Leads ({filteredScfSentLeads.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderLeadsTable(filteredScfSentLeads, 'No SCF Sent LPO leads found.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* SCF ACCEPTED TAB CONTENT */}
+          <TabsContent value="scf_accepted">
+            <Card className="border-slate-200/80 shadow-sm border-indigo-200/60">
+              <CardHeader className="bg-indigo-50/50 py-3 border-b border-indigo-100">
+                <CardTitle className="text-sm font-bold text-indigo-900 flex items-center gap-1.5">
+                  <FileCheck className="h-4 w-4 text-indigo-600" />
+                  SCF Accepted LPO Leads ({filteredScfAcceptedLeads.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderLeadsTable(filteredScfAcceptedLeads, 'No SCF Accepted LPO leads found.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* SIGNED TAB CONTENT */}
+          <TabsContent value="signed">
+            <Card className="border-slate-200/80 shadow-sm border-purple-200/60">
+              <CardHeader className="bg-purple-50/50 py-3 border-b border-purple-100">
+                <CardTitle className="text-sm font-bold text-purple-900 flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-purple-600" />
+                  Signed LPO Leads & Accounts ({filteredSignedLeads.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderLeadsTable(filteredSignedLeads, 'No Signed LPO leads found.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* LPO.PLUS ACCESS SENT TAB CONTENT */}
           <TabsContent value="access_sent">
             <Card className="border-slate-200/80 shadow-sm border-sky-200/60">
@@ -1178,6 +1357,21 @@ export default function LpoLeadsListPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {renderLeadsTable(filteredLoggedInLeads, 'No LPO.Plus logged in accounts found.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* NOT USING LPO.PLUS TAB CONTENT */}
+          <TabsContent value="not_using_lpo_plus">
+            <Card className="border-slate-200/80 shadow-sm border-amber-200/60">
+              <CardHeader className="bg-amber-50/50 py-3 border-b border-amber-100">
+                <CardTitle className="text-sm font-bold text-amber-900 flex items-center gap-1.5">
+                  <Ban className="h-4 w-4 text-amber-600" />
+                  LPO Leads Not Using LPO.Plus System ({filteredNotUsingLeads.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderLeadsTable(filteredNotUsingLeads, 'No LPO leads marked as not using LPO.Plus system.')}
               </CardContent>
             </Card>
           </TabsContent>

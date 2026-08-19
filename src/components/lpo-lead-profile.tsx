@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw, Lock, Trash2, RotateCcw, Copy, Key, ExternalLink } from 'lucide-react';
+import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw, Lock, Trash2, RotateCcw, Copy, Key, ExternalLink, Ban } from 'lucide-react';
 import { LpoConversionWizard, buildLpoServicesArray } from './lpo-conversion-wizard';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 
@@ -116,7 +116,13 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
         }
       } else {
         const docRef = doc(firestore, 'lpo_leads', lead.id);
-        await updateDoc(docRef, { status: newStatus });
+        const updatePayload: any = { status: newStatus };
+        if (newStatus === 'Not Using LPO.Plus') {
+          updatePayload.notUsingLpoPlus = true;
+        } else if (lead.notUsingLpoPlus) {
+          updatePayload.notUsingLpoPlus = false;
+        }
+        await updateDoc(docRef, updatePayload);
         
         // Log status change activity
         await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
@@ -128,7 +134,7 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
       }
 
       setStatus(newStatus);
-      setLead((prev: any) => ({ ...prev, status: newStatus }));
+      setLead((prev: any) => ({ ...prev, status: newStatus, notUsingLpoPlus: newStatus === 'Not Using LPO.Plus' ? true : false }));
       toast({
         title: newStatus === 'Lost' ? 'LPO Lead & Linked Records Marked Lost' : 'Status Updated',
         description: newStatus === 'Lost'
@@ -546,7 +552,13 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
         }
       } else {
         const docRef = doc(firestore, 'lpo_leads', lead.id);
-        await updateDoc(docRef, { status: newStatus });
+        const updatePayload: any = { status: newStatus };
+        if (newStatus === 'Not Using LPO.Plus') {
+          updatePayload.notUsingLpoPlus = true;
+        } else if (lead.notUsingLpoPlus) {
+          updatePayload.notUsingLpoPlus = false;
+        }
+        await updateDoc(docRef, updatePayload);
         
         await addDoc(collection(firestore, 'lpo_leads', lead.id, 'activity'), {
           type: 'StatusChange',
@@ -556,7 +568,7 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
         });
       }
 
-      setLead((prev: any) => ({ ...prev, status: newStatus }));
+      setLead((prev: any) => ({ ...prev, status: newStatus, notUsingLpoPlus: newStatus === 'Not Using LPO.Plus' ? true : false }));
       setStatus(newStatus);
       toast({
         title: newStatus === 'Lost' ? 'LPO Lead & Linked Records Marked Lost' : 'Status Updated',
@@ -586,7 +598,7 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
     });
   };
 
-  const statusOptions = ['New', 'Linked to Partner Location', 'Induction', 'Operations Setup', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created', 'Lost'];
+  const statusOptions = ['New', 'Linked to Partner Location', 'Induction', 'Operations Setup', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'Signed', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Not Using LPO.Plus', 'Lead Created', 'Lost'];
 
   const [isRecheckingPortal, setIsRecheckingPortal] = useState(false);
 
@@ -631,6 +643,28 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {(lead.status === 'Not Using LPO.Plus' || lead.notUsingLpoPlus) && (
+        <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl text-amber-950 flex items-center justify-between flex-wrap gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-200/60 text-amber-900 rounded-lg">
+              <Ban className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-950">Not Using LPO.Plus System</h4>
+              <p className="text-xs text-amber-800 mt-0.5">This Licensed Post Office lead has been marked as not utilizing the LPO.Plus platform.</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleUpdateLpoStatus('New', 'LPO.Plus system usage re-enabled.')}
+            className="border-amber-600 text-amber-900 hover:bg-amber-100 font-bold text-xs"
+          >
+            Re-enable LPO.Plus System
+          </Button>
+        </div>
+      )}
+
       {/* Header card */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm">
         <div className="flex items-start gap-4">
@@ -980,15 +1014,23 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                       size="sm"
                       onClick={() => handleUpdateLpoStatus('SCF Accepted', 'SCF accepted and signed by LPO.')}
                       disabled={lead.status !== 'SCF Sent'}
-                      className="bg-teal-650 text-white hover:bg-teal-700"
+                      className="bg-teal-650 text-white hover:bg-teal-700 font-semibold"
                     >
                       Mark SCF Accepted
                     </Button>
                     <Button
                       size="sm"
+                      onClick={() => handleUpdateLpoStatus('Signed', 'LPO Lead marked as Signed.')}
+                      disabled={lead.status === 'Signed'}
+                      className="bg-purple-600 text-white hover:bg-purple-700 font-semibold"
+                    >
+                      Mark Signed
+                    </Button>
+                    <Button
+                      size="sm"
                       onClick={() => handleUpdateLpoStatus('LPO.Plus Access Sent', 'Access credentials sent to LPO.Plus.')}
-                      disabled={lead.status !== 'SCF Accepted'}
-                      className="bg-indigo-600 text-white hover:bg-indigo-700"
+                      disabled={lead.status !== 'SCF Accepted' && lead.status !== 'Signed'}
+                      className="bg-indigo-600 text-white hover:bg-indigo-700 font-semibold"
                     >
                       Send LPO.Plus Access
                     </Button>
@@ -996,9 +1038,22 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                       size="sm"
                       onClick={() => handleUpdateLpoStatus('LPO.Plus Logged In', 'LPO owner logged into LPO.Plus.')}
                       disabled={lead.status !== 'LPO.Plus Access Sent'}
-                      className="bg-emerald-600 text-white hover:bg-emerald-700"
+                      className="bg-emerald-600 text-white hover:bg-emerald-700 font-semibold"
                     >
                       Simulate LPO.Plus Login
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={lead.status === 'Not Using LPO.Plus' || lead.notUsingLpoPlus ? "outline" : "secondary"}
+                      onClick={() => {
+                        const isNotUsing = lead.status === 'Not Using LPO.Plus' || lead.notUsingLpoPlus;
+                        const nextStatus = isNotUsing ? 'New' : 'Not Using LPO.Plus';
+                        handleUpdateLpoStatus(nextStatus, isNotUsing ? 'LPO.Plus system usage re-enabled.' : 'LPO Lead marked as NOT using the LPO.Plus system.');
+                      }}
+                      className={lead.status === 'Not Using LPO.Plus' || lead.notUsingLpoPlus ? "border-amber-500 text-amber-800 hover:bg-amber-50 font-bold" : "bg-amber-600 text-white hover:bg-amber-700 font-bold"}
+                    >
+                      <Ban className="w-3.5 h-3.5 mr-1" />
+                      {lead.status === 'Not Using LPO.Plus' || lead.notUsingLpoPlus ? 'Re-enable LPO.Plus' : 'Not Using LPO.Plus'}
                     </Button>
                   </div>
                 </div>

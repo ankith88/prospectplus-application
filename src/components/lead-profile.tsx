@@ -1512,26 +1512,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         if (docSnap.exists()) {
           matchedData = docSnap.data();
         } else {
-          // Try displayName
-          const qDisplayName = query(usersRef, where('displayName', '==', amAssigned));
-          const snapDisplayName = await getDocs(qDisplayName);
-          if (!snapDisplayName.empty) {
-            matchedData = snapDisplayName.docs[0].data();
-          } else {
-            // Check all docs
-            const qAll = query(usersRef);
-            const snapAll = await getDocs(qAll);
-            const name = amAssigned.toLowerCase();
-            const found = snapAll.docs.find(d => {
-              const data = d.data();
-              const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
-              const dispName = (data.displayName || '').toLowerCase();
-              const emailName = (data.email || '').split('@')[0].toLowerCase();
-              return fullName === name || dispName === name || emailName === name || d.id === amAssigned;
-            });
-            if (found) {
-              matchedData = found.data();
-            }
+          // Check all docs matching concatenated firstName + lastName
+          const qAll = query(usersRef);
+          const snapAll = await getDocs(qAll);
+          const name = amAssigned.toLowerCase().trim();
+          const found = snapAll.docs.find(d => {
+            const data = d.data();
+            const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+            return fullName === name || (data.email || '').toLowerCase() === name || d.id === amAssigned;
+          });
+          if (found) {
+            matchedData = found.data();
           }
         }
 

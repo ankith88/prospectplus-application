@@ -179,7 +179,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     if ((path.startsWith('/admin/marketing') && !path.startsWith('/admin/marketing/import-leads')) || path.startsWith('/leads/suppressions') || path.startsWith('/admin/brand-bot')) {
       return 'marketing-group';
     }
-    if (path.startsWith('/lpo-leads') || path.startsWith('/lpo-opportunities')) {
+    if (path.startsWith('/lpo-leads') || path.startsWith('/lpo-opportunities') || path.startsWith('/lpo-reporting')) {
       return 'partners-group';
     }
     if (path.startsWith('/admin/tickets') || path.startsWith('/scans') || path.startsWith('/appointments') || path.startsWith('/calls') || path.startsWith('/unassigned_calls') || path.startsWith('/transcripts') || path.startsWith('/check-ins')) {
@@ -341,6 +341,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     // Partners
     '/lpo-leads': { label: 'Participating LPOs', category: 'Partners', icon: Building, href: '/lpo-leads' },
     '/lpo-opportunities': { label: 'Shared Opportunities', category: 'Partners', icon: ArrowUpRight, href: '/lpo-opportunities' },
+    '/lpo-reporting': { label: 'LPO Plus Reporting', category: 'Partners', icon: BarChart3, href: '/lpo-reporting' },
 
     // Operations & History
     '/admin/tickets': { label: 'All Tickets', category: 'Operations & History', icon: Ticket, href: '/admin/tickets' },
@@ -1745,6 +1746,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             <Link href="/lpo-opportunities">
                               <ArrowUpRight />
                               <span>Shared Opportunities</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/lpo-reporting")} tooltip="LPO.Plus Reporting">
+                            <Link href="/lpo-reporting">
+                              <BarChart3 />
+                              <span>LPO.Plus Reporting</span>
                             </Link>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
