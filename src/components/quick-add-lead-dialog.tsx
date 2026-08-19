@@ -369,6 +369,9 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
             }
         }
 
+        const targetBucket = isMultisite ? 'multisite' : (isFranchiseeRole ? (bucket || 'outbound') : (userProfile.activeRole === 'Outbound Admin' ? 'outbound' : bucket));
+        const isOutboundFranchisee = isFranchiseeRole && targetBucket === 'outbound';
+
         const result = await createNewLead({
             companyName,
             websiteUrl,
@@ -382,16 +385,19 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                 email: customerServiceEmail,
                 phone: customerPhone
             },
-            dialerAssigned: (userProfile.activeRole === 'Outbound Admin' || userProfile.activeRole === 'admin') ? '' : userProfile.displayName,
+            dialerAssigned: isOutboundFranchisee ? 'Franchisee Generated' : ((userProfile.activeRole === 'Outbound Admin' || userProfile.activeRole === 'admin') ? '' : userProfile.displayName),
+            status: isOutboundFranchisee ? 'Priority Lead' : undefined,
+            customerStatus: isOutboundFranchisee ? 'Priority Lead' : undefined,
+            isPriority: isOutboundFranchisee ? true : undefined,
             campaign: isMultisite ? 'MultiSite' : defaultCampaign,
-            leadSource: (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee') ? '-4' : undefined,
-            bucket: isMultisite ? 'multisite' : ((userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee') ? '' : (userProfile.activeRole === 'Outbound Admin' ? 'outbound' : bucket)),
+            leadSource: isFranchiseeRole ? '-4' : undefined,
+            bucket: targetBucket,
             accountManagerAssigned: isMultisite ? targetAmName : undefined,
             salesRepAssigned: isMultisite ? targetAmName : undefined,
             franchiseeInternalId,
             franchiseeName,
-            isZeeCreated: userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee',
-            franchiseeReviewPending: userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee'
+            isZeeCreated: isFranchiseeRole,
+            franchiseeReviewPending: isFranchiseeRole && !isOutboundFranchisee
         } as any);
 
         if (result.success && result.leadId) {
@@ -477,7 +483,6 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                          <div className="flex gap-2">
                             <Input 
                                 id="quick-add-search" 
-                                placeholder="Search business name or address..."
                                 value={searchQuery}
                                 onChange={handleInputChange}
                             />
@@ -509,7 +514,7 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                         <Label htmlFor="bucket-select">Bucket{!(userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee') && <span className="text-red-500 font-bold ml-1">*</span>}</Label>
                         <Select value={bucket} onValueChange={setBucket}>
                             <SelectTrigger id="bucket-select">
-                                <SelectValue placeholder="Select a bucket" />
+                                <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="multisite">MultiSite</SelectItem>

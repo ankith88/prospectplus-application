@@ -870,8 +870,10 @@ export function NewLeadForm() {
             (finalValues as any).franchiseeReviewPending = false;
         } else {
             finalValues.bucket = 'outbound';
-            (finalValues as any).isPriority = false;
-            (finalValues as any).franchiseeReviewPending = true;
+            (finalValues as any).status = 'Priority Lead';
+            (finalValues as any).customerStatus = 'Priority Lead';
+            (finalValues as any).isPriority = true;
+            (finalValues as any).franchiseeReviewPending = false;
         }
     }
 
@@ -915,8 +917,8 @@ export function NewLeadForm() {
     const validDefaultDialer = isUserActiveDialer ? dialerForLead : '';
 
     let finalDialer = finalValues.campaign === 'Outbound' ? (values.dialerAssigned || validDefaultDialer) : validDefaultDialer;
-    if (isFranchiseeRole && !isPriority) {
-        finalDialer = 'Aleyna Harnett';
+    if (isFranchiseeRole && finalValues.bucket === 'outbound') {
+        finalDialer = 'Franchisee Generated';
     }
     
     let finalSalesRep = undefined;
@@ -935,6 +937,8 @@ export function NewLeadForm() {
     try {
       const result = await createNewLead({ 
         ...finalValues, 
+        status: (isFranchiseeRole && finalValues.bucket === 'outbound') ? 'Priority Lead' : undefined,
+        customerStatus: (isFranchiseeRole && finalValues.bucket === 'outbound') ? 'Priority Lead' : undefined,
         dialerAssigned: finalDialer, 
         salesRepAssigned: finalSalesRep,
         fieldRepAssigned: values.fieldRepAssigned,
@@ -946,9 +950,9 @@ export function NewLeadForm() {
         leadSource: values.leadSource,
         droppedOffBrochures,
         hadConversationWithContact,
-        isPriority,
+        isPriority: (isFranchiseeRole && finalValues.bucket === 'outbound') ? true : isPriority,
         isZeeCreated: isFranchiseeRole,
-        franchiseeReviewPending: isFranchiseeRole && !isPriority
+        franchiseeReviewPending: isFranchiseeRole && !isPriority && finalValues.bucket !== 'outbound'
       });
 
       if (result.success && result.leadId) {
@@ -958,7 +962,7 @@ export function NewLeadForm() {
         const assignmentUpdates: any = {
             droppedOffBrochures,
             hadConversationWithContact,
-            isPriority,
+            isPriority: (isFranchiseeRole && finalValues.bucket === 'outbound') ? true : isPriority,
         };
 
         if (isMultisite) {
@@ -970,15 +974,24 @@ export function NewLeadForm() {
         if (isFranchiseeRole) {
             assignmentUpdates.customerSource = 'Franchisee Generated';
             assignmentUpdates.leadSource = 'Franchisee Generated';
-            if (isPriority) {
+            if (finalValues.bucket === 'outbound') {
+                assignmentUpdates.bucket = 'outbound';
+                assignmentUpdates.status = 'Priority Lead';
+                assignmentUpdates.customerStatus = 'Priority Lead';
+                assignmentUpdates.isPriority = true;
+                assignmentUpdates.dialerAssigned = 'Franchisee Generated';
+                assignmentUpdates.franchiseeReviewPending = false;
+            } else if (isPriority) {
                 assignmentUpdates.bucket = 'account_manager';
                 assignmentUpdates.isPriority = true;
                 assignmentUpdates.franchiseeReviewPending = false;
             } else if (!isMultisite) {
                 assignmentUpdates.bucket = 'outbound';
-                assignmentUpdates.isPriority = false;
-                assignmentUpdates.dialerAssigned = 'Aleyna Harnett';
-                assignmentUpdates.franchiseeReviewPending = true;
+                assignmentUpdates.status = 'Priority Lead';
+                assignmentUpdates.customerStatus = 'Priority Lead';
+                assignmentUpdates.isPriority = true;
+                assignmentUpdates.dialerAssigned = 'Franchisee Generated';
+                assignmentUpdates.franchiseeReviewPending = false;
             }
         } else {
             if (finalValues.leadSource) {
@@ -1233,7 +1246,6 @@ export function NewLeadForm() {
                             field.ref(node);
                             companySearchRef.current = node;
                           }}
-                          placeholder="Search company name or address..."
                         />
                         <Button
                           type="button"
@@ -1339,7 +1351,7 @@ export function NewLeadForm() {
                                 form.setValue('franchisee', val);
                             }}>
                                 <SelectTrigger className="w-full max-w-sm bg-background">
-                                    <SelectValue placeholder="Select Franchisee" />
+                                    <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {(showAllFranchisees ? sortedAllFranchisees : matchedFranchisees).map(f => (
@@ -1416,19 +1428,19 @@ export function NewLeadForm() {
                   <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Company Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField control={form.control} name="companyName" render={({ field }) => (
-                    <FormItem><FormLabel>Company Name<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} placeholder="Enter company name" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Name<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={form.control} name="websiteUrl" render={({ field }) => (
-                    <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://company.com" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={form.control} name="customerPhone" render={({ field }) => (
-                    <FormItem><FormLabel>Company Phone<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input type="tel" {...field} placeholder="Enter company phone" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Phone<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
                  <FormField control={form.control} name="customerServiceEmail" render={({ field }) => (
-                    <FormItem><FormLabel>Company Email<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input type="email" {...field} placeholder="Enter company email" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Email<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
                  <FormField control={form.control} name="abn" render={({ field }) => (
-                    <FormItem><FormLabel>ABN</FormLabel><FormControl><Input {...field} placeholder="Enter 11-digit ABN" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>ABN</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField
                   control={form.control}
@@ -1439,7 +1451,7 @@ export function NewLeadForm() {
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select an industry" />
+                            <SelectValue />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -1520,7 +1532,7 @@ export function NewLeadForm() {
                     ) : (
                       <div className="p-3 border border-blue-300 bg-blue-50 text-blue-900 rounded-md text-xs font-semibold flex items-center gap-2">
                         <span className="flex h-2.5 w-2.5 rounded-full bg-blue-600 flex-shrink-0" />
-                        <span>📋 <strong>Outbound Lead Mode</strong>: Defaulted to Outbound Bucket.</span>
+                        <span>📋 <strong>Outbound Lead Mode</strong>: Defaulted to Outbound Bucket (Status: Priority Lead, Dialer: Franchisee Generated).</span>
                       </div>
                     )}
                   </div>
@@ -1537,7 +1549,7 @@ export function NewLeadForm() {
                       <Select onValueChange={field.onChange} value={field.value} disabled={isFranchiseeRole}>
                         <FormControl>
                           <SelectTrigger className={isFranchiseeRole ? "bg-slate-100 font-medium cursor-not-allowed opacity-90" : ""}>
-                            <SelectValue placeholder="Select a lead source" />
+                            <SelectValue />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -1567,7 +1579,7 @@ export function NewLeadForm() {
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select a dialer" />
+                              <SelectValue />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -1594,7 +1606,7 @@ export function NewLeadForm() {
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select a field rep" />
+                              <SelectValue />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -1621,7 +1633,7 @@ export function NewLeadForm() {
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select an account manager" />
+                              <SelectValue />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -1648,7 +1660,7 @@ export function NewLeadForm() {
                         <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                             <SelectTrigger>
-                                <SelectValue placeholder="Select a campaign" />
+                                <SelectValue />
                             </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -1682,7 +1694,7 @@ export function NewLeadForm() {
                         <Select onValueChange={field.onChange} value={field.value || ''} disabled={isFranchiseeRole}>
                           <FormControl>
                             <SelectTrigger className={isFranchiseeRole ? "bg-slate-100 font-medium cursor-not-allowed opacity-90" : ""}>
-                              <SelectValue placeholder="Unassigned" />
+                              <SelectValue />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -1698,7 +1710,7 @@ export function NewLeadForm() {
                           <p className="text-xs text-muted-foreground mt-1 font-medium">
                             {field.value === 'account_manager' 
                               ? "Auto-set to Account Manager Bucket (Priority Lead based on site visit details)." 
-                              : "Defaulted to Unassigned. Will be sent for verification."}
+                              : "Defaulted to Outbound Bucket (Status: Priority Lead, Dialer: Franchisee Generated)."}
                           </p>
                         )}
                        <FormMessage />
@@ -1719,19 +1731,19 @@ export function NewLeadForm() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField control={form.control} name="contact.firstName" render={({ field }) => (
-                        <FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} placeholder="Enter first name" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.lastName" render={({ field }) => (
-                        <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} placeholder="Enter last name" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.title" render={({ field }) => (
-                        <FormItem><FormLabel>Job Title</FormLabel><FormControl><Input {...field} placeholder="Enter job title" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Job Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.email" render={({ field }) => (
-                        <FormItem><FormLabel>Email {hadConversationWithContact && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel><FormControl><Input {...field} type="email" placeholder="email@company.com" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Email {hadConversationWithContact && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel><FormControl><Input {...field} type="email" /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.phone" render={({ field }) => (
-                        <FormItem><FormLabel>Phone {hadConversationWithContact && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel><FormControl><Input {...field} type="tel" placeholder="Enter phone number" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Phone {hadConversationWithContact && <span className="text-red-500 font-bold ml-1">*</span>}</FormLabel><FormControl><Input {...field} type="tel" /></FormControl><FormMessage /></FormItem>
                     )}/>
                 </div>
             </div>
@@ -1774,7 +1786,6 @@ export function NewLeadForm() {
                         <FormControl>
                             <div className="relative">
                                 <Textarea
-                                    placeholder="Add initial notes or comments about this lead..."
                                     {...field}
                                     rows={5}
                                 />

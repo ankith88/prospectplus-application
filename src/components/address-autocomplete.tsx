@@ -132,7 +132,7 @@ export function AddressAutocomplete({ onAddressSelect }: AddressAutocompleteProp
                     <FormItem>
                         <FormLabel>Suite/Level/Unit</FormLabel>
                         <FormControl>
-                            <Input placeholder="Suite, level, unit, etc." {...field} />
+                            <Input {...field} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -157,7 +157,6 @@ export function AddressAutocomplete({ onAddressSelect }: AddressAutocompleteProp
                                     // Delay hiding predictions so button click registers first
                                     setTimeout(() => setIsFocused(false), 200);
                                 }}
-                                placeholder="Enter street address..." 
                                 autoComplete="off"
                             />
                         </FormControl>
@@ -185,13 +184,13 @@ export function AddressAutocomplete({ onAddressSelect }: AddressAutocompleteProp
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField control={control} name="address.city" render={({ field }) => (
-                    <FormItem><FormLabel>Suburb<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} className="bg-background font-medium" placeholder="Suburb" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Suburb<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} className="bg-background font-medium" /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={control} name="address.state" render={({ field }) => (
-                    <FormItem><FormLabel>State<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} className="bg-background font-medium" placeholder="State" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>State<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} className="bg-background font-medium" /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={control} name="address.zip" render={({ field }) => (
-                    <FormItem><FormLabel>Postcode<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} className="bg-background font-medium" placeholder="Postcode" /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Postcode<span className="text-red-500 font-bold ml-1">*</span></FormLabel><FormControl><Input {...field} className="bg-background font-medium" /></FormControl><FormMessage /></FormItem>
                 )}/>
             </div>
             <FormField control={control} name="address.country" render={({ field }) => (
