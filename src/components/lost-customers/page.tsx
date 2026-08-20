@@ -20,7 +20,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
-import { Loader } from '@/components/ui/loader';
+import { Loader, FullScreenLoader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Building, Mail, MapPin, Phone, Search, XCircle, Trash2, Calendar, FileText, Filter, SlidersHorizontal, ArrowUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -404,11 +404,7 @@ export default function LostCustomersComponent() {
   };
 
   if (loading || authLoading || loadingPermissions) {
-    return (
-      <div className="flex h-full items-center justify-center min-h-[60vh]">
-        <Loader />
-      </div>
-    );
+    return <FullScreenLoader message="Loading Lost Customers..." />;
   }
 
   if (!hasAccess) {

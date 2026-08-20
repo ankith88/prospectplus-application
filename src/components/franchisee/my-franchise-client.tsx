@@ -31,21 +31,15 @@ import {
 
 import { AccessDenied } from '@/components/access-denied';
 
-interface LodgementPoint {
-  depotId: string;
-  name: string;
-  suburb: string;
-  postcode: string;
-  state: string;
-  operators?: string[];
-  operatorId?: string;
-}
+import { parseAndEnrichLodgementPoints, LodgementPoint } from '@/lib/lodgement-helpers';
 
 export default function MyFranchiseClient() {
   const { user, userProfile } = useAuth();
   
   const [franchiseeDoc, setFranchiseeDoc] = useState<Franchisee | null>(null);
   const [operators, setOperators] = useState<Operator[]>([]);
+  const [partnerLocations, setPartnerLocations] = useState<any[]>([]);
+  const [allOperators, setAllOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -109,6 +103,24 @@ export default function MyFranchiseClient() {
         } else {
           setOperators([]);
         }
+
+        // Fetch Partner Locations to match depot details by ncl_name
+        try {
+          const pLocSnap = await getDocs(collection(firestore, 'partner_locations'));
+          const pLocs = pLocSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setPartnerLocations(pLocs);
+        } catch (pErr) {
+          console.error('Error loading partner_locations:', pErr);
+        }
+
+        // Fetch all operators to resolve op_primary_id operator IDs to full names
+        try {
+          const opsSnap = await getDocs(collection(firestore, 'operators'));
+          const allOps = opsSnap.docs.map(d => ({ internalId: d.id, ...d.data() } as Operator));
+          setAllOperators(allOps);
+        } catch (opErr) {
+          console.error('Error loading all operators:', opErr);
+        }
       } catch (err) {
         console.error('Error loading franchisee data:', err);
       } finally {
@@ -152,18 +164,22 @@ export default function MyFranchiseClient() {
     return list;
   }, [franchiseeDoc]);
 
-  // Extract lodgement points safely
+  // Extract and parse lodgement points (handling JSON strings, operator name mapping, partner location mapping)
   const expressLodgementPoints = useMemo(() => {
-    const raw = franchiseeDoc?.mpExpressLodgementPoints;
-    if (Array.isArray(raw)) return raw as LodgementPoint[];
-    return [];
-  }, [franchiseeDoc]);
+    return parseAndEnrichLodgementPoints(
+      franchiseeDoc?.mpExpressLodgementPoints,
+      partnerLocations,
+      allOperators.length > 0 ? allOperators : operators
+    );
+  }, [franchiseeDoc, partnerLocations, allOperators, operators]);
 
   const starTrackLodgementPoints = useMemo(() => {
-    const raw = franchiseeDoc?.starTrackLodgementPoints;
-    if (Array.isArray(raw)) return raw as LodgementPoint[];
-    return [];
-  }, [franchiseeDoc]);
+    return parseAndEnrichLodgementPoints(
+      franchiseeDoc?.starTrackLodgementPoints,
+      partnerLocations,
+      allOperators.length > 0 ? allOperators : operators
+    );
+  }, [franchiseeDoc, partnerLocations, allOperators, operators]);
 
   // Filter suburbs by search query
   const filterSuburbs = (suburbs: SuburbMapping[]) => {

@@ -104,6 +104,7 @@ interface AuthContextType {
     loading: boolean;
     isSigningIn: boolean;
     isSigningOut: boolean;
+    isSwitchingFranchisee: boolean;
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
     sendPasswordReset: (email: string) => Promise<void>;
@@ -124,6 +125,7 @@ const AuthContext = createContext<AuthContextType>({
     loading: true,
     isSigningIn: false,
     isSigningOut: false,
+    isSwitchingFranchisee: false,
     signIn: async () => {},
     signOut: async () => {},
     sendPasswordReset: async () => {},
@@ -143,6 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [isSigningIn, setIsSigningIn] = useState(false);
     const [isSigningOut, setIsSigningOut] = useState(false);
+    const [isSwitchingFranchisee, setIsSwitchingFranchisee] = useState(false);
     const [auth, setAuth] = useState<Auth | null>(null);
     const router = useRouter();
     const pathname = usePathname();
@@ -478,20 +481,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!userProfile) return;
         const target = userProfile.linkedFranchisees?.find(f => f.franchiseeId === targetFranchiseeId);
         if (target) {
-            const updates: Partial<UserProfile> = {
-                activeFranchiseeId: target.franchiseeId,
-                franchiseeId: target.franchiseeId,
-                franchiseeInternalId: target.franchiseeId,
-                franchisee: target.franchiseeName,
-                franchiseeRole: target.relationship,
-            };
-            if (typeof window !== 'undefined') {
-                localStorage.setItem(`activeFranchiseeId_${userProfile.uid}`, target.franchiseeId);
-            }
-            setUserProfile(prev => prev ? { ...prev, ...updates } : prev);
-            if (user) {
-                const userDocRef = doc(firestore, "users", user.uid);
-                await updateDoc(userDocRef, updates).catch(err => console.warn("Failed saving active franchisee to Firestore:", err));
+            const currentFranId = userProfile.activeFranchiseeId || userProfile.franchiseeId;
+            if (currentFranId === target.franchiseeId) return;
+
+            setIsSwitchingFranchisee(true);
+            try {
+                const updates: Partial<UserProfile> = {
+                    activeFranchiseeId: target.franchiseeId,
+                    franchiseeId: target.franchiseeId,
+                    franchiseeInternalId: target.franchiseeId,
+                    franchisee: target.franchiseeName,
+                    franchiseeRole: target.relationship,
+                };
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem(`activeFranchiseeId_${userProfile.uid}`, target.franchiseeId);
+                }
+                setUserProfile(prev => prev ? { ...prev, ...updates } : prev);
+                if (user) {
+                    const userDocRef = doc(firestore, "users", user.uid);
+                    await updateDoc(userDocRef, updates).catch(err => console.warn("Failed saving active franchisee to Firestore:", err));
+                }
+            } finally {
+                setTimeout(() => {
+                    setIsSwitchingFranchisee(false);
+                }, 750);
             }
         }
     }, [user, userProfile]);
@@ -543,6 +556,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loading,
         isSigningIn,
         isSigningOut,
+        isSwitchingFranchisee,
         signIn,
         signOut,
         sendPasswordReset,

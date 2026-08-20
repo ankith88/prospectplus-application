@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { doc, getDoc, getDocs, collection, query, where, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Franchisee, Operator } from '@/lib/types';
+import { parseAndEnrichLodgementPoints, LodgementPoint } from '@/lib/lodgement-helpers';
 import { getAllFranchisees, getOperatorsForFranchisee, getLpoParentsForFranchisee } from '@/services/firebase';
 import { Autocomplete } from '@react-google-maps/api';
 import { useGoogleMapsScript } from '@/hooks/use-google-maps';
@@ -32,15 +33,6 @@ interface SuburbItem {
   lng?: number;
 }
 
-interface LodgementPoint {
-  depotId: string;
-  name: string;
-  suburb: string;
-  postcode: string;
-  state: string;
-  operators: string[];
-  operatorId?: string; // fallback single operator for compatibility
-}
 
 export default function SuburbMappingClient() {
   const [franchisees, setFranchisees] = useState<Franchisee[]>([]);
@@ -224,106 +216,8 @@ export default function SuburbMappingClient() {
     return arrayData.map(sanitizeSuburbItem);
   };
 
-  const parseLodgementPoints = (pts: any, depotsList: any[] = []): LodgementPoint[] => {
-    if (!pts) return [];
-    let parsed: any = pts;
-    if (typeof pts === 'string') {
-      try {
-        parsed = JSON.parse(pts);
-      } catch {
-        parsed = [];
-      }
-    }
-
-    let arrayData: any[] = [];
-    if (Array.isArray(parsed)) {
-      arrayData = parsed.flat();
-    } else if (parsed && typeof parsed === 'object') {
-      if (Array.isArray(parsed.data)) {
-        arrayData = parsed.data.flat();
-      } else if (parsed.depotId || parsed.depot_id || parsed.depot || parsed.ncl_id || parsed.name || parsed.ncl_name) {
-        arrayData = [parsed];
-      } else {
-        const values = Object.values(parsed);
-        if (values.length > 0) {
-          arrayData = values.flat();
-        }
-      }
-    }
-    
-    return arrayData.map(pt => {
-      if (!pt || typeof pt !== 'object') {
-        return {
-          depotId: '',
-          name: '',
-          suburb: '',
-          postcode: '',
-          state: '',
-          operators: [],
-          operatorId: ''
-        };
-      }
-
-      const depotId = String(pt?.ncl_id || pt?.depotId || pt?.depot_id || pt?.depot || pt?.id || pt?.internalId || '');
-      
-      // Match with depots (partner_locations)
-      const matchedDepot = depotsList.find(d => 
-        String(d.internalId || d.id) === depotId || String(d.ncl_id) === depotId
-      );
-
-      const name = pt?.ncl_name || pt?.name || pt?.depot || matchedDepot?.name || '';
-      
-      let suburb = pt?.suburb || matchedDepot?.suburb || '';
-      let postcode = pt?.postcode || pt?.post_code || pt?.zip || matchedDepot?.postCode || matchedDepot?.postcode || '';
-      let state = pt?.state || matchedDepot?.state || '';
-
-      // Fallback: Parse ncl_address if suburb, state or postcode are missing
-      if ((!suburb || !state || !postcode) && pt?.ncl_address) {
-        const addr = String(pt.ncl_address);
-        const parts = addr.split(',').map(s => s.trim());
-        if (parts.length >= 2) {
-          const lastPart = parts[parts.length - 1];
-          const statePostMatch = lastPart.match(/([A-Z]{2,3})?\s*-?\s*(\d{4})/i);
-          if (statePostMatch) {
-            if (!state && statePostMatch[1]) state = statePostMatch[1].toUpperCase();
-            if (!postcode && statePostMatch[2]) postcode = statePostMatch[2];
-          }
-          if (!suburb && parts.length >= 2) {
-            suburb = parts[parts.length - 2];
-          }
-        }
-      }
-
-      // Handle operators: op_primary_id or operators or operatorId
-      let operators: string[] = [];
-      const opRaw = pt?.op_primary_id ?? pt?.operators ?? pt?.operatorId ?? pt?.operator_id ?? pt?.operator;
-      if (Array.isArray(opRaw)) {
-        operators = opRaw.map(o => String(o));
-      } else if (typeof opRaw === 'string' && opRaw) {
-        try {
-          const parsedOps = JSON.parse(opRaw);
-          if (Array.isArray(parsedOps)) {
-            operators = parsedOps.map(o => String(o));
-          } else {
-            operators = [opRaw];
-          }
-        } catch {
-          operators = opRaw.split(',').map(s => s.trim()).filter(Boolean);
-        }
-      } else if (typeof opRaw === 'number') {
-        operators = [String(opRaw)];
-      }
-
-      return {
-        depotId,
-        name,
-        suburb,
-        postcode,
-        state,
-        operators,
-        operatorId: operators[0] || ''
-      };
-    });
+  const parseLodgementPoints = (pts: any, depotsList: any[] = [], opsList: any[] = []): LodgementPoint[] => {
+    return parseAndEnrichLodgementPoints(pts, depotsList, opsList.length > 0 ? opsList : operators);
   };
 
   // Clone Main Territory to TGE (Express)

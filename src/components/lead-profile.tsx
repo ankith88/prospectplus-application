@@ -75,7 +75,7 @@ import {
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
-import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer } from '@/lib/lead-permissions'
+import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isFranchiseeRole } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
 import { RequestAssignmentDialog } from '@/components/request-assignment-dialog'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
@@ -4167,7 +4167,32 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
   };
 
-  const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);
+  const callActivities = useMemo(() => (activities || []).filter(a => a.type === 'Call'), [activities]);
+
+  const callHistory = useMemo(() => {
+    const calls = (activities || []).filter(a => a.type === 'Call' && a.callId);
+    return [...calls].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+  }, [activities]);
+
+  const sortedNotes = useMemo(() => {
+    return [...(lead.notes || notes || [])].sort((a, b) => new Date(b.date || (b as any).createdAt || 0).getTime() - new Date(a.date || (a as any).createdAt || 0).getTime());
+  }, [lead.notes, notes]);
+
+  const sortedActivities = useMemo(() => {
+    return [...(activities || [])].sort((a, b) => new Date(b.date || (b as any).createdAt || 0).getTime() - new Date(a.date || (a as any).createdAt || 0).getTime());
+  }, [activities]);
+
+  const sortedEmails = useMemo(() => {
+    return [...(lead.emails || [])].sort((a, b) => new Date(b.sentAt || (b as any).date || (b as any).createdAt || 0).getTime() - new Date(a.sentAt || (a as any).date || (a as any).createdAt || 0).getTime());
+  }, [lead.emails]);
+
+  const resolvedCallAttempts = useMemo(() => {
+    if (callActivities.length > 0) return callActivities.length;
+    if (typeof lead.attemptCount === 'number') return lead.attemptCount;
+    if (typeof lead.totalCalls === 'number') return lead.totalCalls;
+    return 0;
+  }, [callActivities.length, lead.attemptCount, lead.totalCalls]);
+
   const uniqueCallIdsCount = useMemo(() => {
     const callIds = new Set<string>();
     (activities || []).forEach(a => {
@@ -4197,28 +4222,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         isOpen={isRequestAssignmentOpen}
         onOpenChange={setIsRequestAssignmentOpen}
     />
-    <MergeDuplicatesDialog
-        currentLead={lead}
-        duplicates={duplicateLeads}
-        isOpen={isMergeDialogOpen}
-        onOpenChange={setIsMergeDialogOpen}
-        onDismissed={() => {
-            handleDismissDuplicate();
-            setIsMergeDialogOpen(false);
-        }}
-        onMerged={(targetLeadId) => {
-            if (targetLeadId !== lead.id) {
-                window.location.href = `/leads/${targetLeadId}`;
-            } else {
-                getLeadFromFirebase(lead.id, true).then((updatedLead) => {
-                    if (updatedLead) {
-                        setLead(updatedLead);
-                    }
-                });
-                setDuplicateLeads([]);
-            }
-        }}
-    />
+    {!isFranchiseeRole(userProfile) && (
+        <MergeDuplicatesDialog
+            currentLead={lead}
+            duplicates={duplicateLeads}
+            isOpen={isMergeDialogOpen}
+            onOpenChange={setIsMergeDialogOpen}
+            onDismissed={() => {
+                handleDismissDuplicate();
+                setIsMergeDialogOpen(false);
+            }}
+            onMerged={(targetLeadId) => {
+                if (targetLeadId !== lead.id) {
+                    window.location.href = `/leads/${targetLeadId}`;
+                } else {
+                    getLeadFromFirebase(lead.id, true).then((updatedLead) => {
+                        if (updatedLead) {
+                            setLead(updatedLead);
+                        }
+                    });
+                    setDuplicateLeads([]);
+                }
+            }}
+        />
+    )}
     <MoveToNurtureDialog
         leads={[lead]}
         isOpen={isMoveToNurtureDialogOpen}
@@ -4420,7 +4447,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
             Refresh Data
           </Button>
-          {!isCompanyProfile && !isMultiSiteBucket(lead) && lead.bucket !== 'lpo_network' && (
+          {!isCompanyProfile && !isMultiSiteBucket(lead) && lead.bucket !== 'lpo_network' && !isFranchiseeRole(userProfile) && (
             <Button
               variant="outline"
               size="sm"
@@ -4477,7 +4504,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                       <Button size="sm" variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold" onClick={handleDismissDuplicate}>
                           Not a Duplicate
                       </Button>
-                      {!isMultiSiteBucket(lead) && (
+                      {!isMultiSiteBucket(lead) && !isFranchiseeRole(userProfile) && (
                           <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white border-transparent font-semibold" onClick={() => setIsMergeDialogOpen(true)}>
                               Resolve & Merge
                           </Button>
@@ -4487,7 +4514,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Alert>
       )}
 
-      {!isActionable && (
+      {!isActionable && !isFranchiseeRole(userProfile) && (
           <Alert className="bg-amber-50 border-amber-300 text-amber-950 shadow-sm">
               <AlertCircle className="h-4 w-4 !text-amber-700" />
               <AlertTitle className="font-bold text-amber-900 flex items-center justify-between">
@@ -4641,7 +4668,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </Badge>
 
                     <CallAttemptBadge 
-                        attempts={typeof lead.attemptCount === 'number' ? lead.attemptCount : (typeof lead.totalCalls === 'number' ? lead.totalCalls : (Array.isArray(lead.activity) ? lead.activity.filter(a => a.type === 'Call').length : 0))} 
+                        attempts={resolvedCallAttempts} 
                     />
                 </div>
 
@@ -6892,7 +6919,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <Card>
                     <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><ClipboardEdit className="w-5 h-5 text-muted-foreground" />Notes</CardTitle></CardHeader>
                     <CardContent className="pt-6 space-y-4">
-                        {notes.map(note => (
+                        {sortedNotes.map(note => (
                             <div key={note.id} className="text-sm border-l-2 pl-4 py-1 border-primary/40 flex justify-between items-start group">
                                 <div className="space-y-1 pr-4 flex-1">
                                     <p className="whitespace-pre-wrap">{note.content}</p>
@@ -6913,7 +6940,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 )}
                             </div>
                         ))}
-                        {notes.length === 0 && <p className="text-sm text-muted-foreground text-center">No notes found.</p>}
+                        {sortedNotes.length === 0 && <p className="text-sm text-muted-foreground text-center">No notes found.</p>}
                     </CardContent>
                 </Card>
                 <Card>
@@ -7014,7 +7041,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <Card>
                     <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><ActivityIcon className="w-5 h-5 text-muted-foreground" />Activity</CardTitle></CardHeader>
                     <CardContent className="pt-6 space-y-2">
-                        {activities.map(a => {
+                        {sortedActivities.map(a => {
                             const isCall = a.type === 'Call' && a.callId;
                             const recordingAssetUrl = a.recordingAssetUrl || (a.callId ? `https://assets.aircall.io/calls/${a.callId}/recording/info` : undefined);
                             return (
@@ -7065,13 +7092,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                             );
                         })}
-                        {activities.length === 0 && <p className="text-sm text-muted-foreground text-center">No activity found.</p>}
+                        {sortedActivities.length === 0 && <p className="text-sm text-muted-foreground text-center">No activity found.</p>}
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><Mail className="w-5 h-5 text-muted-foreground" />Emails</CardTitle></CardHeader>
                     <CardContent className="pt-6 space-y-4">
-                        {lead.emails?.map(email => (
+                        {sortedEmails.map(email => (
                             <div key={email.id} className="text-sm border-b pb-2 flex flex-col sm:flex-row justify-between items-start gap-4">
                                 <div>
                                     <p className="font-medium">{email.subject}</p>
@@ -7083,7 +7110,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                             </div>
                         ))}
-                        {(!lead.emails || lead.emails.length === 0) && <p className="text-sm text-muted-foreground text-center">No emails sent yet.</p>}
+                        {sortedEmails.length === 0 && <p className="text-sm text-muted-foreground text-center">No emails sent yet.</p>}
                     </CardContent>
                 </Card>
                 <Card>

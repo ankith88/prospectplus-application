@@ -228,6 +228,10 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
   const { user, userProfile } = useAuth();
 
   const leadAttemptsCount = useMemo(() => {
+    if (Array.isArray(lead.activity) && lead.activity.length > 0) {
+      const callActs = lead.activity.filter(a => a.type === 'Call');
+      if (callActs.length > 0) return callActs.length;
+    }
     if (typeof lead.attemptCount === 'number') return lead.attemptCount;
     if (typeof lead.totalCalls === 'number') return lead.totalCalls;
     if (Array.isArray(lead.activity)) return lead.activity.filter(a => a.type === 'Call').length;

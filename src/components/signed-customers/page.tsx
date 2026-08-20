@@ -20,7 +20,7 @@ import type { Lead, Address, MapLead, Contact } from '@/lib/types'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
-import { Loader } from '@/components/ui/loader'
+import { Loader, FullScreenLoader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
 import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, FileX, MoreHorizontal } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
@@ -908,11 +908,7 @@ export default function SignedCustomersPage() {
     };
 
   if (loading || authLoading) {
-    return (
-      <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
-        <Loader />
-      </div>
-    )
+    return <FullScreenLoader message="Loading Signed Customers..." />;
   }
   
   const hasActiveFilters = filters.companyName !== '' || filters.franchisee.length > 0 || filters.prospectedStatus !== 'all' || !!filters.prospectedDate || (geoSearchInputNodeRef.current && geoSearchInputNodeRef.current.value !== '');
@@ -1157,13 +1153,13 @@ export default function SignedCustomersPage() {
                   <TableHead><Button variant="ghost" onClick={() => requestSort('lastProspected')} className="group -ml-4">Last Prospected{getSortIndicator('lastProspected')}</Button></TableHead>
                   <TableHead className="hidden lg:table-cell">Email</TableHead>
                   <TableHead className="hidden md:table-cell">Phone</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {!isFranchisee && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={isFranchisee ? 8 : 9} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedCompanies.length > 0 ? (
                   paginatedCompanies.map((lead) => (
@@ -1210,50 +1206,52 @@ export default function SignedCustomersPage() {
                             <span>{lead.customerPhone || 'N/A'}</span>
                         </div>
                        </TableCell>
-                       <TableCell className="text-right">
-                         <DropdownMenu>
-                           <DropdownMenuTrigger asChild>
-                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                               <span className="sr-only">Open menu</span>
-                               <MoreHorizontal className="h-4 w-4" />
-                             </Button>
-                           </DropdownMenuTrigger>
-                           <DropdownMenuContent align="end">
-                             <DropdownMenuItem onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
-                               <Building className="mr-2 h-4 w-4" /> View Profile
-                             </DropdownMenuItem>
-                             <DropdownMenuItem 
-                                className="text-amber-700 focus:text-amber-800"
-                                onClick={() => {
-                                  setSelectedCancelLead(lead as unknown as Lead);
-                                  setCancelMode('request');
-                                  setIsCancelDialogOpen(true);
-                                }}
-                              >
-                                <FileX className="mr-2 h-4 w-4 text-amber-600" />
-                                Request Cancellation
-                              </DropdownMenuItem>
-                              {isAdmin && (
-                                <DropdownMenuItem 
-                                  className="text-destructive focus:text-destructive"
+                       {!isFranchisee && (
+                         <TableCell className="text-right">
+                           <DropdownMenu>
+                             <DropdownMenuTrigger asChild>
+                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                 <span className="sr-only">Open menu</span>
+                                 <MoreHorizontal className="h-4 w-4" />
+                               </Button>
+                             </DropdownMenuTrigger>
+                             <DropdownMenuContent align="end">
+                               <DropdownMenuItem onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
+                                 <Building className="mr-2 h-4 w-4" /> View Profile
+                               </DropdownMenuItem>
+                               <DropdownMenuItem 
+                                  className="text-amber-700 focus:text-amber-800"
                                   onClick={() => {
                                     setSelectedCancelLead(lead as unknown as Lead);
-                                    setCancelMode('cancel');
+                                    setCancelMode('request');
                                     setIsCancelDialogOpen(true);
                                   }}
                                 >
-                                  <FileX className="mr-2 h-4 w-4 text-destructive" />
-                                  Cancel Customer Directly
+                                  <FileX className="mr-2 h-4 w-4 text-amber-600" />
+                                  Request Cancellation
                                 </DropdownMenuItem>
-                              )}
-                           </DropdownMenuContent>
-                         </DropdownMenu>
-                       </TableCell>
+                                {isAdmin && (
+                                  <DropdownMenuItem 
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => {
+                                      setSelectedCancelLead(lead as unknown as Lead);
+                                      setCancelMode('cancel');
+                                      setIsCancelDialogOpen(true);
+                                    }}
+                                  >
+                                    <FileX className="mr-2 h-4 w-4 text-destructive" />
+                                    Cancel Customer Directly
+                                  </DropdownMenuItem>
+                                )}
+                             </DropdownMenuContent>
+                           </DropdownMenu>
+                         </TableCell>
+                       )}
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={isFranchisee ? 8 : 9} className="py-10 text-center text-muted-foreground">
                           No signed customers found.
                       </TableCell>
                   </TableRow>

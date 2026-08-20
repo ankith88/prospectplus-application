@@ -566,6 +566,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const createdLeadId = docRef ? docRef.id : netSuiteId;
+    if (createdLeadId && /^\d+$/.test(createdLeadId)) {
+      try {
+        const leadDocSnap = await db.collection('leads').doc(createdLeadId).get();
+        if (leadDocSnap.exists) {
+          const leadDocData = leadDocSnap.data() || {};
+          const payloadObject: Record<string, any> = {
+            "Document ID": Number(createdLeadId)
+          };
+          for (const [key, val] of Object.entries(leadDocData)) {
+            if (val && typeof (val as any).toDate === 'function') {
+              payloadObject[key] = (val as any).toDate().toISOString();
+            } else {
+              payloadObject[key] = val;
+            }
+          }
+          const apiKey = process.env.GENERAL_API_KEY || process.env.RTA_GENERAL_API_KEY || process.env.MAILPLUS_GENERAL_API_KEY || '708aa067-d67d-73e6-8967-66786247f5d7';
+          await fetch('https://app.mailplus.com.au/api/v2/leads', {
+            method: 'POST',
+            headers: {
+              'GENERAL_API_KEY': apiKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify([payloadObject])
+          });
+        }
+      } catch (syncErr) {
+        console.error('Failed to sync numeric lead to MailPlus API v2:', syncErr);
+      }
+    }
+
     return NextResponse.json({ 
       success: true, 
       id: docRef ? docRef.id : netSuiteId,

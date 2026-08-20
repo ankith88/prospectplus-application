@@ -110,11 +110,128 @@ export default function FranchiseeLeadsClientPage() {
   const [outboundInfoDialogOpen, setOutboundInfoDialogOpen] = useState<boolean>(false);
   const [activeLeadForStatusInfo, setActiveLeadForStatusInfo] = useState<Lead | null>(null);
 
+  // AM Email Dialog State
+  const [amContactModalOpen, setAmContactModalOpen] = useState<boolean>(false);
+  const [selectedLeadForAm, setSelectedLeadForAm] = useState<Lead | null>(null);
+  const [amEmailSubject, setAmEmailSubject] = useState<string>('');
+  const [amEmailMessage, setAmEmailMessage] = useState<string>('');
+  const [sendingAmEmail, setSendingAmEmail] = useState<boolean>(false);
+
+  const resolveAccountManager = (lead: Lead) => {
+    const amName =
+      lead.accountManagerAssigned ||
+      (lead as any).salesRepAssigned ||
+      (lead as any).dialerAssigned ||
+      userProfile?.linkedSalesRep ||
+      'Aleyna Harnett';
+
+    const cleanName = amName.trim();
+    const parts = cleanName.split(/\s+/);
+    const targetFirst = parts[0]?.toLowerCase() || '';
+    const targetLast = parts.slice(1).join(' ')?.toLowerCase() || '';
+
+    // Match in users collection by firstName & lastName (or displayName / full name / email)
+    const amUser = users.find((u) => {
+      const uFirst = (u.firstName || '').toLowerCase().trim();
+      const uLast = (u.lastName || '').toLowerCase().trim();
+      const uDisplay = (u.displayName || u.name || '').toLowerCase().trim();
+      const uFull = `${uFirst} ${uLast}`.trim();
+      const uEmail = (u.email || '').toLowerCase().trim();
+
+      // 1. Exact match on both firstName AND lastName
+      if (targetFirst && targetLast && uFirst === targetFirst && uLast === targetLast) {
+        return true;
+      }
+      // 2. Full name match or displayName match
+      if (uFull === cleanName.toLowerCase() || uDisplay === cleanName.toLowerCase()) {
+        return true;
+      }
+      // 3. Email starts with first.last
+      if (targetFirst && targetLast && uEmail.startsWith(`${targetFirst}.${targetLast}`)) {
+        return true;
+      }
+      // 4. Fallback only if no last name was specified in target name
+      if (targetFirst && !targetLast && uFirst === targetFirst) {
+        return true;
+      }
+      return false;
+    });
+
+    const email =
+      amUser?.email ||
+      (cleanName.toLowerCase().includes('aleyna')
+        ? 'aleyna.harnett@mailplus.com.au'
+        : `${cleanName.toLowerCase().replace(/\s+/g, '.')}@mailplus.com.au`);
+
+    const mobile =
+      (amUser as any)?.mobileNumber ||
+      (amUser as any)?.mobile ||
+      (amUser as any)?.phone ||
+      (amUser as any)?.phoneNumber ||
+      (cleanName.toLowerCase().includes('aleyna') ? '0412 345 678' : '1300 65 65 95');
+
+    return { name: cleanName, email, mobile, userDoc: amUser };
+  };
+
+  const openAmContactModal = (lead: Lead) => {
+    const am = resolveAccountManager(lead);
+    const displayId = (lead as any).prospectPlusId || lead.id || 'N/A';
+    setSelectedLeadForAm(lead);
+    setAmEmailSubject(`[ID: ${displayId}] ${lead.companyName} (${lead.status || 'Active'})`);
+    setAmEmailMessage(`Hi ${am.name},\n\nI am contacting you regarding the lead ${lead.companyName} (Prospect+ ID: ${displayId}, Status: ${lead.status || 'Quote/Trial'}).\n\nPlease let me know the latest update or if you need any assistance from our franchisee team.\n\nThank you,\n${userProfile?.displayName || userProfile?.name || 'MailPlus Franchisee'}`);
+    setAmContactModalOpen(true);
+  };
+
+  const handleSendAmEmail = async () => {
+    if (!selectedLeadForAm) return;
+    const am = resolveAccountManager(selectedLeadForAm);
+
+    try {
+      setSendingAmEmail(true);
+      const res = await fetch('/api/email/contact-am', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadId: selectedLeadForAm.id,
+          prospectPlusId: (selectedLeadForAm as any).prospectPlusId || selectedLeadForAm.id,
+          companyName: selectedLeadForAm.companyName,
+          leadStatus: selectedLeadForAm.status,
+          isCompany: (selectedLeadForAm as any).isCompany || false,
+          amName: am.name,
+          amEmail: am.email,
+          senderName: userProfile?.displayName || userProfile?.name || 'MailPlus Franchisee',
+          senderEmail: userProfile?.email,
+          subject: amEmailSubject,
+          message: amEmailMessage
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send email');
+
+      toast({
+        title: 'Email Sent!',
+        description: `Successfully emailed ${am.name} (${am.email}) with CC to Luke Forbes.`,
+      });
+      setAmContactModalOpen(false);
+    } catch (err: any) {
+      console.error('Error sending AM email:', err);
+      toast({
+        title: 'Error Sending Email',
+        description: err.message || 'Failed to dispatch email.',
+        variant: 'destructive'
+      });
+    } finally {
+      setSendingAmEmail(false);
+    }
+  };
+
   const franchiseeName = userProfile?.franchisee || '';
   const isFranchiseeRole = userProfile?.activeRole === 'Franchisee';
 
   const fetchData = async () => {
     try {
+      setLoading(true);
       setRefreshing(true);
       const [fetchedLeads, fetchedUsers] = await Promise.all([
         getLeadsFromFirebase({ 
@@ -209,6 +326,27 @@ export default function FranchiseeLeadsClientPage() {
       hotPriorityLeads,
       newLeads
     };
+  }, [leads]);
+
+  // Priority Action Leads: Quote Sent or Active Trial
+  const priorityQuoteTrialLeads = useMemo(() => {
+    return leads.filter(l => {
+      const statusStr = (l.status || '').toLowerCase();
+      const trialTypeStr = ((l as any).trialType || '').toLowerCase();
+      const isQuote =
+        QUOTE_SENT_ACCEPTED_STATUSES.includes(l.status as LeadStatus) ||
+        statusStr.includes('quote');
+      const isTrial =
+        LOCALMILE_TRIAL_STATUSES.includes(l.status as LeadStatus) ||
+        SHIPMATE_TRIAL_STATUSES.includes(l.status as LeadStatus) ||
+        statusStr.includes('trial') ||
+        statusStr.includes('shipmate') ||
+        statusStr.includes('localmile') ||
+        trialTypeStr.includes('shipmate') ||
+        trialTypeStr.includes('localmile');
+
+      return isQuote || isTrial;
+    });
   }, [leads]);
 
   // Dynamic unique list of Customer Sources for filtering
@@ -321,9 +459,109 @@ export default function FranchiseeLeadsClientPage() {
     });
   }, [leads, searchQuery, selectedCategoryTab, selectedSpecificStatus, selectedLeadSource, selectedBucket, selectedCustomerSource]);
 
-  // Sorted Leads
+  // Exact Status Priority Weighting according to User Specification:
+  // Tier 1: ShipMate Trial / LocalMile Trial / Free Trial (Weight 1 - TOP)
+  // Tier 2: LocalMile Opportunity (Weight 2)
+  // Tier 3: Quote Accepted (Weight 3)
+  // Tier 4: Quote Sent (Weight 4)
+  // Tier 5: Work in Progress / active progress (Weight 5)
+  // Tier 6: New / Other active (Weight 6)
+  // Tier 7: Lost / Email Brush Off / Unqualified / Declined / Closed (Weight 7 - END)
+  const getStatusSortWeight = (lead: Lead): number => {
+    const statusStr = (lead.status || '').toLowerCase().trim();
+    const trialTypeStr = ((lead as any).trialType || '').toLowerCase().trim();
+
+    // Tier 1: ShipMate Trial / LocalMile Trial / Free Trial
+    if (
+      statusStr.includes('shipmate trial') ||
+      statusStr.includes('localmile trial') ||
+      statusStr.includes('trialing shipmate') ||
+      statusStr.includes('trialing localmile') ||
+      statusStr === 'free trial' ||
+      statusStr === 'trialing' ||
+      trialTypeStr.includes('shipmate') ||
+      trialTypeStr.includes('localmile')
+    ) {
+      return 1;
+    }
+
+    // Tier 2: LocalMile Opportunity
+    if (statusStr.includes('localmile opportunity') || statusStr.includes('localmile opp')) {
+      return 2;
+    }
+
+    // Tier 3: Quote Accepted
+    if (statusStr === 'quote accepted' || statusStr.includes('accepted')) {
+      return 3;
+    }
+
+    // Tier 4: Quote Sent
+    if (statusStr === 'quote sent' || statusStr.includes('quote')) {
+      return 4;
+    }
+
+    // Tier 7: Lost / Closed Lost / Unqualified / Declined / Email Brush Off
+    if (
+      statusStr.includes('lost') ||
+      statusStr.includes('unqualified') ||
+      statusStr.includes('declined') ||
+      statusStr.includes('brush off') ||
+      statusStr.includes('cancelled') ||
+      statusStr.includes('not interested')
+    ) {
+      return 7;
+    }
+
+    // Tier 5: Work in Progress
+    if (
+      statusStr.includes('work in progress') ||
+      statusStr.includes('in progress') ||
+      statusStr.includes('contacted') ||
+      statusStr.includes('callback') ||
+      statusStr.includes('high touch') ||
+      statusStr.includes('negotiating')
+    ) {
+      return 5;
+    }
+
+    // Tier 6: New / Other active
+    return 6;
+  };
+
+  // Helper for Email AM button visibility:
+  // Only Quote Sent, Quote Accepted, Trials (Tiers 1-4) or Account Manager bucket leads!
+  const canShowEmailAm = (lead: Lead) => {
+    const statusWeight = getStatusSortWeight(lead);
+    const bucketVal = ((lead as any).bucket || (lead as any).salesRepBucket || '').toLowerCase();
+
+    const isQuoteOrTrial = statusWeight >= 1 && statusWeight <= 4;
+    const isAmBucket =
+      bucketVal.includes('account') ||
+      bucketVal.includes('manager') ||
+      bucketVal === 'am' ||
+      bucketVal.includes('account_manager');
+
+    // Only allow Email AM if it's a Quote/Trial OR in AM bucket, AND NOT a lost lead!
+    return (isQuoteOrTrial || isAmBucket) && statusWeight < 7;
+  };
+
+  // Priority Lead Helper: Quote Sent, Active Trials, LocalMile Opp, Quote Accepted
+  const isPriorityLead = (lead: Lead) => {
+    return getStatusSortWeight(lead) <= 4;
+  };
+
+  // Sorted Leads: Sorted strictly by Status Priority Hierarchy, then secondary column sort
   const sortedLeads = useMemo(() => {
     return [...filteredLeads].sort((a, b) => {
+      const weightA = getStatusSortWeight(a);
+      const weightB = getStatusSortWeight(b);
+
+      // Primary sort: Status Hierarchy Weight
+      if (weightA !== weightB) {
+        return weightA - weightB;
+      }
+
+      // Secondary weight: User column sort
       let aVal: any = '';
       let bVal: any = '';
 
@@ -996,24 +1234,32 @@ export default function FranchiseeLeadsClientPage() {
 
                     const contactName = (lead as any).contactPerson || (lead as any).contactFirstName || lead.contacts?.[0]?.name || '';
                     const contactEmail = (lead as any).email || lead.customerServiceEmail || lead.contacts?.[0]?.email || '';
+                    const am = resolveAccountManager(lead);
+                    const isPriority = isPriorityLead(lead);
 
                     return (
-                      <TableRow key={lead.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors">
+                      <TableRow key={lead.id} className={`hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors ${isPriority ? 'bg-amber-50/30 dark:bg-amber-950/20' : ''}`}>
                         {/* Company Name & Contact Info */}
                         <TableCell className="font-medium py-3.5">
                           <div className="flex flex-col space-y-0.5">
                             <Link 
                               href={(lead as any).isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`} 
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className="text-sm font-semibold text-slate-900 dark:text-slate-100 hover:text-teal-600 dark:hover:text-teal-400 flex items-center gap-1.5 group"
                             >
                               <Building2 className="h-4 w-4 text-slate-400 group-hover:text-teal-600 transition-colors shrink-0" />
                               <span className="line-clamp-1">{lead.companyName || 'Unnamed Lead'}</span>
+                              {isPriority && (
+                                <span title="Priority Lead (Quote Sent / Active Trial)">
+                                  <Sparkles className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                </span>
+                              )}
                             </Link>
-                            {(contactName || contactEmail) && (
-                              <div className="text-xs text-slate-500 pl-5 line-clamp-1">
-                                {[contactName, contactEmail].filter(Boolean).join(' • ')}
-                              </div>
-                            )}
+                            <div className="text-xs text-slate-500 pl-5 flex items-center gap-2 line-clamp-1">
+                              {[contactName, contactEmail].filter(Boolean).join(' • ') || <span>AM: {am.name}</span>}
+                              {(contactName || contactEmail) && <span className="text-slate-400">• AM: {am.name}</span>}
+                            </div>
                           </div>
                         </TableCell>
 
@@ -1049,6 +1295,19 @@ export default function FranchiseeLeadsClientPage() {
                         {/* Actions */}
                         <TableCell className="py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* Email AM Button: Only shown if status is Quote Sent/Accepted, Trial, or in Account Manager bucket (excluding Lost leads) */}
+                            {canShowEmailAm(lead) && (
+                              <Button
+                                size="sm"
+                                onClick={() => openAmContactModal(lead)}
+                                title={`Email Account Manager (${am.name} - ${am.email})`}
+                                className="h-8 text-xs font-semibold bg-[#095c7b] hover:bg-[#095c7b]/90 text-white shadow-sm shrink-0"
+                              >
+                                <Mail className="h-3.5 w-3.5 mr-1" />
+                                Email AM
+                              </Button>
+                            )}
+
                             {isOutboundBucketLead(lead) && (
                               /* Status Info Button for Outbound Bucket Leads */
                               <Button
@@ -1056,7 +1315,7 @@ export default function FranchiseeLeadsClientPage() {
                                 variant="outline"
                                 onClick={() => handleOpenOutboundStatusInfo(lead)}
                                 title="View Outbound Status Info"
-                                className="h-8 text-xs font-medium border-amber-300 text-amber-800 bg-amber-50/60 hover:bg-amber-100 hover:border-amber-400 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950/30 dark:hover:bg-amber-900/50"
+                                className="h-8 text-xs font-medium border-amber-300 text-amber-800 bg-amber-50/60 hover:bg-amber-100 hover:border-amber-400 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 shrink-0"
                               >
                                 <HelpCircle className="h-3.5 w-3.5 mr-1 text-amber-600 dark:text-amber-400 shrink-0" />
                                 Status Info
@@ -1068,10 +1327,14 @@ export default function FranchiseeLeadsClientPage() {
                               size="sm"
                               variant="ghost"
                               asChild
-                              className="h-8 w-8 p-0 text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                              title="View Lead Profile"
+                              className="h-8 w-8 p-0 text-slate-500 hover:text-slate-900 dark:hover:text-white shrink-0"
+                              title="View Lead Profile in new tab"
                             >
-                              <Link href={(lead as any).isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`}>
+                              <Link 
+                                href={(lead as any).isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
                                 <ExternalLink className="h-4 w-4" />
                               </Link>
                             </Button>
@@ -1280,6 +1543,111 @@ export default function FranchiseeLeadsClientPage() {
               className="text-xs"
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Account Manager Contact Dialog */}
+      <Dialog open={amContactModalOpen} onOpenChange={setAmContactModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+              <Mail className="h-5 w-5 text-[#095c7b]" />
+              Contact Account Manager
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Send a direct email message to the assigned Account Manager for <strong>{selectedLeadForAm?.companyName}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedLeadForAm && (
+            <div className="space-y-4 py-2 text-xs">
+              {/* AM Card */}
+              {(() => {
+                const am = resolveAccountManager(selectedLeadForAm);
+                return (
+                  <div className="space-y-3">
+                    {/* AM Profile Card */}
+                    <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border rounded-xl flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                          {am.name}
+                          <Badge variant="outline" className="bg-white dark:bg-slate-800 border-[#095c7b]/30 text-[#095c7b] text-[10px]">
+                            Account Manager
+                          </Badge>
+                        </div>
+                        <div className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1.5">
+                          <Mail className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
+                          <span>{am.email}</span>
+                        </div>
+                        <div className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1.5">
+                          <Phone className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">Mobile: {am.mobile}</span>
+                          <a href={`tel:${am.mobile}`} className="ml-1 text-[11px] text-[#095c7b] hover:underline font-bold">
+                            Call
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* From & CC Address Explanation Badge */}
+                    <div className="p-2.5 bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/50 rounded-lg text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
+                      <div className="font-semibold text-[#095c7b] dark:text-sky-400">
+                        From: {userProfile?.displayName || userProfile?.name || 'Franchisee'} &lt;{userProfile?.email || 'Logged in user email'}&gt;
+                      </div>
+                      <div>
+                        This email is sent directly from your email address with <strong>Luke Forbes (luke.forbes@mailplus.com.au)</strong> CC&apos;ed automatically.
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-2">
+                <Label htmlFor="am-subject" className="font-semibold text-slate-700 dark:text-slate-300">Subject</Label>
+                <Input
+                  id="am-subject"
+                  value={amEmailSubject}
+                  onChange={(e) => setAmEmailSubject(e.target.value)}
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="am-message" className="font-semibold text-slate-700 dark:text-slate-300">Message</Label>
+                <Textarea
+                  id="am-message"
+                  rows={5}
+                  value={amEmailMessage}
+                  onChange={(e) => setAmEmailMessage(e.target.value)}
+                  className="text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex items-center justify-between sm:justify-between pt-2 border-t">
+            <Button variant="ghost" size="sm" onClick={() => setAmContactModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSendAmEmail}
+              disabled={sendingAmEmail}
+              className="bg-[#095c7b] hover:bg-[#095c7b]/90 text-white font-semibold"
+            >
+              {sendingAmEmail ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="h-3.5 w-3.5 mr-1.5" />
+                  Send Email to AM
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -211,8 +211,11 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
         return { filename: att.name, path: att.url };
       });
 
+      const fromHeader = customFrom ? customFrom : `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`;
+
       await transporter.sendMail({
-        from: `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`,
+        from: fromHeader,
+        replyTo: customFrom || undefined,
         to,
         cc: finalCc,
         bcc,

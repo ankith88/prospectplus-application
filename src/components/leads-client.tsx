@@ -553,6 +553,10 @@ export default function LeadsClientPage({
   const [accountManagerMobile, setAccountManagerMobile] = useState<string>('');
   const [accountManagerCalendly, setAccountManagerCalendly] = useState<string>('');
   const getCallCount = useCallback((lead: Lead) => {
+    if (Array.isArray(lead.activity) && lead.activity.length > 0) {
+      const callActs = lead.activity.filter(a => a.type === 'Call');
+      if (callActs.length > 0) return callActs.length;
+    }
     if (typeof lead.attemptCount === 'number' && lead.attemptCount > 0) return lead.attemptCount;
     if (typeof lead.totalCalls === 'number' && lead.totalCalls > 0) return lead.totalCalls;
     if (Array.isArray(lead.activity)) return lead.activity.filter(a => a.type === 'Call').length;
@@ -2256,7 +2260,7 @@ export default function LeadsClientPage({
                                                         {!isFranchisee && (
                                                           <DropdownMenuItem onClick={() => handleStartDialing(leads, lead.id)}>Start dialing from here</DropdownMenuItem>
                                                         )}
-                                                        {lead.isDuplicate && !isMultiSiteBucket(lead) && (
+                                                        {lead.isDuplicate && !isMultiSiteBucket(lead) && !isFranchisee && (
                                                             <DropdownMenuItem onClick={() => {
                                                                  setMasterLeadForMerge(lead);
                                                                  let matches = allLeads.filter(l => l.id !== lead.id && lead.similarLeads?.includes(l.id));

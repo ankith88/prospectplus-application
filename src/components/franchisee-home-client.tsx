@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { usePerformance } from '@/hooks/use-performance';
 import { FranchiseeSwitcher } from '@/components/franchisee-switcher';
 import { getLeadsFromFirebase, getAllAppointments } from '@/services/firebase';
 import type { Lead, Appointment, Task } from '@/lib/types';
@@ -13,7 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarWidget } from '@/components/ui/calendar';
-import { Loader } from '@/components/ui/loader';
+import { Loader, FullScreenLoader } from '@/components/ui/loader';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -108,6 +109,11 @@ export default function FranchiseeHomeClient() {
   const [isSubmittingBooking, setIsSubmittingBooking] = useState<boolean>(false);
   const [bookingSuccess, setBookingSuccess] = useState<boolean>(false);
   const [confirmedJoinUrl, setConfirmedJoinUrl] = useState<string | null>(null);
+  // Cancellation Modal States
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [apptToCancel, setApptToCancel] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState<string>('');
+  const [isSubmittingCancel, setIsSubmittingCancel] = useState<boolean>(false);
 
   const isFranchiseeRole =
     userProfile?.activeRole === 'Franchisee' ||
@@ -138,16 +144,30 @@ export default function FranchiseeHomeClient() {
     }
   };
 
+  const { setLoadTime, setPageName, setIsCustom } = usePerformance();
+
+  useEffect(() => {
+    setIsCustom(true);
+    setPageName('Franchisee Homepage');
+  }, [setIsCustom, setPageName]);
+
   // Load leads, appointments, and trigger day-of reminder check
   useEffect(() => {
+    const startTimePerf = performance.now();
     async function loadData() {
       if (!user) return;
       setLoadingData(true);
       try {
-        const [fetchedLeads, fetchedAppts] = await Promise.all([
-          getLeadsFromFirebase({ summary: true }),
-          getAllAppointments().catch(() => [])
-        ]);
+        const targetFranchisee = (activeFranName && activeFranName !== 'Franchise Territory' && activeFranName !== 'My Franchise')
+          ? activeFranName
+          : userProfile?.franchisee;
+
+        let fetchedLeads = await getLeadsFromFirebase({ summary: true, franchisee: targetFranchisee });
+        if (fetchedLeads.length === 0 && targetFranchisee) {
+          // Mismatch fallback: load summary leads
+          fetchedLeads = await getLeadsFromFirebase({ summary: true });
+        }
+        const fetchedAppts = await getAllAppointments().catch(() => []);
 
         // Filter leads for this franchisee territory if applicable
         const territoryLeads = fetchedLeads.filter((l) => {
@@ -169,13 +189,16 @@ export default function FranchiseeHomeClient() {
         console.error('Failed to load franchisee home data:', error);
       } finally {
         setLoadingData(false);
+        const duration = Math.round(performance.now() - startTimePerf);
+        setLoadTime(duration);
+        console.log(`[Performance Dynamic] /franchisee-home - Load Time: ${duration}ms`);
       }
     }
 
     if (!authLoading) {
       loadData();
     }
-  }, [user, userProfile, authLoading, currentFranId, activeFranName]);
+  }, [user, userProfile, authLoading, currentFranId, activeFranName, setLoadTime]);
 
   // Fetch real Teams calendar availability for Aleyna when bookingDate changes
   useEffect(() => {
@@ -342,18 +365,26 @@ export default function FranchiseeHomeClient() {
 
       if (!isWon) return false;
 
-      const dateVal =
+      let dateVal =
         (l as any).signedUpAt ||
         (l as any).wonAt ||
         (l as any).dateWon ||
-        (l as any).updatedAt ||
-        (l as any).updated_at ||
-        (l as any).createdAt ||
-        (l as any).created_at;
+        (l as any).convertedAt;
 
-      if (!dateVal) return true;
+      if (!dateVal && (l as any).statusHistory && Array.isArray((l as any).statusHistory)) {
+        const hist = (l as any).statusHistory.find((h: any) =>
+          ['won', 'signed', 'converted'].includes((h.status || '').toLowerCase())
+        );
+        if (hist?.date) dateVal = hist.date;
+      }
+
+      if (!dateVal) {
+        dateVal = (l as any).createdAt || (l as any).created_at;
+      }
+
+      if (!dateVal) return false;
       const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return true;
+      if (isNaN(d.getTime())) return false;
       return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
     });
   }, [leads, activeMonthDate]);
@@ -374,16 +405,26 @@ export default function FranchiseeHomeClient() {
 
       if (!isQuote) return false;
 
-      const dateVal =
+      let dateVal =
         (l as any).quoteSentAt ||
-        (l as any).updatedAt ||
-        (l as any).updated_at ||
-        (l as any).createdAt ||
-        (l as any).created_at;
+        (l as any).quotesSentAt ||
+        (l as any).dateQuoteSent ||
+        (l as any).scfSentAt;
 
-      if (!dateVal) return true;
+      if (!dateVal && (l as any).statusHistory && Array.isArray((l as any).statusHistory)) {
+        const hist = (l as any).statusHistory.find((h: any) =>
+          (h.status || '').toLowerCase().includes('quote')
+        );
+        if (hist?.date) dateVal = hist.date;
+      }
+
+      if (!dateVal) {
+        dateVal = (l as any).createdAt || (l as any).created_at;
+      }
+
+      if (!dateVal) return false;
       const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return true;
+      if (isNaN(d.getTime())) return false;
       return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
     });
   }, [leads, activeMonthDate]);
@@ -409,16 +450,28 @@ export default function FranchiseeHomeClient() {
 
       if (!isTrial) return false;
 
-      const dateVal =
+      let dateVal =
         (l as any).trialStartDate ||
-        (l as any).updatedAt ||
-        (l as any).updated_at ||
-        (l as any).createdAt ||
-        (l as any).created_at;
+        (l as any).trialActivatedAt ||
+        (l as any).shipmateActivatedAt ||
+        (l as any).localmileActivatedAt;
 
-      if (!dateVal) return true;
+      if (!dateVal && (l as any).statusHistory && Array.isArray((l as any).statusHistory)) {
+        const hist = (l as any).statusHistory.find((h: any) =>
+          (h.status || '').toLowerCase().includes('trial') ||
+          (h.status || '').toLowerCase().includes('shipmate') ||
+          (h.status || '').toLowerCase().includes('localmile')
+        );
+        if (hist?.date) dateVal = hist.date;
+      }
+
+      if (!dateVal) {
+        dateVal = (l as any).createdAt || (l as any).created_at;
+      }
+
+      if (!dateVal) return false;
       const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return true;
+      if (isNaN(d.getTime())) return false;
       return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
     });
   }, [leads, activeMonthDate]);
@@ -552,10 +605,11 @@ export default function FranchiseeHomeClient() {
     return (
       <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
         {list.map((appt) => {
+          const rawName = (appt as any).leadName && (appt as any).leadName !== 'Unknown Lead' ? (appt as any).leadName : null;
           const leadCompanyName =
-            (appt as any).leadName ||
-            leadsMap.get(appt.leadId) ||
-            (appt.type === 'Teams Training Session' ? 'ProspectPlus Training Session with Aleyna' : 'Scheduled Appointment');
+            (appt as any).isTraining || appt.type === 'Teams Training Session' || !rawName
+              ? 'Prospect+ Training x Aleyna'
+              : rawName || leadsMap.get(appt.leadId) || 'Prospect+ Training x Aleyna';
 
           const apptDate = appt.duedate ? new Date(appt.duedate) : appt.appointmentDate ? new Date(appt.appointmentDate) : null;
           let dateFormatted = 'N/A';
@@ -634,6 +688,20 @@ export default function FranchiseeHomeClient() {
                       </Link>
                     </Button>
                   )}
+                  {status !== 'Completed' && status !== 'Cancelled' && status !== 'No Show' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setApptToCancel(appt);
+                        setCancelReason('');
+                        setIsCancelModalOpen(true);
+                      }}
+                      className="p-0 h-auto text-xs text-rose-600 font-bold hover:text-rose-800 hover:bg-transparent flex items-center gap-1 ml-1"
+                    >
+                      <XCircle className="h-3.5 w-3.5" /> Cancel
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -686,12 +754,44 @@ export default function FranchiseeHomeClient() {
     }
   };
 
-  if (authLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader />
-      </div>
-    );
+  // Handle Cancel Appointment
+  const handleCancelAppointment = async () => {
+    if (!apptToCancel) return;
+    setIsSubmittingCancel(true);
+    try {
+      const res = await fetch('/api/calendar/cancel-appointment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointmentId: apptToCancel.id,
+          leadId: apptToCancel.leadId,
+          reason: cancelReason,
+          cancelledBy: userProfile?.displayName || user?.displayName || userProfile?.email || 'Franchisee User',
+          userEmail: user?.email || userProfile?.email || ''
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to cancel appointment');
+
+      toast.success('Appointment Cancelled!', {
+        description: 'Aleyna and participants have been notified and calendar updated.'
+      });
+
+      setIsCancelModalOpen(false);
+      setApptToCancel(null);
+      setCancelReason('');
+      await refreshAppointments();
+    } catch (err: any) {
+      console.error('Cancellation error:', err);
+      toast.error(err.message || 'Could not cancel appointment');
+    } finally {
+      setIsSubmittingCancel(false);
+    }
+  };
+
+  if (authLoading || loadingData) {
+    return <FullScreenLoader message="Loading Franchisee Homepage..." />;
   }
 
   if (userProfile && !isFranchiseeRole) {
@@ -848,11 +948,6 @@ export default function FranchiseeHomeClient() {
                   <CardDescription className="text-xs">Scheduled appointments & follow-ups</CardDescription>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" asChild className="text-xs text-[#095c7b] hover:text-[#095c7b]/80">
-                <Link href="/appointments" className="flex items-center gap-1 font-semibold">
-                  View All <ChevronRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
             </div>
           </CardHeader>
           <CardContent className="p-4 flex-1 flex flex-col items-center justify-between gap-4">
@@ -886,10 +981,11 @@ export default function FranchiseeHomeClient() {
               ) : dayAppointments.length > 0 ? (
                 <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                   {dayAppointments.map((appt) => {
+                    const rawName = (appt as any).leadName && (appt as any).leadName !== 'Unknown Lead' ? (appt as any).leadName : null;
                     const leadCompanyName =
-                      (appt as any).leadName ||
-                      leadsMap.get(appt.leadId) ||
-                      'Scheduled Appointment';
+                      (appt as any).isTraining || appt.type === 'Teams Training Session' || !rawName
+                        ? 'Prospect+ Training x Aleyna'
+                        : rawName || leadsMap.get(appt.leadId) || 'Prospect+ Training x Aleyna';
                     const isTeams = (appt as any).isTeams || appt.type === 'Teams Training Session' || (appt as any).meetingType === 'teams';
 
                     return (
@@ -1568,7 +1664,11 @@ export default function FranchiseeHomeClient() {
                     </div>
                   ) : activeQuickViewModal === 'appointments' ? (
                     quickViewItems.map((appt: any) => {
-                      const leadCompanyName = appt.leadName || leadsMap.get(appt.leadId) || 'Scheduled Appointment';
+                      const rawName = appt.leadName && appt.leadName !== 'Unknown Lead' ? appt.leadName : null;
+                      const leadCompanyName =
+                        appt.isTraining || appt.type === 'Teams Training Session' || !rawName
+                          ? 'Prospect+ Training x Aleyna'
+                          : rawName || leadsMap.get(appt.leadId) || 'Prospect+ Training x Aleyna';
                       const isTeams = appt.isTeams || appt.type === 'Teams Training Session' || appt.meetingType === 'teams';
                       const status = appt.appointmentStatus || 'Scheduled';
 
@@ -1603,6 +1703,20 @@ export default function FranchiseeHomeClient() {
                             <Badge variant="outline" className="text-[10px] font-semibold">
                               {status}
                             </Badge>
+                            {status !== 'Completed' && status !== 'Cancelled' && status !== 'No Show' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setApptToCancel(appt);
+                                  setCancelReason('');
+                                  setIsCancelModalOpen(true);
+                                }}
+                                className="h-8 text-xs text-rose-600 font-bold hover:text-rose-800 flex items-center gap-1"
+                              >
+                                <XCircle className="h-3.5 w-3.5" /> Cancel
+                              </Button>
+                            )}
                             {appt.leadId && (
                               <Button variant="ghost" size="sm" asChild className="h-8 text-xs text-[#095c7b] font-bold">
                                 <Link href={`/leads/${appt.leadId}`} className="flex items-center gap-1">
@@ -1668,6 +1782,81 @@ export default function FranchiseeHomeClient() {
               </>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* CANCELLATION CONFIRMATION DIALOG MODAL */}
+      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
+        <DialogContent className="max-w-md w-full p-6 bg-white rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-rose-600 flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-rose-600" />
+              Cancel Booked Appointment
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Are you sure you want to cancel this appointment? This will notify <strong>Aleyna Harnett</strong> and remove the event from Outlook / Google calendars.
+            </DialogDescription>
+          </DialogHeader>
+
+          {apptToCancel && (
+            <div className="space-y-4 py-2">
+              {/* Summary Card */}
+              <div className="p-3.5 bg-slate-50 border rounded-xl text-xs space-y-1.5">
+                <div className="font-bold text-slate-900">
+                  {apptToCancel.isTraining || apptToCancel.type === 'Teams Training Session' || !apptToCancel.leadName || apptToCancel.leadName === 'Unknown Lead'
+                    ? 'Prospect+ Training x Aleyna'
+                    : apptToCancel.leadName || leadsMap.get(apptToCancel.leadId) || 'Prospect+ Training x Aleyna'}
+                </div>
+                <div className="text-slate-600 flex items-center gap-1.5 text-[11px]">
+                  <Clock className="h-3.5 w-3.5 text-[#095c7b]" />
+                  <span>
+                    {apptToCancel.duedate ? new Date(apptToCancel.duedate).toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled Date'}
+                    {apptToCancel.starttime ? ` at ${apptToCancel.starttime}` : ''}
+                  </span>
+                </div>
+                <div className="text-slate-500 text-[11px]">
+                  Host: <strong>{apptToCancel.assignedTo || 'Aleyna Harnett'}</strong>
+                </div>
+              </div>
+
+              {/* Cancellation Reason */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700">Reason for cancellation (Optional):</Label>
+                <Textarea
+                  placeholder="e.g. Schedule conflict, client rescheduled, or no longer needed..."
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="text-xs min-h-[70px]"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsCancelModalOpen(false)}
+                  disabled={isSubmittingCancel}
+                >
+                  Keep Appointment
+                </Button>
+                <Button
+                  onClick={handleCancelAppointment}
+                  disabled={isSubmittingCancel}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-9 px-4 flex items-center gap-1.5"
+                >
+                  {isSubmittingCancel ? (
+                    <Loader />
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4" />
+                      Confirm Cancellation
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

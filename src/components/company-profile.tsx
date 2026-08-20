@@ -121,6 +121,39 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [showAllInvoices, setShowAllInvoices] = useState(false);
 
+  const sortedNotes = useMemo(() => {
+    return [...(company.notes || [])].sort((a, b) => {
+      const timeA = new Date(a.date || (a as any).createdAt || 0).getTime();
+      const timeB = new Date(b.date || (b as any).createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [company.notes]);
+
+  const sortedCalls = useMemo(() => {
+    const calls = (company.activity || []).filter(a => a.type === 'Call' || a.notes?.includes('Initiated call') || a.aircallStatus === 'initiated' || a.callId);
+    return [...calls].sort((a, b) => {
+      const timeA = new Date(a.date || (a as any).createdAt || 0).getTime();
+      const timeB = new Date(b.date || (b as any).createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [company.activity]);
+
+  const sortedActivities = useMemo(() => {
+    return [...(company.activity || [])].sort((a, b) => {
+      const timeA = new Date(a.date || (a as any).createdAt || 0).getTime();
+      const timeB = new Date(b.date || (b as any).createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [company.activity]);
+
+  const sortedEmails = useMemo(() => {
+    return [...(company.emails || [])].sort((a, b) => {
+      const timeA = new Date(a.sentAt || (a as any).date || (a as any).createdAt || 0).getTime();
+      const timeB = new Date(b.sentAt || (b as any).date || (b as any).createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [company.emails]);
+
   useEffect(() => {
     if (!company?.id) return;
     const q = query(collection(firestore, 'leads', company.id, 'localMileJobs'));
@@ -1758,17 +1791,63 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             </Card>
 
             <Card>
-                <CardHeader><CardTitle>History</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="flex items-center gap-2"><History className="w-5 h-5 text-muted-foreground" />History</CardTitle></CardHeader>
                 <CardContent>
                     <Tabs defaultValue="notes">
-                        <TabsList><TabsTrigger value="notes">Notes</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger></TabsList>
+                        <TabsList>
+                            <TabsTrigger value="notes">Notes ({sortedNotes.length})</TabsTrigger>
+                            <TabsTrigger value="calls">Calls ({sortedCalls.length})</TabsTrigger>
+                            <TabsTrigger value="activity">Activity ({sortedActivities.length})</TabsTrigger>
+                            <TabsTrigger value="emails">Emails ({sortedEmails.length})</TabsTrigger>
+                        </TabsList>
                         <TabsContent value="notes" className="space-y-4 pt-4">
-                            {company.notes?.map(note => (
-                                <div key={note.id} className="text-sm border-l-2 pl-4 py-1"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{safeFormatDate(note.date, 'PPpp')} by {note.author}</p></div>
+                            {sortedNotes.map(note => (
+                                <div key={note.id} className="text-sm border-l-2 pl-4 py-1 border-primary/40">
+                                    <p className="whitespace-pre-wrap">{note.content}</p>
+                                    <p className="text-xs text-muted-foreground mt-1">{safeFormatDate(note.date, 'PPpp')} by {note.author}</p>
+                                </div>
                             ))}
+                            {sortedNotes.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No notes found.</p>}
+                        </TabsContent>
+                        <TabsContent value="calls" className="space-y-3 pt-4">
+                            {sortedCalls.map(call => (
+                                <div key={call.id} className="text-sm border-b pb-3 last:border-b-0 space-y-1">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div>
+                                            <p className="font-medium text-foreground">{call.notes}</p>
+                                            <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground mt-0.5">
+                                                {call.author && <span>By: {call.author}</span>}
+                                                {call.callId && <span>• AirCall ID: <code className="bg-muted px-1 rounded font-mono text-[10px]">{call.callId}</code></span>}
+                                                {call.duration && <span>• Duration: {call.duration}</span>}
+                                            </div>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground shrink-0 text-right">
+                                            {safeFormatDate(call.date, 'PPpp')}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                            {sortedCalls.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No calls found.</p>}
                         </TabsContent>
                         <TabsContent value="activity" className="space-y-2 pt-4">
-                            {company.activity?.map(a => <div key={a.id} className="text-xs flex justify-between"><span>{a.notes}</span><span className="text-muted-foreground">{safeFormatDate(a.date, 'PP')}</span></div>)}
+                            {sortedActivities.map(a => (
+                                <div key={a.id} className="text-xs flex justify-between border-b pb-2 last:border-b-0 gap-4">
+                                    <span className="font-medium text-foreground">{a.notes}</span>
+                                    <span className="text-muted-foreground shrink-0">{safeFormatDate(a.date, 'PPpp')}</span>
+                                </div>
+                            ))}
+                            {sortedActivities.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No activity found.</p>}
+                        </TabsContent>
+                        <TabsContent value="emails" className="space-y-4 pt-4">
+                            {sortedEmails.map(email => (
+                                <div key={email.id} className="text-sm border-b pb-2 flex justify-between items-start gap-4">
+                                    <div>
+                                        <p className="font-medium">{email.subject}</p>
+                                        <p className="text-xs text-muted-foreground">{safeFormatDate(email.sentAt || (email as any).date, 'PPpp')} to {email.recipient}</p>
+                                    </div>
+                                </div>
+                            ))}
+                            {sortedEmails.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No emails sent yet.</p>}
                         </TabsContent>
                     </Tabs>
                 </CardContent>

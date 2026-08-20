@@ -10,13 +10,13 @@ import { calculatePrevMonthRealizationCohort, type ExtendedInvoice } from '@/lib
 import { PrevMonthCohortWidget } from './prev-month-cohort-widget';
 import { LeadCampaign, getLeadCampaigns } from '@/services/lead-campaigns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader } from '@/components/ui/loader';
+import { Loader, FullScreenLoader } from '@/components/ui/loader';
 import { 
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, AreaChart, Area, LabelList
 } from 'recharts';
 import { 
   Phone, Percent, Filter, SlidersHorizontal, X, Star, Calendar as CalendarIcon, Goal, TrendingUp, BarChart3, RefreshCw, 
-  Flame, AlertCircle, ExternalLink, Layers, Send, User, Download, ClipboardCheck, CalendarCheck, Clock, ArrowRight, Info, Briefcase, DollarSign
+  Flame, AlertCircle, ExternalLink, Layers, Send, User, Download, ClipboardCheck, CalendarCheck, Clock, ArrowRight, Info, Briefcase, DollarSign, BookOpen
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -38,7 +38,7 @@ import { collection, query, getDocs, where, limit, documentId, collectionGroup }
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { BucketBreakdownBar } from './bucket-breakdown-bar';
-import { StatusOutcomeBanner } from './status-outcome-guide';
+import { StatusOutcomeBanner, StatusOutcomeGuideModal } from './status-outcome-guide';
 import { cn, getQuickDateRange, isManualActivity, parseDateString, getLeadDisplayDateValue, getLeadDisplayDateLabel } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -336,6 +336,7 @@ export default function SalesSnapshotClient() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [invoices, setInvoices] = useState<ExtendedInvoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
   const { setLoadTime, setPageName, setIsCustom } = usePerformance();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -1279,6 +1280,10 @@ export default function SalesSnapshotClient() {
     window.print();
   };
 
+  if (loading) {
+    return <FullScreenLoader message="Loading Sales Process Snapshot & Pipeline Data..." />;
+  }
+
   return (
     <div className="flex flex-col gap-6 p-1 relative print:bg-white print:p-0">
       {/* Styles for Presentation Printing */}
@@ -1337,7 +1342,43 @@ export default function SalesSnapshotClient() {
           </div>
         </header>
 
-        <StatusOutcomeBanner className="mt-4" />
+        {/* Combined Sales Snapshot & Lead Status Trigger Guide Banner */}
+        <div className="mt-4 p-4 rounded-xl border border-sky-200 dark:border-sky-800 bg-gradient-to-r from-sky-50 via-indigo-50/40 to-white dark:from-sky-950/40 dark:via-indigo-950/20 dark:to-slate-900 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 no-print">
+          <div className="flex items-start gap-3.5 flex-1">
+            <div className="p-2.5 rounded-xl bg-[#095c7b] text-white shrink-0 shadow-sm mt-0.5">
+              <Info className="h-5 w-5" />
+            </div>
+            <div className="space-y-1 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+              <div className="font-bold text-sm text-[#095c7b] dark:text-sky-400 flex items-center gap-2">
+                Sales Snapshot & Trigger Guide
+                <Badge variant="outline" className="text-[10px] px-2 py-0 bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800 font-semibold">
+                  Current Month Default
+                </Badge>
+              </div>
+              <p>
+                By default, this page displays and calculates metrics based on <strong>current month activity</strong>. Existing and historical leads are continuously actioned by both our <strong>Outbound BBD Team</strong> and assigned <strong>Account Managers</strong>.
+              </p>
+              <p className="text-slate-600 dark:text-slate-400">
+                To view details of a specific lead, inspect entry dates, or filter by milestones (such as <em>Date Lead Entered</em>, <em>Date Quote Sent</em>, or <em>Date Signed Up</em>), expand <strong>Report Filters</strong> below.
+              </p>
+            </div>
+          </div>
+
+          <div className="w-full md:w-auto pt-3 md:pt-0 border-t md:border-t-0 border-sky-200 dark:border-sky-800 flex flex-col items-stretch md:items-end gap-1.5 shrink-0">
+            <div className="text-[11px] text-slate-500 font-medium hidden md:block">Automated Rules Guide</div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStatusModalOpen(true)}
+              className="text-xs border-sky-300 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900/50 text-[#095c7b] dark:text-sky-300 font-semibold shadow-xs bg-white dark:bg-slate-900"
+            >
+              <BookOpen className="h-3.5 w-3.5 mr-1.5 text-[#095c7b] dark:text-sky-400" />
+              View Status-Outcome Map
+            </Button>
+          </div>
+        </div>
+
+        <StatusOutcomeGuideModal isOpen={statusModalOpen} onClose={() => setStatusModalOpen(false)} />
 
         <Collapsible defaultOpen={false} className="no-print">
           <Card className="border-[#095c7b]/20 shadow-sm card">

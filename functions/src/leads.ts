@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
+import fetch from 'node-fetch';
 import { sendAutomatedEmail } from './services/emailDispatcher';
 
 export const onLeadUpdated = functions
@@ -272,6 +273,40 @@ export const onLeadCreated = functions
     if (Object.keys(updates).length > 0) {
       await snap.ref.update(updates);
     }
+
+    // If document ID is numeric, sync to MailPlus API v2
+    const leadId = context.params.leadId;
+    if (/^\d+$/.test(leadId)) {
+      try {
+        const fullData = { ...data, ...updates };
+        const payloadObject: Record<string, any> = {
+          "Document ID": Number(leadId)
+        };
+
+        for (const [key, val] of Object.entries(fullData)) {
+          if (val && typeof (val as any).toDate === 'function') {
+            payloadObject[key] = (val as any).toDate().toISOString();
+          } else {
+            payloadObject[key] = val;
+          }
+        }
+
+        const apiKey = process.env.GENERAL_API_KEY || process.env.RTA_GENERAL_API_KEY || process.env.MAILPLUS_GENERAL_API_KEY || '708aa067-d67d-73e6-8967-66786247f5d7';
+        const response = await fetch('https://app.mailplus.com.au/api/v2/leads', {
+          method: 'POST',
+          headers: {
+            'GENERAL_API_KEY': apiKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify([payloadObject])
+        });
+
+        functions.logger.info(`Synced new numeric lead ${leadId} to MailPlus API v2. Status: ${response.status}`);
+      } catch (apiErr) {
+        functions.logger.error(`Failed to sync new numeric lead ${leadId} to MailPlus API v2:`, apiErr);
+      }
+    }
+
     return null;
   });
 

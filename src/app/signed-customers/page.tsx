@@ -21,7 +21,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { usePermissions } from '@/hooks/use-permissions'
-import { Loader } from '@/components/ui/loader'
+import { Loader, FullScreenLoader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
 import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, FileX, MoreHorizontal, CalendarCheck, FileText, PackageCheck } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
@@ -1093,11 +1093,7 @@ export default function SignedCustomersPage() {
     };
 
   if (loading || authLoading || loadingPermissions) {
-    return (
-      <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
-        <Loader />
-      </div>
-    )
+    return <FullScreenLoader message="Loading Signed Customers..." />;
   }
 
   if (!hasAccess) {
@@ -1384,13 +1380,13 @@ export default function SignedCustomersPage() {
                   <TableHead>Address</TableHead>
                   <TableHead>Services</TableHead>
                   <TableHead>Last Invoice</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {!isFranchisee && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={isFranchisee ? 7 : 8} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedCompanies.length > 0 ? (
                   paginatedCompanies.map((lead) => (
@@ -1423,6 +1419,7 @@ export default function SignedCustomersPage() {
                       <TableCell>
                         {renderLastInvoiceCell(lead.id, lead.companyName)}
                       </TableCell>
+                      {!isFranchisee && (
                        <TableCell className="text-right">
                          <DropdownMenu>
                            <DropdownMenuTrigger asChild>
@@ -1489,11 +1486,12 @@ export default function SignedCustomersPage() {
                            </DropdownMenuContent>
                          </DropdownMenu>
                        </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      )}
+                     </TableRow>
+                   ))
+                 ) : (
+                   <TableRow>
+                        <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                           No signed customers found.
                       </TableCell>
                   </TableRow>

@@ -61,7 +61,7 @@ import { cn } from "@/lib/utils"
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin, switchRole, updateUserProfile } = useAuth()
+  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSwitchingFranchisee, isSuperAdmin, switchRole, updateUserProfile } = useAuth()
   const { canView } = usePermissions()
   const { isMobile, state, toggleSidebar, setOpenMobile } = useSidebar()
   const { startTour } = useOnboarding()
@@ -128,13 +128,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       });
     }
 
-    // Safety timeout: if it takes more than 10 seconds, stop and record
+    // Safety timeout: if page load takes unusually long, cap safety stop at 60 seconds
     const safetyTimeout = setTimeout(() => {
       if (!completed) {
         completed = true;
         setLoadTime(Math.round(performance.now() - start));
       }
-    }, 10000);
+    }, 60000);
 
     return () => {
       observer.disconnect();
@@ -294,7 +294,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/leads/new': { label: 'New Lead', category: 'Sales & CRM', icon: PlusCircle, href: '/leads/new' },
     '/leads': { label: 'Outbound Leads', category: 'Sales & CRM', icon: Briefcase, href: '/leads' },
     '/inbound-leads': { label: 'Inbound Leads', category: 'Sales & CRM', icon: Inbox, href: '/inbound-leads' },
-    '/franchisee-leads': { label: 'Franchisee Leads', category: 'Sales & CRM', icon: Briefcase, href: '/franchisee-leads' },
+    '/franchisee-leads': { label: 'All Leads', category: 'Sales & CRM', icon: Briefcase, href: '/franchisee-leads' },
     '/franchisee-home': { label: 'Franchisee Home', category: 'My Franchise', icon: Home, href: '/franchisee-home' },
     '/my-franchise': { label: 'My Franchise Profile', category: 'My Franchise', icon: Store, href: '/my-franchise' },
     '/admin/marketing/import-leads': { label: 'Import Leads', category: 'Sales & CRM', icon: PlusCircle, href: '/admin/marketing/import-leads' },
@@ -625,6 +625,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (isSigningOut) return <FullScreenLoader message="Signing out..." />;
   if (isSigningIn) return <FullScreenLoader message="Signing in..." />;
+  if (isSwitchingFranchisee) return <FullScreenLoader message="Switching Franchise..." />;
   
   if (
     isAuthPage || 
@@ -1288,10 +1289,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         )}
                         {isFranchiseeRole ? (
                           <SidebarMenuItem>
-                            <SidebarMenuButton asChild isActive={isActive("/franchisee-leads")} tooltip="Franchisee Leads">
+                            <SidebarMenuButton asChild isActive={isActive("/franchisee-leads")} tooltip="All Leads">
                               <Link href="/franchisee-leads">
                                 <Briefcase />
-                                <span>Franchisee Leads</span>
+                                <span>All Leads</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
@@ -2618,7 +2619,9 @@ const CUSTOM_TIMER_PATHS = [
   '/inbound-leads',
   '/sales-snapshot',
   '/account-manager/pipeline',
-  '/account-manager/reports'
+  '/account-manager/reports',
+  '/franchisee-home',
+  '/franchisee-leads'
 ];
 
 const isCustomPath = (path: string) => {
@@ -2627,6 +2630,7 @@ const isCustomPath = (path: string) => {
 };
 
 const getPageNameFromPath = (path: string) => {
+  if (path === '/franchisee-leads') return 'All Leads';
   if (path === '/admin/mass-link-customers') return 'Mass Link Customers';
   if (path === '/admin/in-review-leads') return 'In Review Leads';
   if (path === '/leads/archive') return 'Archived Leads';

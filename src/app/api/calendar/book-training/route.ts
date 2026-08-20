@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     const apptData = {
       id: apptId,
       leadId: `training-${parentId}`,
-      leadName: `Teams Training Session with Aleyna (${franchiseeName || 'Franchisee'})`,
+      leadName: 'Prospect+ Training x Aleyna',
       assignedTo: 'Aleyna Harnett',
       duedate: isoDueDate,
       starttime: timeSlot,

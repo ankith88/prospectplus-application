@@ -1364,25 +1364,33 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
         if (leadIds.length === 0) return [];
 
         const leadsData: Record<string, Lead> = {};
+        const leadsChunks: string[][] = [];
         for (let i = 0; i < leadIds.length; i += 30) {
-            const chunk = leadIds.slice(i, i + 30);
-            const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
-            const leadsSnapshot = await getDocs(leadsQuery);
-            leadsSnapshot.forEach(doc => { leadsData[doc.id] = sanitizeData(doc.data()) as Lead; });
+            leadsChunks.push(leadIds.slice(i, i + 30));
         }
+        const leadsSnapshots = await Promise.all(
+            leadsChunks.map(chunk => getDocs(query(collection(firestore, 'leads'), where(documentId(), 'in', chunk))))
+        );
+        leadsSnapshots.forEach(snap => {
+            snap.forEach(doc => { leadsData[doc.id] = sanitizeData(doc.data()) as Lead; });
+        });
 
         const missingIds = leadIds.filter(id => !leadsData[id]);
         if (missingIds.length > 0) {
+            const compChunks: string[][] = [];
             for (let i = 0; i < missingIds.length; i += 30) {
-                const chunk = missingIds.slice(i, i + 30);
-                const compQuery = query(collection(firestore, 'companies'), where(documentId(), 'in', chunk));
-                const compSnapshot = await getDocs(compQuery);
-                compSnapshot.forEach(doc => { leadsData[doc.id] = sanitizeData(doc.data()) as Lead; });
+                compChunks.push(missingIds.slice(i, i + 30));
             }
+            const compSnapshots = await Promise.all(
+                compChunks.map(chunk => getDocs(query(collection(firestore, 'companies'), where(documentId(), 'in', chunk))))
+            );
+            compSnapshots.forEach(snap => {
+                snap.forEach(doc => { leadsData[doc.id] = sanitizeData(doc.data()) as Lead; });
+            });
         }
 
         return filteredDocs.map(doc => {
-            const data = sanitizeData(doc.data()) as Appointment;
+            const data = sanitizeData(doc.data()) as any;
             const leadId = doc.ref.parent.parent!.id;
             const lead = leadsData[leadId];
             return {
@@ -1390,7 +1398,9 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
                 id: doc.id,
                 leadId,
                 prospectPlusId: lead?.prospectPlusId || leadId,
-                leadName: lead?.companyName || 'Unknown Lead',
+                leadName: (data.isTraining || data.type === 'Teams Training Session')
+                    ? (data.leadName || 'Prospect+ Training x Aleyna')
+                    : (lead?.companyName || (data.leadName && data.leadName !== 'Unknown Lead' ? data.leadName : 'Prospect+ Training x Aleyna')),
                 dialerAssigned: lead?.dialerAssigned,
                 leadStatus: (lead?.customerStatus || lead?.status) as LeadStatus,
                 discoveryData: lead?.discoveryData,
