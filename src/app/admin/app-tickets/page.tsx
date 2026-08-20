@@ -1571,23 +1571,26 @@ export default function AdminAppTicketsPage() {
                         <div className="max-h-[120px] overflow-y-auto space-y-1 pr-1">
                           {users
                             .filter(u => {
+                              if (!u || !u.email) return false;
                               const query = userSearchQuery.toLowerCase();
                               const name = (u.displayName || "").toLowerCase();
-                              const email = (u.email || "").toLowerCase();
+                              const email = u.email.toLowerCase();
                               return name.includes(query) || email.includes(query);
                             })
                             .map(u => {
-                              const emailSelected = ccEmailVal.toLowerCase().includes(u.email.toLowerCase());
+                              const uEmail = u.email || "";
+                              const emailSelected = !!uEmail && ccEmailVal.toLowerCase().includes(uEmail.toLowerCase());
                               return (
                                 <button
                                   type="button"
-                                  key={u.uid}
+                                  key={u.uid || u.id || uEmail}
                                   onClick={() => {
+                                    if (!uEmail) return;
                                     const emails = ccEmailVal
                                       ? ccEmailVal.split(",").map(e => e.trim()).filter(Boolean)
                                       : [];
-                                    if (!emails.includes(u.email)) {
-                                      emails.push(u.email);
+                                    if (!emails.map(e => e.toLowerCase()).includes(uEmail.toLowerCase())) {
+                                      emails.push(uEmail);
                                     }
                                     setCcEmailVal(emails.join(", "));
                                   }}
@@ -1598,8 +1601,8 @@ export default function AdminAppTicketsPage() {
                                   }`}
                                 >
                                   <div>
-                                    <div>{u.displayName || u.email}</div>
-                                    <div className="text-[10px] text-gray-400 font-normal">{u.email}</div>
+                                    <div>{u.displayName || uEmail}</div>
+                                    <div className="text-[10px] text-gray-400 font-normal">{uEmail}</div>
                                   </div>
                                   <span className="text-[10px] font-bold text-[#095c7b] px-1.5 py-0.5 rounded bg-[#095c7b]/5 border border-[#095c7b]/10">
                                     {emailSelected ? "Added" : "+ Add"}

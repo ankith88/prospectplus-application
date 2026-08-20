@@ -6,6 +6,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useRouter, useParams } from "next/navigation";
 import { FullScreenLoader } from "@/components/ui/loader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -301,6 +302,38 @@ export default function TicketDetailsPage() {
   const [actions, setActions] = useState<any[]>([]);
   const [communications, setCommunications] = useState<any[]>([]);
   const [staffNotes, setStaffNotes] = useState<any[]>([]);
+
+  // Combined Investigation Actions & Staff Notes Feed
+  const combinedLogs = useMemo(() => {
+    const actionItems = actions.map((act) => ({
+      id: `act-${act.id}`,
+      type: "action" as const,
+      rawId: act.id,
+      title: act.action,
+      content: act.notes,
+      author: act.user,
+      date: act.date || act.createdAt,
+      status: act.status || "Pending",
+      raw: act,
+    }));
+
+    const noteItems = staffNotes.map((note) => ({
+      id: `note-${note.id}`,
+      type: "note" as const,
+      rawId: note.id,
+      title: "Internal Staff Note",
+      content: note.content,
+      author: note.author,
+      date: note.timestamp,
+      raw: note,
+    }));
+
+    return [...actionItems, ...noteItems].sort((a, b) => {
+      const timeA = a.date ? new Date(a.date).getTime() : 0;
+      const timeB = b.date ? new Date(b.date).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [actions, staffNotes]);
 
   // Modal / Input States
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
@@ -988,7 +1021,7 @@ export default function TicketDetailsPage() {
             for (const recipient of recipients) {
               // Personalize greeting if recipient name is known
               let personalizedBody = formattedHtml;
-              const contactObj = availableResolutionRecipients.find(c => c.email.toLowerCase() === recipient.toLowerCase());
+              const contactObj = availableResolutionRecipients.find(c => c.email && c.email.toLowerCase() === recipient.toLowerCase());
               const recipientName = contactObj?.name || (recipient === ticket?.customerEmail ? (ticket?.customerContactName || ticket?.enquirerName) : (recipient === ticket?.enquirerEmail ? ticket?.enquirerName : ''));
               
               if (recipientName) {
@@ -3164,96 +3197,209 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
           {/* RIGHT COLUMN: Sidebar Quick Actions, Escalations, Investigation */}
           <div className="space-y-6">
 
-            {/* Investigation Actions Log Panel */}
-            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6 flex justify-between items-center">
-                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                  <Wrench className="h-4.5 w-4.5 text-[#095c7b]" /> Investigation Log
-                </CardTitle>
+            {/* Merged Case Investigation Log & Internal Staff Notes Panel */}
+            <Card className="border border-slate-200/80 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/70 py-3.5 px-6 flex justify-between items-center flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Wrench className="h-4.5 w-4.5 text-[#095c7b]" />
+                  <CardTitle className="text-sm font-bold text-slate-800">
+                    Investigation & Internal Notes
+                  </CardTitle>
+                  <Badge className="bg-amber-100 text-amber-900 border border-amber-200 text-[9px] font-bold tracking-wider uppercase rounded-full px-2 py-0.5">
+                    Private Log
+                  </Badge>
+                </div>
                 <Button 
                   onClick={() => setIsActionModalOpen(true)}
-                  className="bg-[#095c7b] hover:bg-[#053647] text-white text-[11px] h-7 px-2.5 flex items-center gap-1 rounded-lg"
+                  className="bg-[#095c7b] hover:bg-[#053647] text-white text-[11px] h-7 px-2.5 flex items-center gap-1 rounded-lg font-semibold shadow-sm"
                 >
                   <Plus className="h-3.5 w-3.5" /> Log Action
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-[300px] overflow-y-auto">
-                  {actions.length > 0 ? (
-                    <div className="divide-y divide-slate-100">
-                      {actions.map((act) => (
-                        <div key={act.id} className="p-4 hover:bg-slate-50/40 transition-colors space-y-1 text-xs">
-                          <div className="flex justify-between items-start gap-2">
-                            <span className="font-bold text-slate-800">{act.action}</span>
-                            <select
-                              value={act.status || "Pending"}
-                              onChange={async (e) => {
-                                const newStatus = e.target.value;
-                                try {
-                                  await updateDoc(doc(db, "tickets", ticketId, "actions", act.id), {
-                                    status: newStatus
-                                  });
-                                  toast.success(`Action status updated to ${newStatus}`);
-                                } catch (err) {
-                                  toast.error("Failed to update status");
-                                }
-                              }}
-                              className={`text-[9px] font-bold rounded-full border-0 p-1 cursor-pointer outline-none focus:ring-1 focus:ring-[#095c7b] ${act.status === "Complete" ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100" : "text-amber-700 bg-amber-50 hover:bg-amber-100"}`}
-                            >
-                              <option value="Pending">Pending</option>
-                              <option value="Complete">Complete</option>
-                            </select>
-                          </div>
-                          <p className="text-[11px] text-slate-500 leading-relaxed font-medium mt-1">
-                            {act.notes}
-                          </p>
-                          <div className="flex justify-between text-[10px] text-slate-400 pt-1.5 font-medium">
-                            <span>By: {act.user}</span>
-                            <span>{act.date ? new Date(act.date).toLocaleDateString("en-AU", { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : ""}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-6 text-center text-xs text-slate-400 italic">No investigation tasks have been logged.</div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                <Tabs defaultValue="all" className="w-full">
+                  <div className="px-5 pt-3 pb-2 border-b border-slate-100 bg-slate-50/30">
+                    <TabsList className="grid grid-cols-3 bg-slate-200/60 p-1 rounded-xl text-xs font-semibold">
+                      <TabsTrigger value="all" className="text-xs py-1 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        All ({combinedLogs.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="actions" className="text-xs py-1 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        Actions ({actions.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="notes" className="text-xs py-1 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        Notes ({staffNotes.length})
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
 
-            {/* Staff-Only Internal Notes */}
-            <Card className="border border-amber-250 bg-amber-50/20 shadow-sm rounded-2xl overflow-hidden">
-              <CardHeader className="border-b border-amber-200/50 bg-amber-50/40 py-3.5 px-6 flex justify-between items-center">
-                <CardTitle className="text-sm font-bold text-amber-900">Internal Staff Notes</CardTitle>
-                <Badge className="bg-amber-100 text-amber-850 border border-amber-200 text-[9px] font-bold tracking-wider hover:bg-amber-100 uppercase rounded-full">
-                  Private Log
-                </Badge>
-              </CardHeader>
-              <CardContent className="p-5 space-y-4">
-                <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
-                  {staffNotes.map((note) => (
-                    <div key={note.id} className="p-3 bg-white border border-amber-150 rounded-xl shadow-sm">
-                      <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold mb-1">
-                        <span>{note.author}</span>
-                        <span>{note.timestamp ? new Date(note.timestamp).toLocaleString("en-AU", { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : ""}</span>
-                      </div>
-                      <p className="text-xs text-slate-700 leading-relaxed font-medium">{note.content}</p>
+                  {/* Combined All Updates Tab */}
+                  <TabsContent value="all" className="m-0 focus-visible:outline-none">
+                    <div className="max-h-[320px] overflow-y-auto p-4 space-y-2.5">
+                      {combinedLogs.length > 0 ? (
+                        combinedLogs.map((item) => (
+                          <div 
+                            key={item.id} 
+                            className={`p-3.5 rounded-xl border text-xs space-y-1.5 transition-all ${
+                              item.type === "action"
+                                ? "bg-slate-50/80 border-slate-200/80 border-l-4 border-l-[#095c7b]"
+                                : "bg-amber-50/40 border-amber-200/60 border-l-4 border-l-amber-500"
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {item.type === "action" ? (
+                                  <Badge className="bg-[#095c7b]/10 text-[#095c7b] border border-[#095c7b]/20 text-[9px] font-bold px-1.5 py-0 rounded">
+                                    Action
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-amber-100 text-amber-800 border border-amber-200 text-[9px] font-bold px-1.5 py-0 rounded">
+                                    Note
+                                  </Badge>
+                                )}
+                                <span className="font-bold text-slate-800">{item.title}</span>
+                              </div>
+                              {item.type === "action" && (
+                                <select
+                                  value={item.status || "Pending"}
+                                  onChange={async (e) => {
+                                    const newStatus = e.target.value;
+                                    try {
+                                      await updateDoc(doc(db, "tickets", ticketId, "actions", item.rawId), {
+                                        status: newStatus
+                                      });
+                                      toast.success(`Action status updated to ${newStatus}`);
+                                    } catch (err) {
+                                      toast.error("Failed to update status");
+                                    }
+                                  }}
+                                  className={`text-[9px] font-bold rounded-full border-0 p-1 cursor-pointer outline-none focus:ring-1 focus:ring-[#095c7b] ${
+                                    item.status === "Complete" 
+                                      ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100" 
+                                      : "text-amber-700 bg-amber-50 hover:bg-amber-100"
+                                  }`}
+                                >
+                                  <option value="Pending">Pending</option>
+                                  <option value="Complete">Complete</option>
+                                </select>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-650 leading-relaxed font-medium">
+                              {item.content}
+                            </p>
+                            <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1 font-medium border-t border-slate-200/40">
+                              <span>By: {item.author}</span>
+                              <span>
+                                {item.date 
+                                  ? new Date(item.date).toLocaleString("en-AU", { 
+                                      month: 'short', 
+                                      day: 'numeric', 
+                                      hour: '2-digit', 
+                                      minute: '2-digit', 
+                                      timeZone: 'Australia/Sydney' 
+                                    }) 
+                                  : ""}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-8 text-center text-xs text-slate-400 italic">
+                          No investigation tasks or staff notes logged yet.
+                        </div>
+                      )}
                     </div>
-                  ))}
-                  {staffNotes.length === 0 && (
-                    <span className="text-xs text-slate-400 italic block py-4 text-center">No team notes logged.</span>
-                  )}
-                </div>
-                <div className="flex gap-2">
+                  </TabsContent>
+
+                  {/* Actions Only Tab */}
+                  <TabsContent value="actions" className="m-0 focus-visible:outline-none">
+                    <div className="max-h-[320px] overflow-y-auto divide-y divide-slate-100">
+                      {actions.length > 0 ? (
+                        actions.map((act) => (
+                          <div key={act.id} className="p-4 hover:bg-slate-50/40 transition-colors space-y-1 text-xs">
+                            <div className="flex justify-between items-start gap-2">
+                              <span className="font-bold text-slate-800">{act.action}</span>
+                              <select
+                                value={act.status || "Pending"}
+                                onChange={async (e) => {
+                                  const newStatus = e.target.value;
+                                  try {
+                                    await updateDoc(doc(db, "tickets", ticketId, "actions", act.id), {
+                                      status: newStatus
+                                    });
+                                    toast.success(`Action status updated to ${newStatus}`);
+                                  } catch (err) {
+                                    toast.error("Failed to update status");
+                                  }
+                                }}
+                                className={`text-[9px] font-bold rounded-full border-0 p-1 cursor-pointer outline-none focus:ring-1 focus:ring-[#095c7b] ${
+                                  act.status === "Complete" ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100" : "text-amber-700 bg-amber-50 hover:bg-amber-100"
+                                }`}
+                              >
+                                <option value="Pending">Pending</option>
+                                <option value="Complete">Complete</option>
+                              </select>
+                            </div>
+                            <p className="text-[11px] text-slate-500 leading-relaxed font-medium mt-1">
+                              {act.notes}
+                            </p>
+                            <div className="flex justify-between text-[10px] text-slate-400 pt-1.5 font-medium">
+                              <span>By: {act.user}</span>
+                              <span>{act.date ? new Date(act.date).toLocaleDateString("en-AU", { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : ""}</span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-8 text-center text-xs text-slate-400 italic">
+                          No investigation tasks have been logged.
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  {/* Notes Only Tab */}
+                  <TabsContent value="notes" className="m-0 focus-visible:outline-none">
+                    <div className="max-h-[320px] overflow-y-auto p-4 space-y-2.5">
+                      {staffNotes.length > 0 ? (
+                        staffNotes.map((note) => (
+                          <div key={note.id} className="p-3 bg-amber-50/40 border border-amber-200/60 rounded-xl shadow-sm space-y-1">
+                            <div className="flex justify-between items-center text-[9px] text-amber-900 font-bold">
+                              <span>{note.author}</span>
+                              <span className="text-slate-400 font-normal">
+                                {note.timestamp ? new Date(note.timestamp).toLocaleString("en-AU", { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : ""}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-700 leading-relaxed font-medium">{note.content}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-8 text-center text-xs text-slate-400 italic">
+                          No team notes logged.
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+
+                {/* Footer Input: Append Internal Staff Note */}
+                <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex gap-2">
                   <Input 
                     id="staff-note-input"
-                    placeholder="Append staff details..." 
+                    placeholder="Append staff details / note..." 
                     value={newStaffNote}
                     onChange={(e) => setNewStaffNote(e.target.value)}
-                    className="text-xs h-9 bg-white border-slate-200 rounded-lg shadow-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddStaffNote();
+                      }
+                    }}
+                    className="text-xs h-9 bg-white border-slate-200 rounded-lg shadow-sm focus:border-[#095c7b]"
                   />
-                  <Button onClick={handleAddStaffNote} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 rounded-lg px-3 shrink-0">
-                    Post
+                  <Button 
+                    onClick={handleAddStaffNote} 
+                    className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 rounded-lg px-3 shrink-0 font-semibold"
+                  >
+                    Post Note
                   </Button>
                 </div>
               </CardContent>
