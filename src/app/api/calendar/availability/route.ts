@@ -189,6 +189,20 @@ export async function GET(req: NextRequest) {
       };
       const msGraphTz = IANA_TO_MS_GRAPH[amTz] || 'AUS Eastern Standard Time';
 
+      // Helper to compute timezone offset
+      const getTzOffset = (tz: string, d: Date): string => {
+        try {
+          const formattedStr = d.toLocaleString('en-US', { timeZone: tz, timeZoneName: 'longOffset' });
+          const match = formattedStr.match(/GMT([+-])(\d+)(?::(\d+))?/);
+          if (!match) return '+10:00';
+          const [_, sign, hours, minutes = '00'] = match;
+          return `${sign}${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+        } catch (e) {
+          return '+10:00';
+        }
+      };
+
+      const tzOffset = getTzOffset(amTz, date);
       let busyBlocks: Array<{ start: Date; end: Date }> = [];
 
       // Query Microsoft Graph Teams/Outlook Calendar if refreshToken is available
@@ -215,11 +229,16 @@ export async function GET(req: NextRequest) {
               let startStr = item.start.dateTime;
               let endStr = item.end.dateTime;
 
-              if (item.start.timeZone === 'UTC' && !startStr.endsWith('Z')) {
+              if ((item.start.timeZone === 'UTC' || !item.start.timeZone) && !startStr.endsWith('Z') && !startStr.includes('+')) {
                 startStr = `${startStr}Z`;
+              } else if (!startStr.endsWith('Z') && !startStr.includes('+')) {
+                startStr = `${startStr}${tzOffset}`;
               }
-              if (item.end.timeZone === 'UTC' && !endStr.endsWith('Z')) {
+
+              if ((item.end.timeZone === 'UTC' || !item.end.timeZone) && !endStr.endsWith('Z') && !endStr.includes('+')) {
                 endStr = `${endStr}Z`;
+              } else if (!endStr.endsWith('Z') && !endStr.includes('+')) {
+                endStr = `${endStr}${tzOffset}`;
               }
 
               return {
@@ -256,21 +275,7 @@ export async function GET(req: NextRequest) {
         console.warn('Firestore busy blocks check fallback:', dbErr);
       }
 
-      // Helper to compute timezone offset
-      const getTzOffset = (tz: string, d: Date): string => {
-        try {
-          const formattedStr = d.toLocaleString('en-US', { timeZone: tz, timeZoneName: 'longOffset' });
-          const match = formattedStr.match(/GMT([+-])(\d+)(?::(\d+))?/);
-          if (!match) return '+10:00';
-          const [_, sign, hours, minutes = '00'] = match;
-          return `${sign}${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
-        } catch (e) {
-          return '+10:00';
-        }
-      };
-
       const slots = [];
-      const tzOffset = getTzOffset(amTz, date);
 
       const [startH, startM] = workingHours.start.split(':');
       const [endH, endM] = workingHours.end.split(':');
@@ -307,10 +312,17 @@ export async function GET(req: NextRequest) {
         });
 
         if (!isBusy) {
+          const formattedTimeStr = new Intl.DateTimeFormat('en-US', {
+            timeZone: amTz,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          }).format(currentSlot);
+
           slots.push({
             start: currentSlot.toISOString(),
             end: slotEnd.toISOString(),
-            formattedTime: format(currentSlot, 'hh:mm a')
+            formattedTime: formattedTimeStr
           });
         }
 
