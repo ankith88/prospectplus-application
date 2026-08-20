@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Address, Contact, Lead } from "@/lib/types";
+import { canChangeFranchisee } from "@/lib/lead-permissions";
 import { createChildSiteLead, updateLeadDetails, getSiblingLeads, getLeadFromFirebase, getCompanyFromFirebase, getLastInvoicesForCompanies, getAllFranchisees } from "@/services/firebase";
 import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search, Receipt, FileText, Store, Sparkles } from "lucide-react";
 import { DiscoverMultiSitesDialog } from "@/components/discover-multisites-dialog";
@@ -858,15 +859,21 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                                          Assigned Franchisee: <strong className="text-emerald-900 dark:text-emerald-200 font-bold">{selectedFranchiseeName}</strong>
                                                      </span>
                                                  </div>
-                                                 <Button
-                                                     type="button"
-                                                     variant="outline"
-                                                     size="sm"
-                                                     className="h-7 text-[11px] px-2 bg-white dark:bg-slate-900 text-emerald-800 dark:text-emerald-300 border-emerald-300 hover:bg-emerald-100 font-medium"
-                                                     onClick={() => setShowOverrideFranchisee(!showOverrideFranchisee)}
-                                                 >
-                                                     {showOverrideFranchisee ? "Use Automatic Allocation" : "Change / Override Franchisee"}
-                                                 </Button>
+                                                 {canChangeFranchisee(lead, userProfile, isSuperAdmin) ? (
+                                                      <Button
+                                                          type="button"
+                                                          variant="outline"
+                                                          size="sm"
+                                                          className="h-7 text-[11px] px-2 bg-white dark:bg-slate-900 text-emerald-800 dark:text-emerald-300 border-emerald-300 hover:bg-emerald-100 font-medium"
+                                                          onClick={() => setShowOverrideFranchisee(!showOverrideFranchisee)}
+                                                      >
+                                                          {showOverrideFranchisee ? "Use Automatic Allocation" : "Change / Override Franchisee"}
+                                                      </Button>
+                                                  ) : (
+                                                      <span className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 italic">
+                                                          (Only admins can change franchisee for signed customers)
+                                                      </span>
+                                                  )}
                                              </div>
 
                                              {franchiseeMatchReason && !showOverrideFranchisee && (

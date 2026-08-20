@@ -299,3 +299,47 @@ export function canFranchiseeAccessLead(
   return false;
 }
 
+export function isSignedCustomer(lead?: Partial<Lead> | null): boolean {
+  if (!lead) return false;
+  const status = (lead.status || '').toString().toLowerCase().trim();
+  const customerStatus = (lead.customerStatus || '').toString().toLowerCase().trim();
+  const isCompany = Boolean((lead as any).isCompany);
+
+  return (
+    isCompany ||
+    customerStatus === 'signed' ||
+    customerStatus === 'signed customer' ||
+    customerStatus === 'won' ||
+    customerStatus === 'customer' ||
+    status === 'signed' ||
+    status === 'signed customer' ||
+    status === 'won' ||
+    status === 'customer'
+  );
+}
+
+export function canChangeFranchisee(
+  lead: Partial<Lead> | null | undefined,
+  userProfile: UserProfile | null | undefined,
+  isSuperAdmin: boolean = false
+): boolean {
+  if (!userProfile) return false;
+
+  const role = userProfile.activeRole || userProfile.role || '';
+  const roleLower = role.toLowerCase().trim();
+  const isStrictAdmin = isSuperAdmin || roleLower === 'admin' || roleLower === 'superadmin';
+
+  // For signed customers, ONLY users with role as 'admin' or 'superadmin' (or isSuperAdmin) can change franchisee
+  if (isSignedCustomer(lead)) {
+    return isStrictAdmin;
+  }
+
+  // For unsigned prospects, dialers ('user') cannot change franchisee
+  if (roleLower === 'user' || roleLower === 'dialer' || roleLower === 'dialers') {
+    return false;
+  }
+
+  return true;
+}
+
+

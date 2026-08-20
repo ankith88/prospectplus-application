@@ -68,7 +68,8 @@ import { LogNoteDialog } from './log-note-dialog'
 import { LossReasonPicker } from './loss-reason-picker'
 import { collection, getDocs, orderBy, query, doc, getDoc, setDoc, where, onSnapshot, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
-import { canEditSignedCustomerAddress, canFranchiseeAccessLead } from '@/lib/lead-permissions'
+import { canEditSignedCustomerAddress, canFranchiseeAccessLead, canChangeFranchisee } from '@/lib/lead-permissions'
+import { sendCompanyCustomerUpdateToNetSuite } from '@/services/netsuite'
 import { AccessDenied } from '@/components/access-denied'
 import { RequestAddressChangeDialog } from '@/components/request-address-change-dialog'
 import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
@@ -384,6 +385,13 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [isNotifyUpsellDialogOpen, setIsNotifyUpsellDialogOpen] = useState(false);
   const [isReqAddressDialogOpen, setIsReqAddressDialogOpen] = useState(false);
 
+  // Franchisee Lookup State
+  const [isFranchiseeLookupOpen, setIsFranchiseeLookupOpen] = useState(false);
+  const [isLookingUpFranchisee, setIsLookingUpFranchisee] = useState(false);
+  const [franchiseeMatches, setFranchiseeMatches] = useState<any[]>([]);
+  const [showAllFranchiseesInLookup, setShowAllFranchiseesInLookup] = useState(false);
+  const [lookupSearchQuery, setLookupSearchQuery] = useState('');
+
   // Franchisee & Operators state
   const [franchiseeDetails, setFranchiseeDetails] = useState<any | null>(null);
   const [loadingFranchisee, setLoadingFranchisee] = useState(false);
@@ -395,6 +403,87 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [checkingShipmateId, setCheckingShipmateId] = useState<string | null>(null);
   const [verifyingEmails, setVerifyingEmails] = useState<Record<string, boolean>>({});
   const autoVerifiedCompanyRef = useRef<Set<string>>(new Set());
+
+  const handleManageAdditionalAddresses = () => {
+    setIsAdditionalAddressDialogOpen(true);
+  };
+
+  const handleFranchiseeLookup = async () => {
+      if (!canChangeFranchisee(company, userProfile, isSuperAdmin)) {
+          toast({
+              variant: 'destructive',
+              title: 'Action Denied',
+              description: 'For signed customers, only admins or superadmins can change the franchisee.'
+          });
+          return;
+      }
+      setIsLookingUpFranchisee(true);
+      setFranchiseeMatches([]);
+      setShowAllFranchiseesInLookup(false);
+      setLookupSearchQuery('');
+      setIsFranchiseeLookupOpen(true);
+      try {
+          const snap = await getDocs(collection(firestore, 'franchisees'));
+          const franchisees = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+          const matches = franchisees.filter(f => {
+              if (!f.territoryJson) return false;
+              const companyCity = company.address?.city?.toLowerCase().trim();
+              const companyState = company.address?.state?.toLowerCase().trim();
+              const companyZip = company.address?.zip?.toLowerCase().trim();
+              
+              if (!companyCity || !companyState || !companyZip) return false;
+
+              return f.territoryJson.some((t: any) => 
+                  t.suburbs?.toLowerCase().trim() === companyCity &&
+                  t.state?.toLowerCase().trim() === companyState &&
+                  t.post_code?.toLowerCase().trim() === companyZip
+              );
+          });
+          setFranchiseeMatches(matches);
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Lookup Error', description: 'Failed to fetch franchisees.' });
+      } finally {
+          setIsLookingUpFranchisee(false);
+      }
+  };
+
+  const handleFranchiseeSelection = async (franchisee: any) => {
+      if (!canChangeFranchisee(company, userProfile, isSuperAdmin)) {
+          toast({
+              variant: 'destructive',
+              title: 'Action Denied',
+              description: 'For signed customers, only admins or superadmins can change the franchisee.'
+          });
+          return;
+      }
+      try {
+          const franchiseeId = String(franchisee.internalId || franchisee.id);
+          const compRef = doc(firestore, 'companies', company.id);
+          await updateDoc(compRef, { franchisee: franchisee.name, franchisee_id: franchiseeId });
+          
+          try {
+              const leadRef = doc(firestore, 'leads', company.id);
+              await updateDoc(leadRef, { franchisee: franchisee.name, franchisee_id: franchiseeId });
+          } catch (_) {}
+
+          setCompany(prev => ({ ...prev, franchisee: franchisee.name, franchisee_id: franchiseeId }));
+          
+          await sendCompanyCustomerUpdateToNetSuite({
+              internalId: company.id,
+              companyName: company.companyName || '',
+              email: company.customerServiceEmail || '',
+              phone: company.customerPhone || '',
+              franchiseeId: franchiseeId,
+              prospectPlusId: company.id,
+              abn: (company as any).abn || '',
+          });
+
+          toast({ title: 'Franchisee Updated', description: `Customer mapped to ${franchisee.name} and synced with NetSuite.` });
+          setIsFranchiseeLookupOpen(false);
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Update Error', description: 'Failed to update customer franchisee.' });
+      }
+  };
 
   const handleVerifySingleEmail = async (contact: any) => {
     if (!contact.email) return;
@@ -818,7 +907,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     return date && isValid(date) ? format(date, 'MMM d, yyyy') : '-';
   };
 
-  const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId, emailClickable }: any) => {
+  const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId, emailClickable, actionIcon: ActionIcon, onActionClick, isActionLoading, actionClassName }: any) => {
     return (
         <div className="space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -853,6 +942,18 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <span className="text-sm font-semibold">{value || '-'}</span>
                 )}
                 
+                {ActionIcon && onActionClick && (
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className={`h-5 w-5 ml-1 ${actionClassName || 'text-muted-foreground hover:text-foreground'}`}
+                        onClick={onActionClick}
+                        disabled={isActionLoading}
+                    >
+                        {isActionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ActionIcon className="h-3.5 w-3.5" />}
+                    </Button>
+                )}
+
                 {copyable && value && (
                     <CopyButton
                         textToCopy={value}
@@ -861,9 +962,6 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         iconClassName="h-3.5 w-3.5"
                     />
                 )}
-
-
-
                 
                 {callable && value && (
                     <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(value)}>
@@ -1218,7 +1316,15 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                             <div className="space-y-8">
-                                <DetailItem icon={Tag} label="Franchisee Name" value={franchiseeDetails?.name || company.franchisee || 'Unassigned'} />
+                                <DetailItem 
+                                    icon={Tag} 
+                                    label="Franchisee Name" 
+                                    value={franchiseeDetails?.name || company.franchisee || 'Unassigned'} 
+                                    actionIcon={canChangeFranchisee(company, userProfile, isSuperAdmin) ? Search : undefined}
+                                    onActionClick={canChangeFranchisee(company, userProfile, isSuperAdmin) ? handleFranchiseeLookup : undefined}
+                                    isActionLoading={isLookingUpFranchisee}
+                                    actionClassName="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                />
                                 <DetailItem icon={User} label="Main Contact" value={franchiseeDetails?.mainContact || '-'} />
                             </div>
                             <div className="space-y-8">
@@ -1871,6 +1977,117 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
           }
         }}
       />
+
+    <Dialog open={isFranchiseeLookupOpen} onOpenChange={setIsFranchiseeLookupOpen}>
+        <DialogContent className="max-w-md">
+            <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                    <Search className="h-5 w-5 text-primary" />
+                    Territory Franchisee Lookup
+                </DialogTitle>
+                <DialogDescription>
+                    Automated territory lookup based on company site address ({company.address?.city || 'No City'}, {company.address?.state || 'No State'} {company.address?.zip || 'No Zip'}).
+                </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+                {isLookingUpFranchisee ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader className="h-6 w-6 animate-spin text-primary" />
+                        <span className="ml-2 text-sm text-muted-foreground">Matching territory...</span>
+                    </div>
+                ) : (
+                    <>
+                        {franchiseeMatches.length > 0 && !showAllFranchiseesInLookup && (
+                            <div className="space-y-3">
+                                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                    Matched Territory Franchisee(s)
+                                </Label>
+                                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                    {franchiseeMatches.map((f: any) => (
+                                        <div 
+                                            key={f.id} 
+                                            className="flex items-center justify-between p-3 border rounded-lg hover:border-primary/50 hover:bg-muted/50 cursor-pointer transition-colors"
+                                            onClick={() => handleFranchiseeSelection(f)}
+                                        >
+                                            <div>
+                                                <div className="font-semibold text-sm">{f.name}</div>
+                                                <div className="text-xs text-muted-foreground">ID: {f.internalId || f.id} • {f.mainContact || 'No contact'}</div>
+                                            </div>
+                                            <Button size="sm" variant="secondary">Select</Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {franchiseeMatches.length === 0 && !showAllFranchiseesInLookup && (
+                            <div className="text-center py-6 border rounded-lg bg-muted/20 space-y-2">
+                                <p className="text-sm font-medium text-destructive">No exact territory match found</p>
+                                <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                                    No franchisee territory matched postcode {company.address?.zip || 'N/A'}. You can browse all franchisees below.
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="pt-2 border-t flex flex-col gap-2">
+                            <Button 
+                                type="button"
+                                variant="outline" 
+                                size="sm"
+                                className="w-full text-xs"
+                                onClick={async () => {
+                                    if (!showAllFranchiseesInLookup) {
+                                        setShowAllFranchiseesInLookup(true);
+                                        if (franchiseeMatches.length === 0) {
+                                            const snap = await getDocs(collection(firestore, 'franchisees'));
+                                            setFranchiseeMatches(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+                                        }
+                                    } else {
+                                        setShowAllFranchiseesInLookup(false);
+                                    }
+                                }}
+                            >
+                                {showAllFranchiseesInLookup ? 'Show Matched Territory Only' : 'Search / Select From All Franchisees'}
+                            </Button>
+
+                            {showAllFranchiseesInLookup && (
+                                <div className="space-y-3 pt-2">
+                                    <Input
+                                        placeholder="Search franchisee by name or ID..."
+                                        value={lookupSearchQuery}
+                                        onChange={(e) => setLookupSearchQuery(e.target.value)}
+                                        className="h-8 text-xs"
+                                    />
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {franchiseeMatches
+                                            .filter(f => !lookupSearchQuery || f.name?.toLowerCase().includes(lookupSearchQuery.toLowerCase()) || String(f.internalId || f.id).includes(lookupSearchQuery))
+                                            .map((f: any) => (
+                                                <div 
+                                                    key={f.id} 
+                                                    className="flex items-center justify-between p-2.5 border rounded-lg hover:border-primary/50 hover:bg-muted/50 cursor-pointer transition-colors text-xs"
+                                                    onClick={() => handleFranchiseeSelection(f)}
+                                                >
+                                                    <div>
+                                                        <div className="font-semibold">{f.name}</div>
+                                                        <div className="text-[11px] text-muted-foreground">ID: {f.internalId || f.id}</div>
+                                                    </div>
+                                                    <Button size="sm" variant="ghost" className="h-7 text-xs">Assign</Button>
+                                                </div>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
+            </div>
+
+            <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setIsFranchiseeLookupOpen(false)}>Cancel</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </>
   )
 }

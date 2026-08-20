@@ -35,9 +35,11 @@ import { SmsDialog } from '@/components/sms-dialog';
 import { EmailDialog } from '@/components/email-dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { BulkImportOperators } from '@/components/admin/bulk-import-operators';
+import { UploadAgreementDialog } from '@/components/admin/upload-agreement-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { UploadAgreementDialog } from '@/components/admin/upload-agreement-dialog';
+
 
 export function getLinkedUsersForFranchisee(f: Franchisee | null, allUsers: UserProfile[]) {
   if (!f) return [];
@@ -192,6 +194,8 @@ export default function FranchiseeDirectoryClient() {
   const [searchQuery, setSearchQuery] = useState('');
   const [territoryQuery, setTerritoryQuery] = useState('');
   const [campaignQuery, setCampaignQuery] = useState('');
+  const [ownershipFilter, setOwnershipFilter] = useState<'all' | 'company' | 'franchisee'>('all');
+
 
   // Dialog states
   const [emailDialogTarget, setEmailDialogTarget] = useState<{ email: string, name: string } | null>(null);
@@ -332,9 +336,14 @@ export default function FranchiseeDirectoryClient() {
       const matchesCampaign = !cq || 
         franchisee.campaignPriorities?.some(cp => cp.campaign.toLowerCase().includes(cq));
 
-      return matchesText && matchesTerritory && matchesCampaign;
+      const matchesOwnership =
+        ownershipFilter === 'all' ||
+        (ownershipFilter === 'company' && !!franchisee.isCompanyOwned) ||
+        (ownershipFilter === 'franchisee' && !franchisee.isCompanyOwned);
+
+      return matchesText && matchesTerritory && matchesCampaign && matchesOwnership;
     });
-  }, [franchisees, allUsers, searchQuery, territoryQuery, campaignQuery]);
+  }, [franchisees, allUsers, searchQuery, territoryQuery, campaignQuery, ownershipFilter]);
 
   const sortedFranchisees = useMemo(() => {
     if (!campaignQuery) return filteredFranchisees;
@@ -478,7 +487,7 @@ export default function FranchiseeDirectoryClient() {
 
   const downloadCSV = () => {
     const header = [
-      "Internal ID", "Name", "Main Contact", "Linked Users", "Email", "Mobile", "Sales Rep", 
+      "Internal ID", "Name", "Ownership", "Main Contact", "Linked Users", "Email", "Mobile", "Sales Rep", 
       "AusPost Suburb", "AusPost State", "AusPost Postcode", "LPO ID", "LPO Name", "Nominated Post Office", "Campaigns"
     ];
     const rows: string[][] = [];
@@ -488,10 +497,11 @@ export default function FranchiseeDirectoryClient() {
       const linkedUserText = getLinkedUsersForFranchisee(f, allUsers)
         .map(u => `${u.name} (${u.email})${u.relationship ? ` [${u.relationship}]` : ''}`)
         .join("; ");
+      const ownershipText = f.isCompanyOwned ? "Company Owned" : "Franchisee Owned";
 
       if (!f.ausPostSuburbsJson || f.ausPostSuburbsJson.length === 0) {
         rows.push([
-          f.internalId || "", f.name || "", f.mainContact || "", linkedUserText, f.email || "", f.mobile || "", f.salesRepAssigned || "",
+          f.internalId || "", f.name || "", ownershipText, f.mainContact || "", linkedUserText, f.email || "", f.mobile || "", f.salesRepAssigned || "",
           "", "", "", "", "", nominatedLpoText, (f.campaignPriorities || []).map(cp => `${cp.campaign}:${cp.priority}`).join(", ")
         ]);
         return;
@@ -501,7 +511,7 @@ export default function FranchiseeDirectoryClient() {
         const lpoId = t.parent_lpo_id || "";
         const lpoName = lpoId ? (lpoNames[lpoId] || "") : "";
         rows.push([
-          f.internalId || "", f.name || "", f.mainContact || "", linkedUserText, f.email || "", f.mobile || "", f.salesRepAssigned || "",
+          f.internalId || "", f.name || "", ownershipText, f.mainContact || "", linkedUserText, f.email || "", f.mobile || "", f.salesRepAssigned || "",
           t.suburbs || "", t.state || "", t.post_code || "", lpoId, lpoName, nominatedLpoText, (f.campaignPriorities || []).map(cp => `${cp.campaign}:${cp.priority}`).join(", ")
         ]);
       });
@@ -561,6 +571,18 @@ export default function FranchiseeDirectoryClient() {
             onChange={(e) => setCampaignQuery(e.target.value)}
           />
         </div>
+        <div className="w-full sm:w-[180px]">
+          <Select value={ownershipFilter} onValueChange={(val: 'all' | 'company' | 'franchisee') => setOwnershipFilter(val)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Ownership" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Ownership</SelectItem>
+              <SelectItem value="company">Company Owned</SelectItem>
+              <SelectItem value="franchisee">Franchisee Owned</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="ml-auto flex items-center gap-2">
           <Button
             variant="default"
@@ -606,6 +628,7 @@ export default function FranchiseeDirectoryClient() {
               )}
               <TableHead className="whitespace-nowrap font-bold text-slate-700">Internal ID</TableHead>
               <TableHead className="whitespace-nowrap font-bold text-slate-700">Franchisee Name</TableHead>
+              <TableHead className="whitespace-nowrap font-bold text-slate-700">Ownership</TableHead>
               <TableHead className="whitespace-nowrap font-bold text-slate-700">Linked Users</TableHead>
               <TableHead className="whitespace-nowrap font-bold text-slate-700">Main Contact</TableHead>
               <TableHead className="whitespace-nowrap font-bold text-slate-700">Email</TableHead>
@@ -622,7 +645,7 @@ export default function FranchiseeDirectoryClient() {
           <TableBody>
             {sortedFranchisees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={15} className="text-center text-muted-foreground py-8">
                   No active franchisees found matching your filters.
                 </TableCell>
               </TableRow>
@@ -652,6 +675,17 @@ export default function FranchiseeDirectoryClient() {
                     )}
                     <TableCell className="font-semibold text-slate-900">#{franchisee.internalId}</TableCell>
                     <TableCell className="font-bold text-slate-900">{franchisee.name}</TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {franchisee.isCompanyOwned ? (
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200 text-xs whitespace-nowrap font-medium">
+                          Company Owned
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 text-xs whitespace-nowrap font-medium">
+                          Franchisee Owned
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       {linkedUsers.length === 0 ? (
                         <span className="text-slate-400 text-xs italic">Unlinked</span>

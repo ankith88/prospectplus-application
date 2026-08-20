@@ -75,7 +75,7 @@ import {
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
-import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead } from '@/lib/lead-permissions'
+import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
 import { RequestAssignmentDialog } from '@/components/request-assignment-dialog'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
@@ -1840,8 +1840,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleFranchiseeLookup = async () => {
-      if (userProfile?.activeRole === 'user') {
-          toast({ variant: 'destructive', title: 'Action Denied', description: 'Dialers are not permitted to change lead franchisees.' });
+      if (!canChangeFranchisee(lead, userProfile, isSuperAdmin)) {
+          const isSigned = isSignedCustomer(lead);
+          toast({
+              variant: 'destructive',
+              title: 'Action Denied',
+              description: isSigned
+                  ? 'For signed customers, only admins or superadmins can change the franchisee.'
+                  : 'You are not permitted to change lead franchisees.'
+          });
           return;
       }
       setIsLookingUpFranchisee(true);
@@ -1875,8 +1882,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleFranchiseeSelection = async (franchisee: any) => {
-      if (userProfile?.activeRole === 'user') {
-          toast({ variant: 'destructive', title: 'Action Denied', description: 'Dialers are not permitted to change lead franchisees.' });
+      if (!canChangeFranchisee(lead, userProfile, isSuperAdmin)) {
+          const isSigned = isSignedCustomer(lead);
+          toast({
+              variant: 'destructive',
+              title: 'Action Denied',
+              description: isSigned
+                  ? 'For signed customers, only admins or superadmins can change the franchisee.'
+                  : 'You are not permitted to change lead franchisees.'
+          });
           return;
       }
       try {
@@ -3459,6 +3473,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleSetupMultiFranchisee = async () => {
+      if (!canChangeFranchisee(lead, userProfile, isSuperAdmin)) {
+          const isSigned = isSignedCustomer(lead);
+          toast({
+              variant: 'destructive',
+              title: 'Action Denied',
+              description: isSigned
+                  ? 'For signed customers, only admins or superadmins can change the franchisee.'
+                  : 'You are not permitted to change lead franchisees.'
+          });
+          return;
+      }
       if (selectedFranchiseesForSetup.length === 0) {
           toast({ variant: 'destructive', title: 'Selection Required', description: 'Please select at least one servicing franchisee.' });
           return;
@@ -5111,8 +5136,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     icon={Tag} 
                                     label="Franchisee Name" 
                                     value={franchiseeDetails?.name || (lead.franchisee && isNaN(Number(lead.franchisee)) ? lead.franchisee : null) || '- Unassigned -'} 
-                                    actionIcon={userProfile?.activeRole === 'user' ? undefined : Search}
-                                    onActionClick={userProfile?.activeRole === 'user' ? undefined : handleFranchiseeLookup}
+                                    actionIcon={canChangeFranchisee(lead, userProfile, isSuperAdmin) ? Search : undefined}
+                                    onActionClick={canChangeFranchisee(lead, userProfile, isSuperAdmin) ? handleFranchiseeLookup : undefined}
                                     isActionLoading={isLookingUpFranchisee}
                                     actionClassName="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                                 />
