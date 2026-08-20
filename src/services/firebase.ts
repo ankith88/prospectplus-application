@@ -565,7 +565,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
 
     const snapshot = await getDocs(leadsQuery);
     const leads = snapshot.docs
-        .filter((doc) => includeDuplicates || !doc.data().isDuplicate)
+        .filter((doc) => !doc.id.startsWith('fran-training-') && (includeDuplicates || !doc.data().isDuplicate))
         .map((doc) => {
         const data = sanitizeData(doc.data() || {});
         let address: Address | undefined;

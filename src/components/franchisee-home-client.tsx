@@ -79,9 +79,18 @@ export default function FranchiseeHomeClient() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
-  // Selected date on calendar widget
+  // Selected date & active calendar month state on calendar widget
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isVideoOpen, setIsVideoOpen] = useState(false);
+
+  const activeMonthDate = useMemo(() => {
+    return selectedDate || calendarMonth || new Date();
+  }, [selectedDate, calendarMonth]);
+
+  const activeMonthName = useMemo(() => {
+    return activeMonthDate.toLocaleString('en-AU', { month: 'long', year: 'numeric' });
+  }, [activeMonthDate]);
 
   // Quick View Pop-Up Modal State
   const [activeQuickViewModal, setActiveQuickViewModal] = useState<'won' | 'quotes' | 'trials' | 'appointments' | null>(null);
@@ -220,25 +229,38 @@ export default function FranchiseeHomeClient() {
     };
   }, [leads]);
 
-  // Detailed distribution of leads based on requested categories
+  // Detailed distribution of leads based on requested categories for active selected month
+  const targetMonthLeads = useMemo(() => {
+    const targetYear = activeMonthDate.getFullYear();
+    const targetMonth = activeMonthDate.getMonth();
+    return leads.filter((l) => {
+      const dateVal = (l as any).createdAt || (l as any).created_at || (l as any).updatedAt || (l as any).updated_at;
+      if (!dateVal) return true;
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return true;
+      return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
+    });
+  }, [leads, activeMonthDate]);
+
   const leadDistribution = useMemo(() => {
-    const quoteSentAccepted = leads.filter((l) =>
+    const pool = targetMonthLeads.length > 0 ? targetMonthLeads : leads;
+    const quoteSentAccepted = pool.filter((l) =>
       ['Quote Sent', 'Quote Accepted'].includes(l.status as string)
     ).length;
 
-    const localMileTrial = leads.filter(
+    const localMileTrial = pool.filter(
       (l) =>
         ['Trialing LocalMile', 'LocalMile Pending', 'LocalMile Opportunity', 'LocalMile Trial'].includes(l.status as string) ||
         ((l as any).trialType || '').toLowerCase().includes('localmile')
     ).length;
 
-    const shipMateTrial = leads.filter(
+    const shipMateTrial = pool.filter(
       (l) =>
         ['Trialing ShipMate', 'ShipMate Trial', 'Free Trial'].includes(l.status as string) ||
         ((l as any).trialType || '').toLowerCase().includes('shipmate')
     ).length;
 
-    const workInProgress = leads.filter((l) =>
+    const workInProgress = pool.filter((l) =>
       [
         'In Progress',
         'Contacted',
@@ -252,14 +274,14 @@ export default function FranchiseeHomeClient() {
       ].includes(l.status as string)
     ).length;
 
-    const hotPriorityLeads = leads.filter(
+    const hotPriorityLeads = pool.filter(
       (l) =>
         ['Hot Lead', 'Priority Lead', 'Priority Field Lead'].includes(l.status as string) ||
         (l as any).priority === 'High' ||
         (l as any).isHot === true
     ).length;
 
-    const newLeads = leads.filter(
+    const newLeads = pool.filter(
       (l) => ['New', 'New Lead', 'Uncontacted'].includes(l.status as string) || !l.status
     ).length;
 
@@ -271,25 +293,15 @@ export default function FranchiseeHomeClient() {
       hotPriorityLeads,
       newLeads
     };
-  }, [leads]);
+  }, [leads, targetMonthLeads]);
 
-  // Current Month Performance Snapshot (High level view of current month only)
+  // Current Month Performance Snapshot (High level view of selected month)
   const currentMonthSnapshot = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const monthName = now.toLocaleString('en-AU', { month: 'long', year: 'numeric' });
+    const targetYear = activeMonthDate.getFullYear();
+    const targetMonth = activeMonthDate.getMonth();
+    const monthName = activeMonthName;
 
-    // Filter leads created or active in current month
-    const thisMonthLeads = leads.filter((l) => {
-      const dateVal = (l as any).createdAt || (l as any).created_at || (l as any).updatedAt || (l as any).updated_at;
-      if (!dateVal) return false;
-      const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return false;
-      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
-    });
-
-    const pool = thisMonthLeads.length > 0 ? thisMonthLeads : leads;
+    const pool = targetMonthLeads.length > 0 ? targetMonthLeads : leads;
     const totalLeads = pool.length;
     const wonLeads = pool.filter((l) => l.status === 'Won').length;
     const inDiscussion = pool.filter((l) =>
@@ -309,13 +321,12 @@ export default function FranchiseeHomeClient() {
       quotesSent,
       conversionRate
     };
-  }, [leads]);
+  }, [leads, targetMonthLeads, activeMonthDate, activeMonthName]);
 
   // Metric 1: Leads Won / Signed Up This Month
   const wonLeadsThisMonth = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    const targetYear = activeMonthDate.getFullYear();
+    const targetMonth = activeMonthDate.getMonth();
 
     return leads.filter((l) => {
       const statusStr = (l.status || '').toLowerCase();
@@ -343,59 +354,87 @@ export default function FranchiseeHomeClient() {
       if (!dateVal) return true;
       const d = new Date(dateVal);
       if (isNaN(d.getTime())) return true;
-      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
     });
-  }, [leads]);
+  }, [leads, activeMonthDate]);
 
-  // Metric 2: Quotes Sent Leads
+  // Metric 2: Quotes Sent Leads (Filtered for active month)
   const quotesSentLeads = useMemo(() => {
+    const targetYear = activeMonthDate.getFullYear();
+    const targetMonth = activeMonthDate.getMonth();
+
     return leads.filter((l) => {
       const statusStr = (l.status || '').toLowerCase();
-      return (
+      const isQuote =
         statusStr.includes('quote') ||
         statusStr === 'proposal sent' ||
         statusStr === 'in discussion' ||
         !!(l as any).quoteSentAt ||
-        !!(l as any).quotesSent
-      );
-    });
-  }, [leads]);
+        !!(l as any).quotesSent;
 
-  // Metric 3: Trials (ShipMate or LocalMile) Leads
+      if (!isQuote) return false;
+
+      const dateVal =
+        (l as any).quoteSentAt ||
+        (l as any).updatedAt ||
+        (l as any).updated_at ||
+        (l as any).createdAt ||
+        (l as any).created_at;
+
+      if (!dateVal) return true;
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return true;
+      return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
+    });
+  }, [leads, activeMonthDate]);
+
+  // Metric 3: Trials (ShipMate or LocalMile) Leads (Filtered for active month)
   const trialLeads = useMemo(() => {
+    const targetYear = activeMonthDate.getFullYear();
+    const targetMonth = activeMonthDate.getMonth();
+
     return leads.filter((l) => {
       const statusStr = (l.status || '').toLowerCase();
       const trialTypeStr = ((l as any).trialType || '').toLowerCase();
       const isShipmate = (l as any).shipmateStatus === 'Activated' || trialTypeStr.includes('shipmate');
       const isLocalmile = trialTypeStr.includes('localmile');
 
-      return (
+      const isTrial =
         statusStr.includes('trial') ||
         statusStr.includes('localmile') ||
         statusStr.includes('shipmate') ||
         statusStr === 'free trial' ||
         isShipmate ||
-        isLocalmile
-      );
-    });
-  }, [leads]);
+        isLocalmile;
 
-  // Label for 3-month appointment scope window (Prev Month, Current Month, Next Month)
+      if (!isTrial) return false;
+
+      const dateVal =
+        (l as any).trialStartDate ||
+        (l as any).updatedAt ||
+        (l as any).updated_at ||
+        (l as any).createdAt ||
+        (l as any).created_at;
+
+      if (!dateVal) return true;
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return true;
+      return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
+    });
+  }, [leads, activeMonthDate]);
+
+  // Label for active month appointment scope
   const threeMonthWindowLabel = useMemo(() => {
-    const now = new Date();
-    const prevM = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const nextM = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const prevStr = prevM.toLocaleString('en-AU', { month: 'short' });
-    const nextStr = nextM.toLocaleString('en-AU', { month: 'short', year: 'numeric' });
-    return `${prevStr} – ${nextStr}`;
-  }, []);
+    return activeMonthName;
+  }, [activeMonthName]);
 
   // Filter appointments specifically linked ONLY to this franchisee's leads/companies OR Aleyna training,
-  // restricted to Previous Month, Current Month, and Next Month
+  // restricted to the selected active month
   const franchiseeAppointments = useMemo(() => {
-    const now = new Date();
-    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0);
-    const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 999);
+    const targetYear = activeMonthDate.getFullYear();
+    const targetMonth = activeMonthDate.getMonth();
+    const startOfTargetMonth = new Date(targetYear, targetMonth, 1, 0, 0, 0);
+    const endOfTargetMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
 
     return appointments.filter((appt) => {
       const isTerritoryLead = territoryLeadIds.has(appt.leadId);
@@ -415,15 +454,15 @@ export default function FranchiseeHomeClient() {
       const matchesContext = isTerritoryLead || isAleyna || isAssignedToUser || isTerritoryFran;
       if (!matchesContext) return false;
 
-      // Restrict date range to Previous Month, Current Month, and Next Month
+      // Restrict date range to active selected month
       const rawDate = appt.duedate || appt.appointmentDate || (appt as any).createdAt || (appt as any).created_at;
       if (!rawDate) return true;
       const apptDate = new Date(rawDate);
       if (isNaN(apptDate.getTime())) return true;
 
-      return apptDate >= startOfPrevMonth && apptDate <= endOfNextMonth;
+      return apptDate >= startOfTargetMonth && apptDate <= endOfTargetMonth;
     });
-  }, [appointments, territoryLeadIds, userDisplayName, userProfile, activeFranName, user?.uid]);
+  }, [appointments, territoryLeadIds, userDisplayName, userProfile, activeFranName, user?.uid, activeMonthDate]);
 
   // Categorized appointments for status tabs
   const scheduledAppts = useMemo(() => {
@@ -787,7 +826,7 @@ export default function FranchiseeHomeClient() {
               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Appointments</p>
               <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{franchiseeAppointments.length}</span>
-                <span className="text-[11px] text-teal-700 font-semibold truncate">3-Month Window</span>
+                <span className="text-[11px] text-teal-700 font-semibold truncate">{activeMonthName}</span>
               </div>
             </div>
           </CardContent>
@@ -821,7 +860,12 @@ export default function FranchiseeHomeClient() {
               <CalendarWidget
                 mode="single"
                 selected={selectedDate}
-                onSelect={setSelectedDate}
+                onSelect={(d) => {
+                  setSelectedDate(d);
+                  if (d) setCalendarMonth(d);
+                }}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
                 className="rounded-md"
               />
             </div>
@@ -893,11 +937,11 @@ export default function FranchiseeHomeClient() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <CardTitle className="text-lg font-bold text-[#095c7b]">Appointments</CardTitle>
                     <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30 text-[10px] font-bold">
-                      📅 Scope: 3-Month Window ({threeMonthWindowLabel})
+                      📅 Month: {activeMonthName}
                     </Badge>
                   </div>
                   <CardDescription className="text-xs">
-                    Appointments across Previous, Current, & Next Month ({threeMonthWindowLabel})
+                    Appointments scheduled for {activeMonthName}
                   </CardDescription>
                 </div>
               </div>

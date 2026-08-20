@@ -95,6 +95,50 @@ export async function syncFranchiseeUsers(
       new Set([...existingLinkedFranchisees, ...payloadLinkedFranchisees, String(franchiseeId)])
     ).filter(Boolean);
 
+    // Build/accumulate linkedFranchisees array of objects for UI header switcher
+    const existingLinkedObjects: Array<{ franchiseeId: string; franchiseeName: string; relationship: 'owner' | 'investor'; isDefault?: boolean }> = existingData.linkedFranchisees || [];
+    const currentRelationship: 'owner' | 'investor' = (userInput.typeOfOwner === 'investor' || (userInput as any).relationship === 'investor' || (userInput as any).franchiseeRole === 'investor') ? 'investor' : 'owner';
+
+    let mergedLinkedObjects = [...existingLinkedObjects];
+    const existingObjIdx = mergedLinkedObjects.findIndex(f => String(f.franchiseeId) === String(franchiseeId));
+    if (existingObjIdx >= 0) {
+      mergedLinkedObjects[existingObjIdx] = {
+        ...mergedLinkedObjects[existingObjIdx],
+        franchiseeName: franchiseeName || mergedLinkedObjects[existingObjIdx].franchiseeName,
+        relationship: currentRelationship,
+      };
+    } else {
+      mergedLinkedObjects.push({
+        franchiseeId: String(franchiseeId),
+        franchiseeName: franchiseeName,
+        relationship: currentRelationship,
+        isDefault: mergedLinkedObjects.length === 0,
+      });
+    }
+
+    // Ensure all accumulated linked franchisee IDs have corresponding metadata objects
+    for (const fId of accumulatedLinkedFranchiseeIds) {
+      if (!mergedLinkedObjects.some(o => String(o.franchiseeId) === String(fId))) {
+        try {
+          const franSnap = await db.collection('franchisees').doc(String(fId)).get();
+          const fName = franSnap.exists ? (franSnap.data()?.name || String(fId)) : String(fId);
+          mergedLinkedObjects.push({
+            franchiseeId: String(fId),
+            franchiseeName: fName,
+            relationship: 'owner',
+            isDefault: mergedLinkedObjects.length === 0,
+          });
+        } catch (e) {
+          mergedLinkedObjects.push({
+            franchiseeId: String(fId),
+            franchiseeName: String(fId),
+            relationship: 'owner',
+            isDefault: mergedLinkedObjects.length === 0,
+          });
+        }
+      }
+    }
+
     const updatedUserObj: Record<string, any> = {
       uid,
       email,
@@ -108,6 +152,8 @@ export async function syncFranchiseeUsers(
       franchiseeInternalId: existingData.franchiseeInternalId || String(franchiseeId),
       franchisee: existingData.franchisee || franchiseeName,
       linkedFranchiseeIds: accumulatedLinkedFranchiseeIds,
+      linkedFranchisees: mergedLinkedObjects,
+      activeFranchiseeId: existingData.activeFranchiseeId || (mergedLinkedObjects[0] ? mergedLinkedObjects[0].franchiseeId : String(franchiseeId)),
       updatedAt: nowStr,
     };
 

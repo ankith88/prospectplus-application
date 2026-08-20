@@ -42,40 +42,43 @@ export async function POST(req: NextRequest) {
 
     const db = adminApp.firestore();
 
-    // 1. Create or reference a parent lead document for franchisee training sessions
-    const leadId = `fran-training-${userId || 'user'}`;
-    const leadRef = db.collection('leads').doc(leadId);
-    const leadSnap = await leadRef.get();
-
-    if (!leadSnap.exists) {
-      await leadRef.set({
-        id: leadId,
-        companyName: `Franchisee Training - ${franchiseeName || userName || 'Franchisee'}`,
-        status: 'Qualified',
-        profile: 'Franchisee 1-on-1 ProspectPlus Training',
-        franchisee: franchiseeName || 'Franchisee Territory',
-        customerServiceEmail: userEmail,
-        createdAt: new Date().toISOString(),
-        bucket: 'outbound'
-      });
-    }
-
-    // 2. Generate Teams Meeting Join URL
+    // 1. Generate Teams Meeting Join URL & Appointment IDs
+    const apptId = `appt-training-${Date.now()}`;
+    const parentId = userId || 'training-sessions';
     const teamsMeetingId = `teams-training-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const teamsJoinUrl = `https://teams.microsoft.com/l/meetup-join/19%3ameeting_${teamsMeetingId}%40thread.v2/0?context=%7b%22Tid%22%3a%22mailplus-training%22%7d`;
 
-    // Calculate full ISO duedate
+    // Calculate full dates & times for iCalendar (.ics) export
     const dateObj = new Date(date);
     const formattedDate = format(dateObj, 'EEEE, d MMMM yyyy');
     const isoDueDate = dateObj.toISOString();
 
-    // 3. Store Appointment Document under leads/{leadId}/appointments/{apptId}
-    const apptId = `appt-${Date.now()}`;
-    const apptRef = leadRef.collection('appointments').doc(apptId);
+    // Parse timeSlot string (e.g., "10:00 AM")
+    let hours = 10;
+    let minutes = 0;
+    if (typeof timeSlot === 'string' && timeSlot.includes(':')) {
+      const parts = timeSlot.split(' ');
+      const timeParts = parts[0].split(':');
+      hours = parseInt(timeParts[0], 10);
+      minutes = parseInt(timeParts[1], 10) || 0;
+      if (parts[1] && parts[1].toUpperCase() === 'PM' && hours < 12) hours += 12;
+      if (parts[1] && parts[1].toUpperCase() === 'AM' && hours === 12) hours = 0;
+    }
+
+    const startDateTime = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), hours, minutes, 0);
+    const endDateTime = new Date(startDateTime.getTime() + 30 * 60 * 1000); // 30 min duration
+
+    const formatIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const dtStartStr = formatIcsDate(startDateTime);
+    const dtEndStr = formatIcsDate(endDateTime);
+    const dtStampStr = formatIcsDate(new Date());
+
+    // 2. Store Appointment Document in dedicated training_sessions collection (NOT in leads collection)
+    const apptRef = db.collection('training_sessions').doc(parentId).collection('appointments').doc(apptId);
 
     const apptData = {
       id: apptId,
-      leadId: leadId,
+      leadId: `training-${parentId}`,
       leadName: `Teams Training Session with Aleyna (${franchiseeName || 'Franchisee'})`,
       assignedTo: 'Aleyna Harnett',
       duedate: isoDueDate,
@@ -85,6 +88,7 @@ export async function POST(req: NextRequest) {
       type: 'Teams Training Session',
       meetingType: 'teams',
       isTeams: true,
+      isTraining: true,
       joinUrl: teamsJoinUrl,
       franchisee: franchiseeName || 'Franchisee Territory',
       franchiseeUserId: userId || '',
@@ -98,7 +102,38 @@ export async function POST(req: NextRequest) {
 
     await apptRef.set(apptData);
 
-    // 4. Send Immediate Booking Confirmation Email (Following AGENTS.md Table-Based Rules)
+    // 3. Build iCalendar (.ics) Event File String
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//MailPlus Australia//ProspectPlus Training//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:REQUEST',
+      'BEGIN:VEVENT',
+      `UID:${apptId}@prospectplus.mailplus.com.au`,
+      `DTSTAMP:${dtStampStr}`,
+      `DTSTART:${dtStartStr}`,
+      `DTEND:${dtEndStr}`,
+      `SUMMARY:ProspectPlus 1-on-1 Training Session with Aleyna`,
+      `DESCRIPTION:1-on-1 ProspectPlus Training Session with Aleyna Harnett via Microsoft Teams.\\n\\nTeams Meeting Link: ${teamsJoinUrl}${notes ? `\\n\\nNotes: ${notes.replace(/\n/g, ' ')}` : ''}`,
+      `LOCATION:${teamsJoinUrl}`,
+      'ORGANIZER;CN="Aleyna Harnett":mailto:aleyna.harnett@mailplus.com.au',
+      `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN="${userName || 'Franchisee'}":mailto:${userEmail}`,
+      'ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN="Aleyna Harnett":mailto:aleyna.harnett@mailplus.com.au',
+      'STATUS:CONFIRMED',
+      'SEQUENCE:0',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const icsBase64 = Buffer.from(icsContent).toString('base64');
+    const icsDataUri = `data:text/calendar;charset=utf-8;base64,${icsBase64}`;
+
+    // Direct Calendar URLs
+    const googleCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('ProspectPlus Training Session with Aleyna')}&dates=${dtStartStr}/${dtEndStr}&details=${encodeURIComponent(`1-on-1 ProspectPlus Training Session via Microsoft Teams.\n\nMeeting Link: ${teamsJoinUrl}`)}&location=${encodeURIComponent(teamsJoinUrl)}`;
+    const outlookCalUrl = `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent('ProspectPlus Training Session with Aleyna')}&startdt=${startDateTime.toISOString()}&enddt=${endDateTime.toISOString()}&body=${encodeURIComponent(`1-on-1 ProspectPlus Training Session via Microsoft Teams.\n\nMeeting Link: ${teamsJoinUrl}`)}&location=${encodeURIComponent(teamsJoinUrl)}`;
+
+    // 4. Send Confirmation Email with ICS Attachment & Calendar Links
     const confirmationHtml = `
 <!DOCTYPE html>
 <html>
@@ -129,7 +164,7 @@ export async function POST(req: NextRequest) {
                 Hi <strong>${userName || 'Franchisee'}</strong>,
               </p>
               <p style="margin: 0 0 20px; color: #4a5568;">
-                Your 1-on-1 ProspectPlus training session with <strong>Aleyna Harnett</strong> has been successfully booked via <strong>Microsoft Teams</strong>.
+                Your 1-on-1 ProspectPlus training session with <strong>Aleyna Harnett</strong> has been successfully booked via <strong>Microsoft Teams</strong>. An <strong>iCalendar (.ics) invite</strong> is attached to this email so you can automatically add it to your Outlook, Apple, or Google Calendar.
               </p>
 
               <!-- APPOINTMENT DETAILS BOX -->
@@ -170,12 +205,23 @@ export async function POST(req: NextRequest) {
                 </tr>
               </table>
 
-              <!-- TEAMS JOIN BUTTON -->
+              <!-- TEAMS JOIN BUTTON & CALENDAR LINKS -->
               <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
                 <tr>
-                  <td align="center">
+                  <td align="center" style="padding-bottom: 15px;">
                     <a href="${teamsJoinUrl}" target="_blank" style="display: inline-block; background-color: #095c7b; color: #ffffff; font-weight: 700; font-size: 14px; padding: 14px 28px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(9, 92, 123, 0.2);">
                       Join Microsoft Teams Meeting
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center">
+                    <p style="margin: 0 0 10px; font-size: 12px; color: #718096; font-weight: 600;">Add to Calendar:</p>
+                    <a href="${googleCalUrl}" target="_blank" style="display: inline-block; background-color: #ea4335; color: #ffffff; font-weight: 600; font-size: 12px; padding: 8px 14px; border-radius: 6px; text-decoration: none; margin-right: 8px;">
+                      Google Calendar
+                    </a>
+                    <a href="${outlookCalUrl}" target="_blank" style="display: inline-block; background-color: #0078d4; color: #ffffff; font-weight: 600; font-size: 12px; padding: 8px 14px; border-radius: 6px; text-decoration: none;">
+                      Outlook Web
                     </a>
                   </td>
                 </tr>
@@ -209,12 +255,18 @@ export async function POST(req: NextRequest) {
 </html>
 `;
 
-    // Send confirmation to franchisee, Aleyna, and additional attendees
+    // Send confirmation to franchisee, Aleyna, and additional attendees with .ics attachment
     const recipients = Array.from(new Set([userEmail, 'aleyna.harnett@mailplus.com.au', ...parsedAdditionalEmails].filter(Boolean)));
     await sendPhysicalEmail({
       to: recipients.join(','),
       subject: `Confirmed: ProspectPlus Training Session with Aleyna on ${formattedDate} (${timeSlot})`,
-      html: confirmationHtml
+      html: confirmationHtml,
+      attachments: [
+        {
+          name: 'training-session.ics',
+          url: icsDataUri
+        }
+      ]
     }).catch((err) => console.error('Failed to send booking confirmation email:', err));
 
     return NextResponse.json({

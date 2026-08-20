@@ -1423,26 +1423,28 @@ export default function SalesSnapshotClient() {
                   </Popover>
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1 font-semibold text-[#095c7b]">
-                    <span>Commencement Cohort</span>
-                    <SectionHelp content="Selects the calendar months window for evaluating the Service Commencement Realization Cohort widget based on service commencement dates." />
-                  </Label>
-                  <Select 
-                    value={String(filters.cohortMonthsCount)} 
-                    onValueChange={(val) => setFilters(prev => ({ ...prev, cohortMonthsCount: parseInt(val, 10) }))}
-                  >
-                    <SelectTrigger className="border-[#095c7b]/30">
-                      <SelectValue placeholder="Last Month (Default)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">Last Month (Default)</SelectItem>
-                      <SelectItem value="3">Prior 3 Months</SelectItem>
-                      <SelectItem value="6">Prior 6 Months</SelectItem>
-                      <SelectItem value="12">Prior 12 Months</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!isFranchisee && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1 font-semibold text-[#095c7b]">
+                      <span>Commencement Cohort</span>
+                      <SectionHelp content="Selects the calendar months window for evaluating the Service Commencement Realization Cohort widget based on service commencement dates." />
+                    </Label>
+                    <Select 
+                      value={String(filters.cohortMonthsCount)} 
+                      onValueChange={(val) => setFilters(prev => ({ ...prev, cohortMonthsCount: parseInt(val, 10) }))}
+                    >
+                      <SelectTrigger className="border-[#095c7b]/30">
+                        <SelectValue placeholder="Last Month (Default)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Last Month (Default)</SelectItem>
+                        <SelectItem value="3">Prior 3 Months</SelectItem>
+                        <SelectItem value="6">Prior 6 Months</SelectItem>
+                        <SelectItem value="12">Prior 12 Months</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Bucket</Label>
@@ -1502,8 +1504,8 @@ export default function SalesSnapshotClient() {
         ) : (
           <div className="space-y-6">
             
-            {/* Previous Month Realization Cohort Hero Widget */}
-            <PrevMonthCohortWidget summary={prevMonthSummary} />
+            {/* Previous Month Realization Cohort Hero Widget (Hidden for Franchisees) */}
+            {!isFranchisee && <PrevMonthCohortWidget summary={prevMonthSummary} />}
 
             {/* Unified Management & Franchisee Pipeline Stage Breakdown with Embedded Milestones */}
             <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">

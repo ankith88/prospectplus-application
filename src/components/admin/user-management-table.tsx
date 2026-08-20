@@ -2,7 +2,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { UserRole } from '@/lib/types';
+import type { UserProfile, AdminApprovalRequest, Franchisee, UserRole } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,10 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
 import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely, unlinkUserFromFranchiseeCompletely } from '@/services/firebase';
-import type { UserProfile, AdminApprovalRequest, Franchisee } from '@/lib/types';
-import { useToast } from '@/hooks/use-toast';
-import { Badge } from '../ui/badge';
-import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { CreateUserDialog } from './create-user-dialog';
@@ -31,6 +30,13 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+export interface LinkedFranchiseeStateItem {
+  franchiseeId: string;
+  franchiseeName: string;
+  relationship: 'owner' | 'investor';
+  isDefault?: boolean;
+}
 import { 
   getAllAdminApprovalRequests, 
   createAdminApprovalRequest, 
@@ -66,6 +72,7 @@ export function UserManagementTable() {
   const [newFranchisee, setNewFranchisee] = useState('');
   const [newFranchiseeId, setNewFranchiseeId] = useState('');
   const [newFranchiseeRole, setNewFranchiseeRole] = useState<'owner' | 'investor'>('owner');
+  const [newLinkedFranchisees, setNewLinkedFranchisees] = useState<LinkedFranchiseeStateItem[]>([]);
   const [newPersonalEmail, setNewPersonalEmail] = useState('');
   const [newAbn, setNewAbn] = useState('');
   const [newStreet, setNewStreet] = useState('');
@@ -160,6 +167,25 @@ export function UserManagementTable() {
       }
 
       const linkedFran = userToEdit.linkedFranchisees?.[0];
+
+      let initialLinkedFrans: LinkedFranchiseeStateItem[] = [];
+      if (userToEdit.linkedFranchisees && userToEdit.linkedFranchisees.length > 0) {
+        initialLinkedFrans = userToEdit.linkedFranchisees.map((f: any, idx: number) => ({
+          franchiseeId: String(f.franchiseeId || ''),
+          franchiseeName: f.franchiseeName || f.franchiseeId || '',
+          relationship: f.relationship || 'owner',
+          isDefault: f.isDefault !== undefined ? f.isDefault : idx === 0,
+        })).filter((f: any) => f.franchiseeId);
+      } else if (userToEdit.franchiseeId || userToEdit.franchiseeInternalId || userToEdit.franchisee) {
+        const fId = String(userToEdit.franchiseeId || userToEdit.franchiseeInternalId || 'default');
+        initialLinkedFrans = [{
+          franchiseeId: fId,
+          franchiseeName: userToEdit.franchisee || fId,
+          relationship: userToEdit.franchiseeRole || 'owner',
+          isDefault: true,
+        }];
+      }
+      setNewLinkedFranchisees(initialLinkedFrans);
 
       setNewLinkedSalesRep(userToEdit.linkedSalesRep || '');
       setNewLinkedBDR(userToEdit.linkedBDR || '');
@@ -395,10 +421,6 @@ export function UserManagementTable() {
         updateData.linkedBDR = newLinkedBDR;
         updateData.franchisee = '';
       } else if (effectiveAssignedRoles.includes('Franchisee') && !isUnlinkingFranchisee) {
-        updateData.franchisee = newFranchisee;
-        updateData.franchiseeId = newFranchiseeId || undefined;
-        updateData.franchiseeInternalId = newFranchiseeId || undefined;
-        updateData.franchiseeRole = newFranchiseeRole;
         updateData.personalEmail = newPersonalEmail;
         updateData.abn = newAbn;
         updateData.addressDetails = {
@@ -413,15 +435,37 @@ export function UserManagementTable() {
           accountNumber: newAccountNumber,
           accountName: newAccountName,
         };
-        if (newFranchiseeId && newFranchiseeId !== 'none') {
+
+        const validLinkedFrans = newLinkedFranchisees.filter(f => f.franchiseeId && f.franchiseeId !== 'none');
+        if (validLinkedFrans.length > 0) {
+          const hasDefault = validLinkedFrans.some(f => f.isDefault);
+          if (!hasDefault) {
+            validLinkedFrans[0].isDefault = true;
+          }
+          const defaultFran = validLinkedFrans.find(f => f.isDefault) || validLinkedFrans[0];
+
+          updateData.linkedFranchisees = validLinkedFrans;
+          updateData.linkedFranchiseeIds = validLinkedFrans.map(f => String(f.franchiseeId));
+          updateData.activeFranchiseeId = defaultFran.franchiseeId;
+          updateData.franchiseeId = defaultFran.franchiseeId;
+          updateData.franchiseeInternalId = defaultFran.franchiseeId;
+          updateData.franchisee = defaultFran.franchiseeName;
+          updateData.franchiseeRole = defaultFran.relationship;
+        } else if (newFranchiseeId && newFranchiseeId !== 'none') {
           updateData.linkedFranchisees = [{
             franchiseeId: newFranchiseeId,
             franchiseeName: newFranchisee,
             relationship: newFranchiseeRole,
             isDefault: true,
           }];
+          updateData.linkedFranchiseeIds = [newFranchiseeId];
           updateData.activeFranchiseeId = newFranchiseeId;
+          updateData.franchiseeId = newFranchiseeId;
+          updateData.franchiseeInternalId = newFranchiseeId;
+          updateData.franchisee = newFranchisee;
+          updateData.franchiseeRole = newFranchiseeRole;
         }
+
         updateData.linkedSalesRep = '';
         updateData.linkedBDR = '';
       } else {
@@ -790,7 +834,18 @@ export function UserManagementTable() {
                         <span className="text-muted-foreground text-xs">-</span>
                       )}
                     </TableCell>
-                    <TableCell>{user.franchisee || '-'}</TableCell>
+                    <TableCell>
+                      {user.linkedFranchisees && user.linkedFranchisees.length > 1 ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-medium text-xs text-foreground">{user.franchisee || user.linkedFranchisees[0].franchiseeName}</span>
+                          <span className="text-[10px] text-muted-foreground font-semibold bg-[#095c7b]/10 text-[#095c7b] px-1.5 py-0.5 rounded w-fit">
+                            +{user.linkedFranchisees.length - 1} more ({user.linkedFranchisees.map((f: any) => f.franchiseeName).join(', ')})
+                          </span>
+                        </div>
+                      ) : (
+                        <span>{user.franchisee || '-'}</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={user.disabled ? 'destructive' : 'secondary'}>
                         {user.disabled ? 'Disabled' : 'Active'}
@@ -1066,50 +1121,118 @@ export function UserManagementTable() {
                 {newAssignedRoles.includes('Franchisee') && (
                     <div className="space-y-4 border p-3.5 rounded-md bg-muted/30 text-sm">
                         <div className="space-y-2">
-                            <Label className="text-xs font-semibold">Link Franchise Entity*</Label>
-                            <Select 
-                                value={newFranchiseeId || 'none'} 
-                                onValueChange={(val) => {
-                                    if (val === 'none') {
-                                        setNewFranchiseeId('none');
-                                        setNewFranchisee('');
-                                    } else {
-                                        setNewFranchiseeId(val);
-                                        const selectedFr = allFranchisees.find(f => String(f.internalId) === val);
-                                        if (selectedFr) {
-                                            setNewFranchisee(selectedFr.name);
-                                        }
-                                    }
-                                }}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select existing franchise..." />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-60">
-                                    <SelectItem value="none">
-                                        <span className="text-muted-foreground italic">(None - Unlinked)</span>
-                                    </SelectItem>
-                                    {allFranchisees.map((fr) => (
-                                        <SelectItem key={fr.internalId} value={String(fr.internalId)}>
-                                            {fr.name || 'Unnamed'} ({fr.internalId})
-                                        </SelectItem>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <Building2 className="h-4 w-4 text-[#095c7b]" />
+                                    Linked Franchise Entities ({newLinkedFranchisees.length})
+                                </Label>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs bg-white border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5"
+                                    onClick={() => {
+                                        setNewLinkedFranchisees(prev => [
+                                            ...prev,
+                                            { franchiseeId: '', franchiseeName: '', relationship: 'owner', isDefault: prev.length === 0 }
+                                        ]);
+                                    }}
+                                >
+                                    <Plus className="mr-1 h-3.5 w-3.5" />
+                                    Add Franchise
+                                </Button>
+                            </div>
+
+                            {newLinkedFranchisees.length === 0 ? (
+                                <p className="text-xs text-muted-foreground italic py-2">No franchises currently linked. Click &quot;Add Franchise&quot; above to link this user account to a franchise.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {newLinkedFranchisees.map((item, index) => (
+                                        <div key={index} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2.5 rounded-md bg-white border border-border dark:bg-slate-900 shadow-xs">
+                                            <div className="flex-1">
+                                                <Select
+                                                    value={item.franchiseeId || 'none'}
+                                                    onValueChange={(val) => {
+                                                        const selectedFr = allFranchisees.find(f => String(f.internalId) === val);
+                                                        const name = selectedFr ? selectedFr.name : val;
+                                                        setNewLinkedFranchisees(prev => prev.map((f, i) => i === index ? { 
+                                                            ...f, 
+                                                            franchiseeId: val === 'none' ? '' : val, 
+                                                            franchiseeName: name 
+                                                        } : f));
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-8 text-xs">
+                                                        <SelectValue placeholder="Select franchise..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="max-h-60">
+                                                        <SelectItem value="none">
+                                                            <span className="text-muted-foreground italic">(Select Franchise)</span>
+                                                        </SelectItem>
+                                                        {allFranchisees.map((fr) => (
+                                                            <SelectItem key={fr.internalId} value={String(fr.internalId)}>
+                                                                {fr.name || 'Unnamed'} ({fr.internalId})
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <div className="w-full sm:w-28">
+                                                <Select
+                                                    value={item.relationship}
+                                                    onValueChange={(val: 'owner' | 'investor') => {
+                                                        setNewLinkedFranchisees(prev => prev.map((f, i) => i === index ? { ...f, relationship: val } : f));
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-8 text-xs capitalize">
+                                                        <SelectValue placeholder="Role" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="owner">Owner</SelectItem>
+                                                        <SelectItem value="investor">Investor</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    variant={item.isDefault ? 'default' : 'outline'}
+                                                    size="sm"
+                                                    className={`h-8 px-2 text-[11px] font-medium ${item.isDefault ? 'bg-[#095c7b] text-white hover:bg-[#074760]' : 'text-muted-foreground hover:text-foreground'}`}
+                                                    onClick={() => {
+                                                        setNewLinkedFranchisees(prev => prev.map((f, i) => ({ ...f, isDefault: i === index })));
+                                                    }}
+                                                    title={item.isDefault ? 'Primary / Default Franchise' : 'Set as Default Franchise'}
+                                                >
+                                                    {item.isDefault ? 'Primary' : 'Set Primary'}
+                                                </Button>
+
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                    onClick={() => {
+                                                        setNewLinkedFranchisees(prev => {
+                                                            const filtered = prev.filter((_, i) => i !== index);
+                                                            if (item.isDefault && filtered.length > 0) {
+                                                                filtered[0].isDefault = true;
+                                                            }
+                                                            return filtered;
+                                                        });
+                                                    }}
+                                                    title="Remove link"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
                                     ))}
-                                </SelectContent>
-                            </Select>
-                            <p className="text-[11px] text-muted-foreground">Select the official franchise entity to link with this user account or select (None - Unlinked) to disassociate.</p>
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-xs font-semibold">Franchisee Relationship / Type*</Label>
-                            <Select value={newFranchiseeRole} onValueChange={(val: 'owner' | 'investor') => setNewFranchiseeRole(val)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select designation..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="owner">Owner</SelectItem>
-                                    <SelectItem value="investor">Investor</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p className="text-[11px] text-muted-foreground">Specify whether this user is an Owner or Investor of the linked franchise.</p>
+                                </div>
+                            )}
+                            <p className="text-[11px] text-muted-foreground">Link one or multiple franchise entities to this single user account. The user will be able to switch between them from the header bar after logging in.</p>
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-semibold">Personal Email Address</Label>
