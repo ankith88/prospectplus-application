@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -33,9 +33,36 @@ import type { Lead, Address } from "@/lib/types"
 import { useGoogleMapsScript } from '@/hooks/use-google-maps'
 import { firestore } from "@/lib/firebase"
 import { updateLeadDetails } from "@/services/firebase"
-import { collection, query, where, getDocs } from "firebase/firestore"
+import { collection, getDocs } from "firebase/firestore"
+import { Search, Building2, Loader2, MapPin } from "lucide-react"
 
 const boxTypes = ["PO Box", "GPO Box"];
+
+export function normalizeState(stateStr?: string): string {
+  if (!stateStr) return '';
+  const s = stateStr.trim().toLowerCase().replace(/[^a-z]/g, '');
+  if (s === 'nsw' || s === 'newsouthwales') return 'NSW';
+  if (s === 'vic' || s === 'victoria') return 'VIC';
+  if (s === 'qld' || s === 'queensland') return 'QLD';
+  if (s === 'sa' || s === 'southaustralia') return 'SA';
+  if (s === 'wa' || s === 'westernaustralia') return 'WA';
+  if (s === 'tas' || s === 'tasmania') return 'TAS';
+  if (s === 'act' || s === 'australiancapitalterritory') return 'ACT';
+  if (s === 'nt' || s === 'northernterritory') return 'NT';
+  return stateStr.trim().toUpperCase();
+}
+
+function calculateDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 const formSchema = z.object({
   boxType: z.string().min(1, "Box type is required"),
@@ -133,6 +160,8 @@ export function EditPostalAddressDialog({
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [partnerLocations, setPartnerLocations] = useState<any[]>([]);
+  const [loadingLocations, setLoadingLocations] = useState(false);
+  const [suburbSearch, setSuburbSearch] = useState('');
 
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesService = useRef<google.maps.places.PlacesService | null>(null);
@@ -171,68 +200,72 @@ export function EditPostalAddressDialog({
     },
   })
 
-  // Fetch partner locations matching the postcode and/or suburb
-  const fetchMatchingPartnerLocations = useCallback(async (postcode: string, suburb: string, state: string) => {
-    if (!postcode && !suburb) {
-      setPartnerLocations([]);
-      return;
-    }
-    try {
-      const promises = [];
-      
-      if (postcode) {
-        const q1 = query(
-          collection(firestore, 'partner_locations'),
-          where('locationType', '==', 'AusPost'),
-          where('postCode', '==', postcode.trim())
-        );
-        promises.push(getDocs(q1));
-      }
-      
-      if (suburb) {
-        const q2 = query(
-          collection(firestore, 'partner_locations'),
-          where('locationType', '==', 'AusPost'),
-          where('suburb', '==', suburb.trim().toUpperCase())
-        );
-        promises.push(getDocs(q2));
-      }
-      
-      const snaps = await Promise.all(promises);
-      const uniqueLocsMap: Record<string, any> = {};
-      
-      snaps.forEach(snap => {
-        snap.docs.forEach(docSnap => {
+  // Determine customer's state
+  const formState = form.watch("address.state");
+  const customerState = useMemo(() => {
+    const rawState = formState || lead.address?.state || lead.state || '';
+    return normalizeState(rawState);
+  }, [formState, lead]);
+
+  // Extract site coordinates for distance sorting if available
+  const leadLat = lead?.latitude != null ? Number(lead.latitude) : ((lead as any)?.lat != null ? Number((lead as any).lat) : (lead?.address?.lat != null ? Number(lead.address.lat) : null));
+  const leadLng = lead?.longitude != null ? Number(lead.longitude) : ((lead as any)?.lng != null ? Number((lead as any).lng) : (lead?.address?.lng != null ? Number(lead.address.lng) : null));
+
+  // Load Australia Post partner locations in the customer's state
+  useEffect(() => {
+    if (!isOpen) return;
+
+    async function loadStatePartnerLocations() {
+      setLoadingLocations(true);
+      try {
+        const locationsSnap = await getDocs(collection(firestore, 'partner_locations'));
+        const locs: any[] = [];
+
+        locationsSnap.forEach((docSnap) => {
           const data = docSnap.data();
-          const matchesState = !state || !data.state || data.state.trim().toLowerCase() === state.trim().toLowerCase();
-          if (matchesState) {
-            uniqueLocsMap[docSnap.id] = { id: docSnap.id, ...data };
+          const locType = (data.locationType || data.type || '').toString().trim().toLowerCase();
+          const isAusPost = locType === 'auspost' || locType === 'australia post' || locType === 'lpo' || locType === 'post office' || locType === 'postshop' || !locType;
+
+          if (isAusPost) {
+            const locState = normalizeState(data.state || data.address?.state);
+            if (!customerState || locState === customerState) {
+              const locLat = parseFloat(data.lat || data.latitude);
+              const locLng = parseFloat(data.lng || data.longitude);
+              const hasCoords = leadLat !== null && leadLng !== null && !isNaN(leadLat) && !isNaN(leadLng) && !isNaN(locLat) && !isNaN(locLng);
+              const distanceKm = hasCoords ? calculateDistanceInKm(leadLat, leadLng, locLat, locLng) : null;
+
+              locs.push({
+                id: docSnap.id,
+                ...data,
+                distanceKm
+              });
+            }
           }
         });
-      });
-      
-      const locs = Object.values(uniqueLocsMap);
-      setPartnerLocations(locs);
-      
-      // Auto-select if there is only 1 match and no existing selection
-      const currentSelection = form.getValues('partnerLocationId');
-      if (locs.length === 1 && (!currentSelection || !locs.some(l => l.id === currentSelection))) {
-        form.setValue('partnerLocationId', locs[0].id, { shouldDirty: true });
-      } else if (currentSelection && !locs.some(l => l.id === currentSelection)) {
-        form.setValue('partnerLocationId', '', { shouldDirty: true });
+
+        // Sort by distance if available, otherwise by suburb and name
+        locs.sort((a, b) => {
+          if (a.distanceKm !== null && b.distanceKm !== null) {
+            return a.distanceKm - b.distanceKm;
+          }
+          if (a.distanceKm !== null) return -1;
+          if (b.distanceKm !== null) return 1;
+          const subA = (a.suburb || a.city || '').toLowerCase();
+          const subB = (b.suburb || b.city || '').toLowerCase();
+          if (subA !== subB) return subA.localeCompare(subB);
+          return (a.name || '').localeCompare(b.name || '');
+        });
+
+        setPartnerLocations(locs);
+      } catch (error) {
+        console.error("Failed to load state partner locations:", error);
+      } finally {
+        setLoadingLocations(false);
       }
-    } catch (error) {
-      console.error("Failed to fetch matching partner locations:", error);
     }
-  }, [form]);
 
-  const zipValue = form.watch("address.zip");
-  const cityValue = form.watch("address.city");
-  const stateValue = form.watch("address.state");
-
-  useEffect(() => {
-    fetchMatchingPartnerLocations(zipValue, cityValue, stateValue);
-  }, [zipValue, cityValue, stateValue, fetchMatchingPartnerLocations]);
+    loadStatePartnerLocations();
+  }, [isOpen, customerState, leadLat, leadLng]);
 
   useEffect(() => {
     if (isOpen) {
@@ -251,8 +284,62 @@ export function EditPostalAddressDialog({
           lng: lead.postalAddress?.lng ?? undefined,
         }
       })
+      setSuburbSearch('');
     }
   }, [isOpen, lead, form])
+
+  // Filter partner locations dynamically based on suburb search or form suburb value
+  const cityValue = form.watch("address.city");
+  
+  const filteredLocations = useMemo(() => {
+    const searchTerm = (suburbSearch || cityValue || '').trim().toLowerCase();
+    if (!searchTerm) return partnerLocations;
+
+    return partnerLocations.filter((loc) => {
+      const suburb = (loc.suburb || loc.city || '').toLowerCase();
+      const postcode = (loc.postCode || loc.postcode || loc.zip || '').toLowerCase();
+      const name = (loc.name || loc.locationName || '').toLowerCase();
+      const street = (loc.address1 || loc.street || '').toLowerCase();
+
+      return (
+        suburb.includes(searchTerm) ||
+        postcode.includes(searchTerm) ||
+        name.includes(searchTerm) ||
+        street.includes(searchTerm)
+      );
+    });
+  }, [partnerLocations, suburbSearch, cityValue]);
+
+  // Handler for selecting a partner location (prefills address details)
+  const handleSelectPartnerLocation = useCallback((loc: any) => {
+    if (!loc) {
+      form.setValue('partnerLocationId', '', { shouldDirty: true });
+      return;
+    }
+
+    const streetAddr = loc.address1 || loc.street || loc.address || loc.name || '';
+    const suburb = loc.suburb || loc.city || '';
+    const state = loc.state || customerState || '';
+    const zip = loc.postCode || loc.postcode || loc.zip || '';
+    const lat = parseFloat(loc.lat || loc.latitude);
+    const lng = parseFloat(loc.lng || loc.longitude);
+
+    form.setValue('partnerLocationId', loc.id || loc.internalId || '', { shouldDirty: true, shouldValidate: true });
+    form.setValue('address.street', streetAddr, { shouldDirty: true, shouldValidate: true });
+    form.setValue('address.city', suburb, { shouldDirty: true, shouldValidate: true });
+    form.setValue('address.state', state, { shouldDirty: true, shouldValidate: true });
+    form.setValue('address.zip', zip, { shouldDirty: true, shouldValidate: true });
+
+    if (!isNaN(lat)) form.setValue('address.lat', lat, { shouldDirty: true });
+    if (!isNaN(lng)) form.setValue('address.lng', lng, { shouldDirty: true });
+
+    form.trigger(['address.street', 'address.city', 'address.state', 'address.zip']);
+
+    toast({
+      title: "AusPost Location Selected",
+      description: `Prefilled address details for ${loc.name || suburb}.`,
+    });
+  }, [form, customerState, toast]);
 
   const handleInputChange = useCallback((value: string) => {
     if (autocompleteService.current && value.trim()) {
@@ -320,7 +407,7 @@ export function EditPostalAddressDialog({
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      const selectedPartnerLoc = partnerLocations.find(l => l.id === values.partnerLocationId);
+      const selectedPartnerLoc = partnerLocations.find(l => l.id === values.partnerLocationId || l.internalId === values.partnerLocationId);
       const partnerLocName = selectedPartnerLoc ? (selectedPartnerLoc.name || selectedPartnerLoc.locationName || '') : '';
 
       const updatedPostalAddress = {
@@ -423,12 +510,109 @@ export function EditPostalAddressDialog({
                   <FormItem>
                     <FormLabel>Box Number*</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. 111" {...field} />
+                      <Input placeholder="e.g. 1234" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            </div>
+
+            {/* AusPost Partner Location Selector & Suburb Search */}
+            <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+              <div className="flex items-center justify-between">
+                <FormLabel className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  Select Partner AusPost Location
+                </FormLabel>
+                {customerState && (
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-primary/10 text-primary">
+                    State: {customerState}
+                  </span>
+                )}
+              </div>
+
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search by suburb or location name..."
+                  value={suburbSearch}
+                  onChange={(e) => setSuburbSearch(e.target.value)}
+                  className="pl-9 pr-14 bg-background h-9 text-xs"
+                />
+                {suburbSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setSuburbSearch('')}
+                    className="absolute right-2.5 top-2.5 text-xs text-muted-foreground hover:text-foreground font-medium"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {loadingLocations ? (
+                <div className="flex items-center justify-center py-3 text-xs text-muted-foreground gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  Loading Australia Post locations...
+                </div>
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="partnerLocationId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Select
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          const match = partnerLocations.find(l => l.id === val || l.internalId === val);
+                          if (match) {
+                            handleSelectPartnerLocation(match);
+                          }
+                        }}
+                        value={field.value || ""}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="bg-background text-xs">
+                            <SelectValue placeholder={filteredLocations.length > 0 ? "Select AusPost location in state..." : "No matching AusPost locations found"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="max-h-60">
+                          {filteredLocations.length === 0 ? (
+                            <div className="p-3 text-xs text-center text-muted-foreground">
+                              No Australia Post locations found{suburbSearch ? ` matching "${suburbSearch}"` : ''}{customerState ? ` in ${customerState}` : ''}.
+                            </div>
+                          ) : (
+                            filteredLocations.map((loc) => {
+                              const locId = loc.id || loc.internalId;
+                              const name = loc.name || loc.locationName || 'AusPost Location';
+                              const suburb = loc.suburb || loc.city || '';
+                              const postcode = loc.postCode || loc.postcode || loc.zip || '';
+                              const addr = loc.address1 || loc.street || '';
+                              const dist = loc.distanceKm !== null && loc.distanceKm !== undefined ? ` (${loc.distanceKm.toFixed(1)} km)` : '';
+
+                              return (
+                                <SelectItem key={locId} value={locId}>
+                                  <div className="flex flex-col text-left py-0.5">
+                                    <span className="font-medium text-xs">
+                                      {name} {suburb ? `(${suburb})` : ''} {dist}
+                                    </span>
+                                    <span className="text-[11px] text-muted-foreground">
+                                      {[addr, suburb, loc.state, postcode].filter(Boolean).join(', ')}
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              );
+                            })
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <FormField
@@ -534,39 +718,6 @@ export function EditPostalAddressDialog({
               />
             </div>
 
-            {partnerLocations.length > 0 && (
-              <FormField
-                control={form.control}
-                name="partnerLocationId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Matching AusPost Location*</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select AusPost Hub" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {partnerLocations.map((loc) => (
-                          <SelectItem key={loc.id} value={loc.id}>
-                            {loc.name} {loc.suburb ? `(${loc.suburb})` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {zipValue && partnerLocations.length === 0 && (
-              <p className="text-xs text-amber-500 font-semibold">
-                No matching AusPost partner locations found for postcode {zipValue}.
-              </p>
-            )}
-
             <div className="flex justify-end gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
@@ -581,3 +732,4 @@ export function EditPostalAddressDialog({
     </Dialog>
   )
 }
+
