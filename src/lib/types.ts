@@ -805,7 +805,7 @@ export interface InteractionLog {
   metadata: Record<string, any>;
 }
 
-export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee' | 'customerServiceEmail' | 'customerPhone' | 'accountManagerAssigned' | 'services'> & { isCompany: boolean; isProspect?: boolean };
+export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee' | 'customerServiceEmail' | 'customerPhone' | 'accountManagerAssigned' | 'services' | 'bucket'> & { isCompany: boolean; isProspect?: boolean };
 
 export interface SuburbMapping {
   suburbs: string;       // Upper-case suburb text (e.g., "ACACIA RIDGE")

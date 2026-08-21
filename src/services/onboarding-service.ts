@@ -37,6 +37,7 @@ export interface CreateOnboardingRequestPayload {
   assignedToName?: string;
   preferredTimeframe?: string;
   notes?: string;
+  isLpoPlus?: boolean;
 }
 
 const sanitize = (data: any) => {
@@ -71,6 +72,7 @@ export async function createOnboardingRequest(payload: CreateOnboardingRequestPa
     assignedToName: payload.assignedToName || DEFAULT_LIAM_NAME,
     preferredTimeframe: payload.preferredTimeframe || '',
     notes: payload.notes || '',
+    isLpoPlus: Boolean(payload.isLpoPlus),
     createdAt: now,
     updatedAt: now,
   });
@@ -82,7 +84,7 @@ export async function createOnboardingRequest(payload: CreateOnboardingRequestPa
     await logActivity(payload.leadId, {
       type: 'Update',
       date: now,
-      notes: `Onboarding Request created for ${payload.companyName}. Assigned to ${requestData.assignedToName}.`,
+      notes: `Onboarding Request ${payload.isLpoPlus ? 'for LPO.Plus ' : ''}created for ${payload.companyName}. Assigned to ${requestData.assignedToName}.`,
       author: payload.requestedByName,
     }, 'companies');
   } catch (err) {
@@ -106,6 +108,7 @@ export async function createOnboardingRequest(payload: CreateOnboardingRequestPa
         assignedToUid: requestData.assignedToUid,
         assignedToName: requestData.assignedToName,
         notes: payload.notes,
+        isLpoPlus: Boolean(payload.isLpoPlus),
       }),
     }).catch(err => console.error('Error dispatching onboarding email notification:', err));
   } catch (emailErr) {

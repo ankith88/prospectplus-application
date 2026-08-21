@@ -437,6 +437,22 @@ export default function CancellationDashboard() {
         console.error("LocalMile deactivation api fail", err);
       });
 
+      // Trigger LPO cancellation cascade (child cancellation & LPO.Plus access disabling)
+      try {
+        await fetch('/api/companies/cancel-cascade', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            leadId: selectedRequest.leadId,
+            companyName: selectedRequest.companyName,
+            cancellationReason: selectedReasonObj?.name || cancelReason,
+            cancelledBy: userDisplayName
+          })
+        });
+      } catch (cascadeErr) {
+        console.error("Error triggering LPO cancellation cascade:", cascadeErr);
+      }
+
       setProcessModalOpen(false);
       fetchRequests();
     } catch (e) {
@@ -885,31 +901,33 @@ export default function CancellationDashboard() {
               </div>
 
               {/* Action Card: Launch Resell / Send New Quote Workflow */}
-              <div className="bg-emerald-50/80 border border-emerald-200/90 p-4 rounded-xl space-y-3 shadow-2xs">
-                <div className="flex items-start gap-2.5">
-                  <Sparkles className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5 fill-emerald-100" />
-                  <div>
-                    <h4 className="text-sm font-bold text-emerald-900">Change Service, Frequency or Price</h4>
-                    <p className="text-xs text-emerald-700 mt-0.5">
-                      Launch the official Resell / Send New Quote workflow to modify pricing or pickup days and issue an updated commencement form for customer sign-off.
-                    </p>
+              {(selectedRequest as any).bucket !== 'lpo_network' && (
+                <div className="bg-emerald-50/80 border border-emerald-200/90 p-4 rounded-xl space-y-3 shadow-2xs">
+                  <div className="flex items-start gap-2.5">
+                    <Sparkles className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5 fill-emerald-100" />
+                    <div>
+                      <h4 className="text-sm font-bold text-emerald-900">Change Service, Frequency or Price</h4>
+                      <p className="text-xs text-emerald-700 mt-0.5">
+                        Launch the official Resell / Send New Quote workflow to modify pricing or pickup days and issue an updated commencement form for customer sign-off.
+                      </p>
+                    </div>
                   </div>
+                  <Button
+                    onClick={handleOpenResellDialog}
+                    disabled={loadingResellLead}
+                    className="w-full bg-[#095c7b] hover:bg-[#074760] text-white font-semibold text-xs py-2.5 shadow-sm rounded-lg flex items-center justify-center gap-2"
+                  >
+                    {loadingResellLead ? (
+                      <Loader />
+                    ) : (
+                      <>
+                        <TrendingUp className="h-4 w-4" />
+                        Modify Services & Send Resell Quote
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  onClick={handleOpenResellDialog}
-                  disabled={loadingResellLead}
-                  className="w-full bg-[#095c7b] hover:bg-[#074760] text-white font-semibold text-xs py-2.5 shadow-sm rounded-lg flex items-center justify-center gap-2"
-                >
-                  {loadingResellLead ? (
-                    <Loader />
-                  ) : (
-                    <>
-                      <TrendingUp className="h-4 w-4" />
-                      Modify Services & Send Resell Quote
-                    </>
-                  )}
-                </Button>
-              </div>
+              )}
 
               {/* Alternative Quick / Direct Save */}
               <div className="space-y-4 pt-3 border-t border-slate-200/80">

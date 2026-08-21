@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -95,6 +96,16 @@ export function OrganiseOnboardingDialog({
     }
   };
 
+  const isLpoPlusOnboarding = Boolean(
+    lead?.bucket === 'lpo_network' ||
+    (lead?.bucket as string)?.toLowerCase() === 'lpo_network' ||
+    lead?.bucket === 'lpo_plus' ||
+    (lead as any)?.isLpoLead ||
+    (lead as any)?.lpoLeadId ||
+    (lead as any)?.lpoPlusStatus ||
+    effectiveCompanyName?.toUpperCase().includes('LPO')
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!effectiveLeadId || !effectiveCompanyName) {
@@ -118,6 +129,7 @@ export function OrganiseOnboardingDialog({
         assignedToName,
         preferredTimeframe,
         notes,
+        isLpoPlus: isLpoPlusOnboarding,
       });
 
       toast({
@@ -153,6 +165,14 @@ export function OrganiseOnboardingDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          {/* LPO.Plus Onboarding Indicator */}
+          {isLpoPlusOnboarding && (
+            <div className="flex items-center gap-2.5 p-3 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-teal-900 dark:text-teal-200 rounded-lg font-medium text-xs">
+              <Badge className="bg-[#095c7b] text-white hover:bg-[#095c7b] shrink-0 font-bold px-2 py-0.5">LPO.Plus</Badge>
+              <span>This is an Onboarding request for <strong>LPO.Plus</strong>.</span>
+            </div>
+          )}
+
           {/* Target Company Banner */}
           <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3">
             <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Target Customer</p>

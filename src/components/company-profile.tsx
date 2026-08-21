@@ -1638,7 +1638,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             <Card className="border-primary bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                    {['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '') && (
+                    {['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '') && company.bucket !== 'lpo_network' && (
                         <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsNotifyUpsellDialogOpen(true)}>
                             <TrendingUp className="mr-2 h-4 w-4" />Notify AM for Upsell
                         </Button>
@@ -1651,17 +1651,19 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     </Button>
                     {company.status !== 'Lost Customer' ? (
                         <>
-                            <Button 
-                                className="w-full justify-start bg-background hover:bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300 font-medium" 
-                                variant="outline" 
-                                onClick={() => {
-                                    setCancelMode('request');
-                                    setIsCancelDialogOpen(true);
-                                }}
-                            >
-                                <FileX className="mr-2 h-4 w-4 text-amber-600" />
-                                Request Cancellation
-                            </Button>
+                            {company.bucket !== 'lpo_network' && (
+                                <Button 
+                                    className="w-full justify-start bg-background hover:bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300 font-medium" 
+                                    variant="outline" 
+                                    onClick={() => {
+                                        setCancelMode('request');
+                                        setIsCancelDialogOpen(true);
+                                    }}
+                                >
+                                    <FileX className="mr-2 h-4 w-4 text-amber-600" />
+                                    Request Cancellation
+                                </Button>
+                            )}
                             {isAdmin && (
                                 <Button 
                                     className="w-full justify-start bg-background hover:bg-destructive/10 text-destructive border-destructive/20 hover:border-destructive/30 font-medium" 

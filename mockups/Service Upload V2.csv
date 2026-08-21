@@ -1,0 +1,103 @@
+Internal ID,Name,Service Category,NetSuite Item ID,NetSuite Item,Partner Commission Account,Partner Commission Model,Partner Commission Rate,Base Price,GST Applicable
+22,Account Admin Fee,Extras (Custom Price),8729,Account Admin Fee,Franchise Commissions,Percentage of Sales - Franchisee Defined,,9,Yes
+155,Additional LPO Bag,Extras,10910,Additional LPO Bag,Franchise Commissions,Percentage of Sales - Franchisee Defined,,3.5,Yes
+1,AMPO,Services,24,Pick up and Delivery from PO,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+58,AMPO 10,Services,8912,Pick up and Delivery from PO 10,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+50,AMPO 2,Services,60,Pick up and Delivery from PO 2,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+51,AMPO 3,Services,61,Pick up and Delivery from PO 3,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+52,AMPO 4,Services,72,Pick up and Delivery from PO 4,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+53,AMPO 5,Services,8907,Pick up and Delivery from PO 5,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+54,AMPO 6,Services,8908,Pick up and Delivery from PO 6,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+55,AMPO 7,Services,8909,Pick up and Delivery from PO 7,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+56,AMPO 8,Services,8910,Pick up and Delivery from PO 8,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+57,AMPO 9,Services,8911,Pick up and Delivery from PO 9,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+3,AMStreet,Services,138,Pickup and Delivery of Street Addressed Mail,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+18,BILLPay,Services,8623,Bill Payment in Specified Institution,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+7,CB,Services,30,Counter Banking,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+101,CB 2,Services,68,Counter Banking 2,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+102,CB 3,Services,70,Counter Banking 3,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+103,CB 4,Services,71,Counter Banking 4,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+49,CB: > 10 Bags,Services,9576,Counter Banking > 10 bags,Franchise Commissions,Percentage of Sales - Franchisee Defined,,20,Yes
+8,CB: Petty Cash,Services,54,Counter Banking : Petty Cash,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+15,COGS (GST),Extras (Custom Price),108,COGS (GST),Franchise Commissions,100% Franchisee Commission,,,Yes
+16,COGS (no GST),Extras (Custom Price),44,COGS (no GST),Franchise Commissions,100% Franchisee Commission,,,No
+17,Discount,Extras (Custom Price),97,Discount,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+6,EB,Services,31,Express Banking,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+99,EB 2,Services,69,Express Banking 2,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+100,EB 3,Services,90,Express Banking 3,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+156,Excess Weight Handling,Extras (Custom Price),10911,Excess Weight Handling,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+30,Fixed Charges,Services,66,Fixed Charges,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+154,Fixed Charges 2,Services,67,Fixed Charges 2,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+10,Goods Delivery,Services,106,Goods Delivery,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+9,H2H,Services,35,Hand to Hand Deliveries,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+73,H2H 10,Services,8621,Hand to Hand Deliveries 10,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+74,H2H 11,Services,8916,Hand to Hand Deliveries 11,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+75,H2H 12,Services,8917,Hand to Hand Deliveries 12,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+76,H2H 13,Services,8918,Hand to Hand Deliveries 13,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+77,H2H 14,Services,8919,Hand to Hand Deliveries 14,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+78,H2H 15,Services,8920,Hand to Hand Deliveries 15,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+79,H2H 16,Services,8921,Hand to Hand Deliveries 16,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+80,H2H 17,Services,8922,Hand to Hand Deliveries 17,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+81,H2H 18,Services,8923,Hand to Hand Deliveries 18,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+82,H2H 19,Services,8924,Hand to Hand Deliveries 19,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+65,H2H 2,Services,55,Hand to Hand Deliveries 2,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+83,H2H 20,Services,8925,Hand to Hand Deliveries 20,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+84,H2H 21,Services,8926,Hand to Hand Deliveries 21,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+85,H2H 22,Services,8927,Hand to Hand Deliveries 22,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+86,H2H 23,Services,8928,Hand to Hand Deliveries 23,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+87,H2H 24,Services,8929,Hand to Hand Deliveries 24,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+88,H2H 25,Services,8930,Hand to Hand Deliveries 25,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+89,H2H 26,Services,8931,Hand to Hand Deliveries 26,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+90,H2H 27,Services,8932,Hand to Hand Deliveries 27,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+91,H2H 28,Services,8933,Hand to Hand Deliveries 28,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+92,H2H 29,Services,8934,Hand to Hand Deliveries 29,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+66,H2H 3,Services,56,Hand to Hand Deliveries 3,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+93,H2H 30,Services,8935,Hand to Hand Deliveries 30,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+94,H2H 31,Services,8936,Hand to Hand Deliveries 31,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+95,H2H 32,Services,8937,Hand to Hand Deliveries 32,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+96,H2H 33,Services,8938,Hand to Hand Deliveries 33,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+97,H2H 34,Services,8939,Hand to Hand Deliveries 34,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+98,H2H 35,Services,8940,Hand to Hand Deliveries 35,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+67,H2H 4,Services,57,Hand to Hand Deliveries 4,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+68,H2H 5,Services,58,Hand to Hand Deliveries 5,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+69,H2H 6,Services,8617,Hand to Hand Deliveries 6,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+70,H2H 7,Services,8618,Hand to Hand Deliveries 7,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+71,H2H 8,Services,8619,Hand to Hand Deliveries 8,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+72,H2H 9,Services,8620,Hand to Hand Deliveries 9,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+157,LocalMile Trial,Services,10913,LocalMile Trial,Franchise Commissions,100% Franchisee Commission,7,0,Yes
+20,Mail Processing,Services,8727,Mail Processing,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+25,Mail Redirection,Services,8985,Mail Redirection,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+27,Mail Scan Per Minute,Extras,8989,Mail Scan Per Minute,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+19,MB,Services,8624,Machine Banking,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+24,MP Parcel Pickup,Services,8981,MP Parcel Pickup,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+31,Neopost Package: 1 AM and 1 PM Service - 1 Flute per Service,Services,7660,Neopost Package: 1 AM and 1 PM Service - 1 Flute per Service,Franchise Commissions,Percentage of Sales - Franchisee Defined,,295,Yes
+32,Neopost Package: 1 AM and 1 PM Service - 2 Flute per Service,Services,7664,Neopost Package: 1 AM and 1 PM Service - 2 Flute per Service,Franchise Commissions,Percentage of Sales - Franchisee Defined,,385,Yes
+33,Neopost Package: 1 AM and 1 PM Service - 3 Flute per Service,Services,7668,Neopost Package: 1 AM and 1 PM Service - 3 Flute per Service,Franchise Commissions,Percentage of Sales - Franchisee Defined,,475,Yes
+34,Neopost Package: 1 AM and 1 PM Service - 3 Flutes per Day,Services,7673,Neopost Package: 1 AM and 1 PM Service - 3 Flutes per Day,Franchise Commissions,Percentage of Sales - Franchisee Defined,,340,Yes
+35,Neopost Package: 2 AM and 2 PM Service - 1 Flute per Service,Services,7662,Neopost Package: 2 AM and 2 PM Service - 1 Flute per Service,Franchise Commissions,Percentage of Sales - Franchisee Defined,,430,Yes
+36,Neopost Package: 2 AM and 2 PM Service - 2 Flute per Service,Services,7666,Neopost Package: 2 AM and 2 PM Service - 2 Flute per Service,Franchise Commissions,Percentage of Sales - Franchisee Defined,,520,Yes
+37,Neopost Package: 2 AM and 2 PM Service - 3 Flute per Service,Services,7670,Neopost Package: 2 AM and 2 PM Service - 3 Flute per Service,Franchise Commissions,Percentage of Sales - Franchisee Defined,,610,Yes
+38,Neopost Package: Monthly PM Service(s) - 1 Flute per Service,Services,7889,Neopost Package: Monthly PM Service(s) - 1 Flute per Service,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+158,On Demand Delivery,Services,10914,On Demand Delivery,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+28,On Demand Pickup,Services,9232,On Demand Pickup - Sendle,Franchise Commissions - Sendle (AU EXP),Percentage of Sales - Franchisee Defined,,,Yes
+29,On Demand Pickup Additional Item,Services,9233,On Demand Pickup Additional Item - Sendle,Franchise Commissions - Sendle (AU EXP),Percentage of Sales - Franchisee Defined,,1.5,Yes
+153,Package: AMPO & H2H,Services,79,Package: Pickup from PO & Hand to Hand Delivery,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+47,Package: AMPO & PMPO,Services,76,Package: Pickup from PO & Lodge Outgoing Mail,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+150,Package: AMPO & PMPO 2,Services,10793,Package: Pickup from PO & Lodge Outgoing Mail 2,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+151,Package: AMPO & PMPO 3,Services,10794,Package: Pickup from PO & Lodge Outgoing Mail 3,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+152,Package: AMPO 2 PO Box,Services,78,Package: Pickup & Delivery from 2 PO,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+48,"Package: AMPO, PMPO & EB",Services,77,"Package: Pickup from PO, Lodge Outgoing Mail & Express Bank",Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+42,Package: AMST & AMPO,Services,9223,Package: Pick Up and Delivery of Street & PO,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+40,Package: PMPO & EB,Services,88,Package: Lodge Outgoing Mail & Express Banking,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+13,Parcel Collection,Extras (Custom Price),32,Parcel Collection,Franchise Commissions,Percentage of Sales - Franchisee Defined,,2,Yes
+4,PMPO,Services,27,Outgoing Mail Lodgement,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+59,PMPO 2,Services,73,Outgoing Mail Lodgement 2,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+60,PMPO 3,Services,91,Outgoing Mail Lodgement 3,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+61,PMPO 4,Services,92,Outgoing Mail Lodgement 4,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+62,PMPO 5,Services,93,Outgoing Mail Lodgement 5,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+63,PMPO 6,Services,94,Outgoing Mail Lodgement 6,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+64,PMPO 7,Services,95,Outgoing Mail Lodgement 7,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,
+12,Registered Mail,Extras,33,Registered Mail Collected,Franchise Commissions,Percentage of Sales - Franchisee Defined,,3,Yes
+23,Signature Item,Extras,8780,Signature Item Collected,Franchise Commissions,Percentage of Sales - Franchisee Defined,,3,Yes
+14,Waiting Time,Extras,37,Waiting Time,Franchise Commissions,Percentage of Sales - Franchisee Defined,,,Yes
+11,Weight Charges,Extras,34,Weight Charges,Franchise Commissions,Percentage of Sales - Franchisee Defined,,3.5,Yes

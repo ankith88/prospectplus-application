@@ -102,12 +102,23 @@ export const bulkImportServices = functions
       const docRef = db.collection("services").doc(String(service.id));
       const category = service.category || categorizeService(service.code, service.netsuiteItemName);
 
+      const partnerCommissionAccount = service.partnerCommissionAccount ?? null;
+      const partnerCommissionModel = service.partnerCommissionModel ?? null;
+      const partnerCommissionRate = service.partnerCommissionRate !== undefined && service.partnerCommissionRate !== "" ? service.partnerCommissionRate : null;
+      const basePrice = service.basePrice !== undefined && service.basePrice !== "" ? (isNaN(Number(service.basePrice)) ? service.basePrice : Number(service.basePrice)) : null;
+      const gstApplicable = service.gstApplicable ?? null;
+
       currentBatch.set(docRef, {
         id: String(service.id),
         code: service.code,
         netsuiteItemName: service.netsuiteItemName,
         netsuiteItemId: service.netsuiteItemId ? String(service.netsuiteItemId) : null,
         category,
+        partnerCommissionAccount,
+        partnerCommissionModel,
+        partnerCommissionRate,
+        basePrice,
+        gstApplicable,
         isActive: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });

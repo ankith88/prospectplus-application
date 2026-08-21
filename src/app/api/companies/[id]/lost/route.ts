@@ -144,6 +144,19 @@ export async function PATCH(
       console.error('[Companies Lost Route] Error sending cancellation notification email:', emailErr);
     }
 
+    // Process LPO cancellation cascade (child lead/company cancellation & LPO.Plus account access disabling)
+    try {
+      const { processLpoCancellationCascade } = await import('@/services/lpo-cancellation-cascade-server');
+      await processLpoCancellationCascade({
+        leadId: companyId,
+        companyName,
+        cancellationReason: cancellationReason || 'Customer Cancelled',
+        cancelledBy
+      });
+    } catch (cascadeErr) {
+      console.error('[Companies Lost Route] Error running LPO cancellation cascade:', cascadeErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Customer successfully marked as lost.',

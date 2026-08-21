@@ -14,9 +14,20 @@ export function BulkImportServices() {
   const { toast } = useToast();
 
   const downloadSampleCSV = () => {
-    const headers = ['Internal ID', 'Name', 'NetSuite Item', 'Service Category', 'NetSuite Item ID'];
+    const headers = [
+      'Internal ID',
+      'Name',
+      'Service Category',
+      'NetSuite Item ID',
+      'NetSuite Item',
+      'Partner Commission Account',
+      'Partner Commission Model',
+      'Partner Commission Rate',
+      'Base Price',
+      'GST Applicable'
+    ];
     const sampleRows = [
-      ['2001', 'AMPO', 'Pick up and Delivery from PO', 'Services', '24']
+      ['2001', 'AMPO', 'Services', '24', 'Pick up and Delivery from PO', 'Franchise Commissions', 'Percentage of Sales - Franchisee Defined', '', '9.00', 'Yes']
     ];
 
     const csvContent = [
@@ -51,9 +62,14 @@ export function BulkImportServices() {
           const services = results.data.map((row: any) => ({
             id: row['Internal ID'] || row['id'],
             code: row['Name'] || row['code'],
-            netsuiteItemName: row['NetSuite Item'] || row['netsuiteItemName'],
+            netsuiteItemName: row['NetSuite Item'] || row['NetSuite Item Name'] || row['netsuiteItemName'],
             category: row['Service Category'] || row['category'],
             netsuiteItemId: row['NetSuite Item ID'] || row['netsuiteItemId'] || row['NetSuite Item Id'],
+            partnerCommissionAccount: row['Partner Commission Account'] || row['partnerCommissionAccount'] || '',
+            partnerCommissionModel: row['Partner Commission Model'] || row['partnerCommissionModel'] || '',
+            partnerCommissionRate: row['Partner Commission Rate'] || row['partnerCommissionRate'] || '',
+            basePrice: row['Base Price'] || row['basePrice'] || row['Base Rate'] || row['baseRate'] || '',
+            gstApplicable: row['GST Applicable'] || row['gstApplicable'] || '',
           }));
 
           // Basic validation

@@ -324,6 +324,22 @@ export function CancelCustomerDialog({
           console.error("Failed to deactivate LocalMile access during direct cancellation:", err);
         });
 
+        // Trigger LPO cancellation cascade (child lead/company cancellation & LPO.Plus access disabling)
+        try {
+          await fetch('/api/companies/cancel-cascade', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              leadId: lead.id,
+              companyName: lead.companyName || `${leadAny.firstName || ''} ${leadAny.lastName || ''}`.trim(),
+              cancellationReason: reasonName,
+              cancelledBy: staffName
+            })
+          });
+        } catch (cascadeErr) {
+          console.error("Failed to run LPO cancellation cascade during direct cancellation:", cascadeErr);
+        }
+
         toast({
           title: 'Customer Cancelled',
           description: `${lead.companyName || 'Customer'} has been directly cancelled.`,

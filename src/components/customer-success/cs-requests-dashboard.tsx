@@ -1242,7 +1242,7 @@ export default function CSRequestsDashboard() {
                             </Select>
                           </div>
 
-                          {['Change Frequency & Update Price', 'Keep Frequency & Update Price', 'Remove Specific Service Item'].includes(cancelSaveStrategy) && (
+                          {['Change Frequency & Update Price', 'Keep Frequency & Update Price', 'Remove Specific Service Item'].includes(cancelSaveStrategy) && (selectedRequest as any)?.bucket !== 'lpo_network' && (
                             <div className="p-3.5 rounded-xl bg-emerald-100/80 border border-emerald-300 space-y-2.5 shadow-2xs">
                               <div className="flex items-start gap-2">
                                 <Sparkles className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />

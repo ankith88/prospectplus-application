@@ -1439,37 +1439,39 @@ export default function SignedCustomersPage() {
                                <Search className="mr-2 h-4 w-4 text-blue-600" /> Discover Multi-sites
                              </DropdownMenuItem>
                              <DropdownMenuItem onClick={() => {
-                               setSelectedMultiSiteCompany(lead);
+                                setSelectedMultiSiteCompany(lead);
                                setSelectedPlaceForChildLead(null);
                                setIsMultiSiteDialogOpen(true);
                              }}>
                                <Building className="mr-2 h-4 w-4 text-purple-600" /> Enter Multi-site Lead
                              </DropdownMenuItem>
                              {invoicesMap[lead.id] && (
-                               <DropdownMenuItem onClick={() => {
-                                 setSelectedInvoiceForModal({ invoice: invoicesMap[lead.id]!, companyName: lead.companyName });
-                                 setIsInvoiceModalOpen(true);
-                               }}>
-                                 <FileText className="mr-2 h-4 w-4 text-primary" /> View Last Invoice
-                               </DropdownMenuItem>
-                             )}
-                             <DropdownMenuItem onClick={() => {
-                               setSelectedOnboardingLead(lead as unknown as Lead);
-                               setIsOnboardingDialogOpen(true);
-                             }}>
-                               <CalendarCheck className="mr-2 h-4 w-4 text-primary" /> Organise Onboarding
-                             </DropdownMenuItem>
-                             <DropdownMenuItem 
-                                className="text-amber-700 focus:text-amber-800"
-                                onClick={() => {
-                                  setSelectedCancelLead(lead as unknown as Lead);
-                                  setCancelMode('request');
-                                  setIsCancelDialogOpen(true);
-                                }}
-                              >
-                                <FileX className="mr-2 h-4 w-4 text-amber-600" />
-                                Request Cancellation
+                                <DropdownMenuItem onClick={() => {
+                                  setSelectedInvoiceForModal({ invoice: invoicesMap[lead.id]!, companyName: lead.companyName });
+                                  setIsInvoiceModalOpen(true);
+                                }}>
+                                  <FileText className="mr-2 h-4 w-4 text-primary" /> View Last Invoice
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedOnboardingLead(lead as unknown as Lead);
+                                setIsOnboardingDialogOpen(true);
+                              }}>
+                                <CalendarCheck className="mr-2 h-4 w-4 text-primary" /> Organise Onboarding
                               </DropdownMenuItem>
+                              {lead.bucket !== 'lpo_network' && (
+                                <DropdownMenuItem 
+                                  className="text-amber-700 focus:text-amber-800"
+                                  onClick={() => {
+                                    setSelectedCancelLead(lead as unknown as Lead);
+                                    setCancelMode('request');
+                                    setIsCancelDialogOpen(true);
+                                  }}
+                                >
+                                  <FileX className="mr-2 h-4 w-4 text-amber-600" />
+                                  Request Cancellation
+                                </DropdownMenuItem>
+                              )}
                               {isAdmin && (
                                 <DropdownMenuItem 
                                   className="text-destructive focus:text-destructive"

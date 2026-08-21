@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       assignedToUid,
       assignedToName,
       notes,
+      isLpoPlus,
     } = body;
 
     if (!companyName) {
@@ -41,7 +42,9 @@ export async function POST(request: Request) {
     }
 
     const ccEmail = 'alexandra.bathman@mailplus.com.au';
-    const subject = `[New Onboarding Request] - ${companyName}`;
+    const subject = isLpoPlus 
+      ? `[New Onboarding Request - LPO.Plus] - ${companyName}`
+      : `[New Onboarding Request] - ${companyName}`;
 
     const priorityBadgeColor = priority === 'Urgent' ? '#e53e3e' : '#319795';
 
@@ -96,10 +99,19 @@ export async function POST(request: Request) {
               <div class="greeting" style="font-size: 20px; color: #095c7b; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.5px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
                 Hi ${assignedToName || 'Liam'},
               </div>
-              
+
+              ${isLpoPlus ? `
+              <div style="background-color: #095c7b; color: #ffffff; padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: 14px; margin-bottom: 20px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                ★ Onboarding for LPO.Plus
+              </div>
+              <p style="margin: 0 0 20px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                A new <strong>LPO.Plus</strong> customer onboarding request has been submitted for <strong style="color: #095c7b;">${companyName}</strong> and assigned to you.
+              </p>
+              ` : `
               <p style="margin: 0 0 20px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
                 A new customer onboarding request has been submitted for <strong style="color: #095c7b;">${companyName}</strong> and assigned to you.
               </p>
+              `}
               
               <!-- Request Details Box Table -->
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">

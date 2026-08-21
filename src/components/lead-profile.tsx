@@ -3716,6 +3716,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     lead.leadSource === 'LPO Expressions of Interest' ||
     lead.isLpoLead
   );
+  const isLpoNetworkBucket = lead.bucket === 'lpo_network' || (lead.bucket as string)?.toLowerCase() === 'lpo_network' || lead.bucket === 'LPO Network' || isLpoLeadProcess;
 
   let showSchedule = false;
   let showProcessLead = false;
@@ -3920,15 +3921,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <CalendarCheck className="mr-2 h-4 w-4" />
             Organise Onboarding Request
           </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}
-            className="bg-[#095c7b] text-white hover:bg-[#095c7b]/90 font-semibold shadow-sm"
-          >
-            <Briefcase className="mr-2 h-4 w-4" />
-            Resell / Send New Quote
-          </Button>
+          {!isLpoNetworkBucket && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}
+              className="bg-[#095c7b] text-white hover:bg-[#095c7b]/90 font-semibold shadow-sm"
+            >
+              <Briefcase className="mr-2 h-4 w-4" />
+              Resell / Send New Quote
+            </Button>
+          )}
         </div>
       );
     }
@@ -4047,7 +4050,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 ? (isQuoteAccepted ? [quoteItem, signupItem].filter(Boolean) : [quoteItem].filter(Boolean))
                 : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
 
-    const isLpoNetworkBucket = lead.bucket === 'lpo_network' || (lead.bucket as string)?.toLowerCase() === 'lpo_network' || lead.bucket === 'LPO Network' || isLpoLeadProcess;
     const hasSalesItems = salesItems.length > 0;
     const canShowLpoPlus = userProfile?.activeRole !== 'user' && !isLeadWonOrSigned && !isLpoNetworkBucket;
 
@@ -7423,14 +7425,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <CardContent className="space-y-2">
                     {isCompanyProfile && (
                         <>
-                            {['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '') ? (
-                                <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsNotifyUpsellDialogOpen(true)}>
-                                    <TrendingUp className="mr-2 h-4 w-4" />Notify AM for Upsell / Resell
-                                </Button>
-                            ) : (
-                                <Button className="w-full justify-start font-medium bg-[#095c7b] text-white hover:bg-[#095c7b]/90 shadow-sm" variant="default" onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}>
-                                    <Briefcase className="mr-2 h-4 w-4" />Resell / Send New Quote
-                                </Button>
+                            {!isLpoNetworkBucket && (
+                                ['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '') ? (
+                                    <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsNotifyUpsellDialogOpen(true)}>
+                                        <TrendingUp className="mr-2 h-4 w-4" />Notify AM for Upsell / Resell
+                                    </Button>
+                                ) : (
+                                    <Button className="w-full justify-start font-medium bg-[#095c7b] text-white hover:bg-[#095c7b]/90 shadow-sm" variant="default" onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}>
+                                        <Briefcase className="mr-2 h-4 w-4" />Resell / Send New Quote
+                                    </Button>
+                                )
                             )}
                             <Button className="w-full justify-start font-medium bg-background hover:bg-muted text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsOnboardingDialogOpen(true)}>
                                 <CalendarCheck className="mr-2 h-4 w-4 text-emerald-600" />Organise Onboarding Request
@@ -7468,17 +7472,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <>
                             {lead.status !== 'Lost Customer' ? (
                                 <>
-                                    <Button 
-                                        className="w-full justify-start bg-background hover:bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300 font-medium" 
-                                        variant="outline" 
-                                        onClick={() => {
-                                            setCancelMode('request');
-                                            setIsCancelDialogOpen(true);
-                                        }}
-                                    >
-                                        <FileX className="mr-2 h-4 w-4 text-amber-600" />
-                                        Request Cancellation
-                                    </Button>
+                                    {!isLpoNetworkBucket && (
+                                        <Button 
+                                            className="w-full justify-start bg-background hover:bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300 font-medium" 
+                                            variant="outline" 
+                                            onClick={() => {
+                                                setCancelMode('request');
+                                                setIsCancelDialogOpen(true);
+                                            }}
+                                        >
+                                            <FileX className="mr-2 h-4 w-4 text-amber-600" />
+                                            Request Cancellation
+                                        </Button>
+                                    )}
                                     {isAdmin && (
                                         <Button 
                                             className="w-full justify-start bg-background hover:bg-destructive/10 text-destructive border-destructive/20 hover:border-destructive/30 font-medium" 
