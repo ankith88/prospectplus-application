@@ -477,14 +477,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     };
 
     const handleGetTranscriptForCall = async (call: Activity) => {
-        if (!call.callId || !user?.displayName) return;
-        if (user?.uid !== 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' && userProfile?.uid !== 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') return;
+        if (!call.callId || !user) return;
+        const authorName = user.displayName || (userProfile ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : 'System');
         setFetchingTranscriptId(call.callId);
         try {
             const result = await getCallTranscriptByCallId({
                 callId: String(call.callId),
                 leadId: lead.id,
-                leadAuthor: user.displayName
+                leadAuthor: authorName
             });
 
             if (result?.transcriptFound) {
@@ -7014,7 +7014,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                             <FileText className="mr-1.5 h-3.5 w-3.5" />
                                                             View Transcript
                                                         </Button>
-                                                    ) : (user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') ? (
+                                                    ) : (
                                                         <Button 
                                                             variant="outline" 
                                                             size="sm" 
@@ -7029,7 +7029,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                             )}
                                                             Fetch Transcript
                                                         </Button>
-                                                    ) : null}
+                                                    )}
                                                 </>
                                             );
                                         })()}

@@ -7,7 +7,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { updateTranscriptAnalysis } from '@/services/firebase';
+import { updateTranscriptAnalysisServer } from '@/services/firebase-server';
+import type { TranscriptAnalysis } from '@/lib/types';
 
 const AnalyzeTranscriptInputSchema = z.object({
   leadId: z.string().describe('The ID of the lead the transcript belongs to.'),
@@ -29,11 +30,20 @@ const AnalyzeTranscriptOutputSchema = z.object({
 });
 export type AnalyzeTranscriptOutput = z.infer<typeof AnalyzeTranscriptOutputSchema>;
 
-
 export async function analyzeTranscript(input: AnalyzeTranscriptInput): Promise<AnalyzeTranscriptOutput> {
-    return analyzeTranscriptFlow(input);
+    try {
+        const cleanInput = {
+            leadId: String(input.leadId || ''),
+            transcriptId: String(input.transcriptId || ''),
+            transcriptContent: String(input.transcriptContent || '')
+        };
+        const result = await analyzeTranscriptFlow(cleanInput);
+        return result || { analysis: {} as any, error: 'No response returned from analysis flow.' };
+    } catch (error: any) {
+        console.error('Error in analyzeTranscript Server Action:', error);
+        return { analysis: {} as any, error: error.message || 'An unexpected error occurred during analysis.' };
+    }
 }
-
 
 const analyzeTranscriptPrompt = ai.definePrompt({
     name: 'analyzeTranscriptPrompt',
@@ -56,7 +66,6 @@ const analyzeTranscriptPrompt = ai.definePrompt({
     `,
 });
 
-
 const analyzeTranscriptFlow = ai.defineFlow(
   {
     name: 'analyzeTranscriptFlow',
@@ -71,13 +80,14 @@ const analyzeTranscriptFlow = ai.defineFlow(
             throw new Error("AI failed to generate transcript analysis.");
         }
 
-        // Save the analysis to the transcript document in Firebase
-        await updateTranscriptAnalysis(leadId, transcriptId, output);
+        // Save the analysis to the transcript document in Firebase using Server Service
+        await updateTranscriptAnalysisServer(leadId, transcriptId, output as TranscriptAnalysis);
 
         return { analysis: output };
     } catch (error: any) {
-        console.error('Error analyzing transcript:', error);
+        console.error('Error analyzing transcript flow:', error);
         return { analysis: {} as any, error: `An unexpected error occurred: ${error.message}` };
     }
   }
 );
+

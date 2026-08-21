@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Users, ArrowUpDown, MoreVertical, Layers } from 'lucide-react'
+import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Users, ArrowUpDown, MoreVertical, Layers, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getAllCallActivities, getAllTranscripts, addCallReview, getAllUsers } from '@/services/firebase'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
@@ -565,14 +565,14 @@ export default function CallsClientPage() {
   };
 
   const handleGetTranscriptForCall = async (call: CallActivity) => {
-    if (!call.callId || !user?.displayName) return;
-    if (user?.uid !== 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' && userProfile?.uid !== 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') return;
+    if (!call.callId || !user) return;
+    const authorName = user.displayName || (userProfile ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : 'System');
     setFetchingTranscriptId(call.callId);
     try {
         const result = await getCallTranscriptByCallId({
             callId: String(call.callId),
             leadId: call.leadId,
-            leadAuthor: user.displayName
+            leadAuthor: authorName
         });
 
         if (result?.transcriptFound) {
@@ -659,6 +659,16 @@ export default function CallsClientPage() {
                             <DropdownMenuItem onClick={() => { setSelectedTranscript(transcript); setIsViewerOpen(true); }} className="cursor-pointer flex items-center gap-2">
                                 <FileText className="h-4 w-4" />
                                 <span>Transcript</span>
+                            </DropdownMenuItem>
+                        )}
+                        {call.callId && !transcript && (
+                            <DropdownMenuItem 
+                                onClick={() => handleGetTranscriptForCall(call)} 
+                                disabled={fetchingTranscriptId === call.callId}
+                                className="cursor-pointer flex items-center gap-2 text-violet-600 font-medium"
+                            >
+                                {fetchingTranscriptId === call.callId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                <span>Fetch Transcript</span>
                             </DropdownMenuItem>
                         )}
                         {call.review && (

@@ -20,6 +20,8 @@ import type { Transcript, Lead } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
+import { usePermissions } from '@/hooks/use-permissions'
+import { SUPER_ADMIN_UIDS } from '@/lib/constants'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
 import { Phone, Calendar, Clock, FileText, DownloadCloud, Hash, X, Filter, SlidersHorizontal, User, Voicemail, Download } from 'lucide-react'
@@ -63,11 +65,12 @@ export default function TranscriptsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const isSuperAdminUid = user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
-  const hasAccess = isSuperAdminUid;
+  const { canView } = usePermissions();
+  const isSuperAdminUid = (user && SUPER_ADMIN_UIDS.includes(user.uid)) || (userProfile && SUPER_ADMIN_UIDS.includes(userProfile.uid));
+  const hasAccess = isSuperAdminUid || canView('historyCallsTranscripts') || ['admin', 'Outbound Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'Sales Manager'].includes(userProfile?.activeRole || '');
 
   const fetchTranscripts = async () => {
-    if (!user || !isSuperAdminUid) return;
+    if (!user || !hasAccess) return;
     try {
       setLoading(true);
       const fetchedTranscripts = await getAllTranscripts();
@@ -96,7 +99,7 @@ export default function TranscriptsPage() {
     }
     if (authLoading) return;
     
-    if (!isSuperAdminUid) {
+    if (!hasAccess) {
       router.replace('/');
       return;
     }
@@ -104,7 +107,7 @@ export default function TranscriptsPage() {
     fetchTranscripts();
     fetchLeads();
 
-  }, [user, userProfile, authLoading, router, toast, isSuperAdminUid]);
+  }, [user, userProfile, authLoading, router, toast, hasAccess]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));

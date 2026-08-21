@@ -1,7 +1,7 @@
 
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import type { Activity, Lead, Transcript, UserProfile, EmailRecord } from '@/lib/types';
+import type { Activity, Lead, Transcript, TranscriptAnalysis, UserProfile, EmailRecord } from '@/lib/types';
 import { getSydneyISOString } from '@/lib/utils';
 
 const db = getFirestore(adminApp);
@@ -297,6 +297,49 @@ export async function duplicateLeadToCompaniesServer(leadId: string): Promise<vo
         console.log(`[Server] Successfully duplicated lead ${leadId} and all subcollections to companies collection.`);
     } catch (error) {
         console.error('[Server] Error duplicating lead to companies:', error);
+        throw error;
+    }
+}
+
+/**
+ * Updates a transcript document with its AI analysis.
+ */
+export async function updateTranscriptAnalysisServer(leadId: string, transcriptId: string, analysis: TranscriptAnalysis): Promise<void> {
+    try {
+        if (!transcriptId) return;
+
+        if (leadId) {
+            // Check leads subcollection
+            const leadTranscriptRef = db.collection('leads').doc(leadId).collection('transcripts').doc(transcriptId);
+            const leadSnap = await leadTranscriptRef.get();
+            if (leadSnap.exists) {
+                await leadTranscriptRef.update({ analysis });
+                return;
+            }
+
+            // Check companies subcollection
+            const companyTranscriptRef = db.collection('companies').doc(leadId).collection('transcripts').doc(transcriptId);
+            const companySnap = await companyTranscriptRef.get();
+            if (companySnap.exists) {
+                await companyTranscriptRef.update({ analysis });
+                return;
+            }
+        }
+
+        // Fallback: collection group search by document ID or callId
+        const groupSnap = await db.collectionGroup('transcripts').get();
+        const matchingDoc = groupSnap.docs.find(d => d.id === transcriptId || d.data()?.callId === transcriptId);
+        if (matchingDoc) {
+            await matchingDoc.ref.update({ analysis });
+            return;
+        }
+
+        // If leadId is provided, write to lead transcripts subcollection
+        if (leadId) {
+            await db.collection('leads').doc(leadId).collection('transcripts').doc(transcriptId).set({ analysis }, { merge: true });
+        }
+    } catch (error) {
+        console.error('[Server Error] Failed to update transcript analysis:', error);
         throw error;
     }
 }

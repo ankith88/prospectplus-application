@@ -81,16 +81,31 @@ export function BulkImportServices() {
               return;
           }
 
-          const functions = getFunctions(app, 'australia-southeast1');
-          const importServices = httpsCallable(functions, 'bulkImportServices');
-          
-          const response = await importServices({ services });
-          const data = response.data as any;
+          let data: any = null;
+          try {
+            const apiRes = await fetch('/api/admin/services/bulk-import', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ services }),
+            });
+            if (apiRes.ok) {
+              data = await apiRes.json();
+            }
+          } catch (fetchErr) {
+            console.warn('API route call failed, falling back to callable function:', fetchErr);
+          }
 
-          if (data.success) {
+          if (!data) {
+            const functions = getFunctions(app, 'australia-southeast1');
+            const importServices = httpsCallable(functions, 'bulkImportServices');
+            const response = await importServices({ services });
+            data = response.data as any;
+          }
+
+          if (data && data.success) {
             toast({ title: 'Success', description: data.message || 'Successfully imported services.' });
           } else {
-            toast({ variant: 'destructive', title: 'Error', description: data.message || 'Import completed with errors.' });
+            toast({ variant: 'destructive', title: 'Error', description: data?.message || 'Import completed with errors.' });
           }
           
           if (data.errors && data.errors.length > 0) {

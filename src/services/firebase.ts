@@ -1964,7 +1964,7 @@ async function addScorecard(leadId: string, data: any): Promise<any> {
     return { id: docRef.id, ...sanitizeData(snap.data()) };
 }
 
-async function updateScorecardAnalysis(leadId: string, scorecardId: string, analysis: TranscriptAnalysis): Promise<void> {
+async function updateScorecardAnalysis(leadId: string, scorecardId: string, analysis: any): Promise<void> {
     await updateDoc(doc(firestore, 'leads', leadId, 'scorecards', scorecardId), { analysis });
 }
 
