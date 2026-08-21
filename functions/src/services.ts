@@ -72,16 +72,16 @@ export const bulkImportServices = functions
         const userDoc = await admin.firestore().collection("users").doc(uid).get();
         if (userDoc.exists) {
           const uData = userDoc.data() || {};
-          const role = String(uData.role || uData.activeRole || uData.defaultRole || "").toLowerCase();
+          const role = String(uData.role || uData.activeRole || uData.defaultRole || "").trim().toLowerCase();
           const assignedRoles = Array.isArray(uData.assignedRoles)
-            ? uData.assignedRoles.map((r: any) => String(r).toLowerCase())
+            ? uData.assignedRoles.map((r: any) => String(r).trim().toLowerCase())
             : [];
-          const adminRoles = ["admin", "outbound admin", "data admin", "sales manager", "super user", "operations"];
+          const allowedRoles = ["admin", "super_admin", "super admin", "super user"];
 
           if (
-            adminRoles.some(r => role.includes(r)) ||
-            assignedRoles.some(r => adminRoles.some(ar => r.includes(ar))) ||
-            uData.isSuperAdmin === true
+            uData.isSuperAdmin === true ||
+            allowedRoles.includes(role) ||
+            assignedRoles.some(r => allowedRoles.includes(r))
           ) {
             isAuthorized = true;
           }

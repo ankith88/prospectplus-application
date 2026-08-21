@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 
     const db = getFirestore(adminApp);
 
-    // Strict Authorization Check: Only Super Admins and Admins can upload
+    // Strict Authorization Check: Only Super Admins and exact 'admin' role users can upload
     let isAuthorized = false;
 
     if (requestorUid) {
@@ -69,16 +69,17 @@ export async function POST(req: NextRequest) {
         const userDoc = await db.collection('users').doc(requestorUid).get();
         if (userDoc.exists) {
           const uData = userDoc.data() || {};
-          const role = String(uData.role || uData.activeRole || uData.defaultRole || '').toLowerCase();
+          const role = String(uData.role || uData.activeRole || uData.defaultRole || '').trim().toLowerCase();
           const assignedRoles = Array.isArray(uData.assignedRoles)
-            ? uData.assignedRoles.map((r: any) => String(r).toLowerCase())
+            ? uData.assignedRoles.map((r: any) => String(r).trim().toLowerCase())
             : [];
-          const adminRoles = ['admin', 'outbound admin', 'field sales admin', 'lead gen admin', 'data admin', 'super user'];
+
+          const allowedRoles = ['admin', 'super_admin', 'super admin', 'super user'];
 
           if (
             uData.isSuperAdmin === true ||
-            adminRoles.some((r) => role.includes(r)) ||
-            assignedRoles.some((r) => adminRoles.some((ar) => r.includes(ar)))
+            allowedRoles.includes(role) ||
+            assignedRoles.some((r) => allowedRoles.includes(r))
           ) {
             isAuthorized = true;
           }
