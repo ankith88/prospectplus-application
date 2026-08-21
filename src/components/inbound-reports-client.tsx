@@ -490,10 +490,6 @@ export default function InboundReportsClientPage({
 
         const usersQuery = query(collection(firestore, 'users'));
 
-        const bucketHistoryQuery = query(
-            collectionGroup(firestore, 'bucket_history')
-        );
-
         let fetchedLeads: Lead[] = [];
         let fetchedCompanies: Lead[] = [];
         let activitiesSnap;
@@ -503,8 +499,8 @@ export default function InboundReportsClientPage({
             fetchedCompanies = cacheRef.current.companies;
             const [actSnap, apptSnap, usersSnap] = await Promise.all([
                 getDocs(activityQuery),
-                getDocs(apptQuery),
-                getDocs(usersQuery)
+                getDocs(apptQuery).catch(() => ({ docs: [] } as any)),
+                getDocs(usersQuery).catch(() => ({ docs: [] } as any))
             ]);
             activitiesSnap = actSnap;
 
@@ -573,34 +569,20 @@ export default function InboundReportsClientPage({
                 }
             }
             
-            const [snap, actSnap, compSnap, apptSnap, usersSnap, bhSnap] = await Promise.all([
+            const [snap, actSnap, compSnap, apptSnap, usersSnap] = await Promise.all([
               getDocs(leadsQuery),
               getDocs(activityQuery),
               getDocs(companiesQuery),
-              getDocs(apptQuery),
-              getDocs(usersQuery),
-              getDocs(bucketHistoryQuery).catch(() => null)
+              getDocs(apptQuery).catch(() => ({ docs: [] } as any)),
+              getDocs(usersQuery).catch(() => ({ docs: [] } as any))
             ]);
             setFetchProgress(70);
-
-            const bucketHistoryMap = new Map<string, any[]>();
-            if (bhSnap && !bhSnap.empty) {
-                bhSnap.docs.forEach((doc: any) => {
-                    const data = doc.data();
-                    const parentId = doc.ref.parent?.parent?.id;
-                    if (parentId) {
-                        const list = bucketHistoryMap.get(parentId) || [];
-                        list.push({ id: doc.id, ...data });
-                        bucketHistoryMap.set(parentId, list);
-                    }
-                });
-            }
 
             const processRawDoc = (doc: any) => {
                 const data = doc.data();
                 const history = (data.bucketHistory && Array.isArray(data.bucketHistory) && data.bucketHistory.length > 0)
                     ? data.bucketHistory
-                    : (bucketHistoryMap.get(doc.id) || []);
+                    : [];
                 return { id: doc.id, ...data, bucketHistory: history } as Lead;
             };
 
