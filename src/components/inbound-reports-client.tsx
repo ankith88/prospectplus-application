@@ -369,7 +369,7 @@ export default function InboundReportsClientPage({
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cacheRef = useRef<{ leads: Lead[], companies: Lead[] } | null>(null);
+  const cacheRef = useRef<{ leads: Lead[], companies: Lead[], activities: Activity[], appointments: Appointment[], users: string[] } | null>(null);
   const lastFetchedStartISORef = useRef<string | null>(null);
 
   const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
@@ -479,44 +479,28 @@ export default function InboundReportsClientPage({
             lastFetchedStartISORef.current = startISO;
         }
 
-        const activityQuery = query(
-            collectionGroup(firestore, 'activity'),
-            where('date', '>=', startISO)
-        );
-
-        const apptQuery = query(
-            collectionGroup(firestore, 'appointments')
-        );
-
-        const usersQuery = query(collection(firestore, 'users'));
-
-        let fetchedLeads: Lead[] = [];
-        let fetchedCompanies: Lead[] = [];
-        let activitiesSnap;
-
         if (cacheRef.current) {
-            fetchedLeads = cacheRef.current.leads;
-            fetchedCompanies = cacheRef.current.companies;
-            const [actSnap, apptSnap, usersSnap] = await Promise.all([
-                getDocs(activityQuery),
-                getDocs(apptQuery).catch(() => ({ docs: [] } as any)),
-                getDocs(usersQuery).catch(() => ({ docs: [] } as any))
-            ]);
-            activitiesSnap = actSnap;
-
-            const userList = usersSnap.docs.map((doc: any) => {
-                const data = doc.data();
-                return `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.displayName;
-            }).filter(Boolean);
-            setAllUsers(userList);
-
-            const apptsList = apptSnap.docs.map((doc: any) => ({
-                id: doc.id,
-                ...doc.data(),
-                leadId: doc.data()?.leadId || doc.ref.parent?.parent?.id,
-            } as Appointment));
-            setAllAppointments(apptsList);
+            const leadMap = new Map<string, Lead>();
+            for (const lead of [...cacheRef.current.leads, ...cacheRef.current.companies]) {
+                leadMap.set(lead.id, lead);
+            }
+            setAllLeads(Array.from(leadMap.values()));
+            setAllActivities(cacheRef.current.activities);
+            setAllAppointments(cacheRef.current.appointments);
+            setAllUsers(cacheRef.current.users);
+            setFetchProgress(100);
         } else {
+            const activityQuery = query(
+                collectionGroup(firestore, 'activity'),
+                where('date', '>=', startISO)
+            );
+
+            const apptQuery = query(
+                collectionGroup(firestore, 'appointments')
+            );
+
+            const usersQuery = query(collection(firestore, 'users'));
+
             let leadsQuery, companiesQuery;
             if (appliedFilters.dateEntered?.from) {
                 if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
@@ -541,7 +525,6 @@ export default function InboundReportsClientPage({
                     );
                 }
             } else {
-                // Enforce a fallback range of last 90 days to avoid loading the entire database
                 const ninetyDaysAgo = new Date();
                 ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
                 const fallbackISO = ninetyDaysAgo.toISOString();
@@ -596,53 +579,52 @@ export default function InboundReportsClientPage({
                 if (l.inboundDetails || (l as any).inboundType) return true;
                 const sourceLower = (l.customerSource || '').toLowerCase();
                 const leadSourceLower = ((l as any).leadSource || '').toLowerCase();
+                const campaignLower = ((l.campaign || (l as any).customerCampaign || '') as string).toLowerCase();
                 if (sourceLower.includes('inbound') || sourceLower.includes('website') || sourceLower.includes('web') || sourceLower.includes('online') || sourceLower.includes('registration') || sourceLower.includes('form') || sourceLower.includes('direct') || sourceLower.includes('organic')) return true;
                 if (leadSourceLower.includes('inbound') || leadSourceLower.includes('website') || leadSourceLower.includes('web')) return true;
-                const hasWebsite = Object.entries(l).some(([key, val]) => {
-                    if (typeof val !== 'string') return false;
-                    const keyLower = key.toLowerCase();
-                    if (keyLower.includes('url') || keyLower === 'website') return false;
-                    return val.toLowerCase().includes('website');
-                });
-                return hasWebsite;
+                if (campaignLower.includes('inbound') || campaignLower.includes('website') || campaignLower.includes('web')) return true;
+                return false;
             };
-            fetchedLeads = rawLeads.filter(isInbound);
-            fetchedCompanies = rawCompanies.filter(isInbound);
-
-            activitiesSnap = actSnap;
+            const fetchedLeads = rawLeads.filter(isInbound);
+            const fetchedCompanies = rawCompanies.filter(isInbound);
 
             const userList = usersSnap.docs.map((doc: any) => {
                 const data = doc.data();
                 return `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.displayName;
             }).filter(Boolean);
-            setAllUsers(userList);
 
             const apptsList = apptSnap.docs.map((doc: any) => ({
                 id: doc.id,
                 ...doc.data(),
                 leadId: doc.data()?.leadId || doc.ref.parent?.parent?.id,
             } as Appointment));
-            setAllAppointments(apptsList);
 
-            cacheRef.current = { leads: fetchedLeads, companies: fetchedCompanies };
-        }
-        
-        const leadMap = new Map<string, Lead>();
-        for (const lead of [...fetchedLeads, ...fetchedCompanies]) {
-            leadMap.set(lead.id, lead);
-        }
-        setAllLeads(Array.from(leadMap.values()));
+            const activities = actSnap.docs.map((doc: any) => {
+                const data = doc.data() as Activity;
+                return {
+                    ...data,
+                    id: doc.id,
+                    leadId: doc.ref.parent.parent!.id
+                };
+            });
 
-        const activities = activitiesSnap.docs.map(doc => {
-            const data = doc.data() as Activity;
-            return {
-                ...data,
-                id: doc.id,
-                leadId: doc.ref.parent.parent!.id
+            cacheRef.current = {
+                leads: fetchedLeads,
+                companies: fetchedCompanies,
+                activities,
+                appointments: apptsList,
+                users: userList,
             };
-        });
 
-        setAllActivities(activities);
+            const leadMap = new Map<string, Lead>();
+            for (const lead of [...fetchedLeads, ...fetchedCompanies]) {
+                leadMap.set(lead.id, lead);
+            }
+            setAllLeads(Array.from(leadMap.values()));
+            setAllActivities(activities);
+            setAllAppointments(apptsList);
+            setAllUsers(userList);
+        }
 
     } catch (error: any) {
         console.error("Failed to refresh inbound reporting data:", error);
@@ -745,6 +727,29 @@ export default function InboundReportsClientPage({
     });
   }, [allLeads, appliedFilters]);
 
+  const activitiesByLeadId = useMemo(() => {
+    const map = new Map<string, Activity[]>();
+    for (let i = 0; i < allActivities.length; i++) {
+      const act = allActivities[i];
+      if (!act.leadId) continue;
+      let list = map.get(act.leadId);
+      if (!list) {
+        list = [];
+        map.set(act.leadId, list);
+      }
+      list.push(act);
+    }
+    return map;
+  }, [allActivities]);
+
+  const leadMap = useMemo(() => {
+    const map = new Map<string, Lead>();
+    for (let i = 0; i < allLeads.length; i++) {
+      map.set(allLeads[i].id, allLeads[i]);
+    }
+    return map;
+  }, [allLeads]);
+
   const stats = useMemo(() => {
     const totalInbound = filteredLeads.length;
     
@@ -772,7 +777,7 @@ export default function InboundReportsClientPage({
         
         // Collect all activity dates
         let activityDates: Date[] = [];
-        const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+        const leadActivities = (activitiesByLeadId.get(lead.id) || []).filter(act => isManualActivity(act));
         if (leadActivities.length > 0) {
             activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
         }
@@ -826,7 +831,7 @@ export default function InboundReportsClientPage({
         if (['Quote Sent', 'Quote Accepted', 'Quote Out', 'Quotes Sent', 'Proposal Sent'].includes(st)) return true;
         if (l.scfLinks && l.scfLinks.length > 0) return true;
         if (l.sofDetails && (l.sofDetails.signedAt || (l.sofDetails as any).sentAt)) return true;
-        const leadActs = allActivities.filter(a => a.leadId === l.id);
+        const leadActs = activitiesByLeadId.get(l.id) || [];
         return leadActs.some(a => {
             const notes = (a.notes || '').toLowerCase();
             return notes.includes('status changed to quote sent') || 
@@ -854,7 +859,7 @@ export default function InboundReportsClientPage({
     allQuotedLeads.forEach(l => {
         const entered = parseDateString(l.dateLeadEntered);
         if (!entered) return;
-        const leadActs = allActivities.filter(a => a.leadId === l.id);
+        const leadActs = activitiesByLeadId.get(l.id) || [];
         const quoteAct = leadActs.find(a => {
             const notes = (a.notes || '').toLowerCase();
             return notes.includes('quote sent') || notes.includes('quote out') || notes.includes('proposal sent');
@@ -1103,7 +1108,7 @@ export default function InboundReportsClientPage({
     const anyTrialLeads: Lead[] = [];
 
     filteredLeads.forEach(lead => {
-        const leadActivities = allActivities.filter(act => act.leadId === lead.id);
+        const leadActivities = activitiesByLeadId.get(lead.id) || [];
         
         // ShipMate Trial Detection
         const hasShipMateTrialActivity = leadActivities.some(act => 
@@ -1146,7 +1151,7 @@ export default function InboundReportsClientPage({
         
         const hasInboundDetails = !!l.inboundDetails;
         
-        const leadActivities = allActivities.filter(act => act.leadId === l.id);
+        const leadActivities = activitiesByLeadId.get(l.id) || [];
         const hasPublicRegistrationNote = leadActivities.some(act => 
             act.notes?.toLowerCase().includes('public registration') || 
             act.notes?.toLowerCase().includes('website registration') || 
@@ -1250,7 +1255,8 @@ export default function InboundReportsClientPage({
     }> = {};
 
     filteredLeads.forEach(lead => {
-        const leadActivities = allActivities.filter(a => a.leadId === lead.id).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const rawActivities = activitiesByLeadId.get(lead.id) || [];
+        const leadActivities = rawActivities.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         const enteredDate = parseDateString(lead.dateLeadEntered);
         const isLost = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off'].includes(lead.customerStatus || '');
 
@@ -1419,8 +1425,7 @@ export default function InboundReportsClientPage({
 
         const currentStatus = lead.customerStatus || 'New';
 
-        const leadActivities = allActivities
-            .filter(act => act.leadId === lead.id)
+        const leadActivities = (activitiesByLeadId.get(lead.id) || [])
             .map(a => ({ date: new Date(a.date), notes: a.notes }))
             .filter(a => isValid(a.date));
 
@@ -1494,7 +1499,7 @@ export default function InboundReportsClientPage({
       'DNC - Stop List', 'Empty / Closed', 'LOST - Duplicate', 'LOST - Existing Customer'
     ];
 
-    const leadMapForCalls = new Map<string, Lead>(allLeads.map(l => [l.id, l]));
+    const leadMapForCalls = leadMap;
     const filteredLeadIds = new Set(filteredLeads.map(l => l.id));
 
     const seenTeamCallIds = new Set<string>();
@@ -1609,7 +1614,7 @@ export default function InboundReportsClientPage({
     }
 
     const perfFilteredCalls = filteredCalls.filter((call: any) => {
-      const lead = allLeads.find(l => l.id === call.leadId);
+      const lead = leadMap.get(call.leadId);
       if (!lead) return false;
       if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
         if (lead.franchisee !== userProfile.franchisee) return false;
@@ -1620,7 +1625,7 @@ export default function InboundReportsClientPage({
 
     const perfFilteredAppointments = allAppointments.filter((appointment: any) => {
       if ((appointment as any).leadName === 'Unknown Lead') return false;
-      const lead = allLeads.find(l => l.id === appointment.leadId);
+      const lead = leadMap.get(appointment.leadId);
       if (!lead) return false;
       const aDate = parseDateString(appointment.appointmentDate || appointment.duedate || appointment.starttime || appointment.date || (appointment as any).createdAt);
       return aDate ? (aDate >= perfFromDate && aDate <= perfToDate) : false;
@@ -2839,7 +2844,7 @@ export default function InboundReportsClientPage({
                                             if (!entered || !isValid(entered)) return false;
                                             
                                             let activityDates: Date[] = [];
-                                            const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+                                            const leadActivities = (activitiesByLeadId.get(lead.id) || []).filter(act => isManualActivity(act));
                                             if (leadActivities.length > 0) {
                                                 activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
                                             }
@@ -3085,7 +3090,7 @@ export default function InboundReportsClientPage({
                                     if (!entered || !isValid(entered)) return false;
                                     
                                     let activityDates: Date[] = [];
-                                    const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+                                    const leadActivities = (activitiesByLeadId.get(lead.id) || []).filter(act => isManualActivity(act));
                                     if (leadActivities.length > 0) {
                                         activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
                                     }
@@ -3168,7 +3173,7 @@ export default function InboundReportsClientPage({
 
             {/* Full Lifecycle Lead Progression & Quote Performance Section - Disabled per request */}
             {/* To re-enable, change false to true below or ask the AI: "show Full Lifecycle Lead Progression & Quote Performance section" */}
-            {false && (!visibleSections || visibleSections.includes('quote-conversion')) && (
+            {false && (!visibleSections || visibleSections?.includes('quote-conversion')) && (
             <Card id="step-quote-conversion-performance" className="w-full shadow-md border-cyan-500/20 mt-6">
                 <CardHeader>
                     <div className="flex items-center justify-between">
@@ -5331,7 +5336,7 @@ export default function InboundReportsClientPage({
                                     if (!entered || !isValid(entered)) return false;
                                     
                                     let activityDates: Date[] = [];
-                                    const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+                                    const leadActivities = (activitiesByLeadId.get(lead.id) || []).filter(act => isManualActivity(act));
                                     if (leadActivities.length > 0) {
                                         activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
                                     }
@@ -5998,7 +6003,7 @@ export default function InboundReportsClientPage({
                             
                             let activitiesAndEmails: Array<{ date: Date; type: string; details: string; author: string }> = [];
                             
-                            const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+                            const leadActivities = (activitiesByLeadId.get(lead.id) || []).filter(act => isManualActivity(act));
                             leadActivities.forEach(act => {
                                 const d = new Date(act.date);
                                 if (isValid(d)) {
