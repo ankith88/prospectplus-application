@@ -41,10 +41,12 @@ import {
   Workflow,
   Zap,
   Trophy,
+  Target,
   AlertTriangle,
   CheckCircle2,
   FileText,
-  PlusCircle
+  PlusCircle,
+  Quote
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -1431,21 +1433,32 @@ export default function ReportsClientPage({
         const leadActivities = activitiesByLeadIdMap.get(lead.id) || [];
         
         // ShipMate Trial Detection
+        const isShipMateStatus = lead.customerStatus === 'Trialing ShipMate' || lead.status === 'Trialing ShipMate';
         const hasShipMateTrialActivity = leadActivities.some(act => 
             (act.notes?.includes("Initiated ShipMate Trial") || act.notes?.includes("Status changed to Trialing ShipMate")) &&
             isDateInRange(act.date)
         );
-        const isCurrentlyShipMate = lead.status === 'Trialing ShipMate';
-        const startedShipMate = hasShipMateTrialActivity || (isCurrentlyShipMate && (!appliedFilters.activityDate?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
+        const isEarlyStageLead = ['In Progress', 'Pre Qualified', 'New', 'Unassigned', 'Contacted'].includes(lead.customerStatus || lead.status || '');
+        const startedShipMate = (isShipMateStatus || (hasShipMateTrialActivity && !isEarlyStageLead)) && 
+                                (!appliedFilters.activityDate?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered)));
 
         // LocalMile Trial Detection
-        const hasLocalMileTrialActivity = leadActivities.some(act => 
-            (act.notes?.includes("Initiated LocalMile Trial") || act.notes?.includes("Status changed to Trialing LocalMile") || act.notes?.includes("First LocalMile Job created")) &&
+        const isLocalMileStatus = ['Trialing LocalMile', 'LocalMile Opportunity', 'LocalMile Pending'].includes(lead.customerStatus || lead.status || '');
+        const hasLocalMileJob = !!lead.firstJobCreatedAt || (lead.jobCount !== undefined && lead.jobCount > 0);
+        const hasLocalMileDates = !!lead.dateRegistrationSent || !!(lead as any).registrationSentAt || !!lead.dateLocalmileAccepted || !!(lead as any).localMileAcceptedAt;
+        const hasLocalMileConfirmedTrialActivity = leadActivities.some(act => 
+            (act.notes?.includes("Status changed to Trialing LocalMile") || 
+             act.notes?.includes("First LocalMile Job created") ||
+             act.notes?.includes("Completed LocalMile Registration") ||
+             act.notes?.includes("Initiated LocalMile Trial") ||
+             act.notes?.includes("Status changed to LocalMile Opportunity") ||
+             act.notes?.includes("Status changed to LocalMile Pending") ||
+             act.notes?.includes("Sent LocalMile Registration")) &&
             isDateInRange(act.date)
         );
-        const isCurrentlyLocalMile = lead.status === 'Trialing LocalMile' || lead.status === 'LocalMile Opportunity';
-        const hasLocalMileFields = !!lead.firstJobCreatedAt || (lead.jobCount !== undefined && lead.jobCount > 0) || lead.localMileTrialsRemaining !== undefined;
-        const startedLocalMile = hasLocalMileTrialActivity || ((isCurrentlyLocalMile || hasLocalMileFields) && (!appliedFilters.activityDate?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
+
+        const startedLocalMile = (isLocalMileStatus || hasLocalMileJob || hasLocalMileDates || (hasLocalMileConfirmedTrialActivity && !isEarlyStageLead)) && 
+                                 (!appliedFilters.activityDate?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered)));
 
         if (startedShipMate) {
             shipmateTrialLeads.push(lead);
@@ -1453,7 +1466,7 @@ export default function ReportsClientPage({
         if (startedLocalMile) {
             localmileTrialLeads.push(lead);
         }
-        if (startedShipMate || startedLocalMile || lead.status === 'Free Trial') {
+        if (startedShipMate || startedLocalMile || lead.status === 'Free Trial' || lead.customerStatus === 'Free Trial') {
             anyTrialLeads.push(lead);
         }
     });
@@ -1557,7 +1570,7 @@ export default function ReportsClientPage({
         return d ? (d <= perfToDate) : true;
       };
 
-      const lmOppLeads = dialerBaseLeads.filter(l => l.status === 'LocalMile Opportunity' && (isDateInTimeframe(l.dateRegistrationSent || (l as any).registrationSentAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
+      const lmOppLeads = dialerBaseLeads.filter(l => (l.status === 'LocalMile Opportunity' || (l as any).customerStatus === 'LocalMile Opportunity') && (isDateInTimeframe(l.dateRegistrationSent || (l as any).registrationSentAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
       const lmOppCount = lmOppLeads.length;
       const lmOppCallRate = dialerCalls > 0 ? (lmOppCount / dialerCalls) * 100 : 0;
 
@@ -1565,7 +1578,7 @@ export default function ReportsClientPage({
       const lmPendingCount = lmPendingLeads.length;
       const lmPendingCallRate = dialerCalls > 0 ? (lmPendingCount / dialerCalls) * 100 : 0;
 
-      const trialingLMLeads = dialerBaseLeads.filter(l => l.status === 'Trialing LocalMile' && (isDateInTimeframe(l.firstJobCreatedAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
+      const trialingLMLeads = dialerBaseLeads.filter(l => (l.status === 'Trialing LocalMile' || (l as any).customerStatus === 'Trialing LocalMile') && (isDateInTimeframe(l.firstJobCreatedAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
       const trialingLMCount = trialingLMLeads.length;
       const trialingLMCallRate = dialerCalls > 0 ? (trialingLMCount / dialerCalls) * 100 : 0;
 
@@ -2386,8 +2399,95 @@ export default function ReportsClientPage({
         dialerPeriodTotalsMap,
     };
 
+    // Outbound Lead Lifecycle Progression Analytics (Based on Dialer Assignment Date)
+    const outboundAllQuotedLeads = baseFilteredLeads.filter(l => {
+      const st = l.customerStatus || l.status || '';
+      if (['Quote Sent', 'Quote Accepted', 'Quote Out', 'Quotes Sent', 'Proposal Sent'].includes(st)) return true;
+      if (l.scfLinks && l.scfLinks.length > 0) return true;
+      if (l.sofDetails && (l.sofDetails.signedAt || (l.sofDetails as any).sentAt)) return true;
+      const leadActs = allActivities.filter(a => a.leadId === l.id);
+      return leadActs.some(a => {
+        const notes = (a.notes || '').toLowerCase();
+        return notes.includes('status changed to quote sent') || 
+               notes.includes('status changed to quote out') || 
+               notes.includes('status changed to proposal sent') || 
+               notes.includes('quote sent successfully') ||
+               notes.includes('sent quote');
+      });
+    });
+
+    const outboundQuotedWonLeads = outboundAllQuotedLeads.filter(isSignedLead);
+    const outboundQuotedLostLeads = outboundAllQuotedLeads.filter(isLostLead);
+    const outboundQuotedPendingLeads = outboundAllQuotedLeads.filter(l => !isSignedLead(l) && !isLostLead(l));
+    const outboundDirectLostLeads = baseFilteredLeads.filter(l => isLostLead(l) && !outboundAllQuotedLeads.some(q => q.id === l.id));
+    const outboundActivePipelineLeads = baseFilteredLeads.filter(l => !isSignedLead(l) && !isLostLead(l));
+    const outboundTotalAssignedCount = baseFilteredLeads.length;
+
+    // Outbound Trial Progression Metrics
+    const anyTrialLeadsList = anyTrialLeads;
+    const trialWonLeads = anyTrialLeadsList.filter(isSignedLead);
+    const trialQuotedLeads = anyTrialLeadsList.filter(l => !isSignedLead(l) && !isLostLead(l) && outboundAllQuotedLeads.some(q => q.id === l.id));
+    const trialLostLeads = anyTrialLeadsList.filter(isLostLead);
+    const activeTrialStatuses = ['Trialing LocalMile', 'LocalMile Opportunity', 'LocalMile Pending', 'Trialing ShipMate', 'Free Trial'];
+    const trialActiveLeads = anyTrialLeadsList.filter(l => 
+        !isSignedLead(l) && 
+        !isLostLead(l) && 
+        !outboundAllQuotedLeads.some(q => q.id === l.id) &&
+        activeTrialStatuses.includes(l.customerStatus || l.status || '')
+    );
+
+    const outboundProgressionByDialer = allDialers.map(dialer => {
+      const dialerLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
+      const total = dialerLeads.length;
+      const quoted = dialerLeads.filter(l => outboundAllQuotedLeads.some(q => q.id === l.id));
+      const quotedWon = quoted.filter(isSignedLead);
+      const quotedLost = quoted.filter(isLostLead);
+      const directLost = dialerLeads.filter(l => isLostLead(l) && !quoted.some(q => q.id === l.id));
+      const active = dialerLeads.filter(l => !isSignedLead(l) && !isLostLead(l));
+      
+      const dialerTrialLeads = dialerLeads.filter(l => anyTrialLeads.some(t => t.id === l.id));
+      const dialerTrialWonLeads = dialerTrialLeads.filter(isSignedLead);
+
+      const convRate = quoted.length > 0 ? (quotedWon.length / quoted.length) * 100 : 0;
+      const totalConvRate = total > 0 ? (quotedWon.length / total) * 100 : 0;
+
+      return {
+        dialer,
+        total,
+        quoted: quoted.length,
+        quotedLeads: quoted,
+        quotedWon: quotedWon.length,
+        quotedWonLeads: quotedWon,
+        quotedLost: quotedLost.length,
+        quotedLostLeads: quotedLost,
+        directLost: directLost.length,
+        directLostLeads: directLost,
+        active: active.length,
+        activeLeads: active,
+        trialCount: dialerTrialLeads.length,
+        trialLeads: dialerTrialLeads,
+        trialWonCount: dialerTrialWonLeads.length,
+        trialWonLeads: dialerTrialWonLeads,
+        convRate,
+        totalConvRate
+      };
+    }).filter(d => d.total > 0).sort((a, b) => b.total - a.total);
+
     return {
       dailyActioned,
+      outboundAllQuotedLeads,
+      outboundQuotedWonLeads,
+      outboundQuotedLostLeads,
+      outboundQuotedPendingLeads,
+      outboundDirectLostLeads,
+      outboundActivePipelineLeads,
+      outboundTotalAssignedCount,
+      outboundProgressionByDialer,
+      anyTrialLeadsList,
+      trialWonLeads,
+      trialQuotedLeads,
+      trialActiveLeads,
+      trialLostLeads,
       unassignedLeadsCount,
       staleLeadsList,
       staleLeadsCount,
@@ -3561,6 +3661,8 @@ export default function ReportsClientPage({
             </Card>
             )}
 
+
+
             {/* Appointments Booked & Downstream Conversions Leaderboard */}
             {(!visibleSections || visibleSections.includes('appointment-incentives')) && (
             <Card className="mt-6 border shadow-sm">
@@ -3868,7 +3970,7 @@ export default function ReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
                                 onClick={() => setTrialDrilldown({ 
                                     title: "ShipMate Trials Signed", 
-                                    leads: stats.shipmateJourney.leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                                    leads: stats.shipmateJourney.leads.filter(isSignedLead) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
@@ -3881,7 +3983,7 @@ export default function ReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
                                 onClick={() => setTrialDrilldown({ 
                                     title: "ShipMate Trials Lost", 
-                                    leads: stats.shipmateJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')) 
+                                    leads: stats.shipmateJourney.leads.filter(isLostLead) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
@@ -3894,7 +3996,7 @@ export default function ReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
                                 onClick={() => setTrialDrilldown({ 
                                     title: "ShipMate Trials Active", 
-                                    leads: stats.shipmateJourney.leads.filter(l => ['Trialing ShipMate', 'Free Trial'].includes(l.status || '')) 
+                                    leads: stats.shipmateJourney.leads.filter(l => !isSignedLead(l) && !isLostLead(l)) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
@@ -3922,7 +4024,7 @@ export default function ReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
                                 onClick={() => setTrialDrilldown({ 
                                     title: "LocalMile Trials Signed", 
-                                    leads: stats.localmileJourney.leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                                    leads: stats.localmileJourney.leads.filter(isSignedLead) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
@@ -3935,7 +4037,7 @@ export default function ReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
                                 onClick={() => setTrialDrilldown({ 
                                     title: "LocalMile Trials Lost", 
-                                    leads: stats.localmileJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')) 
+                                    leads: stats.localmileJourney.leads.filter(isLostLead) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
@@ -3948,7 +4050,7 @@ export default function ReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
                                 onClick={() => setTrialDrilldown({ 
                                     title: "LocalMile Trials Active", 
-                                    leads: stats.localmileJourney.leads.filter(isActiveLocalMileLead) 
+                                    leads: stats.localmileJourney.leads.filter(l => !isSignedLead(l) && !isLostLead(l)) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
@@ -3976,7 +4078,7 @@ export default function ReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
                                 onClick={() => setTrialDrilldown({ 
                                     title: "Total Free Trials Signed", 
-                                    leads: stats.combinedJourney.leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                                    leads: stats.combinedJourney.leads.filter(isSignedLead) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
@@ -3989,7 +4091,7 @@ export default function ReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
                                 onClick={() => setTrialDrilldown({ 
                                     title: "Total Free Trials Lost", 
-                                    leads: stats.combinedJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')) 
+                                    leads: stats.combinedJourney.leads.filter(isLostLead) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
@@ -4002,7 +4104,7 @@ export default function ReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
                                 onClick={() => setTrialDrilldown({ 
                                     title: "Total Free Trials Active", 
-                                    leads: stats.combinedJourney.leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.status || '')) 
+                                    leads: stats.combinedJourney.leads.filter(l => !isSignedLead(l) && !isLostLead(l)) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>

@@ -65,6 +65,8 @@ export function UserManagementTable() {
   
   const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [newFirstName, setNewFirstName] = useState('');
+  const [newLastName, setNewLastName] = useState('');
   const [newAssignedRoles, setNewAssignedRoles] = useState<UserRole[]>([]);
   const [newDefaultRole, setNewDefaultRole] = useState<UserRole | ''>('');
   const [newLinkedSalesRep, setNewLinkedSalesRep] = useState('');
@@ -186,6 +188,10 @@ export function UserManagementTable() {
         }];
       }
       setNewLinkedFranchisees(initialLinkedFrans);
+
+      const displayNameParts = (userToEdit.displayName || userToEdit.name || '').trim().split(' ');
+      setNewFirstName(userToEdit.firstName || displayNameParts[0] || '');
+      setNewLastName(userToEdit.lastName || (displayNameParts.length > 1 ? displayNameParts.slice(1).join(' ') : ''));
 
       setNewLinkedSalesRep(userToEdit.linkedSalesRep || '');
       setNewLinkedBDR(userToEdit.linkedBDR || '');
@@ -402,7 +408,15 @@ export function UserManagementTable() {
         approvalRequested = true;
       }
 
+      const computedFirstName = newFirstName.trim();
+      const computedLastName = newLastName.trim();
+      const computedDisplayName = `${computedFirstName} ${computedLastName}`.trim() || userToEdit.email;
+
       const updateData: Partial<UserProfile> = { 
+        firstName: computedFirstName,
+        lastName: computedLastName,
+        displayName: computedDisplayName,
+        name: computedDisplayName,
         assignedRoles: effectiveAssignedRoles, 
         defaultRole: effectiveDefaultRole as UserRole, 
         phoneNumber: newMobileNumber, 
@@ -1047,6 +1061,27 @@ export function UserManagementTable() {
                 <DialogTitle>Edit User: {userToEdit?.displayName}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
+                <div className="grid grid-cols-2 gap-3 pb-2 border-b">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="edit-first-name">First Name</Label>
+                        <Input
+                            id="edit-first-name"
+                            value={newFirstName}
+                            onChange={(e) => setNewFirstName(e.target.value)}
+                            placeholder="e.g. John"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="edit-last-name">Last Name</Label>
+                        <Input
+                            id="edit-last-name"
+                            value={newLastName}
+                            onChange={(e) => setNewLastName(e.target.value)}
+                            placeholder="e.g. Smith"
+                        />
+                    </div>
+                </div>
+
                 {newAssignedRoles.includes('Franchisee') ? (
                     <div className="space-y-1 pb-1">
                         <Label>User Role</Label>

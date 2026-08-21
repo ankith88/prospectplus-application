@@ -132,6 +132,8 @@ export interface Task {
     completedAt?: string;
     author: string;
     dialerAssigned?: string;
+    outlookEventId?: string;
+    durationMinutes?: number;
 }
 
 export type AppointmentStatus = 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled' | 'Pending';

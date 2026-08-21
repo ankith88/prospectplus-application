@@ -21,7 +21,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Trash2, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
+import { Trash2, AlertCircle, CheckCircle2, Clock, Pencil } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { updateTaskCompletion, deleteTaskFromLead } from '@/services/firebase'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -29,6 +29,7 @@ import { format, isPast, isToday } from 'date-fns'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { EditTaskDialog } from '@/components/edit-task-dialog'
 
 type UserTask = Task & { leadId: string; leadName: string };
 
@@ -39,8 +40,11 @@ interface TasksClientPageProps {
 export default function TasksClientPage({ initialTasks }: TasksClientPageProps) {
   const [tasks, setTasks] = useState<UserTask[]>(initialTasks);
   const [loading, setLoading] = useState(false);
+  const [editingTask, setEditingTask] = useState<UserTask | null>(null);
+  const [isEditTaskOpen, setIsEditTaskOpen] = useState(false);
+
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -91,12 +95,33 @@ export default function TasksClientPage({ initialTasks }: TasksClientPageProps) 
   const handleDeleteTask = async (task: UserTask) => {
       try {
           await deleteTaskFromLead(task.leadId, task.id);
+          
+          // Delete from Outlook if outlookEventId exists
+          const userEmail = userProfile?.email || user?.email || '';
+          const userId = userProfile?.uid || user?.uid || '';
+          if (userId && userEmail && task.outlookEventId) {
+              fetch('/api/tasks/outlook-sync', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      action: 'delete',
+                      userId,
+                      userEmail,
+                      outlookEventId: task.outlookEventId,
+                  })
+              }).catch(e => console.error("Failed to delete Outlook event:", e));
+          }
+
           setTasks(prev => prev.filter(t => t.id !== task.id));
           toast({ title: 'Success', description: 'Task deleted successfully.' });
       } catch (error) {
           console.error("Failed to delete task:", error);
           toast({ variant: "destructive", title: "Error", description: "Failed to delete task." });
       }
+  };
+
+  const handleTaskUpdatedInPage = (updatedTask: Task) => {
+    setTasks(prev => prev.map(t => t.id === updatedTask.id ? { ...t, ...updatedTask } as UserTask : t));
   };
 
   const renderTaskRow = (task: UserTask) => (
@@ -118,17 +143,31 @@ export default function TasksClientPage({ initialTasks }: TasksClientPageProps) 
         </TableCell>
         <TableCell>
             <Badge variant={isPast(new Date(task.dueDate)) && !task.isCompleted ? "destructive" : "outline"}>
-                {format(new Date(task.dueDate), 'PP')}
+                {format(new Date(task.dueDate), 'PP p')}
             </Badge>
         </TableCell>
          <TableCell>
             <p className="text-muted-foreground">{task.author}</p>
         </TableCell>
         <TableCell className="text-right">
-             <Button variant="ghost" size="icon" onClick={() => handleDeleteTask(task)}>
-                <Trash2 className="h-4 w-4" />
-                <span className="sr-only">Delete task</span>
-            </Button>
+             <div className="flex items-center justify-end gap-1">
+                 <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                        setEditingTask(task);
+                        setIsEditTaskOpen(true);
+                    }}
+                    title="Edit task"
+                 >
+                    <Pencil className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                    <span className="sr-only">Edit task</span>
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => handleDeleteTask(task)} title="Delete task">
+                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                    <span className="sr-only">Delete task</span>
+                </Button>
+             </div>
         </TableCell>
     </TableRow>
   );
@@ -223,6 +262,13 @@ export default function TasksClientPage({ initialTasks }: TasksClientPageProps) 
              </AccordionItem>
           </Card>
        </Accordion>
+
+       <EditTaskDialog
+         task={editingTask}
+         open={isEditTaskOpen}
+         onOpenChange={setIsEditTaskOpen}
+         onTaskUpdated={handleTaskUpdatedInPage}
+       />
     </div>
   )
 }

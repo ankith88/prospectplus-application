@@ -34,7 +34,7 @@ import { Loader } from './ui/loader'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail, Building, Lock } from 'lucide-react'
-import { logCallActivity, logActivity, addTaskToLead, updateContactSendEmail, updateContactInLead, updateLeadDetails, logBucketChange } from '@/services/firebase'
+import { logCallActivity, logActivity, addTaskToLead, updateTaskInLead, updateContactSendEmail, updateContactInLead, updateLeadDetails, logBucketChange } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy'
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore'
@@ -1115,11 +1115,39 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                 nextBestAction: actionText
             });
 
-            await addTaskToLead(lead.id, {
+            const createdTask = await addTaskToLead(lead.id, {
                 title: actionText,
                 dueDate: callBackIso,
-                author: user.displayName || 'System'
+                author: userProfile?.displayName || user?.displayName || 'System',
+                durationMinutes: 30,
             });
+
+            const userEmail = userProfile?.email || user?.email || '';
+            const userId = userProfile?.uid || user?.uid || '';
+            if (userId && userEmail) {
+                try {
+                    const syncRes = await fetch('/api/tasks/outlook-sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'create',
+                            userId,
+                            userEmail,
+                            title: actionText,
+                            dueDate: callBackIso,
+                            durationMinutes: 30,
+                            leadId: lead.id,
+                            leadName: lead.companyName,
+                        })
+                    });
+                    const syncData = await syncRes.json();
+                    if (syncData.synced && syncData.outlookEventId) {
+                        await updateTaskInLead(lead.id, createdTask.id, { outlookEventId: syncData.outlookEventId });
+                    }
+                } catch (syncErr) {
+                    console.error("Outlook sync error in post-call dialog:", syncErr);
+                }
+            }
         }
 
         // Special handling for Future Follow-up
@@ -1149,11 +1177,40 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                 customerStatus: 'Future Follow-up' 
             });
 
-            await addTaskToLead(lead.id, {
-                title: `Future Follow-up: Re-contact Lead`,
+            const taskTitle = `Future Follow-up: Re-contact Lead`;
+            const createdFollowUpTask = await addTaskToLead(lead.id, {
+                title: taskTitle,
                 dueDate: followUpIso,
-                author: user.displayName || 'System'
+                author: userProfile?.displayName || user?.displayName || 'System',
+                durationMinutes: 30,
             });
+
+            const userEmail = userProfile?.email || user?.email || '';
+            const userId = userProfile?.uid || user?.uid || '';
+            if (userId && userEmail) {
+                try {
+                    const syncRes = await fetch('/api/tasks/outlook-sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'create',
+                            userId,
+                            userEmail,
+                            title: taskTitle,
+                            dueDate: followUpIso,
+                            durationMinutes: 30,
+                            leadId: lead.id,
+                            leadName: lead.companyName,
+                        })
+                    });
+                    const syncData = await syncRes.json();
+                    if (syncData.synced && syncData.outlookEventId) {
+                        await updateTaskInLead(lead.id, createdFollowUpTask.id, { outlookEventId: syncData.outlookEventId });
+                    }
+                } catch (syncErr) {
+                    console.error("Outlook sync error in post-call follow-up task:", syncErr);
+                }
+            }
         }
 
         // Special handling for SMS on No Answer for Account Managers / non-user roles

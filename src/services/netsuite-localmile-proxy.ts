@@ -274,12 +274,12 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 					);
 					await sendPhysicalEmail({
 						to: contactEmail,
-						subject: "Your LocalMile Access",
+						subject: "You're in — activate your 5 free collections",
 						html,
 						customFrom: "localmile@mailplus.com.au"
 					});
 					await logEmailServer(payload.leadId, {
-						subject: "Your LocalMile Access",
+						subject: "You're in — activate your 5 free collections",
 						bodyHtml: html,
 						sentAt: new Date().toISOString(),
 						sender: 'localmile@mailplus.com.au',
@@ -288,7 +288,7 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 					});
 
 					if (contactPhone) {
-						const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile. Please use Security Code: ${responseBody.securityCode} to authenticate your account at: ${responseBody.localMilePlusAuthLink}`;
+						const smsText = `MailPlus: your LocalMile activation code is ${responseBody.securityCode}. Set your password at ${responseBody.localMilePlusAuthLink} — details also in your email. Help: 1300 65 65 95`;
 						await sendSms(contactPhone, smsText);
 					}
 
@@ -419,13 +419,13 @@ export async function resendLocalMileEmail(payload: {
 	try {
 		await sendPhysicalEmail({
 			to: contactEmail,
-			subject: "Your LocalMile Access",
+			subject: "You're in — activate your 5 free collections",
 			html,
 			customFrom: "localmile@mailplus.com.au"
 		});
 		if (payload.leadId) {
 			await logEmailServer(payload.leadId, {
-				subject: "Your LocalMile Access",
+				subject: "You're in — activate your 5 free collections",
 				bodyHtml: html,
 				sentAt: new Date().toISOString(),
 				sender: 'localmile@mailplus.com.au',
@@ -435,7 +435,7 @@ export async function resendLocalMileEmail(payload: {
 		}
 
 		if (contactPhone) {
-			const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile. Please use Security Code: ${securityCode} to authenticate your account at: ${localMilePlusAuthLink}`;
+			const smsText = `MailPlus: your LocalMile activation code is ${securityCode}. Set your password at ${localMilePlusAuthLink} — details also in your email. Help: 1300 65 65 95`;
 			await sendSms(contactPhone, smsText);
 		}
 
@@ -496,7 +496,7 @@ function generateLocalMileEmailHtml(
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="x-apple-disable-message-reformatting">
-<title>Your LocalMile Access</title>
+<title>You're in — activate your 5 free collections</title>
 <!--[if mso]>
 <noscript>
 <xml>
@@ -542,12 +542,12 @@ function generateLocalMileEmailHtml(
 		</tr>
 		<tr>
 		<td style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 24px; color: #556068; padding-bottom: 12px;">
-			Welcome aboard &#8212; as we discussed on the call, your <strong style="color:#333333;">five free collections</strong> are ready and waiting. Below is your access to <strong style="color:#333333;">LocalMile</strong>, the free booking platform where you&#8217;ll manage them.
+			Your <strong style="color:#333333;">five free collections with MailPlus</strong> are ready. This email is your access to <strong style="color:#333333;">LocalMile</strong> &#8212; the free booking platform where you&#8217;ll book them.
 		</td>
 		</tr>
 		<tr>
 		<td style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 20px; color: #718096; padding-bottom: 25px;">
-			Activating takes about two minutes: enter your security code, set a password, and you&#8217;re in. LocalMile will look a little different to the MailPlus site &#8212; same team, it&#8217;s just where the bookings live.
+			Activating takes about two minutes: enter your security code, set a password, and you&#8217;re in. LocalMile looks a little different to the MailPlus site &#8212; same team, it&#8217;s just where the bookings live. Your Australia Post account stays exactly as it is.
 		</td>
 		</tr>
 		</table>

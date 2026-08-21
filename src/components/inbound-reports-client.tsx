@@ -2388,6 +2388,20 @@ export default function InboundReportsClientPage({
       };
     }).sort((a, b) => b.count - a.count);
 
+    const anyTrialLeadsList = anyTrialLeads;
+    const trialWonLeads = anyTrialLeads.filter(isSignedLead);
+    const trialQuotedLeads = anyTrialLeads.filter(l => l.customerStatus === 'Quote Sent' || l.customerStatus === 'SOF Sent' || l.customerStatus === 'SCF Sent');
+    const trialLostLeads = anyTrialLeads.filter(isLostLead);
+    const trialActiveLeads = anyTrialLeads.filter(l => !isSignedLead(l) && !isLostLead(l) && l.customerStatus !== 'Quote Sent' && l.customerStatus !== 'SOF Sent' && l.customerStatus !== 'SCF Sent');
+
+    const nonTrialQuotedLeads = allQuotedLeads.filter(l => !anyTrialLeads.some(t => t.id === l.id));
+    const directQuotedWonLeads = nonTrialQuotedLeads.filter(isSignedLead);
+    const directQuotedActiveLeads = nonTrialQuotedLeads.filter(l => !isSignedLead(l) && !isLostLead(l));
+    const directQuotedLostLeads = nonTrialQuotedLeads.filter(isLostLead);
+
+    const preQuoteActiveLeads = filteredLeads.filter(l => !anyTrialLeads.some(t => t.id === l.id) && !allQuotedLeads.some(q => q.id === l.id) && !isLostLead(l) && !isSignedLead(l));
+    const directLostNoQuoteNoTrialLeads = filteredLeads.filter(l => !anyTrialLeads.some(t => t.id === l.id) && !allQuotedLeads.some(q => q.id === l.id) && isLostLead(l));
+
     return {
         totalInboundCohort,
         bucketProgressionData,
@@ -2408,6 +2422,18 @@ export default function InboundReportsClientPage({
         totalWeeklyParcelsLoggedPercent,
         inboundJourneyStats,
         shipmateTrialLeads,
+        localmileTrialLeads,
+        anyTrialLeadsList,
+        trialWonLeads,
+        trialQuotedLeads,
+        trialLostLeads,
+        trialActiveLeads,
+        nonTrialQuotedLeads,
+        directQuotedWonLeads,
+        directQuotedActiveLeads,
+        directQuotedLostLeads,
+        preQuoteActiveLeads,
+        directLostNoQuoteNoTrialLeads,
         shipmateJourney,
         localmileJourney,
         combinedJourney,
@@ -3156,6 +3182,421 @@ export default function InboundReportsClientPage({
                     </div>
                 )}
             </div>
+            )}
+
+            {/* Full Lifecycle Lead Progression & Quote Performance Section - Disabled per request */}
+            {/* To re-enable, change false to true below or ask the AI: "show Full Lifecycle Lead Progression & Quote Performance section" */}
+            {false && (!visibleSections || visibleSections.includes('quote-conversion')) && (
+            <Card id="step-quote-conversion-performance" className="w-full shadow-md border-cyan-500/20 mt-6">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <Quote className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+                                <span>Full Lifecycle Lead Progression &amp; Quote Performance</span>
+                                <SectionHelp content="Tracks complete end-to-end lifecycle conversion across all inbound leads: from initial entry to quote dispatched, awaiting decision, won customers, and lost drop-offs." />
+                            </CardTitle>
+                            <CardDescription>
+                                Analyze complete outcome progression across all inbound leads entered in this period.
+                            </CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => handleExportData(stats.quoteAmPerformanceData, 'full_lifecycle_quote_performance')}>
+                            <Download className="h-4 w-4 mr-2" /> Export
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Card 
+                            className="bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
+                            onClick={() => setDrillDownData({ 
+                                title: "Total Quotes Issued Leads", 
+                                leads: stats.allQuotedLeads 
+                            })}
+                        >
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Quotes Sent</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">
+                                    {stats.totalQuotedCount}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">Leads given a formal quote ({stats.quoteSentRate.toFixed(1)}% of inbound)</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card 
+                            className="bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
+                            onClick={() => setDrillDownData({ 
+                                title: "Quoted Won Customers", 
+                                leads: stats.allQuotedLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.status === 'Won' || (l.status as string) === 'Signed')
+                            })}
+                        >
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Quote-to-Won Conversion</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                                    {stats.quoteToWonConversionRate.toFixed(1)}%
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">{stats.quotedWonCount} won from {stats.totalQuotedCount} quoted leads</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card 
+                            className="bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
+                            onClick={() => setDrillDownData({ 
+                                title: "Quoted Pending Decision", 
+                                leads: stats.allQuotedLeads.filter(l => !isSignedLead(l) && !isLostLead(l))
+                            })}
+                        >
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Awaiting Decision</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-sky-600 dark:text-sky-400">
+                                    {stats.quotedPendingCount}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">Currently open in Quote Sent status</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="bg-muted/20">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Avg Time to Quote</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                                    {stats.avgDaysToQuote.toFixed(1)} days
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">Lead entry to Quote Sent date</p>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Inbound Lead Lifecycle Progression & Trial Pathways Cards */}
+                    <div className="pt-4 border-t space-y-5">
+                        <div>
+                            <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                                <Workflow className="h-4 w-4 text-emerald-600" />
+                                <span>LocalMile &amp; ShipMate Trial Lifecycle Progression</span>
+                                <SectionHelp content="Tracks product trial entries (LocalMile & ShipMate) and their downstream conversion outcomes: Trial → Won, Trial → Quote Sent, Active Trial, and Trial → Lost." />
+                            </h4>
+                            <p className="text-xs text-muted-foreground mt-0.5 mb-3">
+                                Total LocalMile &amp; ShipMate trials initiated: <strong>{(stats.anyTrialLeadsList || []).length} leads</strong> ({stats.totalInbound > 0 ? (((stats.anyTrialLeadsList || []).length / stats.totalInbound) * 100).toFixed(1) : 0}% of total inbound)
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <Card 
+                                    className="bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100/50 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Trial → Won Customers", 
+                                        leads: stats.trialWonLeads || [] 
+                                    })}
+                                >
+                                    <CardHeader className="pb-1.5">
+                                        <CardTitle className="text-xs font-medium text-emerald-900 dark:text-emerald-300 uppercase tracking-wider flex items-center justify-between">
+                                            <span className="flex items-center gap-1">
+                                                <span>Trial → Won</span>
+                                                <SectionHelp content="Calculation: Count of product trial leads that converted to Won/Signed customers. Trial Conversion Rate = (Trial Won Leads / Total Product Trials) × 100." />
+                                            </span>
+                                            <Target className="h-3.5 w-3.5 text-emerald-600" />
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
+                                            {(stats.trialWonLeads || []).length} <span className="text-xs font-normal text-muted-foreground">leads</span>
+                                        </div>
+                                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                            {(stats.anyTrialLeadsList || []).length > 0 ? ((((stats.trialWonLeads || []).length) / (stats.anyTrialLeadsList || []).length) * 100).toFixed(1) : 0}% trial conversion rate
+                                        </p>
+                                    </CardContent>
+                                </Card>
+
+                                <Card 
+                                    className="bg-sky-50/60 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800/40 hover:bg-sky-100/50 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Trial → Quote Sent Leads", 
+                                        leads: stats.trialQuotedLeads || [] 
+                                    })}
+                                >
+                                    <CardHeader className="pb-1.5">
+                                        <CardTitle className="text-xs font-medium text-sky-900 dark:text-sky-300 uppercase tracking-wider flex items-center justify-between">
+                                            <span className="flex items-center gap-1">
+                                                <span>Trial → Quote Sent</span>
+                                                <SectionHelp content="Calculation: Count of product trial leads issued an official Quote/SOF/SCF proposal post-trial. % of Trials = (Trial Quoted Leads / Total Product Trials) × 100." />
+                                            </span>
+                                            <Quote className="h-3.5 w-3.5 text-sky-600" />
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-xl font-bold text-sky-700 dark:text-sky-300">
+                                            {(stats.trialQuotedLeads || []).length} <span className="text-xs font-normal text-muted-foreground">leads</span>
+                                        </div>
+                                        <p className="text-[11px] text-sky-600 dark:text-sky-400 mt-0.5">
+                                            {(stats.anyTrialLeadsList || []).length > 0 ? ((((stats.trialQuotedLeads || []).length) / (stats.anyTrialLeadsList || []).length) * 100).toFixed(1) : 0}% of trial leads
+                                        </p>
+                                    </CardContent>
+                                </Card>
+
+                                <Card 
+                                    className="bg-indigo-50/60 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800/40 hover:bg-indigo-100/50 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Active LocalMile & ShipMate Trial Leads", 
+                                        leads: stats.trialActiveLeads || [] 
+                                    })}
+                                >
+                                    <CardHeader className="pb-1.5">
+                                        <CardTitle className="text-xs font-medium text-indigo-900 dark:text-indigo-300 uppercase tracking-wider flex items-center justify-between">
+                                            <span className="flex items-center gap-1">
+                                                <span>Active Trial</span>
+                                                <SectionHelp content="Calculation: Count of leads currently in an open active trial status (Trialing LocalMile, LocalMile Opportunity, LocalMile Pending, Trialing ShipMate, or Free Trial)." />
+                                            </span>
+                                            <Zap className="h-3.5 w-3.5 text-indigo-600" />
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-xl font-bold text-indigo-700 dark:text-indigo-300">
+                                            {(stats.trialActiveLeads || []).length} <span className="text-xs font-normal text-muted-foreground">leads</span>
+                                        </div>
+                                        <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-0.5">
+                                            {(stats.anyTrialLeadsList || []).length > 0 ? ((((stats.trialActiveLeads || []).length) / (stats.anyTrialLeadsList || []).length) * 100).toFixed(1) : 0}% currently in trial
+                                        </p>
+                                    </CardContent>
+                                </Card>
+
+                                <Card 
+                                    className="bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/40 hover:bg-rose-100/50 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Trial → Lost Leads", 
+                                        leads: stats.trialLostLeads || [] 
+                                    })}
+                                >
+                                    <CardHeader className="pb-1.5">
+                                        <CardTitle className="text-xs font-medium text-rose-900 dark:text-rose-300 uppercase tracking-wider flex items-center justify-between">
+                                            <span className="flex items-center gap-1">
+                                                <span>Trial → Lost</span>
+                                                <SectionHelp content="Calculation: Count of product trial leads that stopped trial or were marked Lost/Unqualified. Trial Drop-off % = (Trial Lost Leads / Total Product Trials) × 100." />
+                                            </span>
+                                            <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-xl font-bold text-rose-700 dark:text-rose-300">
+                                            {(stats.trialLostLeads || []).length} <span className="text-xs font-normal text-muted-foreground">leads</span>
+                                        </div>
+                                        <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-0.5">
+                                            {(stats.anyTrialLeadsList || []).length > 0 ? ((((stats.trialLostLeads || []).length) / (stats.anyTrialLeadsList || []).length) * 100).toFixed(1) : 0}% trial drop-off
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t">
+                            <h4 className="text-sm font-semibold flex items-center gap-1.5 mb-1">
+                                <BarChart3 className="h-4 w-4 text-cyan-600" />
+                                <span>Complete 100% Inbound Lead Lifecycle Accounting</span>
+                                <SectionHelp content="Breaks down 100% of all inbound leads entered in this timeframe across mutually exclusive pathways so the math sums exactly to total inbound leads." />
+                            </h4>
+                            <p className="text-xs text-muted-foreground mb-3">
+                                Total Inbound Leads: <strong>{stats.totalInbound} leads (100%)</strong>
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <Card 
+                                    className="bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200 hover:bg-emerald-100/40 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "LocalMile & ShipMate Trial Leads", 
+                                        leads: stats.anyTrialLeadsList || [] 
+                                    })}
+                                >
+                                    <CardHeader className="pb-1.5">
+                                        <CardTitle className="text-xs font-medium text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center justify-between">
+                                            <span className="flex items-center gap-1">
+                                                <span>1. Product Trials</span>
+                                                <SectionHelp content="Calculation: All inbound leads that entered a LocalMile or ShipMate trial (includes Won, Quoted, Active, and Lost trials). % of Inbound = (Product Trial Leads / Total Inbound) × 100." />
+                                            </span>
+                                            <Zap className="h-3.5 w-3.5 text-emerald-600" />
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
+                                            {(stats.anyTrialLeadsList || []).length} <span className="text-xs font-normal text-muted-foreground">leads</span>
+                                        </div>
+                                        <p className="text-[11px] text-emerald-600 mt-0.5">
+                                            {stats.totalInbound > 0 ? (((stats.anyTrialLeadsList || []).length / stats.totalInbound) * 100).toFixed(1) : 0}% of total inbound ({(stats.trialWonLeads || []).length} won, {(stats.trialQuotedLeads || []).length} quoted)
+                                        </p>
+                                    </CardContent>
+                                </Card>
+
+                                <Card 
+                                    className="bg-cyan-50/40 dark:bg-cyan-950/20 border-cyan-200 hover:bg-cyan-100/40 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Direct Quote Pathway Leads (No Trial)", 
+                                        leads: stats.nonTrialQuotedLeads || [] 
+                                    })}
+                                >
+                                    <CardHeader className="pb-1.5">
+                                        <CardTitle className="text-xs font-medium text-cyan-800 dark:text-cyan-300 uppercase tracking-wider flex items-center justify-between">
+                                            <span className="flex items-center gap-1">
+                                                <span>2. Direct Quote Pathway</span>
+                                                <SectionHelp content="Calculation: All inbound leads given an official Quote/SOF/SCF directly without going through a trial. % of Inbound = (Direct Quoted Leads / Total Inbound) × 100." />
+                                            </span>
+                                            <Quote className="h-3.5 w-3.5 text-cyan-600" />
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-xl font-bold text-cyan-700 dark:text-cyan-300">
+                                            {(stats.nonTrialQuotedLeads || []).length} <span className="text-xs font-normal text-muted-foreground">leads</span>
+                                        </div>
+                                        <p className="text-[11px] text-cyan-600 mt-0.5">
+                                            {stats.totalInbound > 0 ? (((stats.nonTrialQuotedLeads || []).length / stats.totalInbound) * 100).toFixed(1) : 0}% of total inbound ({(stats.directQuotedWonLeads || []).length} won, {(stats.directQuotedActiveLeads || []).length} open)
+                                        </p>
+                                    </CardContent>
+                                </Card>
+
+                                <Card 
+                                    className="bg-sky-50/40 dark:bg-sky-950/20 border-sky-200 hover:bg-sky-100/40 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Pre-Quote Active Pipeline Leads", 
+                                        leads: stats.preQuoteActiveLeads || [] 
+                                    })}
+                                >
+                                    <CardHeader className="pb-1.5">
+                                        <CardTitle className="text-xs font-medium text-sky-800 dark:text-sky-300 uppercase tracking-wider flex items-center justify-between">
+                                            <span className="flex items-center gap-1">
+                                                <span>3. Pre-Quote Open Pipeline</span>
+                                                <SectionHelp content="Calculation: Open leads currently in early pipeline stages (Contacted, In Progress, Pre-Qualified) working towards quote/trial. % of Inbound = (Pre-Quote Open Leads / Total Inbound) × 100." />
+                                            </span>
+                                            <Clock className="h-3.5 w-3.5 text-sky-600" />
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-xl font-bold text-sky-700 dark:text-sky-300">
+                                            {(stats.preQuoteActiveLeads || []).length} <span className="text-xs font-normal text-muted-foreground">leads</span>
+                                        </div>
+                                        <p className="text-[11px] text-sky-600 mt-0.5">
+                                            {stats.totalInbound > 0 ? (((stats.preQuoteActiveLeads || []).length / stats.totalInbound) * 100).toFixed(1) : 0}% of total inbound (In progress pre-quote)
+                                        </p>
+                                    </CardContent>
+                                </Card>
+
+                                <Card 
+                                    className="bg-rose-50/40 dark:bg-rose-950/20 border-rose-200 hover:bg-rose-100/40 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Direct Lost Leads (No Quote & No Trial)", 
+                                        leads: stats.directLostNoQuoteNoTrialLeads || [] 
+                                    })}
+                                >
+                                    <CardHeader className="pb-1.5">
+                                        <CardTitle className="text-xs font-medium text-rose-800 dark:text-rose-300 uppercase tracking-wider flex items-center justify-between">
+                                            <span className="flex items-center gap-1">
+                                                <span>4. Direct Lost (Early Drop-off)</span>
+                                                <SectionHelp content="Calculation: Inbound leads that dropped off to Lost/Unqualified before ever receiving a quote or starting a trial. % of Inbound = (Direct Lost Leads / Total Inbound) × 100." />
+                                            </span>
+                                            <X className="h-3.5 w-3.5 text-rose-600" />
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-1xl font-bold text-rose-700 dark:text-rose-300">
+                                            {(stats.directLostNoQuoteNoTrialLeads || []).length} <span className="text-xs font-normal text-muted-foreground">leads</span>
+                                        </div>
+                                        <p className="text-[11px] text-rose-600 mt-0.5">
+                                            {stats.totalInbound > 0 ? (((stats.directLostNoQuoteNoTrialLeads || []).length / stats.totalInbound) * 100).toFixed(1) : 0}% of total inbound (Lost before quote/trial)
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t">
+                        <div>
+                            <h4 className="text-sm font-semibold mb-1">Quote Disposition Breakdown</h4>
+                            <p className="text-xs text-muted-foreground mb-4">
+                                Current outcomes of all leads that received a quote or proposal.
+                            </p>
+                            <div className="h-[260px] w-full flex items-center justify-center border rounded-lg bg-muted/5 p-4">
+                                {stats.quoteDispositionData.length > 0 ? (
+                                    <ChartContainer config={{}} className="h-full w-full">
+                                        <PieChart>
+                                            <Pie 
+                                                data={stats.quoteDispositionData} 
+                                                cx="50%" 
+                                                cy="50%" 
+                                                innerRadius={55} 
+                                                outerRadius={85} 
+                                                paddingAngle={4} 
+                                                dataKey="value"
+                                                label={({ name, percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
+                                            >
+                                                {stats.quoteDispositionData.map((entry, index) => (
+                                                    <Cell key={`cell-quote-${index}`} fill={entry.fill} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip />
+                                            <Legend />
+                                        </PieChart>
+                                    </ChartContainer>
+                                ) : (
+                                    <div className="text-sm text-muted-foreground italic">No quoted leads found for this period.</div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 className="text-sm font-semibold mb-1">Account Manager Quote Conversion</h4>
+                            <p className="text-xs text-muted-foreground mb-4">
+                                Quote performance and conversion rate breakdown by assigned Account Manager. Click any row to view leads.
+                            </p>
+                            <ScrollArea className="h-[260px] border rounded-lg p-2">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Account Manager</TableHead>
+                                            <TableHead className="text-right">Quotes Sent</TableHead>
+                                            <TableHead className="text-right">Won</TableHead>
+                                            <TableHead className="text-right">Pending</TableHead>
+                                            <TableHead className="text-right">Lost</TableHead>
+                                            <TableHead className="text-right">Quote Conv %</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {stats.quoteAmPerformanceData.length > 0 ? (
+                                            stats.quoteAmPerformanceData.map((am) => (
+                                                <TableRow 
+                                                    key={am.name} 
+                                                    className="cursor-pointer hover:bg-muted/50"
+                                                    onClick={() => setDrillDownData({ 
+                                                        title: `Quotes Sent by ${am.name}`, 
+                                                        leads: am.leads 
+                                                    })}
+                                                >
+                                                    <TableCell className="font-semibold">{am.name}</TableCell>
+                                                    <TableCell className="text-right font-bold text-cyan-600">{am.quotesSent}</TableCell>
+                                                    <TableCell className="text-right text-emerald-600 font-medium">{am.quotedWon}</TableCell>
+                                                    <TableCell className="text-right text-sky-600 font-medium">{am.quotedPending}</TableCell>
+                                                    <TableCell className="text-right text-rose-500 font-medium">{am.quotedLost}</TableCell>
+                                                    <TableCell className="text-right font-bold">
+                                                        <Badge variant={am.quoteConversionRate >= 30 ? "default" : "outline"} className={am.quoteConversionRate >= 30 ? "bg-emerald-600" : ""}>
+                                                            {am.quoteConversionRate.toFixed(1)}%
+                                                        </Badge>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                                    No Account Manager quote data available for this period.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </ScrollArea>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
             )}
 
             {/* Leads Volume Over Time & Geographic Distribution */}
@@ -5042,182 +5483,6 @@ export default function InboundReportsClientPage({
                                     <div className="text-sm text-muted-foreground italic">No visual data available.</div>
                                 )}
                             </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card id="step-quote-conversion-performance" className="w-full shadow-md border-cyan-500/20">
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle className="text-xl font-bold flex items-center gap-2">
-                                <Quote className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
-                                <span>Quote Sent &amp; Proposal Conversion Performance</span>
-                                <SectionHelp content="Tracks the conversion efficiency of leads that received quotes/proposals, measuring the Quote-to-Won conversion rate, average time to quote, and team-wide quote outcomes." />
-                            </CardTitle>
-                            <CardDescription>
-                                Analyze how effectively quotes and proposals convert into signed customers across account managers.
-                            </CardDescription>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => handleExportData(stats.quoteAmPerformanceData, 'quote_sent_performance')}>
-                            <Download className="h-4 w-4 mr-2" /> Export
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Card 
-                            className="bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
-                            onClick={() => setDrillDownData({ 
-                                title: "All Quotes Sent Leads", 
-                                leads: stats.allQuotedLeads 
-                            })}
-                        >
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Quotes Sent</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">
-                                    {stats.totalQuotedCount}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">Leads given a formal quote ({stats.quoteSentRate.toFixed(1)}% of inbound)</p>
-                            </CardContent>
-                        </Card>
-
-                        <Card 
-                            className="bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
-                            onClick={() => setDrillDownData({ 
-                                title: "Quoted Won Customers", 
-                                leads: stats.allQuotedLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.status === 'Won' || (l.status as string) === 'Signed')
-                            })}
-                        >
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Quote-to-Won Conversion</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                                    {stats.quoteToWonConversionRate.toFixed(1)}%
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">{stats.quotedWonCount} won from {stats.totalQuotedCount} quoted leads</p>
-                            </CardContent>
-                        </Card>
-
-                        <Card 
-                            className="bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
-                            onClick={() => setDrillDownData({ 
-                                title: "Quoted Pending Decision", 
-                                leads: stats.allQuotedLeads.filter(l => !isSignedLead(l) && !isLostLead(l))
-                            })}
-                        >
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Awaiting Decision</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-sky-600 dark:text-sky-400">
-                                    {stats.quotedPendingCount}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">Currently open in Quote Sent status</p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="bg-muted/20">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Avg Time to Quote</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                                    {stats.avgDaysToQuote.toFixed(1)} days
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">Lead entry to Quote Sent date</p>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t">
-                        <div>
-                            <h4 className="text-sm font-semibold mb-1">Quote Disposition Breakdown</h4>
-                            <p className="text-xs text-muted-foreground mb-4">
-                                Current outcomes of all leads that received a quote or proposal.
-                            </p>
-                            <div className="h-[260px] w-full flex items-center justify-center border rounded-lg bg-muted/5 p-4">
-                                {stats.quoteDispositionData.length > 0 ? (
-                                    <ChartContainer config={{}} className="h-full w-full">
-                                        <PieChart>
-                                            <Pie 
-                                                data={stats.quoteDispositionData} 
-                                                cx="50%" 
-                                                cy="50%" 
-                                                innerRadius={55} 
-                                                outerRadius={85} 
-                                                paddingAngle={4} 
-                                                dataKey="value"
-                                                label={({ name, percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
-                                            >
-                                                {stats.quoteDispositionData.map((entry, index) => (
-                                                    <Cell key={`cell-quote-${index}`} fill={entry.fill} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip />
-                                            <Legend />
-                                        </PieChart>
-                                    </ChartContainer>
-                                ) : (
-                                    <div className="text-sm text-muted-foreground italic">No quoted leads found for this period.</div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 className="text-sm font-semibold mb-1">Account Manager Quote Conversion</h4>
-                            <p className="text-xs text-muted-foreground mb-4">
-                                Quote performance and conversion rate breakdown by assigned Account Manager. Click any row to view leads.
-                            </p>
-                            <ScrollArea className="h-[260px] border rounded-lg p-2">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Account Manager</TableHead>
-                                            <TableHead className="text-right">Quotes Sent</TableHead>
-                                            <TableHead className="text-right">Won</TableHead>
-                                            <TableHead className="text-right">Pending</TableHead>
-                                            <TableHead className="text-right">Lost</TableHead>
-                                            <TableHead className="text-right">Quote Conv %</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {stats.quoteAmPerformanceData.length > 0 ? (
-                                            stats.quoteAmPerformanceData.map((am) => (
-                                                <TableRow 
-                                                    key={am.name} 
-                                                    className="cursor-pointer hover:bg-muted/50"
-                                                    onClick={() => setDrillDownData({ 
-                                                        title: `Quotes Sent by ${am.name}`, 
-                                                        leads: am.leads 
-                                                    })}
-                                                >
-                                                    <TableCell className="font-semibold">{am.name}</TableCell>
-                                                    <TableCell className="text-right font-bold text-cyan-600">{am.quotesSent}</TableCell>
-                                                    <TableCell className="text-right text-emerald-600 font-medium">{am.quotedWon}</TableCell>
-                                                    <TableCell className="text-right text-sky-600 font-medium">{am.quotedPending}</TableCell>
-                                                    <TableCell className="text-right text-rose-500 font-medium">{am.quotedLost}</TableCell>
-                                                    <TableCell className="text-right font-bold">
-                                                        <Badge variant={am.quoteConversionRate >= 30 ? "default" : "outline"} className={am.quoteConversionRate >= 30 ? "bg-emerald-600" : ""}>
-                                                            {am.quoteConversionRate.toFixed(1)}%
-                                                        </Badge>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        ) : (
-                                            <TableRow>
-                                                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
-                                                    No Account Manager quote data available for this period.
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </ScrollArea>
                         </div>
                     </div>
                 </CardContent>

@@ -77,13 +77,16 @@ import { OrganiseOnboardingDialog } from '@/components/customer-success/organise
 import { encryptLeadId } from '@/lib/localmile-security'
 import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isFranchiseeRole } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
+import { Pencil } from 'lucide-react'
+import { EditTaskDialog } from '@/components/edit-task-dialog'
+import { setHours, setMinutes } from 'date-fns'
 import { RequestAssignmentDialog } from '@/components/request-assignment-dialog'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskInLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName } from '@/lib/duplicate-detector'
 import { isMultiSiteBucket } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
@@ -1014,6 +1017,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [dialogProcessMode, setDialogProcessMode] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setnewTaskDueDate] = useState<Date | undefined>();
+  const [newTaskDueTime, setNewTaskDueTime] = useState('09:00');
+  const [newTaskDurationMinutes, setNewTaskDurationMinutes] = useState('30');
+  const [editingTask, setEditingTask] = useState<(Task & { leadId?: string; leadName?: string }) | null>(null);
+  const [isEditTaskOpen, setIsEditTaskOpen] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
   const [loadingBack, setLoadingBack] = useState(false);
   const [isRekeying, setIsRekeying] = useState(false);
@@ -3530,21 +3537,61 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskTitle || !newTaskDueDate || !user?.displayName) return;
+    if (!newTaskTitle || !newTaskDueDate || (!user?.displayName && !userProfile?.displayName)) return;
     try {
-        const newTask = await addTaskToLead(lead.id, {
+        const authorName = userProfile?.displayName || user?.displayName || 'Unknown';
+        const [hStr, mStr] = newTaskDueTime.split(':');
+        const h = parseInt(hStr || '9', 10);
+        const m = parseInt(mStr || '0', 10);
+        const finalDueDate = setMinutes(setHours(newTaskDueDate, h), m);
+        const dueDateIso = finalDueDate.toISOString();
+        const duration = parseInt(newTaskDurationMinutes, 10) || 30;
+
+        let newTask = await addTaskToLead(lead.id, {
             title: newTaskTitle,
-            dueDate: newTaskDueDate.toISOString(),
-            author: user.displayName,
+            dueDate: dueDateIso,
+            author: authorName,
+            durationMinutes: duration,
         });
+
+        // Trigger Outlook sync if eligible
+        const userEmail = userProfile?.email || user?.email || '';
+        const userId = userProfile?.uid || user?.uid || '';
+        if (userId && userEmail) {
+            try {
+                const syncRes = await fetch('/api/tasks/outlook-sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'create',
+                        userId,
+                        userEmail,
+                        title: newTaskTitle,
+                        dueDate: dueDateIso,
+                        durationMinutes: duration,
+                        leadId: lead.id,
+                        leadName: lead.companyName,
+                    })
+                });
+                const syncData = await syncRes.json();
+                if (syncData.synced && syncData.outlookEventId) {
+                    await updateTaskInLead(lead.id, newTask.id, { outlookEventId: syncData.outlookEventId });
+                    newTask = { ...newTask, outlookEventId: syncData.outlookEventId };
+                }
+            } catch (syncErr) {
+                console.error("Outlook task sync error:", syncErr);
+            }
+        }
+
         setLead(prev => ({ ...prev, tasks: [newTask, ...(prev.tasks || [])] }));
         setNewTaskTitle('');
         setnewTaskDueDate(undefined);
-        toast({ title: 'Task Added' });
+        setNewTaskDueTime('09:00');
+        toast({ title: 'Task Added', description: 'Task scheduled successfully.' });
         logActivity(lead.id, {
             type: 'Update',
             notes: `Created task: ${newTaskTitle}`,
-            author: user.displayName || 'Unknown'
+            author: authorName
         });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not add task.' });
@@ -3566,7 +3613,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleDeleteTask = async (taskId: string) => {
     try {
+        const targetTask = lead.tasks?.find(t => t.id === taskId);
         await deleteTaskFromLead(lead.id, taskId);
+
+        // Delete from Outlook if outlookEventId exists
+        const userEmail = userProfile?.email || user?.email || '';
+        const userId = userProfile?.uid || user?.uid || '';
+        if (userId && userEmail && targetTask?.outlookEventId) {
+            fetch('/api/tasks/outlook-sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'delete',
+                    userId,
+                    userEmail,
+                    outlookEventId: targetTask.outlookEventId,
+                })
+            }).catch(e => console.error("Failed to delete Outlook event:", e));
+        }
+
         setLead(prev => ({
             ...prev,
             tasks: prev.tasks?.filter(t => t.id !== taskId)
@@ -3575,6 +3640,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not delete task.' });
     }
+  };
+
+  const handleTaskUpdatedInProfile = (updatedTask: Task) => {
+    setLead(prev => ({
+        ...prev,
+        tasks: prev.tasks?.map(t => t.id === updatedTask.id ? updatedTask : t)
+    }));
   };
 
   const formatDate = (dateStr?: string) => {
@@ -6762,14 +6834,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <form onSubmit={handleAddTask} className="flex flex-col gap-2">
-                        <Input placeholder="New task..." value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} />
-                        <div className="flex gap-2">
+                        <Input placeholder="New task..." value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} required />
+                        <div className="grid grid-cols-2 gap-2">
                             <Popover>
-                                <PopoverTrigger asChild><Button variant="outline" className="flex-1 text-left font-normal">{newTaskDueDate ? format(newTaskDueDate, "PPP") : "Pick date"}</Button></PopoverTrigger>
+                                <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal">{newTaskDueDate ? format(newTaskDueDate, "PPP") : "Pick date"}</Button></PopoverTrigger>
                                 <PopoverContent className="w-auto p-0"><CalendarPicker mode="single" selected={newTaskDueDate} onSelect={setnewTaskDueDate} initialFocus /></PopoverContent>
                             </Popover>
-                            <Button type="submit" size="icon"><PlusCircle className="h-4 w-4" /></Button>
+                            <Input type="time" value={newTaskDueTime} onChange={(e) => setNewTaskDueTime(e.target.value)} className="w-full" required />
                         </div>
+                        <Button type="submit" className="w-full mt-1 flex items-center justify-center gap-1.5"><PlusCircle className="h-4 w-4" /> Add Task & Sync</Button>
                     </form>
 
                     {tasks.length === 0 ? (
@@ -6796,6 +6869,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                 ) : (
                                                     <Badge variant="secondary" className="text-[11px]">Pending</Badge>
                                                 )}
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6 w-6 text-muted-foreground hover:text-foreground" 
+                                                    onClick={() => {
+                                                        setEditingTask({ ...t, leadId: lead.id, leadName: lead.companyName });
+                                                        setIsEditTaskOpen(true);
+                                                    }}
+                                                    title="Edit task"
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                    <span className="sr-only">Edit task</span>
+                                                </Button>
                                                 <Button 
                                                     variant="ghost" 
                                                     size="icon" 
@@ -6840,6 +6926,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                 </CardContent>
             </Card>
+            <EditTaskDialog
+                task={editingTask}
+                open={isEditTaskOpen}
+                onOpenChange={setIsEditTaskOpen}
+                onTaskUpdated={handleTaskUpdatedInProfile}
+            />
                 {linkedVisitNote && (
                 <Card>
                     <CardHeader>

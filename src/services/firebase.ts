@@ -1934,11 +1934,15 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
     return snap.docs.map(doc => ({ ...sanitizeData(doc.data()), id: doc.id, leadId: doc.ref.parent.parent!.id, leadName: 'Lead' } as any));
 }
 
-async function addTaskToLead(leadId: string, taskData: { title: string; dueDate: string; author: string }): Promise<Task> {
+async function addTaskToLead(leadId: string, taskData: { title: string; dueDate: string; author: string; durationMinutes?: number; outlookEventId?: string }): Promise<Task> {
     const leadSnap = await getDoc(doc(firestore, 'leads', leadId));
     const newTask = { ...taskData, dialerAssigned: leadSnap.data()?.dialerAssigned || null, isCompleted: false, createdAt: new Date().toISOString() };
     const docRef = await addDoc(collection(firestore, 'leads', leadId, 'tasks'), prepareForFirestore(newTask));
     return { ...newTask, id: docRef.id } as Task;
+}
+
+async function updateTaskInLead(leadId: string, taskId: string, updates: Partial<Task>): Promise<void> {
+    await updateDoc(doc(firestore, 'leads', leadId, 'tasks', taskId), prepareForFirestore(updates));
 }
 
 async function updateTaskCompletion(leadId: string, taskId: string, isCompleted: boolean): Promise<void> {
@@ -3465,6 +3469,7 @@ export {
     getAllUserTasks,
     getAllTasks,
     addTaskToLead,
+    updateTaskInLead,
     updateTaskCompletion,
     deleteTaskFromLead,
     updateLeadDiscoveryData,
