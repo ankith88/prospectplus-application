@@ -6027,13 +6027,27 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <div className="p-3 bg-muted/40 rounded-lg border">
                                 <p className="text-xs text-muted-foreground font-medium">Selected Service Option</p>
                                 <p className="text-lg font-bold text-primary mt-1 capitalize">
-                                    {lead.selectedServiceOption ? lead.selectedServiceOption.replace('-', ' ') : 'N/A'}
+                                    {lead.selectedServiceOption 
+                                        ? lead.selectedServiceOption.replace(/-/g, ' ') 
+                                        : (lead.discoveryData?.interestedIn || lead.interestedIn || 'N/A')}
                                 </p>
                             </div>
                             <div className="p-3 bg-muted/40 rounded-lg border">
-                                <p className="text-xs text-muted-foreground font-medium">Routing</p>
+                                <p className="text-xs text-muted-foreground font-medium">Inbound Website URL</p>
                                 <div className="mt-1">
-                                    {lead.discoveryData?.routingTag ? (
+                                    {lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage ? (
+                                        <a 
+                                            href={(lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage || '').startsWith('http') 
+                                                ? (lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage) 
+                                                : `https://${lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage}`}
+                                            target="_blank" 
+                                            rel="noopener noreferrer" 
+                                            className="text-sm font-semibold text-primary hover:underline break-all block"
+                                            title={lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage}
+                                        >
+                                            {lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage}
+                                        </a>
+                                    ) : lead.discoveryData?.routingTag ? (
                                         <Badge variant="outline" className="text-sm font-semibold">{lead.discoveryData.routingTag}</Badge>
                                     ) : (
                                         <span className="text-sm font-semibold text-muted-foreground">N/A</span>

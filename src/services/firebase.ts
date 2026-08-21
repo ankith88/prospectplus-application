@@ -306,6 +306,9 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           signedUpAt: data.signedUpAt,
           scfAcceptedAt: data.scfAcceptedAt,
           trialStartedAt: data.trialStartedAt,
+          selectedServiceOption: data.selectedServiceOption || data.selectedService || data.interestedIn,
+          inboundPageUrl: data.inboundPageUrl || data.pageUrl || data.pageURL || data.inboundDetails?.landingPage || data.sourcePageUrl,
+          pageURL: data.pageURL || data.inboundPageUrl || data.pageUrl,
         };
 
         if (includeSubCollections) {
@@ -655,6 +658,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           bookingUrlId: data.bookingUrlId,
           bookingContactId: data.bookingContactId,
           followUpDate: data.followUpDate,
+          selectedServiceOption: data.selectedServiceOption || data.selectedService || data.interestedIn,
+          inboundPageUrl: data.inboundPageUrl || data.pageUrl || data.pageURL || data.inboundDetails?.landingPage || data.sourcePageUrl,
+          pageURL: data.pageURL || data.inboundPageUrl || data.pageUrl,
           prospectPlusId: data.prospectPlusId || data.prospectplusId || data.prospect_plus_id || data.customerEntityId || data.entityId || data.internalid || data.salesRecordInternalId,
           cancellationTheme: data.cancellationTheme,
           cancellationThemeId: data.cancellationThemeId,
@@ -797,6 +803,9 @@ function subscribeLeadsFromFirebase(
           activeJourneys: data.activeJourneys || [],
           bookingUrlId: data.bookingUrlId,
           followUpDate: data.followUpDate,
+          selectedServiceOption: data.selectedServiceOption || data.selectedService || data.interestedIn,
+          inboundPageUrl: data.inboundPageUrl || data.pageUrl || data.pageURL || data.inboundDetails?.landingPage || data.sourcePageUrl,
+          pageURL: data.pageURL || data.inboundPageUrl || data.pageUrl,
           prospectPlusId: data.prospectPlusId || data.prospectplusId || data.prospect_plus_id || data.customerEntityId || data.entityId || data.internalid || data.salesRecordInternalId,
           cancellationTheme: data.cancellationTheme,
           cancellationThemeId: data.cancellationThemeId,
@@ -894,6 +903,9 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     currentCarrier: data.currentCarrier,
                     marketingLists: data.marketingLists,
                     activeJourneys: data.activeJourneys || [],
+                    selectedServiceOption: data.selectedServiceOption || data.selectedService || data.interestedIn,
+                    inboundPageUrl: data.inboundPageUrl || data.pageUrl || data.pageURL || data.inboundDetails?.landingPage || data.sourcePageUrl,
+                    pageURL: data.pageURL || data.inboundPageUrl || data.pageUrl,
                     prospectPlusId: data.prospectPlusId || data.prospectplusId || data.prospect_plus_id || data.customerEntityId || data.entityId || data.internalid || data.salesRecordInternalId,
                     cancellationTheme: data.cancellationTheme,
                     cancellationThemeId: data.cancellationThemeId,
@@ -968,6 +980,9 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                 currentCarrier: data.currentCarrier,
                 marketingLists: data.marketingLists,
                 activeJourneys: data.activeJourneys || [],
+                selectedServiceOption: data.selectedServiceOption || data.selectedService || data.interestedIn,
+                inboundPageUrl: data.inboundPageUrl || data.pageUrl || data.pageURL || data.inboundDetails?.landingPage || data.sourcePageUrl,
+                pageURL: data.pageURL || data.inboundPageUrl || data.pageUrl,
             };
         });
 
@@ -1035,6 +1050,9 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 currentCarrier: data.currentCarrier,
                 marketingLists: data.marketingLists,
                 activeJourneys: data.activeJourneys || [],
+                selectedServiceOption: data.selectedServiceOption || data.selectedService || data.interestedIn,
+                inboundPageUrl: data.inboundPageUrl || data.pageUrl || data.pageURL || data.inboundDetails?.landingPage || data.sourcePageUrl,
+                pageURL: data.pageURL || data.inboundPageUrl || data.pageUrl,
             } as Lead;
         });
     } catch (error) {
