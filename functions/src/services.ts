@@ -92,8 +92,10 @@ export const bulkImportServices = functions
     }
 
     if (!isAuthorized) {
-      // If user is authenticated in the session, allow execution
-      functions.logger.info("Granting service import access to authenticated user:", uid);
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Unauthorized: Only Super Admins and Admins can upload services."
+      );
     }
 
     const services = data.services;

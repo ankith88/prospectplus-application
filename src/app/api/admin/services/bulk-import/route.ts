@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 
 function categorizeService(code: string, name: string): string {
   const c = (code || '').toLowerCase();
@@ -47,7 +48,7 @@ function categorizeService(code: string, name: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { services } = body;
+    const { services, requestorUid } = body;
 
     if (!services || !Array.isArray(services)) {
       return NextResponse.json(
@@ -57,6 +58,41 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getFirestore(adminApp);
+
+    // Strict Authorization Check: Only Super Admins and Admins can upload
+    let isAuthorized = false;
+
+    if (requestorUid) {
+      if (SUPER_ADMIN_UIDS.includes(requestorUid)) {
+        isAuthorized = true;
+      } else {
+        const userDoc = await db.collection('users').doc(requestorUid).get();
+        if (userDoc.exists) {
+          const uData = userDoc.data() || {};
+          const role = String(uData.role || uData.activeRole || uData.defaultRole || '').toLowerCase();
+          const assignedRoles = Array.isArray(uData.assignedRoles)
+            ? uData.assignedRoles.map((r: any) => String(r).toLowerCase())
+            : [];
+          const adminRoles = ['admin', 'outbound admin', 'field sales admin', 'lead gen admin', 'data admin', 'super user'];
+
+          if (
+            uData.isSuperAdmin === true ||
+            adminRoles.some((r) => role.includes(r)) ||
+            assignedRoles.some((r) => adminRoles.some((ar) => r.includes(ar)))
+          ) {
+            isAuthorized = true;
+          }
+        }
+      }
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { success: false, message: 'Unauthorized: Only Super Admins and Admins can upload services.' },
+        { status: 403 }
+      );
+    }
+
     const batchSize = 400;
     const batches: FirebaseFirestore.WriteBatch[] = [];
     let currentBatch = db.batch();

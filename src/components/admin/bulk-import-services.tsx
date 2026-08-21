@@ -8,10 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
 
 export function BulkImportServices() {
   const [isImporting, setIsImporting] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const downloadSampleCSV = () => {
     const headers = [
@@ -86,7 +88,7 @@ export function BulkImportServices() {
             const apiRes = await fetch('/api/admin/services/bulk-import', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ services }),
+              body: JSON.stringify({ services, requestorUid: user?.uid }),
             });
             if (apiRes.ok) {
               data = await apiRes.json();
