@@ -101,6 +101,8 @@ export async function GET(req: NextRequest) {
         contactEmail,
         amName: amUser.displayName || amAssigned,
         amId: amUserId,
+        amEmail: amUser.email || '',
+        amMobile: amUser.mobileNumber || amUser.phoneNumber || '',
         defaultMeetingType: amUser.defaultMeetingType || 'phone',
         isGeneralBooking
       });

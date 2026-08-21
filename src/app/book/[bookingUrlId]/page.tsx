@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { format, isBefore, startOfDay } from 'date-fns';
 import { isWeekendOrPublicHoliday } from '@/lib/australian-holidays';
-import { Phone, Video, Calendar as CalendarIcon, CheckCircle2, Clock, Globe } from 'lucide-react';
+import { Phone, Video, Calendar as CalendarIcon, CheckCircle2, Clock, Globe, Mail, Smartphone } from 'lucide-react';
 
 interface AvailableSlot {
   start: string; // ISO string
@@ -32,6 +32,8 @@ export default function BookingPage() {
   const [contactEmail, setContactEmail] = useState('');
   const [amName, setAmName] = useState('');
   const [amId, setAmId] = useState('');
+  const [amEmail, setAmEmail] = useState('');
+  const [amMobile, setAmMobile] = useState('');
 
   const [isGeneralBooking, setIsGeneralBooking] = useState(false);
   const [firstName, setFirstName] = useState('');
@@ -64,6 +66,8 @@ export default function BookingPage() {
         setContactEmail(data.contactEmail);
         setAmName(data.amName);
         setAmId(data.amId);
+        setAmEmail(data.amEmail || '');
+        setAmMobile(data.amMobile || '');
         setIsGeneralBooking(!!data.isGeneralBooking);
         if (data.defaultMeetingType) {
           setMeetingType(data.defaultMeetingType);
@@ -245,12 +249,29 @@ export default function BookingPage() {
           
           {/* Left Panel: Meeting Details */}
           <div className="w-full md:w-[350px] bg-background p-8 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col">
-            <p className="text-sm font-semibold tracking-wider uppercase text-slate-500 mb-2">MailPlus</p>
-            <p className="text-sm font-semibold tracking-wider uppercase text-slate-500 mb-2">{amName}</p>
-            <h1 className="text-3xl font-bold text-[#2c5046] mb-6 leading-tight">
-              {rescheduleAppointmentId ? 'Reschedule Appointment' : 'Quick Discovery Call'}
+            <h1 className="text-3xl font-bold text-[#2c5046] mb-4 leading-tight">
+              {rescheduleAppointmentId 
+                ? `Reschedule Appointment with: ${amName || 'Account Manager'}` 
+                : `Quick Discovery Call with: ${amName || 'Account Manager'}`}
             </h1>
             
+            {(amEmail || amMobile) && (
+              <div className="mb-6 space-y-2 text-slate-600 font-medium text-sm">
+                {amEmail && (
+                  <div className="flex items-center">
+                    <Mail className="h-4 w-4 mr-3 text-slate-400 shrink-0" />
+                    <a href={`mailto:${amEmail}`} className="hover:underline text-slate-700 truncate">{amEmail}</a>
+                  </div>
+                )}
+                {amMobile && (
+                  <div className="flex items-center">
+                    <Smartphone className="h-4 w-4 mr-3 text-slate-400 shrink-0" />
+                    <a href={`tel:${amMobile}`} className="hover:underline text-slate-700">{amMobile}</a>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-4 mb-8">
               {!isGeneralBooking && (
                 <div className="flex items-start text-slate-600 font-medium">

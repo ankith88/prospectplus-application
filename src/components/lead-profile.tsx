@@ -4,7 +4,7 @@ import React from 'react'
 import { CopyButton } from '@/components/ui/copy-button'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -1375,7 +1375,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const monthlyInvoiceData = useMemo(() => {
     if (!invoices || invoices.length === 0) return [];
-    const map: Record<string, { monthKey: string; monthLabel: string; totalValue: number; count: number; timestamp: number }> = {};
+    const map: Record<string, {
+      monthKey: string;
+      monthLabel: string;
+      totalValue: number;
+      paidValue: number;
+      unpaidValue: number;
+      totalCount: number;
+      paidCount: number;
+      unpaidCount: number;
+      timestamp: number;
+    }> = {};
 
     invoices.forEach(inv => {
       if (!inv.invoiceDate) return;
@@ -1387,26 +1397,52 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       const firstOfMonth = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
       const val = Number(inv.invoiceTotal || 0);
 
+      const statusStr = (inv.invoiceStatus || inv.status || '').toLowerCase().trim();
+      const isPaid = statusStr.includes('paid') && !statusStr.includes('unpaid');
+
       if (!map[monthKey]) {
         map[monthKey] = {
           monthKey,
           monthLabel,
           totalValue: 0,
-          count: 0,
+          paidValue: 0,
+          unpaidValue: 0,
+          totalCount: 0,
+          paidCount: 0,
+          unpaidCount: 0,
           timestamp: firstOfMonth,
         };
       }
       map[monthKey].totalValue += val;
-      map[monthKey].count += 1;
+      map[monthKey].totalCount += 1;
+
+      if (isPaid) {
+        map[monthKey].paidValue += val;
+        map[monthKey].paidCount += 1;
+      } else {
+        map[monthKey].unpaidValue += val;
+        map[monthKey].unpaidCount += 1;
+      }
     });
 
     const sorted = Object.values(map).sort((a, b) => a.timestamp - b.timestamp);
     return sorted.map(item => ({
       month: item.monthLabel,
       total: Number(item.totalValue.toFixed(2)),
-      count: item.count,
+      paid: Number(item.paidValue.toFixed(2)),
+      unpaid: Number(item.unpaidValue.toFixed(2)),
+      count: item.totalCount,
+      paidCount: item.paidCount,
+      unpaidCount: item.unpaidCount,
     }));
   }, [invoices]);
+
+  const { totalInvoicedVal, totalPaidVal, totalUnpaidVal } = useMemo(() => {
+    const totalInvoicedVal = monthlyInvoiceData.reduce((acc, curr) => acc + curr.total, 0);
+    const totalPaidVal = monthlyInvoiceData.reduce((acc, curr) => acc + curr.paid, 0);
+    const totalUnpaidVal = monthlyInvoiceData.reduce((acc, curr) => acc + curr.unpaid, 0);
+    return { totalInvoicedVal, totalPaidVal, totalUnpaidVal };
+  }, [monthlyInvoiceData]);
 
   const toggleExpandInvoice = (invoiceId: string) => {
     setExpandedInvoiceIds(prev => {
@@ -7233,20 +7269,32 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             {isCompanyProfile && (
               <TabsContent value="invoices" className="flex flex-col gap-6 mt-0">
                 <Card className="w-full">
-                  <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+                  <CardHeader className="pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <CardTitle className="flex items-center gap-2 text-lg font-bold">
                         <TrendingUp className="w-5 h-5 text-[#095c7b]" />
                         Monthly Invoice Values
                       </CardTitle>
                       <CardDescription className="text-xs mt-0.5">
-                        Total invoiced value per month for this customer
+                        Total invoiced value per month for this customer (Paid vs Unpaid)
                       </CardDescription>
                     </div>
                     {monthlyInvoiceData.length > 0 && (
-                      <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/20 font-semibold">
-                        ${monthlyInvoiceData.reduce((acc, curr) => acc + curr.total, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Total Invoiced
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 inline-block" />
+                          ${totalPaidVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Paid
+                        </Badge>
+                        {totalUnpaidVal > 0 && (
+                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-semibold dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 mr-1.5 inline-block" />
+                            ${totalUnpaidVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Unpaid
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/20 font-semibold dark:bg-[#095c7b]/20 dark:text-teal-300">
+                          ${totalInvoicedVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Total Invoiced
+                        </Badge>
+                      </div>
                     )}
                   </CardHeader>
                   <CardContent className="pt-6">
@@ -7274,14 +7322,53 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                               tick={{ fontSize: 11, fill: '#64748b' }}
                             />
                             <RechartsTooltip
-                              formatter={(val: any) => [`$${Number(val).toFixed(2)}`, 'Invoiced Amount']}
-                              labelStyle={{ fontWeight: 'bold', color: '#0f172a' }}
-                              contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                              content={({ active, payload, label }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  return (
+                                    <div className="bg-popover p-3 rounded-lg border shadow-md text-xs space-y-1.5 min-w-[170px]">
+                                      <p className="font-bold text-foreground border-b pb-1 mb-1.5">{label}</p>
+                                      <div className="flex justify-between items-center text-emerald-600 font-medium">
+                                        <span className="flex items-center gap-1.5">
+                                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                          Paid ({data.paidCount || 0}):
+                                        </span>
+                                        <span className="font-semibold">${Number(data.paid || 0).toFixed(2)}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-amber-600 font-medium">
+                                        <span className="flex items-center gap-1.5">
+                                          <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                          Unpaid ({data.unpaidCount || 0}):
+                                        </span>
+                                        <span className="font-semibold">${Number(data.unpaid || 0).toFixed(2)}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center pt-1 border-t text-foreground font-bold">
+                                        <span>Total ({data.count || 0}):</span>
+                                        <span>${Number(data.total || 0).toFixed(2)}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Legend
+                              verticalAlign="top"
+                              align="right"
+                              wrapperStyle={{ paddingBottom: '10px', fontSize: '12px' }}
                             />
                             <Bar
-                              dataKey="total"
-                              name="Invoiced Amount"
-                              fill="#095c7b"
+                              dataKey="paid"
+                              name="Paid Invoices"
+                              stackId="a"
+                              fill="#10b981"
+                              maxBarSize={50}
+                            />
+                            <Bar
+                              dataKey="unpaid"
+                              name="Unpaid Invoices"
+                              stackId="a"
+                              fill="#f59e0b"
                               radius={[4, 4, 0, 0]}
                               maxBarSize={50}
                             />
@@ -7356,7 +7443,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 
                                 let badgeClass = "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800";
                                 const lowerStatus = statusStr.toLowerCase();
-                                if (lowerStatus.includes('paid')) {
+                                if (lowerStatus.includes('paid') && !lowerStatus.includes('unpaid')) {
                                   badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800";
                                 } else if (lowerStatus.includes('overdue')) {
                                   badgeClass = "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800";
