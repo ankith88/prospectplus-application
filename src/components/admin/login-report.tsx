@@ -108,9 +108,9 @@ export default function LoginActivityReport() {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       return (
-        record.userDisplayName.toLowerCase().includes(q) ||
-        record.userEmail.toLowerCase().includes(q) ||
-        record.clientTimezone.toLowerCase().includes(q)
+        (record.userDisplayName || '').toLowerCase().includes(q) ||
+        (record.userEmail || '').toLowerCase().includes(q) ||
+        (record.clientTimezone || '').toLowerCase().includes(q)
       );
     });
   }, [loginRecords, searchQuery]);

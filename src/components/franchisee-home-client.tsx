@@ -676,18 +676,6 @@ export default function FranchiseeHomeClient() {
                       <Video className="h-3 w-3" /> Join Teams
                     </a>
                   )}
-                  {appt.leadId && (
-                    <Button
-                      variant="link"
-                      size="sm"
-                      asChild
-                      className="p-0 h-auto text-xs text-[#095c7b] font-bold hover:underline"
-                    >
-                      <Link href={`/leads/${appt.leadId}`} className="flex items-center gap-1">
-                        View Lead <ArrowRight className="h-3 w-3" />
-                      </Link>
-                    </Button>
-                  )}
                   {status !== 'Completed' && status !== 'Cancelled' && status !== 'No Show' && (
                     <Button
                       variant="ghost"
@@ -1715,13 +1703,6 @@ export default function FranchiseeHomeClient() {
                                 className="h-8 text-xs text-rose-600 font-bold hover:text-rose-800 flex items-center gap-1"
                               >
                                 <XCircle className="h-3.5 w-3.5" /> Cancel
-                              </Button>
-                            )}
-                            {appt.leadId && (
-                              <Button variant="ghost" size="sm" asChild className="h-8 text-xs text-[#095c7b] font-bold">
-                                <Link href={`/leads/${appt.leadId}`} className="flex items-center gap-1">
-                                  View Lead <ChevronRight className="h-3.5 w-3.5" />
-                                </Link>
                               </Button>
                             )}
                           </div>

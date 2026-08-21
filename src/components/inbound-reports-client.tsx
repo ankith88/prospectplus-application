@@ -446,6 +446,7 @@ export default function InboundReportsClientPage({
   const [allUsers, setAllUsers] = useState<string[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [fetchProgress, setFetchProgress] = useState(15);
+  const [kpiViewMode, setKpiViewMode] = useState<'timeline' | 'grid'>('timeline');
 
   useEffect(() => {
     if (!drillDownData) {
@@ -836,6 +837,82 @@ export default function InboundReportsClientPage({
     const quoteSentCount = filteredLeads.filter(l => l.customerStatus === 'Quote Sent').length;
     const conversionRate = totalInbound > 0 ? (wonCount / totalInbound) * 100 : 0;
     const hotLeadsRate = totalInbound > 0 ? (hotLeadsCount / totalInbound) * 100 : 0;
+
+    // Advanced Quote Sent & Proposal Conversion Rate Analytics
+    const allQuotedLeads = filteredLeads.filter(l => {
+        const st = l.customerStatus || l.status || '';
+        if (['Quote Sent', 'Quote Accepted', 'Quote Out', 'Quotes Sent', 'Proposal Sent'].includes(st)) return true;
+        if (l.scfLinks && l.scfLinks.length > 0) return true;
+        if (l.sofDetails && (l.sofDetails.signedAt || (l.sofDetails as any).sentAt)) return true;
+        const leadActs = allActivities.filter(a => a.leadId === l.id);
+        return leadActs.some(a => {
+            const notes = (a.notes || '').toLowerCase();
+            return notes.includes('status changed to quote sent') || 
+                   notes.includes('status changed to quote out') || 
+                   notes.includes('status changed to proposal sent') || 
+                   notes.includes('quote sent successfully') ||
+                   notes.includes('sent quote');
+        });
+    });
+
+    const quotedWonLeads = allQuotedLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.status === 'Won' || (l.status as string) === 'Signed');
+    const quotedLostLeads = allQuotedLeads.filter(isLostLead);
+    const quotedPendingLeads = allQuotedLeads.filter(l => !quotedWonLeads.some(w => w.id === l.id) && !quotedLostLeads.some(lost => lost.id === l.id));
+
+    const totalQuotedCount = allQuotedLeads.length;
+    const quotedWonCount = quotedWonLeads.length;
+    const quotedLostCount = quotedLostLeads.length;
+    const quotedPendingCount = quotedPendingLeads.length;
+
+    const quoteToWonConversionRate = totalQuotedCount > 0 ? (quotedWonCount / totalQuotedCount) * 100 : 0;
+    const quoteSentRate = totalInbound > 0 ? (totalQuotedCount / totalInbound) * 100 : 0;
+
+    let totalDaysToQuote = 0;
+    let leadsWithQuoteTime = 0;
+    allQuotedLeads.forEach(l => {
+        const entered = parseDateString(l.dateLeadEntered);
+        if (!entered) return;
+        const leadActs = allActivities.filter(a => a.leadId === l.id);
+        const quoteAct = leadActs.find(a => {
+            const notes = (a.notes || '').toLowerCase();
+            return notes.includes('quote sent') || notes.includes('quote out') || notes.includes('proposal sent');
+        });
+        const quoteDate = quoteAct ? new Date(quoteAct.date) : entered;
+        if (isValid(quoteDate) && quoteDate.getTime() >= entered.getTime()) {
+            totalDaysToQuote += (quoteDate.getTime() - entered.getTime()) / (1000 * 3600 * 24);
+            leadsWithQuoteTime++;
+        }
+    });
+    const avgDaysToQuote = leadsWithQuoteTime > 0 ? totalDaysToQuote / leadsWithQuoteTime : 0;
+
+    const quoteDispositionData = [
+        { name: 'Converted (Won)', value: quotedWonCount, fill: '#10b981' },
+        { name: 'Awaiting Decision', value: quotedPendingCount, fill: '#0ea5e9' },
+        { name: 'Closed (Lost)', value: quotedLostCount, fill: '#ef4444' },
+    ].filter(d => d.value > 0);
+
+    const quoteAmDist = allQuotedLeads.reduce((acc, l) => {
+        const am = l.accountManagerAssigned || 'Unassigned';
+        if (!acc[am]) acc[am] = [];
+        acc[am].push(l);
+        return acc;
+    }, {} as Record<string, Lead[]>);
+
+    const quoteAmPerformanceData = Object.entries(quoteAmDist).map(([name, amQuotedLeads]) => {
+        const won = amQuotedLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.status === 'Won' || (l.status as string) === 'Signed').length;
+        const lost = amQuotedLeads.filter(isLostLead).length;
+        const pending = amQuotedLeads.length - won - lost;
+        const convRate = amQuotedLeads.length > 0 ? (won / amQuotedLeads.length) * 100 : 0;
+        return {
+            name,
+            quotesSent: amQuotedLeads.length,
+            quotedWon: won,
+            quotedLost: lost,
+            quotedPending: pending,
+            quoteConversionRate: convRate,
+            leads: amQuotedLeads
+        };
+    }).sort((a, b) => b.quotesSent - a.quotesSent);
 
     const netsuiteStatusDist = filteredLeads.reduce((acc, l) => {
         const status = l.netsuiteLeadStatus || 'Unknown';
@@ -2340,6 +2417,16 @@ export default function InboundReportsClientPage({
         quoteSentCount,
         conversionRate,
         hotLeadsRate,
+        allQuotedLeads,
+        totalQuotedCount,
+        quotedWonCount,
+        quotedLostCount,
+        quotedPendingCount,
+        quoteToWonConversionRate,
+        quoteSentRate,
+        avgDaysToQuote,
+        quoteDispositionData,
+        quoteAmPerformanceData,
         outOfTerritoryData,
         netsuiteStatusData,
         customerStatusData,
@@ -2679,139 +2766,395 @@ export default function InboundReportsClientPage({
       {!error && (
           <div className="space-y-6">
             {!visibleSections && (
-            <div id="step-inbound-metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <StatCard 
-                    title="Total Inbound" 
-                    value={stats.totalInbound} 
-                    icon={Inbox} 
-                    description="Total in period" 
-                    onClick={() => setDrillDownData({ title: "Total Inbound Leads", leads: filteredLeads })}
-                    helpContent="Total number of unique, non-duplicate inbound leads matching your active filters. Excludes duplicate lead entries."
-                />
-                <StatCard 
-                    title="Hot Leads" 
-                    value={stats.hotLeadsCount} 
-                    icon={Target} 
-                    description={
-                        <span className="flex items-center gap-1">
-                            {`${stats.hotLeadsRate.toFixed(1)}% of total`}
-                            <span className={`font-medium ml-1 ${stats.overdueHotLeadsList.length > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                                ({stats.overdueHotLeadsList.length} Overdue)
-                            </span>
-                        </span>
-                    }
-                    onClick={() => setDrillDownData({ 
-                        title: "Hot Leads", 
-                        leads: filteredLeads.filter(l => ['Hot Lead', 'Priority Lead', 'Priority Field Lead'].includes(l.customerStatus || l.status || '')) 
-                    })}
-                    helpContent="Inbound leads categorized with 'Hot Lead' customer status. Overdue leads are hot leads where the last activity (or lead entry) was more than 8 business hours ago."
-                />
-                <StatCard 
-                    title="Won Customers" 
-                    value={stats.wonCount} 
-                    icon={Star} 
-                    description={`${stats.conversionRate.toFixed(1)}% conversion`}
-                    onClick={() => setDrillDownData({ 
-                        title: "Won Customers", 
-                        leads: filteredLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed') 
-                    })}
-                    helpContent="Total number of leads converted to signed customers (Status is 'Won' or 'Signed')."
-                />
-                <StatCard 
-                    title="Stale Leads" 
-                    value={stats.staleLeadsList.length} 
-                    icon={AlertCircle} 
-                    description="No action in 7 business days" 
-                    onClick={() => setDrillDownData({ 
-                        title: "Stale Leads", 
-                        leads: stats.staleLeadsList
-                    })}
-                    helpContent="Inbound leads that have been in an open status (excluding closed, Out of Territory, and Future Follow-up) for more than 56 business hours (7 working days, 9am-5pm Mon-Fri Sydney time) without any manual activities or emails logged."
-                />
-                <StatCard 
-                    title="Avg Time to Close" 
-                    value={`${stats.avgTimeToClose.toFixed(1)} d`} 
-                    icon={Clock} 
-                    description="Lead creation to Won" 
-                    helpContent="Average calendar days to turn a lead into a signed customer. Calculated from the lead's entry date to the Service Commencement Form (SCF) acceptance date or Sign-off Form (SOF) signature date."
-                />
-                <StatCard 
-                    title="Avg Response Time" 
-                    value={`${stats.avgResponseTime.toFixed(1)} h`} 
-                    icon={User} 
-                    description="Time to first action" 
-                    onClick={() => setDrillDownData({ 
-                        title: "Avg Response Time Leads", 
-                        leads: filteredLeads.filter(lead => {
-                            const entered = parseDateString(lead.dateLeadEntered);
-                            if (!entered || !isValid(entered)) return false;
-                            
-                            let activityDates: Date[] = [];
-                            const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
-                            if (leadActivities.length > 0) {
-                                activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
+            <div id="step-inbound-metrics" className="space-y-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b">
+                    <div>
+                        <h3 className="text-lg font-bold flex items-center gap-2">
+                            <Workflow className="h-5 w-5 text-primary" />
+                            <span>Inbound Lead Lifecycle &amp; Timeline Perspective</span>
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                            Chronological progression from initial lead entry to final resolution (Won, Lost, or Out of Territory).
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border text-xs shrink-0">
+                        <Button
+                            variant={kpiViewMode === 'timeline' ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-7 text-xs px-3 shadow-none"
+                            onClick={() => setKpiViewMode('timeline')}
+                        >
+                            <Workflow className="h-3.5 w-3.5 mr-1.5" />
+                            Timeline Perspective
+                        </Button>
+                        <Button
+                            variant={kpiViewMode === 'grid' ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-7 text-xs px-3 shadow-none"
+                            onClick={() => setKpiViewMode('grid')}
+                        >
+                            <Layers className="h-3.5 w-3.5 mr-1.5" />
+                            Classic Grid
+                        </Button>
+                    </div>
+                </div>
+
+                {kpiViewMode === 'timeline' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 relative">
+                        {/* STAGE 1: INGESTION & CONTACT */}
+                        <div className="flex flex-col gap-3 rounded-xl border border-sky-200 dark:border-sky-800/40 bg-sky-50/50 dark:bg-sky-950/20 p-4 relative">
+                            <div className="flex items-center justify-between pb-2 border-b border-sky-200/60 dark:border-sky-800/40">
+                                <div className="flex items-center gap-2">
+                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-sky-600 text-white font-bold text-xs">1</span>
+                                    <span className="font-semibold text-xs text-sky-900 dark:text-sky-200 uppercase tracking-wider">01 Ingestion &amp; Contact</span>
+                                </div>
+                                <Inbox className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                            </div>
+                            <div className="grid grid-cols-1 gap-2.5">
+                                <StatCard 
+                                    title="Total Inbound" 
+                                    value={stats.totalInbound} 
+                                    icon={Inbox} 
+                                    description="Total in period" 
+                                    onClick={() => setDrillDownData({ title: "Total Inbound Leads", leads: filteredLeads })}
+                                    helpContent="Total number of unique, non-duplicate inbound leads matching your active filters. Excludes duplicate lead entries."
+                                />
+                                <StatCard 
+                                    title="Avg Response Time" 
+                                    value={`${stats.avgResponseTime.toFixed(1)} h`} 
+                                    icon={User} 
+                                    description="Time to first action" 
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Avg Response Time Leads", 
+                                        leads: filteredLeads.filter(lead => {
+                                            const entered = parseDateString(lead.dateLeadEntered);
+                                            if (!entered || !isValid(entered)) return false;
+                                            
+                                            let activityDates: Date[] = [];
+                                            const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+                                            if (leadActivities.length > 0) {
+                                                activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
+                                            }
+                                            if (lead.emails && lead.emails.length > 0) {
+                                                const manualEmails = lead.emails.filter(e => isManualEmail(e));
+                                                activityDates = activityDates.concat(manualEmails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
+                                            }
+                                            
+                                            if (activityDates.length > 0) {
+                                                activityDates.sort((a, b) => a.getTime() - b.getTime());
+                                                const firstAction = activityDates[0];
+                                                return firstAction.getTime() >= entered.getTime();
+                                            }
+                                            return false;
+                                        })
+                                    })}
+                                    helpContent="Average hours to perform the first manual action (activity or email) on a lead, calculated using Sydney business hours (9:00 AM - 5:00 PM, Mon-Fri, excluding weekends)."
+                                />
+                                <StatCard 
+                                    title="Hot Leads" 
+                                    value={stats.hotLeadsCount} 
+                                    icon={Target} 
+                                    description={
+                                        <span className="flex items-center gap-1">
+                                            {`${stats.hotLeadsRate.toFixed(1)}% of total`}
+                                            <span className={`font-medium ml-1 ${stats.overdueHotLeadsList.length > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                                ({stats.overdueHotLeadsList.length} Overdue)
+                                            </span>
+                                        </span>
+                                    }
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Hot Leads", 
+                                        leads: filteredLeads.filter(l => ['Hot Lead', 'Priority Lead', 'Priority Field Lead'].includes(l.customerStatus || l.status || '')) 
+                                    })}
+                                    helpContent="Inbound leads categorized with 'Hot Lead' customer status. Overdue leads are hot leads where the last activity (or lead entry) was more than 8 business hours ago."
+                                />
+                            </div>
+                        </div>
+
+                        {/* STAGE 2: EVALUATION & QUOTING */}
+                        <div className="flex flex-col gap-3 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50/50 dark:bg-amber-950/20 p-4 relative">
+                            <div className="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-amber-800/40">
+                                <div className="flex items-center gap-2">
+                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-600 text-white font-bold text-xs">2</span>
+                                    <span className="font-semibold text-xs text-amber-900 dark:text-amber-200 uppercase tracking-wider">02 Evaluation &amp; Quoting</span>
+                                </div>
+                                <Quote className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            </div>
+                            <div className="grid grid-cols-1 gap-2.5">
+                                <StatCard 
+                                    title="Quote Sent" 
+                                    value={stats.totalQuotedCount} 
+                                    icon={Quote} 
+                                    description="Dispatched to prospects" 
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Quote Sent Leads", 
+                                        leads: stats.allQuotedLeads 
+                                    })}
+                                    helpContent="Leads that have received an official quote or proposal."
+                                />
+                                <StatCard 
+                                    title="Quote Sent Conversion" 
+                                    value={`${stats.quoteToWonConversionRate.toFixed(1)}%`} 
+                                    icon={Percent} 
+                                    description="Quoted → Won Rate" 
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Quoted Won Customers", 
+                                        leads: stats.allQuotedLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.status === 'Won' || (l.status as string) === 'Signed') 
+                                    })}
+                                    helpContent="Percentage of leads that received a quote and converted to Won Customers."
+                                />
+                                <StatCard 
+                                    title="Active Trials" 
+                                    value={stats.localmileJourney.leads.filter(isActiveLocalMileLead).length + stats.shipmateJourney.total} 
+                                    icon={Zap} 
+                                    description={`LocalMile: ${stats.localmileJourney.leads.filter(isActiveLocalMileLead).length} | ShipMate: ${stats.shipmateJourney.total}`}
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Active Trial Leads", 
+                                        leads: [...stats.localmileJourney.leads.filter(isActiveLocalMileLead), ...stats.shipmateJourney.leads.filter(l => !isLostLead(l))] 
+                                    })}
+                                    helpContent="Total inbound leads currently in active LocalMile or ShipMate product trials."
+                                />
+                                <StatCard 
+                                    title="Stale Leads" 
+                                    value={stats.staleLeadsList.length} 
+                                    icon={AlertCircle} 
+                                    description="No action in 7 business days" 
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Stale Leads", 
+                                        leads: stats.staleLeadsList
+                                    })}
+                                    helpContent="Inbound leads in open status with no manual activity logged for over 7 working days."
+                                />
+                            </div>
+                        </div>
+
+                        {/* STAGE 3: WON CUSTOMERS */}
+                        <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 relative">
+                            <div className="flex items-center justify-between pb-2 border-b border-emerald-200/60 dark:border-emerald-800/40">
+                                <div className="flex items-center gap-2">
+                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs">3</span>
+                                    <span className="font-semibold text-xs text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">03 Won Customers</span>
+                                </div>
+                                <Star className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <div className="grid grid-cols-1 gap-2.5">
+                                <StatCard 
+                                    title="Won Customers" 
+                                    value={stats.wonCount} 
+                                    icon={Star} 
+                                    description={`${stats.conversionRate.toFixed(1)}% total conversion`}
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Won Customers", 
+                                        leads: filteredLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed') 
+                                    })}
+                                    helpContent="Total number of leads converted to signed customers (Status is 'Won' or 'Signed')."
+                                />
+                                <StatCard 
+                                    title="Overall Conversion Rate" 
+                                    value={`${stats.conversionRate.toFixed(1)}%`} 
+                                    icon={TrendingUp} 
+                                    description="Won / Total Inbound" 
+                                    helpContent="Percentage of total inbound leads that converted to Won Customers. Calculated as: (Won Customers / Total Inbound) × 100." 
+                                />
+                                <StatCard 
+                                    title="Avg Time to Close" 
+                                    value={`${stats.avgTimeToClose.toFixed(1)} d`} 
+                                    icon={Clock} 
+                                    description="Lead creation to Won" 
+                                    helpContent="Average calendar days to turn a lead into a signed customer."
+                                />
+                            </div>
+                        </div>
+
+                        {/* STAGE 4: EXIT & DROP-OFF */}
+                        <div className="flex flex-col gap-3 rounded-xl border border-rose-200 dark:border-rose-800/40 bg-rose-50/50 dark:bg-rose-950/20 p-4 relative">
+                            <div className="flex items-center justify-between pb-2 border-b border-rose-200/60 dark:border-rose-800/40">
+                                <div className="flex items-center gap-2">
+                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-rose-600 text-white font-bold text-xs">4</span>
+                                    <span className="font-semibold text-xs text-rose-900 dark:text-rose-200 uppercase tracking-wider">04 Exit &amp; Drop-Off</span>
+                                </div>
+                                <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                            </div>
+                            <div className="grid grid-cols-1 gap-2.5">
+                                <StatCard 
+                                    title="Out of Territory" 
+                                    value={stats.outOfTerritoryData.totalLeads.length} 
+                                    icon={MapPin} 
+                                    description={`${stats.outOfTerritoryData.directLeads.length} direct, ${stats.outOfTerritoryData.lostLeads.length} lost`}
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Out of Territory Leads (All)", 
+                                        leads: stats.outOfTerritoryData.totalLeads 
+                                    })}
+                                    helpContent="Inbound leads that are out of territory, including direct 'Out of Territory' status and leads marked Lost with reason 'Out of Territory'."
+                                />
+                                <StatCard 
+                                    title="Lost / Unqualified" 
+                                    value={stats.inboundJourneyStats.dropoffCount} 
+                                    icon={AlertTriangle} 
+                                    description={`${(stats.totalInbound > 0 ? (stats.inboundJourneyStats.dropoffCount / stats.totalInbound) * 100 : 0).toFixed(1)}% total drop-off`}
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Lost / Unqualified Leads", 
+                                        leads: filteredLeads.filter(isLostLead) 
+                                    })}
+                                    helpContent="Inbound leads that dropped off to Lost or Unqualified status."
+                                />
+                                <StatCard 
+                                    title="Avg Time to Drop-off" 
+                                    value={`${stats.inboundJourneyStats.avgTimeToDropoff.toFixed(1)} d`} 
+                                    icon={Clock} 
+                                    description="Lead creation to Lost" 
+                                    helpContent="Average calendar days from lead creation to being marked Lost/Unqualified."
+                                />
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <StatCard 
+                            title="Total Inbound" 
+                            value={stats.totalInbound} 
+                            icon={Inbox} 
+                            description="Total in period" 
+                            onClick={() => setDrillDownData({ title: "Total Inbound Leads", leads: filteredLeads })}
+                            helpContent="Total number of unique, non-duplicate inbound leads matching your active filters. Excludes duplicate lead entries."
+                        />
+                        <StatCard 
+                            title="Hot Leads" 
+                            value={stats.hotLeadsCount} 
+                            icon={Target} 
+                            description={
+                                <span className="flex items-center gap-1">
+                                    {`${stats.hotLeadsRate.toFixed(1)}% of total`}
+                                    <span className={`font-medium ml-1 ${stats.overdueHotLeadsList.length > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                        ({stats.overdueHotLeadsList.length} Overdue)
+                                    </span>
+                                </span>
                             }
-                            if (lead.emails && lead.emails.length > 0) {
-                                const manualEmails = lead.emails.filter(e => isManualEmail(e));
-                                activityDates = activityDates.concat(manualEmails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
-                            }
-                            
-                            if (activityDates.length > 0) {
-                                activityDates.sort((a, b) => a.getTime() - b.getTime());
-                                const firstAction = activityDates[0];
-                                return firstAction.getTime() >= entered.getTime();
-                            }
-                            return false;
-                        })
-                    })}
-                    helpContent="Average hours to perform the first manual action (activity or email) on a lead, calculated using Sydney business hours (9:00 AM - 5:00 PM, Mon-Fri, excluding weekends)."
-                />
-                <StatCard 
-                    title="Quote Sent" 
-                    value={stats.quoteSentCount} 
-                    icon={Quote} 
-                    description="Waiting for acceptance" 
-                    onClick={() => setDrillDownData({ 
-                        title: "Quote Sent Leads", 
-                        leads: filteredLeads.filter(l => l.customerStatus === 'Quote Sent') 
-                    })}
-                    helpContent="Leads currently in 'Quote Sent' customer status, awaiting client acceptance."
-                />
-                <StatCard title="Conversion Rate" value={`${stats.conversionRate.toFixed(1)}%`} icon={TrendingUp} description="Won / Total" helpContent="Percentage of total inbound leads that converted to Won Customers. Calculated as: (Won Customers / Total Inbound) × 100." />
-                <StatCard title="Hot Leads Rate" value={`${stats.hotLeadsRate.toFixed(1)}%`} icon={Percent} description="Hot Leads / Total" helpContent="Percentage of total inbound leads categorized as Hot Leads. Calculated as: (Hot Leads / Total Inbound) × 100." />
-                <StatCard 
-                    title="LocalMile Trials" 
-                    value={stats.localmileJourney.leads.filter(isActiveLocalMileLead).length} 
-                    icon={Zap} 
-                    description="Active LocalMile trials" 
-                    onClick={() => setDrillDownData({ 
-                        title: "LocalMile Trial Leads", 
-                        leads: stats.localmileJourney.leads.filter(isActiveLocalMileLead) 
-                    })}
-                    helpContent="Total inbound leads currently in active LocalMile trial statuses (LocalMile Opportunity, LocalMile Pending, Trialing LocalMile)."
-                />
-                <StatCard 
-                    title="ShipMate Trials" 
-                    value={stats.shipmateJourney.total} 
-                    icon={Package} 
-                    description="Active / Total ShipMate trials" 
-                    onClick={() => setDrillDownData({ 
-                        title: "ShipMate Trial Leads", 
-                        leads: stats.shipmateJourney.leads.filter(l => !isLostLead(l)) 
-                    })}
-                    helpContent="Total inbound leads that started a ShipMate trial in this period."
-                />
-                <StatCard 
-                    title="Out of Territory" 
-                    value={stats.outOfTerritoryData.totalLeads.length} 
-                    icon={MapPin} 
-                    description={`${stats.outOfTerritoryData.directLeads.length} direct, ${stats.outOfTerritoryData.lostLeads.length} lost`}
-                    onClick={() => setDrillDownData({ 
-                        title: "Out of Territory Leads (All)", 
-                        leads: stats.outOfTerritoryData.totalLeads 
-                    })}
-                    helpContent="Inbound leads that are out of territory, including direct 'Out of Territory' status and leads marked Lost with reason 'Out of Territory'."
-                />
+                            onClick={() => setDrillDownData({ 
+                                title: "Hot Leads", 
+                                leads: filteredLeads.filter(l => ['Hot Lead', 'Priority Lead', 'Priority Field Lead'].includes(l.customerStatus || l.status || '')) 
+                            })}
+                            helpContent="Inbound leads categorized with 'Hot Lead' customer status. Overdue leads are hot leads where the last activity (or lead entry) was more than 8 business hours ago."
+                        />
+                        <StatCard 
+                            title="Won Customers" 
+                            value={stats.wonCount} 
+                            icon={Star} 
+                            description={`${stats.conversionRate.toFixed(1)}% conversion`}
+                            onClick={() => setDrillDownData({ 
+                                title: "Won Customers", 
+                                leads: filteredLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed') 
+                            })}
+                            helpContent="Total number of leads converted to signed customers (Status is 'Won' or 'Signed')."
+                        />
+                        <StatCard 
+                            title="Stale Leads" 
+                            value={stats.staleLeadsList.length} 
+                            icon={AlertCircle} 
+                            description="No action in 7 business days" 
+                            onClick={() => setDrillDownData({ 
+                                title: "Stale Leads", 
+                                leads: stats.staleLeadsList
+                            })}
+                            helpContent="Inbound leads that have been in an open status (excluding closed, Out of Territory, and Future Follow-up) for more than 56 business hours (7 working days, 9am-5pm Mon-Fri Sydney time) without any manual activities or emails logged."
+                        />
+                        <StatCard 
+                            title="Avg Time to Close" 
+                            value={`${stats.avgTimeToClose.toFixed(1)} d`} 
+                            icon={Clock} 
+                            description="Lead creation to Won" 
+                            helpContent="Average calendar days to turn a lead into a signed customer. Calculated from the lead's entry date to the Service Commencement Form (SCF) acceptance date or Sign-off Form (SOF) signature date."
+                        />
+                        <StatCard 
+                            title="Avg Response Time" 
+                            value={`${stats.avgResponseTime.toFixed(1)} h`} 
+                            icon={User} 
+                            description="Time to first action" 
+                            onClick={() => setDrillDownData({ 
+                                title: "Avg Response Time Leads", 
+                                leads: filteredLeads.filter(lead => {
+                                    const entered = parseDateString(lead.dateLeadEntered);
+                                    if (!entered || !isValid(entered)) return false;
+                                    
+                                    let activityDates: Date[] = [];
+                                    const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+                                    if (leadActivities.length > 0) {
+                                        activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
+                                    }
+                                    if (lead.emails && lead.emails.length > 0) {
+                                        const manualEmails = lead.emails.filter(e => isManualEmail(e));
+                                        activityDates = activityDates.concat(manualEmails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
+                                    }
+                                    
+                                    if (activityDates.length > 0) {
+                                        activityDates.sort((a, b) => a.getTime() - b.getTime());
+                                        const firstAction = activityDates[0];
+                                        return firstAction.getTime() >= entered.getTime();
+                                    }
+                                    return false;
+                                })
+                            })}
+                            helpContent="Average hours to perform the first manual action (activity or email) on a lead, calculated using Sydney business hours (9:00 AM - 5:00 PM, Mon-Fri, excluding weekends)."
+                        />
+                        <StatCard 
+                            title="Quote Sent" 
+                            value={stats.totalQuotedCount} 
+                            icon={Quote} 
+                            description="Total quotes dispatched" 
+                            onClick={() => setDrillDownData({ 
+                                title: "Quote Sent Leads", 
+                                leads: stats.allQuotedLeads 
+                            })}
+                            helpContent="Leads that have received a quote or proposal."
+                        />
+                        <StatCard 
+                            title="Quote Conversion Rate" 
+                            value={`${stats.quoteToWonConversionRate.toFixed(1)}%`} 
+                            icon={Percent} 
+                            description="Quoted → Won Rate" 
+                            onClick={() => setDrillDownData({ 
+                                title: "Quoted Won Customers", 
+                                leads: stats.allQuotedLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.status === 'Won' || (l.status as string) === 'Signed') 
+                            })}
+                            helpContent="Percentage of quoted leads that converted to Won Customers." 
+                        />
+                        <StatCard title="Conversion Rate" value={`${stats.conversionRate.toFixed(1)}%`} icon={TrendingUp} description="Won / Total" helpContent="Percentage of total inbound leads that converted to Won Customers. Calculated as: (Won Customers / Total Inbound) × 100." />
+                        <StatCard title="Hot Leads Rate" value={`${stats.hotLeadsRate.toFixed(1)}%`} icon={Percent} description="Hot Leads / Total" helpContent="Percentage of total inbound leads categorized as Hot Leads. Calculated as: (Hot Leads / Total Inbound) × 100." />
+                        <StatCard 
+                            title="LocalMile Trials" 
+                            value={stats.localmileJourney.leads.filter(isActiveLocalMileLead).length} 
+                            icon={Zap} 
+                            description="Active LocalMile trials" 
+                            onClick={() => setDrillDownData({ 
+                                title: "LocalMile Trial Leads", 
+                                leads: stats.localmileJourney.leads.filter(isActiveLocalMileLead) 
+                            })}
+                            helpContent="Total inbound leads currently in active LocalMile trial statuses (LocalMile Opportunity, LocalMile Pending, Trialing LocalMile)."
+                        />
+                        <StatCard 
+                            title="ShipMate Trials" 
+                            value={stats.shipmateJourney.total} 
+                            icon={Package} 
+                            description="Active / Total ShipMate trials" 
+                            onClick={() => setDrillDownData({ 
+                                title: "ShipMate Trial Leads", 
+                                leads: stats.shipmateJourney.leads.filter(l => !isLostLead(l)) 
+                            })}
+                            helpContent="Total inbound leads that started a ShipMate trial in this period."
+                        />
+                        <StatCard 
+                            title="Out of Territory" 
+                            value={stats.outOfTerritoryData.totalLeads.length} 
+                            icon={MapPin} 
+                            description={`${stats.outOfTerritoryData.directLeads.length} direct, ${stats.outOfTerritoryData.lostLeads.length} lost`}
+                            onClick={() => setDrillDownData({ 
+                                title: "Out of Territory Leads (All)", 
+                                leads: stats.outOfTerritoryData.totalLeads 
+                            })}
+                            helpContent="Inbound leads that are out of territory, including direct 'Out of Territory' status and leads marked Lost with reason 'Out of Territory'."
+                        />
+                    </div>
+                )}
             </div>
             )}
 
@@ -4699,6 +5042,182 @@ export default function InboundReportsClientPage({
                                     <div className="text-sm text-muted-foreground italic">No visual data available.</div>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card id="step-quote-conversion-performance" className="w-full shadow-md border-cyan-500/20">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <Quote className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+                                <span>Quote Sent &amp; Proposal Conversion Performance</span>
+                                <SectionHelp content="Tracks the conversion efficiency of leads that received quotes/proposals, measuring the Quote-to-Won conversion rate, average time to quote, and team-wide quote outcomes." />
+                            </CardTitle>
+                            <CardDescription>
+                                Analyze how effectively quotes and proposals convert into signed customers across account managers.
+                            </CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => handleExportData(stats.quoteAmPerformanceData, 'quote_sent_performance')}>
+                            <Download className="h-4 w-4 mr-2" /> Export
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Card 
+                            className="bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
+                            onClick={() => setDrillDownData({ 
+                                title: "All Quotes Sent Leads", 
+                                leads: stats.allQuotedLeads 
+                            })}
+                        >
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Quotes Sent</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">
+                                    {stats.totalQuotedCount}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">Leads given a formal quote ({stats.quoteSentRate.toFixed(1)}% of inbound)</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card 
+                            className="bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
+                            onClick={() => setDrillDownData({ 
+                                title: "Quoted Won Customers", 
+                                leads: stats.allQuotedLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.status === 'Won' || (l.status as string) === 'Signed')
+                            })}
+                        >
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Quote-to-Won Conversion</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                                    {stats.quoteToWonConversionRate.toFixed(1)}%
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">{stats.quotedWonCount} won from {stats.totalQuotedCount} quoted leads</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card 
+                            className="bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
+                            onClick={() => setDrillDownData({ 
+                                title: "Quoted Pending Decision", 
+                                leads: stats.allQuotedLeads.filter(l => !isSignedLead(l) && !isLostLead(l))
+                            })}
+                        >
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Awaiting Decision</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-sky-600 dark:text-sky-400">
+                                    {stats.quotedPendingCount}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">Currently open in Quote Sent status</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="bg-muted/20">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Avg Time to Quote</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                                    {stats.avgDaysToQuote.toFixed(1)} days
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">Lead entry to Quote Sent date</p>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t">
+                        <div>
+                            <h4 className="text-sm font-semibold mb-1">Quote Disposition Breakdown</h4>
+                            <p className="text-xs text-muted-foreground mb-4">
+                                Current outcomes of all leads that received a quote or proposal.
+                            </p>
+                            <div className="h-[260px] w-full flex items-center justify-center border rounded-lg bg-muted/5 p-4">
+                                {stats.quoteDispositionData.length > 0 ? (
+                                    <ChartContainer config={{}} className="h-full w-full">
+                                        <PieChart>
+                                            <Pie 
+                                                data={stats.quoteDispositionData} 
+                                                cx="50%" 
+                                                cy="50%" 
+                                                innerRadius={55} 
+                                                outerRadius={85} 
+                                                paddingAngle={4} 
+                                                dataKey="value"
+                                                label={({ name, percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
+                                            >
+                                                {stats.quoteDispositionData.map((entry, index) => (
+                                                    <Cell key={`cell-quote-${index}`} fill={entry.fill} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip />
+                                            <Legend />
+                                        </PieChart>
+                                    </ChartContainer>
+                                ) : (
+                                    <div className="text-sm text-muted-foreground italic">No quoted leads found for this period.</div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 className="text-sm font-semibold mb-1">Account Manager Quote Conversion</h4>
+                            <p className="text-xs text-muted-foreground mb-4">
+                                Quote performance and conversion rate breakdown by assigned Account Manager. Click any row to view leads.
+                            </p>
+                            <ScrollArea className="h-[260px] border rounded-lg p-2">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Account Manager</TableHead>
+                                            <TableHead className="text-right">Quotes Sent</TableHead>
+                                            <TableHead className="text-right">Won</TableHead>
+                                            <TableHead className="text-right">Pending</TableHead>
+                                            <TableHead className="text-right">Lost</TableHead>
+                                            <TableHead className="text-right">Quote Conv %</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {stats.quoteAmPerformanceData.length > 0 ? (
+                                            stats.quoteAmPerformanceData.map((am) => (
+                                                <TableRow 
+                                                    key={am.name} 
+                                                    className="cursor-pointer hover:bg-muted/50"
+                                                    onClick={() => setDrillDownData({ 
+                                                        title: `Quotes Sent by ${am.name}`, 
+                                                        leads: am.leads 
+                                                    })}
+                                                >
+                                                    <TableCell className="font-semibold">{am.name}</TableCell>
+                                                    <TableCell className="text-right font-bold text-cyan-600">{am.quotesSent}</TableCell>
+                                                    <TableCell className="text-right text-emerald-600 font-medium">{am.quotedWon}</TableCell>
+                                                    <TableCell className="text-right text-sky-600 font-medium">{am.quotedPending}</TableCell>
+                                                    <TableCell className="text-right text-rose-500 font-medium">{am.quotedLost}</TableCell>
+                                                    <TableCell className="text-right font-bold">
+                                                        <Badge variant={am.quoteConversionRate >= 30 ? "default" : "outline"} className={am.quoteConversionRate >= 30 ? "bg-emerald-600" : ""}>
+                                                            {am.quoteConversionRate.toFixed(1)}%
+                                                        </Badge>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                                    No Account Manager quote data available for this period.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </ScrollArea>
                         </div>
                     </div>
                 </CardContent>

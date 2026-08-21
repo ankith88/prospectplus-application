@@ -591,7 +591,10 @@ export function UserManagementTable() {
       const lowerSearch = searchTerm.toLowerCase();
       result = result.filter(u => 
         (u.displayName || '').toLowerCase().includes(lowerSearch) || 
-        u.email.toLowerCase().includes(lowerSearch)
+        (u.email || '').toLowerCase().includes(lowerSearch) ||
+        (u.role || '').toLowerCase().includes(lowerSearch) ||
+        (u.defaultRole || '').toLowerCase().includes(lowerSearch) ||
+        (u.franchisee || '').toLowerCase().includes(lowerSearch)
       );
     }
 
