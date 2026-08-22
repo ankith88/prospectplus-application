@@ -695,6 +695,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewCustomerSuccessOnboarding = canView('customerSuccessOnboarding') || user?.uid === 'Uh71ctLejpg8dietKngBQwnqivI2';
   const canViewScans = canView('scans');
   const canViewCancellationReporting = canView('cancellationReporting') || isSuperAdmin || ['admin', 'superadmin', 'marketing manager', 'customer success', 'customer service'].includes(activeRoleLower);
+  const canViewPostHogReporting = canView('posthogReporting') || isSuperAdmin || ['admin', 'superadmin', 'marketing manager', 'marketing_manager'].includes(activeRoleLower);
   const canViewTickets = canView('tickets');
   const canViewLpoLeads = canView('lpoLeads');
   const canAccessAsk = !!userProfile?.uid && ALLOWED_ASK_UIDS.includes(userProfile.uid);
@@ -1971,6 +1972,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                               <Link href="/inbound-reporting">
                                 <Inbox />
                                 <span>Inbound Reporting</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewPostHogReporting && !isFranchiseeRole && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/marketing-analytics")} tooltip="PostHog & Campaign Analytics">
+                              <Link href="/marketing-analytics">
+                                <BarChart2 />
+                                <span>PostHog Analytics</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>

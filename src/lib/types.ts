@@ -23,6 +23,11 @@ export interface InboundDetails {
   utmCampaign?: string;
   utmContent?: string;
   utmTerm?: string;
+  adClickId?: string;
+  channel?: string;
+  posthogDistinctId?: string;
+  posthogSessionId?: string;
+  posthogSessionUrl?: string;
   submittedAt: string; // ISO date string
   referrer?: string;
   landingPage?: string;
@@ -645,6 +650,9 @@ export interface Lead {
   attemptCount?: number;
   totalCalls?: number;
   inboundDetails?: InboundDetails;
+  attribution?: Record<string, any>;
+  marketingChannel?: string;
+  posthogSessionUrl?: string;
   isDuplicate?: boolean;
   ignoreDuplicateWarning?: boolean;
   similarLeads?: string[];
@@ -1347,6 +1355,117 @@ export interface DepositDetails {
   documents?: ProspectDocument[];
 }
 
+export interface RequestForDocsData {
+  publicToken: string;
+  status: 'draft' | 'sent' | 'instructed' | 'completed';
+  sentAt?: string;
+  instructedAt?: string;
+  instructedBy?: string;
+  outgoingFranchiseeName?: string;
+  disputeDetails?: string;
+  withheldConsent?: boolean;
+  incomingEntityName?: string;
+  abn?: string;
+  registeredAddress?: string;
+  email?: string;
+  mobile?: string;
+  isSoleTrader?: boolean;
+  guarantors?: Array<{ name: string; address: string; email: string; phone: string }>;
+  manager?: { name: string; address: string; email: string; phone: string };
+  outgoingLawyer?: string;
+  outgoingAccountant?: string;
+  incomingLawyer?: string;
+  incomingAccountant?: string;
+  businessName?: string;
+  territoryName?: string;
+  territoryMapUrl?: string;
+  termYears?: number;
+  commencementDate?: string;
+  expiryDate?: string;
+  fees?: {
+    deposit?: number;
+    initialFranchiseFee?: number;
+    renewalFee?: number;
+    transferFee?: number;
+    transactionFee?: number;
+    serviceFeePercent?: number;
+    marketingLevyPercent?: number;
+    techLicenceFee?: number;
+    coolOffRetained?: number;
+  };
+  earningsProvided?: boolean;
+  mpFinancingProvided?: boolean;
+  capitalExpenditure?: {
+    vehicleRange?: string;
+    toolsOfTrade?: string;
+  };
+  specialConditions?: string;
+  reviewedByMatt?: boolean;
+  reviewedByMattAt?: string;
+  chasedByMaddie?: boolean;
+  chasedByMaddieAt?: string;
+}
+
+export interface DisclosureDocumentData {
+  publicToken: string;
+  status: 'not_started' | 'dispatched' | 'receipt_signed' | 'completed';
+  dispatchMethod: 'electronic' | 'postal';
+  dispatchedAt?: string;
+  receiptSignedAt?: string;
+  receiptBackdated?: boolean;
+  receiptUploadedAt?: string;
+  receiptPdfUrl?: string;
+  signerName?: string;
+  signerEmail?: string;
+  signerIp?: string;
+  earliestFranchiseAgreementExecutionDate?: string; // receiptSignedAt + 14 days
+}
+
+export interface FranchiseAgreementData {
+  publicToken: string;
+  status: 'locked' | 'available' | 'signed_online' | 'wet_signed_uploaded' | 'completed';
+  earliestExecutionDate?: string;
+  executedAt?: string;
+  signedPdfUrl?: string;
+  executionType?: 'digital' | 'wet_ink';
+  netSuiteSyncStatus?: 'auto_synced' | 'manual_pending' | 'uploaded';
+  signerName?: string;
+  signerEmail?: string;
+  signerIp?: string;
+  signatureDataUrl?: string;
+}
+
+export interface NABFundingDetails {
+  accreditationFundingRequired: boolean;
+  nabStatus: 'not_required' | 'pending_michael_confirmation' | 'confirmed' | 'rejected';
+  nabConfirmedBy?: string;
+  nabConfirmedAt?: string;
+  nabNotes?: string;
+}
+
+export interface OperationalTrainingSchedule {
+  confirmedStartDate?: string;
+  salesTraining?: {
+    trainer: 'Aleyna';
+    scheduledDate?: string;
+    status: 'pending' | 'scheduled' | 'completed';
+    alertsSent?: boolean;
+  };
+  appPustraining?: {
+    trainer: 'Operational Lead';
+    scheduledDate?: string;
+    status: 'pending' | 'scheduled' | 'completed';
+    alertsSent?: boolean;
+  };
+  billingTraining?: {
+    trainer: 'Popie';
+    scheduledDate?: string;
+    status: 'pending' | 'scheduled' | 'completed';
+    alertsSent?: boolean;
+  };
+  gregCalendarSynced?: boolean;
+}
+
 export interface FranchiseProspect {
   id: string;
   firstName: string;
@@ -1362,7 +1481,23 @@ export interface FranchiseProspect {
   experience?: string;
   employment?: string;
   message?: string;
-  status: 'New' | 'Contacted' | 'Under Review' | 'EOI Signed' | 'Converted' | 'Rejected' | 'Archived';
+  status:
+    | 'New'
+    | 'Deed Signed'
+    | 'IM Sent'
+    | 'Contacted'
+    | 'Under Review'
+    | 'EOI Signed'
+    | 'Deposit Paid'
+    | 'NAB Pending'
+    | 'NAB Confirmed'
+    | 'Legal Instructions Sent'
+    | 'Disclosure 14-Day Lock'
+    | 'FA Executed'
+    | 'Training Scheduled'
+    | 'Converted'
+    | 'Rejected'
+    | 'Archived';
   brochureSent?: boolean;
   brochureSentAt?: string;
   emailLogs?: ProspectEmailLog[];
@@ -1378,11 +1513,16 @@ export interface FranchiseProspect {
   convertedUserId?: string;
   convertedFranchiseeId?: string;
 
-  // New Step-by-Step Prospect Pipeline Fields
+  // Step-by-Step Prospect Pipeline Fields
   keyFactSheet?: KeyFactSheetData;
   confidentialityDeed?: ConfidentialityDeedData;
   eoiData?: EOIData;
   depositDetails?: DepositDetails;
+  requestForDocs?: RequestForDocsData;
+  disclosureDocument?: DisclosureDocumentData;
+  franchiseAgreement?: FranchiseAgreementData;
+  nabFunding?: NABFundingDetails;
+  trainingSchedule?: OperationalTrainingSchedule;
 }
 
 export interface Operator {

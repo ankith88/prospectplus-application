@@ -2175,7 +2175,9 @@ export default function ReportsClientPage({
                 if (!act.notes) return null;
                 const match = act.notes.match(/Status changed to ([^(]+)/);
                 const actDate = parseDateString(act.date);
-                return match && match[1] && actDate ? { status: match[1].trim(), date: actDate } : null;
+                if (!match || !match[1] || !actDate) return null;
+                const cleanStatus = match[1].replace(/\s+via\s+.*$/i, '').trim();
+                return { status: cleanStatus, date: actDate };
             })
             .filter((a): a is { status: string; date: Date } => a !== null)
             .sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -2223,7 +2225,9 @@ export default function ReportsClientPage({
         }))
         .filter(item => {
             const normalized = item.name.toLowerCase();
-            return normalized !== 'lost' && !normalized.includes('out of territory');
+            const isLost = normalized.includes('lost') || normalized.includes('unqualified') || normalized.includes('brush off') || normalized.includes('out of territory');
+            const isWonSigned = normalized.includes('won') || normalized.includes('signed');
+            return !isLost && !isWonSigned;
         })
         .sort((a, b) => b.value - a.value);
 

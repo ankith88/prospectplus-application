@@ -49,8 +49,15 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, endOfDay, isValid, isWithinInterval, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWeekend } from 'date-fns';
+import { format, startOfDay, endOfDay, isValid, isWithinInterval, subDays, subWeeks, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWeekend } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
+
+const getLastAndThisWeekRange = (): DateRange => {
+  const today = new Date();
+  const startOfLastWeek = subWeeks(startOfWeek(today, { weekStartsOn: 1 }), 1);
+  const endOfThisWeek = endOfWeek(today, { weekStartsOn: 1 });
+  return { from: startOfLastWeek, to: endOfThisWeek };
+};
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -385,7 +392,7 @@ export default function InboundReportsClientPage({
   
   const [filters, setFilters] = useState({
     customerStatus: [] as string[],
-    dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    dateEntered: getLastAndThisWeekRange() as DateRange | undefined,
     accountManagerAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
@@ -393,7 +400,7 @@ export default function InboundReportsClientPage({
   });
   const [appliedFilters, setAppliedFilters] = useState({
     customerStatus: [] as string[],
-    dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    dateEntered: getLastAndThisWeekRange() as DateRange | undefined,
     accountManagerAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
@@ -412,7 +419,7 @@ export default function InboundReportsClientPage({
       }));
     }
   }, [externalDateRange]);
-  const [datePreset, setDatePreset] = useState<string>("this_month");
+  const [datePreset, setDatePreset] = useState<string>("last_and_this_week");
 
   const hasUnappliedFilters = useMemo(() => {
     return JSON.stringify(filters.customerStatus) !== JSON.stringify(appliedFilters.customerStatus) ||
@@ -651,6 +658,11 @@ export default function InboundReportsClientPage({
     let to: Date | undefined;
 
     switch (preset) {
+      case 'last_and_this_week':
+        const lastAndThisWeek = getLastAndThisWeekRange();
+        from = lastAndThisWeek.from;
+        to = lastAndThisWeek.to;
+        break;
       case 'today':
         from = startOfDay(today);
         to = endOfDay(today);
@@ -690,10 +702,10 @@ export default function InboundReportsClientPage({
   };
 
   const clearFilters = () => {
-    setDatePreset('this_month');
+    setDatePreset('last_and_this_week');
     const defaultFilters = {
       customerStatus: [],
-      dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
+      dateEntered: getLastAndThisWeekRange(),
       accountManagerAssigned: [],
       source: [],
       franchisee: [],
@@ -1434,7 +1446,9 @@ export default function InboundReportsClientPage({
             .map(act => {
                 if (!act.notes) return null;
                 const match = act.notes.match(/Status changed to ([^(]+)/);
-                return match && match[1] ? { status: match[1].trim(), date: act.date } : null;
+                if (!match || !match[1]) return null;
+                const cleanStatus = match[1].replace(/\s+via\s+.*$/i, '').trim();
+                return { status: cleanStatus, date: act.date };
             })
             .filter((a): a is { status: string; date: Date } => a !== null)
             .sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -1488,7 +1502,9 @@ export default function InboundReportsClientPage({
         }))
         .filter(item => {
             const normalized = item.name.toLowerCase();
-            return normalized !== 'lost' && !normalized.includes('out of territory');
+            const isLost = normalized.includes('lost') || normalized.includes('unqualified') || normalized.includes('brush off') || normalized.includes('out of territory');
+            const isWonSigned = normalized.includes('won') || normalized.includes('signed');
+            return !isLost && !isWonSigned;
         })
         .sort((a, b) => b.value - a.value);
 
@@ -2133,7 +2149,7 @@ export default function InboundReportsClientPage({
     }> = {};
 
     filteredLeads.forEach(lead => {
-        const rawUrl = lead.inboundPageUrl || lead.inboundDetails?.landingPage || lead.pageURL || lead.customerSource || 'Direct / Form';
+        const rawUrl = lead.inboundPageUrl || lead.inboundDetails?.landingPage || lead.pageURL || (lead as any).pageUrl || (lead as any).sourcePageUrl || 'Direct / Form';
         let cleanUrl = (rawUrl || 'Direct / Form').trim();
         
         let displayUrl = cleanUrl;
@@ -2643,9 +2659,10 @@ export default function InboundReportsClientPage({
                                 <SelectValue placeholder="Select preset" />
                             </SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="last_and_this_week">Last & Current Week</SelectItem>
+                                <SelectItem value="this_week">This Week</SelectItem>
                                 <SelectItem value="today">Today</SelectItem>
                                 <SelectItem value="yesterday">Yesterday</SelectItem>
-                                <SelectItem value="this_week">This Week</SelectItem>
                                 <SelectItem value="this_month">This Month</SelectItem>
                                 <SelectItem value="last_month">Last Month</SelectItem>
                                 <SelectItem value="all_time">All Time</SelectItem>
@@ -5197,6 +5214,18 @@ export default function InboundReportsClientPage({
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
                                 <Badge variant="outline" className="text-md">{stats.shipmateJourney.trialing}</Badge>
                             </div>
+                            {stats.shipmateJourney.other > 0 && (
+                                <div 
+                                    className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "ShipMate Trials (In General Pipeline)", 
+                                        leads: stats.shipmateJourney.leads.filter(l => !isSignedLead(l) && !isLostLead(l) && !['Trialing ShipMate', 'Free Trial'].includes(l.customerStatus || '')) 
+                                    })}
+                                >
+                                    <span className="text-sm font-medium text-muted-foreground">In General Pipeline</span>
+                                    <Badge variant="secondary" className="text-md">{stats.shipmateJourney.other}</Badge>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -5251,6 +5280,18 @@ export default function InboundReportsClientPage({
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
                                 <Badge variant="outline" className="text-md">{stats.localmileJourney.trialing}</Badge>
                             </div>
+                            {stats.localmileJourney.other > 0 && (
+                                <div 
+                                    className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "LocalMile Trials (In General Pipeline)", 
+                                        leads: stats.localmileJourney.leads.filter(l => !isSignedLead(l) && !isLostLead(l) && !isActiveLocalMileLead(l)) 
+                                    })}
+                                >
+                                    <span className="text-sm font-medium text-muted-foreground">In General Pipeline</span>
+                                    <Badge variant="secondary" className="text-md">{stats.localmileJourney.other}</Badge>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -5305,6 +5346,18 @@ export default function InboundReportsClientPage({
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
                                 <Badge variant="outline" className="text-md">{stats.combinedJourney.trialing}</Badge>
                             </div>
+                            {stats.combinedJourney.other > 0 && (
+                                <div 
+                                    className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "Total Free Trials (In General Pipeline)", 
+                                        leads: stats.combinedJourney.leads.filter(l => !isSignedLead(l) && !isLostLead(l) && !['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.customerStatus || '')) 
+                                    })}
+                                >
+                                    <span className="text-sm font-medium text-muted-foreground">In General Pipeline</span>
+                                    <Badge variant="secondary" className="text-md">{stats.combinedJourney.other}</Badge>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </CardContent>

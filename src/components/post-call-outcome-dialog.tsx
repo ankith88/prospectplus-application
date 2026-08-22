@@ -34,7 +34,8 @@ import { Loader } from './ui/loader'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail, Building, Lock } from 'lucide-react'
-import { logCallActivity, logActivity, addTaskToLead, updateTaskInLead, updateContactSendEmail, updateContactInLead, updateLeadDetails, logBucketChange } from '@/services/firebase'
+import { logCallActivity, logActivity, addTaskToLead, updateTaskInLead, updateContactSendEmail, updateContactInLead, updateLeadDetails, logBucketChange, isLostLeadStatus, getPendingItemsForLead, resolvePendingItemsForLead } from '@/services/firebase'
+import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy'
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore'
@@ -46,6 +47,7 @@ import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
 import { LossReasonPicker } from '@/components/loss-reason-picker'
 import { isContactEmpty } from '@/lib/contact-utils'
 import { getMergedCancellationHierarchy } from '@/lib/cancellation-reasons-mapper'
+import { REVERSE_OUTCOME_TO_STATUS_MAP } from '@/lib/status-outcome-mapping'
 import { CallAttemptBadge } from './call-attempt-badge'
 import { triggerVictoryConfetti } from '@/lib/confetti'
 import { getPmpoServiceForLead, isDialerUser } from '@/lib/localmile-utils'
@@ -224,6 +226,11 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
   const [uniqueEmails, setUniqueEmails] = useState<{email: string, label: string, name: string}[]>([]);
   const [uniquePhones, setUniquePhones] = useState<{phone: string, label: string, name: string}[]>([]);
   const [accountManagerEmail, setAccountManagerEmail] = useState('');
+  const [pendingItemsModalOpen, setPendingItemsModalOpen] = useState(false);
+  const [pendingAppts, setPendingAppts] = useState<any[]>([]);
+  const [pendingTasks, setPendingTasks] = useState<any[]>([]);
+  const [pendingLostStatus, setPendingLostStatus] = useState<string>('Lost');
+  const [pendingOutcomeValues, setPendingOutcomeValues] = useState<z.infer<typeof formSchema> | null>(null);
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
 
@@ -896,6 +903,26 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
         return;
     }
     
+    const mappedStatusObj = REVERSE_OUTCOME_TO_STATUS_MAP[values.outcome];
+    const targetStatus = mappedStatusObj?.status || lead.status;
+    const isTargetLost = isLostOutcome || isLostLeadStatus(targetStatus) || isLostLeadStatus(values.outcome);
+
+    if (isTargetLost && !pendingOutcomeValues) {
+        try {
+            const { pendingAppointments, pendingTasks: tasks } = await getPendingItemsForLead(lead.id, lead);
+            if (pendingAppointments.length > 0 || tasks.length > 0) {
+                setPendingAppts(pendingAppointments);
+                setPendingTasks(tasks);
+                setPendingLostStatus(targetStatus || 'Lost');
+                setPendingOutcomeValues(values);
+                setPendingItemsModalOpen(true);
+                return;
+            }
+        } catch (e) {
+            console.error('Error checking pending items for lost lead:', e);
+        }
+    }
+
     setFirebaseDuration(null);
     setSubmissionState('saving_outcome');
 
@@ -1319,6 +1346,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
   }
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(open) => {
         if (!open) resetAndClose();
     }}>
@@ -2487,6 +2515,28 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
         )}
       </DialogContent>
     </Dialog>
+
+    <ResolvePendingItemsModal
+      isOpen={pendingItemsModalOpen}
+      onClose={() => {
+        setPendingItemsModalOpen(false);
+        setPendingOutcomeValues(null);
+      }}
+      leadName={lead.companyName || 'Lead'}
+      targetStatus={pendingLostStatus}
+      pendingAppointments={pendingAppts}
+      pendingTasks={pendingTasks}
+      onConfirm={async (apptResolutions, taskResolutions) => {
+        const author = user?.displayName || 'Unknown';
+        await resolvePendingItemsForLead(lead.id, apptResolutions, taskResolutions, author);
+        setPendingItemsModalOpen(false);
+        if (pendingOutcomeValues) {
+          const vals = pendingOutcomeValues;
+          onSubmit(vals);
+        }
+      }}
+    />
+    </>
   )
 }
 

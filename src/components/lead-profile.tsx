@@ -86,7 +86,8 @@ import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Ap
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskInLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskInLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices, isLostLeadStatus, getPendingItemsForLead, resolvePendingItemsForLead } from '@/services/firebase'
+import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal'
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName } from '@/lib/duplicate-detector'
 import { isMultiSiteBucket } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
@@ -362,6 +363,34 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [localMileJobs, setLocalMileJobs] = useState<any[]>([]);
     const [isRecreditingId, setIsRecreditingId] = useState<string | null>(null);
     const [isPushingLpoPlus, setIsPushingLpoPlus] = useState(false);
+    const [pendingItemsModalOpen, setPendingItemsModalOpen] = useState(false);
+    const [pendingAppts, setPendingAppts] = useState<any[]>([]);
+    const [pendingTasks, setPendingTasks] = useState<any[]>([]);
+    const [pendingLostStatus, setPendingLostStatus] = useState<string>('Lost');
+    const [pendingStatusCallback, setPendingStatusCallback] = useState<(() => Promise<void>) | null>(null);
+
+    const checkAndPromptPendingItemsForLost = async (targetStatus: string, onProceed: () => Promise<void>) => {
+        if (!isLostLeadStatus(targetStatus)) {
+            await onProceed();
+            return;
+        }
+
+        try {
+            const { pendingAppointments, pendingTasks: tasks } = await getPendingItemsForLead(lead.id, lead);
+            if (pendingAppointments.length > 0 || tasks.length > 0) {
+                setPendingAppts(pendingAppointments);
+                setPendingTasks(tasks);
+                setPendingLostStatus(targetStatus);
+                setPendingStatusCallback(() => onProceed);
+                setPendingItemsModalOpen(true);
+                return;
+            }
+        } catch (e) {
+            console.error('Error checking pending items for lost status:', e);
+        }
+
+        await onProceed();
+    };
 
 
     const handleToggleLpoPlus = async () => {
@@ -6056,6 +6085,55 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </div>
                         </div>
 
+                        {/* Marketing Campaign & Social Ad Attribution */}
+                        <div className="p-4 bg-muted/20 rounded-lg border border-primary/10 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Marketing & Social Ad Attribution</h4>
+                                    <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                                        {lead.inboundDetails?.channel || lead.marketingChannel || lead.attribution?.channel || 'Direct / Organic'}
+                                    </Badge>
+                                </div>
+                                {(lead.inboundDetails?.posthogSessionUrl || lead.posthogSessionUrl || lead.attribution?.posthogSessionUrl) && (
+                                    <a
+                                        href={lead.inboundDetails?.posthogSessionUrl || lead.posthogSessionUrl || lead.attribution?.posthogSessionUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 bg-purple-50 px-2.5 py-1 rounded border border-purple-200 transition-colors"
+                                    >
+                                        🎥 Watch PostHog Replay
+                                    </a>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                <div>
+                                    <span className="text-muted-foreground block text-[10px]">Campaign Name</span>
+                                    <span className="font-semibold text-foreground truncate block">
+                                        {lead.inboundDetails?.utmCampaign || lead.attribution?.utmCampaign || lead.campaign || 'N/A'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground block text-[10px]">Source / Medium</span>
+                                    <span className="font-semibold text-foreground truncate block">
+                                        {lead.inboundDetails?.utmSource || lead.attribution?.utmSource || 'N/A'} / {lead.inboundDetails?.utmMedium || lead.attribution?.utmMedium || 'N/A'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground block text-[10px]">Ad Creative / Variant</span>
+                                    <span className="font-semibold text-foreground truncate block">
+                                        {lead.inboundDetails?.utmContent || lead.attribution?.utmContent || 'N/A'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground block text-[10px]">Ad Click ID</span>
+                                    <span className="font-mono text-[11px] text-muted-foreground truncate block" title={lead.inboundDetails?.adClickId || lead.attribution?.adClickId || 'N/A'}>
+                                        {lead.inboundDetails?.adClickId || lead.attribution?.adClickId || 'N/A'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
                         {lead.discoveryData ? (
                             <div className="space-y-6 pt-4 border-t">
                                 <div className="flex items-center justify-between">
@@ -9071,6 +9149,27 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       lead={lead}
       onSuccess={() => {
         toast({ title: "Success", description: "Onboarding request submitted successfully." });
+      }}
+    />
+    <ResolvePendingItemsModal
+      isOpen={pendingItemsModalOpen}
+      onClose={() => {
+        setPendingItemsModalOpen(false);
+        setPendingStatusCallback(null);
+      }}
+      leadName={lead.companyName || 'Lead'}
+      targetStatus={pendingLostStatus}
+      pendingAppointments={pendingAppts}
+      pendingTasks={pendingTasks}
+      onConfirm={async (apptResolutions, taskResolutions) => {
+        const author = user?.displayName || user?.email || 'System';
+        await resolvePendingItemsForLead(lead.id, apptResolutions, taskResolutions, author);
+        setPendingItemsModalOpen(false);
+        if (pendingStatusCallback) {
+          const cb = pendingStatusCallback;
+          setPendingStatusCallback(null);
+          await cb();
+        }
       }}
     />
     </>

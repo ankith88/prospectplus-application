@@ -576,12 +576,30 @@ export default function FranchiseProspectsClient() {
     switch (status) {
       case 'New':
         return <Badge className="bg-blue-600 text-white font-medium">New</Badge>;
+      case 'Deed Signed':
+        return <Badge className="bg-purple-600 text-white font-medium">1. Deed Signed</Badge>;
+      case 'IM Sent':
       case 'Contacted':
-        return <Badge className="bg-amber-500 text-white font-medium">Contacted</Badge>;
+        return <Badge className="bg-indigo-600 text-white font-medium">2. IM Sent</Badge>;
+      case 'EOI Signed':
       case 'Under Review':
-        return <Badge className="bg-purple-600 text-white font-medium">Under Review</Badge>;
+        return <Badge className="bg-sky-600 text-white font-medium">3. EOI Signed</Badge>;
+      case 'Deposit Paid':
+        return <Badge className="bg-teal-600 text-white font-medium">4. Deposit Paid</Badge>;
+      case 'NAB Pending':
+        return <Badge className="bg-amber-600 text-white font-medium">5. NAB Pending</Badge>;
+      case 'NAB Confirmed':
+        return <Badge className="bg-emerald-600 text-white font-medium">5. NAB Confirmed</Badge>;
+      case 'Legal Instructions Sent':
+        return <Badge className="bg-cyan-600 text-white font-medium">6. Legal Docs Sent</Badge>;
+      case 'Disclosure 14-Day Lock':
+        return <Badge className="bg-rose-600 text-white font-medium">7. 14d Lock Active</Badge>;
+      case 'FA Executed':
+        return <Badge className="bg-emerald-700 text-white font-medium">8. FA Executed</Badge>;
+      case 'Training Scheduled':
+        return <Badge className="bg-teal-700 text-white font-medium">9. Training Scheduled</Badge>;
       case 'Converted':
-        return <Badge className="bg-emerald-600 text-white font-medium">Converted</Badge>;
+        return <Badge className="bg-emerald-800 text-white font-bold">Converted</Badge>;
       case 'Rejected':
         return <Badge variant="destructive">Rejected</Badge>;
       case 'Archived':
@@ -676,8 +694,16 @@ export default function FranchiseProspectsClient() {
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="New">New</SelectItem>
-                <SelectItem value="Contacted">Contacted</SelectItem>
-                <SelectItem value="Under Review">Under Review</SelectItem>
+                <SelectItem value="Deed Signed">Step 1: Deed Signed</SelectItem>
+                <SelectItem value="IM Sent">Step 2: IM Sent</SelectItem>
+                <SelectItem value="EOI Signed">Step 3: EOI Signed</SelectItem>
+                <SelectItem value="Deposit Paid">Step 4: Deposit Paid</SelectItem>
+                <SelectItem value="NAB Pending">Step 5: NAB Pending</SelectItem>
+                <SelectItem value="NAB Confirmed">Step 5: NAB Confirmed</SelectItem>
+                <SelectItem value="Legal Instructions Sent">Step 6: Legal Docs Sent</SelectItem>
+                <SelectItem value="Disclosure 14-Day Lock">Step 7: 14d Lock Active</SelectItem>
+                <SelectItem value="FA Executed">Step 8: FA Executed</SelectItem>
+                <SelectItem value="Training Scheduled">Step 9: Training Scheduled</SelectItem>
                 <SelectItem value="Converted">Converted</SelectItem>
                 <SelectItem value="Rejected">Rejected</SelectItem>
                 <SelectItem value="Archived">Archived</SelectItem>
@@ -844,6 +870,68 @@ export default function FranchiseProspectsClient() {
                           }`}
                         >
                           4. Deposit {depositDone ? `(${prospect.depositDetails?.percentageDeposited || 5}%) ✓` : ''}
+                        </Badge>
+
+                        {/* Step 5 NAB Funding */}
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] py-0.5 px-1.5 ${
+                            prospect.nabFunding?.accreditationFundingRequired
+                              ? prospect.nabFunding?.nabStatus === 'confirmed'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                : 'bg-amber-50 text-amber-800 border-amber-300 font-bold'
+                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                          }`}
+                        >
+                          5. NAB {prospect.nabFunding?.accreditationFundingRequired ? (prospect.nabFunding?.nabStatus === 'confirmed' ? '✓' : 'Pending Michael') : 'N/A'}
+                        </Badge>
+
+                        {/* Step 6 Legal Instructions / Request for Docs */}
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] py-0.5 px-1.5 ${
+                            prospect.requestForDocs?.status === 'instructed'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                              : 'bg-slate-100 text-slate-600 border-slate-300'
+                          }`}
+                        >
+                          6. Docs {prospect.requestForDocs?.status === 'instructed' ? 'Anna Instructed ✓' : 'Draft'}
+                        </Badge>
+
+                        {/* Step 7 Disclosure 14-Day Lock */}
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] py-0.5 px-1.5 ${
+                            prospect.disclosureDocument?.status === 'receipt_signed'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                              : 'bg-slate-100 text-slate-600 border-slate-300'
+                          }`}
+                        >
+                          7. Disclosure {prospect.disclosureDocument?.status === 'receipt_signed' ? 'Receipt Returned (14d Lock Active) ✓' : 'Pending'}
+                        </Badge>
+
+                        {/* Step 8 Franchise Agreement Execution */}
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] py-0.5 px-1.5 ${
+                            prospect.franchiseAgreement?.executedAt
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-bold'
+                              : 'bg-slate-100 text-slate-600 border-slate-300'
+                          }`}
+                        >
+                          8. FA {prospect.franchiseAgreement?.executedAt ? 'Executed ✓' : 'Locked'}
+                        </Badge>
+
+                        {/* Step 9 Operational Training */}
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] py-0.5 px-1.5 ${
+                            prospect.trainingSchedule?.salesTraining?.scheduledDate
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                              : 'bg-slate-100 text-slate-600 border-slate-300'
+                          }`}
+                        >
+                          9. Training {prospect.trainingSchedule?.salesTraining?.scheduledDate ? 'Scheduled ✓' : 'Pending'}
                         </Badge>
                       </div>
                     </TableCell>

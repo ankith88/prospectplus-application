@@ -60,7 +60,7 @@ export function decodePresaleId(tokenOrId: string): string {
   return clean;
 }
 
-export function encodeProspectToken(prefix: 'kfs' | 'cd' | 'eoi', prospectId: string): string {
+export function encodeProspectToken(prefix: 'kfs' | 'cd' | 'eoi' | 'rfd' | 'disc' | 'fa', prospectId: string): string {
   const cleanId = String(prospectId || '').trim();
   if (!cleanId) return '';
   const payload = `mp_${prefix}_v1_${cleanId}`;
@@ -85,7 +85,7 @@ export function decodeProspectToken(token: string): { prefix?: string; prospectI
   if (!token) return { prospectId: '' };
   const clean = String(token).trim();
 
-  const match = clean.match(/^(kfs|cd|eoi)_(.+)$/);
+  const match = clean.match(/^(kfs|cd|eoi|rfd|disc|fa)_(.+)$/);
   if (match) {
     const [, prefix, rawToken] = match;
     try {

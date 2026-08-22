@@ -16,11 +16,12 @@ import { Loader } from '@/components/ui/loader';
 import { LossReasonPicker } from '@/components/loss-reason-picker';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { logActivity } from '@/services/firebase';
+import { logActivity, getPendingItemsForLead, resolvePendingItemsForLead } from '@/services/firebase';
 import { firestore, storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, doc, getDoc, updateDoc, addDoc, getDocs } from 'firebase/firestore';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
+import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal';
 import type { Lead } from '@/lib/types';
 import { Paperclip, ExternalLink, Trash2, Plus } from 'lucide-react';
 
@@ -56,9 +57,14 @@ export function CancelCustomerDialog({
   const [proofAttachments, setProofAttachments] = useState<Array<{ name: string; url: string; size?: number; type?: string; uploadedAt?: string }>>([]);
   const [uploadingProofFile, setUploadingProofFile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingItemsModalOpen, setPendingItemsModalOpen] = useState(false);
+  const [pendingAppts, setPendingAppts] = useState<any[]>([]);
+  const [pendingTasks, setPendingTasks] = useState<any[]>([]);
+  const [pendingConfirmed, setPendingConfirmed] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
+      setPendingConfirmed(false);
       const defaultRequestedBy =
         lead?.contacts?.[0]?.name ||
         (lead as any)?.contactName ||
@@ -173,6 +179,20 @@ export function CancelCustomerDialog({
         description: 'Please select a Theme, Why (Category), and Reason for direct customer cancellation.',
       });
       return;
+    }
+
+    if (isDirectCancel && !pendingConfirmed && lead?.id) {
+      try {
+        const { pendingAppointments, pendingTasks: tasks } = await getPendingItemsForLead(lead.id, lead);
+        if (pendingAppointments.length > 0 || tasks.length > 0) {
+          setPendingAppts(pendingAppointments);
+          setPendingTasks(tasks);
+          setPendingItemsModalOpen(true);
+          return;
+        }
+      } catch (e) {
+        console.error("Error checking pending items for direct cancellation:", e);
+      }
     }
 
     setIsSubmitting(true);
@@ -467,6 +487,7 @@ export function CancelCustomerDialog({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-6 pb-4 border-b border-slate-100 shrink-0">
@@ -636,5 +657,23 @@ export function CancelCustomerDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <ResolvePendingItemsModal
+      isOpen={pendingItemsModalOpen}
+      onClose={() => setPendingItemsModalOpen(false)}
+      leadName={lead?.companyName || 'Customer'}
+      targetStatus="Lost Customer"
+      pendingAppointments={pendingAppts}
+      pendingTasks={pendingTasks}
+      onConfirm={async (apptResolutions, taskResolutions) => {
+        if (!lead?.id) return;
+        const staffName = capturedBy.trim() || userProfile?.displayName || user?.displayName || 'Staff';
+        await resolvePendingItemsForLead(lead.id, apptResolutions, taskResolutions, staffName);
+        setPendingItemsModalOpen(false);
+        setPendingConfirmed(true);
+        await handleConfirmCancellation();
+      }}
+    />
+    </>
   );
 }

@@ -101,8 +101,8 @@ export default function FranchiseProspectDetailClient() {
   const [prospect, setProspect] = useState<FranchiseProspect | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Active Stepper Tab (1 = Fact Sheet, 2 = Deed, 3 = EOI, 4 = Deposit, 5 = Convert)
-  const [activeTab, setActiveTab] = useState<1 | 2 | 3 | 4 | 5>(1);
+  // Active Stepper Tab (1 = Deed, 2 = IM / Fact Sheet, 3 = EOI, 4 = Deposit, 5 = NAB, 6 = Request Docs, 7 = Disclosure, 8 = Agreement, 9 = Training)
+  const [activeTab, setActiveTab] = useState<number>(1);
 
   // Notes state
   const [newNoteText, setNewNoteText] = useState('');
@@ -795,22 +795,46 @@ export default function FranchiseProspectDetailClient() {
       return;
     }
 
-    const kfsDone = Boolean(prospectData.keyFactSheet?.publicToken);
     const deedDone = prospectData.confidentialityDeed?.status === 'signed_online' || prospectData.confidentialityDeed?.status === 'uploaded' || Boolean(prospectData.confidentialityDeed?.documents && prospectData.confidentialityDeed.documents.length > 0);
+    const kfsDone = Boolean(prospectData.keyFactSheet?.publicToken);
     const eoiDone = prospectData.eoiData?.status === 'signed_online' || prospectData.eoiData?.status === 'uploaded' || Boolean(prospectData.eoiData?.documents && prospectData.eoiData.documents.length > 0);
+    const depositDone = Boolean(prospectData.depositDetails?.isPaid) || Boolean(prospectData.depositDetails?.documents && prospectData.depositDetails.documents.length > 0);
+    const nabConfirmed = prospectData.nabFunding?.nabStatus === 'confirmed';
+    const rfdInstructed = prospectData.requestForDocs?.status === 'instructed';
+    const discSigned = prospectData.disclosureDocument?.status === 'receipt_signed';
+    const faExecuted = Boolean(prospectData.franchiseAgreement?.executedAt);
+    const trainingScheduled = Boolean(prospectData.trainingSchedule?.salesTraining?.scheduledDate);
 
     let targetStatus: FranchiseProspect['status'] | null = null;
     let autoNoteReason = '';
 
-    if (eoiDone && prospectData.status !== 'EOI Signed') {
+    if (trainingScheduled && prospectData.status !== 'Training Scheduled') {
+      targetStatus = 'Training Scheduled';
+      autoNoteReason = 'Operational training module scheduled.';
+    } else if (faExecuted && prospectData.status !== 'FA Executed') {
+      targetStatus = 'FA Executed';
+      autoNoteReason = 'Franchise Agreement executed & archived.';
+    } else if (discSigned && prospectData.status !== 'Disclosure 14-Day Lock') {
+      targetStatus = 'Disclosure 14-Day Lock';
+      autoNoteReason = 'Disclosure Receipt signed. Statutory 14-day rule active.';
+    } else if (rfdInstructed && prospectData.status !== 'Legal Instructions Sent') {
+      targetStatus = 'Legal Instructions Sent';
+      autoNoteReason = 'Request for Docs legal instructions dispatched to Lawyer Anna Trist.';
+    } else if (nabConfirmed && prospectData.status !== 'NAB Confirmed') {
+      targetStatus = 'NAB Confirmed';
+      autoNoteReason = 'Formal NAB accreditation funding confirmed by Michael McDaid.';
+    } else if (depositDone && prospectData.status !== 'Deposit Paid') {
+      targetStatus = 'Deposit Paid';
+      autoNoteReason = '5-10% Franchise deposit payment verified.';
+    } else if (eoiDone && prospectData.status !== 'EOI Signed') {
       targetStatus = 'EOI Signed';
-      autoNoteReason = 'Expression of Interest (EOI) signed/completed.';
-    } else if (deedDone && ['New', 'Contacted'].includes(prospectData.status)) {
-      targetStatus = 'Under Review';
-      autoNoteReason = 'Confidentiality Deed completed/uploaded.';
-    } else if (kfsDone && prospectData.status === 'New') {
-      targetStatus = 'Contacted';
-      autoNoteReason = 'Key Fact Sheet prefilled/generated.';
+      autoNoteReason = 'Expression of Interest (EOI) application form completed.';
+    } else if (kfsDone && (prospectData.status === 'Deed Signed' || prospectData.status === 'New')) {
+      targetStatus = 'IM Sent';
+      autoNoteReason = 'Information Memorandum (IM) / Key Fact Sheet sent.';
+    } else if (deedDone && prospectData.status === 'New') {
+      targetStatus = 'Deed Signed';
+      autoNoteReason = 'Initial Confidentiality Deed executed.';
     }
 
     if (targetStatus && targetStatus !== prospectData.status) {
@@ -1083,16 +1107,20 @@ export default function FranchiseProspectDetailClient() {
         }));
 
         // Automatically set initial active tab based on candidate progress
-        const kfsDone = Boolean(data.keyFactSheet?.publicToken);
         const deedDone = data.confidentialityDeed?.status === 'signed_online' || data.confidentialityDeed?.status === 'uploaded' || Boolean(data.confidentialityDeed?.documents && data.confidentialityDeed.documents.length > 0);
+        const kfsDone = Boolean(data.keyFactSheet?.publicToken);
         const eoiDone = data.eoiData?.status === 'signed_online' || data.eoiData?.status === 'uploaded' || Boolean(data.eoiData?.documents && data.eoiData.documents.length > 0);
         const depositDone = Boolean(data.depositDetails?.isPaid) || Boolean(data.depositDetails?.documents && data.depositDetails.documents.length > 0);
 
-        if (!kfsDone) setActiveTab(1);
-        else if (!deedDone) setActiveTab(2);
+        if (!deedDone) setActiveTab(1);
+        else if (!kfsDone) setActiveTab(2);
         else if (!eoiDone) setActiveTab(3);
         else if (!depositDone) setActiveTab(4);
-        else setActiveTab(5);
+        else if (data.nabFunding?.accreditationFundingRequired && data.nabFunding?.nabStatus !== 'confirmed') setActiveTab(5);
+        else if (data.requestForDocs?.status !== 'instructed') setActiveTab(6);
+        else if (data.disclosureDocument?.status !== 'receipt_signed') setActiveTab(7);
+        else if (!data.franchiseAgreement?.executedAt) setActiveTab(8);
+        else setActiveTab(9);
 
         // Check and auto update prospect status based on step completions
         checkAndAutoUpdateStatus(data);
@@ -1138,22 +1166,33 @@ export default function FranchiseProspectDetailClient() {
   }
 
   // Pipeline Completion Flags
-  const kfsDone = Boolean(prospect.keyFactSheet?.publicToken);
   const deedDone = prospect.confidentialityDeed?.status === 'signed_online' || prospect.confidentialityDeed?.status === 'uploaded' || Boolean(prospect.confidentialityDeed?.documents && prospect.confidentialityDeed.documents.length > 0);
+  const kfsDone = Boolean(prospect.keyFactSheet?.publicToken);
   const eoiDone = prospect.eoiData?.status === 'signed_online' || prospect.eoiData?.status === 'uploaded' || Boolean(prospect.eoiData?.documents && prospect.eoiData.documents.length > 0);
   const depositDone = Boolean(prospect.depositDetails?.isPaid) || Boolean(prospect.depositDetails?.documents && prospect.depositDetails.documents.length > 0);
+  const nabDone = !prospect.nabFunding?.accreditationFundingRequired || prospect.nabFunding?.nabStatus === 'confirmed';
+  const rfdDone = prospect.requestForDocs?.status === 'instructed';
+  const discDone = prospect.disclosureDocument?.status === 'receipt_signed';
+  const faDone = Boolean(prospect.franchiseAgreement?.executedAt);
+  const trainingDone = prospect.status === 'Converted' || Boolean(prospect.trainingSchedule?.salesTraining?.scheduledDate);
 
-  const completedCount = [kfsDone, deedDone, eoiDone, depositDone].filter(Boolean).length;
-  const isPrerequisitesComplete = kfsDone && eoiDone && depositDone;
+  const completedCount = [deedDone, kfsDone, eoiDone, depositDone, nabDone, rfdDone, discDone, faDone, trainingDone].filter(Boolean).length;
+  const isPrerequisitesComplete = deedDone && kfsDone && eoiDone && depositDone;
 
   // Determine current stage string for top stage indicator banner
   const getCurrentStageName = () => {
-    if (prospect.status === 'Converted') return 'Step 5: Converted to Franchisee';
-    if (!kfsDone) return 'Step 1: Key Fact Sheet (Pending Prefill & Send)';
-    if (!deedDone) return 'Step 2: Confidentiality Deed (Pending Candidate Signature for Run-Along)';
-    if (!eoiDone) return 'Step 3: Expression of Interest (Pending Candidate Online EOI Form)';
+    if (prospect.status === 'Converted') return 'Step 9: Converted to Franchisee';
+    if (!deedDone) return 'Step 1: Confidentiality Deed (Pending Execution prior to Commercial Disclosure)';
+    if (!kfsDone) return 'Step 2: Information Memorandum (IM) / Key Fact Sheet';
+    if (!eoiDone) return 'Step 3: Expression of Interest (EOI Application Form)';
     if (!depositDone) return 'Step 4: Deposit (Pending 5-10% Deposit Receipt)';
-    return 'Step 5: Ready for Conversion';
+    if (prospect.nabFunding?.accreditationFundingRequired && prospect.nabFunding?.nabStatus !== 'confirmed') {
+      return 'Step 5: Funding Branching (Pending Michael McDaid NAB Confirmation)';
+    }
+    if (prospect.requestForDocs?.status !== 'instructed') return 'Step 6: Request for Docs (Pending Instructions to Lawyer Anna)';
+    if (prospect.disclosureDocument?.status !== 'receipt_signed') return 'Step 7: Disclosure Document (Pending Signed Receipt for 14-Day Lock)';
+    if (!prospect.franchiseAgreement?.executedAt) return 'Step 8: Franchise Agreement Execution';
+    return 'Step 9: Role-Sequenced Operational Training & Conversion';
   };
 
   // Origin for links
@@ -1161,15 +1200,63 @@ export default function FranchiseProspectDetailClient() {
   const kfsToken = prospect.keyFactSheet?.publicToken || encodeProspectToken('kfs', prospect.id);
   const deedToken = prospect.confidentialityDeed?.publicToken || encodeProspectToken('cd', prospect.id);
   const eoiToken = prospect.eoiData?.publicToken || encodeProspectToken('eoi', prospect.id);
+  const rfdToken = prospect.requestForDocs?.publicToken || encodeProspectToken('rfd', prospect.id);
+  const discToken = prospect.disclosureDocument?.publicToken || encodeProspectToken('disc', prospect.id);
+  const faToken = prospect.franchiseAgreement?.publicToken || encodeProspectToken('fa', prospect.id);
 
   const kfsPublicUrl = `${origin}/fact-sheet/${kfsToken}`;
   const deedPublicUrl = `${origin}/confidentiality-deed/${deedToken}`;
   const eoiPublicUrl = `${origin}/eoi/${eoiToken}`;
+  const rfdPublicUrl = `${origin}/sign/request-for-docs/${rfdToken}`;
+  const discPublicUrl = `${origin}/sign/disclosure/${discToken}`;
+  const faPublicUrl = `${origin}/sign/franchise-agreement/${faToken}`;
 
   // Handlers
   const handleCopyLink = (url: string, label: string) => {
     navigator.clipboard.writeText(url);
     toast({ title: 'Link Copied', description: `${label} public URL copied to clipboard.` });
+  };
+
+  const handleConfirmNAB = async (action: 'confirm' | 'reject') => {
+    if (!prospect) return;
+    try {
+      const res = await fetch('/api/franchise-prospects/nab-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prospectId: prospect.id,
+          action,
+          confirmedBy: userProfile?.displayName || userProfile?.email || 'Michael McDaid',
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message);
+      toast({ title: 'NAB Accreditation Updated', description: json.message });
+      fetchProspect();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'NAB Confirmation Failed', description: err.message });
+    }
+  };
+
+  const handleBackdateDisclosure = async (backdateIso: string) => {
+    if (!prospect || !backdateIso) return;
+    try {
+      const res = await fetch('/api/franchise-prospects/backdate-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prospectId: prospect.id,
+          backdatedDate: backdateIso,
+          updatedBy: userProfile?.displayName || 'Anna Trist / Legal Admin',
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message);
+      toast({ title: 'Disclosure Backdated', description: json.message });
+      fetchProspect();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Backdate Failed', description: err.message });
+    }
   };
 
   const handleSaveFactSheet = async (e: React.FormEvent) => {
@@ -1340,14 +1427,30 @@ export default function FranchiseProspectDetailClient() {
     switch (status) {
       case 'New':
         return <Badge className="bg-blue-600 text-white font-medium">New</Badge>;
+      case 'Deed Signed':
+        return <Badge className="bg-purple-600 text-white font-medium">Step 1: Deed Signed</Badge>;
+      case 'IM Sent':
       case 'Contacted':
-        return <Badge className="bg-amber-500 text-white font-medium">Contacted</Badge>;
-      case 'Under Review':
-        return <Badge className="bg-purple-600 text-white font-medium">Under Review</Badge>;
+        return <Badge className="bg-indigo-600 text-white font-medium">Step 2: IM Sent</Badge>;
       case 'EOI Signed':
-        return <Badge className="bg-sky-600 text-white font-medium">EOI Signed</Badge>;
+      case 'Under Review':
+        return <Badge className="bg-sky-600 text-white font-medium">Step 3: EOI Signed</Badge>;
+      case 'Deposit Paid':
+        return <Badge className="bg-teal-600 text-white font-medium">Step 4: Deposit Paid</Badge>;
+      case 'NAB Pending':
+        return <Badge className="bg-amber-600 text-white font-medium">Step 5: NAB Pending</Badge>;
+      case 'NAB Confirmed':
+        return <Badge className="bg-emerald-600 text-white font-medium">Step 5: NAB Confirmed</Badge>;
+      case 'Legal Instructions Sent':
+        return <Badge className="bg-cyan-600 text-white font-medium">Step 6: Legal Docs Sent</Badge>;
+      case 'Disclosure 14-Day Lock':
+        return <Badge className="bg-rose-600 text-white font-medium">Step 7: 14d Lock Active</Badge>;
+      case 'FA Executed':
+        return <Badge className="bg-emerald-700 text-white font-medium">Step 8: FA Executed</Badge>;
+      case 'Training Scheduled':
+        return <Badge className="bg-teal-700 text-white font-medium">Step 9: Training Scheduled</Badge>;
       case 'Converted':
-        return <Badge className="bg-emerald-600 text-white font-medium">Converted</Badge>;
+        return <Badge className="bg-emerald-800 text-white font-bold">Converted</Badge>;
       case 'Rejected':
         return <Badge variant="destructive">Rejected</Badge>;
       case 'Archived':
@@ -1389,148 +1492,228 @@ export default function FranchiseProspectDetailClient() {
         </div>
       </div>
 
+      {/* Full-Width Current Stage Indicator Banner */}
+      <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-amber-500/20 rounded-lg text-amber-900 shrink-0">
+            <Info className="h-5 w-5" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 block">Current Candidate Stage</span>
+            <span className="text-base font-extrabold text-amber-950">{getCurrentStageName()}</span>
+          </div>
+        </div>
+        <div className="text-xs font-semibold text-amber-900 bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-300 shrink-0 flex items-center gap-1.5">
+          <CheckCircle className="h-4 w-4 text-amber-700" />
+          <span>{completedCount} of 9 Conversion Pipeline Steps Completed</span>
+        </div>
+      </div>
+
+      {/* Full-Width 9-Step Progress Stepper + Interactive Tabs Header */}
+      <Card className="shadow-md border-[#095c7b]/30">
+        <CardHeader className="pb-3 border-b bg-slate-50 rounded-t-xl">
+          <CardTitle className="text-xs font-bold uppercase tracking-wider text-[#095c7b] flex items-center gap-2">
+            <FileText className="h-4 w-4" /> Interactive Candidate Pipeline Stepper (Click to Switch View)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-3 sm:p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-9 gap-2">
+            {/* Step 1 Tab Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab(1)}
+              className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                activeTab === 1
+                  ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
+                  : deedDone
+                  ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
+                  : 'bg-white border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold text-[11px] text-slate-900">
+                <span>1. Deed</span>
+                {deedDone ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+              </div>
+              <span className="text-[9px] text-slate-600 mt-1 block font-medium truncate">
+                {deedDone ? 'Signed' : 'Pending'}
+              </span>
+            </button>
+
+            {/* Step 2 Tab Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab(2)}
+              className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                activeTab === 2
+                  ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
+                  : kfsDone
+                  ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
+                  : 'bg-white border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold text-[11px] text-slate-900">
+                <span>2. IM / Fact Sheet</span>
+                {kfsDone ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+              </div>
+              <span className="text-[9px] text-slate-600 mt-1 block font-medium truncate">
+                {kfsDone ? 'Dispatched' : 'Pending'}
+              </span>
+            </button>
+
+            {/* Step 3 Tab Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab(3)}
+              className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                activeTab === 3
+                  ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
+                  : eoiDone
+                  ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
+                  : 'bg-white border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold text-[11px] text-slate-900">
+                <span>3. EOI Form</span>
+                {eoiDone ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+              </div>
+              <span className="text-[9px] text-slate-600 mt-1 block font-medium truncate">
+                {eoiDone ? 'Signed Online' : 'Pending'}
+              </span>
+            </button>
+
+            {/* Step 4 Tab Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab(4)}
+              className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                activeTab === 4
+                  ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
+                  : depositDone
+                  ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
+                  : 'bg-white border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold text-[11px] text-slate-900">
+                <span>4. Deposit</span>
+                {depositDone ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+              </div>
+              <span className="text-[9px] text-slate-600 mt-1 block font-medium truncate">
+                {depositDone ? 'Verified' : 'Pending'}
+              </span>
+            </button>
+
+            {/* Step 5 Tab Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab(5)}
+              className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                activeTab === 5
+                  ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
+                  : prospect.nabFunding?.nabStatus === 'confirmed'
+                  ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
+                  : 'bg-white border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold text-[11px] text-slate-900">
+                <span>5. NAB Branching</span>
+                {prospect.nabFunding?.nabStatus === 'confirmed' ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+              </div>
+              <span className="text-[9px] text-slate-600 mt-1 block font-medium truncate">
+                {prospect.nabFunding?.accreditationFundingRequired ? (prospect.nabFunding?.nabStatus === 'confirmed' ? 'Confirmed' : 'Pending Michael') : 'Not Required'}
+              </span>
+            </button>
+
+            {/* Step 6 Tab Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab(6)}
+              className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                activeTab === 6
+                  ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
+                  : prospect.requestForDocs?.status === 'instructed'
+                  ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
+                  : 'bg-white border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold text-[11px] text-slate-900">
+                <span>6. Request Docs</span>
+                {prospect.requestForDocs?.status === 'instructed' ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+              </div>
+              <span className="text-[9px] text-slate-600 mt-1 block font-medium truncate">
+                {prospect.requestForDocs?.status === 'instructed' ? 'Anna Instructed' : 'Draft'}
+              </span>
+            </button>
+
+            {/* Step 7 Tab Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab(7)}
+              className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                activeTab === 7
+                  ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
+                  : prospect.disclosureDocument?.status === 'receipt_signed'
+                  ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
+                  : 'bg-white border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold text-[11px] text-slate-900">
+                <span>7. Disclosure</span>
+                {prospect.disclosureDocument?.status === 'receipt_signed' ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+              </div>
+              <span className="text-[9px] text-slate-600 mt-1 block font-medium truncate">
+                {prospect.disclosureDocument?.status === 'receipt_signed' ? '14d Lock Active' : 'Pending Receipt'}
+              </span>
+            </button>
+
+            {/* Step 8 Tab Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab(8)}
+              className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                activeTab === 8
+                  ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
+                  : prospect.franchiseAgreement?.executedAt
+                  ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
+                  : 'bg-white border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold text-[11px] text-slate-900">
+                <span>8. Agreement</span>
+                {prospect.franchiseAgreement?.executedAt ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+              </div>
+              <span className="text-[9px] text-slate-600 mt-1 block font-medium truncate">
+                {prospect.franchiseAgreement?.executedAt ? 'Executed' : 'Locked'}
+              </span>
+            </button>
+
+            {/* Step 9 Tab Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab(9)}
+              className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                activeTab === 9
+                  ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
+                  : prospect.status === 'Converted'
+                  ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
+                  : 'bg-white border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold text-[11px] text-slate-900">
+                <span>9. Training</span>
+                {prospect.status === 'Converted' ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
+              </div>
+              <span className="text-[9px] text-slate-600 mt-1 block font-medium truncate">
+                {prospect.status === 'Converted' ? 'Converted' : 'Scheduled'}
+              </span>
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Main 2-Column Responsive Layout Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column (lg:col-span-7 xl:col-span-7): Stepper Header & Dynamic Step Workflows */}
+        {/* Left Column (lg:col-span-7 xl:col-span-7): Dynamic Step Workflows */}
         <div className="lg:col-span-7 xl:col-span-7 space-y-6">
-          {/* Current Stage Indicator Banner */}
-          <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-500/20 rounded-lg text-amber-900 shrink-0">
-                <Info className="h-5 w-5" />
-              </div>
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 block">Current Candidate Stage</span>
-                <span className="text-base font-extrabold text-amber-950">{getCurrentStageName()}</span>
-              </div>
-            </div>
-            <div className="text-xs font-semibold text-amber-900 bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-300 shrink-0">
-              {completedCount} of 4 Pre-requisites Complete
-            </div>
-          </div>
-
-          {/* 5-Step Progress Stepper + Interactive Tabs Header */}
-          <Card className="shadow-md border-[#095c7b]/30">
-            <CardHeader className="pb-3 border-b bg-slate-50 rounded-t-xl">
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-[#095c7b] flex items-center gap-2">
-                <FileText className="h-4 w-4" /> Interactive Candidate Pipeline Stepper (Click to Switch View)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 sm:p-4">
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
-                {/* Step 1 Tab Button */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(1)}
-                  className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                    activeTab === 1
-                      ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
-                      : kfsDone
-                      ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
-                      : 'bg-white border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between font-bold text-xs text-slate-900">
-                    <span>1. Key Fact Sheet</span>
-                    {kfsDone ? <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" /> : null}
-                  </div>
-                  <span className="text-[10px] text-slate-600 mt-1 block font-medium">
-                    {kfsDone ? 'Prefilled & Link Active' : 'Pending Prefill'}
-                  </span>
-                </button>
-
-                {/* Step 2 Tab Button */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(2)}
-                  className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                    activeTab === 2
-                      ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
-                      : deedDone
-                      ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
-                      : 'bg-white border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between font-bold text-xs text-slate-900">
-                    <span>2. Confidentiality Deed</span>
-                    {deedDone ? <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" /> : null}
-                  </div>
-                  <span className="text-[10px] text-slate-600 mt-1 block font-medium">
-                    {deedDone ? 'Digitally Signed' : prospect.confidentialityDeed?.status === 'sent' ? 'Deed Email Sent' : 'Not Signed'}
-                  </span>
-                </button>
-
-                {/* Step 3 Tab Button */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(3)}
-                  className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                    activeTab === 3
-                      ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
-                      : eoiDone
-                      ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
-                      : 'bg-white border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between font-bold text-xs text-slate-900">
-                    <span>3. EOI Application</span>
-                    {eoiDone ? <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" /> : null}
-                  </div>
-                  <span className="text-[10px] text-slate-600 mt-1 block font-medium">
-                    {eoiDone ? 'Signed Online' : 'Pending Candidate EOI'}
-                  </span>
-                </button>
-
-                {/* Step 4 Tab Button */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(4)}
-                  className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                    activeTab === 4
-                      ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
-                      : depositDone
-                      ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
-                      : 'bg-white border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between font-bold text-xs text-slate-900">
-                    <span>4. 5–10% Deposit</span>
-                    {depositDone ? <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" /> : null}
-                  </div>
-                  <span className="text-[10px] text-slate-600 mt-1 block font-medium">
-                    {depositDone ? `${prospect.depositDetails?.percentageDeposited || 5}% Paid ($${prospect.depositDetails?.amountPaid || 0})` : 'Not Paid'}
-                  </span>
-                </button>
-
-                {/* Step 5 Tab Button */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(5)}
-                  className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                    activeTab === 5
-                      ? 'ring-2 ring-[#095c7b] bg-[#095c7b]/10 border-[#095c7b] shadow-sm'
-                      : prospect.status === 'Converted'
-                      ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100/60'
-                      : isPrerequisitesComplete
-                      ? 'bg-emerald-100/70 border-emerald-400'
-                      : 'bg-slate-100 border-slate-300 opacity-80'
-                  }`}
-                >
-                  <div className="flex items-center justify-between font-bold text-xs text-slate-900">
-                    <span>5. Conversion</span>
-                    {prospect.status === 'Converted' ? (
-                      <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
-                    ) : !isPrerequisitesComplete ? (
-                      <Lock className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                    ) : null}
-                  </div>
-                  <span className="text-[10px] text-slate-600 mt-1 block font-medium">
-                    {prospect.status === 'Converted' ? 'Converted' : isPrerequisitesComplete ? 'Ready to Convert' : 'Locked (Pending 1-4)'}
-                  </span>
-                </button>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Main Dynamic Step Content Area (In-Page Content for Selected Step) */}
           <Card className="shadow-lg border-2 border-[#095c7b]/20">
@@ -1538,24 +1721,36 @@ export default function FranchiseProspectDetailClient() {
             <CardHeader className="bg-slate-900 text-white p-5 rounded-t-xl flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-                  {activeTab === 1 && <FileText className="h-5 w-5 text-[#eaf143]" />}
-                  {activeTab === 2 && <ShieldCheck className="h-5 w-5 text-[#eaf143]" />}
+                  {activeTab === 1 && <ShieldCheck className="h-5 w-5 text-[#eaf143]" />}
+                  {activeTab === 2 && <FileText className="h-5 w-5 text-[#eaf143]" />}
                   {activeTab === 3 && <PenTool className="h-5 w-5 text-[#eaf143]" />}
                   {activeTab === 4 && <DollarSign className="h-5 w-5 text-emerald-400" />}
-                  {activeTab === 5 && <UserCheck className="h-5 w-5 text-emerald-400" />}
+                  {activeTab === 5 && <ShieldCheck className="h-5 w-5 text-amber-400" />}
+                  {activeTab === 6 && <FileText className="h-5 w-5 text-teal-400" />}
+                  {activeTab === 7 && <Lock className="h-5 w-5 text-rose-400" />}
+                  {activeTab === 8 && <PenTool className="h-5 w-5 text-emerald-400" />}
+                  {activeTab === 9 && <UserCheck className="h-5 w-5 text-emerald-400" />}
                   
-                  {activeTab === 1 && 'Step 1: Key Fact Sheet Prefill & Email Dispatch'}
-                  {activeTab === 2 && 'Step 2: Confidentiality Deed (Run-Along Agreement)'}
-                  {activeTab === 3 && 'Step 3: Expression of Interest (EOI Form)'}
+                  {activeTab === 1 && 'Step 1: Confidentiality Deed (Run-Along & NDA)'}
+                  {activeTab === 2 && 'Step 2: Information Memorandum (IM) & Key Fact Sheet'}
+                  {activeTab === 3 && 'Step 3: Expression of Interest (EOI Application Form)'}
                   {activeTab === 4 && 'Step 4: 5–10% Franchise Deposit Tracking'}
-                  {activeTab === 5 && 'Step 5: Convert Candidate to Franchisee User'}
+                  {activeTab === 5 && 'Step 5: NAB Funding & Legal Dispatch Branching'}
+                  {activeTab === 6 && 'Step 6: Request for Docs Legal Instructions (Lawyer Anna)'}
+                  {activeTab === 7 && 'Step 7: Disclosure Document & 14-Day Statutory Rule'}
+                  {activeTab === 8 && 'Step 8: Franchise Agreement Execution'}
+                  {activeTab === 9 && 'Step 9: Role-Sequenced Operational Training Module'}
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-300 mt-0.5">
-                  {activeTab === 1 && 'Configure territory facts and dispatch the personalized Key Fact Sheet email to candidate.'}
-                  {activeTab === 2 && 'Require candidate to digitally sign the Confidentiality Deed before their run-along.'}
-                  {activeTab === 3 && 'Send online EOI application form link and view submitted candidate details.'}
-                  {activeTab === 4 && 'Log and verify the 5-10% deposit payment before account provisioning.'}
-                  {activeTab === 5 && 'Provision Firebase Auth account and link to territory presale wizard.'}
+                  {activeTab === 1 && 'Enforce execution of the initial confidentiality deed prior to commercial data disclosure.'}
+                  {activeTab === 2 && 'Dispatch standard Information Memorandum (IM) packet and Key Fact Sheet to candidate.'}
+                  {activeTab === 3 && 'Capture prospect parameters, accreditation funding flag (NAB), and Sole Trader logic.'}
+                  {activeTab === 4 && 'Log and verify the 5-10% deposit payment.'}
+                  {activeTab === 5 && 'Route NAB funding verification to Michael McDaid and control legal instruction release.'}
+                  {activeTab === 6 && 'Generate pre-filled legal instruction sheet for Lawyer Anna Trist with Greg’s territory map.'}
+                  {activeTab === 7 && 'Deliver disclosure document and enforce the 14-day statutory cooling wait period.'}
+                  {activeTab === 8 && 'Execute Franchise Agreement online with R-Sign digital signature or wet-ink upload.'}
+                  {activeTab === 9 && 'Lock operational training module schedules within the T-14 start date window.'}
                 </CardDescription>
               </div>
 
@@ -1572,7 +1767,7 @@ export default function FranchiseProspectDetailClient() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={activeTab === 5}
+                  disabled={activeTab === 9}
                   onClick={() => setActiveTab((activeTab + 1) as any)}
                   className="h-8 text-xs bg-slate-800 text-white border-slate-700 hover:bg-slate-700"
                 >
@@ -1582,8 +1777,8 @@ export default function FranchiseProspectDetailClient() {
             </CardHeader>
 
             <CardContent className="p-6 space-y-6">
-              {/* STEP 1 */}
-              {activeTab === 1 && (
+              {/* STEP 2: IM & KEY FACT SHEET */}
+              {activeTab === 2 && (
                 <div className="space-y-6">
                   {/* Prefill Key Fact Sheet Form */}
                   <div className="space-y-4">
@@ -2187,8 +2382,8 @@ export default function FranchiseProspectDetailClient() {
                 </div>
               )}
 
-              {/* STEP 2 */}
-              {activeTab === 2 && (
+              {/* STEP 1: CONFIDENTIALITY DEED */}
+              {activeTab === 1 && (
                 <div className="space-y-6">
                   <div className="space-y-4">
                     <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-2">
@@ -3268,35 +3463,42 @@ export default function FranchiseProspectDetailClient() {
 
         {/* Right Column (lg:col-span-5 xl:col-span-5): Sticky Sidebar with Status on Top, Submission Details, Timeline & Notes, Email Log */}
         <div className="lg:col-span-5 xl:col-span-5 space-y-6 lg:sticky lg:top-6 self-start">
-          {/* 1. Change Application Status Card (RIGHT ON TOP) */}
+          {/* 1. Change Application Status Card (RIGHT ON TOP - Sleek Compact UI) */}
           <Card className="shadow-md border-2 border-[#095c7b]/20 bg-white rounded-xl overflow-hidden">
-            <CardHeader className="pb-2 bg-slate-50 border-b rounded-t-xl flex flex-row items-center justify-between">
+            <CardHeader className="pb-2.5 pt-3 px-4 bg-slate-50 border-b flex flex-row items-center justify-between">
               <CardTitle className="text-xs font-bold uppercase tracking-wider text-[#095c7b] flex items-center gap-2">
-                <Tag className="h-4 w-4" /> Change Application Status
+                <Tag className="h-4 w-4 text-[#095c7b]" /> Application Status
               </CardTitle>
               {getStatusBadge(prospect.status)}
             </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              <div className="flex flex-wrap gap-2">
-                {(['New', 'Contacted', 'Under Review', 'EOI Signed', 'Converted', 'Rejected', 'Archived'] as FranchiseProspect['status'][]).map((st) => (
-                  <Button
-                    key={st}
-                    size="sm"
-                    variant={prospect.status === st ? 'default' : 'outline'}
-                    disabled={updatingStatus}
-                    onClick={() => handleUpdateStatus(st)}
-                    className={`text-xs font-semibold ${
-                      prospect.status === st 
-                        ? 'bg-[#095c7b] text-white shadow-sm hover:bg-[#074760]' 
-                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
-                    }`}
-                  >
-                    {st}
-                  </Button>
-                ))}
+            <CardContent className="p-3.5 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <select
+                  value={prospect.status}
+                  disabled={updatingStatus}
+                  onChange={(e) => handleUpdateStatus(e.target.value as FranchiseProspect['status'])}
+                  className="flex-1 h-9 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#095c7b] focus:border-[#095c7b] outline-none shadow-xs transition-all cursor-pointer"
+                >
+                  <option value="New">New Application</option>
+                  <option value="Deed Signed">Step 1: Deed Signed</option>
+                  <option value="IM Sent">Step 2: IM / Fact Sheet Sent</option>
+                  <option value="EOI Signed">Step 3: EOI Application Signed</option>
+                  <option value="Deposit Paid">Step 4: Deposit Paid</option>
+                  <option value="NAB Pending">Step 5: NAB Pending Confirmation</option>
+                  <option value="NAB Confirmed">Step 5: NAB Confirmed</option>
+                  <option value="Legal Instructions Sent">Step 6: Legal Docs Instructed</option>
+                  <option value="Disclosure 14-Day Lock">Step 7: 14d Lock Active</option>
+                  <option value="FA Executed">Step 8: FA Executed</option>
+                  <option value="Training Scheduled">Step 9: Training Scheduled</option>
+                  <option value="Converted">Converted to Franchisee</option>
+                  <option value="Rejected">Rejected</option>
+                  <option value="Archived">Archived</option>
+                </select>
+
+                {updatingStatus && <Loader className="h-4 w-4 animate-spin text-[#095c7b] shrink-0" />}
               </div>
-              <p className="text-[11px] text-slate-500 italic pt-1 border-t">
-                Status automatically syncs when steps are completed (e.g. Key Fact Sheet sent &rarr; Contacted, Confidentiality Deed &rarr; Under Review, EOI Signed &rarr; EOI Signed, Converted &rarr; Converted).
+              <p className="text-[10px] text-slate-500 italic">
+                Status automatically syncs upon step completion, or can be manually updated using the selector above.
               </p>
             </CardContent>
           </Card>

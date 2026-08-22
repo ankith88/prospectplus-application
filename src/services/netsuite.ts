@@ -906,10 +906,11 @@ interface NewLeadData {
   lpoLeadId?: string;
   linkedLpoLeadId?: string;
   pageUrl?: string;
+  attribution?: Record<string, any>;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; salesRecordInternalId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees, selectedServiceOption, parentLeadId, parentId, parentCustomer, lpoLeadId, linkedLpoLeadId, pageUrl } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees, selectedServiceOption, parentLeadId, parentId, parentCustomer, lpoLeadId, linkedLpoLeadId, pageUrl, attribution } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -923,7 +924,7 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         email: customerServiceEmail || '',
         custentity_abn: abn || '',
         category: industryCategory || '',
-        custentity_leadsource: campaign || '',
+        custentity_leadsource: attribution?.channel || campaign || '',
         billaddr1: address?.street || (address as any)?.address1 || '',
         billcity: address?.city || '',
         billstate: getShorthandState(address?.state || ''),
@@ -940,6 +941,19 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         custentity_primary_contact_email: contact?.email || '',
         custentity_primary_contact_phone: contact?.phone || '',
     });
+
+    if (attribution) {
+      if (attribution.utmSource) params.append('custentity_utm_source', attribution.utmSource);
+      if (attribution.utmMedium) params.append('custentity_utm_medium', attribution.utmMedium);
+      if (attribution.utmCampaign) params.append('custentity_utm_campaign', attribution.utmCampaign);
+      if (attribution.utmContent) params.append('custentity_utm_content', attribution.utmContent);
+      if (attribution.utmTerm) params.append('custentity_utm_term', attribution.utmTerm);
+      if (attribution.adClickId) params.append('custentity_ad_click_id', attribution.adClickId);
+      if (attribution.channel) params.append('custentity_marketing_channel', attribution.channel);
+      if (attribution.posthogSessionId) params.append('custentity_posthog_session_id', attribution.posthogSessionId);
+      if (attribution.posthogSessionUrl) params.append('custentity_posthog_session_url', attribution.posthogSessionUrl);
+      if (attribution.landingPage) params.append('custentity_landing_page', attribution.landingPage);
+    }
     
     const effectiveParentId = parentId || parentLeadId || parentCustomer;
     if (effectiveParentId) {
@@ -975,8 +989,8 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     if (salesRepAssigned) {
         params.append('salesrep', salesRepAssigned);
     }
-    if (discoveryData) {
-        const discoveryString = Object.entries(discoveryData)
+    if (discoveryData || attribution) {
+        let discoveryString = discoveryData ? Object.entries(discoveryData)
             .map(([key, value]) => {
                 if (!value || (Array.isArray(value) && value.length === 0)) return '';
                 const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
@@ -984,8 +998,25 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
                 return `${formattedKey}: ${formattedValue}`;
             })
             .filter(Boolean)
-            .join('\n');
-        params.append('custentity_checkin_questions', discoveryString);
+            .join('\n') : '';
+
+        if (attribution) {
+          const attrLines = [];
+          if (attribution.channel) attrLines.push(`Ad Channel: ${attribution.channel}`);
+          if (attribution.utmCampaign) attrLines.push(`Campaign: ${attribution.utmCampaign}`);
+          if (attribution.utmSource) attrLines.push(`UTM Source: ${attribution.utmSource}`);
+          if (attribution.utmMedium) attrLines.push(`UTM Medium: ${attribution.utmMedium}`);
+          if (attribution.utmContent) attrLines.push(`Ad Content: ${attribution.utmContent}`);
+          if (attribution.posthogSessionUrl) attrLines.push(`PostHog Replay: ${attribution.posthogSessionUrl}`);
+          
+          if (attrLines.length > 0) {
+            discoveryString = discoveryString ? `${discoveryString}\n\n--- Marketing Attribution ---\n${attrLines.join('\n')}` : `--- Marketing Attribution ---\n${attrLines.join('\n')}`;
+          }
+        }
+
+        if (discoveryString) {
+          params.append('custentity_checkin_questions', discoveryString);
+        }
     }
 
     if (visitNoteID) {

@@ -56,6 +56,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   customerSuccessOnboarding: ['Customer Success', 'Marketing Manager', 'superadmin', 'admin'],
   multisiteReporting: ['admin', 'superadmin', 'Marketing Manager', 'Customer Success', 'customer success', 'customer_success', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager'],
   cancellationReporting: ['admin', 'superadmin', 'Marketing Manager', 'marketing manager', 'Customer Success', 'customer success', 'customer_success', 'Customer Service', 'customer service'],
+  posthogReporting: ['admin', 'superadmin', 'Marketing Manager', 'marketing manager'],
 };
 
 export const PermissionsProvider = ({ children }: { children: React.ReactNode }) => {

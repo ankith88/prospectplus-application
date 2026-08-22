@@ -6,7 +6,7 @@
 import { app, firestore } from '@/lib/firebase';
 import { getAuth } from 'firebase/auth';
 import { getSydneyISOString } from '@/lib/utils';
-import type { Lead, LeadStatus, Address, TaggedAddress, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead, CompanyInsight } from '@/lib/types';
+import type { Lead, LeadStatus, Address, TaggedAddress, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, AppointmentStatus, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead, CompanyInsight } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion, arrayRemove, onSnapshot } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
@@ -1971,6 +1971,104 @@ async function deleteTaskFromLead(leadId: string, taskId: string): Promise<void>
     await deleteDoc(doc(firestore, 'leads', leadId, 'tasks', taskId));
 }
 
+function isLostLeadStatus(status?: string | null): boolean {
+    if (!status) return false;
+    const s = status.trim().toLowerCase();
+    return (
+        s === 'lost' ||
+        s === 'lost customer' ||
+        s.includes('lost') ||
+        s === 'unqualified' ||
+        s === 'email brush off' ||
+        s === 'out of territory'
+    );
+}
+
+async function getPendingItemsForLead(leadId: string, leadInState?: Partial<Lead>): Promise<{
+    pendingAppointments: Appointment[];
+    pendingTasks: Task[];
+}> {
+    let appts: Appointment[] = [];
+    let tasks: Task[] = [];
+
+    if (leadInState?.appointments && Array.isArray(leadInState.appointments) && leadInState.appointments.length > 0) {
+        appts = leadInState.appointments;
+    } else {
+        appts = await getSubCollection<Appointment>('leads', leadId, 'appointments', 'duedate');
+    }
+
+    if (leadInState?.tasks && Array.isArray(leadInState.tasks) && leadInState.tasks.length > 0) {
+        tasks = leadInState.tasks;
+    } else {
+        tasks = await getSubCollection<Task>('leads', leadId, 'tasks', 'dueDate', 'asc');
+    }
+
+    const pendingAppointments = appts.filter(a => {
+        const s = a.appointmentStatus || 'Pending';
+        return s !== 'Completed' && s !== 'Cancelled' && s !== 'No Show';
+    });
+
+    const pendingTasks = tasks.filter(t => !t.isCompleted);
+
+    return { pendingAppointments, pendingTasks };
+}
+
+async function resolvePendingItemsForLead(
+    leadId: string,
+    appointmentResolutions: Array<{ id: string; status: AppointmentStatus; notes?: string }>,
+    taskResolutions: Array<{ id: string; action: 'complete' | 'cancel' | 'keep' }>,
+    author: string = 'System'
+): Promise<void> {
+    const leadRef = doc(firestore, 'leads', leadId);
+    const leadSnap = await getDoc(leadRef);
+    const leadData = leadSnap.exists() ? leadSnap.data() : {};
+    let existingAppts: Appointment[] = leadData?.appointments || [];
+
+    // Process Appointment Updates
+    for (const apptRes of appointmentResolutions) {
+        const apptRef = doc(firestore, 'leads', leadId, 'appointments', apptRes.id);
+        const updates: any = {
+            appointmentStatus: apptRes.status,
+            updatedAt: new Date().toISOString()
+        };
+        if (apptRes.notes?.trim()) {
+            updates.notes = apptRes.notes.trim();
+        }
+        await setDoc(apptRef, updates, { merge: true });
+
+        existingAppts = existingAppts.map(a => a.id === apptRes.id ? { ...a, ...updates } : a);
+
+        await logActivity(leadId, {
+            type: 'Update',
+            notes: `Appointment status updated to ${apptRes.status}${apptRes.notes?.trim() ? `: ${apptRes.notes.trim()}` : ''}`,
+            author
+        });
+    }
+
+    if (appointmentResolutions.length > 0 && leadData?.appointments) {
+        await updateDoc(leadRef, { appointments: existingAppts });
+    }
+
+    // Process Task Updates
+    for (const taskRes of taskResolutions) {
+        if (taskRes.action === 'complete') {
+            await updateTaskCompletion(leadId, taskRes.id, true);
+            await logActivity(leadId, {
+                type: 'Update',
+                notes: `Task marked as completed on lead lost status change.`,
+                author
+            });
+        } else if (taskRes.action === 'cancel') {
+            await deleteTaskFromLead(leadId, taskRes.id);
+            await logActivity(leadId, {
+                type: 'Update',
+                notes: `Task cancelled/deleted on lead lost status change.`,
+                author
+            });
+        }
+    }
+}
+
 async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Promise<void> {
     await updateDoc(doc(firestore, 'leads', leadId), prepareForFirestore({ discoveryData: data }));
 }
@@ -3490,6 +3588,9 @@ export {
     updateTaskInLead,
     updateTaskCompletion,
     deleteTaskFromLead,
+    isLostLeadStatus,
+    getPendingItemsForLead,
+    resolvePendingItemsForLead,
     updateLeadDiscoveryData,
     updateLeadFieldSales,
     updateLeadCheckinQuestions,

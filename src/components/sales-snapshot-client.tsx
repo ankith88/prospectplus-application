@@ -869,7 +869,9 @@ export default function SalesSnapshotClient() {
               if (!act.notes) return null;
               const match = act.notes.match(/Status changed to ([^(]+)/i);
               const dateVal = parseDateString(act.date);
-              return match && match[1] && dateVal ? { stage: match[1].trim(), date: dateVal } : null;
+              if (!match || !match[1] || !dateVal) return null;
+              const cleanStage = match[1].replace(/\s+via\s+.*$/i, '').trim();
+              return { stage: cleanStage, date: dateVal };
             })
             .filter((x): x is { stage: string; date: Date } => x !== null);
 
@@ -973,10 +975,18 @@ export default function SalesSnapshotClient() {
     })).sort((a, b) => a.date.localeCompare(b.date));
 
     // Format Average Days in Status data
-    const avgDaysData = Object.entries(statusDurations).map(([name, data]) => ({
-      name,
-      value: parseFloat((data.totalDays / data.count).toFixed(1))
-    })).sort((a, b) => b.value - a.value);
+    const avgDaysData = Object.entries(statusDurations)
+      .map(([name, data]) => ({
+        name,
+        value: parseFloat((data.totalDays / data.count).toFixed(1))
+      }))
+      .filter(item => {
+        const normalized = item.name.toLowerCase();
+        const isLost = normalized.includes('lost') || normalized.includes('unqualified') || normalized.includes('brush off') || normalized.includes('out of territory');
+        const isWonSigned = normalized.includes('won') || normalized.includes('signed');
+        return !isLost && !isWonSigned;
+      })
+      .sort((a, b) => b.value - a.value);
 
     // Format Pipeline Value by Lead Type data
     const typeValueData = Object.entries(typeValueMap).map(([name, value]) => ({

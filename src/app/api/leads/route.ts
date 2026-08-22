@@ -86,10 +86,70 @@ export async function POST(req: NextRequest) {
       selectedServiceOption,
       pageUrl,
       sourcePageUrl,
-      url
+      url,
+      attribution,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      utmContent,
+      utmTerm,
+      adClickId,
+      channel,
+      posthogDistinctId,
+      posthogSessionId,
+      posthogSessionUrl,
+      referrer
     } = body;
 
-    const finalPageUrl = body.inboundPageUrl || pageUrl || sourcePageUrl || url || inboundDetails?.landingPage || null;
+    const finalPageUrl = body.inboundPageUrl || pageUrl || sourcePageUrl || url || inboundDetails?.landingPage || attribution?.landingPage || null;
+
+    // Process & sanitize Marketing Attribution
+    const finalUtmSource = attribution?.utmSource || utmSource || inboundDetails?.utmSource || null;
+    const finalUtmMedium = attribution?.utmMedium || utmMedium || inboundDetails?.utmMedium || null;
+    const finalUtmCampaign = attribution?.utmCampaign || utmCampaign || inboundDetails?.utmCampaign || body.campaign || null;
+    const finalUtmContent = attribution?.utmContent || utmContent || inboundDetails?.utmContent || null;
+    const finalUtmTerm = attribution?.utmTerm || utmTerm || inboundDetails?.utmTerm || null;
+    const finalAdClickId = attribution?.adClickId || adClickId || inboundDetails?.adClickId || null;
+    const finalReferrer = attribution?.referrer || referrer || inboundDetails?.referrer || null;
+    const finalPhDistinctId = attribution?.posthogDistinctId || posthogDistinctId || inboundDetails?.posthogDistinctId || null;
+    const finalPhSessionId = attribution?.posthogSessionId || posthogSessionId || inboundDetails?.posthogSessionId || null;
+
+    let finalPhSessionUrl = attribution?.posthogSessionUrl || posthogSessionUrl || inboundDetails?.posthogSessionUrl || null;
+    if (!finalPhSessionUrl && finalPhSessionId) {
+      finalPhSessionUrl = `https://us.posthog.com/project/108577/replay/${finalPhSessionId}`;
+    }
+
+    let finalChannel = attribution?.channel || channel || inboundDetails?.channel || null;
+    if (!finalChannel) {
+      if (finalAdClickId?.startsWith('fb') || (finalUtmSource && /facebook|instagram|meta|fb|ig/i.test(finalUtmSource))) {
+        finalChannel = 'Meta Ads (Facebook/Instagram)';
+      } else if (finalAdClickId?.startsWith('g') || (finalUtmSource && /google/i.test(finalUtmSource))) {
+        finalChannel = 'Google Search / Display Ads';
+      } else if (finalUtmSource && /linkedin/i.test(finalUtmSource)) {
+        finalChannel = 'LinkedIn Ads';
+      } else if (finalUtmSource) {
+        finalChannel = `${finalUtmSource.charAt(0).toUpperCase() + finalUtmSource.slice(1)} Campaign`;
+      } else if (finalReferrer) {
+        finalChannel = `Referral (${finalReferrer})`;
+      } else {
+        finalChannel = 'Direct / Organic';
+      }
+    }
+
+    const mergedAttribution = {
+      utmSource: finalUtmSource,
+      utmMedium: finalUtmMedium,
+      utmCampaign: finalUtmCampaign,
+      utmContent: finalUtmContent,
+      utmTerm: finalUtmTerm,
+      adClickId: finalAdClickId,
+      channel: finalChannel,
+      referrer: finalReferrer,
+      landingPage: finalPageUrl,
+      posthogDistinctId: finalPhDistinctId,
+      posthogSessionId: finalPhSessionId,
+      posthogSessionUrl: finalPhSessionUrl,
+    };
 
     // Support both flat fields and nested address object
     const finalZip = zip || address?.zip;
@@ -230,12 +290,16 @@ export async function POST(req: NextRequest) {
       selectedServiceOption: selectedServiceOption || null,
       inboundPageUrl: finalPageUrl,
       pageUrl: finalPageUrl,
+      attribution: mergedAttribution,
+      marketingChannel: finalChannel,
+      posthogSessionUrl: finalPhSessionUrl,
       discoveryData: {
         interestedIn: interestedIn || null,
         weeklyParcels: weeklyParcels || null,
       },
       inboundDetails: {
         ...inboundDetails,
+        ...mergedAttribution,
         pageUrl: finalPageUrl,
         submittedAt: inboundDetails?.submittedAt || new Date().toISOString()
       }
@@ -346,6 +410,7 @@ export async function POST(req: NextRequest) {
       noFranchisees: leadData.noFranchisees,
       selectedServiceOption: leadData.selectedServiceOption || undefined,
       pageUrl: leadData.pageUrl || undefined,
+      attribution: leadData.attribution,
     };
 
     let docRef: any;
