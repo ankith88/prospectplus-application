@@ -1978,8 +1978,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         )}
                         {canViewPostHogReporting && !isFranchiseeRole && (
                           <SidebarMenuItem>
-                            <SidebarMenuButton asChild isActive={isActive("/marketing-analytics")} tooltip="PostHog & Campaign Analytics">
-                              <Link href="/marketing-analytics">
+                            <SidebarMenuButton asChild isActive={isActive("/inbound-reporting")} tooltip="PostHog & Campaign Analytics">
+                              <Link href="/inbound-reporting">
                                 <BarChart2 />
                                 <span>PostHog Analytics</span>
                               </Link>
