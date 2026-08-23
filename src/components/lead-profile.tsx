@@ -208,6 +208,16 @@ function cleanCallNotes(notes: string): string {
     return cleaned.trim().replace(/\n\s*\n/g, '\n');
 }
 
+function extractUrlQueryParam(urlStr?: string, paramName?: string): string | null {
+    if (!urlStr || !paramName) return null;
+    try {
+        const parsed = new URL(urlStr.startsWith('http') ? urlStr : `https://${urlStr}`);
+        return parsed.searchParams.get(paramName) || null;
+    } catch {
+        return null;
+    }
+}
+
 const formatAddressString = (address?: Address) => {
     if (!address) return 'N/A';
     const parts = [];
@@ -6086,53 +6096,92 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </div>
 
                         {/* Marketing Campaign & Social Ad Attribution */}
-                        <div className="p-4 bg-muted/20 rounded-lg border border-primary/10 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Marketing & Social Ad Attribution</h4>
-                                    <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
-                                        {lead.inboundDetails?.channel || lead.marketingChannel || lead.attribution?.channel || 'Direct / Organic'}
-                                    </Badge>
-                                </div>
-                                {(lead.inboundDetails?.posthogSessionUrl || lead.posthogSessionUrl || lead.attribution?.posthogSessionUrl) && (
-                                    <a
-                                        href={lead.inboundDetails?.posthogSessionUrl || lead.posthogSessionUrl || lead.attribution?.posthogSessionUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 bg-purple-50 px-2.5 py-1 rounded border border-purple-200 transition-colors"
-                                    >
-                                        🎥 Watch PostHog Replay
-                                    </a>
-                                )}
-                            </div>
+                        {(() => {
+                            const landingUrl = lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage || lead.attribution?.landingPage;
+                            const channel = lead.attribution?.channel || lead.inboundDetails?.channel || lead.marketingChannel || (extractUrlQueryParam(landingUrl, 'utm_source')?.toLowerCase().includes('facebook') ? 'Meta Ads (Facebook/Instagram)' : 'Direct / Organic');
+                            const utmCampaign = lead.attribution?.utmCampaign || lead.inboundDetails?.utmCampaign || extractUrlQueryParam(landingUrl, 'utm_campaign') || (lead.campaign && lead.campaign !== 'Outbound' ? lead.campaign : null) || 'N/A';
+                            const utmSource = lead.attribution?.utmSource || lead.inboundDetails?.utmSource || extractUrlQueryParam(landingUrl, 'utm_source') || (channel.includes('Meta') || channel.includes('Facebook') ? 'Facebook' : 'N/A');
+                            const utmMedium = lead.attribution?.utmMedium || lead.inboundDetails?.utmMedium || extractUrlQueryParam(landingUrl, 'utm_medium') || 'N/A';
+                            const utmContent = lead.attribution?.utmContent || lead.inboundDetails?.utmContent || extractUrlQueryParam(landingUrl, 'utm_content') || extractUrlQueryParam(landingUrl, 'utm_ad') || 'N/A';
+                            const adClickId = lead.attribution?.adClickId || lead.inboundDetails?.adClickId || extractUrlQueryParam(landingUrl, 'fbclid') || extractUrlQueryParam(landingUrl, 'gclid') || 'N/A';
+                            const posthogReplayUrl = lead.inboundDetails?.posthogSessionUrl || lead.posthogSessionUrl || lead.attribution?.posthogSessionUrl || (lead.attribution?.posthogSessionId ? `https://us.posthog.com/project/108577/replay/${lead.attribution.posthogSessionId}` : null);
+                            const posthogSessionId = lead.attribution?.posthogSessionId || lead.inboundDetails?.posthogSessionId;
 
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                <div>
-                                    <span className="text-muted-foreground block text-[10px]">Campaign Name</span>
-                                    <span className="font-semibold text-foreground truncate block">
-                                        {lead.inboundDetails?.utmCampaign || lead.attribution?.utmCampaign || (lead.campaign && lead.campaign !== 'Outbound' ? lead.campaign : null) || 'N/A'}
-                                    </span>
+                            return (
+                                <div className="p-4 bg-muted/20 rounded-lg border border-primary/10 space-y-4">
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Marketing & Social Ad Attribution</h4>
+                                            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                                                {channel}
+                                            </Badge>
+                                        </div>
+                                        {posthogReplayUrl && (
+                                            <a
+                                                href={posthogReplayUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 bg-purple-50 px-2.5 py-1 rounded border border-purple-200 transition-colors"
+                                            >
+                                                🎥 Watch PostHog Replay
+                                            </a>
+                                        )}
+                                    </div>
+
+                                    {/* 5 Core Attribution Metrics */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                                        <div className="p-2.5 bg-background/50 rounded border border-border/50">
+                                            <span className="text-muted-foreground block text-[10px] font-medium">Channel</span>
+                                            <span className="font-semibold text-foreground truncate block mt-0.5" title={channel}>
+                                                {channel}
+                                            </span>
+                                        </div>
+                                        <div className="p-2.5 bg-background/50 rounded border border-border/50">
+                                            <span className="text-muted-foreground block text-[10px] font-medium">UTM Campaign</span>
+                                            <span className="font-semibold text-foreground truncate block mt-0.5" title={utmCampaign}>
+                                                {utmCampaign}
+                                            </span>
+                                        </div>
+                                        <div className="p-2.5 bg-background/50 rounded border border-border/50">
+                                            <span className="text-muted-foreground block text-[10px] font-medium">UTM Source</span>
+                                            <span className="font-semibold text-foreground truncate block mt-0.5" title={utmSource}>
+                                                {utmSource}
+                                            </span>
+                                        </div>
+                                        <div className="p-2.5 bg-background/50 rounded border border-border/50">
+                                            <span className="text-muted-foreground block text-[10px] font-medium">UTM Medium</span>
+                                            <span className="font-semibold text-foreground truncate block mt-0.5" title={utmMedium}>
+                                                {utmMedium}
+                                            </span>
+                                        </div>
+                                        <div className="p-2.5 bg-background/50 rounded border border-border/50">
+                                            <span className="text-muted-foreground block text-[10px] font-medium">UTM Content</span>
+                                            <span className="font-semibold text-foreground truncate block mt-0.5" title={utmContent}>
+                                                {utmContent}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Secondary Click & Session Metadata */}
+                                    <div className="pt-2 border-t border-border/50 text-[11px] text-muted-foreground flex items-center justify-between flex-wrap gap-2">
+                                        <div className="flex items-center gap-1.5 truncate max-w-md">
+                                            <span>Ad Click ID:</span>
+                                            <code className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded text-foreground/90 truncate" title={adClickId}>
+                                                {adClickId}
+                                            </code>
+                                        </div>
+                                        {posthogSessionId && (
+                                            <div className="flex items-center gap-3 text-[10px]">
+                                                <span>PostHog Session: <code className="font-mono text-foreground/80">{posthogSessionId}</code></span>
+                                                {lead.attribution?.posthogDistinctId && (
+                                                    <span>Distinct ID: <code className="font-mono text-foreground/80">{lead.attribution.posthogDistinctId}</code></span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <div>
-                                    <span className="text-muted-foreground block text-[10px]">Source / Medium</span>
-                                    <span className="font-semibold text-foreground truncate block">
-                                        {lead.inboundDetails?.utmSource || lead.attribution?.utmSource || 'N/A'} / {lead.inboundDetails?.utmMedium || lead.attribution?.utmMedium || 'N/A'}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground block text-[10px]">Ad Creative / Variant</span>
-                                    <span className="font-semibold text-foreground truncate block">
-                                        {lead.inboundDetails?.utmContent || lead.attribution?.utmContent || 'N/A'}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground block text-[10px]">Ad Click ID</span>
-                                    <span className="font-mono text-[11px] text-muted-foreground truncate block" title={lead.inboundDetails?.adClickId || lead.attribution?.adClickId || 'N/A'}>
-                                        {lead.inboundDetails?.adClickId || lead.attribution?.adClickId || 'N/A'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                            );
+                        })()}
 
                         {lead.discoveryData ? (
                             <div className="space-y-6 pt-4 border-t">

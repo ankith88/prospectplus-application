@@ -194,14 +194,14 @@ export default function PostHogReportingClient() {
 
   const filteredLeads = attributionLeads.filter((l) => {
     if (channelFilter === "all") return true;
-    const channel = l.inboundDetails?.channel || l.marketingChannel || "";
+    const channel = l.inboundDetails?.channel || l.marketingChannel || l.attribution?.channel || "";
     return channel.toLowerCase().includes(channelFilter.toLowerCase());
   });
 
   // Calculate top-line metrics
   const channelCounts: Record<string, number> = {};
   attributionLeads.forEach((l) => {
-    const ch = l.inboundDetails?.channel || l.marketingChannel || "Direct / Organic";
+    const ch = l.inboundDetails?.channel || l.marketingChannel || l.attribution?.channel || "Direct / Organic";
     channelCounts[ch] = (channelCounts[ch] || 0) + 1;
   });
 
@@ -210,7 +210,7 @@ export default function PostHogReportingClient() {
   const topChannelCount = sortedChannels[0] ? sortedChannels[0][1] : 0;
 
   const sessionReplaysCount = attributionLeads.filter(
-    (l) => l.inboundDetails?.posthogSessionUrl || l.posthogSessionUrl
+    (l) => l.inboundDetails?.posthogSessionUrl || l.posthogSessionUrl || l.attribution?.posthogSessionUrl
   ).length;
 
   return (
@@ -933,17 +933,17 @@ export default function PostHogReportingClient() {
                 </thead>
                 <tbody className="divide-y">
                   {filteredLeads.map((lead) => {
-                    const channel = lead.inboundDetails?.channel || lead.marketingChannel || "Direct / Organic";
+                    const channel = lead.inboundDetails?.channel || lead.marketingChannel || lead.attribution?.channel || "Direct / Organic";
                     const campaignName =
                       lead.inboundDetails?.utmCampaign ||
                       lead.attribution?.utmCampaign ||
                       (lead.campaign && lead.campaign !== "Outbound" ? lead.campaign : null) ||
                       "N/A";
-                    const utmSource = lead.inboundDetails?.utmSource || "N/A";
-                    const utmMedium = lead.inboundDetails?.utmMedium || "N/A";
-                    const utmContent = lead.inboundDetails?.utmContent || "N/A";
-                    const landingPage = lead.inboundPageUrl || lead.inboundDetails?.landingPage || "N/A";
-                    const sessionUrl = lead.inboundDetails?.posthogSessionUrl || lead.posthogSessionUrl;
+                    const utmSource = lead.inboundDetails?.utmSource || lead.attribution?.utmSource || "N/A";
+                    const utmMedium = lead.inboundDetails?.utmMedium || lead.attribution?.utmMedium || "N/A";
+                    const utmContent = lead.inboundDetails?.utmContent || lead.attribution?.utmContent || "N/A";
+                    const landingPage = lead.inboundPageUrl || lead.inboundDetails?.landingPage || lead.attribution?.landingPage || "N/A";
+                    const sessionUrl = lead.inboundDetails?.posthogSessionUrl || lead.posthogSessionUrl || lead.attribution?.posthogSessionUrl;
 
                     return (
                       <tr key={lead.id} className="hover:bg-muted/30 transition-colors">
