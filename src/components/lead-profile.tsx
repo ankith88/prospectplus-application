@@ -6110,7 +6110,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <div>
                                     <span className="text-muted-foreground block text-[10px]">Campaign Name</span>
                                     <span className="font-semibold text-foreground truncate block">
-                                        {lead.inboundDetails?.utmCampaign || lead.attribution?.utmCampaign || lead.campaign || 'N/A'}
+                                        {lead.inboundDetails?.utmCampaign || lead.attribution?.utmCampaign || (lead.campaign && lead.campaign !== 'Outbound' ? lead.campaign : null) || 'N/A'}
                                     </span>
                                 </div>
                                 <div>

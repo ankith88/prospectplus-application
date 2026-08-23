@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     // Process & sanitize Marketing Attribution
     const finalUtmSource = attribution?.utmSource || utmSource || inboundDetails?.utmSource || null;
     const finalUtmMedium = attribution?.utmMedium || utmMedium || inboundDetails?.utmMedium || null;
-    const finalUtmCampaign = attribution?.utmCampaign || utmCampaign || inboundDetails?.utmCampaign || body.campaign || null;
+    const finalUtmCampaign = attribution?.utmCampaign || utmCampaign || inboundDetails?.utmCampaign || (body.campaign && body.campaign !== 'Outbound' ? body.campaign : null) || null;
     const finalUtmContent = attribution?.utmContent || utmContent || inboundDetails?.utmContent || null;
     const finalUtmTerm = attribution?.utmTerm || utmTerm || inboundDetails?.utmTerm || null;
     const finalAdClickId = attribution?.adClickId || adClickId || inboundDetails?.adClickId || null;
