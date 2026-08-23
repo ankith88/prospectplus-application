@@ -27,6 +27,8 @@ import {
   Settings,
   Calendar
 } from "lucide-react";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { firestore } from "@/lib/firebase";
 import { getLeadsFromFirebase } from "@/services/firebase";
 import { Lead } from "@/lib/types";
 
@@ -110,8 +112,88 @@ export default function PostHogReportingClient() {
     async function fetchAttributionLeads() {
       try {
         setLoadingLeads(true);
-        const fetchedLeads = await getLeadsFromFirebase();
-        setLeads(fetchedLeads || []);
+        const leadMap = new Map<string, Lead>();
+
+        const processDoc = (docSnap: any) => {
+          const data = docSnap.data();
+          if (!data) return;
+          if (!leadMap.has(docSnap.id)) {
+            leadMap.set(docSnap.id, {
+              id: docSnap.id,
+              internalid: data.internalid || data.internalId || docSnap.id,
+              companyName: data.companyName || data.company || "Unknown Company",
+              status: data.customerStatus || data.status || "New",
+              customerStatus: data.customerStatus,
+              profile: "",
+              attribution: data.attribution,
+              inboundDetails: data.inboundDetails,
+              customerSource: data.customerSource || data.source || data.leadSource,
+              bucket: data.bucket,
+              marketingChannel: data.marketingChannel || data.attribution?.channel || (data.customerSource === "Website" ? "Website / Organic" : undefined),
+              posthogSessionUrl:
+                data.posthogSessionUrl ||
+                data.attribution?.posthogSessionUrl ||
+                (data.attribution?.posthogSessionId
+                  ? `https://us.posthog.com/project/108577/replay/${data.attribution.posthogSessionId}`
+                  : undefined),
+              contacts:
+                data.contacts ||
+                (data.customerServiceEmail
+                  ? [{ name: data.contactName || "", email: data.customerServiceEmail, phone: data.customerPhone || "", id: "", title: "" }]
+                  : []),
+              inboundPageUrl: data.inboundPageUrl || data.attribution?.landingPage,
+              campaign: data.campaign || data.attribution?.utmCampaign,
+              customerServiceEmail: data.customerServiceEmail || data.customerEmail,
+            } as Lead);
+          }
+        };
+
+        // 1. Direct indexed queries across Firestore collections
+        try {
+          const leadsRef = collection(firestore, "leads");
+          const compRef = collection(firestore, "companies");
+
+          const [attrSnap, inboundSnap, mktSnap, bucketSnap, siteSnap, compAttrSnap] = await Promise.all([
+            getDocs(query(leadsRef, where("attribution", "!=", null))).catch(() => ({ docs: [] })),
+            getDocs(query(leadsRef, where("inboundDetails", "!=", null))).catch(() => ({ docs: [] })),
+            getDocs(query(leadsRef, where("marketingChannel", "!=", null))).catch(() => ({ docs: [] })),
+            getDocs(query(leadsRef, where("bucket", "==", "inbound"))).catch(() => ({ docs: [] })),
+            getDocs(query(leadsRef, where("customerSource", "==", "Website"))).catch(() => ({ docs: [] })),
+            getDocs(query(compRef, where("attribution", "!=", null))).catch(() => ({ docs: [] })),
+          ]);
+
+          attrSnap.docs.forEach(processDoc);
+          inboundSnap.docs.forEach(processDoc);
+          mktSnap.docs.forEach(processDoc);
+          bucketSnap.docs.forEach(processDoc);
+          siteSnap.docs.forEach(processDoc);
+          compAttrSnap.docs.forEach(processDoc);
+        } catch (e) {
+          console.warn("Direct Firestore attribution queries failed, falling back:", e);
+        }
+
+        // 2. Supplementary load via getLeadsFromFirebase
+        try {
+          const generalLeads = await getLeadsFromFirebase({ includeDuplicates: true });
+          (generalLeads || []).forEach((lead) => {
+            if (
+              lead.attribution ||
+              lead.inboundDetails?.channel ||
+              lead.marketingChannel ||
+              lead.posthogSessionUrl ||
+              lead.customerSource === "Website" ||
+              lead.bucket === "inbound"
+            ) {
+              if (!leadMap.has(lead.id)) {
+                leadMap.set(lead.id, lead);
+              }
+            }
+          });
+        } catch (e) {
+          console.warn("General leads fetch error:", e);
+        }
+
+        setLeads(Array.from(leadMap.values()));
       } catch (err) {
         console.error("Failed to fetch leads for marketing analytics:", err);
       } finally {
@@ -187,9 +269,15 @@ export default function PostHogReportingClient() {
     return <AccessDenied />;
   }
 
-  // Filter leads with attribution or campaign data
+  // Filter leads with attribution, campaign, website source, or inbound bucket data
   const attributionLeads = leads.filter(
-    (l) => l.attribution || l.inboundDetails?.channel || l.inboundDetails?.utmCampaign || l.marketingChannel
+    (l) =>
+      Boolean(l.attribution && (typeof l.attribution !== "object" || Object.keys(l.attribution).length > 0)) ||
+      Boolean(l.inboundDetails?.channel || l.inboundDetails?.utmCampaign) ||
+      Boolean(l.marketingChannel) ||
+      Boolean(l.customerSource === "Website" || l.source === "Website") ||
+      Boolean(l.bucket === "inbound") ||
+      Boolean(l.inboundPageUrl)
   );
 
   const filteredLeads = attributionLeads.filter((l) => {
@@ -201,7 +289,7 @@ export default function PostHogReportingClient() {
   // Calculate top-line metrics
   const channelCounts: Record<string, number> = {};
   attributionLeads.forEach((l) => {
-    const ch = l.inboundDetails?.channel || l.marketingChannel || l.attribution?.channel || "Direct / Organic";
+    const ch = l.inboundDetails?.channel || l.marketingChannel || l.attribution?.channel || (l.customerSource === "Website" ? "Website / Organic" : "Direct / Organic");
     channelCounts[ch] = (channelCounts[ch] || 0) + 1;
   });
 
@@ -210,7 +298,11 @@ export default function PostHogReportingClient() {
   const topChannelCount = sortedChannels[0] ? sortedChannels[0][1] : 0;
 
   const sessionReplaysCount = attributionLeads.filter(
-    (l) => l.inboundDetails?.posthogSessionUrl || l.posthogSessionUrl || l.attribution?.posthogSessionUrl
+    (l) =>
+      l.inboundDetails?.posthogSessionUrl ||
+      l.posthogSessionUrl ||
+      l.attribution?.posthogSessionUrl ||
+      l.attribution?.posthogSessionId
   ).length;
 
   return (
@@ -760,11 +852,31 @@ export default function PostHogReportingClient() {
                   </thead>
                   <tbody className="divide-y">
                     {leads
-                      .filter((l) => l.inboundDetails?.posthogSessionUrl || l.posthogSessionUrl)
+                      .filter(
+                        (l) =>
+                          l.inboundDetails?.posthogSessionUrl ||
+                          l.posthogSessionUrl ||
+                          l.attribution?.posthogSessionUrl ||
+                          l.attribution?.posthogSessionId
+                      )
                       .map((lead) => {
-                        const sessionUrl = lead.inboundDetails?.posthogSessionUrl || lead.posthogSessionUrl;
-                        const channel = lead.inboundDetails?.channel || lead.marketingChannel || "Direct / Organic";
-                        const landingPage = lead.inboundPageUrl || lead.inboundDetails?.landingPage || "N/A";
+                        const sessionUrl =
+                          lead.inboundDetails?.posthogSessionUrl ||
+                          lead.posthogSessionUrl ||
+                          lead.attribution?.posthogSessionUrl ||
+                          (lead.attribution?.posthogSessionId
+                            ? `https://us.posthog.com/project/108577/replay/${lead.attribution.posthogSessionId}`
+                            : null);
+                        const channel =
+                          lead.attribution?.channel ||
+                          lead.inboundDetails?.channel ||
+                          lead.marketingChannel ||
+                          "Direct / Organic";
+                        const landingPage =
+                          lead.attribution?.landingPage ||
+                          lead.inboundPageUrl ||
+                          lead.inboundDetails?.landingPage ||
+                          "N/A";
 
                         return (
                           <tr key={lead.id} className="hover:bg-muted/30 transition-colors">
@@ -792,7 +904,13 @@ export default function PostHogReportingClient() {
                           </tr>
                         );
                       })}
-                    {leads.filter((l) => l.inboundDetails?.posthogSessionUrl || l.posthogSessionUrl).length === 0 && (
+                    {leads.filter(
+                      (l) =>
+                        l.inboundDetails?.posthogSessionUrl ||
+                        l.posthogSessionUrl ||
+                        l.attribution?.posthogSessionUrl ||
+                        l.attribution?.posthogSessionId
+                    ).length === 0 && (
                       <tr>
                         <td colSpan={4} className="p-6 text-center text-muted-foreground text-xs">
                           No active session replay links detected on leads yet. Ensure PostHog Session Recording snippet is active on landing pages.

@@ -71,6 +71,7 @@ import {
   GitMerge,
   Zap,
   Bell,
+  Megaphone,
 } from 'lucide-react'
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
@@ -6071,26 +6072,53 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         : (lead.discoveryData?.interestedIn || lead.interestedIn || 'N/A')}
                                 </p>
                             </div>
-                            <div className="p-3 bg-muted/40 rounded-lg border">
-                                <p className="text-xs text-muted-foreground font-medium">Inbound Website URL</p>
-                                <div className="mt-1">
-                                    {lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage ? (
-                                        <a 
-                                            href={(lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage || '').startsWith('http') 
-                                                ? (lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage) 
-                                                : `https://${lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage}`}
-                                            target="_blank" 
-                                            rel="noopener noreferrer" 
-                                            className="text-sm font-semibold text-primary hover:underline break-all block"
-                                            title={lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage}
-                                        >
-                                            {lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage}
-                                        </a>
-                                    ) : lead.discoveryData?.routingTag ? (
-                                        <Badge variant="outline" className="text-sm font-semibold">{lead.discoveryData.routingTag}</Badge>
-                                    ) : (
-                                        <span className="text-sm font-semibold text-muted-foreground">N/A</span>
-                                    )}
+                            <div className="p-3 bg-muted/40 rounded-lg border flex flex-col justify-between">
+                                <p className="text-xs text-muted-foreground font-medium mb-1">Inbound Website URL</p>
+                                <div>
+                                    {(() => {
+                                        const rawUrl = lead.inboundPageUrl || lead.pageURL || lead.inboundDetails?.landingPage;
+                                        if (!rawUrl) {
+                                            return lead.discoveryData?.routingTag ? (
+                                                <Badge variant="outline" className="text-sm font-semibold">{lead.discoveryData.routingTag}</Badge>
+                                            ) : (
+                                                <span className="text-sm font-semibold text-muted-foreground">N/A</span>
+                                            );
+                                        }
+
+                                        const fullUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
+                                        let displayUrl = rawUrl;
+                                        try {
+                                            const parsed = new URL(fullUrl);
+                                            displayUrl = `${parsed.hostname}${parsed.pathname}`;
+                                        } catch (e) {
+                                            displayUrl = rawUrl.split('?')[0];
+                                        }
+
+                                        return (
+                                            <div className="flex items-center gap-1.5 min-w-0 mt-1">
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <a 
+                                                                href={fullUrl}
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer" 
+                                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20 truncate max-w-full"
+                                                            >
+                                                                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                                                                <span className="truncate">{displayUrl}</span>
+                                                            </a>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top" className="max-w-md text-xs bg-slate-900 text-white p-2.5 font-mono break-all shadow-xl">
+                                                            <p className="font-semibold mb-1 text-[10px] text-slate-400 uppercase tracking-wider">Full Inbound URL</p>
+                                                            <p className="break-all text-xs">{fullUrl}</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                                <CopyButton textToCopy={fullUrl} className="h-6 w-6 shrink-0" iconClassName="h-3.5 w-3.5" />
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -6106,13 +6134,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             const adClickId = lead.attribution?.adClickId || lead.inboundDetails?.adClickId || extractUrlQueryParam(landingUrl, 'fbclid') || extractUrlQueryParam(landingUrl, 'gclid') || 'N/A';
                             const posthogReplayUrl = lead.inboundDetails?.posthogSessionUrl || lead.posthogSessionUrl || lead.attribution?.posthogSessionUrl || (lead.attribution?.posthogSessionId ? `https://us.posthog.com/project/108577/replay/${lead.attribution.posthogSessionId}` : null);
                             const posthogSessionId = lead.attribution?.posthogSessionId || lead.inboundDetails?.posthogSessionId;
+                            const posthogDistinctId = lead.attribution?.posthogDistinctId;
+
+                            const metrics = [
+                                { label: 'Channel', value: channel, key: 'channel' },
+                                { label: 'UTM Campaign', value: utmCampaign, key: 'utmCampaign' },
+                                { label: 'UTM Source', value: utmSource, key: 'utmSource' },
+                                { label: 'UTM Medium', value: utmMedium, key: 'utmMedium' },
+                                { label: 'UTM Content', value: utmContent, key: 'utmContent' },
+                            ];
 
                             return (
-                                <div className="p-4 bg-muted/20 rounded-lg border border-primary/10 space-y-4">
-                                    <div className="flex items-center justify-between flex-wrap gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Marketing & Social Ad Attribution</h4>
-                                            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                                <div className="p-4 bg-muted/20 rounded-xl border border-primary/10 space-y-4 shadow-2xs">
+                                    {/* Header */}
+                                    <div className="flex items-center justify-between flex-wrap gap-2 pb-1 border-b border-border/40">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-1 bg-primary/10 rounded text-primary">
+                                                <Megaphone className="w-3.5 h-3.5" />
+                                            </div>
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                                                Marketing & Social Ad Attribution
+                                            </h4>
+                                            <Badge variant="outline" className="text-[10px] font-semibold bg-primary/10 text-primary border-primary/20">
                                                 {channel}
                                             </Badge>
                                         </div>
@@ -6121,7 +6164,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                 href={posthogReplayUrl}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 bg-purple-50 px-2.5 py-1 rounded border border-purple-200 transition-colors"
+                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:text-purple-700 bg-purple-50 dark:bg-purple-950/40 px-2.5 py-1 rounded border border-purple-200 dark:border-purple-800 transition-colors hover:shadow-xs"
                                             >
                                                 🎥 Watch PostHog Replay
                                             </a>
@@ -6129,55 +6172,104 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </div>
 
                                     {/* 5 Core Attribution Metrics */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                                        <div className="p-2.5 bg-background/50 rounded border border-border/50">
-                                            <span className="text-muted-foreground block text-[10px] font-medium">Channel</span>
-                                            <span className="font-semibold text-foreground truncate block mt-0.5" title={channel}>
-                                                {channel}
-                                            </span>
+                                    <TooltipProvider>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 text-xs">
+                                            {metrics.map((m) => {
+                                                const hasValue = m.value && m.value !== 'N/A';
+                                                return (
+                                                    <div
+                                                        key={m.key}
+                                                        className="p-3 bg-background/80 dark:bg-background/40 rounded-lg border border-border/60 hover:border-primary/30 transition-all flex flex-col justify-between group shadow-2xs min-w-0"
+                                                    >
+                                                        <div className="flex items-center justify-between gap-1 mb-1">
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                                                                {m.label}
+                                                            </span>
+                                                            {hasValue && (
+                                                                <CopyButton
+                                                                    textToCopy={m.value}
+                                                                    className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    iconClassName="h-3 w-3"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <div className="cursor-default min-w-0">
+                                                                    <span
+                                                                        className={`font-semibold text-xs break-words line-clamp-2 ${
+                                                                            hasValue ? 'text-foreground' : 'text-muted-foreground/50 font-normal italic'
+                                                                        }`}
+                                                                    >
+                                                                        {m.value}
+                                                                    </span>
+                                                                </div>
+                                                            </TooltipTrigger>
+                                                            {hasValue && (
+                                                                <TooltipContent side="top" className="max-w-xs text-xs bg-slate-900 text-white p-2.5 shadow-xl">
+                                                                    <p className="font-semibold mb-0.5 text-[10px] text-slate-400 uppercase tracking-wider">{m.label}</p>
+                                                                    <p className="break-words font-mono text-xs">{m.value}</p>
+                                                                </TooltipContent>
+                                                            )}
+                                                        </Tooltip>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                        <div className="p-2.5 bg-background/50 rounded border border-border/50">
-                                            <span className="text-muted-foreground block text-[10px] font-medium">UTM Campaign</span>
-                                            <span className="font-semibold text-foreground truncate block mt-0.5" title={utmCampaign}>
-                                                {utmCampaign}
-                                            </span>
-                                        </div>
-                                        <div className="p-2.5 bg-background/50 rounded border border-border/50">
-                                            <span className="text-muted-foreground block text-[10px] font-medium">UTM Source</span>
-                                            <span className="font-semibold text-foreground truncate block mt-0.5" title={utmSource}>
-                                                {utmSource}
-                                            </span>
-                                        </div>
-                                        <div className="p-2.5 bg-background/50 rounded border border-border/50">
-                                            <span className="text-muted-foreground block text-[10px] font-medium">UTM Medium</span>
-                                            <span className="font-semibold text-foreground truncate block mt-0.5" title={utmMedium}>
-                                                {utmMedium}
-                                            </span>
-                                        </div>
-                                        <div className="p-2.5 bg-background/50 rounded border border-border/50">
-                                            <span className="text-muted-foreground block text-[10px] font-medium">UTM Content</span>
-                                            <span className="font-semibold text-foreground truncate block mt-0.5" title={utmContent}>
-                                                {utmContent}
-                                            </span>
-                                        </div>
-                                    </div>
+                                    </TooltipProvider>
 
-                                    {/* Secondary Click & Session Metadata */}
-                                    <div className="pt-2 border-t border-border/50 text-[11px] text-muted-foreground flex items-center justify-between flex-wrap gap-2">
-                                        <div className="flex items-center gap-1.5 truncate max-w-md">
-                                            <span>Ad Click ID:</span>
-                                            <code className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded text-foreground/90 truncate" title={adClickId}>
-                                                {adClickId}
-                                            </code>
+                                    {/* Secondary Click, Session Metadata & Landing Page */}
+                                    <div className="pt-3 border-t border-border/50 text-[11px] text-muted-foreground flex items-center justify-between flex-wrap gap-3">
+                                        <div className="flex items-center gap-2 max-w-full flex-wrap">
+                                            <span className="font-medium text-foreground/80">Ad Click ID:</span>
+                                            {adClickId !== 'N/A' ? (
+                                                <div className="inline-flex items-center gap-1 bg-muted px-2 py-0.5 rounded border border-border/60 max-w-md">
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <code className="font-mono text-[10px] text-foreground/90 truncate max-w-[240px] sm:max-w-[340px] inline-block align-middle cursor-pointer">
+                                                                    {adClickId}
+                                                                </code>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top" className="max-w-md text-xs bg-slate-900 text-white p-2 font-mono break-all">
+                                                                {adClickId}
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                    <CopyButton textToCopy={adClickId} className="h-4 w-4" iconClassName="h-3 w-3" />
+                                                </div>
+                                            ) : (
+                                                <span className="text-muted-foreground/60 italic text-[10px]">N/A</span>
+                                            )}
                                         </div>
-                                        {posthogSessionId && (
-                                            <div className="flex items-center gap-3 text-[10px]">
-                                                <span>PostHog Session: <code className="font-mono text-foreground/80">{posthogSessionId}</code></span>
-                                                {lead.attribution?.posthogDistinctId && (
-                                                    <span>Distinct ID: <code className="font-mono text-foreground/80">{lead.attribution.posthogDistinctId}</code></span>
-                                                )}
-                                            </div>
-                                        )}
+
+                                        <div className="flex items-center gap-4 text-[10px] flex-wrap">
+                                            {posthogSessionId && (
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-muted-foreground">PostHog Session:</span>
+                                                    <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground/80">{posthogSessionId}</code>
+                                                    <CopyButton textToCopy={posthogSessionId} className="h-4 w-4" iconClassName="h-3 w-3" />
+                                                </div>
+                                            )}
+                                            {posthogDistinctId && (
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-muted-foreground">Distinct ID:</span>
+                                                    <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground/80">{posthogDistinctId}</code>
+                                                    <CopyButton textToCopy={posthogDistinctId} className="h-4 w-4" iconClassName="h-3 w-3" />
+                                                </div>
+                                            )}
+                                            {landingUrl && (
+                                                <a
+                                                    href={landingUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-1 text-primary hover:underline font-medium text-[10px]"
+                                                    title={landingUrl}
+                                                >
+                                                    <ExternalLink className="w-3 h-3" /> Landing Page
+                                                </a>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             );
