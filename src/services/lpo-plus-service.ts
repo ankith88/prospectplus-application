@@ -96,20 +96,7 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
       authID = `user-${netsuiteId}`;
     }
 
-    // 2. Create or Update User Document in 'users' collection of lpoconnect DB (Doc ID = authID)
-    await lpoConnectDb.collection('users').doc(authID).set({
-      first_name: contactFirstName || 'LPO',
-      last_name: contactLastName || 'Contact',
-      email: contactEmail,
-      phone: contactPhone || '',
-      lpo_id: String(netsuiteId),
-      role: 'admin',
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-
-    console.log(`[LPO.Plus Firestore] Created/updated 'users' document ID: ${authID}`);
-
-    // 3. Formulate territory suburb strings format ("Suburb, STATE Postcode")
+    // 2. Formulate territory suburb strings format ("Suburb, STATE Postcode")
     const formattedTerritory: string[] = territorySuburbs.map((sub: any) => {
       if (typeof sub === 'string') return sub;
       const subName = sub.suburbs || sub.suburb || sub.name || '';
@@ -120,10 +107,11 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
 
     // Clean company name (split by " - " if present)
     const cleanLpoName = lpoName.split(' - ')[0].trim();
+    const lpoDocId = String(netsuiteId);
 
-    // 4. Create or Update LPO Document in 'lpo' collection of lpoconnect DB (Doc ID = netsuiteId)
+    // 3. Create or Update LPO Document in 'lpo' collection of lpoconnect DB (Doc ID = lpoDocId)
     const lpoData: Record<string, any> = {
-      lpo_id: String(netsuiteId),
+      lpo_id: lpoDocId,
       name: cleanLpoName,
       address1: address1,
       street: street,
@@ -141,9 +129,29 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
       provisionedAt: new Date().toISOString()
     };
 
-    await lpoConnectDb.collection('lpo').doc(String(netsuiteId)).set(lpoData, { merge: true });
+    await lpoConnectDb.collection('lpo').doc(lpoDocId).set(lpoData, { merge: true });
+    console.log(`[LPO.Plus Firestore] Created/updated 'lpo' document ID: ${lpoDocId}`);
 
-    console.log(`[LPO.Plus Firestore] Created/updated 'lpo' document ID: ${netsuiteId}`);
+    // 4. Create or Update User Document in 'users' collection of lpoconnect DB (Doc ID = authID), linked via lpo_id
+    const userData = {
+      first_name: contactFirstName || 'LPO',
+      last_name: contactLastName || 'Contact',
+      email: contactEmail,
+      phone: contactPhone || '',
+      lpo_id: lpoDocId, // Linked directly to the 'lpo' document ID
+      lpoId: lpoDocId,
+      lpo_name: cleanLpoName,
+      role: 'admin',
+      updatedAt: new Date().toISOString()
+    };
+
+    await lpoConnectDb.collection('users').doc(authID).set(userData, { merge: true });
+    console.log(`[LPO.Plus Firestore] Created/updated 'users' document ID: ${authID} linked to lpo_id: ${lpoDocId}`);
+
+    // Also update by email document ID if exists for fallback lookup
+    try {
+      await lpoConnectDb.collection('users').doc(contactEmail).set({ lpo_id: lpoDocId, lpoId: lpoDocId, email: contactEmail }, { merge: true });
+    } catch (e) {}
 
     // 5. Send "Welcome to LPO.PLUS" Email with Default Password
     const year = new Date().getFullYear();
