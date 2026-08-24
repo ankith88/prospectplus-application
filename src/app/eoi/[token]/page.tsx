@@ -180,6 +180,7 @@ export default function PublicEOIPage() {
   // --- Section 12 & 13: Franchise Purchase & Info Statement ---
   const [requiresFinance, setRequiresFinance] = useState('No');
   const [authorizeFinanceSharing, setAuthorizeFinanceSharing] = useState('No');
+  const [fundingType, setFundingType] = useState<'nab' | 'sole_trader' | 'self_funded'>('sole_trader');
   const [informationStatementConfirmed, setInformationStatementConfirmed] = useState(true);
   const [informationStatementDate, setInformationStatementDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -330,6 +331,11 @@ export default function PublicEOIPage() {
             // General Enquiry
             if (d.reasonForPurchase) setReasonForPurchase(d.reasonForPurchase);
             if (d.fundingSource) setFundingSource(d.fundingSource);
+            if (d.fundingType) {
+              setFundingType(d.fundingType as any);
+            } else if (p.nabFunding?.accreditationFundingRequired) {
+              setFundingType('nab');
+            }
             if (d.whySuited) setWhySuited(d.whySuited);
             if (d.similarBusinessExperience !== undefined) setSimilarBusinessExperience(d.similarBusinessExperience ? 'Yes' : 'No');
             if (d.similarBusinessDetails) setSimilarBusinessDetails(d.similarBusinessDetails);
@@ -542,6 +548,8 @@ export default function PublicEOIPage() {
         // General Enquiry
         reasonForPurchase: reasonForPurchase.trim(),
         fundingSource: fundingSource.trim(),
+        fundingType,
+        accreditationFundingRequired: fundingType === 'nab',
         whySuited: whySuited.trim(),
         similarBusinessExperience: similarBusinessExperience === 'Yes',
         similarBusinessDetails: similarBusinessDetails.trim(),
@@ -1121,9 +1129,63 @@ export default function PublicEOIPage() {
                 <textarea rows={2} value={reasonForPurchase} onChange={(e) => setReasonForPurchase(e.target.value)} className="w-full p-2 border rounded bg-white" />
               </div>
 
+              {/* Dedicated Funding & Business Structure Section */}
+              <div className="p-4 bg-[#095c7b]/5 border-2 border-[#095c7b]/30 rounded-xl space-y-3">
+                <Label className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">
+                  Franchise Purchase Funding Requirement & Structure Selection
+                </Label>
+                <p className="text-xs text-slate-600">
+                  Please select whether your franchise purchase requires <strong>NAB Accreditation Funding</strong> or will be <strong>Sole Trader / Self-Funded</strong>. This selection determines your application approval workflow.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <label className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                    fundingType === 'nab'
+                      ? 'border-[#095c7b] bg-[#095c7b]/10 ring-2 ring-[#095c7b]/20 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="fundingTypeRadio"
+                      value="nab"
+                      checked={fundingType === 'nab'}
+                      onChange={() => setFundingType('nab')}
+                      className="mt-0.5 h-4 w-4 text-[#095c7b] focus:ring-[#095c7b]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">1. NAB Accreditation Funding</span>
+                      <span className="text-[11px] text-slate-600 block mt-0.5">
+                        Requires NAB commercial accreditation. Application routes to Michael McDaid for NAB confirmation prior to legal release.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                    fundingType === 'sole_trader' || fundingType === 'self_funded'
+                      ? 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-600/20 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="fundingTypeRadio"
+                      value="sole_trader"
+                      checked={fundingType === 'sole_trader' || fundingType === 'self_funded'}
+                      onChange={() => setFundingType('sole_trader')}
+                      className="mt-0.5 h-4 w-4 text-emerald-600 focus:ring-emerald-600"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">2. Sole Trader / Self-Funded</span>
+                      <span className="text-[11px] text-slate-600 block mt-0.5">
+                        Self-funded capital or Sole Trader financing. Bypasses NAB accreditation hold and proceeds directly to legal instruction dispatch.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">2. How do you intend to fund the purchase of the MailPlus Franchise?</Label>
-                <textarea rows={2} value={fundingSource} onChange={(e) => setFundingSource(e.target.value)} className="w-full p-2 border rounded bg-white" />
+                <textarea rows={2} value={fundingSource} onChange={(e) => setFundingSource(e.target.value)} placeholder="Provide additional funding details (e.g., bank transfer, personal savings, equity)..." className="w-full p-2 border rounded bg-white" />
               </div>
 
               <div className="space-y-1.5">

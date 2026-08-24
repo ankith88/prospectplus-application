@@ -946,6 +946,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                 notes: values.notes || '',
                 author: user.displayName || 'Unknown',
                 salesRecordInternalId: lead.salesRecordInternalId,
+                userRole: userProfile?.activeRole || userProfile?.role || 'user'
             }
         );
 
@@ -1199,9 +1200,14 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
             }
             const followUpIso = d.toISOString();
             
+            const activeRoleStr = String(userProfile?.activeRole || userProfile?.role || 'user').toLowerCase().trim();
+            const dialerRoles = ['dialer', 'dialers', 'lead gen', 'lead_gen', 'leadgen', 'user'];
+            const isDialerUser = dialerRoles.includes(activeRoleStr);
+
+            const isLocalMileOpp = (lead.status === 'LocalMile Opportunity' || lead.customerStatus === 'LocalMile Opportunity') && isDialerUser;
             await updateDoc(doc(db, 'leads', lead.id), { 
                 followUpDate: followUpIso,
-                customerStatus: 'Future Follow-up' 
+                ...(!isLocalMileOpp ? { customerStatus: 'Future Follow-up' } : {})
             });
 
             const taskTitle = `Future Follow-up: Re-contact Lead`;

@@ -130,9 +130,17 @@ export async function POST(req: Request) {
       ...formData,
     };
 
+    const isNabFundingRequired = formData.fundingType === 'nab' || formData.accreditationFundingRequired === true || String(formData.fundingSource || '').toLowerCase().includes('nab');
+
+    const updatedNabFunding = {
+      accreditationFundingRequired: isNabFundingRequired,
+      nabStatus: isNabFundingRequired ? (currentData.nabFunding?.nabStatus === 'confirmed' ? 'confirmed' : 'pending_michael_confirmation') : 'not_required',
+      nabNotes: currentData.nabFunding?.nabNotes || '',
+    };
+
     const newNote = {
       id: Math.random().toString(36).substring(2, 9),
-      text: `Expression of Interest (EOI) form completed and digitally signed by ${signerName}.`,
+      text: `Expression of Interest (EOI) form completed and digitally signed by ${signerName}. Funding method: ${isNabFundingRequired ? 'NAB Accreditation Funding' : 'Sole Trader Funding / Self-Funded'}.`,
       createdAt: new Date().toISOString(),
       createdByName: 'Candidate Online Portal',
       createdByUid: 'system_portal',
@@ -140,6 +148,7 @@ export async function POST(req: Request) {
 
     await ref.update({
       eoiData: fullEOIData,
+      nabFunding: updatedNabFunding,
       status: 'EOI Signed',
       notes: [...(currentData.notes || []), newNote],
     });

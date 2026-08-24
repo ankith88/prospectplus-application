@@ -61,9 +61,17 @@ export async function POST(request: Request) {
     };
 
     if (stepType === 'fact_sheet') {
+      const territoryMapUrl = prospectData.keyFactSheet?.territoryMapUrl;
+      if (!territoryMapUrl) {
+        return NextResponse.json(
+          { success: false, message: 'A territory map graphic is required before sending out the Information Memorandum (IM). Please attach a map image first.' },
+          { status: 400 }
+        );
+      }
+
       const token = prospectData.keyFactSheet?.publicToken || prospectId;
       linkUrl = `${origin}/fact-sheet/${token}`;
-      defaultSubject = `MailPlus Key Fact Sheet - Franchise Opportunity in ${preferredTerritory}`;
+      defaultSubject = `MailPlus Information Memorandum (IM) - Franchise Opportunity in ${preferredTerritory}`;
 
       const franchiseFee = prospectData.keyFactSheet?.franchiseFee || 35000;
       const trainingFee = prospectData.keyFactSheet?.trainingFee || 5000;
@@ -71,7 +79,7 @@ export async function POST(request: Request) {
       const bodyContent = customMessage
         ? formatCustomMessage(customMessage)
         : `<p style="margin-bottom: 16px;">Thank you for your interest in joining the MailPlus franchise network for the <strong>${preferredTerritory}</strong> territory.</p>
-           <p style="margin-bottom: 20px;">We have prepared your personalized <strong>MailPlus Key Fact Sheet</strong>, which outlines the key territory financials, franchise fees, marketing structure, and operational overview.</p>`;
+           <p style="margin-bottom: 20px;">We have prepared your personalized <strong>MailPlus Information Memorandum (IM)</strong>, which outlines the key territory financials, franchise fees, marketing structure, operational overview, and territory map boundaries.</p>`;
 
       emailBodyHtml = `
         <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; font-weight: 700;">Hi ${recipientName},</h2>
@@ -84,15 +92,16 @@ export async function POST(request: Request) {
               <p style="margin: 4px 0; font-size: 13px;">&bull; <strong>Territory:</strong> ${preferredTerritory}</p>
               <p style="margin: 4px 0; font-size: 13px;">&bull; <strong>Franchise Fee:</strong> $${Number(franchiseFee).toLocaleString('en-AU')}</p>
               <p style="margin: 4px 0; font-size: 13px;">&bull; <strong>Training & Onboarding Fee:</strong> $${Number(trainingFee).toLocaleString('en-AU')}</p>
+              ${territoryMapUrl ? `<p style="margin: 4px 0; font-size: 13px;">&bull; <strong>Territory Boundary Map:</strong> Attached & Included in online IM</p>` : ''}
             </td>
           </tr>
         </table>
 
         <p style="text-align: center; margin: 30px 0;">
-          <a href="${linkUrl}" style="background-color: #095c7b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 15px;">View Your Key Fact Sheet &rarr;</a>
+          <a href="${linkUrl}" style="background-color: #095c7b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 15px;">View Your Information Memorandum (IM) &rarr;</a>
         </p>
 
-        <p style="font-size: 13px; color: #64748b;">If you have any questions after reviewing the fact sheet, please feel free to reach out directly to Greg Hart.</p>
+        <p style="font-size: 13px; color: #64748b;">If you have any questions after reviewing the Information Memorandum (IM), please feel free to reach out directly to Greg Hart.</p>
       `;
     } else if (stepType === 'confidentiality_deed') {
       const token = prospectData.confidentialityDeed?.publicToken || prospectId;

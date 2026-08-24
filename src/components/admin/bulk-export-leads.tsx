@@ -115,7 +115,9 @@ export function BulkExportLeads() {
       'Franchisee', 'Industry', 'Lead Type', 'Contact 1 First Name', 'Contact 1 Last Name', 'Contact 1 Title', 
       'Contact 1 Email', 'Contact 1 Phone', 'Contact 2 First Name', 'Contact 2 Last Name', 'Contact 2 Title', 
       'Contact 2 Email', 'Contact 2 Phone', 'Contact 3 First Name', 'Contact 3 Last Name', 'Contact 3 Title', 
-      'Contact 3 Email', 'Contact 3 Phone', 'All Contacts', 'Date Entered', 'Visit Note Outcome'
+      'Contact 3 Email', 'Contact 3 Phone', 'All Contacts', 'Date Entered', 'Visit Note Outcome',
+      'Lodgement Evidence', 'Shipper Evidence', 'Shopify Detected', 'Prospect Summary', 'Xero Detected',
+      'AP Relationship', 'Suggested Product', 'Suggested Opener', 'Suggested Personalisation'
     ];
     
     const getContactNameParts = (c: any) => {
@@ -188,22 +190,31 @@ export function BulkExportLeads() {
         escapeCsvCell(lead.leadType),
         escapeCsvCell(c1Parts.firstName),
         escapeCsvCell(c1Parts.lastName),
-        escapeCsvCell(c1?.title || c1?.role || ''),
+        escapeCsvCell(c1?.title || (c1 as any)?.role || ''),
         escapeCsvCell(c1?.email || ''),
         escapeCsvCell(c1?.phone || ''),
         escapeCsvCell(c2Parts.firstName),
         escapeCsvCell(c2Parts.lastName),
-        escapeCsvCell(c2?.title || c2?.role || ''),
+        escapeCsvCell(c2?.title || (c2 as any)?.role || ''),
         escapeCsvCell(c2?.email || ''),
         escapeCsvCell(c2?.phone || ''),
         escapeCsvCell(c3Parts.firstName),
         escapeCsvCell(c3Parts.lastName),
-        escapeCsvCell(c3?.title || c3?.role || ''),
+        escapeCsvCell(c3?.title || (c3 as any)?.role || ''),
         escapeCsvCell(c3?.email || ''),
         escapeCsvCell(c3?.phone || ''),
         escapeCsvCell(allContactsString),
         escapeCsvCell(lead.dateLeadEntered),
-        escapeCsvCell(outcome)
+        escapeCsvCell(outcome),
+        escapeCsvCell(lead.lodgementEvidence),
+        escapeCsvCell(lead.shipperEvidence),
+        escapeCsvCell(lead.shopifyDetected),
+        escapeCsvCell(lead.prospectSummary),
+        escapeCsvCell(lead.xeroDetected),
+        escapeCsvCell(lead.apRelationship),
+        escapeCsvCell(lead.suggestedProduct),
+        escapeCsvCell(lead.suggestedOpener),
+        escapeCsvCell(lead.suggestedPersonalisation)
       ].join(',');
     });
 

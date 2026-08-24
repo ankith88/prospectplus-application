@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { decodeProspectToken, encodeProspectToken } from '@/lib/presale-token';
+import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
 const db = getFirestore(adminApp);
 
@@ -138,8 +139,60 @@ export async function POST(req: Request) {
 
     await ref.update({
       confidentialityDeed: confidentialityDeedData,
+      status: 'Deed Signed',
       notes: [...(currentData.notes || []), newNote],
     });
+
+    // Send automated email notification to Greg Hart & Michael McDaid
+    try {
+      const prospectName = signerName.trim() || currentData.fullName || 'Candidate';
+      const prospectEmail = (signerEmail || currentData.email || '').trim();
+      const territory = currentData.preferredTerritory || currentData.preferredState || 'Unspecified Territory';
+      const signedAtFormatted = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Sydney' });
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://prospectplus.com.au';
+      const prospectUrl = `${baseUrl}/operations/franchise-prospects/${prospectId}`;
+
+      const emailHtml = `
+        <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+          <div style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+            <h2 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">Confidentiality Deed Executed</h2>
+          </div>
+          <div style="padding: 24px; color: #2d3748; line-height: 1.6; font-size: 14px;">
+            <p style="margin-top: 0;">Hi Greg & Michael,</p>
+            <p><strong>${prospectName}</strong> has digitally signed their <strong>Confidentiality Deed</strong> for <strong>${territory}</strong>.</p>
+            
+            <div style="background-color: #f8fafc; border-left: 4px solid #095c7b; padding: 16px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0 0 6px;"><strong>Candidate Name:</strong> ${prospectName}</p>
+              <p style="margin: 0 0 6px;"><strong>Email:</strong> ${prospectEmail}</p>
+              <p style="margin: 0 0 6px;"><strong>Territory / State:</strong> ${territory}</p>
+              <p style="margin: 0 0 6px;"><strong>Executed Date & Time:</strong> ${signedAtFormatted} AEST</p>
+              <p style="margin: 0;"><strong>Pipeline Status:</strong> Step 1 (Confidentiality Deed) Completed ✓</p>
+            </div>
+
+            <p style="margin-bottom: 24px;">The prospect is now eligible for commercial data disclosure (Step 2: Information Memorandum / Key Fact Sheet).</p>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${prospectUrl}" target="_blank" style="background-color: #095c7b; color: #ffffff; padding: 12px 24px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block;">
+                View Candidate Details in Prospect+
+              </a>
+            </div>
+          </div>
+          <div style="background-color: #f8fafb; padding: 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096;">
+            <p style="margin: 0;"><strong>MailPlus Prospect+ System Notification</strong></p>
+          </div>
+        </div>
+      `;
+
+      await sendPhysicalEmail({
+        to: 'greg.hart@mailplus.com.au',
+        cc: 'michael.mcdaid@mailplus.com.au',
+        subject: `[Confidentiality Deed Signed] ${prospectName} (${territory})`,
+        html: emailHtml,
+        prospectPlusId: prospectId,
+      });
+    } catch (emailErr) {
+      console.error('Error dispatching deed notification email:', emailErr);
+    }
 
     return NextResponse.json(
       {

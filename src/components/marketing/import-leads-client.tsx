@@ -79,7 +79,17 @@ const standardFields = [
   { key: 'contact3LastName', label: 'Contact 3 Last Name', required: false, desc: 'Last name of 3rd contact' },
   { key: 'contact3Title', label: 'Contact 3 Title', required: false, desc: 'Job title of 3rd contact' },
   { key: 'contact3Email', label: 'Contact 3 Email', required: false, desc: 'Direct email of 3rd contact' },
-  { key: 'contact3Phone', label: 'Contact 3 Phone', required: false, desc: 'Direct phone of 3rd contact' }
+  { key: 'contact3Phone', label: 'Contact 3 Phone', required: false, desc: 'Direct phone of 3rd contact' },
+  // Discovery & Enrichment Fields (BR - BZ)
+  { key: 'lodgementEvidence', label: 'Lodgement Evidence', required: false, desc: 'Evidence & signals regarding lodgement (PO Box, mail-out)' },
+  { key: 'shipperEvidence', label: 'Shipper Evidence', required: false, desc: 'Detailed evidence on ecommerce platform, cart, shipping policy' },
+  { key: 'shopifyDetected', label: 'Shopify Detected', required: false, desc: 'Detection signal (Yes / No) for Shopify platform' },
+  { key: 'prospectSummary', label: 'Prospect Summary', required: false, desc: 'Executive high-level intelligence summary' },
+  { key: 'xeroDetected', label: 'Xero Detected', required: false, desc: 'Detection signal (Yes / No) for Xero accounting' },
+  { key: 'apRelationship', label: 'AP Relationship', required: false, desc: 'Australia Post relationship status/assessment' },
+  { key: 'suggestedProduct', label: 'Suggested Product', required: false, desc: 'Recommended product for the lead (e.g. Shipmate)' },
+  { key: 'suggestedOpener', label: 'Suggested Opener', required: false, desc: 'Recommended phone/email opener line' },
+  { key: 'suggestedPersonalisation', label: 'Suggested Personalisation', required: false, desc: 'Personalised outreach angle/hook' }
 ];
 
 export function ImportLeadsClient() {
@@ -487,6 +497,17 @@ export function ImportLeadsClient() {
             if (field.key === 'parentProspectPlusId' && (normalizedHeader === 'parentprospectplusid' || normalizedHeader === 'parentprospectid' || normalizedHeader === 'parentid' || normalizedHeader === 'parentleadid' || normalizedHeader === 'parententityid' || normalizedHeader === 'parentaccountid' || normalizedHeader === 'parentprospectidleadid' || normalizedHeader === 'parentprospectplusidleadid')) return true;
             if (field.key === 'parentCompanyName' && (normalizedHeader === 'parentcompanyname' || normalizedHeader === 'parentcompany' || normalizedHeader === 'parentbusinessname' || normalizedHeader === 'parentaccount')) return true;
             if (field.key === 'parentAbn' && (normalizedHeader === 'parentabn' || normalizedHeader === 'parentabnnumber')) return true;
+
+            // Aliases for Enrichment Fields (Columns BR - BZ)
+            if (field.key === 'lodgementEvidence' && (normalizedHeader === 'lodgementevidence' || normalizedHeader === 'lodgementreferences')) return true;
+            if (field.key === 'shipperEvidence' && (normalizedHeader === 'shipperevidence' || normalizedHeader === 'shippingsignals')) return true;
+            if (field.key === 'shopifyDetected' && (normalizedHeader === 'shopifydetected' || normalizedHeader === 'shopify')) return true;
+            if (field.key === 'prospectSummary' && (normalizedHeader === 'prospectsummary' || normalizedHeader === 'prospectoverview' || normalizedHeader === 'leadsummary')) return true;
+            if (field.key === 'xeroDetected' && (normalizedHeader === 'xerodetected' || normalizedHeader === 'xero')) return true;
+            if (field.key === 'apRelationship' && (normalizedHeader === 'aprelationship' || normalizedHeader === 'australiapostrelationship' || normalizedHeader === 'aprelation')) return true;
+            if (field.key === 'suggestedProduct' && (normalizedHeader === 'suggestedproduct' || normalizedHeader === 'suggesstedproduct' || normalizedHeader === 'recommendedproduct')) return true;
+            if (field.key === 'suggestedOpener' && (normalizedHeader === 'suggestedopener' || normalizedHeader === 'suggesstedopener' || normalizedHeader === 'recommendedopener')) return true;
+            if (field.key === 'suggestedPersonalisation' && (normalizedHeader === 'suggestedpersonalisation' || normalizedHeader === 'suggestedpersonalization' || normalizedHeader === 'personalisation' || normalizedHeader === 'personalization')) return true;
 
             return false;
           });
@@ -1131,6 +1152,27 @@ export function ImportLeadsClient() {
           address,
           ...(postalAddress && { postalAddress }),
           ...(additionalAddresses.length > 0 && { additionalAddresses }),
+          // Enrichment Fields (BR - BZ)
+          ...(getVal('lodgementEvidence') && { lodgementEvidence: getVal('lodgementEvidence') }),
+          ...(getVal('shipperEvidence') && { shipperEvidence: getVal('shipperEvidence') }),
+          ...(getVal('shopifyDetected') && { shopifyDetected: getVal('shopifyDetected') }),
+          ...(getVal('prospectSummary') && { prospectSummary: getVal('prospectSummary') }),
+          ...(getVal('xeroDetected') && { xeroDetected: getVal('xeroDetected') }),
+          ...(getVal('apRelationship') && { apRelationship: getVal('apRelationship') }),
+          ...(getVal('suggestedProduct') && { suggestedProduct: getVal('suggestedProduct') }),
+          ...(getVal('suggestedOpener') && { suggestedOpener: getVal('suggestedOpener') }),
+          ...(getVal('suggestedPersonalisation') && { suggestedPersonalisation: getVal('suggestedPersonalisation') }),
+          discoveryData: {
+            ...(getVal('lodgementEvidence') && { lodgementEvidence: getVal('lodgementEvidence') }),
+            ...(getVal('shipperEvidence') && { shipperEvidence: getVal('shipperEvidence') }),
+            ...(getVal('shopifyDetected') && { shopifyDetected: getVal('shopifyDetected') }),
+            ...(getVal('prospectSummary') && { prospectSummary: getVal('prospectSummary') }),
+            ...(getVal('xeroDetected') && { xeroDetected: getVal('xeroDetected') }),
+            ...(getVal('apRelationship') && { apRelationship: getVal('apRelationship') }),
+            ...(getVal('suggestedProduct') && { suggestedProduct: getVal('suggestedProduct') }),
+            ...(getVal('suggestedOpener') && { suggestedOpener: getVal('suggestedOpener') }),
+            ...(getVal('suggestedPersonalisation') && { suggestedPersonalisation: getVal('suggestedPersonalisation') }),
+          },
           bucket: selectedBucket,
           fieldSales: selectedBucket === 'field_sales',
           leadSource: leadSource || 'Bulk Import Wizard',

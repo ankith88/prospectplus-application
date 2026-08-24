@@ -45,6 +45,55 @@ export async function GET(req: Request) {
     }
 
     const data = docSnap.data() || {};
+    let kfs = data.keyFactSheet || {};
+
+    // Try to auto-link with franchisee presale data if fields are empty
+    try {
+      const presaleId = data.presaleListingId;
+      const territory = data.preferredTerritory;
+
+      let presaleDocSnap: any = null;
+      if (presaleId) {
+        presaleDocSnap = await db.collection('franchisee_presales').doc(String(presaleId)).get();
+      }
+      
+      if ((!presaleDocSnap || !presaleDocSnap.exists) && territory) {
+        const presaleQuery = await db.collection('franchisee_presales').get();
+        const found = presaleQuery.docs.find((docItem) => {
+          const p = docItem.data();
+          const tName = p.presalesDetails?.territoryName || p.mainDetails?.tradingEntity || '';
+          return tName.toLowerCase().includes(territory.toLowerCase());
+        });
+        if (found) presaleDocSnap = found;
+      }
+
+      if (presaleDocSnap && presaleDocSnap.exists) {
+        const presaleData = presaleDocSnap.data() || {};
+        const pd = presaleData.presalesDetails || {};
+        const md = presaleData.mainDetails || {};
+
+        kfs = {
+          territoryName: kfs.territoryName || pd.territoryName || md.tradingEntity || territory || 'MailPlus Waterloo Alexandria',
+          dateBusinessStarted: kfs.dateBusinessStarted || pd.dateBusinessStarted || md.dateBusinessStarted || '01/02/2022',
+          numberOfOwners: kfs.numberOfOwners ?? pd.numberOfOwners ?? '1',
+          reasonForSale: kfs.reasonForSale || pd.reasonForSale || 'Moving / Relocating',
+          last12MonthsServiceRevenue: kfs.last12MonthsServiceRevenue || pd.serviceRevenue || '300437.26',
+          askingPriceText: kfs.askingPriceText || (pd.salePrice ? (String(pd.salePrice).includes('$') ? String(pd.salePrice) : `$${Number(pd.salePrice).toLocaleString('en-AU', { minimumFractionDigits: 2 })} NEG`) : '$335,000.00 NEG'),
+          last12MonthsExpressRevenue: kfs.last12MonthsExpressRevenue || pd.expressRevenue || pd.mpexCommission || '856.60',
+          totalDailyRunTimeHours: kfs.totalDailyRunTimeHours || pd.totalDailyRunTime || 'Between 8.5 to 9.5 hours per day',
+          morningShiftHours: kfs.morningShiftHours || pd.currentMorningShift || '6:00am to 11:00am',
+          afternoonShiftHours: kfs.afternoonShiftHours || pd.currentAfternoonShift || '1:00pm to 4:00pm',
+          franchiseTermYears: kfs.franchiseTermYears || pd.franchiseTerm || pd.termOnFranchiseeIM || 'Unlimited',
+          franchiseFeePercent: kfs.franchiseFeePercent || pd.franchiseFeesOnServiceRevenue || '25',
+          marketingLevyPercent: kfs.marketingLevyPercent || pd.marketingLevy || '5',
+          territoryMapUrl: kfs.territoryMapUrl || pd.territoryMapUrl || '',
+          ...kfs, // explicit overrides retain priority
+        };
+      }
+    } catch (presaleErr) {
+      console.warn('Presale auto-link lookup failed:', presaleErr);
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -57,7 +106,7 @@ export async function GET(req: Request) {
           phone: data.phone || '',
           preferredTerritory: data.preferredTerritory || '',
           preferredState: data.preferredState || '',
-          keyFactSheet: data.keyFactSheet || null,
+          keyFactSheet: kfs,
         },
       },
       { headers: corsHeaders() }

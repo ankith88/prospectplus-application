@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { doc, getDoc, getDocs, collection, query, where, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, query, where, updateDoc, setDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Franchisee, Operator } from '@/lib/types';
 import { parseAndEnrichLodgementPoints, LodgementPoint } from '@/lib/lodgement-helpers';
@@ -414,7 +414,36 @@ export default function SuburbMappingClient() {
     if (!selectedFranchisee) return;
     setSaving(true);
     try {
-      const docRef = doc(firestore, 'franchisees', selectedFranchisee.internalId);
+      let targetDocId = selectedFranchisee.id || selectedFranchisee.internalId;
+      let docRef = doc(firestore, 'franchisees', targetDocId);
+
+      // Verify docRef exists or perform fallback query resolution
+      try {
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+          if (selectedFranchisee.internalId) {
+            const altRef = doc(firestore, 'franchisees', selectedFranchisee.internalId);
+            const altSnap = await getDoc(altRef);
+            if (altSnap.exists()) {
+              docRef = altRef;
+            } else {
+              const qI = query(collection(firestore, 'franchisees'), where('internalId', '==', selectedFranchisee.internalId));
+              const qISnap = await getDocs(qI);
+              if (!qISnap.empty) {
+                docRef = qISnap.docs[0].ref;
+              } else if (selectedFranchisee.name) {
+                const qN = query(collection(firestore, 'franchisees'), where('name', '==', selectedFranchisee.name));
+                const qNSnap = await getDocs(qN);
+                if (!qNSnap.empty) {
+                  docRef = qNSnap.docs[0].ref;
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Doc check fallback error:', e);
+      }
       
       const payload: any = {
         territoryJson: mainTerritory.map(item => ({
@@ -458,7 +487,7 @@ export default function SuburbMappingClient() {
         updatedAt: new Date().toISOString()
       };
 
-      await updateDoc(docRef, payload);
+      await setDoc(docRef, payload, { merge: true });
       
       toast({ title: 'Success', description: 'Franchisee suburb mapping and lodgement points saved successfully!' });
     } catch (err) {

@@ -256,6 +256,16 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           aiReason: data.aiReason,
           discoveryData: data.discoveryData,
           companyDescription: data.companyDescription,
+          // Enrichment Fields (BR - BZ)
+          lodgementEvidence: data.lodgementEvidence || data.discoveryData?.lodgementEvidence,
+          prospectSummary: data.prospectSummary || data.discoveryData?.prospectSummary,
+          shipperEvidence: data.shipperEvidence || data.discoveryData?.shipperEvidence,
+          shopifyDetected: data.shopifyDetected || data.discoveryData?.shopifyDetected,
+          xeroDetected: data.xeroDetected || data.discoveryData?.xeroDetected,
+          apRelationship: data.apRelationship || data.discoveryData?.apRelationship,
+          suggestedProduct: data.suggestedProduct || data.discoveryData?.suggestedProduct,
+          suggestedOpener: data.suggestedOpener || data.discoveryData?.suggestedOpener,
+          suggestedPersonalisation: data.suggestedPersonalisation || data.discoveryData?.suggestedPersonalisation,
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
           fieldSales: data.fieldSales,
@@ -443,6 +453,16 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           aiReason: data.aiReason,
           discoveryData: data.discoveryData,
           companyDescription: data.companyDescription,
+          // Enrichment Fields (BR - BZ)
+          lodgementEvidence: data.lodgementEvidence || data.discoveryData?.lodgementEvidence,
+          prospectSummary: data.prospectSummary || data.discoveryData?.prospectSummary,
+          shipperEvidence: data.shipperEvidence || data.discoveryData?.shipperEvidence,
+          shopifyDetected: data.shopifyDetected || data.discoveryData?.shopifyDetected,
+          xeroDetected: data.xeroDetected || data.discoveryData?.xeroDetected,
+          apRelationship: data.apRelationship || data.discoveryData?.apRelationship,
+          suggestedProduct: data.suggestedProduct || data.discoveryData?.suggestedProduct,
+          suggestedOpener: data.suggestedOpener || data.discoveryData?.suggestedOpener,
+          suggestedPersonalisation: data.suggestedPersonalisation || data.discoveryData?.suggestedPersonalisation,
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
           fieldSales: data.fieldSales,
@@ -630,6 +650,16 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           aiReason: data.aiReason,
           discoveryData: data.discoveryData,
           companyDescription: data.companyDescription,
+          // Enrichment Fields (BR - BZ)
+          lodgementEvidence: data.lodgementEvidence || data.discoveryData?.lodgementEvidence,
+          prospectSummary: data.prospectSummary || data.discoveryData?.prospectSummary,
+          shipperEvidence: data.shipperEvidence || data.discoveryData?.shipperEvidence,
+          shopifyDetected: data.shopifyDetected || data.discoveryData?.shopifyDetected,
+          xeroDetected: data.xeroDetected || data.discoveryData?.xeroDetected,
+          apRelationship: data.apRelationship || data.discoveryData?.apRelationship,
+          suggestedProduct: data.suggestedProduct || data.discoveryData?.suggestedProduct,
+          suggestedOpener: data.suggestedOpener || data.discoveryData?.suggestedOpener,
+          suggestedPersonalisation: data.suggestedPersonalisation || data.discoveryData?.suggestedPersonalisation,
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
           fieldSales: data.fieldSales,
@@ -1660,17 +1690,27 @@ async function updateLeadFieldSales(leadId: string, isFieldSales: boolean): Prom
     }
 }
 
-async function logCallActivity(leadId: string, callData: { outcome: string; notes: string; author: string; salesRecordInternalId?: string; }): Promise<LeadStatus | undefined> {
+async function logCallActivity(
+    leadId: string, 
+    callData: { outcome: string; notes: string; author: string; salesRecordInternalId?: string; userRole?: string; }
+): Promise<LeadStatus | undefined> {
     const { status, reason: outcomeReason } = REVERSE_OUTCOME_TO_STATUS_MAP[callData.outcome] || {};
     const notesToLog = `Outcome: ${callData.outcome}${outcomeReason ? ` (${outcomeReason})` : ''}. Notes: ${callData.notes || 'N/A'}`;
 
+    const leadRef = doc(firestore, 'leads', leadId);
+    const leadSnap = await getDoc(leadRef);
+    const leadData = leadSnap.exists() ? leadSnap.data() : {};
+    const currentStatus = leadData?.customerStatus || leadData?.status;
+
+    const callerRole = (callData.userRole || 'user').toLowerCase().trim();
+    const dialerRoles = ['dialer', 'dialers', 'lead gen', 'lead_gen', 'leadgen', 'user'];
+    const isDialer = dialerRoles.includes(callerRole);
+
+    const isLocalMileOpp = currentStatus === 'LocalMile Opportunity' && isDialer;
+
     // Special logic for "Prospect - No Access/No Contact" processing
-    if (callData.outcome === 'Prospect - No Access/No Contact') {
+    if (callData.outcome === 'Prospect - No Access/No Contact' && !isLocalMileOpp) {
         try {
-            const leadRef = doc(firestore, 'leads', leadId);
-            const leadSnap = await getDoc(leadRef);
-            const leadData = leadSnap.data();
-            
             if (leadData?.visitNoteID) {
                 const noteRef = doc(firestore, 'visitnotes', leadData.visitNoteID);
                 const noteSnap = await getDoc(noteRef);
@@ -1711,12 +1751,8 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
     }
 
     // Special logic for "Unqualified Opportunity" processing
-    if (callData.outcome === 'Unqualified Opportunity') {
+    if (callData.outcome === 'Unqualified Opportunity' && !isLocalMileOpp) {
         try {
-            const leadRef = doc(firestore, 'leads', leadId);
-            const leadSnap = await getDoc(leadRef);
-            const leadData = leadSnap.data();
-            
             if (leadData?.visitNoteID) {
                 const noteRef = doc(firestore, 'visitnotes', leadData.visitNoteID);
                 const noteSnap = await getDoc(noteRef);
@@ -1752,19 +1788,15 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         }
     }
 
-    // Prevent changing status if lead is in a protected post-sale state ('Won' & 'Signed'), unless outcome is Lost
-    const leadRef = doc(firestore, 'leads', leadId);
-    const leadSnap = await getDoc(leadRef);
-    const currentStatus = leadSnap.data()?.customerStatus;
-    const protectedStatuses = ['Won', 'Signed'];
+    // Prevent changing status if lead is in a protected state ('Won', 'Signed', or 'LocalMile Opportunity' for dialers), unless outcome is Lost
+    const protectedStatuses = ['Won', 'Signed', ...(isDialer ? ['LocalMile Opportunity'] : [])];
     
-    const isLostStatus = status === 'Lost';
+    const isLostStatus = status === 'Lost' || status === 'Lost Customer' || (status && status.toLowerCase().includes('lost')) || (callData.outcome && callData.outcome.toLowerCase().includes('lost'));
     const shouldUpdateStatus = status && (!currentStatus || !protectedStatuses.includes(currentStatus) || isLostStatus);
 
     // Special handling for Appointment Booked outcome: transition bucket to account_manager
     if (callData.outcome === 'Appointment Booked') {
         try {
-            const leadData = leadSnap.data();
             const currentBucket = leadData?.bucket || (leadData?.fieldSales ? 'field_sales' : 'outbound');
             if (currentBucket !== 'account_manager') {
                 const nowIso = new Date().toISOString();

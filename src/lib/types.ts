@@ -285,6 +285,17 @@ export interface DiscoveryData {
   searchKeywords?: string[];
   interestedIn?: string;
   weeklyParcels?: string;
+
+  // Enrichment fields (Columns BR - BZ)
+  lodgementEvidence?: string;
+  shipperEvidence?: string;
+  shopifyDetected?: string;
+  prospectSummary?: string;
+  xeroDetected?: string;
+  apRelationship?: string;
+  suggestedProduct?: string;
+  suggestedOpener?: string;
+  suggestedPersonalisation?: string;
 }
 
 export interface InvoiceItem {
@@ -718,6 +729,17 @@ export interface Lead {
   prospectPlusId?: string;
   chosenPremiumPlan?: string;
   chosenExpressPlan?: string;
+
+  // Enrichment & AI Discovery fields (CSV Columns BR-BZ)
+  lodgementEvidence?: string;
+  shipperEvidence?: string;
+  shopifyDetected?: string;
+  prospectSummary?: string;
+  xeroDetected?: string;
+  apRelationship?: string;
+  suggestedProduct?: string;
+  suggestedOpener?: string;
+  suggestedPersonalisation?: string;
   pricing_table?: PricingTableRow[];
   suburb_mapping?: LeadSuburbMapping[];
   quoteSentAt?: string;
@@ -1027,6 +1049,22 @@ export interface KeyFactSheetData {
   sentByUid?: string;
   sentByName?: string;
   
+  // Information Memorandum (IM) Specific Fields (From Official IM Template)
+  dateBusinessStarted?: string;
+  numberOfOwners?: number | string;
+  reasonForSale?: string;
+  last12MonthsServiceRevenue?: number | string;
+  franchiseFeePercent?: number | string;
+  marketingLevyPercent?: number | string;
+  last12MonthsExpressRevenue?: number | string;
+  askingPrice?: number | string;
+  askingPriceText?: string;
+  totalDailyRunTimeHours?: string;
+  morningShiftHours?: string;
+  afternoonShiftHours?: string;
+  franchiseTermYears?: string;
+  territoryMapUrl?: string;
+
   // Section A: About the franchisor
   franchisorName?: string;
   yearsInOperation?: string;
@@ -1309,6 +1347,7 @@ export interface EOIData {
   // Section 9: General Enquiry by MailPlus
   reasonForPurchase?: string;
   fundingSource?: string;
+  fundingType?: 'nab' | 'sole_trader' | 'self_funded' | string;
   whySuited?: string;
   similarBusinessExperience?: boolean | string;
   similarBusinessDetails?: string;
@@ -1512,6 +1551,9 @@ export interface FranchiseProspect {
   sourceApp?: string;
   convertedUserId?: string;
   convertedFranchiseeId?: string;
+  linkedFranchiseeId?: string;
+  linkedFranchiseeName?: string;
+  presaleListingId?: string;
 
   // Step-by-Step Prospect Pipeline Fields
   keyFactSheet?: KeyFactSheetData;

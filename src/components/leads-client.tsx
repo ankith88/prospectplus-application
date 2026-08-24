@@ -23,6 +23,7 @@ import { encryptLeadId } from '@/lib/localmile-security'
 import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
+import { DialerInsightsDialog, DialerInsightsData } from '@/components/dialer-insights-dialog'
 import { usePerformance } from '@/hooks/use-performance';
 import { useDialingSession } from '@/hooks/use-dialing-session'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, mergeMultipleLeads, addLeadsToMarketingList } from '@/services/firebase'
@@ -1528,7 +1529,10 @@ export default function LeadsClientPage({
     }
   };
   
-  const handleInitiateCall = (leadId: string, phoneNumber: string) => {
+  const [dialerInsightsOpen, setDialerInsightsOpen] = useState(false);
+  const [pendingDialData, setPendingDialData] = useState<DialerInsightsData | null>(null);
+
+  const executeCall = (leadId: string, phoneNumber: string) => {
     window.open(`aircall:${phoneNumber}`);
     logActivity(leadId, { 
       type: 'Call', 
@@ -1541,6 +1545,35 @@ export default function LeadsClientPage({
         title: "Opening AirCall",
         description: `Attempting to dial ${phoneNumber}...`,
     });
+  };
+
+  const handleInitiateCall = (leadId: string, phoneNumber: string) => {
+    if (!phoneNumber) return;
+    const targetLead = allLeads.find(l => l.id === leadId);
+
+    const opener = targetLead?.suggestedOpener || targetLead?.discoveryData?.suggestedOpener || (targetLead as any)?.['Suggessted Product'] || (targetLead as any)?.['Suggessted Opener'] || (targetLead as any)?.['Suggested Opener'];
+    const personalisation = targetLead?.suggestedPersonalisation || targetLead?.discoveryData?.suggestedPersonalisation || (targetLead as any)?.['Suggested Personalisation'];
+    const apRel = targetLead?.apRelationship || targetLead?.discoveryData?.apRelationship || (targetLead as any)?.['AP Relationship'] || (targetLead as any)?.['AP Relationship '];
+
+    const hasInsights = Boolean(
+      (opener && opener.trim().length > 0) ||
+      (personalisation && personalisation.trim().length > 0) ||
+      (apRel && apRel.trim().length > 0)
+    );
+
+    if (!hasInsights) {
+      executeCall(leadId, phoneNumber);
+    } else {
+      setPendingDialData({
+        leadId,
+        companyName: targetLead?.companyName,
+        phoneNumber,
+        suggestedOpener: opener,
+        suggestedPersonalisation: personalisation,
+        apRelationship: apRel
+      });
+      setDialerInsightsOpen(true);
+    }
   };
   
   const handleReassignUserSelect = (checked: boolean, userId: string) => {
@@ -2897,6 +2930,16 @@ export default function LeadsClientPage({
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
+    <DialerInsightsDialog
+      open={dialerInsightsOpen}
+      onOpenChange={setDialerInsightsOpen}
+      data={pendingDialData}
+      onConfirmDial={() => {
+        if (pendingDialData) {
+          executeCall(pendingDialData.leadId || '', pendingDialData.phoneNumber || '');
+        }
+      }}
+    />
     </>
   )
 }

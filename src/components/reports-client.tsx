@@ -1584,7 +1584,8 @@ export default function ReportsClientPage({
 
       const dialerAppointments = perfFilteredAppointments.filter(a => a.dialerAssigned === dialer || a.assignedTo === dialer).length;
       const dialerQuotes = dialerBaseLeads.filter(l => (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent') && (isDateInTimeframe(l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
-      const dialerShipmateTrials = shipmateTrialLeads.filter(l => l.dialerAssigned === dialer && (isDateInTimeframe(l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id))).length;
+      const dialerShipmateTrialLeads = shipmateTrialLeads.filter(l => l.dialerAssigned === dialer && (isDateInTimeframe(l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
+      const dialerShipmateTrials = dialerShipmateTrialLeads.length;
 
       const dialerWonLeads = dialerBaseLeads.filter(l => isSignedLead(l) && (isDateInTimeframe((l as any).dateSigned || (l as any).signedAt || (l as any).wonAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
       const dialerWon = dialerWonLeads.length;
@@ -1632,7 +1633,8 @@ export default function ReportsClientPage({
         perfQuotesLeadsList: dialerQuotes,
         perfLmOppLeadsList: lmOppLeads,
         perfLmPendingLeadsList: lmPendingLeads,
-        perfTrialingLmLeadsList: trialingLMLeads
+        perfTrialingLmLeadsList: trialingLMLeads,
+        perfShipmateTrialLeadsList: dialerShipmateTrialLeads
       };
     }).filter(d => d['Total Engagement'] > 0 || d['Total Assigned Leads'] > 0);
 
@@ -3486,9 +3488,20 @@ export default function ReportsClientPage({
                                     >
                                         {dialer['Signed Customers']}
                                     </TableCell>
-                                    <TableCell className="text-right">{dialer['Avg Attempts'].toFixed(1)}</TableCell>
+                                     <TableCell className="text-right">{dialer['Avg Attempts'].toFixed(1)}</TableCell>
                                     <TableCell className="text-right">{dialer['Connect Rate'].toFixed(1)}%</TableCell>
-                                    <TableCell className="text-right font-bold text-blue-600">{dialer.Appointments}</TableCell>
+                                    <TableCell 
+                                        className="text-right font-bold text-blue-600 cursor-pointer hover:underline"
+                                        onClick={() => {
+                                            const apptLeadIds = new Set((dialer.perfAppointmentsList || []).map(a => a.leadId).filter(Boolean));
+                                            setTrialDrilldown({ 
+                                                title: `${dialer.name} - Appointments Set Leads`, 
+                                                leads: stats.baseFilteredLeads.filter(l => apptLeadIds.has(l.id)) 
+                                            });
+                                        }}
+                                    >
+                                        {dialer.Appointments}
+                                    </TableCell>
                                     <TableCell 
                                         className="text-right font-semibold text-orange-600 cursor-pointer hover:underline"
                                         onClick={() => setTrialDrilldown({ 
@@ -3529,7 +3542,7 @@ export default function ReportsClientPage({
                                         className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
                                         onClick={() => setTrialDrilldown({ 
                                             title: `${dialer.name} - ShipMate Trials`, 
-                                            leads: stats.shipmateTrialLeads.filter(l => l.dialerAssigned === dialer.name) 
+                                            leads: dialer.perfShipmateTrialLeadsList || stats.shipmateTrialLeads.filter(l => l.dialerAssigned === dialer.name) 
                                         })}
                                     >
                                         {dialer['ShipMate Trials']}
@@ -3557,47 +3570,35 @@ export default function ReportsClientPage({
                                     className="text-right font-bold text-foreground cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All Total Assigned Leads", 
-                                        leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned) 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfLeadsList || []) 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['Total Assigned Leads']}
                                 </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-blue-500 cursor-pointer hover:underline"
-                                    onClick={() => {
-                                        const targetCalls = stats.perfFilteredCalls || filteredCalls;
-                                        const allCallLeadIds = new Set(targetCalls.map((c: any) => c.leadId));
-                                        setTrialDrilldown({ 
-                                            title: "All Un-actioned Pipeline Leads (Yet to be Actioned)", 
-                                            leads: stats.baseFilteredLeads.filter(l => isActivePipelineLead(l, allCallLeadIds, false)) 
-                                        });
-                                    }}
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All Un-actioned Pipeline Leads (Yet to be Actioned)", 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfUnactionedLeadsList || []) 
+                                    })}
                                 >
                                     {stats.teamPerformanceTotals['Un-actioned Pipeline']}
                                 </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
-                                    onClick={() => {
-                                        const targetCalls = stats.perfFilteredCalls || filteredCalls;
-                                        const allCallLeadIds = new Set(targetCalls.map((c: any) => c.leadId));
-                                        setTrialDrilldown({ 
-                                            title: "All Active Pipeline Leads (In Process & Actioned)", 
-                                            leads: stats.baseFilteredLeads.filter(l => isActivePipelineLead(l, allCallLeadIds, true)) 
-                                        });
-                                    }}
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All Active Pipeline Leads (In Process & Actioned)", 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfActiveLeadsList || []) 
+                                    })}
                                 >
                                     {stats.teamPerformanceTotals['Active Pipeline']}
                                 </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-slate-500 cursor-pointer hover:underline"
-                                    onClick={() => {
-                                        const targetCalls = stats.perfFilteredCalls || filteredCalls;
-                                        const allCallLeadIds = new Set(targetCalls.map((c: any) => c.leadId));
-                                        setTrialDrilldown({ 
-                                            title: "All Lost Pipeline Leads (Archived Lost)", 
-                                            leads: stats.baseFilteredLeads.filter(l => !isSignedLead(l) && allCallLeadIds.has(l.id) && isLostLead(l)) 
-                                        });
-                                    }}
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All Lost Pipeline Leads (Archived Lost)", 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfLostLeadsList || []) 
+                                    })}
                                 >
                                     {stats.teamPerformanceTotals['Lost Pipeline']}
                                 </TableCell>
@@ -3605,19 +3606,30 @@ export default function ReportsClientPage({
                                     className="text-right font-bold text-green-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All Signed Customers", 
-                                        leads: stats.baseFilteredLeads.filter(isSignedLead) 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfWonLeadsList || []) 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['Signed Customers']}
                                 </TableCell>
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Avg Attempts'].toFixed(1)}</TableCell>
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Connect Rate'].toFixed(1)}%</TableCell>
-                                <TableCell className="text-right font-bold text-blue-600">{stats.teamPerformanceTotals.Appointments}</TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-blue-600 cursor-pointer hover:underline"
+                                    onClick={() => {
+                                        const allApptLeadIds = new Set(stats.teamPerformanceData.flatMap(d => (d.perfAppointmentsList || []).map(a => a.leadId)).filter(Boolean));
+                                        setTrialDrilldown({ 
+                                            title: "All Appointments Set Leads", 
+                                            leads: stats.baseFilteredLeads.filter(l => allApptLeadIds.has(l.id)) 
+                                        });
+                                    }}
+                                >
+                                    {stats.teamPerformanceTotals.Appointments}
+                                </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-orange-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All Quotes Sent Leads", 
-                                        leads: stats.baseFilteredLeads.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent') 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfQuotesLeadsList || []) 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['Quotes Sent']}
@@ -3626,7 +3638,7 @@ export default function ReportsClientPage({
                                     className="text-right font-bold text-indigo-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All LocalMile Opportunity Leads", 
-                                        leads: stats.baseFilteredLeads.filter(l => l.status === 'LocalMile Opportunity') 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfLmOppLeadsList || []) 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['LM Opportunity']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['LM Opportunity Rate'].toFixed(1)}%)</span>
@@ -3635,7 +3647,7 @@ export default function ReportsClientPage({
                                     className="text-right font-bold text-amber-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All LocalMile Pending Leads", 
-                                        leads: stats.baseFilteredLeads.filter(l => l.status === 'LocalMile Pending') 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfLmPendingLeadsList || []) 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['LM Pending']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['LM Pending Rate'].toFixed(1)}%)</span>
@@ -3644,7 +3656,7 @@ export default function ReportsClientPage({
                                     className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All Trialing LocalMile Leads", 
-                                        leads: stats.baseFilteredLeads.filter(l => l.status === 'Trialing LocalMile') 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfTrialingLmLeadsList || []) 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['Trialing LocalMile Rate'].toFixed(1)}%)</span>
@@ -3653,7 +3665,7 @@ export default function ReportsClientPage({
                                     className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All ShipMate Trials", 
-                                        leads: stats.shipmateTrialLeads 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfShipmateTrialLeadsList || [])
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['ShipMate Trials']}

@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { CopyButton } from '@/components/ui/copy-button'
+import { DialerInsightsDialog, DialerInsightsData } from '@/components/dialer-insights-dialog'
 
 import { usePathname, useRouter } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -87,7 +88,7 @@ import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Ap
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskInLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices, isLostLeadStatus, getPendingItemsForLead, resolvePendingItemsForLead } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskInLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices, isLostLeadStatus, getPendingItemsForLead, resolvePendingItemsForLead, getAllFranchisees } from '@/services/firebase'
 import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal'
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName } from '@/lib/duplicate-detector'
 import { isMultiSiteBucket } from '@/lib/constants'
@@ -2625,62 +2626,132 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     async function checkLpoSuburbs() {
       setLoadingLpoSuburbs(true);
       try {
-        const franchiseeIds = new Set<string>();
+        const franchiseeRefs = new Set<string>();
         const parentLpoId = (lead as any).ausPostParentLpoId || lead.lpoLeadId || lead.linkedLpoLeadId || lead.id;
-
-        if (lead.franchisee_id) franchiseeIds.add(String(lead.franchisee_id));
-        if ((lead as any).franchiseeInternalId) franchiseeIds.add(String((lead as any).franchiseeInternalId));
-
-        // Find child leads belonging to this parent account
-        const qChild1 = query(collection(firestore, 'leads'), where('parentLeadId', '==', lead.id));
-        const childSnap1 = await getDocs(qChild1);
-        childSnap1.forEach(docSnap => {
-          const d = docSnap.data();
-          const childLpoId = d.ausPostParentLpoId || d.lpoLeadId || d.linkedLpoLeadId || d.lpoId;
-          const matchesParentLpo = !childLpoId || childLpoId === lead.id || childLpoId === parentLpoId || String(childLpoId) === String(lead.id);
-          if (matchesParentLpo) {
-            if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
-            if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
-          }
-        });
-
-        const qChild2 = query(collection(firestore, 'leads'), where('createdParentLeadId', '==', lead.id));
-        const childSnap2 = await getDocs(qChild2);
-        childSnap2.forEach(docSnap => {
-          const d = docSnap.data();
-          const childLpoId = d.ausPostParentLpoId || d.lpoLeadId || d.linkedLpoLeadId || d.lpoId;
-          const matchesParentLpo = !childLpoId || childLpoId === lead.id || childLpoId === parentLpoId || String(childLpoId) === String(lead.id);
-          if (matchesParentLpo) {
-            if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
-            if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
-          }
-        });
-
-        // Query franchisees EXCLUSIVELY for ausPostSuburbsJson / ausPostTerritoryJson
         const extractedSuburbs: any[] = [];
-        for (const fId of Array.from(franchiseeIds)) {
-          const fDoc = await getDoc(doc(firestore, 'franchisees', fId));
-          let fData = fDoc.exists() ? fDoc.data() : null;
-          if (!fData) {
-            const qF = query(collection(firestore, 'franchisees'), where('internalId', '==', fId));
-            const qFSnap = await getDocs(qF);
-            if (!qFSnap.empty) fData = qFSnap.docs[0].data();
-          }
+
+        if (lead.franchisee_id) franchiseeRefs.add(String(lead.franchisee_id));
+        if ((lead as any).franchiseeInternalId) franchiseeRefs.add(String((lead as any).franchiseeInternalId));
+        if ((lead as any).franchisee) franchiseeRefs.add(String((lead as any).franchisee));
+
+        // Check linkedFranchisees array on lead
+        const linkedFrans = (lead as any).linkedFranchisees;
+        if (Array.isArray(linkedFrans)) {
+          linkedFrans.forEach((lf: any) => {
+            if (!lf) return;
+            if (lf.franchiseeId) franchiseeRefs.add(String(lf.franchiseeId));
+            if (lf.internalId) franchiseeRefs.add(String(lf.internalId));
+            if (lf.id) franchiseeRefs.add(String(lf.id));
+            if (lf.name) franchiseeRefs.add(String(lf.name));
+            if (lf.franchiseeName) franchiseeRefs.add(String(lf.franchiseeName));
+
+            let embedded = lf.ausPostSuburbsJson || lf.ausPostTerritoryJson || lf.suburbs;
+            if (typeof embedded === 'string') {
+              try { embedded = JSON.parse(embedded); } catch (e) {}
+            }
+            if (Array.isArray(embedded) && embedded.length > 0) {
+              extractedSuburbs.push(...embedded);
+            }
+          });
+        }
+
+        // Check linkedFranchiseeIds array on lead
+        const linkedFranIds = (lead as any).linkedFranchiseeIds;
+        if (Array.isArray(linkedFranIds)) {
+          linkedFranIds.forEach((id: any) => {
+            if (id) franchiseeRefs.add(String(id));
+          });
+        }
+
+        // Candidate parent IDs to match child companies / leads
+        const parentIdSet = new Set<string>();
+        if (lead.id) parentIdSet.add(String(lead.id));
+        if ((lead as any).internalId) parentIdSet.add(String((lead as any).internalId));
+        if ((lead as any).prospectPlusId) parentIdSet.add(String((lead as any).prospectPlusId));
+        if (lead.lpoLeadId) parentIdSet.add(String(lead.lpoLeadId));
+        if ((lead as any).linkedLpoLeadId) parentIdSet.add(String((lead as any).linkedLpoLeadId));
+        if ((lead as any).ausPostParentLpoId) parentIdSet.add(String((lead as any).ausPostParentLpoId));
+        if (parentLpoId) parentIdSet.add(String(parentLpoId));
+
+        // Build queries across leads and companies collections
+        const childQueries: any[] = [];
+        for (const pId of Array.from(parentIdSet)) {
+          childQueries.push(
+            query(collection(firestore, 'leads'), where('parentLeadId', '==', pId)),
+            query(collection(firestore, 'leads'), where('parentCompanyId', '==', pId)),
+            query(collection(firestore, 'leads'), where('createdParentLeadId', '==', pId)),
+            query(collection(firestore, 'leads'), where('ausPostParentLpoId', '==', pId)),
+            query(collection(firestore, 'companies'), where('parentCompanyId', '==', pId)),
+            query(collection(firestore, 'companies'), where('parentLeadId', '==', pId)),
+            query(collection(firestore, 'companies'), where('createdParentLeadId', '==', pId)),
+            query(collection(firestore, 'companies'), where('ausPostParentLpoId', '==', pId))
+          );
+        }
+
+        const childSnaps = await Promise.all(childQueries.map(q => getDocs(q).catch(() => ({ docs: [] }))));
+
+        childSnaps.forEach(snap => {
+          snap.docs.forEach((docSnap: any) => {
+            const d = docSnap.data();
+            if (!d) return;
+
+            if (d.franchisee_id) franchiseeRefs.add(String(d.franchisee_id));
+            if (d.franchiseeInternalId) franchiseeRefs.add(String(d.franchiseeInternalId));
+            if (d.franchisee) franchiseeRefs.add(String(d.franchisee));
+            if (Array.isArray(d.linkedFranchiseeIds)) {
+              d.linkedFranchiseeIds.forEach((id: any) => { if (id) franchiseeRefs.add(String(id)); });
+            }
+            if (Array.isArray(d.linkedFranchisees)) {
+              d.linkedFranchisees.forEach((lf: any) => {
+                if (!lf) return;
+                if (lf.franchiseeId) franchiseeRefs.add(String(lf.franchiseeId));
+                if (lf.internalId) franchiseeRefs.add(String(lf.internalId));
+                if (lf.id) franchiseeRefs.add(String(lf.id));
+                if (lf.name) franchiseeRefs.add(String(lf.name));
+                if (lf.franchiseeName) franchiseeRefs.add(String(lf.franchiseeName));
+
+                let embedded = lf.ausPostSuburbsJson || lf.ausPostTerritoryJson || lf.suburbs;
+                if (typeof embedded === 'string') {
+                  try { embedded = JSON.parse(embedded); } catch (e) {}
+                }
+                if (Array.isArray(embedded) && embedded.length > 0) {
+                  extractedSuburbs.push(...embedded);
+                }
+              });
+            }
+          });
+        });
+
+        // Load all franchisees from franchisees collection
+        const allFranchisees = await getAllFranchisees();
+
+        for (const ref of Array.from(franchiseeRefs)) {
+          if (!ref) continue;
+          const cleanRef = String(ref).trim().toLowerCase();
+
+          // Match franchisee document from franchisees collection
+          const fData = allFranchisees.find(f => {
+            if (!f) return false;
+            return (
+              String(f.id || '').trim().toLowerCase() === cleanRef ||
+              String(f.internalId || '').trim().toLowerCase() === cleanRef ||
+              String((f as any).prospectPlusId || '').trim().toLowerCase() === cleanRef ||
+              String(f.name || '').trim().toLowerCase() === cleanRef ||
+              String((f as any).code || '').trim().toLowerCase() === cleanRef
+            );
+          });
 
           if (fData) {
-            let suburbs = fData.ausPostSuburbsJson || fData.ausPostTerritoryJson;
+            let suburbs = fData.ausPostSuburbsJson || (fData as any).ausPostTerritoryJson || (fData as any).territoryJson || (fData as any).ausPostSuburbsRaw || (fData as any).custentity_ap_suburbs_json;
             if (typeof suburbs === 'string') {
               try { suburbs = JSON.parse(suburbs); } catch (e) {}
             }
             if (Array.isArray(suburbs) && suburbs.length > 0) {
-              const matchingSuburbs = suburbs.filter((s: any) => {
-                if (!s.parent_lpo_id) return true;
-                return String(s.parent_lpo_id) === String(lead.id) || String(s.parent_lpo_id) === String(parentLpoId);
-              });
-              extractedSuburbs.push(...(matchingSuburbs.length > 0 ? matchingSuburbs : suburbs));
+              extractedSuburbs.push(...suburbs);
             }
           }
         }
+
         setLpoSuburbs(extractedSuburbs);
       } catch (err) {
         console.error('Error checking LPO franchisee suburbs in lead profile:', err);
@@ -3011,7 +3082,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
         const author = user?.displayName || user?.email || 'System';
 
-        await updateLeadDetails(lead.id, lead, { bucket: newBucket as any, fieldSales: isField });
+        const isLpoBucket = newBucket === 'lpo_network' || newBucket === 'lpo_plus';
+        const extraUpdates: any = { bucket: newBucket as any, fieldSales: isField };
+        if (isLpoBucket) {
+          extraUpdates.accountManagerAssigned = "Kerry O'Neill";
+        }
+        await updateLeadDetails(lead.id, lead, extraUpdates);
         await logBucketChange(lead.id, oldBucket, newBucket, author);
 
         setLead(prev => {
@@ -3025,7 +3101,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 },
                 ...(prev.bucketHistory || [])
             ];
-            return { ...prev, bucket: newBucket as any, fieldSales: isField, bucketHistory: updatedHistory };
+            return {
+              ...prev,
+              bucket: newBucket as any,
+              fieldSales: isField,
+              accountManagerAssigned: isLpoBucket ? "Kerry O'Neill" : prev.accountManagerAssigned,
+              bucketHistory: updatedHistory
+            };
         });
 
         toast({ title: 'Bucket Updated', description: `Lead moved to ${newBucket === 'field_sales' ? 'Field Sales' : newBucket} bucket.` });
@@ -3286,16 +3368,47 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
-  const handleInitiateCall = (leadId: string, phoneNumber: string) => {
+  const [dialerInsightsOpen, setDialerInsightsOpen] = useState(false);
+  const [pendingDialData, setPendingDialData] = useState<DialerInsightsData | null>(null);
+
+  const executeCall = (targetLeadId: string, phoneNumber: string) => {
     if (!phoneNumber) return;
     window.open(`aircall:${phoneNumber}`);
-    logActivity(leadId, { 
+    logActivity(targetLeadId, { 
         type: 'Call', 
         notes: `Initiated call to ${phoneNumber} via AirCall app.`,
         author: user?.displayName || 'Unknown',
         email: user?.email || undefined,
         aircallStatus: 'initiated'
     });
+  };
+
+  const handleInitiateCall = (targetLeadId: string, phoneNumber: string) => {
+    if (!phoneNumber) return;
+
+    const opener = lead.suggestedOpener || lead.discoveryData?.suggestedOpener || (lead as any)['Suggessted Opener'] || (lead as any)['Suggested Opener'];
+    const personalisation = lead.suggestedPersonalisation || lead.discoveryData?.suggestedPersonalisation || (lead as any)['Suggested Personalisation'];
+    const apRel = lead.apRelationship || lead.discoveryData?.apRelationship || (lead as any)['AP Relationship'] || (lead as any)['AP Relationship '];
+
+    const hasInsights = Boolean(
+      (opener && opener.trim().length > 0) ||
+      (personalisation && personalisation.trim().length > 0) ||
+      (apRel && apRel.trim().length > 0)
+    );
+
+    if (!hasInsights) {
+      executeCall(targetLeadId, phoneNumber);
+    } else {
+      setPendingDialData({
+        leadId: targetLeadId,
+        companyName: lead.companyName,
+        phoneNumber,
+        suggestedOpener: opener,
+        suggestedPersonalisation: personalisation,
+        apRelationship: apRel
+      });
+      setDialerInsightsOpen(true);
+    }
   };
 
   const handleInitiateSms = (phoneNumber: string, recipientName: string = '') => {
@@ -6049,6 +6162,211 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             )}
 
             <TabsContent value="discovery" className="flex flex-col gap-6 mt-0">
+                {/* 1. Enrichment & AI Lead Intelligence Section */}
+                {(() => {
+                  const lodgementEvidence = lead.lodgementEvidence || lead.discoveryData?.lodgementEvidence || (lead as any).lodgement_evidence || (lead as any)['Lodgement Evidence'];
+                  const shipperEvidence = lead.shipperEvidence || lead.discoveryData?.shipperEvidence || (lead as any).shipper_evidence || (lead as any)['Shipper Evidence'];
+                  const shopifyDetected = lead.shopifyDetected || lead.discoveryData?.shopifyDetected || (lead as any).shopify_detected || (lead as any).shopify || (lead as any)['Shopify Detected'];
+                  const prospectSummary = lead.prospectSummary || lead.discoveryData?.prospectSummary || (lead as any).prospect_summary || (lead as any)['Prospect Summary'] || (lead as any).companyDescription;
+                  const xeroDetected = lead.xeroDetected || lead.discoveryData?.xeroDetected || (lead as any).xero_detected || (lead as any).xero || (lead as any)['Xero Detected'];
+                  const apRelationship = lead.apRelationship || lead.discoveryData?.apRelationship || (lead as any).ap_relationship || (lead as any)['AP Relationship'] || (lead as any)['AP Relationship '] || lead.discoveryData?.postOfficeRelationship;
+                  const suggestedProduct = lead.suggestedProduct || lead.discoveryData?.suggestedProduct || (lead as any).suggested_product || (lead as any)['Suggessted Product'] || (lead as any)['Suggested Product'] || lead.discoveryData?.interestedIn || lead.interestedIn;
+                  const suggestedOpener = lead.suggestedOpener || lead.discoveryData?.suggestedOpener || (lead as any).suggested_opener || (lead as any)['Suggessted Opener'] || (lead as any)['Suggested Opener'];
+                  const suggestedPersonalisation = lead.suggestedPersonalisation || lead.discoveryData?.suggestedPersonalisation || (lead as any).suggested_personalisation || (lead as any)['Suggested Personalisation'] || (lead as any)['Suggested Personalization'];
+
+                  const hasEnrichment = Boolean(
+                    lodgementEvidence ||
+                    shipperEvidence ||
+                    shopifyDetected ||
+                    prospectSummary ||
+                    xeroDetected ||
+                    apRelationship ||
+                    suggestedProduct ||
+                    suggestedOpener ||
+                    suggestedPersonalisation
+                  );
+
+                  return (
+                    <Card className="border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden bg-white dark:bg-slate-900">
+                      <CardHeader className="bg-slate-50/70 dark:bg-slate-800/50 pb-4 border-b flex flex-row items-center justify-between flex-wrap gap-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 bg-[#095c7b]/10 rounded-lg text-[#095c7b] dark:text-[#38bdf8]">
+                            <Zap className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                              Enrichment & AI Lead Intelligence
+                              {hasEnrichment && (
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 text-[10px] font-semibold">
+                                  Enriched
+                                </Badge>
+                              )}
+                            </CardTitle>
+                            <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
+                              Platform detections, shipper & lodgement evidence, and recommended sales openers.
+                            </CardDescription>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-6 space-y-6">
+                        {!hasEnrichment ? (
+                          <div className="text-center py-8 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border border-dashed text-slate-500 text-xs">
+                            <Sparkles className="w-8 h-8 text-slate-400 mx-auto mb-2 opacity-60" />
+                            <p className="font-medium text-slate-700 dark:text-slate-300">No Enrichment Data Recorded</p>
+                            <p className="text-slate-500 mt-1 max-w-sm mx-auto">
+                              Import leads via the CSV wizard with columns BR to BZ to automatically populate intelligence for this record.
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Tech Detections & AP Relationship */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Shopify Detected</p>
+                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                                    {shopifyDetected || 'Not Checked'}
+                                  </p>
+                                </div>
+                                <Badge 
+                                  variant="outline" 
+                                  className={cn("text-xs font-semibold px-2.5 py-1", 
+                                    shopifyDetected?.toLowerCase() === 'yes'
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                      : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400"
+                                  )}
+                                >
+                                  {shopifyDetected?.toLowerCase() === 'yes' ? '✓ Shopify' : 'None'}
+                                </Badge>
+                              </div>
+
+                              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Xero Detected</p>
+                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                                    {xeroDetected || 'Not Checked'}
+                                  </p>
+                                </div>
+                                <Badge 
+                                  variant="outline" 
+                                  className={cn("text-xs font-semibold px-2.5 py-1", 
+                                    xeroDetected?.toLowerCase() === 'yes'
+                                      ? "bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950/60 dark:text-sky-300"
+                                      : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400"
+                                  )}
+                                >
+                                  {xeroDetected?.toLowerCase() === 'yes' ? '✓ Xero' : 'None'}
+                                </Badge>
+                              </div>
+
+                              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">AP Relationship</p>
+                                  <p className="text-sm font-bold text-[#095c7b] dark:text-[#38bdf8] mt-0.5 truncate max-w-[140px]">
+                                    {apRelationship ? (apRelationship.split('-')[0] || apRelationship) : 'Unknown'}
+                                  </p>
+                                </div>
+                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 text-xs font-semibold px-2 py-0.5">
+                                  AP Signal
+                                </Badge>
+                              </div>
+                            </div>
+
+                            {/* Prospect Summary */}
+                            {prospectSummary && (
+                              <div className="p-4 bg-gradient-to-br from-blue-50/60 to-slate-50 dark:from-slate-800/80 dark:to-slate-900 rounded-xl border border-blue-100 dark:border-slate-800 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold uppercase tracking-wider text-[#095c7b] dark:text-[#38bdf8] flex items-center gap-1.5">
+                                    <FileText className="w-4 h-4" /> Executive Prospect Summary
+                                  </span>
+                                  <CopyButton textToCopy={prospectSummary} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
+                                </div>
+                                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                                  {prospectSummary}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Suggested Product & Opener */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              {suggestedProduct && (
+                                <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/40 space-y-1.5">
+                                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
+                                    <Package className="w-4 h-4" /> Suggested Product
+                                  </span>
+                                  <p className="text-base font-bold text-emerald-900 dark:text-emerald-200">
+                                    {suggestedProduct}
+                                  </p>
+                                </div>
+                              )}
+
+                              {suggestedOpener && (
+                                <div className={cn("p-4 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl border border-amber-100 dark:border-amber-900/40 space-y-1.5", suggestedProduct ? "md:col-span-2" : "md:col-span-3")}>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+                                      <PhoneCall className="w-4 h-4" /> Suggested Opener
+                                    </span>
+                                    <CopyButton textToCopy={suggestedOpener} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
+                                  </div>
+                                  <p className="text-xs font-medium text-slate-800 dark:text-slate-200 italic bg-white/80 dark:bg-slate-800/80 p-2.5 rounded-lg border border-amber-200/50 dark:border-amber-800/50">
+                                    "{suggestedOpener}"
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Suggested Personalisation */}
+                            {suggestedPersonalisation && (
+                              <div className="p-4 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl border border-purple-100 dark:border-purple-900/40 space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-bold uppercase tracking-wider text-purple-800 dark:text-purple-400 flex items-center gap-1.5">
+                                    <Sparkles className="w-4 h-4" /> Suggested Personalisation
+                                  </span>
+                                  <CopyButton textToCopy={suggestedPersonalisation} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
+                                </div>
+                                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                                  {suggestedPersonalisation}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Shipper & Lodgement Evidence */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                              {shipperEvidence && (
+                                <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                      <Package className="w-4 h-4 text-primary" /> Shipper Evidence
+                                    </span>
+                                    <CopyButton textToCopy={shipperEvidence} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
+                                  </div>
+                                  <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto pr-1">
+                                    {shipperEvidence}
+                                  </div>
+                                </div>
+                              )}
+
+                              {lodgementEvidence && (
+                                <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                      <Building className="w-4 h-4 text-primary" /> Lodgement Evidence
+                                    </span>
+                                    <CopyButton textToCopy={lodgementEvidence} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
+                                  </div>
+                                  <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto pr-1">
+                                    {lodgementEvidence}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+
                 {/* 1. Discovery Details (Right on top) */}
                 <Card>
                     <CardHeader className="pb-4 border-b flex flex-row items-center justify-between flex-wrap gap-4">
@@ -9310,6 +9628,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           const cb = pendingStatusCallback;
           setPendingStatusCallback(null);
           await cb();
+        }
+      }}
+    />
+    <DialerInsightsDialog
+      open={dialerInsightsOpen}
+      onOpenChange={setDialerInsightsOpen}
+      data={pendingDialData}
+      onConfirmDial={() => {
+        if (pendingDialData) {
+          executeCall(pendingDialData.leadId || lead.id, pendingDialData.phoneNumber || '');
         }
       }}
     />

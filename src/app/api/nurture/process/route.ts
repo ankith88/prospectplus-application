@@ -270,8 +270,10 @@ export async function POST(request: Request) {
             }
           }
 
-          if (currentNode.type === 'email_open_condition' || (currentNode.type === 'condition' && config.conditionType === 'email_opened')) {
-            const config = currentNode.config || {};
+          const nodeConfig = currentNode.config || {};
+
+          if (currentNode.type === 'email_open_condition' || (currentNode.type === 'condition' && nodeConfig.conditionType === 'email_opened')) {
+            const config = nodeConfig;
             const timeoutHours = Number(config.timeoutHours) || 72; // default 3 days wait
             
             // Fetch deliveries for this lead and journey
@@ -290,11 +292,11 @@ export async function POST(request: Request) {
               }
               if (dData.sentAt) {
                 const t = new Date(dData.sentAt);
-                if (!firstSentTime || t < firstSentTime) firstSentTime = t;
+                if (!firstSentTime || t < (firstSentTime as Date)) firstSentTime = t;
               }
             });
 
-            const elapsedHours = firstSentTime ? (now.getTime() - firstSentTime.getTime()) / (1000 * 60 * 60) : 0;
+            const elapsedHours = firstSentTime ? (now.getTime() - (firstSentTime as Date).getTime()) / (1000 * 60 * 60) : 0;
 
             if (isOpened) {
               const matchingEdge = journey.edges?.find((e: any) => 
@@ -393,6 +395,69 @@ export async function POST(request: Request) {
               console.error('Error fetching contact for nurture action:', e);
             }
 
+            // 2. Resolve Account Manager Details from Firestore users collection
+            const rawAmName = leadData.accountManagerAssigned || leadData.salesRepAssigned || leadData.customerSuccessAssigned || '';
+            let amName = rawAmName;
+            let amMobile = leadData.accountManagerMobile || '';
+            let amCalendly = leadData.salesRepAssignedCalendlyLink || '';
+            let amEmail = '';
+            let amPhone = '';
+
+            if (rawAmName) {
+              try {
+                const amNameTrimmed = rawAmName.trim();
+                const userDocById = await db.collection('users').doc(amNameTrimmed).get();
+                let matchedUser: any = userDocById.exists ? userDocById.data() : null;
+
+                if (!matchedUser) {
+                  const usersSnap = await db.collection('users').get();
+                  const targetLower = amNameTrimmed.toLowerCase();
+                  const foundDoc = usersSnap.docs.find(doc => {
+                    const uData = doc.data() || {};
+                    const fullName = `${uData.firstName || ''} ${uData.lastName || ''}`.trim().toLowerCase();
+                    const displayName = (uData.displayName || '').trim().toLowerCase();
+                    const name = (uData.name || '').trim().toLowerCase();
+                    const email = (uData.email || '').trim().toLowerCase();
+                    return fullName === targetLower || displayName === targetLower || name === targetLower || email === targetLower || doc.id.toLowerCase() === targetLower;
+                  });
+                  if (foundDoc) {
+                    matchedUser = foundDoc.data();
+                  }
+                }
+
+                if (matchedUser) {
+                  amName = `${matchedUser.firstName || ''} ${matchedUser.lastName || ''}`.trim() || matchedUser.displayName || matchedUser.name || amNameTrimmed;
+                  amMobile = matchedUser.mobileNumber || matchedUser.mobile || matchedUser.phoneNumber || matchedUser.phone || matchedUser.aircallPhoneNumber || amMobile;
+                  amCalendly = matchedUser.calendlyLink || amCalendly;
+                  amEmail = matchedUser.email || amEmail;
+                  amPhone = matchedUser.phoneNumber || matchedUser.phone || amMobile;
+                }
+              } catch (amErr) {
+                console.error('Error resolving AM details for nurture action:', amErr);
+              }
+            }
+
+            // 3. Calculate Trials Remaining accurately
+            let trialsRemaining = 5;
+            if (leadData.localMileTrialsRemaining !== undefined && leadData.localMileTrialsRemaining !== null) {
+              trialsRemaining = Number(leadData.localMileTrialsRemaining);
+            } else if (leadData.jobCount !== undefined && leadData.jobCount !== null) {
+              trialsRemaining = Math.max(0, 5 - Number(leadData.jobCount));
+            } else {
+              try {
+                const jobsSnap = await leadDoc.ref.collection('localMileJobs').get();
+                if (!jobsSnap.empty) {
+                  const validJobsCount = jobsSnap.docs.filter((d: any) => {
+                    const st = d.data()?.status;
+                    return st !== 'recredited' && st !== 'cancelled';
+                  }).length;
+                  trialsRemaining = Math.max(0, 5 - validJobsCount);
+                }
+              } catch (err) {
+                console.error('Error calculating trials remaining for nurture action:', err);
+              }
+            }
+
             if (actionType === 'email') {
               const templateId = config.templateId;
               const templateDoc = await db.collection('marketing_templates').doc(templateId).get();
@@ -404,8 +469,19 @@ export async function POST(request: Request) {
 
               const templateData = templateDoc.data();
               let bodyHtml = templateData?.body || '';
-              const subject = templateData?.subject || 'Outbound Drip';
+              let subject = templateData?.subject || 'Outbound Drip';
 
+              // Replace Subject Line Placeholders
+              subject = subject.replace(/\{\{Contact\.Name\}\}/gi, contactName !== 'Valued Customer' ? contactName : (leadData.companyName || 'Valued Customer'));
+              subject = subject.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+              subject = subject.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
+              subject = subject.replace(/\{\{SalesRep\.Name\}\}/gi, amName || 'MailPlus Team');
+              subject = subject.replace(/\{\{AccountManager\.Name\}\}/gi, amName || 'MailPlus Team');
+              subject = subject.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
+              subject = subject.replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly);
+              subject = subject.replace(/\{\{(Trials\.Remaining|TrialsRemaining|trials_remaining|trials\.remaining)\}\}/gi, String(trialsRemaining));
+
+              // Replace Body Placeholders
               bodyHtml = bodyHtml.replace(/\{\{Contact\.Name\}\}/gi, contactName !== 'Valued Customer' ? contactName : (leadData.companyName || 'Valued Customer'));
               bodyHtml = bodyHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
               bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
@@ -417,7 +493,19 @@ export async function POST(request: Request) {
               bodyHtml = bodyHtml.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
               bodyHtml = bodyHtml.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
               bodyHtml = bodyHtml.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
-              bodyHtml = bodyHtml.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
+              bodyHtml = bodyHtml.replace(/\{\{SalesRep\.Name\}\}/gi, amName || 'MailPlus Team');
+              bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Name\}\}/gi, amName || 'MailPlus Team');
+              bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
+              bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly);
+              bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Email\}\}/gi, amEmail);
+              bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Phone\}\}/gi, amPhone || amMobile);
+              bodyHtml = bodyHtml.replace(/\{\{(Trials\.Remaining|TrialsRemaining|trials_remaining|trials\.remaining)\}\}/gi, String(trialsRemaining));
+              bodyHtml = bodyHtml.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
+              bodyHtml = bodyHtml.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `https://prospectplus.com.au/book/${leadData.bookingUrlId}` : '');
+              bodyHtml = bodyHtml.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `https://prospectplus.com.au/book/${leadData.generalBookingUrlId}` : '');
+              bodyHtml = bodyHtml.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
+              bodyHtml = bodyHtml.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
+              bodyHtml = bodyHtml.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
 
               // 2. Personalize and inject any Action Buttons
               // We search for action buttons defined in the journey to resolve them
@@ -446,7 +534,7 @@ export async function POST(request: Request) {
                 sender = config.customFromEmail || 'info@mailplus.com.au';
               } else {
                 const fallbackSender = config.fallbackFromEmail || 'info@mailplus.com.au';
-                const manager = (leadData.accountManagerAssigned || leadData.salesRepAssigned || '').trim().toLowerCase();
+                const manager = (amName || leadData.accountManagerAssigned || leadData.salesRepAssigned || '').trim().toLowerCase();
                 sender = fallbackSender;
                 if (manager === 'lee russell') {
                   sender = 'lee.russell@mailplus.com.au';
@@ -454,6 +542,8 @@ export async function POST(request: Request) {
                   sender = 'kerina.helliwell@mailplus.com.au';
                 } else if (manager === 'luke forbes') {
                   sender = 'luke.forbes@mailplus.com.au';
+                } else if (amEmail) {
+                  sender = amEmail;
                 } else if (manager) {
                   sender = `${manager.replace(/\s+/g, '.')}@mailplus.com.au`;
                 }
@@ -526,7 +616,13 @@ export async function POST(request: Request) {
               smsMessage = smsMessage.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
               smsMessage = smsMessage.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
               smsMessage = smsMessage.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
-              smsMessage = smsMessage.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
+              smsMessage = smsMessage.replace(/\{\{SalesRep\.Name\}\}/gi, amName || 'MailPlus Team');
+              smsMessage = smsMessage.replace(/\{\{AccountManager\.Name\}\}/gi, amName || 'MailPlus Team');
+              smsMessage = smsMessage.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
+              smsMessage = smsMessage.replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly);
+              smsMessage = smsMessage.replace(/\{\{AccountManager\.Email\}\}/gi, amEmail);
+              smsMessage = smsMessage.replace(/\{\{AccountManager\.Phone\}\}/gi, amPhone || amMobile);
+              smsMessage = smsMessage.replace(/\{\{(Trials\.Remaining|TrialsRemaining|trials_remaining|trials\.remaining)\}\}/gi, String(trialsRemaining));
 
               if (!contactPhone) {
                 console.warn(`[Nurture] Lead ${leadId} has no phone number. Skipping SMS step.`);

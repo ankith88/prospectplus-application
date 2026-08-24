@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FranchiseProspect, KeyFactSheetData, KeyFactSheetHistoryColumn, DepositDetails, EOIData, ConfidentialityDeedData, ProspectDocument } from '@/lib/types';
+import { FranchiseProspect, KeyFactSheetData, KeyFactSheetHistoryColumn, DepositDetails, EOIData, ConfidentialityDeedData, ProspectDocument, NABFundingDetails } from '@/lib/types';
 import { firestore, storage } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   ArrowLeft,
   UserCheck,
@@ -178,9 +179,36 @@ export default function FranchiseProspectDetailClient() {
     restraintOfTradeClause: '' as '' | 'Yes' | 'No',
     notes: '',
     documentDate: '',
+
+    // Information Memorandum (IM) Specific Dynamic Fields
+    dateBusinessStarted: '01/02/2022',
+    numberOfOwners: '1' as string | number,
+    reasonForSale: 'Moving / Relocating',
+    last12MonthsServiceRevenue: '300437.26' as string | number,
+    franchiseFeePercent: '25' as string | number,
+    marketingLevyPercent: '5' as string | number,
+    last12MonthsExpressRevenue: '856.60' as string | number,
+    askingPrice: '335000.00' as string | number,
+    askingPriceText: '$335,000.00 NEG',
+    totalDailyRunTimeHours: 'Between 8.5 to 9.5 hours per day',
+    morningShiftHours: '6:00am to 11:00am',
+    afternoonShiftHours: '1:00pm to 4:00pm',
+    franchiseTermYears: 'Unlimited',
+    territoryMapUrl: '',
   });
   const [savingFactSheet, setSavingFactSheet] = useState(false);
   const [sendingFactSheetEmail, setSendingFactSheetEmail] = useState(false);
+
+  // Presale Listing & Franchisee Sync State
+  const [presaleListings, setPresaleListings] = useState<any[]>([]);
+  const [allFranchiseeOptions, setAllFranchiseeOptions] = useState<any[]>([]);
+  const [selectedPresaleId, setSelectedPresaleId] = useState<string>('');
+  const [loadingPresales, setLoadingPresales] = useState(false);
+
+  // Franchisee Link Modal State
+  const [isLinkFranchiseeModalOpen, setIsLinkFranchiseeModalOpen] = useState(false);
+  const [selectedLinkFranchiseeId, setSelectedLinkFranchiseeId] = useState<string>('');
+  const [linkingFranchisee, setLinkingFranchisee] = useState(false);
 
   // Step 1: Fact Sheet Email Form State
   const [factSheetEmailForm, setFactSheetEmailForm] = useState({
@@ -875,7 +903,7 @@ export default function FranchiseProspectDetailClient() {
         const data = { id: snap.id, ...(snap.data() as Omit<FranchiseProspect, 'id'>) };
         setProspect(data);
 
-        // Prefill Fact Sheet Form (All Sections A to J)
+        // Prefill Information Memorandum (IM) Form
         const kfs: Partial<KeyFactSheetData> = data.keyFactSheet || {};
         setFactSheetForm({
           franchisorName: kfs.franchisorName || 'Mail Plus Pty Ltd',
@@ -890,7 +918,22 @@ export default function FranchiseProspectDetailClient() {
           corporateOwnedCount: kfs.corporateOwnedCount ?? '',
           historyColumns: kfs.historyColumns?.length ? kfs.historyColumns : getInitialFyColumns(),
 
-          territoryName: kfs.territoryName || data.preferredTerritory || '',
+          territoryName: kfs.territoryName || data.preferredTerritory || 'MailPlus Waterloo Alexandria',
+          dateBusinessStarted: kfs.dateBusinessStarted || '01/02/2022',
+          numberOfOwners: kfs.numberOfOwners ?? '1',
+          reasonForSale: kfs.reasonForSale || 'Moving / Relocating',
+          last12MonthsServiceRevenue: kfs.last12MonthsServiceRevenue || '300437.26',
+          franchiseFeePercent: kfs.franchiseFeePercent || '25',
+          marketingLevyPercent: kfs.marketingLevyPercent || '5',
+          last12MonthsExpressRevenue: kfs.last12MonthsExpressRevenue || '856.60',
+          askingPrice: kfs.askingPrice || '335000.00',
+          askingPriceText: kfs.askingPriceText || '$335,000.00 NEG',
+          totalDailyRunTimeHours: kfs.totalDailyRunTimeHours || 'Between 8.5 to 9.5 hours per day',
+          morningShiftHours: kfs.morningShiftHours || '6:00am to 11:00am',
+          afternoonShiftHours: kfs.afternoonShiftHours || '1:00pm to 4:00pm',
+          franchiseTermYears: kfs.franchiseTermYears || 'Unlimited',
+          territoryMapUrl: kfs.territoryMapUrl || '',
+
           territoryDetailsSelected: kfs.territoryDetailsSelected || [],
           territoryOtherDetails: kfs.territoryOtherDetails || '',
           canFranchisorChangeTerritory: kfs.canFranchisorChangeTerritory || '',
@@ -903,8 +946,8 @@ export default function FranchiseProspectDetailClient() {
           franchisorRebates: kfs.franchisorRebates || '',
 
           preliminaryPaymentRequired: kfs.preliminaryPaymentRequired || '',
-          franchiseFee: kfs.franchiseFee ?? '',
-          trainingFee: kfs.trainingFee ?? '',
+          franchiseFee: kfs.franchiseFee ?? 35000,
+          trainingFee: kfs.trainingFee ?? 5000,
           transactionFee: kfs.transactionFee ?? '',
           vehicleCostRange: kfs.vehicleCostRange || '',
           equipmentCostRange: kfs.equipmentCostRange || '',
@@ -915,10 +958,9 @@ export default function FranchiseProspectDetailClient() {
           otherPaymentsText: kfs.otherPaymentsText || '',
 
           marketingFundContribution: kfs.marketingFundContribution || '',
-          marketingFeePercent: kfs.marketingFeePercent ?? '',
+          marketingFeePercent: kfs.marketingFeePercent || '',
 
           canUnilateralVariation: kfs.canUnilateralVariation || '',
-
           historicalEarningsIncluded: kfs.historicalEarningsIncluded || '',
           projectedEarningsIncluded: kfs.projectedEarningsIncluded || '',
 
@@ -1124,6 +1166,13 @@ export default function FranchiseProspectDetailClient() {
 
         // Check and auto update prospect status based on step completions
         checkAndAutoUpdateStatus(data);
+
+        // Load all franchisees & presale listings for dynamic auto-link and IM sync
+        loadAllFranchiseesAndPresales(
+          data.preferredTerritory || (data.interestedTerritories && data.interestedTerritories[0]),
+          data.linkedFranchiseeId || (data as any).presaleListingId,
+          data
+        );
       } else {
         toast({ variant: 'destructive', title: 'Not Found', description: 'Prospect record does not exist.' });
       }
@@ -1132,6 +1181,291 @@ export default function FranchiseProspectDetailClient() {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not load prospect details.' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAllFranchiseesAndPresales = async (
+    currentProspectTerritory?: string,
+    existingLinkedId?: string,
+    prospectDataObj?: any
+  ) => {
+    try {
+      setLoadingPresales(true);
+      const combinedOptions: any[] = [];
+
+      // 1. Fetch Presales Listings from API
+      try {
+        const res = await fetch('/api/franchisees/presales');
+        const json = await res.json();
+        if (json.success && Array.isArray(json.presales)) {
+          setPresaleListings(json.presales);
+          json.presales.forEach((p: any) => {
+            const pd = p.presalesDetails || {};
+            const md = p.mainDetails || {};
+            const tName = pd.territoryName || md.tradingEntity || p.franchiseeName || p.id;
+            combinedOptions.push({
+              id: p.id,
+              name: tName,
+              state: md.state || pd.state || '',
+              type: 'presale',
+              typeLabel: 'Presale Listing',
+              serviceRevenue: pd.serviceRevenue || '',
+              salePrice: pd.salePrice || pd.highPrice || '',
+              expressRevenue: pd.expressRevenue || pd.mpexCommission || '',
+              totalDailyRunTime: pd.totalDailyRunTime || '',
+              morningShift: pd.currentMorningShift || '',
+              afternoonShift: pd.currentAfternoonShift || '',
+              franchiseTerm: pd.franchiseTerm || pd.termOnFranchiseeIM || '',
+              dateBusinessStarted: pd.dateBusinessStarted || md.dateBusinessStarted || '',
+              numberOfOwners: pd.numberOfOwners || '',
+              reasonForSale: pd.reasonForSale || '',
+              franchiseFeePercent: pd.franchiseFeesOnServiceRevenue || '',
+              marketingLevyPercent: pd.marketingLevy || '',
+              territoryMapUrl: pd.territoryMapUrl || '',
+              rawRecord: p,
+            });
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching presales:', err);
+      }
+
+      // 2. Fetch Active Franchisees from Firestore `franchisees` collection
+      try {
+        const snap = await getDocs(collection(firestore, 'franchisees'));
+        snap.forEach((docSnap) => {
+          const fData = docSnap.data();
+          const fId = docSnap.id;
+          const fName = fData.name || fData.tradingEntity || fData.territoryRaw || fId;
+
+          // Don't duplicate if already in presale list under same ID
+          if (!combinedOptions.some((item) => item.id === fId || item.name.toLowerCase() === fName.toLowerCase())) {
+            combinedOptions.push({
+              id: fId,
+              name: fName,
+              state: fData.state || '',
+              type: 'active_franchisee',
+              typeLabel: 'Existing Franchisee',
+              serviceRevenue: fData.serviceRevenue || fData.presalesDetails?.serviceRevenue || '',
+              salePrice: fData.salePrice || fData.presalesDetails?.salePrice || '',
+              expressRevenue: fData.expressRevenue || fData.presalesDetails?.expressRevenue || fData.commissionRate || '',
+              totalDailyRunTime: fData.totalDailyRunTime || fData.presalesDetails?.totalDailyRunTime || '',
+              morningShift: fData.currentMorningShift || fData.presalesDetails?.currentMorningShift || '',
+              afternoonShift: fData.currentAfternoonShift || fData.presalesDetails?.currentAfternoonShift || '',
+              franchiseTerm: fData.franchiseTerm || fData.presalesDetails?.franchiseTerm || 'Unlimited',
+              dateBusinessStarted: fData.dateBusinessStarted || fData.mainDetails?.dateBusinessStarted || '',
+              numberOfOwners: fData.numberOfOwners || '',
+              reasonForSale: fData.reasonForSale || '',
+              franchiseFeePercent: fData.franchiseFeePercent || fData.presalesDetails?.franchiseFeesOnServiceRevenue || '25',
+              marketingLevyPercent: fData.marketingLevyPercent || fData.presalesDetails?.marketingLevy || '5',
+              territoryMapUrl: fData.territoryMapUrl || fData.presalesDetails?.territoryMapUrl || '',
+              rawRecord: fData,
+            });
+          }
+        });
+      } catch (err) {
+        console.error('Error fetching franchisees from firestore:', err);
+      }
+
+      setAllFranchiseeOptions(combinedOptions);
+
+      // Auto-match if existingLinkedId or territory matches
+      let targetMatch = combinedOptions.find((opt) => opt.id === existingLinkedId);
+
+      if (!targetMatch && currentProspectTerritory) {
+        const cleanTerritory = currentProspectTerritory.trim().toLowerCase();
+        targetMatch = combinedOptions.find(
+          (opt) =>
+            opt.name.toLowerCase().includes(cleanTerritory) ||
+            cleanTerritory.includes(opt.name.toLowerCase()) ||
+            (opt.id && opt.id.toLowerCase() === cleanTerritory)
+        );
+      }
+
+      if (targetMatch) {
+        setSelectedPresaleId(targetMatch.id);
+        setSelectedLinkFranchiseeId(targetMatch.id);
+
+        // Auto-save link to Firestore if not saved yet
+        if (prospectId && (!prospectDataObj?.linkedFranchiseeId || prospectDataObj?.linkedFranchiseeId !== targetMatch.id)) {
+          const prospectRef = doc(firestore, 'franchise_prospects', prospectId);
+          await updateDoc(prospectRef, {
+            linkedFranchiseeId: targetMatch.id,
+            linkedFranchiseeName: targetMatch.name,
+            presaleListingId: targetMatch.id,
+          });
+          setProspect((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  linkedFranchiseeId: targetMatch.id,
+                  linkedFranchiseeName: targetMatch.name,
+                  presaleListingId: targetMatch.id,
+                }
+              : null
+          );
+        }
+
+        // Auto sync IM details if factSheetForm is unpopulated
+        autoApplyIMDataFromFranchisee(targetMatch);
+      }
+    } catch (err) {
+      console.error('Error in loadAllFranchiseesAndPresales:', err);
+    } finally {
+      setLoadingPresales(false);
+    }
+  };
+
+  const autoApplyIMDataFromFranchisee = (item: any) => {
+    const serviceRev = item.serviceRevenue ? String(item.serviceRevenue) : '300437.26';
+    const askingPrice = item.salePrice
+      ? (String(item.salePrice).includes('$') ? String(item.salePrice) : `$${Number(item.salePrice).toLocaleString('en-AU', { minimumFractionDigits: 2 })} NEG`)
+      : '$335,000.00 NEG';
+
+    const productRev = item.expressRevenue ? String(item.expressRevenue) : '856.60';
+    const totalDailyRunTimeHours = item.totalDailyRunTime || 'Between 8.5 to 9.5 hours per day';
+    const morningShiftHours = item.morningShift || '6:00am to 11:00am';
+    const afternoonShiftHours = item.afternoonShift || '1:00pm to 4:00pm';
+    const franchiseTermYears = item.franchiseTerm || 'Unlimited';
+
+    setFactSheetForm((prev) => ({
+      ...prev,
+      territoryName: item.name || prev.territoryName || 'MailPlus Waterloo Alexandria',
+      dateBusinessStarted: item.dateBusinessStarted || prev.dateBusinessStarted || '01/02/2022',
+      numberOfOwners: item.numberOfOwners || prev.numberOfOwners || '1',
+      reasonForSale: item.reasonForSale || prev.reasonForSale || 'Moving / Relocating',
+      last12MonthsServiceRevenue: serviceRev,
+      askingPriceText: askingPrice,
+      last12MonthsExpressRevenue: productRev,
+      totalDailyRunTimeHours: totalDailyRunTimeHours,
+      morningShiftHours: morningShiftHours,
+      afternoonShiftHours: afternoonShiftHours,
+      franchiseTermYears: franchiseTermYears,
+      franchiseFeePercent: item.franchiseFeePercent || prev.franchiseFeePercent || '25',
+      marketingLevyPercent: item.marketingLevyPercent || prev.marketingLevyPercent || '5',
+      territoryMapUrl: item.territoryMapUrl || prev.territoryMapUrl || '',
+    }));
+  };
+
+  const handleConfirmLinkFranchisee = async (targetId: string) => {
+    if (!targetId || !prospectId) return;
+    setLinkingFranchisee(true);
+    try {
+      const match = allFranchiseeOptions.find((opt) => opt.id === targetId);
+      if (!match) throw new Error('Selected franchisee not found');
+
+      const prospectRef = doc(firestore, 'franchise_prospects', prospectId);
+      await updateDoc(prospectRef, {
+        linkedFranchiseeId: match.id,
+        linkedFranchiseeName: match.name,
+        presaleListingId: match.id,
+        preferredTerritory: match.name,
+      });
+
+      setProspect((prev) =>
+        prev
+          ? {
+              ...prev,
+              linkedFranchiseeId: match.id,
+              linkedFranchiseeName: match.name,
+              presaleListingId: match.id,
+              preferredTerritory: match.name,
+            }
+          : null
+      );
+      setSelectedPresaleId(match.id);
+      setSelectedLinkFranchiseeId(match.id);
+
+      autoApplyIMDataFromFranchisee(match);
+
+      toast({
+        title: 'Franchisee Linked & IM Synced',
+        description: `Linked prospect to ${match.name} (${match.typeLabel}) and prefilled IM fields.`,
+      });
+      setIsLinkFranchiseeModalOpen(false);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Link Failed', description: err.message || 'Could not link franchisee.' });
+    } finally {
+      setLinkingFranchisee(false);
+    }
+  };
+
+  const handleSyncFromPresale = (targetId?: string) => {
+    const idToUse = targetId || selectedPresaleId;
+    if (!idToUse) {
+      toast({ variant: 'destructive', title: 'Select Franchisee', description: 'Please select a franchisee from the dropdown.' });
+      return;
+    }
+    const match = allFranchiseeOptions.find((p: any) => p.id === idToUse);
+    if (!match) {
+      toast({ variant: 'destructive', title: 'Not Found', description: 'Selected franchisee record could not be found.' });
+      return;
+    }
+
+    autoApplyIMDataFromFranchisee(match);
+
+    toast({
+      title: 'Synced from Franchisee Record!',
+      description: `Mapped IM revenues, shifts, and profile from ${match.name} (${match.typeLabel}).`,
+    });
+  };
+
+  const [uploadingTerritoryMap, setUploadingTerritoryMap] = useState(false);
+
+  const handleUploadTerritoryMap = async (file: File) => {
+    if (!file || !prospect?.id) return;
+    setUploadingTerritoryMap(true);
+    try {
+      const fileExt = file.name.split('.').pop() || 'png';
+      const storageRef = ref(storage, `franchise_prospects/${prospect.id}/territory_map/${Date.now()}.${fileExt}`);
+      await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(storageRef);
+
+      setFactSheetForm((prev) => ({ ...prev, territoryMapUrl: downloadUrl }));
+
+      const prospectRef = doc(firestore, 'franchise_prospects', prospect.id);
+      const updatedKfs = {
+        ...(prospect.keyFactSheet || {}),
+        territoryMapUrl: downloadUrl,
+      };
+      await updateDoc(prospectRef, {
+        keyFactSheet: updatedKfs,
+      });
+
+      const linkedId = prospect.linkedFranchiseeId || (prospect as any).presaleListingId;
+      if (linkedId) {
+        try {
+          const presaleRef = doc(firestore, 'franchisee_presales', linkedId);
+          const presaleSnap = await getDoc(presaleRef);
+          if (presaleSnap.exists()) {
+            const pData = presaleSnap.data();
+            const updatedPresaleDetails = {
+              ...(pData.presalesDetails || {}),
+              territoryMapUrl: downloadUrl,
+            };
+            await updateDoc(presaleRef, { presalesDetails: updatedPresaleDetails });
+          }
+
+          const franRef = doc(firestore, 'franchisees', linkedId);
+          const franSnap = await getDoc(franRef);
+          if (franSnap.exists()) {
+            await updateDoc(franRef, { territoryMapUrl: downloadUrl });
+          }
+        } catch (syncErr) {
+          console.warn('Sync map to linked franchisee warning:', syncErr);
+        }
+      }
+
+      setProspect((prev) => (prev ? { ...prev, keyFactSheet: updatedKfs as any } : null));
+
+      toast({
+        title: 'Territory Map Uploaded & Synced!',
+        description: 'Territory map updated for candidate IM and synced to Step 4 of the linked presale franchisee.',
+      });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message || 'Failed to upload territory map.' });
+    } finally {
+      setUploadingTerritoryMap(false);
     }
   };
 
@@ -1183,7 +1517,7 @@ export default function FranchiseProspectDetailClient() {
   const getCurrentStageName = () => {
     if (prospect.status === 'Converted') return 'Step 9: Converted to Franchisee';
     if (!deedDone) return 'Step 1: Confidentiality Deed (Pending Execution prior to Commercial Disclosure)';
-    if (!kfsDone) return 'Step 2: Information Memorandum (IM) / Key Fact Sheet';
+    if (!kfsDone) return 'Step 2: Information Memorandum (IM)';
     if (!eoiDone) return 'Step 3: Expression of Interest (EOI Application Form)';
     if (!depositDone) return 'Step 4: Deposit (Pending 5-10% Deposit Receipt)';
     if (prospect.nabFunding?.accreditationFundingRequired && prospect.nabFunding?.nabStatus !== 'confirmed') {
@@ -1259,6 +1593,54 @@ export default function FranchiseProspectDetailClient() {
     }
   };
 
+  const handleToggleFundingType = async (isNabRequired: boolean) => {
+    if (!prospect) return;
+    setSavingEOIPrefill(true);
+    try {
+      const refDoc = doc(firestore, 'franchise_prospects', prospect.id);
+      const updatedNabFunding: NABFundingDetails = {
+        accreditationFundingRequired: isNabRequired,
+        nabStatus: isNabRequired ? (prospect.nabFunding?.nabStatus === 'confirmed' ? 'confirmed' : 'pending_michael_confirmation') : 'not_required',
+        nabConfirmedBy: isNabRequired ? prospect.nabFunding?.nabConfirmedBy : undefined,
+        nabConfirmedAt: isNabRequired ? prospect.nabFunding?.nabConfirmedAt : undefined,
+        nabNotes: prospect.nabFunding?.nabNotes || '',
+      };
+      const updatedEOI: EOIData = {
+        ...(prospect.eoiData || { publicToken: encodeProspectToken('eoi', prospect.id), status: 'not_started' }),
+        fundingType: isNabRequired ? 'nab' : 'sole_trader',
+        fundingSource: isNabRequired ? 'NAB Accreditation Funding' : 'Sole Trader Funding / Self-Funded',
+      };
+      const noteText = isNabRequired
+        ? `Funding method updated to "NAB Accreditation Funding". Requires Michael McDaid's confirmation prior to legal release.`
+        : `Funding method updated to "Sole Trader Funding / Self-Funded". NAB accreditation hold bypassed.`;
+
+      const newNote = {
+        id: Math.random().toString(36).substring(2, 9),
+        text: noteText,
+        createdAt: new Date().toISOString(),
+        createdByName: userProfile?.displayName || userProfile?.email || 'Operations User',
+        createdByUid: userProfile?.uid || 'system',
+      };
+
+      await updateDoc(refDoc, {
+        nabFunding: updatedNabFunding,
+        eoiData: updatedEOI,
+        notes: [...(prospect.notes || []), newNote],
+      });
+
+      toast({
+        title: 'Funding Method Updated',
+        description: noteText,
+      });
+      fetchProspect();
+    } catch (err: any) {
+      console.error('Error updating funding method:', err);
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not update funding method.' });
+    } finally {
+      setSavingEOIPrefill(false);
+    }
+  };
+
   const handleSaveFactSheet = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingFactSheet(true);
@@ -1293,7 +1675,18 @@ export default function FranchiseProspectDetailClient() {
     if (stepType === 'confidentiality_deed') emailForm = deedEmailForm;
     if (stepType === 'eoi') emailForm = eoiEmailForm;
 
-    if (stepType === 'fact_sheet') setSendingFactSheetEmail(true);
+    if (stepType === 'fact_sheet') {
+      const hasMap = factSheetForm.territoryMapUrl || prospect.keyFactSheet?.territoryMapUrl;
+      if (!hasMap) {
+        toast({
+          variant: 'destructive',
+          title: 'Territory Map Required',
+          description: 'You cannot send the Information Memorandum (IM) without uploading a territory map graphic. Please attach a territory map image in Section 4 above first.',
+        });
+        return;
+      }
+      setSendingFactSheetEmail(true);
+    }
     if (stepType === 'confidentiality_deed') setSendingDeedEmail(true);
     if (stepType === 'eoi') setSendingEOIEmail(true);
 
@@ -1552,7 +1945,7 @@ export default function FranchiseProspectDetailClient() {
               }`}
             >
               <div className="flex items-center justify-between font-bold text-[11px] text-slate-900">
-                <span>2. IM / Fact Sheet</span>
+                <span>2. IM</span>
                 {kfsDone ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
               </div>
               <span className="text-[9px] text-slate-600 mt-1 block font-medium truncate">
@@ -1732,7 +2125,7 @@ export default function FranchiseProspectDetailClient() {
                   {activeTab === 9 && <UserCheck className="h-5 w-5 text-emerald-400" />}
                   
                   {activeTab === 1 && 'Step 1: Confidentiality Deed (Run-Along & NDA)'}
-                  {activeTab === 2 && 'Step 2: Information Memorandum (IM) & Key Fact Sheet'}
+                  {activeTab === 2 && 'Step 2: Information Memorandum (IM)'}
                   {activeTab === 3 && 'Step 3: Expression of Interest (EOI Application Form)'}
                   {activeTab === 4 && 'Step 4: 5–10% Franchise Deposit Tracking'}
                   {activeTab === 5 && 'Step 5: NAB Funding & Legal Dispatch Branching'}
@@ -1743,7 +2136,7 @@ export default function FranchiseProspectDetailClient() {
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-300 mt-0.5">
                   {activeTab === 1 && 'Enforce execution of the initial confidentiality deed prior to commercial data disclosure.'}
-                  {activeTab === 2 && 'Dispatch standard Information Memorandum (IM) packet and Key Fact Sheet to candidate.'}
+                  {activeTab === 2 && 'Dispatch standard Information Memorandum (IM) packet to candidate.'}
                   {activeTab === 3 && 'Capture prospect parameters, accreditation funding flag (NAB), and Sole Trader logic.'}
                   {activeTab === 4 && 'Log and verify the 5-10% deposit payment.'}
                   {activeTab === 5 && 'Route NAB funding verification to Michael McDaid and control legal instruction release.'}
@@ -1777,474 +2170,367 @@ export default function FranchiseProspectDetailClient() {
             </CardHeader>
 
             <CardContent className="p-6 space-y-6">
-              {/* STEP 2: IM & KEY FACT SHEET */}
+              {/* STEP 2: INFORMATION MEMORANDUM (IM) */}
               {activeTab === 2 && (
                 <div className="space-y-6">
-                  {/* Prefill Key Fact Sheet Form */}
+                  {/* Information Memorandum (IM) Dynamic Prefill Form */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-2">
-                      <FileText className="h-4 w-4" /> Key Fact Sheet Financial Prefill
-                    </h3>
+                    <div className="flex items-center justify-between border-b pb-2">
+                      <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-2">
+                        <FileText className="h-4 w-4" /> Information Memorandum (IM) Dynamic Prefill
+                      </h3>
+                      <Badge className="bg-[#095c7b] text-white text-[10px] font-bold">
+                        Official IM Template Structure
+                      </Badge>
+                    </div>
 
                     <form onSubmit={handleSaveFactSheet} className="space-y-4 pt-1 max-h-[600px] overflow-y-auto pr-2">
-                      {/* Section A: About the franchisor */}
+                      {/* Linked Presale Listing Sync Banner */}
+                      <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Building className="h-4 w-4 text-[#095c7b]" />
+                            <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider">
+                              Linked Franchisee Auto-Sync
+                            </span>
+                          </div>
+                          {loadingPresales && (
+                            <span className="text-[11px] text-slate-500 animate-pulse">Loading franchisees...</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-600">
+                          Auto-import Service Revenue, Sale Price, Product Commission, and Shift Schedule directly from the linked franchisee:
+                        </p>
+                        <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                          <Select value={selectedPresaleId} onValueChange={(id) => handleConfirmLinkFranchisee(id)}>
+                            <SelectTrigger className="h-8 text-xs bg-white border-blue-200 flex-1">
+                              <SelectValue placeholder="Select franchisee or presale listing..." />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60">
+                              {allFranchiseeOptions.map((opt: any) => (
+                                <SelectItem key={opt.id} value={opt.id} className="text-xs">
+                                  <span className="font-bold">{opt.name}</span>{' '}
+                                  <span className="text-slate-400">({opt.typeLabel}{opt.state ? ` - ${opt.state}` : ''})</span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSyncFromPresale()}
+                            disabled={!selectedPresaleId}
+                            className="h-8 text-xs bg-[#095c7b] text-white hover:bg-[#074760] border-0 shrink-0 gap-1.5"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" /> Sync IM Data
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Section 1: Proposed Territory Profile & Schedule */}
                       <div className="p-3.5 bg-slate-50 border rounded-xl space-y-3">
-                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">A. About the Franchisor</span>
-                        <div className="grid grid-cols-2 gap-3 text-xs">
+                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">
+                          1. Proposed Territory Profile & Schedule
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                           <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Franchisor Entity Name</label>
+                            <label className="text-[11px] font-semibold text-slate-700">Territory Name</label>
                             <Input
-                              value={factSheetForm.franchisorName}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, franchisorName: e.target.value })}
+                              value={factSheetForm.territoryName}
+                              onChange={(e) => setFactSheetForm({ ...factSheetForm, territoryName: e.target.value })}
+                              placeholder="e.g. MailPlus Waterloo Alexandria"
                               className="text-xs h-8 bg-white"
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Years Operating in Australia</label>
+                            <label className="text-[11px] font-semibold text-slate-700">Date Business Started</label>
                             <Input
-                              value={factSheetForm.yearsInOperation}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, yearsInOperation: e.target.value })}
+                              value={factSheetForm.dateBusinessStarted}
+                              onChange={(e) => setFactSheetForm({ ...factSheetForm, dateBusinessStarted: e.target.value })}
+                              placeholder="e.g. 01/02/2022"
                               className="text-xs h-8 bg-white"
                             />
                           </div>
-                          <div className="col-span-2 space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Financial Viability (Able to pay debts when due?)</label>
-                            <select
-                              value={factSheetForm.financialViability}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, financialViability: e.target.value as any })}
-                              className="w-full h-8 text-xs p-1 border rounded bg-white"
-                            >
-                              <option value="">-- Select --</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-slate-700">Number of Owners</label>
+                            <Input
+                              value={factSheetForm.numberOfOwners}
+                              onChange={(e) => setFactSheetForm({ ...factSheetForm, numberOfOwners: e.target.value })}
+                              placeholder="e.g. 1"
+                              className="text-xs h-8 bg-white"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-slate-700">Reason for Sale</label>
+                            <Input
+                              value={factSheetForm.reasonForSale}
+                              onChange={(e) => setFactSheetForm({ ...factSheetForm, reasonForSale: e.target.value })}
+                              placeholder="e.g. Moving / Relocating"
+                              className="text-xs h-8 bg-white"
+                            />
                           </div>
                         </div>
                       </div>
 
-                      {/* Section B: Major disputes */}
+                      {/* Section 2: Financial Revenues & Commercial Terms */}
                       <div className="p-3.5 bg-slate-50 border rounded-xl space-y-3">
-                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">B. Major Disputes</span>
-                        <div className="grid grid-cols-2 gap-3 text-xs">
+                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">
+                          2. Financial Revenues & Commercial Terms
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                           <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Current Disclosable Legal Proceedings?</label>
-                            <select
-                              value={factSheetForm.currentLegalProceedings}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, currentLegalProceedings: e.target.value as any })}
-                              className="w-full h-8 text-xs p-1 border rounded bg-white"
-                            >
-                              <option value="">-- Select --</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
+                            <label className="text-[11px] font-semibold text-slate-700">Last 12 Months Service Revenue (Ex GST) ($)</label>
+                            <Input
+                              value={factSheetForm.last12MonthsServiceRevenue}
+                              onChange={(e) => setFactSheetForm({ ...factSheetForm, last12MonthsServiceRevenue: e.target.value })}
+                              placeholder="e.g. 300437.26"
+                              className="text-xs h-8 bg-white"
+                            />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Final Civil Judgments / Bankruptcy?</label>
-                            <select
-                              value={factSheetForm.finalJudgments}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, finalJudgments: e.target.value as any })}
-                              className="w-full h-8 text-xs p-1 border rounded bg-white"
-                            >
-                              <option value="">-- Select --</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
+                            <label className="text-[11px] font-semibold text-slate-700">Asking / Proposed Sale Price Display Text</label>
+                            <Input
+                              value={factSheetForm.askingPriceText}
+                              onChange={(e) => setFactSheetForm({ ...factSheetForm, askingPriceText: e.target.value })}
+                              placeholder="e.g. $335,000.00 NEG"
+                              className="text-xs h-8 bg-white font-bold text-emerald-700"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-slate-700">Franchise Fee on Service Revenue (%)</label>
+                            <Input
+                              value={factSheetForm.franchiseFeePercent}
+                              onChange={(e) => setFactSheetForm({ ...factSheetForm, franchiseFeePercent: e.target.value })}
+                              placeholder="e.g. 25%"
+                              className="text-xs h-8 bg-white"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-slate-700">Marketing Levy (%)</label>
+                            <Input
+                              value={factSheetForm.marketingLevyPercent}
+                              onChange={(e) => setFactSheetForm({ ...factSheetForm, marketingLevyPercent: e.target.value })}
+                              placeholder="e.g. 5%"
+                              className="text-xs h-8 bg-white"
+                            />
                           </div>
                           <div className="col-span-2 space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Franchisor-Franchisee Dispute Mediation %</label>
-                            <Input
-                              value={factSheetForm.disputeMediationPercent}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, disputeMediationPercent: e.target.value })}
-                              className="text-xs h-8 bg-white"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section C: Current and past franchisees */}
-                      <div className="p-3.5 bg-slate-50 border rounded-xl space-y-3">
-                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">C. Current & Past Franchisees</span>
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Franchisee Owned Count</label>
-                            <Input
-                              type="number"
-                              value={factSheetForm.franchiseeOwnedCount}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, franchiseeOwnedCount: Number(e.target.value) })}
-                              className="text-xs h-8 bg-white"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Corporate Owned Count</label>
-                            <Input
-                              type="number"
-                              value={factSheetForm.corporateOwnedCount}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, corporateOwnedCount: Number(e.target.value) })}
-                              className="text-xs h-8 bg-white"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 pt-2 border-t text-xs">
-                          <div className="flex items-center justify-between gap-2">
-                            <label className="text-[11px] font-bold text-slate-800 uppercase block">
-                              Financial Years History Table (Number of Occurrences)
+                            <label className="text-[11px] font-semibold text-slate-700">
+                              Last 12 Months MailPlus Product Revenue (Product Commission Ex GST) ($)
                             </label>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={handleAddFyColumn}
-                              className="h-7 text-[11px] border-slate-300 text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0 font-semibold"
-                            >
-                              <Plus className="h-3 w-3 mr-1" /> Add FY Column
-                            </Button>
-                          </div>
-
-                          <div className="overflow-x-auto border rounded-lg bg-white shadow-sm">
-                            <table className="w-full text-left text-xs">
-                              <thead className="bg-slate-100 text-slate-700 font-bold border-b text-[10px] uppercase">
-                                <tr>
-                                  <th className="p-2 min-w-[200px] border-r">Event</th>
-                                  {factSheetForm.historyColumns.map((col) => (
-                                    <th key={col.id} className="p-2 border-r min-w-[140px] text-center">
-                                      <div className="flex items-center justify-between gap-1">
-                                        <Input
-                                          value={col.label}
-                                          onChange={(e) => handleUpdateFyColumnLabel(col.id, e.target.value)}
-                                          className="text-[11px] h-7 text-center font-bold bg-white text-slate-900 border-slate-300 focus:ring-1 focus:ring-[#095c7b]"
-                                          placeholder="FY label..."
-                                        />
-                                        {factSheetForm.historyColumns.length > 1 && (
-                                          <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => handleRemoveFyColumn(col.id)}
-                                            className="h-6 w-6 p-0 text-slate-400 hover:text-rose-600 shrink-0"
-                                            title="Remove FY Column"
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        )}
-                                      </div>
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y text-[11px]">
-                                {HISTORICAL_EVENT_ROWS.map((row) => (
-                                  <tr key={row.key} className="hover:bg-slate-50/50">
-                                    <td className="p-2 border-r text-slate-800 font-medium">{row.label}</td>
-                                    {factSheetForm.historyColumns.map((col) => (
-                                      <td key={col.id} className="p-1.5 border-r">
-                                        <Input
-                                          type="number"
-                                          value={col.occurrences[row.key as keyof typeof col.occurrences] ?? 0}
-                                          onChange={(e) => handleUpdateFyOccurrence(col.id, row.key, Number(e.target.value))}
-                                          className="text-xs h-7 text-center bg-slate-50 font-bold text-slate-900 focus:bg-white"
-                                        />
-                                      </td>
-                                    ))}
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                            <Input
+                              value={factSheetForm.last12MonthsExpressRevenue}
+                              onChange={(e) => setFactSheetForm({ ...factSheetForm, last12MonthsExpressRevenue: e.target.value })}
+                              placeholder="e.g. 856.60"
+                              className="text-xs h-8 bg-white"
+                            />
                           </div>
                         </div>
                       </div>
-
-                      {/* Section D: Territory or site */}
-                      <div className="p-3.5 bg-slate-50 border rounded-xl space-y-4">
-                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">D. Territory & Site Details</span>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] font-semibold text-slate-700">Target Territory Name</label>
-                          <Input
-                            value={factSheetForm.territoryName}
-                            onChange={(e) => setFactSheetForm({ ...factSheetForm, territoryName: e.target.value })}
-                            placeholder="e.g. Parramatta Central"
-                            className="text-xs h-8 bg-white"
-                          />
-                        </div>
-
-                        {/* Checkbox Group 1 */}
-                        <div className="space-y-2 pt-1 border-t">
-                          <label className="text-[11px] font-bold text-slate-800 block">
-                            Details of the territory or site: Tick all that apply
-                          </label>
-                          <div className="space-y-1.5 text-xs bg-white p-3 border rounded-lg">
-                            {[
-                              { id: 'limited_premises', label: 'The franchisee can only operate the business at a particular site (limited to premises only)' },
-                              { id: 'no_territory', label: 'The franchisee can operate the business anywhere but may be competing with other franchised businesses (no territory)' },
-                              { id: 'exclusive_territory', label: 'No other franchised business will operate in the franchisee’s defined territory (exclusive territory)' },
-                              { id: 'non_exclusive_territory', label: 'You may encounter competition from other franchisees or the franchisor in your defined territory (non-exclusive territory)' },
-                              { id: 'other', label: 'other – (add details below)' },
-                            ].map((item) => {
-                              const isChecked = (factSheetForm.territoryDetailsSelected || []).includes(item.id);
-                              return (
-                                <label key={item.id} className="flex items-start gap-2.5 cursor-pointer py-1 hover:bg-slate-50 rounded px-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => handleToggleTerritoryDetail(item.id)}
-                                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b]"
-                                  />
-                                  <span className={isChecked ? 'font-bold text-slate-900' : 'text-slate-700'}>{item.label}</span>
-                                </label>
-                              );
-                            })}
-
-                            {(factSheetForm.territoryDetailsSelected || []).includes('other') && (
-                              <div className="pt-2 pl-6">
-                                <label className="text-[10px] font-semibold text-slate-500 block mb-1">Other Territory Details:</label>
+                          {/* Section 3: Shift Schedule & Operational Run Time */}
+                          <div className="p-3.5 bg-slate-50 border rounded-xl space-y-3">
+                            <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">
+                              3. Shift Schedule & Daily Run Time
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                              <div className="col-span-2 space-y-1">
+                                <label className="text-[11px] font-semibold text-slate-700">Total Average Daily Run Time (Current)</label>
                                 <Input
-                                  value={factSheetForm.territoryOtherDetails}
-                                  onChange={(e) => setFactSheetForm({ ...factSheetForm, territoryOtherDetails: e.target.value })}
-                                  placeholder="Enter additional territory or site terms..."
+                                  value={factSheetForm.totalDailyRunTimeHours}
+                                  onChange={(e) => setFactSheetForm({ ...factSheetForm, totalDailyRunTimeHours: e.target.value })}
+                                  placeholder="e.g. Between 8.5 to 9.5 hours per day"
                                   className="text-xs h-8 bg-white"
                                 />
                               </div>
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-slate-700">Current Morning Shift</label>
+                                <Input
+                                  value={factSheetForm.morningShiftHours}
+                                  onChange={(e) => setFactSheetForm({ ...factSheetForm, morningShiftHours: e.target.value })}
+                                  placeholder="e.g. 6:00am to 11:00am"
+                                  className="text-xs h-8 bg-white"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-slate-700">Current Afternoon Shift</label>
+                                <Input
+                                  value={factSheetForm.afternoonShiftHours}
+                                  onChange={(e) => setFactSheetForm({ ...factSheetForm, afternoonShiftHours: e.target.value })}
+                                  placeholder="e.g. 1:00pm to 4:00pm"
+                                  className="text-xs h-8 bg-white"
+                                />
+                              </div>
+                              <div className="col-span-2 space-y-1">
+                                <label className="text-[11px] font-semibold text-slate-700">Franchise Term</label>
+                                <Input
+                                  value={factSheetForm.franchiseTermYears}
+                                  onChange={(e) => setFactSheetForm({ ...factSheetForm, franchiseTermYears: e.target.value })}
+                                  placeholder="e.g. Unlimited"
+                                  className="text-xs h-8 bg-white"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Section 4: Initial Fees & Special Terms */}
+                          <div className="p-3.5 bg-slate-50 border rounded-xl space-y-3">
+                            <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">
+                              4. Initial Fees & Special Commercial Terms
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-slate-700">Initial Franchise Fee ($)</label>
+                                <Input
+                                  type="number"
+                                  value={factSheetForm.franchiseFee}
+                                  onChange={(e) => setFactSheetForm({ ...factSheetForm, franchiseFee: e.target.value })}
+                                  placeholder="e.g. 35000"
+                                  className="text-xs h-8 bg-white"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-slate-700">Training & Onboarding Fee ($)</label>
+                                <Input
+                                  type="number"
+                                  value={factSheetForm.trainingFee}
+                                  onChange={(e) => setFactSheetForm({ ...factSheetForm, trainingFee: e.target.value })}
+                                  placeholder="e.g. 5000"
+                                  className="text-xs h-8 bg-white"
+                                />
+                              </div>
+                              <div className="col-span-2 space-y-2 pt-2 border-t border-slate-200">
+                                <label className="text-[11px] font-semibold text-slate-700 block uppercase tracking-wider">
+                                  Territory Map Graphic & Boundary Overview
+                                </label>
+                                
+                                {factSheetForm.territoryMapUrl ? (
+                                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-3">
+                                    <div className="rounded-lg overflow-hidden border border-slate-200 bg-slate-50 max-h-48 flex items-center justify-center">
+                                      <img
+                                        src={factSheetForm.territoryMapUrl}
+                                        alt="Territory Map Preview"
+                                        className="max-h-44 w-auto object-contain mx-auto"
+                                      />
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1">
+                                      <span className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
+                                        <CheckCircle className="h-3.5 w-3.5" /> Map Image Attached & Synced
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <label className="cursor-pointer">
+                                          <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) handleUploadTerritoryMap(file);
+                                            }}
+                                          />
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={uploadingTerritoryMap}
+                                            className="h-7 text-xs border-slate-300 text-slate-700 gap-1"
+                                          >
+                                            {uploadingTerritoryMap ? <Loader className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                                            Replace Image
+                                          </Button>
+                                        </label>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => setFactSheetForm((prev) => ({ ...prev, territoryMapUrl: '' }))}
+                                          className="h-7 text-xs text-rose-600 hover:bg-rose-50"
+                                        >
+                                          Remove
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="p-4 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/80 text-center space-y-2">
+                                    <MapPin className="h-6 w-6 text-slate-400 mx-auto" />
+                                    <div>
+                                      <p className="text-xs font-bold text-slate-700">No Territory Map Image Attached</p>
+                                      <p className="text-[11px] text-slate-500 mt-0.5">
+                                        Upload a high-res boundary graphic image. Uploading will automatically update the IM and sync to Step 4 of the linked franchisee presale record.
+                                      </p>
+                                    </div>
+                                    <div className="pt-1">
+                                      <label className="cursor-pointer inline-block">
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) handleUploadTerritoryMap(file);
+                                          }}
+                                        />
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          disabled={uploadingTerritoryMap}
+                                          className="bg-[#095c7b] hover:bg-[#074760] text-white text-xs font-bold gap-1.5"
+                                        >
+                                          {uploadingTerritoryMap ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                                          Upload Territory Map Image
+                                        </Button>
+                                      </label>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="pt-1">
+                                  <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Or Direct Image URL:</label>
+                                  <Input
+                                    value={factSheetForm.territoryMapUrl}
+                                    onChange={(e) => setFactSheetForm({ ...factSheetForm, territoryMapUrl: e.target.value })}
+                                    placeholder="https://lh3.googleusercontent.com/..."
+                                    className="text-xs h-8 bg-white"
+                                  />
+                                </div>
+                              </div>
+                              <div className="col-span-2 space-y-1">
+                                <label className="text-[11px] font-semibold text-slate-700">Territory Notes / Special Terms</label>
+                                <textarea
+                                  rows={2}
+                                  value={factSheetForm.notes}
+                                  onChange={(e) => setFactSheetForm({ ...factSheetForm, notes: e.target.value })}
+                                  placeholder="Add any specific territory customer counts or earnings history notes..."
+                                  className="w-full p-2 text-xs border rounded-lg focus:ring-2 focus:ring-[#095c7b] outline-none bg-white"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 pt-2">
+                            <Button type="submit" disabled={savingFactSheet} className="bg-[#095c7b] hover:bg-[#074760] text-white text-xs font-bold gap-2">
+                              {savingFactSheet ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                              Save Information Memorandum (IM) Configuration
+                            </Button>
+                            {kfsDone && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => window.open(kfsPublicUrl, '_blank')}
+                                className="text-xs border-slate-300 text-[#095c7b]"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> View Public IM Page
+                              </Button>
                             )}
                           </div>
-                        </div>
-
-                        {/* Checkbox Group 2 */}
-                        <div className="space-y-2 pt-1 border-t">
-                          <label className="text-[11px] font-bold text-slate-800 block">
-                            Could the franchisee face competition from one or more businesses that sell goods or services that are substantially the same as the franchisee, including via online sales? Tick all that apply
-                          </label>
-                          <div className="space-y-1.5 text-xs bg-white p-3 border rounded-lg">
-                            {[
-                              { id: 'not_associated', label: 'Yes, but only from businesses not associated with the franchisor' },
-                              { id: 'same_brand', label: 'Yes, from another franchisee with the same brand' },
-                              { id: 'franchisor', label: 'Yes, from the franchisor' },
-                              { id: 'third_party', label: 'Yes, from a third party authorised by the franchisor' },
-                            ].map((item) => {
-                              const isChecked = (factSheetForm.competitionTypesSelected || []).includes(item.id);
-                              return (
-                                <label key={item.id} className="flex items-start gap-2.5 cursor-pointer py-1 hover:bg-slate-50 rounded px-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => handleToggleCompetitionType(item.id)}
-                                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b]"
-                                  />
-                                  <span className={isChecked ? 'font-bold text-slate-900' : 'text-slate-700'}>{item.label}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-3 text-xs pt-1 border-t">
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Can franchisor change territory?</label>
-                            <select
-                              value={factSheetForm.canFranchisorChangeTerritory}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, canFranchisorChangeTerritory: e.target.value as any })}
-                              className="w-full h-8 text-xs p-1 border rounded bg-white font-medium"
-                            >
-                              <option value="">-- Select --</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Can sell online?</label>
-                            <select
-                              value={factSheetForm.canFranchiseeSellOnline}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, canFranchiseeSellOnline: e.target.value as any })}
-                              className="w-full h-8 text-xs p-1 border rounded bg-white font-medium"
-                            >
-                              <option value="">-- Select --</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Franchisor lease interest?</label>
-                            <select
-                              value={factSheetForm.leaseInterest}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, leaseInterest: e.target.value as any })}
-                              className="w-full h-8 text-xs p-1 border rounded bg-white font-medium"
-                            >
-                              <option value="">-- Select --</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </div>
-                        </div>
+                        </form>
                       </div>
 
-                      {/* Section E: Supply of goods and services */}
-                      <div className="p-3.5 bg-slate-50 border rounded-xl space-y-3">
-                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">E. Goods & Services Supply</span>
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Supplier Choice Restrictions?</label>
-                            <select
-                              value={factSheetForm.supplierRestrictions}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, supplierRestrictions: e.target.value as any })}
-                              className="w-full h-8 text-xs p-1 border rounded bg-white"
-                            >
-                              <option value="">-- Select --</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Franchisor Receives Supplier Rebates?</label>
-                            <select
-                              value={factSheetForm.franchisorRebates}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, franchisorRebates: e.target.value as any })}
-                              className="w-full h-8 text-xs p-1 border rounded bg-white"
-                            >
-                              <option value="">-- Select --</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section F: What the franchisee has to pay */}
-                      <div className="p-3.5 bg-slate-50 border rounded-xl space-y-3">
-                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">F. Financial Setup & Operating Costs</span>
-                        <div className="grid grid-cols-3 gap-2 text-xs">
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Initial Franchise Fee ($)</label>
-                            <Input
-                              type="number"
-                              value={factSheetForm.franchiseFee}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, franchiseFee: Number(e.target.value) })}
-                              className="text-xs h-8 bg-white"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Training Fee ($)</label>
-                            <Input
-                              type="number"
-                              value={factSheetForm.trainingFee}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, trainingFee: Number(e.target.value) })}
-                              className="text-xs h-8 bg-white"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Transaction Fee ($)</label>
-                            <Input
-                              type="number"
-                              value={factSheetForm.transactionFee}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, transactionFee: Number(e.target.value) })}
-                              className="text-xs h-8 bg-white"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Vehicle Cost Range</label>
-                            <Input
-                              value={factSheetForm.vehicleCostRange}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, vehicleCostRange: e.target.value })}
-                              className="text-xs h-8 bg-white"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Working Capital Range</label>
-                            <Input
-                              value={factSheetForm.workingCapitalRange}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, workingCapitalRange: e.target.value })}
-                              className="text-xs h-8 bg-white"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section J: End of franchise agreement */}
-                      <div className="p-3.5 bg-slate-50 border rounded-xl space-y-3">
-                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">J. End of Agreement Terms</span>
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Agreement Term</label>
-                            <Input
-                              value={factSheetForm.agreementTermYears}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, agreementTermYears: e.target.value })}
-                              className="text-xs h-8 bg-white"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700">Document Current Date</label>
-                            <Input
-                              value={factSheetForm.documentDate}
-                              onChange={(e) => setFactSheetForm({ ...factSheetForm, documentDate: e.target.value })}
-                              className="text-xs h-8 bg-white"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Renewal Options Checkboxes */}
-                        <div className="space-y-2 pt-1 border-t">
-                          <label className="text-[11px] font-bold text-slate-800 block">
-                            Does a franchisee have an option to renew the franchise agreement? Tick all that apply
-                          </label>
-                          <div className="space-y-1.5 text-xs bg-white p-3 border rounded-lg">
-                            {[
-                              { id: 'new_agreement', label: 'Yes – subject to a new agreement' },
-                              { id: 'subject_conditions', label: 'Yes – subject to conditions' },
-                              { id: 'no', label: 'No' },
-                            ].map((item) => {
-                              const isChecked = (factSheetForm.renewalOptionSelected || []).includes(item.id);
-                              return (
-                                <label key={item.id} className="flex items-start gap-2.5 cursor-pointer py-1 hover:bg-slate-50 rounded px-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => handleToggleRenewalOption(item.id)}
-                                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b]"
-                                  />
-                                  <span className={isChecked ? 'font-bold text-slate-900' : 'text-slate-700'}>{item.label}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5 pt-1">
-                          <label className="text-xs font-bold text-slate-700">Territory Notes / Special Terms</label>
-                          <textarea
-                            rows={2}
-                            value={factSheetForm.notes}
-                            onChange={(e) => setFactSheetForm({ ...factSheetForm, notes: e.target.value })}
-                            placeholder="Add any specific territory customer counts or earnings history notes..."
-                            className="w-full p-2 text-xs border rounded-lg focus:ring-2 focus:ring-[#095c7b] outline-none bg-white"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 pt-2">
-                        <Button type="submit" disabled={savingFactSheet} className="bg-[#095c7b] hover:bg-[#074760] text-white text-xs font-bold">
-                          {savingFactSheet ? <Loader className="h-4 w-4 animate-spin mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
-                          Save All Sections (A–J)
-                        </Button>
-                        {kfsDone && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => window.open(kfsPublicUrl, '_blank')}
-                            className="text-xs border-slate-300 text-[#095c7b]"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> View Public Page
-                          </Button>
-                        )}
-                      </div>
-                    </form>
-                  </div>
-
-                  {/* Key Fact Sheet Dispatcher & Live Preview */}
+                  {/* Information Memorandum (IM) Dispatcher & Live Preview */}
                   <div className="space-y-4 pt-4 border-t">
                     <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-2">
-                      <Mail className="h-4 w-4" /> Key Fact Sheet Email Dispatcher
+                      <Mail className="h-4 w-4" /> Information Memorandum (IM) Email Dispatcher
                     </h3>
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -2322,7 +2608,7 @@ export default function FranchiseProspectDetailClient() {
                             <Eye className="h-4 w-4 text-[#095c7b]" /> Live Email Preview
                           </span>
                           <Badge variant="outline" className="text-[10px] bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/20">
-                            Key Fact Sheet
+                            Information Memorandum (IM)
                           </Badge>
                         </div>
 
@@ -2349,12 +2635,12 @@ export default function FranchiseProspectDetailClient() {
 
                             <div className="my-3 text-center">
                               <span className="inline-block bg-[#095c7b] text-white px-4 py-2 rounded-lg font-bold text-xs shadow-sm">
-                                View Your Key Fact Sheet &rarr;
+                                View Your Information Memorandum (IM) &rarr;
                               </span>
                             </div>
 
                             <p className="text-[11px] text-slate-500">
-                              If you have any questions after reviewing the fact sheet, feel free to reach out directly to Greg Hart.
+                              If you have any questions after reviewing the Information Memorandum (IM), feel free to reach out directly to Greg Hart.
                             </p>
 
                             <div className="pt-2 border-t text-slate-600">
@@ -2370,13 +2656,23 @@ export default function FranchiseProspectDetailClient() {
                       </div>
                     </div>
 
+                    {!factSheetForm.territoryMapUrl && !prospect.keyFactSheet?.territoryMapUrl && (
+                      <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center gap-2.5 text-xs text-amber-900 font-medium">
+                        <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                        <div>
+                          <span className="font-bold block text-amber-950">Territory Map Required Before Dispatch</span>
+                          <span>You cannot send out the Information Memorandum (IM) until a territory map image is uploaded in Section 4 above.</span>
+                        </div>
+                      </div>
+                    )}
+
                     <Button
                       onClick={() => handleSendStepEmail('fact_sheet')}
-                      disabled={sendingFactSheetEmail}
-                      className="w-full bg-[#095c7b] hover:bg-[#074760] text-white font-bold text-xs py-2.5 gap-2"
+                      disabled={sendingFactSheetEmail || (!factSheetForm.territoryMapUrl && !prospect.keyFactSheet?.territoryMapUrl)}
+                      className="w-full bg-[#095c7b] hover:bg-[#074760] text-white font-bold text-xs py-2.5 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {sendingFactSheetEmail ? <Loader className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Send Key Fact Sheet Email Now
+                      Send Information Memorandum (IM) Email Now
                     </Button>
                   </div>
                 </div>
@@ -2827,6 +3123,71 @@ export default function FranchiseProspectDetailClient() {
                         <Button size="sm" variant="outline" onClick={() => window.open(eoiPublicUrl, '_blank')} className="shrink-0 text-xs">
                           <ExternalLink className="h-3.5 w-3.5 mr-1" /> Open Form
                         </Button>
+                      </div>
+                    </div>
+
+                    {/* Interactive Funding Method & Workflow Branching Control Card */}
+                    <div className="p-4 bg-[#095c7b]/5 border-2 border-[#095c7b]/30 rounded-xl space-y-3">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b pb-2">
+                        <div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-[#095c7b] block">
+                            Funding Requirement & Workflow Branching Selection
+                          </span>
+                          <span className="text-[11px] text-slate-600 block mt-0.5">
+                            Logged-in operations users can change this option at any time to define candidate workflow progression.
+                          </span>
+                        </div>
+                        <Badge className={prospect.nabFunding?.accreditationFundingRequired ? 'bg-amber-600 text-white font-bold' : 'bg-emerald-600 text-white font-bold'}>
+                          {prospect.nabFunding?.accreditationFundingRequired ? 'NAB Accreditation Funding' : 'Sole Trader / Self-Funded'}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFundingType(true)}
+                          disabled={savingEOIPrefill}
+                          className={`p-3 rounded-xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer ${
+                            prospect.nabFunding?.accreditationFundingRequired
+                              ? 'border-[#095c7b] bg-[#095c7b]/10 ring-2 ring-[#095c7b]/20 shadow-xs'
+                              : 'border-slate-200 bg-white hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className={`mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            prospect.nabFunding?.accreditationFundingRequired ? 'border-[#095c7b] bg-[#095c7b]' : 'border-slate-300'
+                          }`}>
+                            {prospect.nabFunding?.accreditationFundingRequired && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-slate-900 block">1. NAB Accreditation Funding</span>
+                            <span className="text-[11px] text-slate-600 block mt-0.5">
+                              Routes application to Michael McDaid for NAB accreditation confirmation before legal instructions are released to Lawyer Anna.
+                            </span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFundingType(false)}
+                          disabled={savingEOIPrefill}
+                          className={`p-3 rounded-xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer ${
+                            !prospect.nabFunding?.accreditationFundingRequired
+                              ? 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-600/20 shadow-xs'
+                              : 'border-slate-200 bg-white hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className={`mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            !prospect.nabFunding?.accreditationFundingRequired ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'
+                          }`}>
+                            {!prospect.nabFunding?.accreditationFundingRequired && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-slate-900 block">2. Sole Trader / Self-Funded</span>
+                            <span className="text-[11px] text-slate-600 block mt-0.5">
+                              Bypasses NAB accreditation hold. Unlocks Step 6 legal instruction dispatch directly for Lawyer Anna Trist.
+                            </span>
+                          </div>
+                        </button>
                       </div>
                     </div>
 
@@ -3401,60 +3762,127 @@ export default function FranchiseProspectDetailClient() {
                 </div>
               )}
 
-              {/* STEP 5 */}
+              {/* STEP 5: NAB Accreditation Funding & Legal Dispatch Branching */}
               {activeTab === 5 && (
-                <div className="max-w-2xl mx-auto space-y-6">
-                  <div className="border-b pb-3">
+                <div className="space-y-6">
+                  <div className="space-y-4">
                     <h3 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-2">
-                      <UserCheck className="h-5 w-5 text-emerald-600" /> Convert Candidate to Franchisee User
+                      <ShieldCheck className="h-5 w-5 text-amber-500" /> Step 5: Funding Branching & NAB Accreditation Confirmation
                     </h3>
-                    <p className="text-xs text-slate-600 mt-1">
-                      Provision the candidate's Firebase Auth user account, link to their territory entity, and launch the presale wizard.
+
+                    <p className="text-xs text-slate-600">
+                      This step defines the approval workflow. If <strong>NAB Accreditation Funding</strong> is required, legal instructions to Lawyer Anna Trist (Step 6) are held until Michael McDaid logs formal confirmation. If <strong>Sole Trader Funding / Self-Funded</strong> is selected, the hold is bypassed.
                     </p>
+
+                    {/* Interactive Funding Mode Selector */}
+                    <div className="p-4 bg-slate-50 border rounded-xl space-y-4">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b pb-3">
+                        <div>
+                          <span className="text-xs font-bold uppercase text-[#095c7b] block">Current Candidate Funding Mode</span>
+                          <span className="text-xs text-slate-800 font-bold mt-0.5 block">
+                            {prospect.nabFunding?.accreditationFundingRequired ? 'NAB Accreditation Funding Required (Hold Active)' : 'Sole Trader Funding / Self-Funded (NAB Hold Bypassed)'}
+                          </span>
+                        </div>
+                        <Badge className={prospect.nabFunding?.accreditationFundingRequired ? 'bg-amber-600 text-white font-bold' : 'bg-emerald-600 text-white font-bold'}>
+                          {prospect.nabFunding?.accreditationFundingRequired ? 'Pending Michael McDaid' : 'Self-Funded / Sole Trader'}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Button
+                          type="button"
+                          variant={prospect.nabFunding?.accreditationFundingRequired ? 'default' : 'outline'}
+                          onClick={() => handleToggleFundingType(true)}
+                          disabled={savingEOIPrefill}
+                          className={`text-xs font-bold justify-start text-left h-auto p-3 flex flex-col items-start ${
+                            prospect.nabFunding?.accreditationFundingRequired
+                              ? 'bg-[#095c7b] text-white shadow-sm'
+                              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                          }`}
+                        >
+                          <span className="font-extrabold block">1. Require NAB Accreditation Funding</span>
+                          <span className="text-[10px] opacity-90 font-normal mt-0.5">
+                            Routes to Michael McDaid for formal NAB confirmation before releasing legal instructions to Lawyer Anna.
+                          </span>
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant={!prospect.nabFunding?.accreditationFundingRequired ? 'default' : 'outline'}
+                          onClick={() => handleToggleFundingType(false)}
+                          disabled={savingEOIPrefill}
+                          className={`text-xs font-bold justify-start text-left h-auto p-3 flex flex-col items-start ${
+                            !prospect.nabFunding?.accreditationFundingRequired
+                              ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700'
+                              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                          }`}
+                        >
+                          <span className="font-extrabold block">2. Sole Trader / Self-Funded</span>
+                          <span className="text-[10px] opacity-90 font-normal mt-0.5">
+                            Bypasses NAB accreditation hold and unlocks Step 6 legal instruction dispatch directly for Lawyer Anna Trist.
+                          </span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Michael McDaid Confirmation Panel */}
+                    {prospect.nabFunding?.accreditationFundingRequired ? (
+                      <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-amber-950 uppercase flex items-center gap-1.5">
+                            <Info className="h-4 w-4 text-amber-700" /> Michael McDaid NAB Confirmation Status
+                          </span>
+                          <Badge className={prospect.nabFunding?.nabStatus === 'confirmed' ? 'bg-emerald-600 text-white font-bold' : 'bg-amber-600 text-white font-bold'}>
+                            {prospect.nabFunding?.nabStatus === 'confirmed' ? 'Confirmed' : 'Pending Confirmation'}
+                          </Badge>
+                        </div>
+
+                        {prospect.nabFunding?.nabStatus === 'confirmed' ? (
+                          <div className="p-3 bg-emerald-100/80 border border-emerald-300 rounded-lg text-xs text-emerald-950 space-y-1">
+                            <span className="font-bold block">✓ Formal NAB Accreditation Confirmed</span>
+                            <span className="text-[11px] block">
+                              Confirmed by {prospect.nabFunding?.nabConfirmedBy || 'Michael McDaid'} on {prospect.nabFunding?.nabConfirmedAt ? new Date(prospect.nabFunding.nabConfirmedAt).toLocaleDateString('en-AU') : 'N/A'}. Legal instructions unlocked for Step 6!
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <p className="text-xs text-amber-900">
+                              Michael McDaid must review and record formal NAB accreditation confirmation for this prospect.
+                            </p>
+                            <div className="flex items-center gap-3">
+                              <Button
+                                onClick={() => handleConfirmNAB('confirm')}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1.5" /> Log NAB Accreditation Confirmation
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => handleConfirmNAB('reject')}
+                                className="text-xs border-amber-300 text-amber-900 hover:bg-amber-100"
+                              >
+                                Reject NAB Accreditation
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-xl flex items-center justify-between text-xs text-emerald-950 font-bold">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0" />
+                          <span>Sole Trader / Self-Funded Mode Active — NAB Accreditation Hold Bypassed</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => setActiveTab(6)}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-1"
+                        >
+                          Proceed to Step 6 (Request Docs) <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
-
-                  {!isPrerequisitesComplete && prospect.status !== 'Converted' ? (
-                    <div className="p-6 bg-amber-50 border-2 border-amber-300 rounded-2xl space-y-4 text-center">
-                      <div className="p-3 bg-amber-100 rounded-full text-amber-800 inline-block">
-                        <Lock className="h-8 w-8" />
-                      </div>
-                      <h4 className="text-base font-bold text-amber-950">Step 5 Conversion Currently Locked</h4>
-                      <p className="text-xs text-amber-800 max-w-md mx-auto">
-                        Candidate conversion is strictly locked until all required prerequisite steps are satisfied:
-                      </p>
-                      <div className="grid grid-cols-3 gap-2 text-xs font-semibold max-w-md mx-auto">
-                        <div className={`p-2 rounded border ${kfsDone ? 'bg-emerald-100 border-emerald-300 text-emerald-900' : 'bg-white border-amber-200 text-slate-500'}`}>
-                          1. Fact Sheet {kfsDone ? '✓' : '✗'}
-                        </div>
-                        <div className={`p-2 rounded border ${eoiDone ? 'bg-emerald-100 border-emerald-300 text-emerald-900' : 'bg-white border-amber-200 text-slate-500'}`}>
-                          3. EOI Form {eoiDone ? '✓' : '✗'}
-                        </div>
-                        <div className={`p-2 rounded border ${depositDone ? 'bg-emerald-100 border-emerald-300 text-emerald-900' : 'bg-white border-amber-200 text-slate-500'}`}>
-                          4. Deposit {depositDone ? '✓' : '✗'}
-                        </div>
-                      </div>
-                      <Button disabled className="bg-slate-300 text-slate-500 cursor-not-allowed text-xs font-bold">
-                        Locked — Complete Steps 1, 3 & 4 to Unlock
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="p-6 bg-emerald-50 border-2 border-emerald-300 rounded-2xl space-y-4 text-center">
-                      <div className="p-3 bg-emerald-100 rounded-full text-emerald-800 inline-block">
-                        <CheckCircle className="h-8 w-8" />
-                      </div>
-                      <h4 className="text-base font-bold text-emerald-950">All Prerequisites Completed!</h4>
-                      <p className="text-xs text-emerald-800 max-w-md mx-auto">
-                        Candidate details (ABN, business address, contact numbers) will be automatically prefilled into the user creation wizard.
-                      </p>
-
-                      <Button
-                        onClick={handleStartConvert}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 px-6 shadow-md gap-2"
-                      >
-                        <UserCheck className="h-4 w-4" /> Start Franchisee User Provisioning Now
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )}
             </CardContent>
@@ -3481,7 +3909,7 @@ export default function FranchiseProspectDetailClient() {
                 >
                   <option value="New">New Application</option>
                   <option value="Deed Signed">Step 1: Deed Signed</option>
-                  <option value="IM Sent">Step 2: IM / Fact Sheet Sent</option>
+                  <option value="IM Sent">Step 2: IM Sent</option>
                   <option value="EOI Signed">Step 3: EOI Application Signed</option>
                   <option value="Deposit Paid">Step 4: Deposit Paid</option>
                   <option value="NAB Pending">Step 5: NAB Pending Confirmation</option>
@@ -3591,6 +4019,38 @@ export default function FranchiseProspectDetailClient() {
                         </Badge>
                       );
                     })
+                  )}
+                </div>
+              </div>
+
+              {/* Linked Franchisee / Target Business Section */}
+              <div className="pt-4 border-t space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                    <Building className="h-3.5 w-3.5 text-[#095c7b]" /> LINKED FRANCHISEE / TARGET BUSINESS
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsLinkFranchiseeModalOpen(true)}
+                    className="h-7 text-xs border-blue-600/30 bg-blue-50 text-blue-800 hover:bg-blue-100 rounded-full px-3 font-semibold gap-1"
+                  >
+                    <Building className="h-3.5 w-3.5" />
+                    {prospect.linkedFranchiseeName ? 'Change Link' : 'Link Franchisee'}
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-2 pt-0.5">
+                  {prospect.linkedFranchiseeName ? (
+                    <Badge variant="outline" className="text-xs py-1.5 px-3 rounded-xl gap-2 font-bold bg-blue-50 text-[#095c7b] border-blue-300 shadow-xs">
+                      <Building className="h-3.5 w-3.5 text-[#095c7b]" />
+                      <span>{prospect.linkedFranchiseeName}</span>
+                      <span className="text-[10px] text-blue-700 font-normal">
+                        ({allFranchiseeOptions.find((o) => o.id === prospect.linkedFranchiseeId)?.typeLabel || 'Linked Franchisee'})
+                      </span>
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No existing franchisee or presale listing linked yet. Click "Link Franchisee" above to select one.</span>
                   )}
                 </div>
               </div>
@@ -3802,6 +4262,54 @@ export default function FranchiseProspectDetailClient() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link Prospect to Existing Franchisee or Presale Listing Modal */}
+      <Dialog open={isLinkFranchiseeModalOpen} onOpenChange={setIsLinkFranchiseeModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#095c7b] font-bold text-lg flex items-center gap-2">
+              <Building className="h-5 w-5" /> Link Prospect to Existing Franchisee
+            </DialogTitle>
+            <DialogDescription>
+              Select any existing MailPlus Franchisee or Presale Listing to link with this prospect and auto-sync financial IM metrics.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 block">Select Franchisee or Presale Listing</label>
+              <Select value={selectedLinkFranchiseeId} onValueChange={setSelectedLinkFranchiseeId}>
+                <SelectTrigger className="w-full text-xs h-9 bg-white border-slate-300">
+                  <SelectValue placeholder="Choose an existing franchisee or presale..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {allFranchiseeOptions.map((opt) => (
+                    <SelectItem key={opt.id} value={opt.id} className="text-xs">
+                      <span className="font-bold">{opt.name}</span>{' '}
+                      <span className="text-slate-400">({opt.typeLabel}{opt.state ? ` - ${opt.state}` : ''})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DialogFooter className="pt-2 border-t">
+              <Button type="button" variant="outline" onClick={() => setIsLinkFranchiseeModalOpen(false)} className="text-xs">
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleConfirmLinkFranchisee(selectedLinkFranchiseeId)}
+                disabled={linkingFranchisee || !selectedLinkFranchiseeId}
+                className="bg-[#095c7b] hover:bg-[#074760] text-white font-bold text-xs gap-1.5"
+              >
+                {linkingFranchisee ? <Loader className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Link & Sync IM Data
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

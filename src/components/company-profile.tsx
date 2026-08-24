@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { CopyButton } from '@/components/ui/copy-button'
+import { DialerInsightsDialog, DialerInsightsData } from '@/components/dialer-insights-dialog'
 
 import {
   ArrowLeft,
@@ -75,7 +76,7 @@ import { RequestAddressChangeDialog } from '@/components/request-address-change-
 import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
-import { logActivity, getAllUsers, getCompanyFromFirebase, deleteAdditionalAddress, getOperatorsForFranchisee } from '@/services/firebase'
+import { logActivity, getAllUsers, getCompanyFromFirebase, deleteAdditionalAddress, getOperatorsForFranchisee, getAllFranchisees } from '@/services/firebase'
 import { formatInTimezone, parseDateString, safeFormatDate, getLeadDisplayDateValue, getLeadDisplayDateLabel } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
 import { Label } from './ui/label'
@@ -254,62 +255,132 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     async function checkLpoSuburbs() {
       setLoadingLpoSuburbs(true);
       try {
-        const franchiseeIds = new Set<string>();
+        const franchiseeRefs = new Set<string>();
         const parentLpoId = (company as any).ausPostParentLpoId || company.lpoLeadId || company.linkedLpoLeadId || company.id;
-
-        if (company.franchisee_id) franchiseeIds.add(String(company.franchisee_id));
-        if ((company as any).franchiseeInternalId) franchiseeIds.add(String((company as any).franchiseeInternalId));
-
-        // Find child leads/companies belonging to this parent account
-        const qChild1 = query(collection(firestore, 'leads'), where('parentLeadId', '==', company.id));
-        const childSnap1 = await getDocs(qChild1);
-        childSnap1.forEach(docSnap => {
-          const d = docSnap.data();
-          const childLpoId = d.ausPostParentLpoId || d.lpoLeadId || d.linkedLpoLeadId || d.lpoId;
-          const matchesParentLpo = !childLpoId || childLpoId === company.id || childLpoId === parentLpoId || String(childLpoId) === String(company.id);
-          if (matchesParentLpo) {
-            if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
-            if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
-          }
-        });
-
-        const qChild2 = query(collection(firestore, 'leads'), where('createdParentLeadId', '==', company.id));
-        const childSnap2 = await getDocs(qChild2);
-        childSnap2.forEach(docSnap => {
-          const d = docSnap.data();
-          const childLpoId = d.ausPostParentLpoId || d.lpoLeadId || d.linkedLpoLeadId || d.lpoId;
-          const matchesParentLpo = !childLpoId || childLpoId === company.id || childLpoId === parentLpoId || String(childLpoId) === String(company.id);
-          if (matchesParentLpo) {
-            if (d.franchisee_id) franchiseeIds.add(String(d.franchisee_id));
-            if (d.franchiseeInternalId) franchiseeIds.add(String(d.franchiseeInternalId));
-          }
-        });
-
-        // Query franchisees EXCLUSIVELY for ausPostSuburbsJson / ausPostTerritoryJson
         const extractedSuburbs: any[] = [];
-        for (const fId of Array.from(franchiseeIds)) {
-          const fDoc = await getDoc(doc(firestore, 'franchisees', fId));
-          let fData = fDoc.exists() ? fDoc.data() : null;
-          if (!fData) {
-            const qF = query(collection(firestore, 'franchisees'), where('internalId', '==', fId));
-            const qFSnap = await getDocs(qF);
-            if (!qFSnap.empty) fData = qFSnap.docs[0].data();
-          }
+
+        if (company.franchisee_id) franchiseeRefs.add(String(company.franchisee_id));
+        if ((company as any).franchiseeInternalId) franchiseeRefs.add(String((company as any).franchiseeInternalId));
+        if ((company as any).franchisee) franchiseeRefs.add(String((company as any).franchisee));
+
+        // Check linkedFranchisees array on company
+        const linkedFrans = (company as any).linkedFranchisees;
+        if (Array.isArray(linkedFrans)) {
+          linkedFrans.forEach((lf: any) => {
+            if (!lf) return;
+            if (lf.franchiseeId) franchiseeRefs.add(String(lf.franchiseeId));
+            if (lf.internalId) franchiseeRefs.add(String(lf.internalId));
+            if (lf.id) franchiseeRefs.add(String(lf.id));
+            if (lf.name) franchiseeRefs.add(String(lf.name));
+            if (lf.franchiseeName) franchiseeRefs.add(String(lf.franchiseeName));
+
+            let embedded = lf.ausPostSuburbsJson || lf.ausPostTerritoryJson || lf.suburbs;
+            if (typeof embedded === 'string') {
+              try { embedded = JSON.parse(embedded); } catch (e) {}
+            }
+            if (Array.isArray(embedded) && embedded.length > 0) {
+              extractedSuburbs.push(...embedded);
+            }
+          });
+        }
+
+        // Check linkedFranchiseeIds array on company
+        const linkedFranIds = (company as any).linkedFranchiseeIds;
+        if (Array.isArray(linkedFranIds)) {
+          linkedFranIds.forEach((id: any) => {
+            if (id) franchiseeRefs.add(String(id));
+          });
+        }
+
+        // Candidate parent IDs to match child companies / leads
+        const parentIdSet = new Set<string>();
+        if (company.id) parentIdSet.add(String(company.id));
+        if ((company as any).internalId) parentIdSet.add(String((company as any).internalId));
+        if ((company as any).prospectPlusId) parentIdSet.add(String((company as any).prospectPlusId));
+        if (company.lpoLeadId) parentIdSet.add(String(company.lpoLeadId));
+        if ((company as any).linkedLpoLeadId) parentIdSet.add(String((company as any).linkedLpoLeadId));
+        if ((company as any).ausPostParentLpoId) parentIdSet.add(String((company as any).ausPostParentLpoId));
+        if (parentLpoId) parentIdSet.add(String(parentLpoId));
+
+        // Build queries across leads and companies collections
+        const childQueries: any[] = [];
+        for (const pId of Array.from(parentIdSet)) {
+          childQueries.push(
+            query(collection(firestore, 'leads'), where('parentLeadId', '==', pId)),
+            query(collection(firestore, 'leads'), where('parentCompanyId', '==', pId)),
+            query(collection(firestore, 'leads'), where('createdParentLeadId', '==', pId)),
+            query(collection(firestore, 'leads'), where('ausPostParentLpoId', '==', pId)),
+            query(collection(firestore, 'companies'), where('parentCompanyId', '==', pId)),
+            query(collection(firestore, 'companies'), where('parentLeadId', '==', pId)),
+            query(collection(firestore, 'companies'), where('createdParentLeadId', '==', pId)),
+            query(collection(firestore, 'companies'), where('ausPostParentLpoId', '==', pId))
+          );
+        }
+
+        const childSnaps = await Promise.all(childQueries.map(q => getDocs(q).catch(() => ({ docs: [] }))));
+
+        childSnaps.forEach(snap => {
+          snap.docs.forEach((docSnap: any) => {
+            const d = docSnap.data();
+            if (!d) return;
+            
+            if (d.franchisee_id) franchiseeRefs.add(String(d.franchisee_id));
+            if (d.franchiseeInternalId) franchiseeRefs.add(String(d.franchiseeInternalId));
+            if (d.franchisee) franchiseeRefs.add(String(d.franchisee));
+            if (Array.isArray(d.linkedFranchiseeIds)) {
+              d.linkedFranchiseeIds.forEach((id: any) => { if (id) franchiseeRefs.add(String(id)); });
+            }
+            if (Array.isArray(d.linkedFranchisees)) {
+              d.linkedFranchisees.forEach((lf: any) => {
+                if (!lf) return;
+                if (lf.franchiseeId) franchiseeRefs.add(String(lf.franchiseeId));
+                if (lf.internalId) franchiseeRefs.add(String(lf.internalId));
+                if (lf.id) franchiseeRefs.add(String(lf.id));
+                if (lf.name) franchiseeRefs.add(String(lf.name));
+                if (lf.franchiseeName) franchiseeRefs.add(String(lf.franchiseeName));
+
+                let embedded = lf.ausPostSuburbsJson || lf.ausPostTerritoryJson || lf.suburbs;
+                if (typeof embedded === 'string') {
+                  try { embedded = JSON.parse(embedded); } catch (e) {}
+                }
+                if (Array.isArray(embedded) && embedded.length > 0) {
+                  extractedSuburbs.push(...embedded);
+                }
+              });
+            }
+          });
+        });
+
+        // Load all franchisees from franchisees collection
+        const allFranchisees = await getAllFranchisees();
+
+        for (const ref of Array.from(franchiseeRefs)) {
+          if (!ref) continue;
+          const cleanRef = String(ref).trim().toLowerCase();
+
+          // Match franchisee document from franchisees collection
+          const fData = allFranchisees.find(f => {
+            if (!f) return false;
+            return (
+              String(f.id || '').trim().toLowerCase() === cleanRef ||
+              String(f.internalId || '').trim().toLowerCase() === cleanRef ||
+              String((f as any).prospectPlusId || '').trim().toLowerCase() === cleanRef ||
+              String(f.name || '').trim().toLowerCase() === cleanRef ||
+              String((f as any).code || '').trim().toLowerCase() === cleanRef
+            );
+          });
 
           if (fData) {
-            let suburbs = fData.ausPostSuburbsJson || fData.ausPostTerritoryJson;
+            let suburbs = fData.ausPostSuburbsJson || (fData as any).ausPostTerritoryJson || (fData as any).territoryJson || (fData as any).ausPostSuburbsRaw || (fData as any).custentity_ap_suburbs_json;
             if (typeof suburbs === 'string') {
               try { suburbs = JSON.parse(suburbs); } catch (e) {}
             }
             if (Array.isArray(suburbs) && suburbs.length > 0) {
-              const matchingSuburbs = suburbs.filter((s: any) => {
-                if (!s.parent_lpo_id) return true;
-                return String(s.parent_lpo_id) === String(company.id) || String(s.parent_lpo_id) === String(parentLpoId);
-              });
-              extractedSuburbs.push(...(matchingSuburbs.length > 0 ? matchingSuburbs : suburbs));
+              extractedSuburbs.push(...suburbs);
             }
           }
         }
+
         setLpoSuburbs(extractedSuburbs);
       } catch (err) {
         console.error('Error checking LPO franchisee suburbs:', err);
@@ -920,7 +991,10 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     router.push('/signed-customers');
   };
 
-  const handleInitiateCall = (phoneNumber: string) => {
+  const [dialerInsightsOpen, setDialerInsightsOpen] = useState(false);
+  const [pendingDialData, setPendingDialData] = useState<DialerInsightsData | null>(null);
+
+  const executeCall = (phoneNumber: string) => {
     if (!phoneNumber) return;
     window.open(`aircall:${phoneNumber}`);
     logActivity(company.id, { 
@@ -930,6 +1004,34 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         email: user?.email || undefined,
         aircallStatus: 'initiated'
     }, 'companies');
+  };
+
+  const handleInitiateCall = (phoneNumber: string) => {
+    if (!phoneNumber) return;
+
+    const opener = company.suggestedOpener || company.discoveryData?.suggestedOpener || (company as any)['Suggessted Opener'] || (company as any)['Suggested Opener'];
+    const personalisation = company.suggestedPersonalisation || company.discoveryData?.suggestedPersonalisation || (company as any)['Suggested Personalisation'];
+    const apRel = company.apRelationship || company.discoveryData?.apRelationship || (company as any)['AP Relationship'] || (company as any)['AP Relationship '];
+
+    const hasInsights = Boolean(
+      (opener && opener.trim().length > 0) ||
+      (personalisation && personalisation.trim().length > 0) ||
+      (apRel && apRel.trim().length > 0)
+    );
+
+    if (!hasInsights) {
+      executeCall(phoneNumber);
+    } else {
+      setPendingDialData({
+        leadId: company.id,
+        companyName: company.companyName,
+        phoneNumber,
+        suggestedOpener: opener,
+        suggestedPersonalisation: personalisation,
+        apRelationship: apRel
+      });
+      setDialerInsightsOpen(true);
+    }
   };
 
 
@@ -2169,6 +2271,16 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             </DialogFooter>
         </DialogContent>
     </Dialog>
+    <DialerInsightsDialog
+      open={dialerInsightsOpen}
+      onOpenChange={setDialerInsightsOpen}
+      data={pendingDialData}
+      onConfirmDial={() => {
+        if (pendingDialData) {
+          executeCall(pendingDialData.phoneNumber || '');
+        }
+      }}
+    />
     </>
   )
 }
