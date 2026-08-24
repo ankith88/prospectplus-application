@@ -322,6 +322,10 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           selectedServiceOption: data.selectedServiceOption || data.selectedService || data.interestedIn,
           inboundPageUrl: data.inboundPageUrl || data.pageUrl || data.pageURL || data.inboundDetails?.landingPage || data.attribution?.landingPage || data.sourcePageUrl,
           pageURL: data.pageURL || data.inboundPageUrl || data.pageUrl,
+          lpoPlusStatus: data.lpoPlusStatus,
+          lpoPlusProvisionedAt: data.lpoPlusProvisionedAt,
+          lpoPlusPasswordResetAt: data.lpoPlusPasswordResetAt,
+          defaultPassword: data.defaultPassword,
         };
 
         if (includeSubCollections) {
@@ -518,6 +522,10 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           exportedToCompany: data.exportedToCompany,
           exportBatchId: data.exportBatchId,
           exportHistory: data.exportHistory || [],
+          lpoPlusStatus: data.lpoPlusStatus,
+          lpoPlusProvisionedAt: data.lpoPlusProvisionedAt,
+          lpoPlusPasswordResetAt: data.lpoPlusPasswordResetAt,
+          defaultPassword: data.defaultPassword,
         };
         
         if (includeSubCollections) {

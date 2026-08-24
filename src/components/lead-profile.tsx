@@ -5904,6 +5904,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
                         if (!isLpoParentLeadDoc || !isLeadSignedUp) return null;
 
+                        const isAccountActive = lead.lpoPlusStatus === 'Provisioned' || Boolean(lead.defaultPassword) || (lead.status as string) === 'LPO.Plus Access Sent';
+
                         return (
                           <Card className="border-[#095c7b]/30 bg-gradient-to-r from-slate-50 via-sky-50/20 to-white shadow-sm mb-4">
                           <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
@@ -5916,7 +5918,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 LPO.PLUS Portal access and sign-in details for this participating LPO contact.
                               </p>
                             </div>
-                            {lead.lpoPlusStatus === 'Provisioned' || lead.defaultPassword ? (
+                            {isAccountActive ? (
                               <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold px-2.5 py-1">
                                 <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> LPO.Plus Access Active
                               </Badge>
@@ -5928,7 +5930,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                           </CardHeader>
 
                           <CardContent className="pt-4">
-                            {lead.lpoPlusStatus === 'Provisioned' || lead.defaultPassword ? (
+                            {isAccountActive ? (
                               <div className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-3.5 rounded-lg border border-slate-200">
                                   <div>

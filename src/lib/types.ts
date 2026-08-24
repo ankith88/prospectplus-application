@@ -559,6 +559,7 @@ export interface Lead {
   longitude?: number;
   lpoPlusStatus?: string;
   lpoPlusProvisionedAt?: string;
+  lpoPlusPasswordResetAt?: string;
   defaultPassword?: string;
   franchisee?: string;
   franchisee_id?: string;
