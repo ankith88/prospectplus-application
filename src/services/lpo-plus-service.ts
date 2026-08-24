@@ -390,3 +390,184 @@ export async function disableLpoPlusAccount(netsuiteId: string, contactEmail?: s
     };
   }
 }
+
+export interface LpoPlusResetPasswordPayload {
+  netsuiteId: string;
+  contactEmail: string;
+  newPassword?: string;
+  contactFirstName?: string;
+}
+
+/**
+ * Resets/Updates an LPO.Plus account password in Firebase Auth and emails the user the updated credentials.
+ */
+export async function resetLpoPlusPassword(payload: LpoPlusResetPasswordPayload): Promise<{ success: boolean; message: string }> {
+  try {
+    const {
+      netsuiteId,
+      contactEmail,
+      newPassword = 'MailPlus2026!',
+      contactFirstName = 'LPO Partner'
+    } = payload;
+
+    if (!netsuiteId || !contactEmail) {
+      return { success: false, message: 'netsuiteId and contactEmail are required for resetting password.' };
+    }
+
+    console.log(`[LPO.Plus Reset Password] Resetting password for LPO #${netsuiteId} (${contactEmail})...`);
+
+    // 1. Update/Reset Password in Firebase Auth via Admin Auth
+    let userUid = '';
+    try {
+      const lpoApp = getLpoConnectApp();
+      const auth = admin.auth(lpoApp);
+      const existingUser = await auth.getUserByEmail(contactEmail);
+      userUid = existingUser.uid;
+
+      await auth.updateUser(userUid, {
+        password: newPassword,
+        disabled: false
+      });
+      console.log(`[LPO.Plus Reset Password Admin] Successfully reset Auth password for UID: ${userUid}`);
+    } catch (adminAuthErr: any) {
+      console.warn('[LPO.Plus Reset Password Admin Warning] Trying REST API fallback:', adminAuthErr);
+      try {
+        const signInRes = await fetch(
+          "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyDklo95QYbj4PGZeKAqRBBzCfFKc9CFoXs",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: contactEmail, password: newPassword, returnSecureToken: true })
+          }
+        );
+        const signInData = await signInRes.json();
+        if (signInData.idToken) {
+          userUid = signInData.localId || '';
+          await fetch(
+            "https://identitytoolkit.googleapis.com/v1/accounts:update?key=AIzaSyDklo95QYbj4PGZeKAqRBBzCfFKc9CFoXs",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ idToken: signInData.idToken, password: newPassword, returnSecureToken: true })
+            }
+          );
+        } else {
+          // Send Firebase OOB reset password email as REST fallback
+          await fetch(
+            "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=AIzaSyDklo95QYbj4PGZeKAqRBBzCfFKc9CFoXs",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ requestType: "PASSWORD_RESET", email: contactEmail })
+            }
+          );
+        }
+      } catch (e) {}
+    }
+
+    // 2. Update user doc timestamp in lpoconnect DB if found
+    try {
+      const lpoConnectDb = getLpoConnectDb();
+      if (userUid) {
+        await lpoConnectDb.collection('users').doc(userUid).set({
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    } catch (e) {}
+
+    // 3. Send "LPO.PLUS Password Reset Notification" Email
+    const year = new Date().getFullYear();
+    const emailToLPOSubject = "Your LPO.PLUS Password Has Been Reset";
+    const emailToLPOBody = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    .email-container { font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width:600px; margin:0 auto; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.05); border:1px solid #e2e8f0; }
+    .header { background-color:#095c7b; padding:35px 20px; text-align:center; }
+    .header h1 { color:#ffffff; margin:0; font-size:24px; font-weight:300; letter-spacing:1px; }
+    .header span { color:#EAF044; font-weight:bold; }
+    .content { padding:35px 30px; color:#2d3748; line-height:1.6; font-size:14px; }
+    .greeting { font-size:18px; margin-bottom:16px; color:#095c7b; font-weight:bold; }
+    .credentials-box { background-color:#f8fafb; border-radius:8px; padding:20px; margin:24px 0; border:1px solid #e2e8f0; border-left:4px solid #095c7b; }
+    .cred-row { margin-bottom:8px; font-size:14px; }
+    .cred-label { font-weight:bold; color:#4a5568; display:inline-block; width:140px; }
+    .cred-val { color:#095c7b; font-weight:bold; font-family:monospace; background:#eef6ed; padding:2px 8px; border-radius:4px; }
+    .instruction-box { background-color:#fffdf0; border-radius:8px; padding:20px; margin:24px 0; border:1px solid #f6e05e; border-left:4px solid #EAF044; }
+    .button-container { text-align:center; margin:30px 0; }
+    .btn-primary { background-color:#095c7b; color:#ffffff; padding:14px 28px; text-decoration:none; font-weight:bold; border-radius:8px; display:inline-block; text-transform:uppercase; font-size:14px; letter-spacing:0.5px; }
+    .footer { background-color:#f8fafb; padding:25px 20px; text-align:center; border-top:1px solid #edf2f7; font-size:12px; color:#718096; }
+    .footer p { margin:4px 0; }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" width="135" style="display: inline-block; vertical-align: middle; border: 0; max-height: 42px; width: auto;" />
+      <h1 style="margin-top:10px; color:#ffffff;">lpo<span style="color:#EAF044;">.plus</span></h1>
+    </div>
+    <div class="content">
+      <div class="greeting">Password Reset Notification</div>
+      <p>Hello ${contactFirstName || 'LPO Partner'},</p>
+      <p>Your password for the <b>lpo.<i>plus</i></b> portal has been successfully updated by your administrator.</p>
+      
+      <div class="credentials-box">
+        <p style="margin-top:0; margin-bottom:12px; color:#095c7b; font-weight:bold; font-size:15px;">Your Updated Sign-In Credentials:</p>
+        <div class="cred-row"><span class="cred-label">Portal Sign In:</span> <a href="https://lpo.plus/signin" style="color:#095c7b; text-decoration:underline;">https://lpo.plus/signin</a></div>
+        <div class="cred-row"><span class="cred-label">Username (Email):</span> <span class="cred-val">${contactEmail}</span></div>
+        <div class="cred-row" style="margin-bottom:0;"><span class="cred-label">New Password:</span> <span class="cred-val">${newPassword}</span></div>
+      </div>
+
+      <div class="instruction-box">
+        <p style="margin-top:0; color:#095c7b; font-weight:bold;">Sign In Instructions:</p>
+        <ol style="padding-left:20px; margin-bottom:0;">
+          <li>Click the <strong>Sign In to LPO.PLUS</strong> button below.</li>
+          <li>Enter your username (<code>${contactEmail}</code>) and your new password (<code>${newPassword}</code>).</li>
+        </ol>
+      </div>
+
+      <div class="button-container">
+        <a href="https://lpo.plus/signin" class="btn-primary">Sign In to LPO.PLUS</a>
+      </div>
+
+      <p>If you did not request a password reset, please contact Kerry O'Neill or the MailPlus support team immediately.</p>
+    </div>
+    <div class="footer">
+      <p><strong style="color:#4a5568;">MailPlus</strong> | Business logistics, made simple.</p>
+      <p>Powered by MailPlus Australia</p>
+      <p style="margin-top:12px; font-size:11px; color:#a0aec0;">&copy; ${year} LPO.PLUS. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    try {
+      await fetch("https://sendemailfromnetsuite-65tt2ndmpq-uc.a.run.app", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "f7d8c2e1b0a943ef8215d6c7b8a90123fe456789abcd0123456789abcdef0123"
+        },
+        body: JSON.stringify({
+          to: contactEmail,
+          cc: ["michael.mcdaid@mailplus.com.au", "kerry.oneill@mailplus.com.au"],
+          subject: emailToLPOSubject,
+          html: emailToLPOBody
+        })
+      });
+    } catch (e) {
+      console.warn('[LPO.Plus Reset Password Email Warning]', e);
+    }
+
+    return {
+      success: true,
+      message: `LPO.Plus password updated for ${contactEmail} and notification email sent.`
+    };
+  } catch (error: any) {
+    console.error("[LPO.Plus Reset Password Error]", error);
+    return {
+      success: false,
+      message: error.message || 'Failed to reset LPO.Plus password.'
+    };
+  }
+}

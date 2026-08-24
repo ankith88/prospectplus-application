@@ -490,6 +490,64 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       setIsProvisioningLpoPlus(false);
     }
   };
+
+  // Reset Password State
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
+  const [resetPasswordInput, setResetPasswordInput] = useState('MailPlus2026!');
+  const [isResettingLpoPassword, setIsResettingLpoPassword] = useState(false);
+
+  const handleResetLpoPlusPassword = async () => {
+    try {
+      setIsResettingLpoPassword(true);
+      const primaryContact = company.contacts?.find((c: any) => c.isPrimary) || company.contacts?.[0];
+      const email = primaryContact?.email || company.customerServiceEmail || '';
+
+      if (!email) {
+        toast({
+          variant: 'destructive',
+          title: 'Missing Email',
+          description: 'No email address found for this company to send password reset notification.',
+        });
+        return;
+      }
+
+      const res = await fetch('/api/lpo-plus/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          netsuiteId: company.id,
+          contactEmail: email,
+          newPassword: resetPasswordInput || 'MailPlus2026!',
+          contactFirstName: primaryContact?.firstName || 'LPO Partner'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        const updatedFields = {
+          defaultPassword: resetPasswordInput || 'MailPlus2026!'
+        };
+        setCompany(prev => ({ ...prev, ...updatedFields }));
+        toast({
+          title: 'Password Reset Successfully',
+          description: `Password updated to "${resetPasswordInput || 'MailPlus2026!'}" and notification email dispatched to ${email}.`,
+        });
+        setIsResetPasswordDialogOpen(false);
+      } else {
+        throw new Error(data.error || 'Failed to reset password');
+      }
+    } catch (err: any) {
+      console.error('Error resetting LPO.Plus password:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Reset Password Error',
+        description: err.message || 'Failed to reset password.',
+      });
+    } finally {
+      setIsResettingLpoPassword(false);
+    }
+  };
+
   const [isNotifyUpsellDialogOpen, setIsNotifyUpsellDialogOpen] = useState(false);
   const [isReqAddressDialogOpen, setIsReqAddressDialogOpen] = useState(false);
 
@@ -1297,17 +1355,31 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                       <p className="text-xs text-slate-500 italic">
                         Account created in <code>lpoconnect</code> DB (Doc ID: <strong>{company.id}</strong>).
                       </p>
-                      <CopyButton
-                        textToCopy={`Portal: https://lpo.plus/signin\nUsername: ${company.contacts?.[0]?.email || company.customerServiceEmail || ''}\nPassword: ${company.defaultPassword || 'MailPlus2026!'}`}
-                        label="Copy Sign-in Details"
-                        variant="outline"
-                        size="sm"
-                        className="border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5"
-                      />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setResetPasswordInput(company.defaultPassword || 'MailPlus2026!');
+                            setIsResetPasswordDialogOpen(true);
+                          }}
+                          className="border-amber-300 text-amber-800 hover:bg-amber-50 font-medium text-xs h-8"
+                        >
+                          <Key className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+                          Reset Password
+                        </Button>
+                        <CopyButton
+                          textToCopy={`Portal: https://lpo.plus/signin\nUsername: ${company.contacts?.[0]?.email || company.customerServiceEmail || ''}\nPassword: ${company.defaultPassword || 'MailPlus2026!'}`}
+                          label="Copy Sign-in Details"
+                          variant="outline"
+                          size="sm"
+                          className="border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5 h-8 text-xs"
+                        />
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -1983,6 +2055,63 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     <EditAddressDialog lead={company} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setCompany(prev => ({ ...prev, ...updates }))} />
     <RequestAddressChangeDialog company={company} isOpen={isReqAddressDialogOpen} onOpenChange={setIsReqAddressDialogOpen} />
     <NotifyUpsellDialog company={company} isOpen={isNotifyUpsellDialogOpen} onOpenChange={setIsNotifyUpsellDialogOpen} />
+    
+    <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+      <DialogContent className="max-w-md p-6">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-slate-900">
+            <Key className="w-5 h-5 text-[#095c7b]" />
+            Reset LPO.Plus Password
+          </DialogTitle>
+          <DialogDescription className="text-xs text-slate-600 mt-1">
+            Set a new password for <strong>{company.contacts?.[0]?.email || company.customerServiceEmail || 'this user'}</strong>. This will update their login password and send a reset notification email.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-slate-700">Account Email (Username)</Label>
+            <Input
+              value={company.contacts?.[0]?.email || company.customerServiceEmail || ''}
+              disabled
+              className="bg-slate-100 font-mono text-xs"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-slate-700">New Password</Label>
+            <Input
+              value={resetPasswordInput}
+              onChange={(e) => setResetPasswordInput(e.target.value)}
+              placeholder="e.g. MailPlus2026!"
+              className="font-mono text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground">Default recommended format: <code>MailPlus2026!</code></p>
+          </div>
+        </div>
+
+        <DialogFooter className="pt-3 border-t flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setIsResetPasswordDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleResetLpoPlusPassword}
+            disabled={isResettingLpoPassword || !resetPasswordInput.trim()}
+            className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold text-xs"
+          >
+            {isResettingLpoPassword ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Updating & Emailing...
+              </>
+            ) : (
+              'Reset Password & Send Email'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <ManageAdditionalAddressesDialog
         leadId={company.id}
         isCompany={true}
