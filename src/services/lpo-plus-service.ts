@@ -1,4 +1,5 @@
-import { getLpoConnectDb } from '@/lib/lpo-connect-db';
+import * as admin from 'firebase-admin';
+import { getLpoConnectDb, getLpoConnectApp } from '@/lib/lpo-connect-db';
 
 export interface LpoPlusProvisionPayload {
   netsuiteId: string;
@@ -57,43 +58,96 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
 
     console.log(`[LPO.Plus Provisioning] Provisioning account for LPO #${netsuiteId} (${lpoName}) for contact ${contactEmail}...`);
 
-    // 1. Create Authenticated User in Firebase Auth via Identity Toolkit API
+    // 1. Create or Update/Reset Authenticated User in Firebase Auth
     let authID = '';
     try {
-      const authResponse = await fetch(
-        "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyDklo95QYbj4PGZeKAqRBBzCfFKc9CFoXs",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+      const lpoApp = getLpoConnectApp();
+      const auth = admin.auth(lpoApp);
+      const displayName = `${contactFirstName || ''} ${contactLastName || ''}`.trim() || 'LPO Contact';
+
+      try {
+        const existingUser = await auth.getUserByEmail(contactEmail);
+        authID = existingUser.uid;
+        await auth.updateUser(authID, {
+          password: defaultPassword,
+          disabled: false,
+          displayName: displayName
+        });
+        console.log(`[LPO.Plus Auth Admin] Successfully updated/reset password for existing user (${contactEmail}), UID: ${authID}`);
+      } catch (getUserErr: any) {
+        if (getUserErr.code === 'auth/user-not-found') {
+          const newUser = await auth.createUser({
             email: contactEmail,
             password: defaultPassword,
-            returnSecureToken: true
-          })
-        }
-      );
-
-      const authData = await authResponse.json();
-
-      if (authResponse.ok && authData.localId) {
-        authID = authData.localId;
-        console.log(`[LPO.Plus Auth] Successfully created Authenticated User UID: ${authID}`);
-      } else if (authData?.error?.message === 'EMAIL_EXISTS') {
-        console.warn(`[LPO.Plus Auth] User with email ${contactEmail} already exists. Searching existing user document...`);
-        const userSnap = await lpoConnectDb.collection('users').where('email', '==', contactEmail).limit(1).get();
-        if (!userSnap.empty) {
-          authID = userSnap.docs[0].id;
+            displayName: displayName,
+            disabled: false
+          });
+          authID = newUser.uid;
+          console.log(`[LPO.Plus Auth Admin] Successfully created new Auth user (${contactEmail}), UID: ${authID}`);
         } else {
-          // Fallback deterministic document ID if auth exists but user doc missing
+          throw getUserErr;
+        }
+      }
+    } catch (adminAuthErr) {
+      console.warn("[LPO.Plus Auth Admin Warning] Admin Auth error, trying REST API fallback:", adminAuthErr);
+      try {
+        const authResponse = await fetch(
+          "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyDklo95QYbj4PGZeKAqRBBzCfFKc9CFoXs",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: contactEmail,
+              password: defaultPassword,
+              returnSecureToken: true
+            })
+          }
+        );
+
+        const authData = await authResponse.json();
+
+        if (authResponse.ok && authData.localId) {
+          authID = authData.localId;
+          console.log(`[LPO.Plus Auth REST] Successfully created Authenticated User UID: ${authID}`);
+        } else if (authData?.error?.message === 'EMAIL_EXISTS') {
+          console.warn(`[LPO.Plus Auth REST] User with email ${contactEmail} already exists. Searching existing user document...`);
+          const userSnap = await lpoConnectDb.collection('users').where('email', '==', contactEmail).limit(1).get();
+          if (!userSnap.empty) {
+            authID = userSnap.docs[0].id;
+          } else {
+            authID = `user-${netsuiteId}`;
+          }
+          // Attempt password update via REST sign-in + accounts:update
+          try {
+            const signInRes = await fetch(
+              "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyDklo95QYbj4PGZeKAqRBBzCfFKc9CFoXs",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: contactEmail, password: defaultPassword, returnSecureToken: true })
+              }
+            );
+            const signInData = await signInRes.json();
+            if (signInData.idToken) {
+              await fetch(
+                "https://identitytoolkit.googleapis.com/v1/accounts:update?key=AIzaSyDklo95QYbj4PGZeKAqRBBzCfFKc9CFoXs",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ idToken: signInData.idToken, password: defaultPassword, returnSecureToken: true })
+                }
+              );
+              console.log(`[LPO.Plus Auth REST] Updated password for existing user (${contactEmail})`);
+            }
+          } catch (e) {}
+        } else {
+          console.error(`[LPO.Plus Auth Error] ${JSON.stringify(authData)}`);
           authID = `user-${netsuiteId}`;
         }
-      } else {
-        console.error(`[LPO.Plus Auth Error] ${JSON.stringify(authData)}`);
+      } catch (authErr) {
+        console.error("[LPO.Plus Auth Exception]", authErr);
         authID = `user-${netsuiteId}`;
       }
-    } catch (authErr) {
-      console.error("[LPO.Plus Auth Exception]", authErr);
-      authID = `user-${netsuiteId}`;
     }
 
     // 2. Formulate territory suburb strings format ("Suburb, STATE Postcode")
