@@ -1,4 +1,4 @@
-import { Firestore as GoogleFirestore } from '@google-cloud/firestore';
+import { getLpoConnectDb } from '@/lib/lpo-connect-db';
 
 export interface LpoPlusProvisionPayload {
   netsuiteId: string;
@@ -20,14 +20,6 @@ export interface LpoPlusProvisionPayload {
   packageRate?: number | string;
   additionalBagRate?: number | string;
   territorySuburbs?: any[];
-}
-
-// Dedicated Firestore instance targeting project mp-lpo-connect, database lpoconnect
-function getLpoConnectDb() {
-  return new GoogleFirestore({
-    projectId: 'mp-lpo-connect',
-    databaseId: 'lpoconnect',
-  });
 }
 
 /**

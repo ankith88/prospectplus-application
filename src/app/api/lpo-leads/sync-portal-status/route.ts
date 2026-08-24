@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore as getProspectPlusDb, FieldValue } from 'firebase-admin/firestore';
-import { Firestore as GoogleFirestore } from '@google-cloud/firestore';
+import { getLpoConnectDb } from '@/lib/lpo-connect-db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,10 +11,7 @@ export async function POST(request: NextRequest) {
     const prospectDb = getProspectPlusDb(adminApp);
     
     // Connect to mp-lpo-connect project, lpoconnect database
-    const lpoConnectDb = new GoogleFirestore({
-      projectId: 'mp-lpo-connect',
-      databaseId: 'lpoconnect',
-    });
+    const lpoConnectDb = getLpoConnectDb();
 
     // 1. Fetch LPO leads from ProspectPlus
     let lpoLeadsQuery: FirebaseFirestore.Query = prospectDb.collection('lpo_leads');
