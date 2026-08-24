@@ -40,11 +40,14 @@ import { logActivity } from '@/services/firebase';
 import { ServiceSelectionDialog } from '@/components/service-selection-dialog';
 import { fetch3MonthAvgInvoiceMRR } from '@/lib/cancellation-invoice-helper';
 
+import { useToast } from '@/hooks/use-toast';
+
 const REASONS = ['Price too high', 'Competitor offer', 'Service Quality issues', 'No longer needed', 'Business closed', 'Other'];
 const COLORS = ['#095c7b', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#a78bfa'];
 
 export default function CancellationDashboard() {
   const { userProfile } = useAuth();
+  const { toast } = useToast();
   const [requests, setRequests] = useState<CancellationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -79,12 +82,18 @@ export default function CancellationDashboard() {
     if (!selectedRequest) return;
     setLoadingResellLead(true);
     try {
-      const leadSnap = await getDoc(doc(firestore, 'leads', selectedRequest.leadId));
+      const compSnap = await getDoc(doc(firestore, 'companies', selectedRequest.leadId));
+      const leadSnap = compSnap.exists() ? compSnap : await getDoc(doc(firestore, 'leads', selectedRequest.leadId));
       if (leadSnap.exists()) {
         setFullLeadForResell({ id: leadSnap.id, ...leadSnap.data() } as Lead);
         setIsResellDialogOpen(true);
       } else {
-        console.error("Lead not found for resell dialog:", selectedRequest.leadId);
+        console.error("Lead/Company not found for resell dialog:", selectedRequest.leadId);
+        toast({
+          title: 'Customer Not Found',
+          description: 'Could not locate customer details for sending resell quote.',
+          variant: 'destructive',
+        });
       }
     } catch (e) {
       console.error("Failed to load lead for resell:", e);
@@ -107,17 +116,37 @@ export default function CancellationDashboard() {
         processedAt
       });
 
-      await updateDoc(doc(firestore, 'leads', selectedRequest.leadId), {
+      const compRef = doc(firestore, 'companies', selectedRequest.leadId);
+      const leadRef = doc(firestore, 'leads', selectedRequest.leadId);
+      const [compSnap, leadSnap] = await Promise.all([
+        getDoc(compRef),
+        getDoc(leadRef)
+      ]);
+
+      const updates = {
         cancellationRequested: false,
         customerStatus: 'Won'
-      });
+      };
 
-      await logActivity(selectedRequest.leadId, {
-        type: 'Update',
-        date: processedAt,
-        notes: `Customer Saved from Cancellation via Resell / Quote Update.`,
-        author: userDisplayName,
-      });
+      if (compSnap.exists()) {
+        await updateDoc(compRef, updates);
+        await logActivity(selectedRequest.leadId, {
+          type: 'Update',
+          date: processedAt,
+          notes: `Customer Saved from Cancellation via Resell / Quote Update.`,
+          author: userDisplayName,
+        }, 'companies');
+      }
+
+      if (leadSnap.exists()) {
+        await updateDoc(leadRef, updates);
+        await logActivity(selectedRequest.leadId, {
+          type: 'Update',
+          date: processedAt,
+          notes: `Customer Saved from Cancellation via Resell / Quote Update.`,
+          author: userDisplayName,
+        }, 'leads');
+      }
 
       setIsResellDialogOpen(false);
       setProcessModalOpen(false);
@@ -292,14 +321,40 @@ export default function CancellationDashboard() {
       const savedMRR = newInvoiceMRR; // Retained revenue monthly value
       const baselineAvg = isSignedCustomer ? (avg3MonthInvoice ?? 0) : calculateMRR(originalServices);
 
-      // 2. Update Lead document
-      const leadRef = doc(firestore, 'leads', selectedRequest.leadId);
-      await updateDoc(leadRef, {
+      // 2. Update Company/Lead document
+      const saveCompRef = doc(firestore, 'companies', selectedRequest.leadId);
+      const saveLeadRef = doc(firestore, 'leads', selectedRequest.leadId);
+      const [saveCompSnap, saveLeadSnap] = await Promise.all([
+        getDoc(saveCompRef),
+        getDoc(saveLeadRef)
+      ]);
+
+      const saveUpdates = {
         customerStatus: 'Won',
-        bucket: 'customer_success', // Keep in CS bucket or AM bucket if required
+        bucket: 'customer_success',
         services: finalServices,
         cancellationRequested: false
-      });
+      };
+
+      if (saveCompSnap.exists()) {
+        await updateDoc(saveCompRef, saveUpdates);
+        await logActivity(selectedRequest.leadId, {
+          type: 'Update',
+          date: processedAt,
+          notes: `Customer Saved from Cancellation. Strategy: ${saveStrategy}. Notes: ${saveNotes}`,
+          author: userDisplayName,
+        }, 'companies');
+      }
+
+      if (saveLeadSnap.exists()) {
+        await updateDoc(saveLeadRef, saveUpdates);
+        await logActivity(selectedRequest.leadId, {
+          type: 'Update',
+          date: processedAt,
+          notes: `Customer Saved from Cancellation. Strategy: ${saveStrategy}. Notes: ${saveNotes}`,
+          author: userDisplayName,
+        }, 'leads');
+      }
 
       // 3. Update Cancellation Request document
       const cancelReqRef = doc(firestore, 'cancellations', selectedRequest.id);
@@ -318,16 +373,6 @@ export default function CancellationDashboard() {
         serviceRateChanged,
         serviceFrequencyChanged,
         serviceDeleted
-      });
-
-      // 4. Log activity
-      const activityRef = collection(firestore, 'leads', selectedRequest.leadId, 'activity');
-      await addDoc(activityRef, {
-        type: 'Update',
-        date: processedAt,
-        notes: `Customer Saved from Cancellation. Strategy: ${saveStrategy}. Notes: ${saveNotes}`,
-        author: userDisplayName,
-        syncedWithNetSuite: false
       });
 
       setProcessModalOpen(false);

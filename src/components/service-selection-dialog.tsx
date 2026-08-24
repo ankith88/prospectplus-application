@@ -170,6 +170,7 @@ export function ServiceSelectionDialog({
 
     if (isOpen) {
       initSelectionType();
+      setSkipEmail(false);
     }
   }, [mode, isOpen, lead]);
 
@@ -181,6 +182,7 @@ export function ServiceSelectionDialog({
   const [availableServices, setAvailableServices] = useState<{internalId: number|string, label: string}[]>([]);
   const [rawServices, setRawServices] = useState<any[]>([]);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
+  const [skipEmail, setSkipEmail] = useState(false);
   const [emailPreviewData, setEmailPreviewData] = useState({ 
     to: '', 
     cc: '', 
@@ -1163,6 +1165,59 @@ export function ServiceSelectionDialog({
     }
   };
 
+  const handleCompleteWithoutEmail = async () => {
+    if (!lead) return;
+    setIsSending(true);
+    try {
+      if (mode === 'Quote' || mode === 'Resell') {
+        const isCompanyOrSignedCustomer = 
+          mode === 'Resell' ||
+          (lead as any).leadType === 'Company' ||
+          ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(lead.status || '') ||
+          (typeof window !== 'undefined' && window.location.pathname.startsWith('/companies/'));
+
+        const isResendingQuote = 
+          !!emailPreviewData.scfId ||
+          ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won', 'Signed Customer'].includes(lead.status || '');
+
+        if (!isCompanyOrSignedCustomer && !isResendingQuote) {
+          await updateLeadStatus(lead.id, 'Quote Sent');
+        }
+        await logActivity(lead.id, {
+            type: 'Update',
+            notes: `Processed sales option: Quote for services (no email sent).`,
+            author: user?.displayName || 'Unknown'
+        });
+        toast({ title: 'Success!', description: 'The quote process has been completed without sending an email.' });
+      } else if (mode === 'Signup' || mode === 'Resend SCF' || mode === 'Confirm Signup') {
+        if (mode === 'Signup' || mode === 'Confirm Signup') {
+          await updateLeadStatus(lead.id, 'Won');
+        }
+
+        let activityNotes = `Processed sales option: Signup (no email sent).`;
+        if (mode === 'Resend SCF') {
+          activityNotes = `Processed sales option: Resend SCF (no email sent).`;
+        } else if (mode === 'Confirm Signup') {
+          activityNotes = `Processed sales option: Confirm Signup (no email sent).`;
+        }
+
+        await logActivity(lead.id, {
+            type: 'Update',
+            notes: activityNotes,
+            author: user?.displayName || 'Unknown'
+        });
+        toast({ title: 'Success!', description: `${mode} completed without sending an email.` });
+      }
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (e: any) {
+      console.error("Failed to complete without email:", e);
+      toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to complete.' });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
 
   const selectedServices = form.watch('selectedServices');
   const selectedContactId = form.watch('selectedContactId');
@@ -1217,6 +1272,22 @@ export function ServiceSelectionDialog({
        }
        setIsSubmitting(true);
        try {
+           if (skipEmail) {
+               if (mode === 'Confirm Signup') {
+                 await updateLeadStatus(lead.id, 'Won');
+               }
+               await logActivity(lead.id, {
+                   type: 'Update',
+                   notes: `Processed sales option: ${mode} (no email sent).`,
+                   author: user?.displayName || 'Unknown'
+               });
+               toast({ title: 'Success!', description: `${mode} completed without sending an email.` });
+               setIsSubmitting(false);
+               onOpenChange(false);
+               onSuccess?.();
+               return;
+           }
+
            const selectedContacts = contacts.filter(c => values.selectedContactIds?.includes(c.id));
            const contactEmails = selectedContacts.map(c => c.email).filter(Boolean);
            const emailTo = contactEmails.length > 0 ? contactEmails.join(', ') : (lead.customerServiceEmail || '');
@@ -1729,6 +1800,32 @@ export function ServiceSelectionDialog({
               if (data.success) {
                   await updateLeadServices(lead.id, serviceSelections);
                   
+                  if (skipEmail) {
+                    const isCompanyOrSignedCustomer = 
+                      mode === 'Resell' ||
+                      (lead as any).leadType === 'Company' ||
+                      ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(lead.status || '') ||
+                      (typeof window !== 'undefined' && window.location.pathname.startsWith('/companies/'));
+
+                    const isResendingQuote = 
+                      !!scfId ||
+                      ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won', 'Signed Customer'].includes(lead.status || '');
+
+                    if (!isCompanyOrSignedCustomer && !isResendingQuote) {
+                      await updateLeadStatus(lead.id, 'Quote Sent');
+                    }
+                    await logActivity(lead.id, {
+                        type: 'Update',
+                        notes: `Processed sales option: Quote for services (no email sent).`,
+                        author: user?.displayName || 'Unknown'
+                    });
+                    toast({ title: 'Success!', description: 'The quote process has been completed without sending an email.' });
+                    setIsSubmitting(false);
+                    onOpenChange(false);
+                    onSuccess?.();
+                    return;
+                  }
+
                   const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
                   const defaultSenderEmail = amUser?.email || user?.email || '';
                   const lpoCcEmails = await resolveLpoCcEmails(franchiseeEmail);
@@ -1944,7 +2041,25 @@ export function ServiceSelectionDialog({
               }
             }
 
+            if (skipEmail) {
+              await updateLeadStatus(lead.id, 'Won');
+              const signupDesc = selectionType === 'both' 
+                ? `both services (${values.selectedServices.join(', ')}) and products`
+                : selectionType === 'products'
+                  ? 'products only'
+                  : `services only (${values.selectedServices.join(', ')})`;
 
+              await logActivity(lead.id, {
+                  type: 'Update',
+                  notes: `Processed sales option: Signup for ${signupDesc} (no email sent).`,
+                  author: user?.displayName || 'Unknown'
+              });
+              toast({ title: 'Success!', description: 'Signup has been completed successfully without sending an email.' });
+              setIsSubmitting(false);
+              onOpenChange(false);
+              onSuccess?.();
+              return;
+            }
 
             const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
             const defaultSenderEmail = amUser?.email || user?.email || '';
@@ -2426,14 +2541,19 @@ export function ServiceSelectionDialog({
                    />
                  </div>
                </div>
-               <DialogFooter className="flex-shrink-0 pt-4 border-t mt-4">
-                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSending}>
-                   Cancel
-                 </Button>
-                 <Button type="button" onClick={handleSendEmail} disabled={isSending}>
-                   {isSending ? <Loader /> : 'Send Email'}
-                 </Button>
-               </DialogFooter>
+               <DialogFooter className="flex-shrink-0 pt-4 border-t mt-4 flex items-center justify-between">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSending}>
+                    Cancel
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="secondary" onClick={handleCompleteWithoutEmail} disabled={isSending}>
+                      Complete without Email
+                    </Button>
+                    <Button type="button" onClick={handleSendEmail} disabled={isSending}>
+                      {isSending ? <Loader /> : 'Send Email'}
+                    </Button>
+                  </div>
+                </DialogFooter>
              </div>
           ) : isAddingContact ? (
                <div className="flex-1 overflow-y-auto pr-2 py-4 min-h-0 space-y-4">
@@ -3333,6 +3453,26 @@ export function ServiceSelectionDialog({
                                 </Button>
                             </div>
                         )}
+                        {(mode === 'Quote' || mode === 'Signup' || mode === 'Resell' || mode === 'Resend SCF' || mode === 'Confirm Signup') && (
+                          <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg p-3 mt-4">
+                            <Checkbox 
+                              id="skipEmailCheckbox" 
+                              checked={skipEmail} 
+                              onCheckedChange={(checked) => setSkipEmail(!!checked)}
+                            />
+                            <div className="grid gap-0.5 leading-none">
+                              <label
+                                htmlFor="skipEmailCheckbox"
+                                className="text-xs font-semibold leading-none cursor-pointer text-slate-800"
+                              >
+                                Complete without sending email to customer
+                              </label>
+                              <p className="text-[11px] text-slate-500">
+                                Saves services, creates SCF records, and syncs NetSuite without sending an email.
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -3342,7 +3482,7 @@ export function ServiceSelectionDialog({
                       </Button>
                       {selectionType !== null && (
                         <Button id="step-netsuite-sync-btn" type="submit" disabled={isSubmitting}>
-                        {isSubmitting ? <Loader /> : ((mode === 'Quote' || mode === 'Signup' || mode === 'Resell') ? `Preview ${mode === 'Resell' ? 'Resell' : mode} Email` : 'Submit')}
+                        {isSubmitting ? <Loader /> : (skipEmail ? `Complete ${mode} (No Email)` : ((mode === 'Quote' || mode === 'Signup' || mode === 'Resell') ? `Preview ${mode === 'Resell' ? 'Resell' : mode} Email` : 'Submit'))}
                         </Button>
                       )}
                   </DialogFooter>

@@ -84,14 +84,15 @@ export default function CSRequestsDashboard() {
     if (!selectedRequest) return;
     setLoadingResellLead(true);
     try {
-      const leadSnap = await getDoc(doc(firestore, 'leads', selectedRequest.leadId));
+      const compSnap = await getDoc(doc(firestore, 'companies', selectedRequest.leadId));
+      const leadSnap = compSnap.exists() ? compSnap : await getDoc(doc(firestore, 'leads', selectedRequest.leadId));
       if (leadSnap.exists()) {
         setFullLeadForResell({ id: leadSnap.id, ...leadSnap.data() } as Lead);
         setIsResellDialogOpen(true);
       } else {
         toast({
-          title: 'Lead Not Found',
-          description: 'Could not locate lead details for sending resell quote.',
+          title: 'Customer Not Found',
+          description: 'Could not locate customer details for sending resell quote.',
           variant: 'destructive',
         });
       }
@@ -453,12 +454,25 @@ export default function CSRequestsDashboard() {
       const processedAt = new Date().toISOString();
 
       if (newStatus === 'Completed') {
-        // Update services in leads collection
-        await updateDoc(doc(firestore, 'leads', selectedRequest.leadId), {
+        const compRef = doc(firestore, 'companies', selectedRequest.leadId);
+        const leadRef = doc(firestore, 'leads', selectedRequest.leadId);
+        const [compSnap, leadSnap] = await Promise.all([
+          getDoc(compRef),
+          getDoc(leadRef)
+        ]);
+
+        const updates = {
           services: editServices,
           serviceChangeRequested: false,
           customerStatus: 'Won'
-        });
+        };
+
+        if (compSnap.exists()) {
+          await updateDoc(compRef, updates);
+        }
+        if (leadSnap.exists()) {
+          await updateDoc(leadRef, updates);
+        }
 
         // Update cs_requests document
         await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
@@ -475,7 +489,7 @@ export default function CSRequestsDashboard() {
           date: processedAt,
           notes: `Change of Service Request completed by ${userDisplayName}.\nUpdated active services count: ${editServices.length}`,
           author: userDisplayName,
-        });
+        }, compSnap.exists() ? 'companies' : 'leads');
 
         toast({
           title: 'Service Change Completed',
@@ -490,9 +504,19 @@ export default function CSRequestsDashboard() {
           processedAt,
         });
 
-        await updateDoc(doc(firestore, 'leads', selectedRequest.leadId), {
-          serviceChangeRequested: false,
-        });
+        const compRef = doc(firestore, 'companies', selectedRequest.leadId);
+        const leadRef = doc(firestore, 'leads', selectedRequest.leadId);
+        const [compSnap, leadSnap] = await Promise.all([
+          getDoc(compRef),
+          getDoc(leadRef)
+        ]);
+
+        if (compSnap.exists()) {
+          await updateDoc(compRef, { serviceChangeRequested: false });
+        }
+        if (leadSnap.exists()) {
+          await updateDoc(leadRef, { serviceChangeRequested: false });
+        }
 
         toast({
           title: 'Request Dismissed',
