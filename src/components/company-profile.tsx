@@ -439,8 +439,6 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
       const data = await res.json();
       if (data.success) {
-        const compRef = doc(firestore, 'companies', company.id);
-        const leadRef = doc(firestore, 'leads', company.id);
         const updatedFields = {
           lpoPlusStatus: 'Provisioned',
           defaultPassword: 'MailPlus2026!',
@@ -448,24 +446,30 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
           status: 'LPO.Plus Access Sent' as LeadStatus
         };
 
-        await setDoc(compRef, updatedFields, { merge: true });
-
         try {
-          const leadSnap = await getDoc(leadRef);
-          if (leadSnap.exists()) {
-            await updateDoc(leadRef, updatedFields);
-          }
-        } catch (e) {}
+          const compRef = doc(firestore, 'companies', company.id);
+          const leadRef = doc(firestore, 'leads', company.id);
+          await setDoc(compRef, updatedFields, { merge: true });
 
-        await logActivity(
-          company.id,
-          {
-            type: 'Update',
-            notes: `LPO.Plus account created. Auth User (UID: ${data.authId}) and 'lpo' document (${company.id}) created in lpoconnect DB. Welcome email dispatched to ${email}.`,
-            author: userProfile?.displayName || userProfile?.email || 'System User',
-          },
-          'companies'
-        );
+          try {
+            const leadSnap = await getDoc(leadRef);
+            if (leadSnap.exists()) {
+              await updateDoc(leadRef, updatedFields);
+            }
+          } catch (e) {}
+
+          await logActivity(
+            company.id,
+            {
+              type: 'Update',
+              notes: `LPO.Plus account created. Auth User (UID: ${data.authId}) and 'lpo' document (${company.id}) created in lpoconnect DB. Welcome email dispatched to ${email}.`,
+              author: userProfile?.displayName || userProfile?.email || 'System User',
+            },
+            'companies'
+          );
+        } catch (clientErr) {
+          console.warn('[LPO.Plus Client Sync Warning] Already provisioned on server:', clientErr);
+        }
 
         setCompany(prev => ({ ...prev, ...updatedFields }));
         toast({

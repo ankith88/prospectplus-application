@@ -580,16 +580,10 @@ export default function InboundReportsClientPage({
             const rawCompanies = compSnap.docs.map(processRawDoc);
 
             const isInbound = (l: Lead) => {
-                if (l.bucket === 'inbound') return true;
-                if ((l as any).originalBucket === 'inbound' || (l as any).wasInbound === true || (l as any).wasInboundBucket === true) return true;
+                const currentBucket = (l.bucket || '').toLowerCase();
+                if (currentBucket === 'inbound') return true;
+                if (((l as any).originalBucket || '').toLowerCase() === 'inbound' || (l as any).wasInbound === true || (l as any).wasInboundBucket === true) return true;
                 if (Array.isArray(l.bucketHistory) && l.bucketHistory.some((bh: any) => (bh.oldBucket || '').toLowerCase() === 'inbound' || (bh.newBucket || '').toLowerCase() === 'inbound')) return true;
-                if (l.inboundDetails || (l as any).inboundType) return true;
-                const sourceLower = (l.customerSource || '').toLowerCase();
-                const leadSourceLower = ((l as any).leadSource || '').toLowerCase();
-                const campaignLower = ((l.campaign || (l as any).customerCampaign || '') as string).toLowerCase();
-                if (sourceLower.includes('inbound') || sourceLower.includes('website') || sourceLower.includes('web') || sourceLower.includes('online') || sourceLower.includes('registration') || sourceLower.includes('form') || sourceLower.includes('direct') || sourceLower.includes('organic')) return true;
-                if (leadSourceLower.includes('inbound') || leadSourceLower.includes('website') || leadSourceLower.includes('web')) return true;
-                if (campaignLower.includes('inbound') || campaignLower.includes('website') || campaignLower.includes('web')) return true;
                 return false;
             };
             const fetchedLeads = rawLeads.filter(isInbound);

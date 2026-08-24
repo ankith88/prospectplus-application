@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { provisionLpoPlusAccount, LpoPlusProvisionPayload } from '@/services/lpo-plus-service';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +17,45 @@ export async function POST(request: NextRequest) {
     const result = await provisionLpoPlusAccount(body);
 
     if (result.success) {
+      // Sync ProspectPlus record on server using Admin SDK to avoid client permission issues
+      try {
+        const prospectDb = getFirestore(adminApp);
+        const updatedFields = {
+          lpoPlusStatus: 'Provisioned',
+          defaultPassword: body.defaultPassword || 'MailPlus2026!',
+          lpoPlusProvisionedAt: new Date().toISOString(),
+          status: 'LPO.Plus Access Sent',
+        };
+
+        const compRef = prospectDb.collection('companies').doc(String(body.netsuiteId));
+        const compSnap = await compRef.get();
+        if (compSnap.exists) {
+          await compRef.set(updatedFields, { merge: true });
+          await compRef.collection('activity').add({
+            type: 'Update',
+            notes: `LPO.Plus account created. Auth User (UID: ${result.authId}) and 'lpo' document (${body.netsuiteId}) created in lpoconnect DB. Welcome email dispatched to ${body.contactEmail}.`,
+            author: 'System User',
+            date: new Date().toISOString(),
+            syncedWithNetSuite: false,
+          });
+        }
+
+        const leadRef = prospectDb.collection('leads').doc(String(body.netsuiteId));
+        const leadSnap = await leadRef.get();
+        if (leadSnap.exists) {
+          await leadRef.set(updatedFields, { merge: true });
+          await leadRef.collection('activity').add({
+            type: 'Update',
+            notes: `LPO.Plus account created. Auth User (UID: ${result.authId}) and 'lpo' document (${body.netsuiteId}) created in lpoconnect DB. Welcome email dispatched to ${body.contactEmail}.`,
+            author: 'System User',
+            date: new Date().toISOString(),
+            syncedWithNetSuite: false,
+          });
+        }
+      } catch (adminErr) {
+        console.warn('[API /api/lpo-plus/provision Admin Sync Warning]:', adminErr);
+      }
+
       return NextResponse.json({
         success: true,
         authId: result.authId,
@@ -34,3 +75,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

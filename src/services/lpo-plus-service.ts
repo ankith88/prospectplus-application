@@ -23,10 +23,12 @@ export interface LpoPlusProvisionPayload {
 }
 
 // Dedicated Firestore instance targeting project mp-lpo-connect, database lpoconnect
-const lpoConnectDb = new GoogleFirestore({
-  projectId: 'mp-lpo-connect',
-  databaseId: 'lpoconnect',
-});
+function getLpoConnectDb() {
+  return new GoogleFirestore({
+    projectId: 'mp-lpo-connect',
+    databaseId: 'lpoconnect',
+  });
+}
 
 /**
  * Provisions an LPO.Plus account in Firebase Auth and lpoconnect Firestore database.
@@ -34,6 +36,7 @@ const lpoConnectDb = new GoogleFirestore({
  */
 export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload): Promise<{ success: boolean; authId?: string; message: string }> {
   try {
+    const lpoConnectDb = getLpoConnectDb();
     const {
       netsuiteId,
       lpoName,
@@ -261,6 +264,7 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
  */
 export async function disableLpoPlusAccount(netsuiteId: string, contactEmail?: string): Promise<{ success: boolean; message: string }> {
   try {
+    const lpoConnectDb = getLpoConnectDb();
     if (!netsuiteId && !contactEmail) {
       return { success: false, message: 'netsuiteId or contactEmail required' };
     }

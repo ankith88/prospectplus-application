@@ -2811,7 +2811,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       const data = await res.json();
       if (data.success) {
         const targetCollection = isCompanyProfile ? 'companies' : 'leads';
-        const docRef = doc(firestore, targetCollection, lead.id);
         const updatedFields = {
           lpoPlusStatus: 'Provisioned',
           defaultPassword: 'MailPlus2026!',
@@ -2819,26 +2818,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           status: 'LPO.Plus Access Sent' as LeadStatus
         };
 
-        await setDoc(docRef, updatedFields, { merge: true });
-
         try {
-          const counterpartCollection = isCompanyProfile ? 'leads' : 'companies';
-          const counterpartRef = doc(firestore, counterpartCollection, lead.id);
-          const counterpartSnap = await getDoc(counterpartRef);
-          if (counterpartSnap.exists()) {
-            await updateDoc(counterpartRef, updatedFields);
-          }
-        } catch (e) {}
+          const docRef = doc(firestore, targetCollection, lead.id);
+          await setDoc(docRef, updatedFields, { merge: true });
 
-        await logActivity(
-          lead.id,
-          {
-            type: 'Update',
-            notes: `LPO.Plus account created. Auth User (UID: ${data.authId}) and 'lpo' document (${lead.id}) created in lpoconnect DB. Welcome email dispatched to ${email}.`,
-            author: userProfile?.displayName || userProfile?.email || 'System User',
-          },
-          targetCollection
-        );
+          try {
+            const counterpartCollection = isCompanyProfile ? 'leads' : 'companies';
+            const counterpartRef = doc(firestore, counterpartCollection, lead.id);
+            const counterpartSnap = await getDoc(counterpartRef);
+            if (counterpartSnap.exists()) {
+              await updateDoc(counterpartRef, updatedFields);
+            }
+          } catch (e) {}
+
+          await logActivity(
+            lead.id,
+            {
+              type: 'Update',
+              notes: `LPO.Plus account created. Auth User (UID: ${data.authId}) and 'lpo' document (${lead.id}) created in lpoconnect DB. Welcome email dispatched to ${email}.`,
+              author: userProfile?.displayName || userProfile?.email || 'System User',
+            },
+            targetCollection
+          );
+        } catch (clientErr) {
+          console.warn('[LPO.Plus Client Sync Warning] Already provisioned on server:', clientErr);
+        }
 
         setLead(prev => ({ ...prev!, ...updatedFields }));
         toast({

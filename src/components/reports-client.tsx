@@ -81,6 +81,7 @@ import { cn, getQuickDateRange, isManualActivity, getLeadDisplayDateValue, getLe
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
+import { getLeadInitialBucket } from '@/lib/lead-stage-analytics';
 
 const isLostLead = (l: Lead) => {
     const status = l.status || '';
@@ -1246,9 +1247,19 @@ export default function ReportsClientPage({
             }
         }
 
+        const isOutboundLead = (() => {
+            const initBucket = getLeadInitialBucket(l);
+            if (initBucket === 'Inbound') return false;
+            const src = (l.customerSource || (l as any).source || l.leadSource || '').toLowerCase().trim();
+            if (src === 'website' || src.includes('inbound') || l.wasInbound || l.inboundDetails || l.inboundPageUrl) {
+                return false;
+            }
+            return true;
+        })();
+
         const campaignMatch = appliedFilters.campaign === 'all' || (l.campaign || (l as any).customerCampaign) === appliedFilters.campaign;
 
-        return franchiseeMatch && dialerMatch && sourceMatch && interactionMatch && assignmentDateMatch && leadCreatedDateMatch && campaignMatch;
+        return isOutboundLead && franchiseeMatch && dialerMatch && sourceMatch && interactionMatch && assignmentDateMatch && leadCreatedDateMatch && campaignMatch;
     });
 
     const wonLeadsList = leadsWithAppts.filter(l => l.status === 'Won');
@@ -1545,6 +1556,56 @@ export default function ReportsClientPage({
       }
     });
 
+    // Top-Level Summary Performance Metrics (calculated across baseFilteredLeads & top-level appliedFilters)
+    const topLevelQuotesLeads = baseFilteredLeads.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent');
+    const topLevelLmOppLeads = baseFilteredLeads.filter(l => l.status === 'LocalMile Opportunity' || (l as any).customerStatus === 'LocalMile Opportunity');
+    const topLevelLmPendingLeads = baseFilteredLeads.filter(l => l.status === 'LocalMile Pending' || (l as any).customerStatus === 'LocalMile Pending');
+    const topLevelTrialingLmLeads = baseFilteredLeads.filter(l => l.status === 'Trialing LocalMile' || (l as any).customerStatus === 'Trialing LocalMile');
+    const topLevelSignedLeads = baseFilteredLeads.filter(l => isSignedLead(l));
+
+    const topLevelMovedToAmLeads = baseFilteredLeads.filter(l => {
+      const currentBucket = (l.bucket || '').toLowerCase().trim();
+      const isCurrentlyAm = currentBucket === 'account_manager' || currentBucket === 'account manager';
+      const initialBucket = getLeadInitialBucket(l);
+      const comesFromOutbound = initialBucket === 'Outbound' || l.wasOutbound || !!l.assignedToDialerAt;
+      
+      let movedToAm = isCurrentlyAm && comesFromOutbound;
+      if (!movedToAm && comesFromOutbound) {
+        if (l.bucketHistory && Array.isArray(l.bucketHistory)) {
+          const bhMatch = l.bucketHistory.some((h: any) => {
+            const nb = (h.newBucket || h.toBucket || h.bucket || '').toLowerCase().trim();
+            return nb === 'account_manager' || nb === 'account manager';
+          });
+          if (bhMatch) movedToAm = true;
+        }
+      }
+      if (!movedToAm && comesFromOutbound) {
+        if (l.statusHistory && Array.isArray(l.statusHistory)) {
+          const shMatch = l.statusHistory.some((s: any) => s.newStatus === 'Appointment Booked' || s.newStatus === 'Account Manager');
+          if (shMatch) movedToAm = true;
+        }
+      }
+      if (!movedToAm && comesFromOutbound && l.initialAppointmentBucket === 'outbound') {
+        movedToAm = true;
+      }
+      return movedToAm;
+    });
+
+    const topLevelApptLeads = baseFilteredLeads.filter(l => l.status === 'Appointment Booked' || (l as any).customerStatus === 'Appointment Booked');
+
+    const getDialerForLead = (l: any) => {
+      if (l.dialerAssigned && allDialers.includes(l.dialerAssigned)) return l.dialerAssigned;
+      if (l.appointments && Array.isArray(l.appointments)) {
+        for (const a of l.appointments) {
+          const ad = a.dialerAssigned || a.author || a.assignedTo;
+          if (ad && allDialers.includes(ad)) return ad;
+        }
+      }
+      const call = perfFilteredCalls.find(c => c.leadId === l.id && c.author && allDialers.includes(c.author));
+      if (call && call.author) return call.author;
+      return null;
+    };
+
     const teamPerformanceData = allDialers.map(dialer => {
       const dialerCallsList = perfFilteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
       const dialerCalls = dialerCallsList.length;
@@ -1570,24 +1631,27 @@ export default function ReportsClientPage({
         return d ? (d <= perfToDate) : true;
       };
 
-      const lmOppLeads = dialerBaseLeads.filter(l => (l.status === 'LocalMile Opportunity' || (l as any).customerStatus === 'LocalMile Opportunity') && (isDateInTimeframe(l.dateRegistrationSent || (l as any).registrationSentAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
+      const isMatch = (l: any) => getDialerForLead(l) === dialer || (!getDialerForLead(l) && l.dialerAssigned === dialer);
+
+      const lmOppLeads = topLevelLmOppLeads.filter(isMatch);
       const lmOppCount = lmOppLeads.length;
       const lmOppCallRate = dialerCalls > 0 ? (lmOppCount / dialerCalls) * 100 : 0;
 
-      const lmPendingLeads = dialerBaseLeads.filter(l => (l.status === 'LocalMile Pending' || (l as any).customerStatus === 'LocalMile Pending') && (isDateInTimeframe(l.dateLocalmileAccepted || (l as any).localMileAcceptedAt || l.dateRegistrationSent || (l as any).registrationSentAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
+      const lmPendingLeads = topLevelLmPendingLeads.filter(isMatch);
       const lmPendingCount = lmPendingLeads.length;
       const lmPendingCallRate = dialerCalls > 0 ? (lmPendingCount / dialerCalls) * 100 : 0;
 
-      const trialingLMLeads = dialerBaseLeads.filter(l => (l.status === 'Trialing LocalMile' || (l as any).customerStatus === 'Trialing LocalMile') && (isDateInTimeframe(l.firstJobCreatedAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
+      const trialingLMLeads = topLevelTrialingLmLeads.filter(isMatch);
       const trialingLMCount = trialingLMLeads.length;
       const trialingLMCallRate = dialerCalls > 0 ? (trialingLMCount / dialerCalls) * 100 : 0;
 
-      const dialerAppointments = perfFilteredAppointments.filter(a => a.dialerAssigned === dialer || a.assignedTo === dialer).length;
-      const dialerQuotes = dialerBaseLeads.filter(l => (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent') && (isDateInTimeframe(l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
+      const dialerApptLeads = topLevelApptLeads.filter(isMatch);
+      const dialerAppointments = dialerApptLeads.length;
+      const dialerQuotes = topLevelQuotesLeads.filter(isMatch);
       const dialerShipmateTrialLeads = shipmateTrialLeads.filter(l => l.dialerAssigned === dialer && (isDateInTimeframe(l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
       const dialerShipmateTrials = dialerShipmateTrialLeads.length;
 
-      const dialerWonLeads = dialerBaseLeads.filter(l => isSignedLead(l) && (isDateInTimeframe((l as any).dateSigned || (l as any).signedAt || (l as any).wonAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
+      const dialerWonLeads = topLevelSignedLeads.filter(isMatch);
       const dialerWon = dialerWonLeads.length;
 
       const dialerLostPipelineLeads = dialerBaseLeads.filter(l => !isSignedLead(l) && isLostLead(l) && (isDateInTimeframe((l as any).lostAt || (l as any).archivedAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
@@ -1598,6 +1662,8 @@ export default function ReportsClientPage({
 
       const dialerUnactionedPipelineLeads = dialerBaseLeads.filter(l => !isSignedLead(l) && !isLostLead(l) && !dialerActionedLeadIds.has(l.id) && isDateBeforeOrInTimeframe(l.assignedToDialerAt || l.dateLeadEntered || (l as any).createdAt));
       const dialerUnactionedPipeline = dialerUnactionedPipelineLeads.length;
+
+      const dialerMovedToAmLeads = topLevelMovedToAmLeads.filter(isMatch);
 
       const dialerLeads = [...dialerUnactionedPipelineLeads, ...dialerActivePipelineLeads, ...dialerLostPipelineLeads, ...dialerWonLeads];
 
@@ -1623,8 +1689,9 @@ export default function ReportsClientPage({
         'Trialing LocalMile Rate': trialingLMCallRate,
         'ShipMate Trials': dialerShipmateTrials,
         'Signed Customers': dialerWon,
+        'Moved to AM': dialerMovedToAmLeads.length,
         perfCallsList: dialerCallsList,
-        perfAppointmentsList: perfFilteredAppointments.filter(a => a.dialerAssigned === dialer || a.assignedTo === dialer),
+        perfAppointmentsList: dialerApptLeads,
         perfActiveLeadsList: dialerActivePipelineLeads,
         perfUnactionedLeadsList: dialerUnactionedPipelineLeads,
         perfLostLeadsList: dialerLostPipelineLeads,
@@ -1634,9 +1701,60 @@ export default function ReportsClientPage({
         perfLmOppLeadsList: lmOppLeads,
         perfLmPendingLeadsList: lmPendingLeads,
         perfTrialingLmLeadsList: trialingLMLeads,
-        perfShipmateTrialLeadsList: dialerShipmateTrialLeads
+        perfShipmateTrialLeadsList: dialerShipmateTrialLeads,
+        perfMovedToAmLeadsList: dialerMovedToAmLeads
       };
-    }).filter(d => d['Total Engagement'] > 0 || d['Total Assigned Leads'] > 0);
+    }).filter(d => d['Total Engagement'] > 0 || d['Total Assigned Leads'] > 0 || d['Moved to AM'] > 0 || d.Appointments > 0 || d['Quotes Sent'] > 0 || d['Signed Customers'] > 0 || d['LM Opportunity'] > 0 || d['LM Pending'] > 0 || d['Trialing LocalMile'] > 0);
+
+    // Unassigned / System row for un-attributed leads
+    const isUnassignedLead = (l: any) => !getDialerForLead(l) && !allDialers.includes(l.dialerAssigned);
+    const unassignedMovedToAm = topLevelMovedToAmLeads.filter(isUnassignedLead);
+    const unassignedQuotes = topLevelQuotesLeads.filter(isUnassignedLead);
+    const unassignedLmOpp = topLevelLmOppLeads.filter(isUnassignedLead);
+    const unassignedLmPending = topLevelLmPendingLeads.filter(isUnassignedLead);
+    const unassignedTrialingLm = topLevelTrialingLmLeads.filter(isUnassignedLead);
+    const unassignedSigned = topLevelSignedLeads.filter(isUnassignedLead);
+    const unassignedAppt = topLevelApptLeads.filter(isUnassignedLead);
+
+    if (unassignedMovedToAm.length > 0 || unassignedQuotes.length > 0 || unassignedLmOpp.length > 0 || unassignedLmPending.length > 0 || unassignedTrialingLm.length > 0 || unassignedSigned.length > 0 || unassignedAppt.length > 0) {
+      teamPerformanceData.push({
+        name: 'Unassigned / System',
+        'Total Engagement': 0,
+        'Total Assigned Leads': 0,
+        'Un-actioned Pipeline': 0,
+        'Active Pipeline': 0,
+        'Lost Pipeline': 0,
+        'Outside Pipeline': 0,
+        'Leads Processed': 0,
+        'Still In Pipeline': 0,
+        'Avg Attempts': 0,
+        'Connect Rate': 0,
+        'Appointments': unassignedAppt.length,
+        'Quotes Sent': unassignedQuotes.length,
+        'LM Opportunity': unassignedLmOpp.length,
+        'LM Opportunity Rate': 0,
+        'LM Pending': unassignedLmPending.length,
+        'LM Pending Rate': 0,
+        'Trialing LocalMile': unassignedTrialingLm.length,
+        'Trialing LocalMile Rate': 0,
+        'ShipMate Trials': 0,
+        'Signed Customers': unassignedSigned.length,
+        'Moved to AM': unassignedMovedToAm.length,
+        perfCallsList: [],
+        perfAppointmentsList: unassignedAppt,
+        perfActiveLeadsList: [],
+        perfUnactionedLeadsList: [],
+        perfLostLeadsList: [],
+        perfWonLeadsList: unassignedSigned,
+        perfLeadsList: [],
+        perfQuotesLeadsList: unassignedQuotes,
+        perfLmOppLeadsList: unassignedLmOpp,
+        perfLmPendingLeadsList: unassignedLmPending,
+        perfTrialingLmLeadsList: unassignedTrialingLm,
+        perfShipmateTrialLeadsList: [],
+        perfMovedToAmLeadsList: unassignedMovedToAm
+      });
+    }
 
     const totalTeamCalls = teamPerformanceData.reduce((acc, d) => acc + d['Total Engagement'], 0);
     const totalAssignedLeads = teamPerformanceData.reduce((acc, d) => acc + d['Total Assigned Leads'], 0);
@@ -1661,6 +1779,7 @@ export default function ReportsClientPage({
     const totalTrialingLM = teamPerformanceData.reduce((acc, d) => acc + d['Trialing LocalMile'], 0);
     const totalTrialingLMRate = totalTeamCalls > 0 ? (totalTrialingLM / totalTeamCalls) * 100 : 0;
     const totalShipmateTrials = teamPerformanceData.reduce((acc, d) => acc + d['ShipMate Trials'], 0);
+    const totalMovedToAm = teamPerformanceData.reduce((acc, d) => acc + d['Moved to AM'], 0);
 
     const teamPerformanceTotals = {
       name: 'Total',
@@ -1683,7 +1802,8 @@ export default function ReportsClientPage({
       'Trialing LocalMile': totalTrialingLM,
       'Trialing LocalMile Rate': totalTrialingLMRate,
       'ShipMate Trials': totalShipmateTrials,
-      'Signed Customers': totalWon
+      'Signed Customers': totalWon,
+      'Moved to AM': totalMovedToAm
     };
 
     const callOutcomesData = filteredCalls.reduce((acc, call) => {
@@ -2479,7 +2599,25 @@ export default function ReportsClientPage({
       };
     }).filter(d => d.total > 0).sort((a, b) => b.total - a.total);
 
+    const topLevelPerformanceMetrics = {
+      appointmentsSetCount: topLevelApptLeads.length,
+      appointmentsSetLeads: topLevelApptLeads,
+      quotesSentCount: topLevelQuotesLeads.length,
+      quotesSentLeads: topLevelQuotesLeads,
+      lmOpportunityCount: topLevelLmOppLeads.length,
+      lmOpportunityLeads: topLevelLmOppLeads,
+      lmPendingCount: topLevelLmPendingLeads.length,
+      lmPendingLeads: topLevelLmPendingLeads,
+      trialingLmCount: topLevelTrialingLmLeads.length,
+      trialingLmLeads: topLevelTrialingLmLeads,
+      signedCount: topLevelSignedLeads.length,
+      signedLeads: topLevelSignedLeads,
+      movedToAmCount: topLevelMovedToAmLeads.length,
+      movedToAmLeads: topLevelMovedToAmLeads,
+    };
+
     return {
+      topLevelPerformanceMetrics,
       dailyActioned,
       outboundAllQuotedLeads,
       outboundQuotedWonLeads,
@@ -3358,6 +3496,132 @@ export default function ReportsClientPage({
                     <CardDescription>Comprehensive metrics breakdown for BDR and Dialer cold calling activity.</CardDescription>
                 </CardHeader>
                 <CardContent>
+                    {/* Top Level Summary Cards (Calculated from Overall Filtered Range) */}
+                    {stats.topLevelPerformanceMetrics && (
+                    <div className="mb-6 p-4 bg-slate-50/70 dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                    Top-Level Filter Summary Totals
+                                </span>
+                                <Badge variant="outline" className="text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800">
+                                    Overall Date Filter Active
+                                </Badge>
+                            </div>
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                                Click any metric card below to drill down into matching leads
+                            </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                            {/* 1. Appointments Set */}
+                            <div 
+                                onClick={() => setTrialDrilldown({ title: "Top-Level Appointments Set Leads", leads: stats.topLevelPerformanceMetrics.appointmentsSetLeads })}
+                                className="p-3 bg-gradient-to-br from-blue-50/80 to-indigo-50/80 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl border border-blue-200/90 dark:border-blue-800/60 hover:shadow-md transition-all cursor-pointer group"
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">Appointments Set</span>
+                                    <CalendarCheck className="h-4 w-4 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                                </div>
+                                <div className="text-2xl font-black text-blue-950 dark:text-blue-100">
+                                    {stats.topLevelPerformanceMetrics.appointmentsSetCount}
+                                </div>
+                                <div className="text-[10px] text-blue-600/80 dark:text-blue-400/80 mt-0.5">Top Filter Total</div>
+                            </div>
+
+                            {/* 2. Quotes Sent */}
+                            <div 
+                                onClick={() => setTrialDrilldown({ title: "Top-Level Quotes Sent Leads", leads: stats.topLevelPerformanceMetrics.quotesSentLeads })}
+                                className="p-3 bg-gradient-to-br from-purple-50/80 to-fuchsia-50/80 dark:from-purple-950/30 dark:to-fuchsia-950/30 rounded-xl border border-purple-200/90 dark:border-purple-800/60 hover:shadow-md transition-all cursor-pointer group"
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300">Quotes Sent</span>
+                                    <Quote className="h-4 w-4 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />
+                                </div>
+                                <div className="text-2xl font-black text-purple-950 dark:text-purple-100">
+                                    {stats.topLevelPerformanceMetrics.quotesSentCount}
+                                </div>
+                                <div className="text-[10px] text-purple-600/80 dark:text-purple-400/80 mt-0.5">Top Filter Total</div>
+                            </div>
+
+                            {/* 3. LM Opportunity */}
+                            <div 
+                                onClick={() => setTrialDrilldown({ title: "Top-Level LocalMile Opportunity Leads", leads: stats.topLevelPerformanceMetrics.lmOpportunityLeads })}
+                                className="p-3 bg-gradient-to-br from-indigo-50/80 to-violet-50/80 dark:from-indigo-950/30 dark:to-violet-950/30 rounded-xl border border-indigo-200/90 dark:border-indigo-800/60 hover:shadow-md transition-all cursor-pointer group"
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">LM Opportunity</span>
+                                    <Target className="h-4 w-4 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform" />
+                                </div>
+                                <div className="text-2xl font-black text-indigo-950 dark:text-indigo-100">
+                                    {stats.topLevelPerformanceMetrics.lmOpportunityCount}
+                                </div>
+                                <div className="text-[10px] text-indigo-600/80 dark:text-indigo-400/80 mt-0.5">Top Filter Total</div>
+                            </div>
+
+                            {/* 4. LM Pending */}
+                            <div 
+                                onClick={() => setTrialDrilldown({ title: "Top-Level LocalMile Pending Leads", leads: stats.topLevelPerformanceMetrics.lmPendingLeads })}
+                                className="p-3 bg-gradient-to-br from-amber-50/80 to-orange-50/80 dark:from-amber-950/30 dark:to-orange-950/30 rounded-xl border border-amber-200/90 dark:border-amber-800/60 hover:shadow-md transition-all cursor-pointer group"
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">LM Pending</span>
+                                    <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform" />
+                                </div>
+                                <div className="text-2xl font-black text-amber-950 dark:text-amber-100">
+                                    {stats.topLevelPerformanceMetrics.lmPendingCount}
+                                </div>
+                                <div className="text-[10px] text-amber-600/80 dark:text-amber-400/80 mt-0.5">Top Filter Total</div>
+                            </div>
+
+                            {/* 5. Trialing LM */}
+                            <div 
+                                onClick={() => setTrialDrilldown({ title: "Top-Level Trialing LocalMile Leads", leads: stats.topLevelPerformanceMetrics.trialingLmLeads })}
+                                className="p-3 bg-gradient-to-br from-teal-50/80 to-emerald-50/80 dark:from-teal-950/30 dark:to-emerald-950/30 rounded-xl border border-teal-200/90 dark:border-teal-800/60 hover:shadow-md transition-all cursor-pointer group"
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-300">Trialing LM</span>
+                                    <Zap className="h-4 w-4 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform" />
+                                </div>
+                                <div className="text-2xl font-black text-teal-950 dark:text-teal-100">
+                                    {stats.topLevelPerformanceMetrics.trialingLmCount}
+                                </div>
+                                <div className="text-[10px] text-teal-600/80 dark:text-teal-400/80 mt-0.5">Top Filter Total</div>
+                            </div>
+
+                            {/* 6. Signed */}
+                            <div 
+                                onClick={() => setTrialDrilldown({ title: "Top-Level Signed Customers", leads: stats.topLevelPerformanceMetrics.signedLeads })}
+                                className="p-3 bg-gradient-to-br from-emerald-50/80 to-green-50/80 dark:from-emerald-950/30 dark:to-green-950/30 rounded-xl border border-emerald-200/90 dark:border-emerald-800/60 hover:shadow-md transition-all cursor-pointer group"
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">Signed</span>
+                                    <Trophy className="h-4 w-4 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
+                                </div>
+                                <div className="text-2xl font-black text-emerald-950 dark:text-emerald-100">
+                                    {stats.topLevelPerformanceMetrics.signedCount}
+                                </div>
+                                <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">Top Filter Total</div>
+                            </div>
+
+                            {/* 7. Outbound -> AM Handover */}
+                            <div 
+                                onClick={() => setTrialDrilldown({ title: "Outbound to Account Manager Handover Leads", leads: stats.topLevelPerformanceMetrics.movedToAmLeads })}
+                                className="p-3 bg-gradient-to-br from-amber-100/90 to-yellow-100/90 dark:from-amber-900/40 dark:to-yellow-900/40 rounded-xl border border-amber-300 dark:border-amber-700 hover:shadow-md transition-all cursor-pointer group"
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] font-bold text-amber-900 dark:text-amber-200">Moved to AM</span>
+                                    <Workflow className="h-4 w-4 text-amber-700 dark:text-amber-300 group-hover:scale-110 transition-transform" />
+                                </div>
+                                <div className="text-2xl font-black text-amber-950 dark:text-amber-50">
+                                    {stats.topLevelPerformanceMetrics.movedToAmCount}
+                                </div>
+                                <div className="text-[10px] text-amber-700/90 dark:text-amber-300/90 mt-0.5">Outbound → AM</div>
+                            </div>
+                        </div>
+                    </div>
+                    )}
+
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -3411,6 +3675,7 @@ export default function ReportsClientPage({
                                 <TableHead className="text-right">Avg Attempts / Lead</TableHead>
                                 <TableHead className="text-right">Connect Rate %</TableHead>
                                 <TableHead className="text-right">Appointments Set</TableHead>
+                                <TableHead className="text-right">Moved to AM</TableHead>
                                 <TableHead className="text-right">Quotes Sent</TableHead>
                                 <TableHead className="text-right">LM Opportunity (Registration Sent)</TableHead>
                                 <TableHead className="text-right">LM Pending (T&C&apos;s Accepted)</TableHead>
@@ -3492,15 +3757,21 @@ export default function ReportsClientPage({
                                     <TableCell className="text-right">{dialer['Connect Rate'].toFixed(1)}%</TableCell>
                                     <TableCell 
                                         className="text-right font-bold text-blue-600 cursor-pointer hover:underline"
-                                        onClick={() => {
-                                            const apptLeadIds = new Set((dialer.perfAppointmentsList || []).map(a => a.leadId).filter(Boolean));
-                                            setTrialDrilldown({ 
-                                                title: `${dialer.name} - Appointments Set Leads`, 
-                                                leads: stats.baseFilteredLeads.filter(l => apptLeadIds.has(l.id)) 
-                                            });
-                                        }}
+                                        onClick={() => setTrialDrilldown({ 
+                                            title: `${dialer.name} - Appointments Set Leads (Status: Appointment Booked)`, 
+                                            leads: dialer.perfAppointmentsList || [] 
+                                        })}
                                     >
                                         {dialer.Appointments}
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right font-bold text-amber-700 dark:text-amber-300 cursor-pointer hover:underline"
+                                        onClick={() => setTrialDrilldown({ 
+                                            title: `${dialer.name} - Outbound → AM Handover Leads`, 
+                                            leads: dialer.perfMovedToAmLeadsList || [] 
+                                        })}
+                                    >
+                                        {dialer['Moved to AM']}
                                     </TableCell>
                                     <TableCell 
                                         className="text-right font-semibold text-orange-600 cursor-pointer hover:underline"
@@ -3615,15 +3886,21 @@ export default function ReportsClientPage({
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Connect Rate'].toFixed(1)}%</TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-blue-600 cursor-pointer hover:underline"
-                                    onClick={() => {
-                                        const allApptLeadIds = new Set(stats.teamPerformanceData.flatMap(d => (d.perfAppointmentsList || []).map(a => a.leadId)).filter(Boolean));
-                                        setTrialDrilldown({ 
-                                            title: "All Appointments Set Leads", 
-                                            leads: stats.baseFilteredLeads.filter(l => allApptLeadIds.has(l.id)) 
-                                        });
-                                    }}
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All Appointments Set Leads (Status: Appointment Booked)", 
+                                        leads: stats.topLevelPerformanceMetrics.appointmentsSetLeads 
+                                    })}
                                 >
                                     {stats.teamPerformanceTotals.Appointments}
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-amber-700 dark:text-amber-300 cursor-pointer hover:underline"
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All Outbound → AM Handover Leads", 
+                                        leads: stats.topLevelPerformanceMetrics.movedToAmLeads 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Moved to AM']}
                                 </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-orange-600 cursor-pointer hover:underline"
