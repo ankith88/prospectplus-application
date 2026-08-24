@@ -195,17 +195,12 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
       lpo_id: lpoDocId, // Linked directly to the 'lpo' document ID
       lpoId: lpoDocId,
       lpo_name: cleanLpoName,
-      role: 'admin',
+      role: 'lpoadmin',
       updatedAt: new Date().toISOString()
     };
 
     await lpoConnectDb.collection('users').doc(authID).set(userData, { merge: true });
-    console.log(`[LPO.Plus Firestore] Created/updated 'users' document ID: ${authID} linked to lpo_id: ${lpoDocId}`);
-
-    // Also update by email document ID if exists for fallback lookup
-    try {
-      await lpoConnectDb.collection('users').doc(contactEmail).set({ lpo_id: lpoDocId, lpoId: lpoDocId, email: contactEmail }, { merge: true });
-    } catch (e) {}
+    console.log(`[LPO.Plus Firestore] Created/updated single 'users' document ID: ${authID} with role 'lpoadmin' linked to lpo_id: ${lpoDocId}`);
 
     // 5. Send "Welcome to LPO.PLUS" Email with Default Password
     const year = new Date().getFullYear();
