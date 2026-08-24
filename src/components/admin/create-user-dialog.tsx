@@ -28,6 +28,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '../ui/loader';
+import { generateWelcomeEmailHtml } from '@/lib/welcome-email-template';
 import { getAllUsers, getAllFranchisees } from '@/services/firebase';
 import type { UserProfile, Franchisee } from '@/lib/types';
 
@@ -193,51 +194,14 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       if (values.sendWelcomeEmail) {
         const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prospectplus.mailplus.com.au';
         const signInLink = `${origin}/signin`;
-        const emailHtml = `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); color: #334155; line-height: 1.6;">
-  <div style="text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px;">
-    <h1 style="color: #095C7B; font-size: 24px; font-weight: 700; margin: 0; letter-spacing: -0.025em;">Prospect<span style="color: #F59E0B;">+</span></h1>
-    <p style="color: #64748b; font-size: 14px; margin: 4px 0 0 0;">Outbound Leads CRM</p>
-  </div>
-
-  <div>
-    <p style="margin-top: 0; font-weight: 600; font-size: 18px; color: #1e293b;">Welcome to Prospect+, ${values.firstName}!</p>
-    <p>Your administrator has created an account for you. You can now log in and start managing outbound leads and campaigns.</p>
-
-    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin: 24px 0;">
-      <h3 style="color: #095C7B; font-size: 15px; font-weight: 600; margin-top: 0; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Your Login Credentials</h3>
-      
-      <table style="width: 100%; border-collapse: collapse; margin: 0;">
-        <tr>
-          <td style="padding: 6px 0; font-size: 14px; color: #64748b; width: 80px; font-weight: 500;">Email:</td>
-          <td style="padding: 6px 0; font-size: 14px; color: #0f172a; font-family: monospace; font-weight: 600;">${values.email}</td>
-        </tr>
-        <tr>
-          <td style="padding: 6px 0; font-size: 14px; color: #64748b; font-weight: 500;">Password:</td>
-          <td style="padding: 6px 0; font-size: 14px; color: #0f172a; font-family: monospace; font-weight: 600;">${values.password}</td>
-        </tr>
-      </table>
-    </div>
-
-    <div style="text-align: center; margin: 32px 0;">
-      <a href="${signInLink}" style="background-color: #095C7B; color: #ffffff; text-decoration: none; padding: 12px 28px; font-size: 15px; font-weight: 600; border-radius: 6px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(9, 92, 123, 0.2), 0 2px 4px -1px rgba(9, 92, 123, 0.1);">
-        Sign In to Prospect+
-      </a>
-    </div>
-
-    <p style="font-size: 14px; color: #64748b; margin-bottom: 24px;">
-      If the button above does not work, copy and paste this link into your browser:<br>
-      <a href="${signInLink}" style="color: #095C7B; word-break: break-all;">${signInLink}</a>
-    </p>
-
-    <div style="border-top: 1px solid #f1f5f9; padding-top: 20px; margin-top: 28px; font-size: 14px; color: #64748b;">
-      <p style="margin: 0;">Kind regards,</p>
-      <p style="margin: 4px 0 0 0; font-weight: 600; color: #1e293b;">MailPlus IT Support Team</p>
-      <p style="margin: 2px 0 0 0;">mailplusit@mailplus.com.au</p>
-    </div>
-  </div>
-</div>
-        `;
+        const fullName = `${values.firstName || ''} ${values.lastName || ''}`.trim() || values.email;
+        const emailHtml = generateWelcomeEmailHtml({
+          recipientName: fullName,
+          email: values.email,
+          password: values.password,
+          signInLink,
+          isPasswordReset: false,
+        });
 
         await fetch('/api/campaigns/send-custom-email', {
           method: 'POST',
