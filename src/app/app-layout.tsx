@@ -35,8 +35,9 @@ import {
 } from "@/components/ui/sidebar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown, Store, Home } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown, Store, Home, KeyRound } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { useToast } from "@/hooks/use-toast"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState, useRef } from "react"
@@ -61,12 +62,14 @@ import { cn } from "@/lib/utils"
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSwitchingFranchisee, isSuperAdmin, switchRole, updateUserProfile } = useAuth()
+  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSwitchingFranchisee, isSuperAdmin, switchRole, updateUserProfile, sendPasswordReset } = useAuth()
   const { canView } = usePermissions()
   const { isMobile, state, toggleSidebar, setOpenMobile } = useSidebar()
   const { startTour } = useOnboarding()
   const { isSessionActive, elapsedTime, sessionLeadIds, leadsVisited, endSession } = useDialingSession()
   const { loadTime, setLoadTime, pageName, setPageName, isCustom, setIsCustom } = usePerformance()
+  const { toast } = useToast()
+  const [isResettingPassword, setIsResettingPassword] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -436,6 +439,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     await signOut()
+  }
+
+  const handlePasswordReset = async () => {
+    if (!user?.email) {
+      toast({
+        title: "Error",
+        description: "No email address associated with your account.",
+        variant: "destructive",
+      })
+      return
+    }
+    try {
+      setIsResettingPassword(true)
+      await sendPasswordReset(user.email)
+      toast({
+        title: "Password Reset Link Sent",
+        description: `A password reset link has been emailed to ${user.email}. Please check your inbox.`,
+      })
+    } catch (error: any) {
+      console.error("Error sending password reset email:", error)
+      toast({
+        title: "Failed to Send Reset Link",
+        description: error?.message || "An error occurred while requesting a password reset.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsResettingPassword(false)
+    }
   }
 
   const isAuthPage = pathname === '/signin' || pathname === '/signup' || pathname === '/reset-password' || pathname.startsWith('/reset-password') || pathname.startsWith('/__/auth/action') || pathname.startsWith('/auth/action');
@@ -2382,6 +2413,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Ticket className="mr-2 h-4 w-4" />
                   <span>View Feedback & Ideas</span>
                 </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handlePasswordReset} disabled={isResettingPassword} className="cursor-pointer">
+                <KeyRound className="mr-2 h-4 w-4 text-[#095c7b]" />
+                <span>{isResettingPassword ? "Sending Reset Email..." : "Reset Password"}</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
