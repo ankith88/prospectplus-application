@@ -38,6 +38,7 @@ import {
   Check,
   XCircle,
   AlertTriangle,
+  Package,
 } from 'lucide-react'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { getOnboardingRequestByLeadId } from '@/services/onboarding-service'
@@ -118,6 +119,11 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
   const [company, setCompany] = useState<Lead>(initialCompany);
   const [localMileJobs, setLocalMileJobs] = useState<any[]>([]);
+  const [shipMateJobs, setShipMateJobs] = useState<any[]>([]);
+  const [loadingShipMateJobs, setLoadingShipMateJobs] = useState<boolean>(true);
+  const [selectedShipMateJob, setSelectedShipMateJob] = useState<any | null>(null);
+  const [shipMateSearchQuery, setShipMateSearchQuery] = useState<string>('');
+  const [shipMateStatusFilter, setShipMateStatusFilter] = useState<string>('all');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [showAllInvoices, setShowAllInvoices] = useState(false);
@@ -185,6 +191,36 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     });
     return () => unsubscribe();
   }, [company?.id, company?.jobCount, company?.localMileTrialsRemaining, company?.hasCreatedJob]);
+
+  useEffect(() => {
+    if (!company?.id) return;
+    const q = query(collection(firestore, 'companies', company.id, 'shipMateJobs'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const jobsList = snapshot.docs.map(docSnap => ({ ...(docSnap.data() as any), id: docSnap.id }));
+      jobsList.sort((a: any, b: any) => {
+        const aTime = a.updatedAt?.seconds ? a.updatedAt.seconds * 1000 : new Date(a.dateCreated || a.createdAt || 0).getTime();
+        const bTime = b.updatedAt?.seconds ? b.updatedAt.seconds * 1000 : new Date(b.dateCreated || b.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
+      setShipMateJobs(jobsList);
+      setLoadingShipMateJobs(false);
+    }, (err) => {
+      console.error('Error fetching shipMateJobs subcollection:', err);
+      setLoadingShipMateJobs(false);
+    });
+    return () => unsubscribe();
+  }, [company?.id]);
+
+  const filteredShipMateJobs = useMemo(() => {
+    return shipMateJobs.filter(job => {
+      const matchesSearch = !shipMateSearchQuery.trim() || 
+        (job.jobId || '').toLowerCase().includes(shipMateSearchQuery.toLowerCase().trim()) ||
+        (job.customerId || '').toLowerCase().includes(shipMateSearchQuery.toLowerCase().trim()) ||
+        JSON.stringify(job.rawPayload || {}).toLowerCase().includes(shipMateSearchQuery.toLowerCase().trim());
+      const matchesStatus = shipMateStatusFilter === 'all' || (job.status || '').toLowerCase() === shipMateStatusFilter.toLowerCase();
+      return matchesSearch && matchesStatus;
+    });
+  }, [shipMateJobs, shipMateSearchQuery, shipMateStatusFilter]);
 
   const { recentInvoices, olderInvoices } = useMemo(() => {
     if (!invoices || invoices.length === 0) return { recentInvoices: [], olderInvoices: [] };
@@ -1967,6 +2003,86 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                             )}
                         </div>
                     ) : <div className="text-center py-10 text-muted-foreground">No invoices found.</div>}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader className="pb-3 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                            <Package className="w-5 h-5 text-sky-600" />
+                            ShipMate Jobs ({shipMateJobs.length})
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Jobs recorded from ShipMate platform for this customer.
+                        </p>
+                    </div>
+                </CardHeader>
+                <CardContent className="pt-6">
+                    {loadingShipMateJobs ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                            <Loader className="w-6 h-6 text-primary animate-spin mb-2" />
+                            <p className="text-xs text-muted-foreground">Loading ShipMate jobs...</p>
+                        </div>
+                    ) : shipMateJobs.length > 0 ? (
+                        <div className="rounded-xl border overflow-hidden bg-card">
+                            <Table>
+                                <TableHeader className="bg-muted/50">
+                                    <TableRow>
+                                        <TableHead>Job ID</TableHead>
+                                        <TableHead>Date Created</TableHead>
+                                        <TableHead>Scheduled Date</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Platform</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {shipMateJobs.map((job) => {
+                                        const statusLower = (job.status || 'created').toLowerCase();
+                                        let statusBadgeStyle = "bg-sky-50 text-sky-700 border-sky-200";
+                                        if (['completed', 'delivered'].includes(statusLower)) {
+                                            statusBadgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                                        } else if (['cancelled', 'failed'].includes(statusLower)) {
+                                            statusBadgeStyle = "bg-rose-50 text-rose-700 border-rose-200";
+                                        } else if (['in-transit', 'scheduled'].includes(statusLower)) {
+                                            statusBadgeStyle = "bg-amber-50 text-amber-700 border-amber-200";
+                                        }
+
+                                        return (
+                                            <TableRow key={job.id || job.jobId}>
+                                                <TableCell className="font-mono font-medium text-xs">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span>{job.jobId}</span>
+                                                        <CopyButton textToCopy={job.jobId} className="h-6 w-6" />
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">
+                                                    {safeFormatDate(job.dateCreated, 'MMM d, yyyy')}
+                                                </TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">
+                                                    {safeFormatDate(job.dateScheduled, 'MMM d, yyyy')}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline" className={`font-semibold capitalize text-[11px] ${statusBadgeStyle}`}>
+                                                        {job.status || 'created'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-xs">
+                                                    <Badge variant="secondary" className="bg-slate-100 text-slate-700 font-mono text-[10px]">
+                                                        {job.platform || 'ShipMate'}
+                                                    </Badge>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded-lg">
+                            No ShipMate jobs recorded for this company yet.
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 

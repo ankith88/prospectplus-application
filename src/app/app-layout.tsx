@@ -189,7 +189,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       if (path === '/admin/tickets/reporting' || path === '/scans/report') return 'analytics-reports';
       return 'ops-history';
     }
-    if (path.startsWith('/sales-snapshot') || path.startsWith('/reports') || path.startsWith('/inbound-reporting') || path.startsWith('/multisite-reporting') || path.startsWith('/admin/lifecycle-dashboard') || path.startsWith('/account-manager/reports') || path.startsWith('/customer-success/reporting') || path.startsWith('/customer-success/cancellation-reporting') || path.startsWith('/field-activity-report') || path.startsWith('/admin/deployments')) {
+    if (path.startsWith('/sales-snapshot') || path.startsWith('/reports') || path.startsWith('/inbound-reporting') || path.startsWith('/multisite-reporting') || path.startsWith('/admin/lifecycle-dashboard') || path.startsWith('/admin/franchisee-invoicing') || path.startsWith('/account-manager/reports') || path.startsWith('/customer-success/reporting') || path.startsWith('/customer-success/cancellation-reporting') || path.startsWith('/field-activity-report') || path.startsWith('/admin/deployments')) {
       return 'analytics-reports';
     }
     if (path.startsWith('/my-franchise')) {
@@ -372,6 +372,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/scans/report': { label: 'Scan Reporting', category: 'Analytics & Reports', icon: BarChart2, href: '/scans/report' },
     '/field-activity-report': { label: 'Field Activity', category: 'Analytics & Reports', icon: BarChart3, href: '/field-activity-report' },
     '/admin/deployments': { label: 'Deployment History', category: 'Analytics & Reports', icon: MapPin, href: '/admin/deployments' },
+    '/admin/franchisee-invoicing': { label: 'Franchisee Invoicing', category: 'Analytics & Reports', icon: DollarSign, href: '/admin/franchisee-invoicing' },
 
     // Network
     '/admin/franchisees/directory': { label: 'Franchisees Directory', category: 'Network', icon: Building, href: '/admin/franchisees/directory' },
@@ -2033,6 +2034,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                               <Link href="/admin/lifecycle-dashboard">
                                 <Activity />
                                 <span>Lifecycle Dashboard</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {(userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/franchisee-invoicing")} tooltip="Franchisee Invoicing">
+                              <Link href="/admin/franchisee-invoicing">
+                                <DollarSign />
+                                <span>Franchisee Invoicing</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
