@@ -96,13 +96,30 @@ async function generateProspectPlusIdClient(): Promise<string> {
 }
 
 
+export async function getLeadOrCompanyCollection(id: string, leadObject?: any): Promise<'companies' | 'leads'> {
+    if (!id) return 'leads';
+    if (leadObject) {
+        if (leadObject.status === 'Won' || leadObject.leadType === 'Company' || leadObject.collectionName === 'companies') {
+            return 'companies';
+        }
+    }
+    try {
+        const compSnap = await getDoc(doc(firestore, 'companies', id));
+        if (compSnap.exists()) return 'companies';
+    } catch (e) {
+        console.warn(`Error checking collection for ${id}:`, e);
+    }
+    return 'leads';
+}
+
 async function logActivity(
   leadId: string,
   activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string },
-  collectionName: 'leads' | 'companies' = 'leads'
+  collectionName?: 'leads' | 'companies'
 ): Promise<string> {
     try {
-        const activityRef = collection(firestore, collectionName, leadId, 'activity');
+        const colName = collectionName || await getLeadOrCompanyCollection(leadId);
+        const activityRef = collection(firestore, colName, leadId, 'activity');
         
         const auth = getAuth(app);
         const currentUser = auth.currentUser;
@@ -121,7 +138,7 @@ async function logActivity(
         const docRef = await addDoc(activityRef, prepareForFirestore(activityLog));
         return docRef.id;
     } catch (error) {
-        console.error(`Failed to log activity for ${collectionName}/${leadId}:`, error);
+        console.error(`Failed to log activity for ${leadId}:`, error);
         throw new Error(`Failed to log activity in Firebase`);
     }
 }
@@ -1558,8 +1575,14 @@ async function updateLeadStatus(
     try {
         const updates: any = { customerStatus: status, statusReason: reason || '' };
         const now = new Date().toISOString();
-        const leadRef = doc(firestore, 'leads', leadId);
-        const leadSnap = await getDoc(leadRef);
+        const colName = await getLeadOrCompanyCollection(leadId);
+        const leadRef = doc(firestore, colName, leadId);
+        let leadSnap = await getDoc(leadRef);
+        if (!leadSnap.exists() && colName === 'companies') {
+            const altRef = doc(firestore, 'leads', leadId);
+            const altSnap = await getDoc(altRef);
+            if (altSnap.exists()) leadSnap = altSnap;
+        }
         const leadData = leadSnap.exists() ? leadSnap.data() : {};
         const currentBucket = leadData?.bucket || (leadData?.fieldSales ? 'field_sales' : 'outbound');
 
@@ -1962,7 +1985,7 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
 }
 
 async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLeadData: Partial<Lead>): Promise<void> {
-    const col = oldLead.status === 'Won' ? 'companies' : 'leads';
+    const col = await getLeadOrCompanyCollection(leadId, oldLead);
     const dataToSave = { ...newLeadData };
     const statusVal = newLeadData.customerStatus || newLeadData.status;
     const now = new Date().toISOString();
@@ -2508,12 +2531,14 @@ async function moveUserRoute(src: string, target: string, rid: string): Promise<
 }
 
 async function updateLeadServices(id: string, s: ServiceSelection[]): Promise<void> {
-    const leadRef = doc(firestore, 'leads', id);
+    const colName = await getLeadOrCompanyCollection(id);
+    const leadRef = doc(firestore, colName, id);
     await updateDoc(leadRef, { services: s, updatedAt: new Date() });
 }
 
 async function updateLeadCommReg(id: string, commRegId: string, dynamicScfUrl: string): Promise<void> {
-    const leadRef = doc(firestore, 'leads', id);
+    const colName = await getLeadOrCompanyCollection(id);
+    const leadRef = doc(firestore, colName, id);
     await updateDoc(leadRef, { 
         commRegId, 
         dynamicScfUrl, 
@@ -2763,7 +2788,18 @@ async function deleteLeadsByCampaign(c: string): Promise<void> {
 }
 
 async function updateContactSendEmail(id: string, cid: string): Promise<void> {
-    await updateDoc(doc(firestore, 'leads', id, 'contacts', cid), { sendEmail: 'yes' });
+    const colName = await getLeadOrCompanyCollection(id);
+    const contactRef = doc(firestore, colName, id, 'contacts', cid);
+    const snap = await getDoc(contactRef);
+    if (snap.exists()) {
+        await updateDoc(contactRef, { sendEmail: 'yes' });
+    } else {
+        const altCol = colName === 'companies' ? 'leads' : 'companies';
+        const altRef = doc(firestore, altCol, id, 'contacts', cid);
+        if ((await getDoc(altRef)).exists()) {
+            await updateDoc(altRef, { sendEmail: 'yes' });
+        }
+    }
 }
 
 async function addVisitNote(note: any): Promise<string> {
@@ -3253,8 +3289,9 @@ async function createChildSiteLead(
 }
 
 async function createScfRecord(leadId: string, data: any): Promise<string> {
+    const colName = await getLeadOrCompanyCollection(leadId);
     const now = new Date().toISOString();
-    const docRef = await addDoc(collection(firestore, 'leads', leadId, 'scfs'), prepareForFirestore({
+    const docRef = await addDoc(collection(firestore, colName, leadId, 'scfs'), prepareForFirestore({
         ...data,
         createdAt: data.createdAt || now,
         updatedAt: data.updatedAt || now,
@@ -3271,14 +3308,25 @@ export function isScfSignedOrAccepted(scfData: any): boolean {
 }
 
 async function getScfRecord(leadId: string, scfId: string): Promise<any> {
-    const docSnap = await getDoc(doc(firestore, 'leads', leadId, 'scfs', scfId));
-    if (!docSnap.exists()) return null;
-    return { id: docSnap.id, ...docSnap.data() };
+    const colName = await getLeadOrCompanyCollection(leadId);
+    const docSnap = await getDoc(doc(firestore, colName, leadId, 'scfs', scfId));
+    if (docSnap.exists()) return { id: docSnap.id, ...docSnap.data() };
+    const altCol = colName === 'companies' ? 'leads' : 'companies';
+    const altSnap = await getDoc(doc(firestore, altCol, leadId, 'scfs', scfId));
+    if (altSnap.exists()) return { id: altSnap.id, ...altSnap.data() };
+    return null;
 }
 
 async function getScfRecords(leadId: string): Promise<any[]> {
-    const snap = await getDocs(collection(firestore, 'leads', leadId, 'scfs'));
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const colName = await getLeadOrCompanyCollection(leadId);
+    const snap = await getDocs(collection(firestore, colName, leadId, 'scfs'));
+    const records = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    if (records.length === 0) {
+        const altCol = colName === 'companies' ? 'leads' : 'companies';
+        const altSnap = await getDocs(collection(firestore, altCol, leadId, 'scfs'));
+        return altSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+    return records;
 }
 
 async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' | 'Accepted' | 'Cancelled'): Promise<void> {
@@ -3286,7 +3334,11 @@ async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' 
     if (existing && isScfSignedOrAccepted(existing) && status !== existing.status) {
         throw new Error('Signed or accepted Service Commencement Forms cannot be modified or cancelled.');
     }
-    await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), { 
+    const colName = await getLeadOrCompanyCollection(leadId);
+    const docRef = doc(firestore, colName, leadId, 'scfs', scfId);
+    const docSnap = await getDoc(docRef);
+    const targetRef = docSnap.exists() ? docRef : doc(firestore, colName === 'companies' ? 'leads' : 'companies', leadId, 'scfs', scfId);
+    await updateDoc(targetRef, { 
         status,
         updatedAt: new Date().toISOString() 
     });
@@ -3297,7 +3349,11 @@ async function updateScfRecord(leadId: string, scfId: string, data: any): Promis
     if (existing && isScfSignedOrAccepted(existing)) {
         throw new Error('Signed or accepted Service Commencement Forms are locked and cannot be edited.');
     }
-    await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), prepareForFirestore({
+    const colName = await getLeadOrCompanyCollection(leadId);
+    const docRef = doc(firestore, colName, leadId, 'scfs', scfId);
+    const docSnap = await getDoc(docRef);
+    const targetRef = docSnap.exists() ? docRef : doc(firestore, colName === 'companies' ? 'leads' : 'companies', leadId, 'scfs', scfId);
+    await updateDoc(targetRef, prepareForFirestore({
         ...data,
         updatedAt: new Date().toISOString()
     }));
@@ -3305,7 +3361,11 @@ async function updateScfRecord(leadId: string, scfId: string, data: any): Promis
 
 async function updateScfPdfUrl(leadId: string, scfId: string, pdfUrl: string, pdfName?: string, uploadedBy?: string): Promise<void> {
     const now = new Date().toISOString();
-    await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), prepareForFirestore({
+    const colName = await getLeadOrCompanyCollection(leadId);
+    const docRef = doc(firestore, colName, leadId, 'scfs', scfId);
+    const docSnap = await getDoc(docRef);
+    const targetRef = docSnap.exists() ? docRef : doc(firestore, colName === 'companies' ? 'leads' : 'companies', leadId, 'scfs', scfId);
+    await updateDoc(targetRef, prepareForFirestore({
         uploadedPdfUrl: pdfUrl,
         uploadedPdfName: pdfName || 'SCF_Document.pdf',
         uploadedPdfAt: now,

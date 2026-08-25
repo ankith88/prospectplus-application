@@ -68,6 +68,7 @@ import {
   FileAudio,
   FileX,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   GitMerge,
   Zap,
@@ -1542,6 +1543,50 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isAusPostLoading, setIsAusPostLoading] = useState(false);
   const [linkedLpoDoc, setLinkedLpoDoc] = useState<{ id: string; lpoName: string; status?: string } | null>(null);
   const [activeTab, setActiveTab] = useState('profile');
+
+  // Tab scroll rail states & handlers
+  const tabsListRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkTabScroll = useCallback(() => {
+    const container = tabsListRef.current;
+    if (!container) return;
+    const { scrollLeft, scrollWidth, clientWidth } = container;
+    setCanScrollLeft(scrollLeft > 4);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const container = tabsListRef.current;
+    if (!container) return;
+
+    const activeEl = container.querySelector('[data-state="active"]');
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+
+    checkTabScroll();
+    const timer = setTimeout(checkTabScroll, 300);
+
+    window.addEventListener('resize', checkTabScroll);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', checkTabScroll);
+    };
+  }, [activeTab, checkTabScroll]);
+
+  const handleScrollTabsLeft = () => {
+    if (tabsListRef.current) {
+      tabsListRef.current.scrollBy({ left: -220, behavior: 'smooth' });
+    }
+  };
+
+  const handleScrollTabsRight = () => {
+    if (tabsListRef.current) {
+      tabsListRef.current.scrollBy({ left: 220, behavior: 'smooth' });
+    }
+  };
 
   // Quick template email states
   const [templates, setTemplates] = useState<any[]>([]);
@@ -5293,7 +5338,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         <div className="lg:col-span-2 flex flex-col gap-6">
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="mb-6 flex overflow-x-auto w-full h-auto bg-muted/50 p-1.5 rounded-xl md:rounded-full border shadow-inner gap-1 hide-scrollbar">
+            <div className="relative mb-6 group">
+              {/* Left Scroll Control & Gradient */}
+              {canScrollLeft && (
+                <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center pr-4 pl-1 bg-gradient-to-r from-background via-background/90 to-transparent rounded-l-xl md:rounded-l-full pointer-events-auto">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleScrollTabsLeft}
+                    aria-label="Scroll tabs left"
+                    className="h-8 w-8 rounded-full bg-card/95 backdrop-blur-sm shadow-md border border-slate-200 dark:border-slate-700 hover:bg-card hover:scale-105 text-foreground transition-all shrink-0"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+
+              <TabsList
+                ref={tabsListRef}
+                onScroll={checkTabScroll}
+                className="mb-0 flex overflow-x-auto w-full h-auto bg-muted/50 p-1.5 rounded-xl md:rounded-full border shadow-inner gap-1 hide-scrollbar scroll-smooth"
+              >
                 <TabsTrigger id="step-tab-profile" value="profile" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Profile</TabsTrigger>
                 <TabsTrigger id="step-tab-contacts" value="contacts" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Contacts</TabsTrigger>
                 {userProfile?.activeRole?.toLowerCase() !== 'user' && (
@@ -5302,9 +5368,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 {localMileJobs.length > 0 && (
                     <TabsTrigger id="step-tab-trial-jobs" value="trial-jobs" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Trial Jobs</TabsTrigger>
                 )}
-                {lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
+                
+                {/* For Lead Profile (non-company): Show Enrichment inline */}
+                {!isCompanyProfile && lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
                   <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Enrichment & Marketing Insights</TabsTrigger>
                 )}
+                
                 {userProfile?.activeRole?.toLowerCase() !== 'user' && (
                   <TabsTrigger id="step-tab-quotes" value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
                 )}
@@ -5324,9 +5393,101 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                   </TabsTrigger>
                 )}
-                <TabsTrigger id="step-tab-tasks" value="tasks" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Appointments</TabsTrigger>
-                <TabsTrigger id="step-assignment-ledger" value="history" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">History</TabsTrigger>
-            </TabsList>
+
+                {/* For Lead Profile (non-company): Show Appointments & History inline */}
+                {!isCompanyProfile && (
+                  <>
+                    <TabsTrigger id="step-tab-tasks" value="tasks" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Appointments</TabsTrigger>
+                    <TabsTrigger id="step-assignment-ledger" value="history" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">History</TabsTrigger>
+                  </>
+                )}
+
+                {/* For Company Profile: Render 'More' dropdown containing Enrichment, Appointments, History */}
+                {isCompanyProfile && (
+                  <>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className={cn(
+                            "flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full font-semibold text-sm transition-all flex items-center gap-1.5 focus:outline-none",
+                            ['discovery', 'tasks', 'history'].includes(activeTab)
+                              ? "bg-primary text-primary-foreground shadow-md"
+                              : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                          )}
+                        >
+                          <span>
+                            {activeTab === 'discovery'
+                              ? 'Insights'
+                              : activeTab === 'tasks'
+                              ? 'Appointments'
+                              : activeTab === 'history'
+                              ? 'History'
+                              : 'More'}
+                          </span>
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        {lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
+                          <DropdownMenuItem
+                            onClick={() => setActiveTab('discovery')}
+                            className={cn(
+                              "cursor-pointer font-medium flex items-center justify-between py-2",
+                              activeTab === 'discovery' && "font-bold text-primary"
+                            )}
+                          >
+                            <span>Enrichment & Marketing Insights</span>
+                            {activeTab === 'discovery' && <Check className="w-4 h-4 ml-2 text-primary" />}
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => setActiveTab('tasks')}
+                          className={cn(
+                            "cursor-pointer font-medium flex items-center justify-between py-2",
+                            activeTab === 'tasks' && "font-bold text-primary"
+                          )}
+                        >
+                          <span>Appointments</span>
+                          {activeTab === 'tasks' && <Check className="w-4 h-4 ml-2 text-primary" />}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setActiveTab('history')}
+                          className={cn(
+                            "cursor-pointer font-medium flex items-center justify-between py-2",
+                            activeTab === 'history' && "font-bold text-primary"
+                          )}
+                        >
+                          <span>History</span>
+                          {activeTab === 'history' && <Check className="w-4 h-4 ml-2 text-primary" />}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Hidden Radix triggers to maintain accessibility and tab panel rendering */}
+                    <TabsTrigger value="discovery" className="hidden" />
+                    <TabsTrigger value="tasks" className="hidden" />
+                    <TabsTrigger value="history" className="hidden" />
+                  </>
+                )}
+              </TabsList>
+
+              {/* Right Scroll Control & Gradient */}
+              {canScrollRight && (
+                <div className="absolute right-0 top-0 bottom-0 z-10 flex items-center pl-4 pr-1 bg-gradient-to-l from-background via-background/90 to-transparent rounded-r-xl md:rounded-r-full pointer-events-auto">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleScrollTabsRight}
+                    aria-label="Scroll tabs right"
+                    className="h-8 w-8 rounded-full bg-card/95 backdrop-blur-sm shadow-md border border-slate-200 dark:border-slate-700 hover:bg-card hover:scale-105 text-foreground transition-all shrink-0"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
             
             <TabsContent value="profile" className="flex flex-col gap-6 mt-0">
                 <Card>

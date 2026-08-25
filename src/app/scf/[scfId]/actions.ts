@@ -5,17 +5,35 @@ import { sendLeadUpdateToNetSuite } from '@/services/netsuite';
 import { validateABN } from '@/lib/utils';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
+async function getAdminLeadOrCompanyRef(leadId: string) {
+  let ref = adminDb.collection('companies').doc(leadId);
+  let snap = await ref.get();
+  if (snap.exists) return { ref, snap, collectionName: 'companies' as const };
+  ref = adminDb.collection('leads').doc(leadId);
+  snap = await ref.get();
+  return { ref, snap, collectionName: (snap.exists ? 'leads' : 'companies') as 'leads' | 'companies' };
+}
+
 export async function acceptScfAction(leadId: string, scfId: string) {
   try {
-    const leadRef = adminDb.collection('leads').doc(leadId);
-    const leadSnap = await leadRef.get();
+    const { ref: leadRef, snap: leadSnap, collectionName } = await getAdminLeadOrCompanyRef(leadId);
     
     if (!leadSnap.exists) {
-      return { success: false, message: 'Lead not found.' };
+      return { success: false, message: 'Lead or company details not found.' };
     }
 
-    const scfDocRef = adminDb.collection('leads').doc(leadId).collection('scfs').doc(scfId);
-    const scfDocSnap = await scfDocRef.get();
+    let scfDocRef = adminDb.collection(collectionName).doc(leadId).collection('scfs').doc(scfId);
+    let scfDocSnap = await scfDocRef.get();
+    if (!scfDocSnap.exists) {
+      const altCol = collectionName === 'companies' ? 'leads' : 'companies';
+      const altScfRef = adminDb.collection(altCol).doc(leadId).collection('scfs').doc(scfId);
+      const altScfSnap = await altScfRef.get();
+      if (altScfSnap.exists) {
+        scfDocRef = altScfRef;
+        scfDocSnap = altScfSnap;
+      }
+    }
+
     if (scfDocSnap.exists) {
       const scfData = scfDocSnap.data();
       const status = scfData?.status || '';
@@ -33,7 +51,7 @@ export async function acceptScfAction(leadId: string, scfId: string) {
     }
     
     const nowStr = new Date().toISOString();
-    await adminDb.collection('leads').doc(leadId).collection('scfs').doc(scfId).update({
+    await scfDocRef.update({
       status: 'Accepted',
       acceptedAt: nowStr,
       updatedAt: nowStr
@@ -243,7 +261,10 @@ export async function acceptScfAction(leadId: string, scfId: string) {
       const formattedAddress = `${street}, ${city} ${state} ${zip}`;
 
       // Services & Scheduled Start Date
-      const scfSnap = await adminDb.collection('leads').doc(leadId).collection('scfs').doc(scfId).get();
+      let scfSnap = await adminDb.collection('companies').doc(leadId).collection('scfs').doc(scfId).get();
+      if (!scfSnap.exists) {
+        scfSnap = await adminDb.collection('leads').doc(leadId).collection('scfs').doc(scfId).get();
+      }
       const scfDataObj = scfSnap.exists ? scfSnap.data() : null;
       const servicesList: Array<{ name: string; frequency?: string[]; rate?: number }> = scfDataObj?.services || leadData?.services || [];
       
@@ -420,8 +441,14 @@ export async function updateScfDetailsAction(
   scfId?: string
 ) {
   try {
+    const { ref: leadRef, snap: leadSnap, collectionName } = await getAdminLeadOrCompanyRef(leadId);
+
     if (scfId) {
-      const scfSnap = await adminDb.collection('leads').doc(leadId).collection('scfs').doc(scfId).get();
+      let scfSnap = await adminDb.collection(collectionName).doc(leadId).collection('scfs').doc(scfId).get();
+      if (!scfSnap.exists) {
+        const altCol = collectionName === 'companies' ? 'leads' : 'companies';
+        scfSnap = await adminDb.collection(altCol).doc(leadId).collection('scfs').doc(scfId).get();
+      }
       if (scfSnap.exists) {
         const scfData = scfSnap.data();
         const status = scfData?.status || '';
@@ -430,7 +457,11 @@ export async function updateScfDetailsAction(
         }
       }
     } else {
-      const scfsSnap = await adminDb.collection('leads').doc(leadId).collection('scfs').get();
+      let scfsSnap = await adminDb.collection(collectionName).doc(leadId).collection('scfs').get();
+      if (scfsSnap.empty) {
+        const altCol = collectionName === 'companies' ? 'leads' : 'companies';
+        scfsSnap = await adminDb.collection(altCol).doc(leadId).collection('scfs').get();
+      }
       const hasAcceptedScf = scfsSnap.docs.some(doc => {
         const d = doc.data();
         return d.status === 'Accepted' || d.status === 'Signed' || d.status === 'Quote Accepted' || !!d.acceptedAt || !!d.signedAt;
@@ -445,24 +476,21 @@ export async function updateScfDetailsAction(
     if (data.customerServiceEmail !== undefined) leadUpdate.customerServiceEmail = data.customerServiceEmail;
     if (data.customerPhone !== undefined) leadUpdate.customerPhone = data.customerPhone;
     
-    if (Object.keys(leadUpdate).length > 0) {
-      await adminDb.collection('leads').doc(leadId).update(leadUpdate);
+    if (Object.keys(leadUpdate).length > 0 && leadSnap.exists) {
+      await leadRef.update(leadUpdate);
 
       // Sync updated fields with NetSuite
       try {
-        const leadSnap = await adminDb.collection('leads').doc(leadId).get();
-        if (leadSnap.exists) {
-          const fullLead = leadSnap.data();
-          await sendLeadUpdateToNetSuite({
-            leadId: leadId,
-            companyName: fullLead?.companyName || '',
-            email: fullLead?.customerServiceEmail || '',
-            phone: fullLead?.customerPhone || '',
-            website: fullLead?.websiteUrl || '',
-            industry: fullLead?.industryCategory || '',
-            abn: fullLead?.abn || '',
-          });
-        }
+        const fullLead = leadSnap.data();
+        await sendLeadUpdateToNetSuite({
+          leadId: leadId,
+          companyName: fullLead?.companyName || '',
+          email: fullLead?.customerServiceEmail || '',
+          phone: fullLead?.customerPhone || '',
+          website: fullLead?.websiteUrl || '',
+          industry: fullLead?.industryCategory || '',
+          abn: fullLead?.abn || '',
+        });
       } catch (nsErr) {
         console.error('Error syncing SCF details update to NetSuite:', nsErr);
       }
@@ -475,7 +503,14 @@ export async function updateScfDetailsAction(
       if (data.contactPhone !== undefined) contactUpdate.phone = data.contactPhone;
 
       if (Object.keys(contactUpdate).length > 0) {
-        await adminDb.collection('leads').doc(leadId).collection('contacts').doc(contactId).update(contactUpdate);
+        const contactRef = adminDb.collection(collectionName).doc(leadId).collection('contacts').doc(contactId);
+        const cSnap = await contactRef.get();
+        if (cSnap.exists) {
+          await contactRef.update(contactUpdate);
+        } else {
+          const altCol = collectionName === 'companies' ? 'leads' : 'companies';
+          await adminDb.collection(altCol).doc(leadId).collection('contacts').doc(contactId).update(contactUpdate).catch(() => {});
+        }
       }
     }
 

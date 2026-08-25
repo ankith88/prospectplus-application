@@ -33,7 +33,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg, updateLeadDetails, getScfRecords, updateScfRecord } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg, updateLeadDetails, getScfRecords, updateScfRecord, getLeadOrCompanyCollection } from '@/services/firebase';
 import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { useAuth } from '@/hooks/use-auth';
@@ -1520,7 +1520,7 @@ export function ServiceSelectionDialog({
         const pricingTable = selectionType === 'services' ? [] : generatePricingTable(premiumPlan, expressPlan);
         const suburbMapping = generateSuburbMapping(lead, franchisee);
 
-        const collectionName = lead.status === 'Won' ? 'companies' : 'leads';
+        const collectionName = await getLeadOrCompanyCollection(lead.id, lead);
         await updateDoc(doc(firestore, collectionName, lead.id), {
           chosenPremiumPlan: premiumPlan,
           chosenExpressPlan: expressPlan,
