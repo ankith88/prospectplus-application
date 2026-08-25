@@ -70,6 +70,8 @@ export default function CancellationDashboard() {
   const [avg3MonthInvoice, setAvg3MonthInvoice] = useState<number | null>(null);
   const [isSignedCustomer, setIsSignedCustomer] = useState<boolean>(false);
   const [loadingInvoiceAvg, setLoadingInvoiceAvg] = useState<boolean>(false);
+  const [cancelledByFranchisee, setCancelledByFranchisee] = useState<boolean>(false);
+  const [isReductionTurnedCancellation, setIsReductionTurnedCancellation] = useState<boolean>(false);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -207,6 +209,8 @@ export default function CancellationDashboard() {
     setTrueCancellationDate(req.cancellationDate?.substring(0, 10) || new Date().toISOString().substring(0, 10));
     setSaveNotes('');
     setCancelNotes('');
+    setCancelledByFranchisee(Boolean(req.cancelledByFranchisee || req.isFranchiseeCancelled));
+    setIsReductionTurnedCancellation(Boolean(req.isReductionTurnedCancellation));
     setProcessModalOpen(true);
 
     // Fetch signed status and 3-month average invoice value
@@ -372,7 +376,10 @@ export default function CancellationDashboard() {
         savedMRR,
         serviceRateChanged,
         serviceFrequencyChanged,
-        serviceDeleted
+        serviceDeleted,
+        isReductionTurnedCancellation,
+        cancelledByFranchisee,
+        isFranchiseeCancelled: cancelledByFranchisee
       });
 
       setProcessModalOpen(false);
@@ -413,7 +420,9 @@ export default function CancellationDashboard() {
         cancellationCategory: selectedWhyObj?.name || '',
         cancellationWhyId: selectedWhyId,
         cancellationdate: trueCancellationDate,
-        cancellationRequested: false
+        cancellationRequested: false,
+        cancelledByFranchisee,
+        isFranchiseeCancelled: cancelledByFranchisee
       };
 
       if (compSnap.exists()) {
@@ -456,7 +465,9 @@ export default function CancellationDashboard() {
         processedAt,
         isSignedCustomer,
         avg3MonthInvoiceMRR: isSignedCustomer ? (avg3MonthInvoice ?? 0) : undefined,
-        originalMRR: lostMRR
+        originalMRR: lostMRR,
+        cancelledByFranchisee,
+        isFranchiseeCancelled: cancelledByFranchisee
       });
 
       // Call NetSuite outcome sync with Customer - Lost outcome
@@ -997,6 +1008,22 @@ export default function CancellationDashboard() {
                   </Select>
                 </div>
 
+                <div className="flex items-center space-x-2 bg-amber-50/70 border border-amber-200/80 p-3 rounded-lg">
+                  <Checkbox 
+                    id="reductionSave" 
+                    checked={isReductionTurnedCancellation}
+                    onCheckedChange={(checked) => setIsReductionTurnedCancellation(Boolean(checked))}
+                  />
+                  <div>
+                    <Label htmlFor="reductionSave" className="text-xs font-semibold text-amber-900 cursor-pointer">
+                      Reduction Turned Cancellation (Tracked for Commissions)
+                    </Label>
+                    <p className="text-[11px] text-amber-700 font-normal">
+                      Check if customer requested cancellation after a price increase/reduction, but was saved with a revised offer.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="saveNotes" className="font-bold text-slate-700">Retention Notes</Label>
                   <Textarea
@@ -1097,6 +1124,22 @@ export default function CancellationDashboard() {
                     </Select>
                   </div>
                 )}
+              </div>
+
+              <div className="flex items-center space-x-2 bg-amber-50/90 border border-amber-200 p-3 rounded-lg">
+                <Checkbox 
+                  id="franchiseeCancel" 
+                  checked={cancelledByFranchisee}
+                  onCheckedChange={(checked) => setCancelledByFranchisee(Boolean(checked))}
+                />
+                <div>
+                  <Label htmlFor="franchiseeCancel" className="text-xs font-semibold text-amber-900 cursor-pointer">
+                    Cancelled by Franchisee (End of Month - Yellow EOM Tag)
+                  </Label>
+                  <p className="text-[11px] text-amber-700 font-normal">
+                    Check if this cancellation was initiated by the Franchisee at EOM to separate it from real customer churn.
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-2">

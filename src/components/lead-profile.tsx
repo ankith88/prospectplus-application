@@ -5267,7 +5267,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <TabsTrigger id="step-tab-trial-jobs" value="trial-jobs" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Trial Jobs</TabsTrigger>
                 )}
                 {lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
-                  <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery & AI Insights</TabsTrigger>
+                  <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Enrichment & Marketing Insights</TabsTrigger>
                 )}
                 {userProfile?.activeRole?.toLowerCase() !== 'user' && (
                   <TabsTrigger id="step-tab-quotes" value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>

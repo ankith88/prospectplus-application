@@ -1265,10 +1265,18 @@ export function ServiceSelectionDialog({
     if (!lead) return;
     
     if (mode === 'Resend SCF' || mode === 'Confirm Signup') {
+       const validC = (contacts || []).filter(c => !isContactEmpty(c));
        if (!values.selectedContactIds || values.selectedContactIds.length === 0) {
-         form.setError('selectedContactIds', { type: 'manual', message: 'Please select at least one contact.' });
-         toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select at least one contact to receive the email.' });
-         return;
+         if (validC.length > 0) {
+           const defC = validC.find(c => c.isPrimary) || validC[0];
+           const defId = (lead as any)?.bookingContactId || (lead as any)?.serviceCommencementContactId || defC.id;
+           values.selectedContactIds = [defId];
+           form.setValue('selectedContactIds', [defId]);
+         } else if (!skipEmail) {
+           form.setError('selectedContactIds', { type: 'manual', message: 'Please select at least one contact.' });
+           toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select at least one contact to receive the email.' });
+           return;
+         }
        }
        setIsSubmitting(true);
        try {
@@ -1383,10 +1391,18 @@ export function ServiceSelectionDialog({
       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select a trial period.' });
       return;
     }
+    const validC = (contacts || []).filter(c => !isContactEmpty(c));
     if (!values.selectedContactIds || values.selectedContactIds.length === 0) {
-      form.setError('selectedContactIds', { type: 'manual', message: 'Please select at least one contact.' });
-      toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select at least one contact to receive the quote/email.' });
-      return;
+      if (validC.length > 0) {
+        const defC = validC.find(c => c.isPrimary) || validC[0];
+        const defId = (lead as any)?.bookingContactId || (lead as any)?.serviceCommencementContactId || defC.id;
+        values.selectedContactIds = [defId];
+        form.setValue('selectedContactIds', [defId]);
+      } else if (!skipEmail) {
+        form.setError('selectedContactIds', { type: 'manual', message: 'Please select at least one contact.' });
+        toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select at least one contact to receive the quote/email.' });
+        return;
+      }
     }
 
     if (!values.shipmateContactIds || values.shipmateContactIds.length === 0) {
@@ -1397,7 +1413,7 @@ export function ServiceSelectionDialog({
     }
 
     if (mode === 'Signup' && (selectionType === 'both' || selectionType === 'products')) {
-      if (!values.shipmateContactIds || values.shipmateContactIds.length === 0) {
+      if (!skipEmail && (!values.shipmateContactIds || values.shipmateContactIds.length === 0)) {
         form.setError('shipmateContactIds' as any, { type: 'manual', message: 'Please select at least one contact for ShipMate access.' });
         toast({ 
           variant: 'destructive', 
@@ -1409,7 +1425,7 @@ export function ServiceSelectionDialog({
     }
     
     // Fallback for fields relying on selectedContactId
-    values.selectedContactId = values.selectedContactIds[0];
+    values.selectedContactId = values.selectedContactIds?.[0] || "";
 
     if (selectionType === 'products' || selectionType === 'both') {
       if (!values.selectedServices.includes('MP Parcel Pickup')) {

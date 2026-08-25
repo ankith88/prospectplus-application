@@ -448,3 +448,102 @@ export function autoMapLostOutcome(outcome: string): CancellationHierarchyMatch 
   return null;
 }
 
+export type CancellationType = 'GREY' | 'GREEN' | 'YELLOW' | 'RED';
+
+export interface CancellationTypeInfo {
+  type: CancellationType;
+  label: string;
+  shortLabel: string;
+  description: string;
+  colorClass: string;
+  badgeClass: string;
+  hexColor: string;
+}
+
+export const CANCELLATION_TYPE_CONFIG: Record<CancellationType, CancellationTypeInfo> = {
+  GREY: {
+    type: 'GREY',
+    label: 'Data Wash',
+    shortLabel: 'Data Wash',
+    description: 'Admin/data cleanup, non-service starts, or uncollectible debt',
+    colorClass: 'text-slate-800 bg-slate-100 border-slate-300',
+    badgeClass: 'bg-slate-200 text-slate-800 border-slate-300 font-semibold',
+    hexColor: '#64748b',
+  },
+  GREEN: {
+    type: 'GREEN',
+    label: 'Still a Customer',
+    shortLabel: 'Still Customer',
+    description: 'Customer retained via new SCF ownership transfer or location move',
+    colorClass: 'text-emerald-800 bg-emerald-100 border-emerald-300',
+    badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold',
+    hexColor: '#10b981',
+  },
+  YELLOW: {
+    type: 'YELLOW',
+    label: 'End of Month (Franchisee Cancelled)',
+    shortLabel: 'EOM (Franchisee)',
+    description: 'Cancelled directly by the Franchisee at End of Month',
+    colorClass: 'text-amber-900 bg-amber-100 border-amber-300',
+    badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 font-semibold',
+    hexColor: '#eab308',
+  },
+  RED: {
+    type: 'RED',
+    label: 'True Cancellation',
+    shortLabel: 'True Cancellation',
+    description: 'Customer-initiated true churn request',
+    colorClass: 'text-rose-800 bg-rose-100 border-rose-300',
+    badgeClass: 'bg-rose-100 text-rose-800 border-rose-300 font-semibold',
+    hexColor: '#ef4444',
+  },
+};
+
+export function getCancellationTypeInfo(r: {
+  cancellationReason?: string;
+  cancelledByFranchisee?: boolean;
+  isFranchiseeCancelled?: boolean;
+  cancellationType?: string;
+}): CancellationTypeInfo {
+  // 1. YELLOW - END OF MONTH (Franchisee Cancelled)
+  if (r.cancelledByFranchisee || r.isFranchiseeCancelled || r.cancellationType === 'YELLOW') {
+    return CANCELLATION_TYPE_CONFIG.YELLOW;
+  }
+
+  const reason = (r.cancellationReason || '').trim().toLowerCase();
+
+  // 2. GREY - DATA WASH
+  const greyKeywords = [
+    'data wash',
+    'secure cash / neopost / sendle / dashback / rsea',
+    'secure cash',
+    'neopost',
+    'sendle',
+    'dashback',
+    'rsea',
+    'service did not start after signing scf',
+    'customer went cold after signing scf and/or cancelled onboarding',
+    'customer went cold after signing scf',
+    'debt with mailplus'
+  ];
+
+  if (greyKeywords.some(kw => reason.includes(kw) || kw.includes(reason))) {
+    return CANCELLATION_TYPE_CONFIG.GREY;
+  }
+
+  // 3. GREEN - STILL A CUSTOMER
+  const greenKeywords = [
+    'new owners signed new scf',
+    'moving locations, signed new scf',
+    'moving locations signed new scf'
+  ];
+
+  if (greenKeywords.some(kw => reason.includes(kw) || kw.includes(reason))) {
+    return CANCELLATION_TYPE_CONFIG.GREEN;
+  }
+
+  // 4. RED - TRUE CANCELLATION (Default for all other reason codes)
+  return CANCELLATION_TYPE_CONFIG.RED;
+}
+
+

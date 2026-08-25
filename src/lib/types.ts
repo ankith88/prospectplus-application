@@ -1693,6 +1693,12 @@ export interface CancellationRequest {
   serviceRateChanged?: boolean;
   serviceFrequencyChanged?: boolean;
   serviceDeleted?: boolean;
+  cancelledByFranchisee?: boolean;
+  isFranchiseeCancelled?: boolean;
+  cancellationType?: 'GREY' | 'GREEN' | 'YELLOW' | 'RED';
+  isReductionTurnedCancellation?: boolean;
+  reductionTurnedCancellationNotes?: string;
+  franchisee?: string;
 }
 
 export type CSRequestType = 'change_of_service' | 'cancellation';

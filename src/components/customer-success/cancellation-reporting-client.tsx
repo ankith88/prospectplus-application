@@ -5,14 +5,21 @@ import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { AccessDenied } from '@/components/access-denied';
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, getDoc } from 'firebase/firestore';
 import { CancellationRequest, ServiceSelection, normalizeRetentionStrategy, RETENTION_STRATEGIES } from '@/lib/types';
+import { 
+  getCancellationTypeInfo, 
+  CANCELLATION_TYPE_CONFIG, 
+  CancellationType 
+} from '@/lib/cancellation-reasons-mapper';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableHeader, TableBody, TableRow, TableCell, TableHead } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -35,22 +42,37 @@ import {
   Layers, 
   BarChart2, 
   PieChart as PieChartIcon, 
-  FileSpreadsheet, 
   CheckCircle2, 
-  XCircle, 
-  Clock, 
   Building,
   Sparkles,
   ChevronRight,
-  RotateCcw
+  RotateCcw,
+  Tag,
+  Award,
+  CalendarDays,
+  Bot
 } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
-import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfWeek, endOfWeek, getWeek } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
-
 import { fetch3MonthAvgInvoiceMRR } from '@/lib/cancellation-invoice-helper';
+import { useToast } from '@/hooks/use-toast';
 
-const CHART_COLORS = ['#095c7b', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#a78bfa', '#e11d48', '#059669', '#d97706', '#6366f1'];
+export const safeFormatDate = (dateStr?: string | null, formatPattern: string = 'dd MMM yyyy', fallback: string = 'N/A'): string => {
+  if (!dateStr || typeof dateStr !== 'string') return fallback;
+  try {
+    let dt = parseISO(dateStr);
+    if (isNaN(dt.getTime())) {
+      dt = new Date(dateStr);
+    }
+    if (isNaN(dt.getTime())) {
+      return fallback;
+    }
+    return format(dt, formatPattern);
+  } catch {
+    return fallback;
+  }
+};
 
 export const calculateMRR = (services: ServiceSelection[]) => {
   if (!services || !Array.isArray(services) || services.length === 0) return 0;
@@ -98,6 +120,7 @@ export const getSavedMRR = (r: CancellationRequest): number => {
 export default function CancellationReportingClient() {
   const { userProfile } = useAuth();
   const { canView } = usePermissions();
+  const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -106,180 +129,22 @@ export default function CancellationReportingClient() {
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [cancellationTypeFilter, setCancellationTypeFilter] = useState<string>('all');
   const [themeFilter, setThemeFilter] = useState<string>('all');
   const [whyFilter, setWhyFilter] = useState<string>('all');
   const [reasonFilter, setReasonFilter] = useState<string>('all');
   const [strategyFilter, setStrategyFilter] = useState<string>('all');
+  const [franchiseeFilter, setFranchiseeFilter] = useState<string>('all');
+  const [commissionOnlyFilter, setCommissionOnlyFilter] = useState<boolean>(false);
   const [quickDateRange, setQuickDateRange] = useState<string>('thisMonth');
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date())
   });
 
-  // Dynamic filter options based on dataset
-  const availableOptions = useMemo(() => {
-    const themes = new Set<string>();
-    const whys = new Set<string>();
-    const reasons = new Set<string>();
-    const strategies = new Set<string>();
-
-    requests.forEach(r => {
-      if (r.cancellationTheme) themes.add(r.cancellationTheme.trim());
-
-      // @ts-ignore
-      const why = r.cancellationCategory || r.cancellationWhy;
-      if (why && typeof why === 'string') whys.add(why.trim());
-
-      if (r.cancellationReason && typeof r.cancellationReason === 'string') reasons.add(r.cancellationReason.trim());
-
-      const strat = normalizeRetentionStrategy(r.saveStrategy);
-      if (strat && strat !== 'Unspecified') strategies.add(strat);
-    });
-
-    RETENTION_STRATEGIES.forEach(s => strategies.add(s));
-
-    return {
-      themes: Array.from(themes).filter(Boolean).sort(),
-      whys: Array.from(whys).filter(Boolean).sort(),
-      reasons: Array.from(reasons).filter(Boolean).sort(),
-      strategies: Array.from(strategies).filter(Boolean).sort()
-    };
-  }, [requests]);
-
-  const hasActiveFilters = 
-    searchQuery.trim() !== '' ||
-    statusFilter !== 'all' ||
-    themeFilter !== 'all' ||
-    whyFilter !== 'all' ||
-    reasonFilter !== 'all' ||
-    strategyFilter !== 'all' ||
-    quickDateRange !== 'allTime';
-
-  const activeFilterCount = [
-    searchQuery.trim() !== '',
-    statusFilter !== 'all',
-    themeFilter !== 'all',
-    whyFilter !== 'all',
-    reasonFilter !== 'all',
-    strategyFilter !== 'all',
-    quickDateRange !== 'allTime'
-  ].filter(Boolean).length;
-
-  const resetFilters = () => {
-    setSearchQuery('');
-    setStatusFilter('all');
-    setThemeFilter('all');
-    setWhyFilter('all');
-    setReasonFilter('all');
-    setStrategyFilter('all');
-    setQuickDateRange('allTime');
-    setDateRange(undefined);
-  };
-
-  // Modal Pop-Up state for KPI Drilldowns
-  const [modalData, setModalData] = useState<{
-    title: string;
-    subtitle: string;
-    type: 'enquiries' | 'saved' | 'money_saved' | 'money_lost';
-    items: CancellationRequest[];
-  } | null>(null);
-
-  const [modalSearchQuery, setModalSearchQuery] = useState('');
-  const [modalStatusFilter, setModalStatusFilter] = useState('all');
-
-  // Reset modal sub-filters when modal opens/closes
-  useEffect(() => {
-    setModalSearchQuery('');
-    setModalStatusFilter('all');
-  }, [modalData]);
-
-  const filteredModalItems = useMemo(() => {
-    if (!modalData) return [];
-    return modalData.items.filter(req => {
-      if (modalSearchQuery.trim()) {
-        const q = modalSearchQuery.toLowerCase();
-        const matchName = req.companyName?.toLowerCase().includes(q);
-        const matchContact = req.contactName?.toLowerCase().includes(q);
-        const matchReason = req.cancellationReason?.toLowerCase().includes(q);
-        const matchTheme = req.cancellationTheme?.toLowerCase().includes(q);
-        const matchNotes = req.notes?.toLowerCase().includes(q);
-        const matchBy = req.processedBy?.toLowerCase().includes(q);
-        if (!matchName && !matchContact && !matchReason && !matchTheme && !matchNotes && !matchBy) {
-          return false;
-        }
-      }
-
-      if (modalStatusFilter !== 'all' && req.status !== modalStatusFilter) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [modalData, modalSearchQuery, modalStatusFilter]);
-
-  const handleExportModalCSV = (title: string, items: CancellationRequest[]) => {
-    if (!items || items.length === 0) return;
-
-    const headers = [
-      'Company Name',
-      'Contact Name',
-      'Contact Email',
-      'Status',
-      'Signed Customer',
-      '3-Month Avg Invoice ($)',
-      'Save Strategy',
-      'Cancellation Theme',
-      'Cancellation Reason',
-      'Requested Date',
-      'True Stop Date',
-      'Original MRR ($)',
-      'Saved MRR ($)',
-      'MRR Lost ($)',
-      'Annual Value Saved ($)',
-      'Annual Value Lost ($)',
-      'Processed By',
-      'Notes'
-    ];
-
-    const rows = items.map(r => {
-      const isSigned = Boolean(r.isSignedCustomer);
-      const avg3Month = r.avg3MonthInvoiceMRR ?? (isSigned ? (r.originalMRR ?? 0) : 0);
-      const origMRR = r.originalMRR ?? (isSigned ? avg3Month : calculateMRR(r.originalServices));
-      const savedMRR = r.status === 'Saved' ? (r.savedMRR ?? calculateMRR(r.updatedServices || r.originalServices)) : 0;
-      const mrrLost = r.status === 'Cancelled' ? origMRR : 0;
-
-      return [
-        `"${(r.companyName || '').replace(/"/g, '""')}"`,
-        `"${(r.contactName || '').replace(/"/g, '""')}"`,
-        `"${(r.contactEmail || '').replace(/"/g, '""')}"`,
-        `"${r.status}"`,
-        `"${isSigned ? 'Yes' : 'No'}"`,
-        avg3Month.toFixed(2),
-        `"${normalizeRetentionStrategy(r.saveStrategy) || ''}"`,
-        `"${(r.cancellationTheme || '').replace(/"/g, '""')}"`,
-        `"${(r.cancellationReason || '').replace(/"/g, '""')}"`,
-        `"${r.requestedDate || ''}"`,
-        `"${r.trueServiceCancellationDate || r.cancellationDate || ''}"`,
-        origMRR.toFixed(2),
-        savedMRR.toFixed(2),
-        mrrLost.toFixed(2),
-        (savedMRR * 12).toFixed(2),
-        (mrrLost * 12).toFixed(2),
-        `"${(r.processedBy || '').replace(/"/g, '""')}"`,
-        `"${(r.notes || '').replace(/"/g, '""')}"`
-      ];
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    const cleanTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    link.setAttribute('download', `${cleanTitle}_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  // AI Summary States
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSummaryText, setAiSummaryText] = useState<string | null>(null);
 
   // Access check
   const activeRoleLower = userProfile?.activeRole?.toLowerCase() || '';
@@ -301,12 +166,16 @@ export default function CancellationReportingClient() {
     try {
       // 1. Fetch from 'cancellations' collection
       const cancelSnap = await getDocs(collection(firestore, 'cancellations'));
-      const cancelList: CancellationRequest[] = cancelSnap.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      } as CancellationRequest));
+      const cancelList: CancellationRequest[] = cancelSnap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          franchisee: data.franchisee || data.franchiseeName || 'Unassigned'
+        } as CancellationRequest;
+      });
 
-      // 2. Fetch from 'cs_requests' collection (cancellation requestType)
+      // 2. Fetch from 'cs_requests' collection
       const csSnap = await getDocs(collection(firestore, 'cs_requests'));
       const csList: CancellationRequest[] = csSnap.docs
         .map(d => {
@@ -342,19 +211,22 @@ export default function CancellationReportingClient() {
             serviceRateChanged: data.serviceRateChanged,
             serviceFrequencyChanged: data.serviceFrequencyChanged,
             serviceDeleted: data.serviceDeleted,
+            cancelledByFranchisee: data.cancelledByFranchisee || data.isFranchiseeCancelled,
+            isFranchiseeCancelled: data.cancelledByFranchisee || data.isFranchiseeCancelled,
+            isReductionTurnedCancellation: data.isReductionTurnedCancellation,
+            reductionTurnedCancellationNotes: data.reductionTurnedCancellationNotes,
+            franchisee: data.franchisee || data.franchiseeName || 'Unassigned'
           } as CancellationRequest;
         })
         .filter(Boolean) as CancellationRequest[];
 
-      // Combine & Deduplicate by ID or (leadId + date)
+      // Combine & Deduplicate
       const combinedMap = new Map<string, CancellationRequest>();
-      
       [...cancelList, ...csList].forEach(item => {
         const key = item.id || `${item.leadId}_${item.requestedDate?.substring(0, 10)}`;
         if (!combinedMap.has(key)) {
           combinedMap.set(key, item);
         } else {
-          // Merge missing fields
           const existing = combinedMap.get(key)!;
           combinedMap.set(key, { ...existing, ...item });
         }
@@ -367,7 +239,7 @@ export default function CancellationReportingClient() {
       });
 
       setRequests(mergedList);
-      enrichRequestsWithInvoices(mergedList);
+      enrichRequestsWithInvoicesAndFranchisee(mergedList);
     } catch (e) {
       console.error("Error fetching cancellation requests for reporting:", e);
     } finally {
@@ -376,10 +248,11 @@ export default function CancellationReportingClient() {
     }
   };
 
-  const enrichRequestsWithInvoices = async (list: CancellationRequest[]) => {
+  const enrichRequestsWithInvoicesAndFranchisee = async (list: CancellationRequest[]) => {
     const uncalculated = list.filter(r => 
       r.avg3MonthInvoiceMRR === undefined || 
-      (r.status === 'Cancelled' && (!r.originalMRR || r.originalMRR === 0))
+      (r.status === 'Cancelled' && (!r.originalMRR || r.originalMRR === 0)) ||
+      !r.franchisee || r.franchisee === 'Unassigned'
     );
 
     if (uncalculated.length === 0) return;
@@ -392,6 +265,7 @@ export default function CancellationReportingClient() {
       await Promise.all(
         batch.map(async req => {
           try {
+            const updates: Partial<CancellationRequest> = {};
             const res = await fetch3MonthAvgInvoiceMRR(
               req.leadId,
               req.leadId,
@@ -400,16 +274,30 @@ export default function CancellationReportingClient() {
             );
 
             if (res.isSignedCustomer || res.invoicesCount > 0) {
-              enrichedMap.set(req.id, {
-                isSignedCustomer: true,
-                avg3MonthInvoiceMRR: res.avgMonthlyInvoice,
-                ...(req.status === 'Cancelled' && (!req.originalMRR || req.originalMRR === 0)
-                  ? { originalMRR: res.avgMonthlyInvoice }
-                  : {})
-              });
+              updates.isSignedCustomer = true;
+              updates.avg3MonthInvoiceMRR = res.avgMonthlyInvoice;
+              if (req.status === 'Cancelled' && (!req.originalMRR || req.originalMRR === 0)) {
+                updates.originalMRR = res.avgMonthlyInvoice;
+              }
+            }
+
+            // Fetch lead/company for franchisee if missing
+            if (!req.franchisee || req.franchisee === 'Unassigned') {
+              const compSnap = await getDoc(doc(firestore, 'companies', req.leadId));
+              const leadSnap = compSnap.exists() ? compSnap : await getDoc(doc(firestore, 'leads', req.leadId));
+              if (leadSnap.exists()) {
+                const leadData = leadSnap.data();
+                if (leadData?.franchisee) {
+                  updates.franchisee = leadData.franchisee;
+                }
+              }
+            }
+
+            if (Object.keys(updates).length > 0) {
+              enrichedMap.set(req.id, updates);
             }
           } catch (e) {
-            console.error("Error fetching invoice avg for request:", req.id, e);
+            console.error("Error enriching request:", req.id, e);
           }
         })
       );
@@ -439,10 +327,103 @@ export default function CancellationReportingClient() {
     }
   };
 
+  // Toggle Cancelled by Franchisee (EOM Yellow Tag) inline
+  const handleToggleFranchiseeCancelled = async (reqId: string, currentVal: boolean) => {
+    const newVal = !currentVal;
+    // Optimistic update
+    setRequests(prev => prev.map(r => r.id === reqId ? {
+      ...r,
+      cancelledByFranchisee: newVal,
+      isFranchiseeCancelled: newVal,
+      cancellationType: newVal ? 'YELLOW' : undefined
+    } : r));
+
+    try {
+      await updateDoc(doc(firestore, 'cancellations', reqId), {
+        cancelledByFranchisee: newVal,
+        isFranchiseeCancelled: newVal
+      });
+      toast({
+        title: newVal ? "Tagged as Franchisee EOM" : "Removed Franchisee EOM Tag",
+        description: `Cancellation request updated successfully.`
+      });
+    } catch (e) {
+      console.error("Failed to update Franchisee Cancelled tag:", e);
+      fetchRequests(); // rollback
+    }
+  };
+
+  // Toggle Reduction Turned Cancellation (Commission Save Tag) inline
+  const handleToggleReductionSave = async (reqId: string, currentVal: boolean) => {
+    const newVal = !currentVal;
+    // Optimistic update
+    setRequests(prev => prev.map(r => r.id === reqId ? {
+      ...r,
+      isReductionTurnedCancellation: newVal
+    } : r));
+
+    try {
+      await updateDoc(doc(firestore, 'cancellations', reqId), {
+        isReductionTurnedCancellation: newVal
+      });
+      toast({
+        title: newVal ? "Tagged for Commission Save" : "Removed Commission Save Tag",
+        description: `Reduction-turned-cancellation save tag updated.`
+      });
+    } catch (e) {
+      console.error("Failed to update Commission Save tag:", e);
+      fetchRequests(); // rollback
+    }
+  };
+
+  // Dynamic filter options
+  const availableOptions = useMemo(() => {
+    const themes = new Set<string>();
+    const whys = new Set<string>();
+    const reasons = new Set<string>();
+    const strategies = new Set<string>();
+    const franchisees = new Set<string>();
+
+    requests.forEach(r => {
+      if (r.cancellationTheme) themes.add(r.cancellationTheme.trim());
+      // @ts-ignore
+      const why = r.cancellationCategory || r.cancellationWhy;
+      if (why && typeof why === 'string') whys.add(why.trim());
+      if (r.cancellationReason && typeof r.cancellationReason === 'string') reasons.add(r.cancellationReason.trim());
+      const strat = normalizeRetentionStrategy(r.saveStrategy);
+      if (strat && strat !== 'Unspecified') strategies.add(strat);
+      if (r.franchisee) franchisees.add(r.franchisee.trim());
+    });
+
+    RETENTION_STRATEGIES.forEach(s => strategies.add(s));
+
+    return {
+      themes: Array.from(themes).filter(Boolean).sort(),
+      whys: Array.from(whys).filter(Boolean).sort(),
+      reasons: Array.from(reasons).filter(Boolean).sort(),
+      strategies: Array.from(strategies).filter(Boolean).sort(),
+      franchisees: Array.from(franchisees).filter(Boolean).sort()
+    };
+  }, [requests]);
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setCancellationTypeFilter('all');
+    setThemeFilter('all');
+    setWhyFilter('all');
+    setReasonFilter('all');
+    setStrategyFilter('all');
+    setFranchiseeFilter('all');
+    setCommissionOnlyFilter(false);
+    setQuickDateRange('allTime');
+    setDateRange(undefined);
+  };
+
   // Filtered requests
   const filteredRequests = useMemo(() => {
     return requests.filter(req => {
-      // Search filter
+      // Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = req.companyName?.toLowerCase().includes(q);
@@ -453,35 +434,54 @@ export default function CancellationReportingClient() {
         const matchWhy = (req.cancellationCategory || req.cancellationWhy)?.toLowerCase().includes(q);
         const matchNotes = req.notes?.toLowerCase().includes(q);
         const matchBy = req.processedBy?.toLowerCase().includes(q);
-        if (!matchName && !matchContact && !matchReason && !matchTheme && !matchWhy && !matchNotes && !matchBy) {
+        const matchFran = req.franchisee?.toLowerCase().includes(q);
+        if (!matchName && !matchContact && !matchReason && !matchTheme && !matchWhy && !matchNotes && !matchBy && !matchFran) {
           return false;
         }
       }
 
-      // Status filter
+      // Status
       if (statusFilter !== 'all' && req.status !== statusFilter) {
         return false;
       }
 
-      // Theme filter
+      // Cancellation Type Classification Filter (RED, YELLOW, GREEN, GREY)
+      if (cancellationTypeFilter !== 'all') {
+        const typeInfo = getCancellationTypeInfo(req);
+        if (typeInfo.type !== cancellationTypeFilter) {
+          return false;
+        }
+      }
+
+      // Theme
       if (themeFilter !== 'all' && req.cancellationTheme !== themeFilter) {
         return false;
       }
 
-      // Why / Category filter
+      // Category / Why
       if (whyFilter !== 'all') {
         // @ts-ignore
         const reqWhy = req.cancellationCategory || req.cancellationWhy;
         if (reqWhy !== whyFilter) return false;
       }
 
-      // Cancellation Reason filter
+      // Reason
       if (reasonFilter !== 'all' && req.cancellationReason !== reasonFilter) {
         return false;
       }
 
-      // Retention Strategy filter
+      // Retention Strategy
       if (strategyFilter !== 'all' && normalizeRetentionStrategy(req.saveStrategy) !== strategyFilter) {
+        return false;
+      }
+
+      // Franchisee Filter
+      if (franchiseeFilter !== 'all' && req.franchisee !== franchiseeFilter) {
+        return false;
+      }
+
+      // Commission Saved Reductions Only
+      if (commissionOnlyFilter && !req.isReductionTurnedCancellation) {
         return false;
       }
 
@@ -490,209 +490,310 @@ export default function CancellationReportingClient() {
         const targetDateStr = req.processedAt || req.requestedDate || req.cancellationDate;
         if (!targetDateStr) return false;
         try {
-          const targetDate = parseISO(targetDateStr);
+          let targetDate = parseISO(targetDateStr);
+          if (isNaN(targetDate.getTime())) {
+            targetDate = new Date(targetDateStr);
+          }
+          if (isNaN(targetDate.getTime())) return false;
           const from = dateRange.from;
           const to = dateRange.to || dateRange.from;
           if (!isWithinInterval(targetDate, { start: from, end: to })) {
             return false;
           }
         } catch {
-          // keep if parse error
+          return false;
         }
       }
 
       return true;
     });
-  }, [requests, searchQuery, statusFilter, themeFilter, whyFilter, reasonFilter, strategyFilter, dateRange]);
+  }, [requests, searchQuery, statusFilter, cancellationTypeFilter, themeFilter, whyFilter, reasonFilter, strategyFilter, franchiseeFilter, commissionOnlyFilter, dateRange]);
 
-  // Comprehensive Metrics Calculations
+  // Comprehensive Metrics & Tallies
   const metrics = useMemo(() => {
     const totalRequests = filteredRequests.length;
     const pendingRequests = filteredRequests.filter(r => r.status === 'Pending');
     const savedRequests = filteredRequests.filter(r => r.status === 'Saved');
     const cancelledRequests = filteredRequests.filter(r => r.status === 'Cancelled');
 
+    // Classification Type Tallies
+    let redTrueCount = 0;
+    let yellowEomCount = 0;
+    let greyDataWashCount = 0;
+    let greenStillCustomerCount = 0;
+
+    let redTrueMRRLost = 0;
+    let yellowEomMRRLost = 0;
+    let greyDataWashMRR = 0;
+
+    filteredRequests.forEach(r => {
+      const typeInfo = getCancellationTypeInfo(r);
+      const mrr = getLostMRR(r);
+      if (typeInfo.type === 'RED') {
+        redTrueCount++;
+        if (r.status === 'Cancelled') redTrueMRRLost += mrr;
+      } else if (typeInfo.type === 'YELLOW') {
+        yellowEomCount++;
+        if (r.status === 'Cancelled') yellowEomMRRLost += mrr;
+      } else if (typeInfo.type === 'GREY') {
+        greyDataWashCount++;
+        if (r.status === 'Cancelled') greyDataWashMRR += mrr;
+      } else if (typeInfo.type === 'GREEN') {
+        greenStillCustomerCount++;
+      }
+    });
+
     const totalProcessed = savedRequests.length + cancelledRequests.length;
     const saveRate = totalProcessed > 0 ? Math.round((savedRequests.length / totalProcessed) * 100) : 0;
-
-    // Helper to calculate lost MRR for a cancelled request
-    const getLostMRR = (r: CancellationRequest) => {
-      if (r.originalMRR !== undefined && r.originalMRR !== null) {
-        return r.originalMRR;
-      }
-      if (r.isSignedCustomer) {
-        return r.avg3MonthInvoiceMRR ?? 0;
-      }
-      return calculateMRR(r.originalServices);
-    };
-
-    // Helper to calculate saved MRR (retained revenue) for a saved request
-    const getSavedMRR = (r: CancellationRequest) => {
-      if (r.savedMRR !== undefined && r.savedMRR !== null) {
-        return r.savedMRR;
-      }
-      return calculateMRR(r.updatedServices && r.updatedServices.length > 0 ? r.updatedServices : r.originalServices);
-    };
 
     // Money Calculations
     let totalMRRSaved = 0;
     let totalMRRLost = 0;
+    let reductionSavesCount = 0;
+    let reductionMRRSaved = 0;
 
     savedRequests.forEach(r => {
-      totalMRRSaved += getSavedMRR(r);
+      const savedAmount = getSavedMRR(r);
+      totalMRRSaved += savedAmount;
+      if (r.isReductionTurnedCancellation) {
+        reductionSavesCount++;
+        reductionMRRSaved += savedAmount;
+      }
     });
 
     cancelledRequests.forEach(r => {
       totalMRRLost += getLostMRR(r);
     });
 
-    const netMRR = totalMRRSaved - totalMRRLost;
-    const annualizedSaved = totalMRRSaved * 12;
-    const annualizedLost = totalMRRLost * 12;
-    const netAnnualized = netMRR * 12;
+    // Franchisee Tally Aggregation
+    const franchiseeMap: Record<string, {
+      total: number;
+      savedCount: number;
+      cancelledCount: number;
+      redCount: number;
+      yellowCount: number;
+      greyCount: number;
+      greenCount: number;
+      mrrSaved: number;
+      mrrLost: number;
+    }> = {};
 
-    // Theme Breakdown
-    const themeMap: Record<string, { count: number; mrrLost: number }> = {};
-    cancelledRequests.forEach(r => {
-      const theme = r.cancellationTheme || 'Uncategorized';
-      if (!themeMap[theme]) themeMap[theme] = { count: 0, mrrLost: 0 };
-      themeMap[theme].count += 1;
-      themeMap[theme].mrrLost += getLostMRR(r);
-    });
-    const themeData = Object.entries(themeMap).map(([name, data]) => ({
-      name,
-      count: data.count,
-      mrrLost: Math.round(data.mrrLost),
-      annualLost: Math.round(data.mrrLost * 12)
-    })).sort((a, b) => b.count - a.count);
-
-    // Why / Category Breakdown
-    const categoryMap: Record<string, { count: number; mrrLost: number }> = {};
-    cancelledRequests.forEach(r => {
-      // @ts-ignore
-      const cat = r.cancellationCategory || r.cancellationWhy || 'General';
-      if (!categoryMap[cat]) categoryMap[cat] = { count: 0, mrrLost: 0 };
-      categoryMap[cat].count += 1;
-      categoryMap[cat].mrrLost += getLostMRR(r);
-    });
-    const categoryData = Object.entries(categoryMap).map(([name, data]) => ({
-      name,
-      count: data.count,
-      mrrLost: Math.round(data.mrrLost)
-    })).sort((a, b) => b.count - a.count);
-
-    // Cancellation Reason Breakdown
-    const reasonMap: Record<string, { count: number; mrrLost: number }> = {};
-    cancelledRequests.forEach(r => {
-      const reason = r.cancellationReason || 'No Reason Provided';
-      if (!reasonMap[reason]) reasonMap[reason] = { count: 0, mrrLost: 0 };
-      reasonMap[reason].count += 1;
-      reasonMap[reason].mrrLost += getLostMRR(r);
-    });
-    const reasonData = Object.entries(reasonMap).map(([name, data]) => ({
-      name,
-      count: data.count,
-      mrrLost: Math.round(data.mrrLost)
-    })).sort((a, b) => b.count - a.count);
-
-    // Retention Strategy Breakdown
-    const strategyMap: Record<string, { count: number; mrrSaved: number }> = {};
-    savedRequests.forEach(r => {
-      const strategy = normalizeRetentionStrategy(r.saveStrategy);
-      if (!strategyMap[strategy]) strategyMap[strategy] = { count: 0, mrrSaved: 0 };
-      strategyMap[strategy].count += 1;
-      strategyMap[strategy].mrrSaved += getSavedMRR(r);
-    });
-    const strategyData = Object.entries(strategyMap).map(([name, data]) => ({
-      name,
-      count: data.count,
-      mrrSaved: Math.round(data.mrrSaved),
-      annualSaved: Math.round(data.mrrSaved * 12)
-    })).sort((a, b) => b.count - a.count);
-
-    // Monthly Trend Data
-    const monthlyMap: Record<string, { savedCount: number; cancelledCount: number; mrrSaved: number; mrrLost: number }> = {};
     filteredRequests.forEach(r => {
-      const dStr = r.processedAt || r.requestedDate;
-      const month = dStr ? dStr.substring(0, 7) : 'Unknown'; // YYYY-MM
-      if (!monthlyMap[month]) {
-        monthlyMap[month] = { savedCount: 0, cancelledCount: 0, mrrSaved: 0, mrrLost: 0 };
+      const fran = r.franchisee || 'Unassigned';
+      if (!franchiseeMap[fran]) {
+        franchiseeMap[fran] = {
+          total: 0,
+          savedCount: 0,
+          cancelledCount: 0,
+          redCount: 0,
+          yellowCount: 0,
+          greyCount: 0,
+          greenCount: 0,
+          mrrSaved: 0,
+          mrrLost: 0
+        };
       }
+
+      franchiseeMap[fran].total += 1;
+      const typeInfo = getCancellationTypeInfo(r);
+      if (typeInfo.type === 'RED') franchiseeMap[fran].redCount += 1;
+      else if (typeInfo.type === 'YELLOW') franchiseeMap[fran].yellowCount += 1;
+      else if (typeInfo.type === 'GREY') franchiseeMap[fran].greyCount += 1;
+      else if (typeInfo.type === 'GREEN') franchiseeMap[fran].greenCount += 1;
+
       if (r.status === 'Saved') {
-        monthlyMap[month].savedCount += 1;
-        monthlyMap[month].mrrSaved += getSavedMRR(r);
+        franchiseeMap[fran].savedCount += 1;
+        franchiseeMap[fran].mrrSaved += getSavedMRR(r);
       } else if (r.status === 'Cancelled') {
-        monthlyMap[month].cancelledCount += 1;
-        monthlyMap[month].mrrLost += getLostMRR(r);
+        franchiseeMap[fran].cancelledCount += 1;
+        franchiseeMap[fran].mrrLost += getLostMRR(r);
       }
     });
 
-    const trendData = Object.entries(monthlyMap)
-      .map(([month, data]) => ({
-        month,
+    const franchiseeData = Object.entries(franchiseeMap)
+      .map(([name, data]) => ({
+        name,
         ...data,
         mrrSaved: Math.round(data.mrrSaved),
         mrrLost: Math.round(data.mrrLost)
       }))
-      .sort((a, b) => a.month.localeCompare(b.month));
+      .sort((a, b) => b.total - a.total);
 
-    // List of unique themes & strategies for filters
-    const availableThemes = Array.from(new Set(requests.map(r => r.cancellationTheme).filter(Boolean)));
-    const availableStrategies = Array.from(new Set(requests.map(r => r.saveStrategy ? normalizeRetentionStrategy(r.saveStrategy) : null).filter((s): s is string => Boolean(s))));
+    // Weekly Split Aggregation across filtered period
+    const weekMap: Record<string, {
+      weekLabel: string;
+      total: number;
+      savedCount: number;
+      cancelledCount: number;
+      redCount: number;
+      yellowCount: number;
+      greyCount: number;
+      greenCount: number;
+      mrrSaved: number;
+      mrrLost: number;
+    }> = {};
+
+    filteredRequests.forEach(r => {
+      const dStr = r.processedAt || r.requestedDate || r.cancellationDate;
+      let weekKey = 'Unknown';
+      let weekLabel = 'Unknown';
+      if (dStr) {
+        try {
+          let dt = parseISO(dStr);
+          if (isNaN(dt.getTime())) {
+            dt = new Date(dStr);
+          }
+          if (!isNaN(dt.getTime())) {
+            const wStart = startOfWeek(dt, { weekStartsOn: 1 });
+            const wEnd = endOfWeek(dt, { weekStartsOn: 1 });
+            weekKey = format(wStart, 'yyyy-MM-dd');
+            weekLabel = `${format(wStart, 'MMM dd')} - ${format(wEnd, 'MMM dd, yyyy')}`;
+          }
+        } catch {
+          // fallback
+        }
+      }
+
+      if (!weekMap[weekKey]) {
+        weekMap[weekKey] = {
+          weekLabel,
+          total: 0,
+          savedCount: 0,
+          cancelledCount: 0,
+          redCount: 0,
+          yellowCount: 0,
+          greyCount: 0,
+          greenCount: 0,
+          mrrSaved: 0,
+          mrrLost: 0
+        };
+      }
+
+      weekMap[weekKey].total += 1;
+      const typeInfo = getCancellationTypeInfo(r);
+      if (typeInfo.type === 'RED') weekMap[weekKey].redCount += 1;
+      else if (typeInfo.type === 'YELLOW') weekMap[weekKey].yellowCount += 1;
+      else if (typeInfo.type === 'GREY') weekMap[weekKey].greyCount += 1;
+      else if (typeInfo.type === 'GREEN') weekMap[weekKey].greenCount += 1;
+
+      if (r.status === 'Saved') {
+        weekMap[weekKey].savedCount += 1;
+        weekMap[weekKey].mrrSaved += getSavedMRR(r);
+      } else if (r.status === 'Cancelled') {
+        weekMap[weekKey].cancelledCount += 1;
+        weekMap[weekKey].mrrLost += getLostMRR(r);
+      }
+    });
+
+    const weeklySplitData = Object.entries(weekMap)
+      .map(([key, data]) => ({
+        weekKey: key,
+        ...data,
+        saveRate: (data.savedCount + data.cancelledCount) > 0 
+          ? Math.round((data.savedCount / (data.savedCount + data.cancelledCount)) * 100)
+          : 0,
+        mrrSaved: Math.round(data.mrrSaved),
+        mrrLost: Math.round(data.mrrLost)
+      }))
+      .sort((a, b) => a.weekKey.localeCompare(b.weekKey));
+
+    // Classification Type Pie Data
+    const classificationPieData = [
+      { name: 'Red - True Cancellation', value: redTrueCount, color: '#ef4444' },
+      { name: 'Yellow - End of Month (Franchisee)', value: yellowEomCount, color: '#eab308' },
+      { name: 'Grey - Data Wash', value: greyDataWashCount, color: '#64748b' },
+      { name: 'Green - Still a Customer', value: greenStillCustomerCount, color: '#10b981' }
+    ].filter(d => d.value > 0);
 
     return {
       totalRequests,
       pendingCount: pendingRequests.length,
       savedCount: savedRequests.length,
       cancelledCount: cancelledRequests.length,
+      redTrueCount,
+      yellowEomCount,
+      greyDataWashCount,
+      greenStillCustomerCount,
+      redTrueMRRLost: Math.round(redTrueMRRLost),
+      yellowEomMRRLost: Math.round(yellowEomMRRLost),
+      greyDataWashMRR: Math.round(greyDataWashMRR),
       saveRate,
       totalMRRSaved: Math.round(totalMRRSaved),
       totalMRRLost: Math.round(totalMRRLost),
-      netMRR: Math.round(netMRR),
-      annualizedSaved: Math.round(annualizedSaved),
-      annualizedLost: Math.round(annualizedLost),
-      netAnnualized: Math.round(netAnnualized),
-      themeData,
-      categoryData,
-      reasonData,
-      strategyData,
-      trendData,
-      availableThemes,
-      availableStrategies,
-      pendingRequests,
+      reductionSavesCount,
+      reductionMRRSaved: Math.round(reductionMRRSaved),
+      franchiseeData,
+      weeklySplitData,
+      classificationPieData,
       savedRequests,
       cancelledRequests
     };
-  }, [filteredRequests, requests]);
+  }, [filteredRequests]);
 
-  // Export to CSV
+  // Handle Generating AI Summary
+  const handleGenerateAISummary = async () => {
+    setAiSummaryLoading(true);
+    try {
+      const res = await fetch('/api/cancellations/ai-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: filteredRequests,
+          periodName: quickDateRange === 'thisMonth' ? 'this month' : quickDateRange === '7days' ? 'the past 7 days' : 'the filtered period'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setAiSummaryText(data.summary);
+        toast({
+          title: "AI Weekly Executive Summary Ready",
+          description: "Genkit AI successfully analyzed current cancellation records."
+        });
+      } else {
+        throw new Error(data.error || "AI generation failed");
+      }
+    } catch (e: any) {
+      console.error("AI Summary error:", e);
+      toast({
+        title: "AI Summary Generation Failed",
+        description: e?.message || "Could not generate AI summary.",
+        variant: "destructive"
+      });
+    } finally {
+      setAiSummaryLoading(false);
+    }
+  };
+
+  // CSV Export
   const exportToCSV = () => {
     if (filteredRequests.length === 0) return;
 
     const headers = [
+      'Franchisee',
       'Company Name',
       'Contact Name',
       'Contact Email',
       'Status',
-      'Signed Customer',
-      '3-Month Avg Invoice ($)',
+      'Cancellation Type Classification',
+      'Cancelled by Franchisee (EOM)',
+      'Reduction Saved (Commission Tracked)',
       'Save Strategy',
       'Cancellation Theme',
       'Cancellation Category / Why',
       'Cancellation Reason',
       'Requested Date',
       'True Cancellation Date',
-      'Original / Baseline MRR ($)',
+      'Original MRR ($)',
       'Saved MRR ($)',
       'MRR Lost ($)',
-      'Annual Value Saved ($)',
-      'Annual Value Lost ($)',
       'Processed By',
       'Processed At',
       'Notes'
     ];
 
     const rows = filteredRequests.map(r => {
+      const typeInfo = getCancellationTypeInfo(r);
       const isSigned = Boolean(r.isSignedCustomer);
       const avg3Month = r.avg3MonthInvoiceMRR ?? (isSigned ? (r.originalMRR ?? 0) : 0);
       const origMRR = r.originalMRR ?? (isSigned ? avg3Month : calculateMRR(r.originalServices));
@@ -700,12 +801,14 @@ export default function CancellationReportingClient() {
       const mrrLost = r.status === 'Cancelled' ? origMRR : 0;
 
       return [
+        `"${(r.franchisee || 'Unassigned').replace(/"/g, '""')}"`,
         `"${(r.companyName || '').replace(/"/g, '""')}"`,
         `"${(r.contactName || '').replace(/"/g, '""')}"`,
         `"${(r.contactEmail || '').replace(/"/g, '""')}"`,
         `"${r.status}"`,
-        `"${isSigned ? 'Yes' : 'No'}"`,
-        avg3Month.toFixed(2),
+        `"${typeInfo.label} (${typeInfo.type})"`,
+        `"${r.cancelledByFranchisee || r.isFranchiseeCancelled ? 'Yes' : 'No'}"`,
+        `"${r.isReductionTurnedCancellation ? 'Yes' : 'No'}"`,
         `"${normalizeRetentionStrategy(r.saveStrategy) || ''}"`,
         `"${(r.cancellationTheme || '').replace(/"/g, '""')}"`,
         // @ts-ignore
@@ -716,8 +819,6 @@ export default function CancellationReportingClient() {
         origMRR.toFixed(2),
         savedMRR.toFixed(2),
         mrrLost.toFixed(2),
-        (savedMRR * 12).toFixed(2),
-        (mrrLost * 12).toFixed(2),
         `"${(r.processedBy || '').replace(/"/g, '""')}"`,
         `"${r.processedAt || ''}"`,
         `"${(r.notes || '').replace(/"/g, '""')}"`
@@ -728,7 +829,7 @@ export default function CancellationReportingClient() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Cancellation_Retention_Report_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute('download', `Cancellation_Reporting_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -749,26 +850,26 @@ export default function CancellationReportingClient() {
   return (
     <div className="p-6 h-full flex flex-col bg-[#d0dfcd] min-h-screen sidebar-nav-theme space-y-6">
       
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white/80 p-5 rounded-2xl border border-white/60 shadow-sm">
+      {/* Top Header */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white/90 p-5 rounded-2xl border border-white/60 shadow-sm">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-[#095c7b] text-white rounded-xl shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-[#095c7b] text-white rounded-xl shadow-xs">
               <TrendingDown className="h-6 w-6" />
             </div>
             <div>
               <h1 className="text-2xl lg:text-3xl font-extrabold text-[#095c7b] tracking-tight">
                 Cancellation & Retention Reporting
               </h1>
-              <p className="text-slate-600 text-sm mt-0.5">
-                Comprehensive analytics for saved customers, processed cancellations, financial revenue impact, themes & retention strategies.
+              <p className="text-slate-600 text-xs lg:text-sm mt-0.5">
+                Classification breakdown (Red True, Yellow EOM, Grey Data Wash, Green Still Customer), Franchisee tallies, weekly splits, and commission saves tracking.
               </p>
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          {/* Quick Date Presets */}
+          {/* Quick Date Range */}
           <Select value={quickDateRange} onValueChange={handleQuickDateChange}>
             <SelectTrigger className="w-[140px] bg-white border-slate-300">
               <SelectValue placeholder="Date Range" />
@@ -785,13 +886,11 @@ export default function CancellationReportingClient() {
           {/* Date Picker Popover */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="bg-white border-slate-300 gap-2">
+              <Button variant="outline" className="bg-white border-slate-300 gap-2 text-xs">
                 <CalendarIcon className="h-4 w-4 text-[#095c7b]" />
                 {dateRange?.from ? (
                   dateRange.to ? (
-                    <>
-                      {format(dateRange.from, 'LLL dd')} - {format(dateRange.to, 'LLL dd, yyyy')}
-                    </>
+                    <>{format(dateRange.from, 'LLL dd')} - {format(dateRange.to, 'LLL dd, yyyy')}</>
                   ) : (
                     format(dateRange.from, 'LLL dd, yyyy')
                   )
@@ -806,264 +905,160 @@ export default function CancellationReportingClient() {
                 mode="range"
                 defaultMonth={dateRange?.from}
                 selected={dateRange}
-                onSelect={setDateRange}
+                onSelect={(range) => {
+                  setDateRange(range);
+                  setQuickDateRange('custom');
+                }}
                 numberOfMonths={2}
               />
             </PopoverContent>
           </Popover>
 
-          {/* Refresh button */}
           <Button 
             variant="outline" 
-            size="icon" 
-            className="bg-white border-slate-300 text-[#095c7b]"
-            onClick={() => { setRefreshing(true); fetchRequests(); }}
+            onClick={fetchRequests} 
             disabled={refreshing}
-            title="Refresh Data"
+            className="bg-white border-slate-300 hover:bg-slate-50 gap-1.5 text-xs"
           >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-3.5 w-3.5 text-[#095c7b] ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
           </Button>
 
-          {/* Export to CSV */}
           <Button 
             onClick={exportToCSV}
-            className="bg-[#095c7b] text-white hover:bg-[#074760] gap-2 shadow-sm font-semibold"
+            className="bg-[#095c7b] text-white hover:bg-[#074760] gap-1.5 text-xs shadow-xs"
           >
-            <FileSpreadsheet className="h-4 w-4" /> Export CSV
+            <Download className="h-3.5 w-3.5" /> Export CSV
           </Button>
         </div>
       </div>
 
-      {/* Dedicated Filter Section */}
-      <Card className="bg-white/90 border-white/60 shadow-sm rounded-2xl">
-        <CardHeader className="py-3.5 px-5 flex flex-row items-center justify-between border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-[#095c7b]/10 text-[#095c7b] rounded-xl">
-              <Filter className="h-4 w-4" />
-            </div>
-            <div>
-              <CardTitle className="text-sm font-bold text-[#095c7b]">Filter Requests & Analytics</CardTitle>
-              <CardDescription className="text-xs text-slate-500">
-                Filter by search query, status, cancellation theme, why category, reason, or retention strategy
-              </CardDescription>
-            </div>
-          </div>
-          {hasActiveFilters && (
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] font-semibold text-xs py-1 px-2.5 rounded-lg">
-                {activeFilterCount} Active {activeFilterCount === 1 ? 'Filter' : 'Filters'}
-              </Badge>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetFilters}
-                className="h-8 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 gap-1.5 font-medium rounded-lg"
-              >
-                <RotateCcw className="h-3.5 w-3.5" /> Clear All Filters
-              </Button>
-            </div>
-          )}
-        </CardHeader>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-            {/* Search Input */}
-            <div className="space-y-1">
-              <Label className="text-xs font-bold text-slate-700">Search</Label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Search customer..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-8 bg-white border-slate-300 text-xs h-9 focus:border-[#095c7b]"
-                />
-              </div>
-            </div>
-
-            {/* Status Filter */}
-            <div className="space-y-1">
-              <Label className="text-xs font-bold text-slate-700">Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="bg-white border-slate-300 text-xs h-9">
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="Saved">Saved</SelectItem>
-                  <SelectItem value="Cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Cancellation Theme Filter */}
-            <div className="space-y-1">
-              <Label className="text-xs font-bold text-slate-700">Cancellation Theme</Label>
-              <Select value={themeFilter} onValueChange={setThemeFilter}>
-                <SelectTrigger className="bg-white border-slate-300 text-xs h-9">
-                  <SelectValue placeholder="All Themes" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  <SelectItem value="all">All Themes</SelectItem>
-                  {availableOptions.themes.map(t => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Why / Category Filter */}
-            <div className="space-y-1">
-              <Label className="text-xs font-bold text-slate-700">Why / Category</Label>
-              <Select value={whyFilter} onValueChange={setWhyFilter}>
-                <SelectTrigger className="bg-white border-slate-300 text-xs h-9">
-                  <SelectValue placeholder="All Why Categories" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {availableOptions.whys.map(w => (
-                    <SelectItem key={w} value={w}>{w}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Cancellation Reason Filter */}
-            <div className="space-y-1">
-              <Label className="text-xs font-bold text-slate-700">Cancellation Reason</Label>
-              <Select value={reasonFilter} onValueChange={setReasonFilter}>
-                <SelectTrigger className="bg-white border-slate-300 text-xs h-9">
-                  <SelectValue placeholder="All Reasons" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  <SelectItem value="all">All Reasons</SelectItem>
-                  {availableOptions.reasons.map(r => (
-                    <SelectItem key={r} value={r}>{r}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Retention Strategy Filter */}
-            <div className="space-y-1">
-              <Label className="text-xs font-bold text-slate-700">Retention Strategy</Label>
-              <Select value={strategyFilter} onValueChange={setStrategyFilter}>
-                <SelectTrigger className="bg-white border-slate-300 text-xs h-9">
-                  <SelectValue placeholder="All Strategies" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  <SelectItem value="all">All Retention Strategies</SelectItem>
-                  {availableOptions.strategies.map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* KPI Cards Section */}
+      {/* 4 Classification Color Badge KPI Banner */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Enquiries Card */}
-        <Card 
-          onClick={() => setModalData({
-            title: 'Cancellation Enquiries List',
-            subtitle: `Showing all ${metrics.totalRequests} cancellation requests matching selected period`,
-            type: 'enquiries',
-            items: filteredRequests
-          })}
-          className="bg-white/90 border-[#095c7b]/20 shadow-sm hover:shadow-md hover:border-[#095c7b]/50 hover:scale-[1.01] transition-all cursor-pointer group"
-        >
+        {/* RED - TRUE CANCELLATION */}
+        <Card className="bg-white border-rose-300 border-l-8 border-l-rose-600 shadow-xs hover:shadow-md transition-shadow">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 group-hover:text-[#095c7b] transition-colors">Cancellation Enquiries</p>
-              <h3 className="text-2xl font-bold text-[#095c7b] mt-1">{metrics.totalRequests}</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                <span className="font-semibold text-amber-600">{metrics.pendingCount}</span> pending processing • <span className="underline font-medium text-[#095c7b]">View List</span>
+              <div className="flex items-center gap-1.5 mb-1">
+                <Badge className="bg-rose-100 text-rose-800 border-rose-300 font-bold text-[10px]">
+                  🔴 RED - True Cancellation
+                </Badge>
+              </div>
+              <h3 className="text-2xl font-extrabold text-rose-700">{metrics.redTrueCount}</h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Lost MRR: <span className="font-bold text-rose-600">${metrics.redTrueMRRLost.toLocaleString()}</span>
               </p>
             </div>
-            <div className="p-3 bg-[#095c7b]/10 rounded-2xl text-[#095c7b] group-hover:bg-[#095c7b] group-hover:text-white transition-all">
-              <HelpCircle className="h-6 w-6" />
+            <div className="p-3 bg-rose-50 text-rose-600 rounded-2xl">
+              <ShieldAlert className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
-        {/* Saved & Retention Rate */}
-        <Card 
-          onClick={() => setModalData({
-            title: 'Saved Customers List',
-            subtitle: `Showing ${metrics.savedCount} customers retained through save strategies`,
-            type: 'saved',
-            items: metrics.savedRequests
-          })}
-          className="bg-white/90 border-[#095c7b]/20 shadow-sm hover:shadow-md hover:border-emerald-500/50 hover:scale-[1.01] transition-all cursor-pointer group"
-        >
+        {/* YELLOW - END OF MONTH */}
+        <Card className="bg-white border-amber-300 border-l-8 border-l-amber-500 shadow-xs hover:shadow-md transition-shadow">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 group-hover:text-emerald-700 transition-colors">Customers Saved</p>
-              <div className="flex items-baseline gap-2 mt-1">
-                <h3 className="text-2xl font-bold text-emerald-600">{metrics.savedCount}</h3>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-bold">
-                  {metrics.saveRate}% Save Rate
+              <div className="flex items-center gap-1.5 mb-1">
+                <Badge className="bg-amber-100 text-amber-900 border-amber-300 font-bold text-[10px]">
+                  🟡 YELLOW - End of Month (EOM)
                 </Badge>
               </div>
-              <p className="text-xs text-slate-500 mt-1">Retained accounts • <span className="underline font-medium text-emerald-700">View List</span></p>
+              <h3 className="text-2xl font-extrabold text-amber-800">{metrics.yellowEomCount}</h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Franchisee Cancelled: <span className="font-bold text-amber-800">${metrics.yellowEomMRRLost.toLocaleString()}</span>
+              </p>
             </div>
-            <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+            <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
+              <Tag className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* GREY - DATA WASH */}
+        <Card className="bg-white border-slate-300 border-l-8 border-l-slate-500 shadow-xs hover:shadow-md transition-shadow">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-1.5 mb-1">
+                <Badge className="bg-slate-200 text-slate-800 border-slate-300 font-bold text-[10px]">
+                  ⚪ GREY - Data Wash
+                </Badge>
+              </div>
+              <h3 className="text-2xl font-extrabold text-slate-700">{metrics.greyDataWashCount}</h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Data Cleanup / Non-Starts
+              </p>
+            </div>
+            <div className="p-3 bg-slate-100 text-slate-600 rounded-2xl">
+              <Layers className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* GREEN - STILL A CUSTOMER */}
+        <Card className="bg-white border-emerald-300 border-l-8 border-l-emerald-500 shadow-xs hover:shadow-md transition-shadow">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-1.5 mb-1">
+                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[10px]">
+                  🟢 GREEN - Still a Customer
+                </Badge>
+              </div>
+              <h3 className="text-2xl font-extrabold text-emerald-700">{metrics.greenStillCustomerCount}</h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                New SCF / Location Move
+              </p>
+            </div>
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Additional Key Performance Indicators Banner */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="bg-white/90 border-slate-200 shadow-xs">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Saved Revenue</p>
+              <h3 className="text-2xl font-extrabold text-emerald-600">${metrics.totalMRRSaved.toLocaleString()}/mo</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Annualized: <span className="font-bold text-emerald-700">${(metrics.totalMRRSaved * 12).toLocaleString()}/yr</span>
+              </p>
+            </div>
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
               <Smile className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
-        {/* Money Saved */}
-        <Card 
-          onClick={() => setModalData({
-            title: 'Money Saved (MRR) Customer List',
-            subtitle: `Showing ${metrics.savedCount} saved accounts generating $${metrics.totalMRRSaved.toLocaleString()}/mo ($${metrics.annualizedSaved.toLocaleString()}/yr)`,
-            type: 'money_saved',
-            items: metrics.savedRequests
-          })}
-          className="bg-white/90 border-emerald-500/30 shadow-sm hover:shadow-md hover:border-emerald-500 hover:scale-[1.01] transition-all cursor-pointer group"
-        >
+        <Card className="bg-white/90 border-slate-200 shadow-xs">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 group-hover:text-emerald-700 transition-colors">Money Saved (MRR)</p>
-              <h3 className="text-2xl font-bold text-emerald-600 mt-1">
-                ${metrics.totalMRRSaved.toLocaleString()}<span className="text-xs font-normal text-slate-500">/mo</span>
-              </h3>
-              <p className="text-xs font-medium text-emerald-700 mt-1">
-                ${metrics.annualizedSaved.toLocaleString()} Annual Saved • <span className="underline font-medium">View List</span>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Commission Saved Reductions</p>
+              <h3 className="text-2xl font-extrabold text-[#095c7b]">{metrics.reductionSavesCount} Customers</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Saved Revenue: <span className="font-bold text-[#095c7b]">${metrics.reductionMRRSaved.toLocaleString()}/mo</span>
               </p>
             </div>
-            <div className="p-3 bg-emerald-100/80 rounded-2xl text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white transition-all">
-              <TrendingUp className="h-6 w-6" />
+            <div className="p-3 bg-sky-50 text-[#095c7b] rounded-xl">
+              <Award className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
-        {/* Money Lost */}
-        <Card 
-          onClick={() => setModalData({
-            title: 'Money Lost (MRR) Customer List',
-            subtitle: `Showing ${metrics.cancelledCount} cancelled accounts representing $${metrics.totalMRRLost.toLocaleString()}/mo ($${metrics.annualizedLost.toLocaleString()}/yr) lost`,
-            type: 'money_lost',
-            items: metrics.cancelledRequests
-          })}
-          className="bg-white/90 border-rose-500/30 shadow-sm hover:shadow-md hover:border-rose-500 hover:scale-[1.01] transition-all cursor-pointer group"
-        >
+        <Card className="bg-white/90 border-slate-200 shadow-xs">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 group-hover:text-rose-700 transition-colors">Money Lost (MRR)</p>
-              <h3 className="text-2xl font-bold text-rose-600 mt-1">
-                ${metrics.totalMRRLost.toLocaleString()}<span className="text-xs font-normal text-slate-500">/mo</span>
-              </h3>
-              <p className="text-xs font-medium text-rose-700 mt-1">
-                ${metrics.annualizedLost.toLocaleString()} Annual Lost • <span className="underline font-medium">View List</span>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Overall Save Rate</p>
+              <h3 className="text-2xl font-extrabold text-[#095c7b]">{metrics.saveRate}%</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                {metrics.savedCount} Saved out of {metrics.savedCount + metrics.cancelledCount} Processed
               </p>
             </div>
-            <div className="p-3 bg-rose-100/80 rounded-2xl text-rose-700 group-hover:bg-rose-600 group-hover:text-white transition-all">
-              <TrendingDown className="h-6 w-6" />
+            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+              <TrendingUp className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
@@ -1071,525 +1066,237 @@ export default function CancellationReportingClient() {
 
       {/* Main Tabs Container */}
       <Tabs defaultValue="overview" className="flex-1 flex flex-col space-y-4">
-        
-        {/* Controls Bar & Filters */}
-        <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 bg-white/80 p-3 rounded-xl border border-white/60">
-          <TabsList className="bg-slate-100 p-1 rounded-lg w-full lg:w-auto flex flex-wrap">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white font-semibold">
-              <BarChart2 className="h-4 w-4 mr-1.5" /> Analytics Overview
-            </TabsTrigger>
-            <TabsTrigger value="saved" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white font-semibold">
-              <Smile className="h-4 w-4 mr-1.5 text-emerald-400" /> Saved Accounts ({metrics.savedCount})
-            </TabsTrigger>
-            <TabsTrigger value="cancelled" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white font-semibold">
-              <ShieldAlert className="h-4 w-4 mr-1.5 text-rose-400" /> Processed Cancellations ({metrics.cancelledCount})
-            </TabsTrigger>
-            <TabsTrigger value="audit" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white font-semibold">
-              <Layers className="h-4 w-4 mr-1.5" /> All Audit Log ({metrics.totalRequests})
-            </TabsTrigger>
-          </TabsList>
+        <TabsList className="bg-white/90 p-1.5 rounded-xl border border-white/60 w-fit flex flex-wrap gap-1 shadow-xs">
+          <TabsTrigger value="overview" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white text-xs font-bold px-4 py-2">
+            Detailed Cancellation List ({metrics.totalRequests})
+          </TabsTrigger>
+          <TabsTrigger value="ai-summary" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white text-xs font-bold px-4 py-2 flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-amber-300" /> AI Executive Summary
+          </TabsTrigger>
+          <TabsTrigger value="saves" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white text-xs font-bold px-4 py-2 flex items-center gap-1.5">
+            <Smile className="h-3.5 w-3.5" /> Saves of the Week ({metrics.savedCount})
+          </TabsTrigger>
+          <TabsTrigger value="franchisees" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white text-xs font-bold px-4 py-2 flex items-center gap-1.5">
+            <Building className="h-3.5 w-3.5" /> Franchisee Tally ({metrics.franchiseeData.length})
+          </TabsTrigger>
+          <TabsTrigger value="weekly-split" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white text-xs font-bold px-4 py-2 flex items-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5" /> Weekly Split Breakdown
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Search & Filter Controls */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Search Input */}
-            <div className="relative min-w-[200px] flex-1 lg:flex-initial">
-              <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
-              <Input
-                placeholder="Search company, reason..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9 bg-white border-slate-300 h-9"
-              />
-            </div>
-
-            {/* Status Dropdown */}
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[130px] bg-white border-slate-300 h-9">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="Saved">Saved Only</SelectItem>
-                <SelectItem value="Cancelled">Cancelled Only</SelectItem>
-                <SelectItem value="Pending">Pending Only</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Theme Dropdown */}
-            {metrics.availableThemes.length > 0 && (
-              <Select value={themeFilter} onValueChange={setThemeFilter}>
-                <SelectTrigger className="w-[150px] bg-white border-slate-300 h-9">
-                  <SelectValue placeholder="Main Theme" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Themes</SelectItem>
-                  {metrics.availableThemes.map(t => (
-                    <SelectItem key={t} value={t!}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            {/* Strategy Dropdown */}
-            {metrics.availableStrategies.length > 0 && (
-              <Select value={strategyFilter} onValueChange={setStrategyFilter}>
-                <SelectTrigger className="w-[160px] bg-white border-slate-300 h-9">
-                  <SelectValue placeholder="Save Strategy" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Save Strategies</SelectItem>
-                  {metrics.availableStrategies.map(s => (
-                    <SelectItem key={s} value={s!}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        </div>
-
-        {/* Tab 1: Overview Analytics */}
-        <TabsContent value="overview" className="space-y-6 m-0">
+        {/* TAB 1: DETAILED CANCELLATION LIST */}
+        <TabsContent value="overview" className="m-0 space-y-4">
           
-          {/* Net Revenue Impact Card */}
-          <Card className="bg-gradient-to-r from-[#095c7b] to-[#0d789e] text-white shadow-md border-none">
-            <CardContent className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-              <div>
-                <span className="bg-white/20 text-white text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">
-                  Net Financial Performance
-                </span>
-                <h2 className="text-3xl font-extrabold mt-2">
-                  Net MRR Impact: {metrics.netMRR >= 0 ? `+$${metrics.netMRR.toLocaleString()}` : `-$${Math.abs(metrics.netMRR).toLocaleString()}`}/mo
-                </h2>
-                <p className="text-white/80 text-sm mt-1">
-                  Annualized Net Difference: <strong className="text-white">{metrics.netAnnualized >= 0 ? `+$${metrics.netAnnualized.toLocaleString()}` : `-$${Math.abs(metrics.netAnnualized).toLocaleString()}`}</strong>
-                </p>
+          {/* Filters Bar */}
+          <Card className="bg-white/95 border-slate-200 shadow-xs">
+            <CardContent className="p-4 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                  <Input
+                    placeholder="Search company, contact..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 text-xs bg-white border-slate-300"
+                  />
+                </div>
+
+                {/* Status Filter */}
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="text-xs bg-white border-slate-300">
+                    <SelectValue placeholder="Status: All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Status: All</SelectItem>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Saved">Saved</SelectItem>
+                    <SelectItem value="Cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Cancellation Type Classification Filter */}
+                <Select value={cancellationTypeFilter} onValueChange={setCancellationTypeFilter}>
+                  <SelectTrigger className="text-xs bg-white border-slate-300 font-semibold">
+                    <SelectValue placeholder="Type: All Classifications" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Type: All Classifications</SelectItem>
+                    <SelectItem value="RED">🔴 RED - True Cancellation</SelectItem>
+                    <SelectItem value="YELLOW">🟡 YELLOW - End of Month (EOM)</SelectItem>
+                    <SelectItem value="GREY">⚪ GREY - Data Wash</SelectItem>
+                    <SelectItem value="GREEN">🟢 GREEN - Still a Customer</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Theme Filter */}
+                <Select value={themeFilter} onValueChange={setThemeFilter}>
+                  <SelectTrigger className="text-xs bg-white border-slate-300">
+                    <SelectValue placeholder="Theme: All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Theme: All</SelectItem>
+                    {availableOptions.themes.map(t => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Franchisee Filter */}
+                <Select value={franchiseeFilter} onValueChange={setFranchiseeFilter}>
+                  <SelectTrigger className="text-xs bg-white border-slate-300">
+                    <SelectValue placeholder="Franchisee: All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Franchisee: All</SelectItem>
+                    {availableOptions.franchisees.map(f => (
+                      <SelectItem key={f} value={f}>{f}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Reset Button */}
+                <Button 
+                  variant="outline" 
+                  onClick={resetFilters} 
+                  className="text-xs border-slate-300 hover:bg-slate-100 gap-1.5"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Reset Filters
+                </Button>
               </div>
 
-              <div className="flex items-center gap-6 bg-white/10 p-4 rounded-xl backdrop-blur-sm">
-                <div>
-                  <p className="text-xs text-white/70">MRR Saved</p>
-                  <p className="text-xl font-bold text-emerald-300">+${metrics.totalMRRSaved.toLocaleString()}</p>
-                </div>
-                <div className="h-8 w-px bg-white/20" />
-                <div>
-                  <p className="text-xs text-white/70">MRR Lost</p>
-                  <p className="text-xl font-bold text-rose-300">-${metrics.totalMRRLost.toLocaleString()}</p>
-                </div>
+              {/* Checkbox Filter for Commission Saved Reductions */}
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-100 text-xs font-semibold text-slate-700">
+                <Checkbox 
+                  id="commissionFilter" 
+                  checked={commissionOnlyFilter} 
+                  onCheckedChange={(checked) => setCommissionOnlyFilter(Boolean(checked))}
+                />
+                <Label htmlFor="commissionFilter" className="cursor-pointer flex items-center gap-1.5">
+                  <Award className="h-4 w-4 text-[#095c7b]" />
+                  Show Only Commission-Tracked Saved Reductions
+                </Label>
               </div>
             </CardContent>
           </Card>
 
-          {/* Section 1: Themes & Retention Strategies */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* Cancellation Main Theme Breakdown */}
-            <Card className="bg-white/95 shadow-sm border-[#095c7b]/10">
-              <CardHeader>
-                <CardTitle className="text-[#095c7b] text-base font-bold flex items-center justify-between">
-                  <span>Main Themes of Cancellation</span>
-                  <Badge variant="outline" className="bg-rose-50 text-rose-700">Lost Customers</Badge>
-                </CardTitle>
-                <CardDescription>Primary reasons why customers process cancellations</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="h-64">
-                  {metrics.themeData.length === 0 ? (
-                    <div className="flex h-full items-center justify-center text-slate-400 italic">No theme data available</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={metrics.themeData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={55}
-                          outerRadius={80}
-                          paddingAngle={3}
-                          dataKey="count"
-                        >
-                          {metrics.themeData.map((entry, index) => (
-                            <Cell key={`cell-theme-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value, name, item) => [`${value} cancellations ($${item.payload.mrrLost}/mo lost)`, item.payload.name]} />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-
-                {/* Summary Table for Themes */}
-                {metrics.themeData.length > 0 && (
-                  <Table className="text-xs">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="font-bold text-[#095c7b]">Theme</TableHead>
-                        <TableHead className="font-bold text-[#095c7b] text-center">Count</TableHead>
-                        <TableHead className="font-bold text-[#095c7b] text-right">MRR Lost</TableHead>
-                        <TableHead className="font-bold text-[#095c7b] text-right">Annual Lost</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {metrics.themeData.slice(0, 5).map(theme => (
-                        <TableRow key={theme.name}>
-                          <TableCell className="font-semibold text-slate-700">{theme.name}</TableCell>
-                          <TableCell className="text-center font-medium">{theme.count}</TableCell>
-                          <TableCell className="text-right text-rose-600 font-bold">${theme.mrrLost.toLocaleString()}</TableCell>
-                          <TableCell className="text-right text-slate-600">${theme.annualLost.toLocaleString()}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Retention Save Strategies Performance */}
-            <Card className="bg-white/95 shadow-sm border-[#095c7b]/10">
-              <CardHeader>
-                <CardTitle className="text-[#095c7b] text-base font-bold flex items-center justify-between">
-                  <span>Retention & Save Strategies</span>
-                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700">Saved Customers</Badge>
-                </CardTitle>
-                <CardDescription>Breakdown of strategies used to retain accounts and MRR saved</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="h-64">
-                  {metrics.strategyData.length === 0 ? (
-                    <div className="flex h-full items-center justify-center text-slate-400 italic">No retention strategy data available</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={metrics.strategyData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={55}
-                          outerRadius={80}
-                          paddingAngle={3}
-                          dataKey="count"
-                        >
-                          {metrics.strategyData.map((entry, index) => (
-                            <Cell key={`cell-strat-${index}`} fill={CHART_COLORS[(index + 3) % CHART_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value, name, item) => [`${value} accounts saved ($${item.payload.mrrSaved}/mo saved)`, item.payload.name]} />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-
-                {/* Summary Table for Strategies */}
-                {metrics.strategyData.length > 0 && (
-                  <Table className="text-xs">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="font-bold text-[#095c7b]">Strategy Type</TableHead>
-                        <TableHead className="font-bold text-[#095c7b] text-center">Saved</TableHead>
-                        <TableHead className="font-bold text-[#095c7b] text-right">MRR Saved</TableHead>
-                        <TableHead className="font-bold text-[#095c7b] text-right">Annual Saved</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {metrics.strategyData.map(strat => (
-                        <TableRow key={strat.name}>
-                          <TableCell className="font-semibold text-slate-700">{strat.name}</TableCell>
-                          <TableCell className="text-center font-medium">{strat.count}</TableCell>
-                          <TableCell className="text-right text-emerald-600 font-bold">${strat.mrrSaved.toLocaleString()}</TableCell>
-                          <TableCell className="text-right text-slate-600">${strat.annualSaved.toLocaleString()}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-
-          </div>
-
-          {/* Section 2: Why/Category & Reason Rankings */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* Cancellation Whys / Category */}
-            <Card className="bg-white/95 shadow-sm border-[#095c7b]/10">
-              <CardHeader>
-                <CardTitle className="text-[#095c7b] text-base font-bold">Cancellation Categories / Why</CardTitle>
-                <CardDescription>Grouping of root causes for cancellations</CardDescription>
-              </CardHeader>
-              <CardContent className="h-72">
-                {metrics.categoryData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-slate-400 italic">No category data available</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={metrics.categoryData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(value, name, item) => [`${value} cancellations`, item.payload.name]} />
-                      <Bar dataKey="count" fill="#38bdf8" name="Count" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Top Cancellation Reasons */}
-            <Card className="bg-white/95 shadow-sm border-[#095c7b]/10">
-              <CardHeader>
-                <CardTitle className="text-[#095c7b] text-base font-bold">Top Specific Cancellation Reasons</CardTitle>
-                <CardDescription>Ranked by occurrence count and MRR loss</CardDescription>
-              </CardHeader>
-              <CardContent className="h-72 overflow-y-auto">
-                {metrics.reasonData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-slate-400 italic">No reason data available</div>
-                ) : (
-                  <Table className="text-xs">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="font-bold text-[#095c7b]">Reason</TableHead>
-                        <TableHead className="font-bold text-[#095c7b] text-center">Count</TableHead>
-                        <TableHead className="font-bold text-[#095c7b] text-right">MRR Lost</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {metrics.reasonData.map(reason => (
-                        <TableRow key={reason.name}>
-                          <TableCell className="font-medium text-slate-800">{reason.name}</TableCell>
-                          <TableCell className="text-center font-bold">{reason.count}</TableCell>
-                          <TableCell className="text-right text-rose-600 font-bold">${reason.mrrLost.toLocaleString()}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-
-          </div>
-
-          {/* Section 3: Monthly Financial Trend Chart */}
-          <Card className="bg-white/95 shadow-sm border-[#095c7b]/10">
-            <CardHeader>
-              <CardTitle className="text-[#095c7b] text-base font-bold">Monthly Financial Trend (MRR Saved vs Lost)</CardTitle>
-              <CardDescription>Comparison of monthly revenue retained vs revenue lost over time</CardDescription>
-            </CardHeader>
-            <CardContent className="h-80">
-              {metrics.trendData.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-slate-400 italic">No trend data available</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={metrics.trendData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => [`$${value.toLocaleString()}`, '']} />
-                    <Legend />
-                    <Bar dataKey="mrrSaved" fill="#10b981" name="MRR Saved ($)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="mrrLost" fill="#f43f5e" name="MRR Lost ($)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-        </TabsContent>
-
-        {/* Tab 2: Saved Accounts Log */}
-        <TabsContent value="saved" className="m-0">
-          <Card className="bg-white/90 shadow-sm border-white/60">
-            <CardHeader>
-              <CardTitle className="text-[#095c7b] text-base font-bold flex items-center gap-2">
-                <Smile className="h-5 w-5 text-emerald-600" />
-                Saved Customers Log ({metrics.savedCount})
-              </CardTitle>
-              <CardDescription>All customer accounts successfully retained through save strategies</CardDescription>
-            </CardHeader>
+          {/* Interactive Detailed Table */}
+          <Card className="bg-white/95 border-slate-200 shadow-xs overflow-hidden">
             <CardContent className="p-0">
-              {metrics.savedRequests.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 italic">No saved customer records found matching filters.</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50">
-                      <TableHead className="font-bold text-[#095c7b]">Company Name</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Save Strategy</TableHead>
-                      <TableHead className="font-bold text-[#095c7b] text-right">MRR Saved</TableHead>
-                      <TableHead className="font-bold text-[#095c7b] text-right">Annual Value</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Processed By</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Processed Date</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Notes</TableHead>
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Franchisee</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Company & Contact</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Cancellation Classification</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Franchisee EOM?</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Commission Save?</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Theme & Category</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Reason Code</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Dates</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-right">MRR Lost / Saved</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRequests.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="text-center py-12 text-slate-400 italic text-sm">
+                        No cancellation records match the selected filters.
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {metrics.savedRequests.map(req => {
-                      const savedMRR = req.savedMRR ?? calculateMRR(req.updatedServices || req.originalServices);
-                      return (
-                        <TableRow key={req.id}>
-                          <TableCell className="font-semibold text-slate-800">
-                            <a 
-                              href={`/companies/${req.leadId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[#095c7b] hover:underline font-bold"
-                            >
-                              {req.companyName}
-                            </a>
-                            <div className="text-xs text-slate-500 font-normal mt-0.5">{req.contactName}</div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-medium">
-                              {normalizeRetentionStrategy(req.saveStrategy)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-emerald-600">
-                            ${savedMRR.toFixed(2)}/mo
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-slate-700">
-                            ${(savedMRR * 12).toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-600">
-                            {req.processedBy || 'System'}
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-600">
-                            {req.processedAt ? new Date(req.processedAt).toLocaleDateString() : 'N/A'}
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-500 max-w-xs truncate" title={req.notes}>
-                            {req.notes || 'No notes provided'}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab 3: Processed Cancellations Log */}
-        <TabsContent value="cancelled" className="m-0">
-          <Card className="bg-white/90 shadow-sm border-white/60">
-            <CardHeader>
-              <CardTitle className="text-[#095c7b] text-base font-bold flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-rose-600" />
-                Processed Cancellations Log ({metrics.cancelledCount})
-              </CardTitle>
-              <CardDescription>All accounts processed as lost customer cancellations</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {metrics.cancelledRequests.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 italic">No processed cancellation records found matching filters.</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50">
-                      <TableHead className="font-bold text-[#095c7b]">Company Name</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Main Theme</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Category / Why</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Cancellation Reason</TableHead>
-                      <TableHead className="font-bold text-[#095c7b] text-right">MRR Lost</TableHead>
-                      <TableHead className="font-bold text-[#095c7b] text-right">Annual Lost</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Stop Date</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Processed By</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {metrics.cancelledRequests.map(req => {
+                  ) : (
+                    filteredRequests.map(req => {
+                      const typeInfo = getCancellationTypeInfo(req);
                       const mrrLost = getLostMRR(req);
+                      const mrrSaved = getSavedMRR(req);
+
                       return (
-                        <TableRow key={req.id}>
-                          <TableCell className="font-semibold text-slate-800">
+                        <TableRow key={req.id} className="hover:bg-slate-50/80 transition-colors">
+                          {/* Franchisee */}
+                          <TableCell className="text-xs font-semibold text-slate-700">
+                            {req.franchisee || <span className="text-slate-400 italic">Unassigned</span>}
+                          </TableCell>
+
+                          {/* Company & Contact */}
+                          <TableCell className="text-xs">
                             <a 
-                              href={`/companies/${req.leadId}`}
-                              target="_blank"
+                              href={`/companies/${req.leadId}`} 
+                              target="_blank" 
                               rel="noopener noreferrer"
-                              className="text-[#095c7b] hover:underline font-bold"
+                              className="font-bold text-[#095c7b] hover:underline"
                             >
                               {req.companyName}
                             </a>
-                            <div className="text-xs text-slate-500 font-normal mt-0.5">{req.contactName}</div>
+                            <div className="text-[11px] text-slate-500 font-normal">
+                              {req.contactName} {req.contactEmail ? `(${req.contactEmail})` : ''}
+                            </div>
                           </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 font-medium">
-                              {req.cancellationTheme || 'Uncategorized'}
+
+                          {/* Classification Type Badge */}
+                          <TableCell className="text-xs">
+                            <Badge className={`${typeInfo.badgeClass} text-[11px] px-2 py-0.5`}>
+                              {typeInfo.shortLabel}
                             </Badge>
                           </TableCell>
+
+                          {/* Franchisee EOM Checkbox */}
+                          <TableCell className="text-xs text-center">
+                            <Checkbox 
+                              checked={Boolean(req.cancelledByFranchisee || req.isFranchiseeCancelled)}
+                              onCheckedChange={() => handleToggleFranchiseeCancelled(req.id, Boolean(req.cancelledByFranchisee || req.isFranchiseeCancelled))}
+                              title="Toggle Franchisee EOM Tag"
+                            />
+                          </TableCell>
+
+                          {/* Commission Save Checkbox */}
+                          <TableCell className="text-xs text-center">
+                            <Checkbox 
+                              checked={Boolean(req.isReductionTurnedCancellation)}
+                              onCheckedChange={() => handleToggleReductionSave(req.id, Boolean(req.isReductionTurnedCancellation))}
+                              title="Toggle Commission Save Tag"
+                            />
+                          </TableCell>
+
+                          {/* Theme & Category */}
                           <TableCell className="text-xs text-slate-600">
+                            <div className="font-semibold text-slate-800">{req.cancellationTheme || 'N/A'}</div>
                             {/* @ts-ignore */}
-                            {req.cancellationCategory || req.cancellationWhy || 'General'}
+                            <div className="text-[11px] text-slate-500">{req.cancellationCategory || req.cancellationWhy || 'N/A'}</div>
                           </TableCell>
-                          <TableCell className="text-xs font-medium text-slate-800">
-                            {req.cancellationReason || 'Other'}
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-rose-600">
-                            ${mrrLost.toFixed(2)}/mo
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-slate-700">
-                            ${(mrrLost * 12).toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-600">
-                            {req.trueServiceCancellationDate ? new Date(req.trueServiceCancellationDate).toLocaleDateString() : (req.cancellationDate ? new Date(req.cancellationDate).toLocaleDateString() : 'N/A')}
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-600">
-                            {req.processedBy || 'System'}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        {/* Tab 4: Full Requests Audit Log */}
-        <TabsContent value="audit" className="m-0">
-          <Card className="bg-white/90 shadow-sm border-white/60">
-            <CardHeader>
-              <CardTitle className="text-[#095c7b] text-base font-bold flex items-center gap-2">
-                <Layers className="h-5 w-5 text-[#095c7b]" />
-                Unified Cancellation & Retention Audit Log ({filteredRequests.length})
-              </CardTitle>
-              <CardDescription>Complete audit record of all cancellation enquiries, saved accounts, and processed cancellations</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {filteredRequests.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 italic">No records found matching filters.</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50">
-                      <TableHead className="font-bold text-[#095c7b]">Company Name</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Status</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Requested Date</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Main Theme</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Reason / Strategy</TableHead>
-                      <TableHead className="font-bold text-[#095c7b] text-right">Financial Impact</TableHead>
-                      <TableHead className="font-bold text-[#095c7b]">Processed By</TableHead>
-                      <TableHead className="font-bold text-[#095c7b] text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRequests.map(req => {
-                      const origMRR = req.originalMRR ?? calculateMRR(req.originalServices);
-                      const savedMRR = req.savedMRR ?? calculateMRR(req.updatedServices || req.originalServices);
-
-                      return (
-                        <TableRow key={req.id}>
-                          <TableCell className="font-semibold text-slate-800">
-                            <a 
-                              href={`/companies/${req.leadId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[#095c7b] hover:underline font-bold"
-                            >
-                              {req.companyName}
-                            </a>
-                            <div className="text-xs text-slate-500 font-normal mt-0.5">{req.contactName || 'No Contact'}</div>
+                          {/* Reason Code */}
+                          <TableCell className="text-xs font-medium text-slate-700">
+                            <Badge variant="outline" className="bg-slate-50 text-slate-700 text-[11px]">
+                              {req.cancellationReason || 'Other'}
+                            </Badge>
                           </TableCell>
-                          <TableCell>
+
+                          {/* Dates */}
+                          <TableCell className="text-[11px] text-slate-600">
+                            <div><span className="text-slate-400">Req:</span> {safeFormatDate(req.requestedDate, 'dd MMM yyyy')}</div>
+                            <div><span className="text-slate-400">Stop:</span> {safeFormatDate(req.trueServiceCancellationDate || req.cancellationDate, 'dd MMM yyyy')}</div>
+                          </TableCell>
+
+                          {/* Revenue Impact */}
+                          <TableCell className="text-xs text-right font-bold">
+                            {req.status === 'Saved' ? (
+                              <div className="text-emerald-700">
+                                +${mrrSaved.toFixed(2)}/mo
+                              </div>
+                            ) : req.status === 'Cancelled' ? (
+                              <div className="text-rose-600">
+                                -${mrrLost.toFixed(2)}/mo
+                              </div>
+                            ) : (
+                              <div className="text-slate-500">
+                                ${mrrLost.toFixed(2)}/mo
+                              </div>
+                            )}
+                          </TableCell>
+
+                          {/* Status */}
+                          <TableCell className="text-center">
                             <Badge className={
                               req.status === 'Pending' ? 'bg-amber-500 text-white' :
                               req.status === 'Saved' ? 'bg-emerald-600 text-white' :
@@ -1598,214 +1305,282 @@ export default function CancellationReportingClient() {
                               {req.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-xs text-slate-600">
-                            {req.requestedDate ? new Date(req.requestedDate).toLocaleDateString() : 'N/A'}
-                          </TableCell>
-                          <TableCell className="text-xs font-medium text-slate-700">
-                            {req.cancellationTheme || 'N/A'}
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-600">
-                            {req.status === 'Saved' ? (
-                              <span className="text-emerald-700 font-medium">{normalizeRetentionStrategy(req.saveStrategy)}</span>
-                            ) : (
-                              <span>{req.cancellationReason || 'Other'}</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right text-xs font-bold">
-                            {req.status === 'Saved' ? (
-                              <span className="text-emerald-600">+${savedMRR.toFixed(2)}/mo saved</span>
-                            ) : req.status === 'Cancelled' ? (
-                              <span className="text-rose-600">-${origMRR.toFixed(2)}/mo lost</span>
-                            ) : (
-                              <span className="text-slate-500">${origMRR.toFixed(2)}/mo at risk</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-600">
-                            {req.processedBy ? (
-                              <div>
-                                <div>{req.processedBy}</div>
-                                <div className="text-[10px] text-slate-400">
-                                  {req.processedAt ? new Date(req.processedAt).toLocaleDateString() : ''}
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-slate-400 italic">Unprocessed</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              className="text-[#095c7b] hover:bg-[#095c7b]/10"
-                              onClick={() => window.open(`/companies/${req.leadId}`, '_blank')}
-                            >
-                              View Profile <ChevronRight className="h-4 w-4 ml-1" />
-                            </Button>
-                          </TableCell>
                         </TableRow>
                       );
-                    })}
-                  </TableBody>
-                </Table>
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* TAB 2: AI EXECUTIVE SUMMARY */}
+        <TabsContent value="ai-summary" className="m-0 space-y-4">
+          <Card className="bg-white/95 border-slate-200 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-[#095c7b] text-lg font-extrabold flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-[#095c7b]" /> Genkit AI Weekly Executive Summary
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-500">
+                  Generate an AI synthesis of cancellations, retention performance, classification splits, franchisee drivers, and actionable advice.
+                </CardDescription>
+              </div>
+              <Button 
+                onClick={handleGenerateAISummary}
+                disabled={aiSummaryLoading}
+                className="bg-[#095c7b] text-white hover:bg-[#074760] text-xs gap-2 shadow-xs"
+              >
+                {aiSummaryLoading ? <Loader /> : <Sparkles className="h-4 w-4 text-amber-300" />}
+                {aiSummaryLoading ? 'Analyzing Records...' : 'Generate Weekly AI Summary'}
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!aiSummaryText && !aiSummaryLoading ? (
+                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300 p-8 space-y-3">
+                  <Sparkles className="h-10 w-10 text-[#095c7b]/40 mx-auto" />
+                  <h4 className="font-bold text-slate-700">Click "Generate Weekly AI Summary"</h4>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    The AI engine will analyze all {filteredRequests.length} currently filtered cancellation items, classify True Churn vs Franchisee EOM vs Data Wash, and provide executive insights.
+                  </p>
+                </div>
+              ) : aiSummaryLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                  <Loader />
+                  <p className="text-xs text-slate-600 font-medium">Running Genkit AI analysis across cancellation dataset...</p>
+                </div>
+              ) : (
+                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-slate-800 text-sm leading-relaxed prose max-w-none shadow-2xs">
+                  <div className="whitespace-pre-wrap font-sans">
+                    {aiSummaryText}
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-      </Tabs>
-
-      {/* KPI Customer List Drilldown Modal */}
-      <Dialog open={!!modalData} onOpenChange={(open) => { if (!open) setModalData(null); }}>
-        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-6">
-          <DialogHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b">
-            <div>
-              <DialogTitle className="text-xl font-bold text-[#095c7b] flex items-center gap-2">
-                {modalData?.title}
-                <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] font-bold">
-                  {filteredModalItems.length} Customers
-                </Badge>
-              </DialogTitle>
-              <DialogDescription className="text-slate-600 text-xs mt-0.5">
-                {modalData?.subtitle}
-              </DialogDescription>
-            </div>
-
-            <Button
-              onClick={() => handleExportModalCSV(modalData?.title || 'Cancellation_Report_List', filteredModalItems)}
-              className="bg-[#095c7b] text-white hover:bg-[#074760] gap-2 shrink-0 size-sm font-semibold"
-            >
-              <Download className="h-4 w-4" /> Export Customer List
-            </Button>
-          </DialogHeader>
-
-          {/* Controls in Modal */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-3">
-            <div className="relative flex-1 w-full sm:max-w-xs">
-              <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
-              <Input
-                placeholder="Search customer, contact, reason..."
-                value={modalSearchQuery}
-                onChange={(e) => setModalSearchQuery(e.target.value)}
-                className="pl-9 bg-white border-slate-300 h-9 text-sm"
-              />
-            </div>
-
-            {modalData?.type === 'enquiries' && (
-              <Select value={modalStatusFilter} onValueChange={setModalStatusFilter}>
-                <SelectTrigger className="w-[150px] h-9 text-sm">
-                  <SelectValue placeholder="Filter Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="Saved">Saved Only</SelectItem>
-                  <SelectItem value="Cancelled">Cancelled Only</SelectItem>
-                  <SelectItem value="Pending">Pending Only</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
-          {/* Customers Table in Modal */}
-          <div className="flex-1 overflow-y-auto border rounded-xl bg-white max-h-[50vh]">
-            {filteredModalItems.length === 0 ? (
-              <div className="p-12 text-center text-slate-500 italic">No customers found matching search.</div>
-            ) : (
-              <Table className="text-xs">
-                <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-xs">
+        {/* TAB 3: SAVES OF THE WEEK */}
+        <TabsContent value="saves" className="m-0 space-y-4">
+          <Card className="bg-white/95 border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-[#095c7b] text-lg font-bold flex items-center gap-2">
+                <Smile className="h-5 w-5 text-emerald-600" /> Saves of the Week & Reason Selected
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Detailed view of saved accounts, retained monthly revenue, retention strategies applied, and commission-tracked saved reductions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-slate-50">
                   <TableRow>
-                    <TableHead className="font-bold text-[#095c7b]">Company Name</TableHead>
-                    <TableHead className="font-bold text-[#095c7b]">Status</TableHead>
-                    <TableHead className="font-bold text-[#095c7b]">Theme / Reason / Strategy</TableHead>
-                    <TableHead className="font-bold text-[#095c7b] text-right">MRR</TableHead>
-                    <TableHead className="font-bold text-[#095c7b] text-right">Annual Value</TableHead>
-                    <TableHead className="font-bold text-[#095c7b]">Date</TableHead>
-                    <TableHead className="font-bold text-[#095c7b]">Processed By</TableHead>
-                    <TableHead className="font-bold text-[#095c7b] text-right">Action</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Franchisee</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Company Name</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Retention Strategy Selected</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Commission Saved Reduction?</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-right">Retained Monthly Revenue</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Processed By</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredModalItems.map(req => {
-                    const origMRR = getLostMRR(req);
-                    const savedMRR = getSavedMRR(req);
-
-                    return (
-                      <TableRow key={req.id}>
-                        <TableCell className="font-semibold text-slate-800">
-                          <a
-                            href={`/companies/${req.leadId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[#095c7b] hover:underline font-bold"
-                          >
-                            {req.companyName}
-                          </a>
-                          <div className="text-xs text-slate-500 font-normal mt-0.5">{req.contactName || 'No Contact'}</div>
+                  {metrics.savedRequests.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12 text-slate-400 italic text-sm">
+                        No saved customer records found in the selected date range.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    metrics.savedRequests.map(r => (
+                      <TableRow key={r.id}>
+                        <TableCell className="text-xs font-semibold text-slate-700">
+                          {r.franchisee || <span className="text-slate-400 italic">Unassigned</span>}
                         </TableCell>
-                        <TableCell>
-                          <Badge className={
-                            req.status === 'Pending' ? 'bg-amber-500 text-white' :
-                            req.status === 'Saved' ? 'bg-emerald-600 text-white' :
-                            'bg-rose-600 text-white'
-                          }>
-                            {req.status}
+                        <TableCell className="text-xs font-bold text-[#095c7b]">
+                          {r.companyName}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold">
+                            {normalizeRetentionStrategy(r.saveStrategy) || 'Keep Existing'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-slate-700">
-                          {req.status === 'Saved' ? (
-                            <div>
-                              <span className="font-medium text-emerald-700">{normalizeRetentionStrategy(req.saveStrategy)}</span>
-                              {req.cancellationTheme && <div className="text-[10px] text-slate-400">{req.cancellationTheme}</div>}
-                            </div>
+                        <TableCell className="text-xs text-center">
+                          {r.isReductionTurnedCancellation ? (
+                            <Badge className="bg-amber-100 text-amber-900 border-amber-300 font-bold">
+                              🏆 Commission Tracked Save
+                            </Badge>
                           ) : (
-                            <div>
-                              <span className="font-medium text-rose-700">{req.cancellationReason || 'Other'}</span>
-                              {req.cancellationTheme && <div className="text-[10px] text-slate-400">{req.cancellationTheme}</div>}
-                            </div>
+                            <span className="text-slate-400 text-[11px]">No</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right font-bold">
-                          {req.status === 'Saved' ? (
-                            <span className="text-emerald-600">${savedMRR.toFixed(2)}/mo</span>
-                          ) : req.status === 'Cancelled' ? (
-                            <span className="text-rose-600">${origMRR.toFixed(2)}/mo</span>
-                          ) : (
-                            <span className="text-slate-500">${origMRR.toFixed(2)}/mo</span>
-                          )}
+                        <TableCell className="text-xs font-extrabold text-emerald-700 text-right">
+                          +${getSavedMRR(r).toFixed(2)}/mo
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-slate-700">
-                          {req.status === 'Saved' ? (
-                            <span className="text-emerald-700">${(savedMRR * 12).toFixed(2)}</span>
-                          ) : req.status === 'Cancelled' ? (
-                            <span className="text-rose-700">${(origMRR * 12).toFixed(2)}</span>
-                          ) : (
-                            <span className="text-slate-600">${(origMRR * 12).toFixed(2)}</span>
-                          )}
+                        <TableCell className="text-xs text-slate-600">
+                          {r.processedBy || 'CS Team'}
                         </TableCell>
-                        <TableCell className="text-slate-600">
-                          {req.processedAt ? new Date(req.processedAt).toLocaleDateString() : (req.requestedDate ? new Date(req.requestedDate).toLocaleDateString() : 'N/A')}
-                        </TableCell>
-                        <TableCell className="text-slate-600">
-                          {req.processedBy || 'Unprocessed'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-[#095c7b] hover:bg-[#095c7b]/10 text-xs"
-                            onClick={() => window.open(`/companies/${req.leadId}`, '_blank')}
-                          >
-                            View Profile <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
-                          </Button>
+                        <TableCell className="text-xs text-slate-500 max-w-xs truncate">
+                          {r.notes || 'No additional notes'}
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
+                    ))
+                  )}
                 </TableBody>
               </Table>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* TAB 4: FRANCHISEE TALLY */}
+        <TabsContent value="franchisees" className="m-0 space-y-4">
+          <Card className="bg-white/95 border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-[#095c7b] text-lg font-bold flex items-center gap-2">
+                <Building className="h-5 w-5 text-[#095c7b]" /> Franchisee Cancellation & Retention Tally
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Tally of cancellations per Franchisee broken down by Red True Churn, Yellow EOM Franchisee Cancelled, Grey Data Wash, and Green Still Customer.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Franchisee</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">Total Requests</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">🔴 Red True Churn</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">🟡 Yellow EOM (Franchisee)</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">⚪ Grey Data Wash</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">🟢 Green Still Customer</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">Saves Count</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-right">Retained Revenue ($)</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-right">Lost Revenue ($)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metrics.franchiseeData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-12 text-slate-400 italic text-sm">
+                        No franchisee data available for selected filters.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    metrics.franchiseeData.map((f, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="text-xs font-bold text-[#095c7b]">
+                          {f.name}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-slate-800">
+                          {f.total}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-rose-700">
+                          {f.redCount}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-amber-800">
+                          {f.yellowCount}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-slate-600">
+                          {f.greyCount}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-emerald-700">
+                          {f.greenCount}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-emerald-600">
+                          {f.savedCount}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-emerald-700 text-right">
+                          ${f.mrrSaved.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-rose-600 text-right">
+                          ${f.mrrLost.toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* TAB 5: WEEKLY SPLIT BREAKDOWN */}
+        <TabsContent value="weekly-split" className="m-0 space-y-4">
+          <Card className="bg-white/95 border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-[#095c7b] text-lg font-bold flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-[#095c7b]" /> Weekly Split Breakdown (Filtered Period Variations)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Compare weekly variations across the month/date range for true churn, franchisee EOM cancellations, saves, and revenue impact.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Week Range</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">Total Requests</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">🔴 Red True</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">🟡 Yellow EOM</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">⚪ Grey Wash</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">🟢 Green Customer</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">Saves</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-center">Save Rate %</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-right">Saved MRR ($)</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs text-right">Lost MRR ($)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metrics.weeklySplitData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="text-center py-12 text-slate-400 italic text-sm">
+                        No weekly split data found for selected period.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    metrics.weeklySplitData.map((w, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="text-xs font-extrabold text-[#095c7b]">
+                          {w.weekLabel}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-slate-800">
+                          {w.total}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-rose-700">
+                          {w.redCount}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-amber-800">
+                          {w.yellowCount}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-slate-600">
+                          {w.greyCount}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-emerald-700">
+                          {w.greenCount}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-emerald-600">
+                          {w.savedCount}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-center text-[#095c7b]">
+                          {w.saveRate}%
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-emerald-700 text-right">
+                          ${w.mrrSaved.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-rose-600 text-right">
+                          ${w.mrrLost.toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

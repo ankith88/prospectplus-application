@@ -95,7 +95,8 @@ export async function GET(req: NextRequest) {
       'visitNoteID', 'providedShipMateOnboarding', 'firstJobCreatedAt', 'jobCount',
       'localMileTrialsRemaining', 'localMileTermsAccepted', 'wasOutbound', 'notes',
       'discoveryData', 'entityId', 'prospectPlusId', 'customerEntityId', 'internalid', 'bucket',
-      'dateLocalmileAccepted', 'localMileAcceptedAt', 'dateRegistrationSent', 'registrationSentAt', 'bucketHistory'
+      'dateLocalmileAccepted', 'localMileAcceptedAt', 'dateRegistrationSent', 'registrationSentAt', 'bucketHistory',
+      'customerSource', 'source', 'leadSource', 'wasInbound', 'inboundDetails', 'inboundPageUrl', 'pageURL'
     ];
 
     const leadsQuery = db.collection('leads')
@@ -112,18 +113,32 @@ export async function GET(req: NextRequest) {
       companiesQuery.get()
     ]);
 
-    // Process User/Dialer List
+    // Process User/Dialer List (strictly Outbound Dialers & Lead Gen reps, excluding AMs/Managers)
     const userList: string[] = [];
     usersSnap.docs.forEach(doc => {
       const data = doc.data();
       const name = `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.displayName || data.email;
-      if (!name) return;
+      if (!name || data.disabled) return;
 
-      const role = (data.role || '').toLowerCase();
-      const activeRole = (data.activeRole || '').toLowerCase();
-      const assignedRoles = (data.assignedRoles || []).map((r: string) => (r || '').toLowerCase());
+      const role = (data.role || '').toLowerCase().trim();
+      const activeRole = (data.activeRole || '').toLowerCase().trim();
+      const assignedRoles = (data.assignedRoles || []).map((r: string) => (r || '').toLowerCase().trim());
 
-      const isUserRole =
+      const nonDialerRoles = [
+        'account managers', 'account manager', 'sales manager', 
+        'admin', 'super user', 'field sales', 'field sales admin', 
+        'marketing manager', 'customer success', 'customer service', 
+        'operations', 'finance', 'finance manager'
+      ];
+
+      const hasNonDialerRole = 
+        nonDialerRoles.includes(role) || 
+        nonDialerRoles.includes(activeRole) || 
+        assignedRoles.some((r: string) => nonDialerRoles.includes(r));
+
+      if (hasNonDialerRole) return;
+
+      const isDialerRole =
         role === 'user' ||
         activeRole === 'user' ||
         assignedRoles.includes('user') ||
@@ -137,7 +152,7 @@ export async function GET(req: NextRequest) {
         activeRole === 'lead gen' ||
         assignedRoles.includes('lead gen');
 
-      if (isUserRole && !data.disabled) {
+      if (isDialerRole) {
         userList.push(name);
       }
     });
@@ -174,6 +189,10 @@ export async function GET(req: NextRequest) {
         bucket: data.bucket || 'outbound',
         wasOutbound: data.wasOutbound || false,
         notes: data.notes || '',
+        customerSource: data.customerSource || data.source || data.leadSource || null,
+        wasInbound: data.wasInbound || false,
+        inboundDetails: data.inboundDetails || null,
+        inboundPageUrl: data.inboundPageUrl || data.pageURL || null,
       };
     };
 
@@ -190,17 +209,40 @@ export async function GET(req: NextRequest) {
     }
 
     const combinedLeads = Array.from(leadMap.values()).filter(l => {
-      const isOutbound = l.bucket === 'outbound' || 
-                         l.wasOutbound === true || 
-                         !!l.dialerAssigned || 
-                         l.status === 'LocalMile Pending' || 
-                         l.customerStatus === 'LocalMile Pending' || 
-                         (Array.isArray(l.bucketHistory) && l.bucketHistory.some((bh: any) => (bh.oldBucket || '').toLowerCase() === 'outbound' || (bh.newBucket || '').toLowerCase() === 'outbound'));
-      if (!isOutbound) return false;
+      // 1. Exclude all Inbound/Website leads
+      const sourceStr = (l.customerSource || (l as any).source || l.leadSource || '').toLowerCase().trim();
+      const isInboundLead = 
+        sourceStr === 'website' || 
+        sourceStr.includes('inbound') || 
+        l.wasInbound === true || 
+        !!l.inboundDetails || 
+        !!l.inboundPageUrl || 
+        !!l.pageURL;
+
       const companyNameLower = (l.companyName || '').toLowerCase();
       const notesLower = (l.notes || '').toLowerCase();
       const statusLower = (l.status || '').toLowerCase();
-      return !(companyNameLower.includes('website') || notesLower.includes('website') || statusLower.includes('website'));
+      const isWebsiteText = companyNameLower.includes('website') || notesLower.includes('website') || statusLower.includes('website');
+
+      if (isInboundLead || isWebsiteText) {
+        return false;
+      }
+
+      // 2. Must be in Outbound bucket, have Outbound history, or be assigned to an active dialer
+      const currentBucket = (l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')).toLowerCase();
+      const isCurrentlyOutbound = currentBucket === 'outbound';
+      const wasOutboundFlag = l.wasOutbound === true;
+      const wasInBucketHistory = Array.isArray(l.bucketHistory) && l.bucketHistory.some((bh: any) => 
+        (bh.oldBucket || '').toLowerCase() === 'outbound' || (bh.newBucket || '').toLowerCase() === 'outbound'
+      );
+
+      const isAssignedToActiveDialer = !!l.dialerAssigned && userList.some(dialerName => {
+        const dLower = dialerName.toLowerCase().trim();
+        const assignedLower = (l.dialerAssigned || '').toLowerCase().trim();
+        return assignedLower === dLower || assignedLower.startsWith(dLower) || dLower.startsWith(assignedLower);
+      });
+
+      return isCurrentlyOutbound || wasOutboundFlag || wasInBucketHistory || isAssignedToActiveDialer;
     });
 
     const activeLeadMap = new Map<string, any>();

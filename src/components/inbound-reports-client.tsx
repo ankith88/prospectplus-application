@@ -584,6 +584,16 @@ export default function InboundReportsClientPage({
                 if (currentBucket === 'inbound') return true;
                 if (((l as any).originalBucket || '').toLowerCase() === 'inbound' || (l as any).wasInbound === true || (l as any).wasInboundBucket === true) return true;
                 if (Array.isArray(l.bucketHistory) && l.bucketHistory.some((bh: any) => (bh.oldBucket || '').toLowerCase() === 'inbound' || (bh.newBucket || '').toLowerCase() === 'inbound')) return true;
+
+                const sourceStr = (l.customerSource || (l as any).source || l.leadSource || '').toLowerCase().trim();
+                if (
+                    sourceStr === 'website' || 
+                    !!l.inboundDetails || 
+                    !!l.inboundPageUrl || 
+                    !!(l as any).pageURL
+                ) {
+                    return true;
+                }
                 return false;
             };
             const fetchedLeads = rawLeads.filter(isInbound);

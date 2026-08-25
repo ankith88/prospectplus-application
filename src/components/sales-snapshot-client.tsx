@@ -330,6 +330,10 @@ const getUserInCharge = (lead: Lead): string => {
   return lead.dialerAssigned || lead.accountManagerAssigned || lead.salesRepAssigned || lead.fieldRepAssigned || lead.customerSuccessAssigned || 'Unassigned';
 };
 
+let amUsersCache: Set<string> | null = null;
+let amUsersCacheTime = 0;
+const USER_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
 export default function SalesSnapshotClient() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [activities, setActivities] = useState<(Activity & { leadId: string })[]>([]);
@@ -360,10 +364,15 @@ export default function SalesSnapshotClient() {
   const { userProfile } = useAuth();
   const { toast } = useToast();
 
-  const isFranchisee = userProfile?.activeRole === 'Franchisee' || 
-                       userProfile?.role === 'Franchisee' || 
-                       userProfile?.role?.toLowerCase() === 'franchisee' ||
-                       (Array.isArray(userProfile?.assignedRoles) && userProfile.assignedRoles.some((r: string) => r.toLowerCase() === 'franchisee'));
+  const isFranchisee = Boolean(
+    (userProfile?.franchisee && userProfile.franchisee !== 'all') ||
+    userProfile?.activeRole === 'Franchisee' ||
+    userProfile?.role === 'Franchisee' ||
+    userProfile?.role?.toLowerCase().includes('franchisee') ||
+    userProfile?.role?.toLowerCase().includes('owner') ||
+    userProfile?.activeRole?.toLowerCase().includes('owner') ||
+    (Array.isArray(userProfile?.assignedRoles) && userProfile.assignedRoles.some((r: string) => r.toLowerCase().includes('franchisee') || r.toLowerCase().includes('owner')))
+  ) && !['Admin', 'Super Admin', 'System Admin', 'Head Office', 'National Manager'].includes(userProfile?.activeRole || userProfile?.role || '');
 
   const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
 
@@ -441,8 +450,8 @@ export default function SalesSnapshotClient() {
         if (appliedFilters.dateRange?.from) {
             startISO = startOfDay(appliedFilters.dateRange.from).toISOString();
         } else {
-            // High-performance rolling limit: Default "All Time" to past 365 days
-            startISO = subDays(new Date(), 365).toISOString();
+            // Optimized default rolling window: Default fallback to past 30 days for maximum speed
+            startISO = subDays(new Date(), 30).toISOString();
         }
 
         const dateFilterType = appliedFilters.dateFilterType;
@@ -455,6 +464,58 @@ export default function SalesSnapshotClient() {
             setActivities(cached.activities);
             setAppointments(cached.appointments);
             setLoading(false);
+            return;
+        }
+
+        // Ultra-Fast Franchisee Query: Retrieve franchisee leads & date-filtered activities in parallel
+        if (isFranchisee && userProfile?.franchisee) {
+            setProgressMsg("Retrieving franchisee leads & activities...");
+            const endISO = appliedFilters.dateRange?.to ? endOfDay(appliedFilters.dateRange.to).toISOString() : endOfDay(new Date()).toISOString();
+            const activityQuery = query(
+                collectionGroup(firestore, 'activity'),
+                where('date', '>=', startISO),
+                where('date', '<=', endISO)
+            );
+            const apptQuery = query(
+                collectionGroup(firestore, 'appointments'),
+                where('duedate', '>=', startISO),
+                where('duedate', '<=', endISO)
+            );
+
+            const [fLeadsSnap, fCompSnap, activitiesSnap, apptsSnap] = await Promise.all([
+                getDocs(query(collection(firestore, 'leads'), where('franchisee', '==', userProfile.franchisee))),
+                getDocs(query(collection(firestore, 'companies'), where('franchisee', '==', userProfile.franchisee))),
+                getDocs(activityQuery).catch(() => ({ docs: [] })),
+                getDocs(apptQuery).catch(() => ({ docs: [] }))
+            ]);
+            const zeeLeads: Lead[] = [];
+            const zeeLeadIdSet = new Set<string>();
+            fLeadsSnap.docs.forEach(doc => {
+                zeeLeads.push({ id: doc.id, isFromCompaniesCollection: false, ...doc.data() } as unknown as Lead);
+                zeeLeadIdSet.add(doc.id);
+            });
+            fCompSnap.docs.forEach(doc => {
+                zeeLeads.push({ id: doc.id, isFromCompaniesCollection: true, ...doc.data() } as unknown as Lead);
+                zeeLeadIdSet.add(doc.id);
+            });
+
+            const actList = activitiesSnap.docs
+                .map(doc => ({ id: doc.id, leadId: doc.ref.parent?.parent?.id || '', ...doc.data() } as unknown as (Activity & { leadId: string })))
+                .filter(act => zeeLeadIdSet.has(act.leadId) && isManualActivity(act));
+
+            const apptList = apptsSnap.docs
+                .map(doc => ({ id: doc.id, leadId: doc.ref.parent?.parent?.id || '', ...doc.data() } as unknown as Appointment))
+                .filter(appt => zeeLeadIdSet.has(appt.leadId));
+
+            cacheRef.current[cacheKey] = { leads: zeeLeads, activities: actList, appointments: apptList };
+            setAllLeads(zeeLeads);
+            setActivities(actList);
+            setAppointments(apptList);
+            setInvoices([]);
+            setLoading(false);
+            setIsRefreshing(false);
+            console.timeEnd("Sales Snapshot - Load Time");
+            setLoadTime(Math.round(performance.now() - startTimePerf));
             return;
         }
 
@@ -473,40 +534,60 @@ export default function SalesSnapshotClient() {
             where('duedate', '<=', endISO)
         );
 
-        const [activitiesSnap, apptsSnap, usersSnap, invoicesSnap, scfsSnap] = await Promise.all([
+        // Date-bounded subcollection queries for invoices and scfs with fallback
+        const invoiceDateMin = startISO.slice(0, 10);
+        const boundedInvoiceQuery = query(
+            collectionGroup(firestore, 'invoices'),
+            where('invoiceDate', '>=', invoiceDateMin)
+        );
+        const boundedScfQuery = query(
+            collectionGroup(firestore, 'scfs'),
+            where('createdAt', '>=', startISO)
+        );
+
+        // Retrieve users with module-level caching (15 min TTL)
+        const fetchAMUsersPromise = (async () => {
+            const now = Date.now();
+            if (amUsersCache && (now - amUsersCacheTime < USER_CACHE_TTL_MS)) {
+                return amUsersCache;
+            }
+            const usersSnap = await getDocs(collection(firestore, 'users')).catch(() => ({ docs: [] }));
+            const set = new Set<string>();
+            usersSnap.docs.forEach(doc => {
+                const u = doc.data() || {};
+                if (!u.disabled) {
+                    if (u.email) set.add(u.email.toLowerCase().trim());
+                    const firstName = u.firstName || '';
+                    const lastName = u.lastName || '';
+                    const fullName = `${firstName} ${lastName}`.trim().toLowerCase();
+                    if (fullName) set.add(fullName);
+                    if (u.displayName) set.add(u.displayName.toLowerCase().trim());
+                }
+            });
+            amUsersCache = set;
+            amUsersCacheTime = now;
+            return set;
+        })();
+
+        const [activitiesSnap, apptsSnap, amUserIdentifiers, invoicesSnap, scfsSnap] = await Promise.all([
             getDocs(activityQuery),
             getDocs(apptQuery),
-            getDocs(collection(firestore, 'users')),
-            getDocs(collectionGroup(firestore, 'invoices')).catch(err => {
-                console.warn("Failed to fetch invoices for cohort realization:", err);
-                return { docs: [] };
+            fetchAMUsersPromise,
+            getDocs(boundedInvoiceQuery).catch(err => {
+                console.warn("Date-bounded invoices fetch warning, executing fallback:", err);
+                return getDocs(collectionGroup(firestore, 'invoices')).catch(fallbackErr => {
+                    console.warn("Failed to fetch invoices for cohort realization:", fallbackErr);
+                    return { docs: [] };
+                });
             }),
-            getDocs(collectionGroup(firestore, 'scfs')).catch(err => {
-                console.warn("Failed to fetch scfs for cohort realization:", err);
-                return { docs: [] };
+            getDocs(boundedScfQuery).catch(err => {
+                console.warn("Date-bounded scfs fetch warning, executing fallback:", err);
+                return getDocs(collectionGroup(firestore, 'scfs')).catch(fallbackErr => {
+                    console.warn("Failed to fetch scfs for cohort realization:", fallbackErr);
+                    return { docs: [] };
+                });
             })
         ]);
-
-        const amUserIdentifiers = new Set<string>();
-        usersSnap.docs.forEach(doc => {
-            const u = doc.data() || {};
-            const roles = u.assignedRoles || [];
-            const isAM = roles.some((r: string) => ['Account Manager', 'Account Managers', 'account managers'].includes(r));
-            if (isAM && !u.disabled) {
-                if (u.email) {
-                    amUserIdentifiers.add(u.email.toLowerCase().trim());
-                }
-                const firstName = u.firstName || '';
-                const lastName = u.lastName || '';
-                const fullName = `${firstName} ${lastName}`.trim().toLowerCase();
-                if (fullName) {
-                    amUserIdentifiers.add(fullName);
-                }
-                if (u.displayName) {
-                    amUserIdentifiers.add(u.displayName.toLowerCase().trim());
-                }
-            }
-        });
 
         const actList = activitiesSnap.docs.map(doc => {
             const leadId = doc.ref.parent?.parent?.id || '';
@@ -517,7 +598,7 @@ export default function SalesSnapshotClient() {
             if (!author || author === 'system' || author === 'api' || author === 'prospectplus' || author.includes('automated')) {
                 return false;
             }
-            return amUserIdentifiers.has(author);
+            return amUserIdentifiers.size === 0 || amUserIdentifiers.has(author) || (!author.includes('system') && !author.includes('bot') && !author.includes('cron'));
         });
 
         const apptList = apptsSnap.docs.map(doc => {
@@ -1329,15 +1410,15 @@ export default function SalesSnapshotClient() {
           <div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#095c7b]">Sales Process Snapshot</h1>
-              {userProfile?.activeRole === 'Franchisee' && userProfile?.franchisee && (
+              {isFranchisee && userProfile?.franchisee && (
                 <Badge className="bg-teal-700 text-white font-semibold text-xs px-2.5 py-0.5 sm:px-3 sm:py-1">
                   {userProfile.franchisee} Franchise
                 </Badge>
               )}
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-              {userProfile?.activeRole === 'Franchisee'
-                ? `Unified conversion metrics and pipeline analysis for ${userProfile.franchisee || 'your franchise'}.`
+              {isFranchisee && userProfile?.franchisee
+                ? `Unified conversion metrics and pipeline analysis for ${userProfile.franchisee}.`
                 : 'Unified conversion metrics across Inbound, Outbound, Field Sales, and AM.'}
             </p>
           </div>
@@ -1366,7 +1447,7 @@ export default function SalesSnapshotClient() {
                 </Badge>
               </div>
               <p>
-                By default, this page displays and calculates metrics based on <strong>current month activity</strong>. Existing and historical leads are continuously actioned by both our <strong>Outbound BBD Team</strong> and assigned <strong>Account Managers</strong>.
+                By default, this page displays and calculates metrics based on <strong>current month activity</strong>. Existing and historical leads are continuously actioned by both our <strong>Outbound Team</strong> and assigned <strong>Account Managers</strong>.
               </p>
               <p className="text-slate-600 dark:text-slate-400">
                 To view details of a specific lead, inspect entry dates, or filter by milestones (such as <em>Date Lead Entered</em>, <em>Date Quote Sent</em>, or <em>Date Signed Up</em>), expand <strong>Report Filters</strong> below.
@@ -1825,210 +1906,215 @@ export default function SalesSnapshotClient() {
               </Card>
             )}
 
-            {/* Visualisations Grid 1 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0 max-w-full overflow-hidden">
-              
-              {/* Leads Volume Over Time */}
-              <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-[#095c7b]" /> Leads Volume Over Time
-                  </CardTitle>
-                  <SectionHelp content="Visual representation of daily lead creation counts based on lead entry date. Tracks top-of-funnel acquisition trends across your selected date window." />
-                </CardHeader>
-                <CardContent className="h-[260px]">
-                  {metrics.volumeData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={metrics.volumeData}>
-                        <defs>
-                          <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#095c7b" stopOpacity={0.8}/>
-                            <stop offset="95%" stopColor="#095c7b" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="formattedDate" tickLine={false} style={{ fontSize: '10px' }} />
-                        <YAxis tickLine={false} style={{ fontSize: '10px' }} />
-                        <Tooltip labelFormatter={(label, items) => {
-                          const item = items && items[0] ? items[0].payload : null;
-                          return item ? `${item.formattedDate} (${item.date})` : label;
-                        }} />
-                        <Area type="monotone" dataKey="count" stroke="#095c7b" fillOpacity={1} fill="url(#colorCount)" name="Leads Sourced" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No historical data in this range.</div>
-                  )}
-                </CardContent>
-              </Card>
+            {/* Visualisations Grid 1, Grid 2 & Weekly MRR Pipeline (Hidden for Franchisees) */}
+            {!isFranchisee && (
+              <>
+                {/* Visualisations Grid 1 */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0 max-w-full overflow-hidden">
+                  
+                  {/* Leads Volume Over Time */}
+                  <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-[#095c7b]" /> Leads Volume Over Time
+                      </CardTitle>
+                      <SectionHelp content="Visual representation of daily lead creation counts based on lead entry date. Tracks top-of-funnel acquisition trends across your selected date window." />
+                    </CardHeader>
+                    <CardContent className="h-[260px]">
+                      {metrics.volumeData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={metrics.volumeData}>
+                            <defs>
+                              <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#095c7b" stopOpacity={0.8}/>
+                                <stop offset="95%" stopColor="#095c7b" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="formattedDate" tickLine={false} style={{ fontSize: '10px' }} />
+                            <YAxis tickLine={false} style={{ fontSize: '10px' }} />
+                            <Tooltip labelFormatter={(label, items) => {
+                              const item = items && items[0] ? items[0].payload : null;
+                              return item ? `${item.formattedDate} (${item.date})` : label;
+                            }} />
+                            <Area type="monotone" dataKey="count" stroke="#095c7b" fillOpacity={1} fill="url(#colorCount)" name="Leads Sourced" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No historical data in this range.</div>
+                      )}
+                    </CardContent>
+                  </Card>
 
-              {/* Lead Source Breakdown */}
-              <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-[#095c7b]" /> Lead Source breakdown
-                  </CardTitle>
-                  <SectionHelp content="Volume distribution and won customer conversion counts mapped directly by lead origin source (Inbound, Cold Call, Referral, Marketing, etc.)." />
-                </CardHeader>
-                <CardContent className="h-[260px]">
-                  {metrics.sourceData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={metrics.sourceData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="name" tickLine={false} style={{ fontSize: '10px' }} />
-                        <YAxis tickLine={false} style={{ fontSize: '10px' }} />
-                        <Tooltip />
-                        <Bar dataKey="Leads" fill="#095c7b" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                        <Bar dataKey="Wins" fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No source data available.</div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Visualisations Grid 2 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0 max-w-full overflow-hidden">
-              
-              {/* Average Days in Status */}
-              <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-[#095c7b]" /> Average Days in Status
-                  </CardTitle>
-                  <SectionHelp content="Calculates average days spent by leads in each status stage before progressing. Identifies deal stalls and sales cycle velocity." />
-                </CardHeader>
-                <CardContent className="h-[260px]">
-                  {metrics.avgDaysData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={metrics.avgDaysData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                        <XAxis type="number" />
-                        <YAxis dataKey="name" type="category" width={80} style={{ fontSize: '10px' }} />
-                        <Tooltip />
-                        <Bar dataKey="value" fill="#fbbf24" radius={[0, 4, 4, 0]} name="Average Days" maxBarSize={30} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No duration data available.</div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Pipeline Value by Bucket & Lead Type */}
-              <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-[#095c7b]" />
-                    <CardTitle className="text-sm font-semibold">
-                      Pipeline Value {pipelineValueGroupBy === 'bucket' ? 'by Bucket' : 'by Lead Type'}
-                    </CardTitle>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setPipelineValueGroupBy('bucket')}
-                        className={cn(
-                          "px-2 py-0.5 rounded-md text-[11px] font-medium transition-all",
-                          pipelineValueGroupBy === 'bucket' ? "bg-white text-[#095c7b] shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
-                        )}
-                      >
-                        Bucket
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPipelineValueGroupBy('leadType')}
-                        className={cn(
-                          "px-2 py-0.5 rounded-md text-[11px] font-medium transition-all",
-                          pipelineValueGroupBy === 'leadType' ? "bg-white text-[#095c7b] shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
-                        )}
-                      >
-                        Lead Type
-                      </button>
-                    </div>
-                    <SectionHelp content="Sum of estimated monthly recurring revenue (MRR) pipeline value split across lead buckets (Outbound, Inbound, Field Sales) or lead types." />
-                  </div>
-                </CardHeader>
-                <CardContent className="h-[260px]">
-                  {((pipelineValueGroupBy === 'bucket' ? metrics.bucketValueData : metrics.typeValueData) || []).length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart 
-                        data={pipelineValueGroupBy === 'bucket' ? metrics.bucketValueData : metrics.typeValueData}
-                        margin={{ top: 22, right: 10, left: 10, bottom: 0 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="name" tickLine={false} style={{ fontSize: '10px' }} />
-                        <YAxis tickLine={false} style={{ fontSize: '10px' }} />
-                        <Tooltip formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Pipeline Value']} />
-                        <Bar dataKey="value" fill="#38bdf8" radius={[4, 4, 0, 0]} maxBarSize={45}>
-                          <LabelList 
-                            dataKey="value" 
-                            position="top" 
-                            formatter={(val: any) => val ? `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : ''} 
-                            fill="#095c7b" 
-                            fontSize={10} 
-                            fontWeight={700} 
-                          />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No value data available.</div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Weekly MRR Pipeline: In-Pipeline vs Signed MRR */}
-            <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-[#095c7b]" />
-                  <CardTitle className="text-sm font-semibold">
-                    Weekly MRR Pipeline: In-Pipeline (Quotes &amp; Trials) vs Signed (Won)
-                  </CardTitle>
+                  {/* Lead Source Breakdown */}
+                  <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <Briefcase className="h-4 w-4 text-[#095c7b]" /> Lead Source breakdown
+                      </CardTitle>
+                      <SectionHelp content="Volume distribution and won customer conversion counts mapped directly by lead origin source (Inbound, Cold Call, Referral, Marketing, etc.)." />
+                    </CardHeader>
+                    <CardContent className="h-[260px]">
+                      {metrics.sourceData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={metrics.sourceData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="name" tickLine={false} style={{ fontSize: '10px' }} />
+                            <YAxis tickLine={false} style={{ fontSize: '10px' }} />
+                            <Tooltip />
+                            <Bar dataKey="Leads" fill="#095c7b" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            <Bar dataKey="Wins" fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No source data available.</div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
-                <SectionHelp content="Weekly breakdown comparing potential In-Pipeline MRR (Quotes, Opportunities, Trials) versus Converted Signed (Won) MRR week-by-week." />
-              </CardHeader>
-              <CardContent className="h-[280px]">
-                {metrics.weeklyMrrData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={metrics.weeklyMrrData} margin={{ top: 24, right: 15, left: 15, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="weekLabel" tickLine={false} style={{ fontSize: '10px' }} />
-                      <YAxis tickLine={false} style={{ fontSize: '10px' }} />
-                      <Tooltip formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name === 'pipelineMRR' ? 'In-Pipeline MRR' : 'Signed MRR']} />
-                      <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
-                      <Bar dataKey="pipelineMRR" name="In-Pipeline MRR (Quotes &amp; Trials)" fill="#38bdf8" radius={[4, 4, 0, 0]} maxBarSize={40}>
-                        <LabelList 
-                          dataKey="pipelineMRR" 
-                          position="top" 
-                          formatter={(val: any) => val ? `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : ''} 
-                          fill="#0284c7" 
-                          fontSize={9} 
-                          fontWeight={700} 
-                        />
-                      </Bar>
-                      <Bar dataKey="signedMRR" name="Signed (Won) MRR" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40}>
-                        <LabelList 
-                          dataKey="signedMRR" 
-                          position="top" 
-                          formatter={(val: any) => val ? `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : ''} 
-                          fill="#047857" 
-                          fontSize={9} 
-                          fontWeight={700} 
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No weekly MRR records available in this range.</div>
-                )}
-              </CardContent>
-            </Card>
+
+                {/* Visualisations Grid 2 */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0 max-w-full overflow-hidden">
+                  
+                  {/* Average Days in Status */}
+                  <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-[#095c7b]" /> Average Days in Status
+                      </CardTitle>
+                      <SectionHelp content="Calculates average days spent by leads in each status stage before progressing. Identifies deal stalls and sales cycle velocity." />
+                    </CardHeader>
+                    <CardContent className="h-[260px]">
+                      {metrics.avgDaysData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={metrics.avgDaysData} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" />
+                            <YAxis dataKey="name" type="category" width={80} style={{ fontSize: '10px' }} />
+                            <Tooltip />
+                            <Bar dataKey="value" fill="#fbbf24" radius={[0, 4, 4, 0]} name="Average Days" maxBarSize={30} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No duration data available.</div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Pipeline Value by Bucket & Lead Type */}
+                  <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-[#095c7b]" />
+                        <CardTitle className="text-sm font-semibold">
+                          Pipeline Value {pipelineValueGroupBy === 'bucket' ? 'by Bucket' : 'by Lead Type'}
+                        </CardTitle>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setPipelineValueGroupBy('bucket')}
+                            className={cn(
+                              "px-2 py-0.5 rounded-md text-[11px] font-medium transition-all",
+                              pipelineValueGroupBy === 'bucket' ? "bg-white text-[#095c7b] shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
+                            )}
+                          >
+                            Bucket
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPipelineValueGroupBy('leadType')}
+                            className={cn(
+                              "px-2 py-0.5 rounded-md text-[11px] font-medium transition-all",
+                              pipelineValueGroupBy === 'leadType' ? "bg-white text-[#095c7b] shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
+                            )}
+                          >
+                            Lead Type
+                          </button>
+                        </div>
+                        <SectionHelp content="Sum of estimated monthly recurring revenue (MRR) pipeline value split across lead buckets (Outbound, Inbound, Field Sales) or lead types." />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="h-[260px]">
+                      {((pipelineValueGroupBy === 'bucket' ? metrics.bucketValueData : metrics.typeValueData) || []).length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart 
+                            data={pipelineValueGroupBy === 'bucket' ? metrics.bucketValueData : metrics.typeValueData}
+                            margin={{ top: 22, right: 10, left: 10, bottom: 0 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="name" tickLine={false} style={{ fontSize: '10px' }} />
+                            <YAxis tickLine={false} style={{ fontSize: '10px' }} />
+                            <Tooltip formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Pipeline Value']} />
+                            <Bar dataKey="value" fill="#38bdf8" radius={[4, 4, 0, 0]} maxBarSize={45}>
+                              <LabelList 
+                                dataKey="value" 
+                                position="top" 
+                                formatter={(val: any) => val ? `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : ''} 
+                                fill="#095c7b" 
+                                fontSize={10} 
+                                fontWeight={700} 
+                              />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No value data available.</div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Weekly MRR Pipeline: In-Pipeline vs Signed MRR */}
+                <Card className="shadow-sm card min-w-0 max-w-full overflow-hidden">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-[#095c7b]" />
+                      <CardTitle className="text-sm font-semibold">
+                        Weekly MRR Pipeline: In-Pipeline (Quotes &amp; Trials) vs Signed (Won)
+                      </CardTitle>
+                    </div>
+                    <SectionHelp content="Weekly breakdown comparing potential In-Pipeline MRR (Quotes, Opportunities, Trials) versus Converted Signed (Won) MRR week-by-week." />
+                  </CardHeader>
+                  <CardContent className="h-[280px]">
+                    {metrics.weeklyMrrData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={metrics.weeklyMrrData} margin={{ top: 24, right: 15, left: 15, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="weekLabel" tickLine={false} style={{ fontSize: '10px' }} />
+                          <YAxis tickLine={false} style={{ fontSize: '10px' }} />
+                          <Tooltip formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name === 'pipelineMRR' ? 'In-Pipeline MRR' : 'Signed MRR']} />
+                          <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
+                          <Bar dataKey="pipelineMRR" name="In-Pipeline MRR (Quotes &amp; Trials)" fill="#38bdf8" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                            <LabelList 
+                              dataKey="pipelineMRR" 
+                              position="top" 
+                              formatter={(val: any) => val ? `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : ''} 
+                              fill="#0284c7" 
+                              fontSize={9} 
+                              fontWeight={700} 
+                            />
+                          </Bar>
+                          <Bar dataKey="signedMRR" name="Signed (Won) MRR" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                            <LabelList 
+                              dataKey="signedMRR" 
+                              position="top" 
+                              formatter={(val: any) => val ? `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : ''} 
+                              fill="#047857" 
+                              fontSize={9} 
+                              fontWeight={700} 
+                            />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">No weekly MRR records available in this range.</div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
 
             {/* Visualisations Grid 3 (Hidden for Franchisees) */}
             {!isFranchisee && (

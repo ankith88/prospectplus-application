@@ -470,7 +470,7 @@ export default function ReportsClientPage({
     status: [] as string[],
     activityDate: undefined as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
-    dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
+    dialerAssignmentDate: { from: new Date(2026, 7, 1), to: new Date() } as DateRange | undefined,
     leadCreatedDate: undefined as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
@@ -483,7 +483,7 @@ export default function ReportsClientPage({
     status: [] as string[],
     activityDate: undefined as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
-    dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
+    dialerAssignmentDate: { from: new Date(2026, 7, 1), to: new Date() } as DateRange | undefined,
     leadCreatedDate: undefined as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
@@ -621,13 +621,27 @@ export default function ReportsClientPage({
             const userList = usersSnap.docs.map((doc: any) => {
                 const data = doc.data();
                 const name = `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.displayName || data.email;
-                if (!name) return null;
+                if (!name || data.disabled) return null;
 
-                const role = (data.role || '').toLowerCase();
-                const activeRole = (data.activeRole || '').toLowerCase();
-                const assignedRoles = (data.assignedRoles || []).map((r: string) => (r || '').toLowerCase());
+                const role = (data.role || '').toLowerCase().trim();
+                const activeRole = (data.activeRole || '').toLowerCase().trim();
+                const assignedRoles = (data.assignedRoles || []).map((r: string) => (r || '').toLowerCase().trim());
 
-                const isUserRole = 
+                const nonDialerRoles = [
+                  'account managers', 'account manager', 'sales manager', 
+                  'admin', 'super user', 'field sales', 'field sales admin', 
+                  'marketing manager', 'customer success', 'customer service', 
+                  'operations', 'finance', 'finance manager'
+                ];
+
+                const hasNonDialerRole = 
+                  nonDialerRoles.includes(role) || 
+                  nonDialerRoles.includes(activeRole) || 
+                  assignedRoles.some((r: string) => nonDialerRoles.includes(r));
+
+                if (hasNonDialerRole) return null;
+
+                const isDialerRole = 
                     role === 'user' || 
                     activeRole === 'user' || 
                     assignedRoles.includes('user') ||
@@ -641,8 +655,7 @@ export default function ReportsClientPage({
                     activeRole === 'lead gen' || 
                     assignedRoles.includes('lead gen');
 
-                if (!isUserRole) return null;
-                if (data.disabled) return null;
+                if (!isDialerRole) return null;
 
                 return name;
             }).filter(Boolean) as string[];
@@ -775,17 +788,40 @@ export default function ReportsClientPage({
                  }
             }
             const combinedLeads = Array.from(leadMap.values()).filter((l: any) => {
-                const isOutbound = l.bucket === 'outbound' || 
-                                   l.wasOutbound === true || 
-                                   !!l.dialerAssigned || 
-                                   l.status === 'LocalMile Pending' || 
-                                   l.customerStatus === 'LocalMile Pending' || 
-                                   (Array.isArray(l.bucketHistory) && l.bucketHistory.some((bh: any) => (bh.oldBucket || '').toLowerCase() === 'outbound' || (bh.newBucket || '').toLowerCase() === 'outbound'));
-                if (!isOutbound) return false;
+                // 1. Exclude all Inbound/Website leads
+                const sourceStr = (l.customerSource || (l as any).source || l.leadSource || '').toLowerCase().trim();
+                const isInboundLead = 
+                  sourceStr === 'website' || 
+                  sourceStr.includes('inbound') || 
+                  l.wasInbound === true || 
+                  !!l.inboundDetails || 
+                  !!l.inboundPageUrl || 
+                  !!l.pageURL;
+
                 const companyNameLower = (l.companyName || '').toLowerCase();
                 const notesLower = (l.notes || '').toLowerCase();
                 const statusLower = (l.status || '').toLowerCase();
-                return !(companyNameLower.includes('website') || notesLower.includes('website') || statusLower.includes('website'));
+                const isWebsiteText = companyNameLower.includes('website') || notesLower.includes('website') || statusLower.includes('website');
+
+                if (isInboundLead || isWebsiteText) {
+                  return false;
+                }
+
+                // 2. Must be in Outbound bucket, have Outbound history, or be assigned to an active dialer
+                const currentBucket = (l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')).toLowerCase();
+                const isCurrentlyOutbound = currentBucket === 'outbound';
+                const wasOutboundFlag = l.wasOutbound === true;
+                const wasInBucketHistory = Array.isArray(l.bucketHistory) && l.bucketHistory.some((bh: any) => 
+                  (bh.oldBucket || '').toLowerCase() === 'outbound' || (bh.newBucket || '').toLowerCase() === 'outbound'
+                );
+
+                const isAssignedToActiveDialer = !!l.dialerAssigned && userList.some(dialerName => {
+                  const dLower = dialerName.toLowerCase().trim();
+                  const assignedLower = (l.dialerAssigned || '').toLowerCase().trim();
+                  return assignedLower === dLower || assignedLower.startsWith(dLower) || dLower.startsWith(assignedLower);
+                });
+
+                return isCurrentlyOutbound || wasOutboundFlag || wasInBucketHistory || isAssignedToActiveDialer;
             });
             setAllLeads(combinedLeads);
             localStaticData = { leads: combinedLeads, dialers: userList, notes: [] };
@@ -952,7 +988,7 @@ export default function ReportsClientPage({
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     if (filterName === 'dialerAssignmentDate') {
-      const defaultRange = { from: new Date(2026, 6, 10), to: new Date() };
+      const defaultRange = { from: new Date(2026, 7, 1), to: new Date() };
       const validRange = (value && value.from) ? value : defaultRange;
       setFilters(prev => ({ ...prev, dialerAssignmentDate: validRange }));
       return;
@@ -965,7 +1001,7 @@ export default function ReportsClientPage({
       status: [],
       activityDate: undefined,
       appointmentDate: undefined,
-      dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
+      dialerAssignmentDate: { from: new Date(2026, 7, 1), to: new Date() } as DateRange | undefined,
       leadCreatedDate: undefined,
       duration: 'all',
       dialerAssigned: [],
@@ -1556,11 +1592,12 @@ export default function ReportsClientPage({
       }
     });
 
-    // Top-Level Summary Performance Metrics (calculated across baseFilteredLeads & top-level appliedFilters)
-    const topLevelQuotesLeads = baseFilteredLeads.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent');
+    // Top-Level Summary Performance Metrics (calculated strictly across baseFilteredLeads & top-level page filters)
+    const topLevelQuotesLeads = baseFilteredLeads.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent' || (l as any).customerStatus === 'Quote Sent');
     const topLevelLmOppLeads = baseFilteredLeads.filter(l => l.status === 'LocalMile Opportunity' || (l as any).customerStatus === 'LocalMile Opportunity');
     const topLevelLmPendingLeads = baseFilteredLeads.filter(l => l.status === 'LocalMile Pending' || (l as any).customerStatus === 'LocalMile Pending');
     const topLevelTrialingLmLeads = baseFilteredLeads.filter(l => l.status === 'Trialing LocalMile' || (l as any).customerStatus === 'Trialing LocalMile');
+
     const topLevelSignedLeads = baseFilteredLeads.filter(l => isSignedLead(l));
 
     const topLevelMovedToAmLeads = baseFilteredLeads.filter(l => {
@@ -1606,6 +1643,18 @@ export default function ReportsClientPage({
       return null;
     };
 
+    const isDateInTimeframe = (dateVal?: any) => {
+      if (!dateVal) return false;
+      const d = parseDateString(dateVal);
+      return d ? (d >= perfFromDate && d <= perfToDate) : false;
+    };
+
+    const isDateBeforeOrInTimeframe = (dateVal?: any) => {
+      if (!dateVal) return true;
+      const d = parseDateString(dateVal);
+      return d ? (d <= perfToDate) : true;
+    };
+
     const teamPerformanceData = allDialers.map(dialer => {
       const dialerCallsList = perfFilteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
       const dialerCalls = dialerCallsList.length;
@@ -1616,42 +1665,41 @@ export default function ReportsClientPage({
       const connectRate = dialerCalls > 0 ? (dialerConnectedCalls / dialerCalls) * 100 : 0;
 
       const dialerActionedLeadIds = perfActionedLeadIdsMap.get(dialer) || new Set<string>();
-
       const dialerBaseLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
-
-      const isDateInTimeframe = (dateVal?: any) => {
-        if (!dateVal) return false;
-        const d = parseDateString(dateVal);
-        return d ? (d >= perfFromDate && d <= perfToDate) : false;
-      };
-
-      const isDateBeforeOrInTimeframe = (dateVal?: any) => {
-        if (!dateVal) return true;
-        const d = parseDateString(dateVal);
-        return d ? (d <= perfToDate) : true;
-      };
 
       const isMatch = (l: any) => getDialerForLead(l) === dialer || (!getDialerForLead(l) && l.dialerAssigned === dialer);
 
-      const lmOppLeads = topLevelLmOppLeads.filter(isMatch);
+      const isEventInTimeframe = (l: any, ...dateKeys: string[]) => {
+        let eventDateVal: any = null;
+        for (const k of dateKeys) {
+          if ((l as any)[k]) {
+            eventDateVal = (l as any)[k];
+            break;
+          }
+        }
+        const fallbackDateVal = eventDateVal || l.assignedToDialerAt || l.dateLeadEntered || (l as any).createdAt || (l as any).dateCreated;
+        return isDateInTimeframe(fallbackDateVal) || dialerActionedLeadIds.has(l.id);
+      };
+
+      const lmOppLeads = topLevelLmOppLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'dateRegistrationSent', 'registrationSentAt'));
       const lmOppCount = lmOppLeads.length;
       const lmOppCallRate = dialerCalls > 0 ? (lmOppCount / dialerCalls) * 100 : 0;
 
-      const lmPendingLeads = topLevelLmPendingLeads.filter(isMatch);
+      const lmPendingLeads = topLevelLmPendingLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'localMileAcceptedAt', 'dateLocalmileAccepted'));
       const lmPendingCount = lmPendingLeads.length;
       const lmPendingCallRate = dialerCalls > 0 ? (lmPendingCount / dialerCalls) * 100 : 0;
 
-      const trialingLMLeads = topLevelTrialingLmLeads.filter(isMatch);
+      const trialingLMLeads = topLevelTrialingLmLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'localMileTermsAcceptedAt', 'localMileAcceptedAt', 'dateLocalmileAccepted'));
       const trialingLMCount = trialingLMLeads.length;
       const trialingLMCallRate = dialerCalls > 0 ? (trialingLMCount / dialerCalls) * 100 : 0;
 
-      const dialerApptLeads = topLevelApptLeads.filter(isMatch);
+      const dialerApptLeads = topLevelApptLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'appointmentDate', 'duedate', 'date'));
       const dialerAppointments = dialerApptLeads.length;
-      const dialerQuotes = topLevelQuotesLeads.filter(isMatch);
-      const dialerShipmateTrialLeads = shipmateTrialLeads.filter(l => l.dialerAssigned === dialer && (isDateInTimeframe(l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
+      const dialerQuotes = topLevelQuotesLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'dateQuoted', 'quotedAt'));
+      const dialerShipmateTrialLeads = shipmateTrialLeads.filter(l => l.dialerAssigned === dialer && isEventInTimeframe(l));
       const dialerShipmateTrials = dialerShipmateTrialLeads.length;
 
-      const dialerWonLeads = topLevelSignedLeads.filter(isMatch);
+      const dialerWonLeads = topLevelSignedLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'signedUpAt', 'wonAt'));
       const dialerWon = dialerWonLeads.length;
 
       const dialerLostPipelineLeads = dialerBaseLeads.filter(l => !isSignedLead(l) && isLostLead(l) && (isDateInTimeframe((l as any).lostAt || (l as any).archivedAt || l.dateLeadEntered || (l as any).createdAt) || dialerActionedLeadIds.has(l.id)));
@@ -1663,7 +1711,7 @@ export default function ReportsClientPage({
       const dialerUnactionedPipelineLeads = dialerBaseLeads.filter(l => !isSignedLead(l) && !isLostLead(l) && !dialerActionedLeadIds.has(l.id) && isDateBeforeOrInTimeframe(l.assignedToDialerAt || l.dateLeadEntered || (l as any).createdAt));
       const dialerUnactionedPipeline = dialerUnactionedPipelineLeads.length;
 
-      const dialerMovedToAmLeads = topLevelMovedToAmLeads.filter(isMatch);
+      const dialerMovedToAmLeads = topLevelMovedToAmLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'movedToAmAt'));
 
       const dialerLeads = [...dialerUnactionedPipelineLeads, ...dialerActivePipelineLeads, ...dialerLostPipelineLeads, ...dialerWonLeads];
 
@@ -1708,13 +1756,13 @@ export default function ReportsClientPage({
 
     // Unassigned / System row for un-attributed leads
     const isUnassignedLead = (l: any) => !getDialerForLead(l) && !allDialers.includes(l.dialerAssigned);
-    const unassignedMovedToAm = topLevelMovedToAmLeads.filter(isUnassignedLead);
-    const unassignedQuotes = topLevelQuotesLeads.filter(isUnassignedLead);
-    const unassignedLmOpp = topLevelLmOppLeads.filter(isUnassignedLead);
-    const unassignedLmPending = topLevelLmPendingLeads.filter(isUnassignedLead);
-    const unassignedTrialingLm = topLevelTrialingLmLeads.filter(isUnassignedLead);
-    const unassignedSigned = topLevelSignedLeads.filter(isUnassignedLead);
-    const unassignedAppt = topLevelApptLeads.filter(isUnassignedLead);
+    const unassignedMovedToAm = topLevelMovedToAmLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).movedToAmAt || l.assignedToDialerAt || l.dateLeadEntered || (l as any).createdAt));
+    const unassignedQuotes = topLevelQuotesLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).dateQuoted || (l as any).quotedAt || l.dateLeadEntered || (l as any).createdAt));
+    const unassignedLmOpp = topLevelLmOppLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).dateRegistrationSent || (l as any).registrationSentAt || l.dateLeadEntered || (l as any).createdAt));
+    const unassignedLmPending = topLevelLmPendingLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).localMileAcceptedAt || (l as any).dateLocalmileAccepted || l.dateLeadEntered || (l as any).createdAt));
+    const unassignedTrialingLm = topLevelTrialingLmLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).localMileTermsAcceptedAt || (l as any).localMileAcceptedAt || l.dateLeadEntered || (l as any).createdAt));
+    const unassignedSigned = topLevelSignedLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).signedUpAt || (l as any).wonAt || l.dateLeadEntered || (l as any).createdAt));
+    const unassignedAppt = topLevelApptLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).appointmentDate || (l as any).duedate || (l as any).date || l.dateLeadEntered || (l as any).createdAt));
 
     if (unassignedMovedToAm.length > 0 || unassignedQuotes.length > 0 || unassignedLmOpp.length > 0 || unassignedLmPending.length > 0 || unassignedTrialingLm.length > 0 || unassignedSigned.length > 0 || unassignedAppt.length > 0) {
       teamPerformanceData.push({
@@ -1962,7 +2010,7 @@ export default function ReportsClientPage({
     // Filter to ONLY appointments on or after the default/applied Dialer Assignment Date filter (default July 10, 2026)
     const minAssignmentDate = appliedFilters.dialerAssignmentDate?.from 
       ? startOfDay(appliedFilters.dialerAssignmentDate.from) 
-      : startOfDay(new Date(2026, 6, 10));
+      : startOfDay(new Date(2026, 7, 1));
     const maxAssignmentDate = appliedFilters.dialerAssignmentDate?.to 
       ? endOfDay(appliedFilters.dialerAssignmentDate.to) 
       : undefined;

@@ -518,7 +518,7 @@ export function ImportLeadsClient() {
         setColumnMappings(mappings);
         
         toast({ title: 'CSV Loaded', description: `Parsed ${results.data.length} records successfully.` });
-        setStep(3);
+        setStep(2);
       },
       error: (err) => {
         console.error('PapaParse error:', err);
@@ -1215,6 +1215,13 @@ export function ImportLeadsClient() {
         const effectiveCampaign = getVal('campaign') || campaignName;
         const isMultisite = isMultisiteCampaign(effectiveCampaign) || Boolean(effectiveParent);
 
+        const resolveEffectiveSalesRep = (selected: string, idx: number) => {
+          if (selected === 'random_split' || selected === 'Random / Equal Split (Lee & Kerina)') {
+            return idx % 2 === 0 ? 'Lee Russell' : 'Kerina Helliwell';
+          }
+          return selected;
+        };
+
         if (isMultisite || selectedBucket === 'multisite') {
           leadData.bucket = 'multisite';
           leadData.accountManagerUid = MULTISITE_ACCOUNT_MANAGER_UID;
@@ -1234,17 +1241,32 @@ export function ImportLeadsClient() {
         } else if (selectedBucket === 'outbound') {
           leadData.campaign = effectiveCampaign || 'Bulk Import';
           if (dialerAssigned) leadData.dialerAssigned = dialerAssigned;
-          if (salesRepAssigned) leadData.salesRepAssigned = salesRepAssigned;
+          if (salesRepAssigned) {
+            const effRep = resolveEffectiveSalesRep(salesRepAssigned, rowIdx);
+            leadData.salesRepAssigned = effRep;
+            leadData.accountManagerAssigned = effRep;
+          }
         } else if (selectedBucket === 'field_sales') {
           leadData.campaign = effectiveCampaign || 'Door-to-Door';
           if (fieldRepAssigned) leadData.fieldRepAssigned = fieldRepAssigned;
-          if (salesRepAssigned) leadData.salesRepAssigned = salesRepAssigned;
+          if (salesRepAssigned) {
+            const effRep = resolveEffectiveSalesRep(salesRepAssigned, rowIdx);
+            leadData.salesRepAssigned = effRep;
+            leadData.accountManagerAssigned = effRep;
+          }
         } else if (selectedBucket === 'inbound') {
           leadData.campaign = effectiveCampaign || 'Inbound';
-          if (salesRepAssigned) leadData.salesRepAssigned = salesRepAssigned;
+          if (salesRepAssigned) {
+            const effRep = resolveEffectiveSalesRep(salesRepAssigned, rowIdx);
+            leadData.salesRepAssigned = effRep;
+            leadData.accountManagerAssigned = effRep;
+          }
         } else if (selectedBucket === 'account_manager') {
           leadData.campaign = effectiveCampaign || 'Account Manager Generated';
-          if (accountManagerAssigned) leadData.accountManagerAssigned = accountManagerAssigned;
+          if (accountManagerAssigned) {
+            leadData.accountManagerAssigned = accountManagerAssigned;
+            leadData.salesRepAssigned = accountManagerAssigned;
+          }
         } else if (selectedBucket === 'customer_success') {
           leadData.campaign = effectiveCampaign || 'Customer Success Generated';
           if (customerSuccessAssigned) leadData.customerSuccessAssigned = customerSuccessAssigned;
@@ -1720,6 +1742,7 @@ export function ImportLeadsClient() {
                           <SelectContent>
                             <SelectItem value="Lee Russell">Lee Russell</SelectItem>
                             <SelectItem value="Kerina Helliwell">Kerina Helliwell</SelectItem>
+                            <SelectItem value="random_split">🔀 Split Equally (Lee Russell & Kerina Helliwell)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1752,6 +1775,7 @@ export function ImportLeadsClient() {
                           <SelectContent>
                             <SelectItem value="Lee Russell">Lee Russell</SelectItem>
                             <SelectItem value="Kerina Helliwell">Kerina Helliwell</SelectItem>
+                            <SelectItem value="random_split">🔀 Split Equally (Lee Russell & Kerina Helliwell)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1768,6 +1792,7 @@ export function ImportLeadsClient() {
                         <SelectContent>
                           <SelectItem value="Lee Russell">Lee Russell</SelectItem>
                           <SelectItem value="Kerina Helliwell">Kerina Helliwell</SelectItem>
+                          <SelectItem value="random_split">🔀 Split Equally (Lee Russell & Kerina Helliwell)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

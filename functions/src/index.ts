@@ -198,5 +198,6 @@ export * from './invoices';
 export * from './tickets';
 export * from './callsReport';
 export * from './salesSnapshotReport';
+export * from './salesSnapshotAggregator';
 export * from './reportsAggregation';
 export * from './franchiseeSync';

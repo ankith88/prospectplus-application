@@ -145,7 +145,7 @@ const getDefaultFilters = (role?: string) => {
     isFieldSourced: 'all' as 'all' | 'yes' | 'no',
     activityDate: undefined as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
-    dialerAssignmentDate: isOutboundOrUser ? ({ from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined) : undefined,
+    dialerAssignmentDate: isOutboundOrUser ? ({ from: new Date(2026, 7, 1), to: new Date() } as DateRange | undefined) : undefined,
     leadCreatedDate: undefined as DateRange | undefined,
     campaign: 'all',
     statusReason: [] as string[],
@@ -750,7 +750,7 @@ export default function ArchivedLeadsClientPage() {
     
     const isAllOnPageSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedLeads.includes(l.id));
 
-  const defaultAssignmentFrom = new Date(2026, 6, 10).getTime();
+  const defaultAssignmentFrom = new Date(2026, 7, 1).getTime();
   const hasActiveFilters = useMemo(() => {
     const isOutboundOrUser = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user' || userProfile?.activeRole === 'Outbound Admin';
     const isCustomAssignmentDate = isOutboundOrUser
