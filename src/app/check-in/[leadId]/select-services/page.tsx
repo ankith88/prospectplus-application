@@ -362,6 +362,42 @@ function SelectServicesContent() {
           startDate: (mode === 'signup' && addServices) ? values.startDate?.toISOString() : undefined,
         }));
         await updateLeadServices(lead.id, serviceSelectionsForDb);
+
+        if (mode === 'signup' && (values.localmileAccess || lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined)) {
+          for (const serviceName of values.selectedServices) {
+            const isPmpo = serviceName.toLowerCase().includes('pmpo') || serviceName.toLowerCase().includes('outgoing mail lodgement');
+            const freq = values.frequencies[serviceName];
+            const isRecurring = Array.isArray(freq) || (typeof freq === 'string' && freq.toLowerCase() !== 'adhoc');
+            if (isPmpo && isRecurring) {
+              try {
+                const freqArr = Array.isArray(freq) ? freq : (typeof freq === 'string' ? freq.split(',').map((f: string) => f.trim()).filter(Boolean) : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                await fetch('/api/localmile/scheduled-jobs', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    companyId: lead.id,
+                    parentId: "",
+                    startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+                    frequency: freqArr,
+                    service: 'site-to-lpo',
+                    accountManagerName: lead.accountManagerAssigned || '',
+                    customer: {
+                      company: lead.companyName || '',
+                      address: lead.postalAddress?.street || lead.address?.street || '',
+                      suburb: lead.postalAddress?.city || lead.address?.city || '',
+                      state: lead.postalAddress?.state || lead.address?.state || 'NSW',
+                      postcode: lead.postalAddress?.zip || lead.address?.zip || '',
+                      email: lead.customerServiceEmail || '',
+                      phone: lead.customerPhone || ''
+                    }
+                  })
+                });
+              } catch (e) {
+                console.error('Failed to create localmile schedule in check-in signup', e);
+              }
+            }
+          }
+        }
       }
       
       if (selectedBank) {

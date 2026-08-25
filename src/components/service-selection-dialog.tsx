@@ -2021,7 +2021,7 @@ export function ServiceSelectionDialog({
             const signupEmailsString = contactEmails.length > 0 ? contactEmails.join(', ') : (lead.customerServiceEmail || '');
 
             // Handle LocalMile schedule creation ONLY for confirmed existing LocalMile customers
-            const hasLocalMileAccess = lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || selectedContacts.some(c => c?.accessToLocalMile === 'yes');
+            const hasLocalMileAccess = values.createLocalMileAccount || lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || selectedContacts.some(c => c?.accessToLocalMile === 'yes');
             if (hasLocalMileAccess) {
               for (const s of serviceSelections) {
                 const isPmpo = s.name.toLowerCase().includes('pmpo') || s.name.toLowerCase().includes('outgoing mail lodgement');
