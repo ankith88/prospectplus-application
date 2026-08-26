@@ -587,6 +587,25 @@ export function getLeadDisplayDateLabel(lead: any): string {
   return 'Date Lead Entered';
 }
 
+/**
+ * Checks if a lead has an accepted or signed SCF (Service Confirmation Form).
+ */
+export function isScfAcceptedForLead(lead: any): boolean {
+  if (!lead) return false;
+  return Boolean(
+    lead.scfAcceptedAt ||
+    lead.status === 'Quote Accepted' ||
+    lead.customerStatus === 'Quote Accepted' ||
+    lead.status === 'Accepted' ||
+    lead.customerStatus === 'Accepted' ||
+    lead.scfStatus === 'Accepted' ||
+    lead.scfStatus === 'Signed' ||
+    (Array.isArray(lead.scfLinks) && lead.scfLinks.some((s: any) => s.status === 'Accepted' || s.status === 'Signed' || !!s.acceptedAt)) ||
+    (Array.isArray(lead.scfs) && lead.scfs.some((s: any) => s.status === 'Accepted' || s.status === 'Signed' || s.status === 'Quote Accepted' || !!s.acceptedAt || !!s.signedAt))
+  );
+}
+
+
 
 
 

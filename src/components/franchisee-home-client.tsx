@@ -1292,7 +1292,7 @@ export default function FranchiseeHomeClient() {
               className="flex-1 bg-[#d9ebd9] hover:bg-[#cbe3cb] text-[#095c7b] font-extrabold shadow-none transition-all flex items-center justify-center gap-1.5 h-12 rounded-full text-sm border-none"
             >
               <a
-                href="https://www.loom.com/share/e7a2b97c41bf4d0aa9d2a6773347b594"
+                href="https://www.loom.com/share/0728502b4cae4de98e553af04de9f98e"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -1370,7 +1370,7 @@ export default function FranchiseeHomeClient() {
           </DialogHeader>
           <div className="w-full aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner">
             <iframe
-              src="https://www.loom.com/embed/e7a2b97c41bf4d0aa9d2a6773347b594"
+              src="https://www.loom.com/embed/0728502b4cae4de98e553af04de9f98e"
               frameBorder="0"
               allowFullScreen
               className="w-full h-full"

@@ -777,6 +777,8 @@ export function ServiceSelectionDialog({
       const defaultContact = validContacts.find(c => c.isPrimary) || (validContacts.length > 0 ? validContacts[0] : null);
       const defaultContactId = (lead as any)?.bookingContactId || (lead as any)?.serviceCommencementContactId || (defaultContact ? defaultContact.id : undefined);
 
+      const hasExistingLocalMileAccess = lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || (lead as any)?.localmileAccess === true || validContacts.some(c => c?.accessToLocalMile === 'yes');
+
       form.reset({
           selectedServices: initialSelectedServices,
           frequencies: initialFrequencies,
@@ -784,7 +786,7 @@ export function ServiceSelectionDialog({
           startDate: startDate,
           chosenPremiumPlan: (lead as any)?.chosenPremiumPlan || 'Merchant',
           chosenExpressPlan: (lead as any)?.chosenExpressPlan || 'Merchant',
-          createLocalMileAccount: false,
+          createLocalMileAccount: hasExistingLocalMileAccess,
           createShipMateAccount: false,
           selectedContactId: defaultContactId,
           selectedContactIds: defaultContactId ? [defaultContactId] : [],

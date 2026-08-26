@@ -13,6 +13,7 @@ import { collection, getDocs, addDoc, doc, deleteDoc, updateDoc } from 'firebase
 import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle, Pencil, Users, Clock, GitBranch, ExternalLink, MessageSquare, ChevronRight, ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { getMergedCancellationHierarchy } from '@/lib/cancellation-reasons-mapper';
 
 interface Template {
   id: string;
@@ -208,6 +209,7 @@ export function NurtureJourneys() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [smsTemplates, setSmsTemplates] = useState<Template[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [cancellationCategories, setCancellationCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -234,11 +236,12 @@ export function NurtureJourneys() {
   const fetchJourneysAndTemplates = async () => {
     setLoading(true);
     try {
-      const [journeysSnap, templatesSnap, smsTemplatesSnap, campaignsSnap] = await Promise.all([
+      const [journeysSnap, templatesSnap, smsTemplatesSnap, campaignsSnap, hierarchySnap] = await Promise.all([
         getDocs(collection(firestore, 'Journeys')),
         getDocs(collection(firestore, 'marketing_templates')),
         getDocs(collection(firestore, 'marketing_sms_templates')),
-        getDocs(collection(firestore, 'marketing_campaigns'))
+        getDocs(collection(firestore, 'marketing_campaigns')),
+        getDocs(collection(firestore, 'cancellation_hierarchy')).catch(() => ({ docs: [] } as any))
       ]);
 
       const jList = journeysSnap.docs.map(doc => ({
@@ -262,6 +265,16 @@ export function NurtureJourneys() {
         id: doc.id,
         ...doc.data()
       }));
+
+      const fetchedThemes = hierarchySnap.docs?.map((d: any) => ({ id: d.id, ...d.data() })) || [];
+      const mergedHierarchy = getMergedCancellationHierarchy(fetchedThemes);
+      const whysSet = new Set<string>();
+      mergedHierarchy.forEach((t: any) => {
+        (t.whys || []).forEach((w: any) => {
+          if (w.name) whysSet.add(w.name);
+        });
+      });
+      setCancellationCategories(Array.from(whysSet).sort());
 
       setJourneys(jList);
       setTemplates(tList);
@@ -624,6 +637,7 @@ export function NurtureJourneys() {
                                                     <SelectItem value="bucket">Lead Bucket</SelectItem>
                                                     <SelectItem value="leadSource">Lead Source</SelectItem>
                                                     <SelectItem value="campaign">Campaign</SelectItem>
+                                                    <SelectItem value="cancellationCategory">Cancellation Category</SelectItem>
                                                     <SelectItem value="localMileJobCount">LocalMile Job Count</SelectItem>
                                                     <SelectItem value="localMileTermsAccepted">LocalMile Terms Accepted</SelectItem>
                                                   </SelectContent>
@@ -646,6 +660,7 @@ export function NurtureJourneys() {
                                                     {cond.field === 'bucket' ? AVAILABLE_BUCKETS.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>) :
                                                      cond.field === 'leadSource' ? AVAILABLE_LEAD_SOURCES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>) :
                                                      cond.field === 'campaign' ? AVAILABLE_CAMPAIGNS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>) :
+                                                     cond.field === 'cancellationCategory' ? cancellationCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>) :
                                                      cond.field === 'localMileJobCount' ? ['1', '2', '3', '4', '5'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>) :
                                                      cond.field === 'localMileTermsAccepted' ? [
                                                        <SelectItem key="true" value="true">True</SelectItem>,
@@ -877,7 +892,7 @@ export function NurtureJourneys() {
                               </div>
                             )}
 
-                            {node.type === 'condition' && (
+                             {node.type === 'condition' && (
                               <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                   <label className="text-[10px] font-bold text-slate-500 uppercase">Evaluation Field</label>
@@ -891,16 +906,33 @@ export function NurtureJourneys() {
                                     <SelectContent>
                                       <SelectItem value="bucket">Lead Bucket</SelectItem>
                                       <SelectItem value="customerStatus">Lead Status</SelectItem>
+                                      <SelectItem value="cancellationCategory">Cancellation Category</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
                                 <div className="space-y-1">
                                   <label className="text-[10px] font-bold text-slate-500 uppercase">Field Value must equal</label>
-                                  <Input 
-                                    value={node.config.value || ''} 
-                                    onChange={(e) => handleUpdateNodeConfig(node.id, 'value', e.target.value)}
-                                    placeholder="e.g. outbound"
-                                  />
+                                  {node.config.field === 'cancellationCategory' ? (
+                                    <Select 
+                                      value={node.config.value || ''} 
+                                      onValueChange={(val) => handleUpdateNodeConfig(node.id, 'value', val)}
+                                    >
+                                      <SelectTrigger className="h-9 bg-slate-50/50">
+                                        <SelectValue placeholder="Select cancellation category..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {cancellationCategories.map(cat => (
+                                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Input 
+                                      value={node.config.value || ''} 
+                                      onChange={(e) => handleUpdateNodeConfig(node.id, 'value', e.target.value)}
+                                      placeholder="e.g. outbound"
+                                    />
+                                  )}
                                 </div>
                               </div>
                             )}

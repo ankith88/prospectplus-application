@@ -22,7 +22,7 @@ import { LogNoteDialog } from '@/components/log-note-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+import { cn, isScfAcceptedForLead } from '@/lib/utils';
 import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { RevisitDialog } from '@/components/revisit-dialog';
@@ -715,6 +715,7 @@ const FieldDiscoveryStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpen
 
 const FinishStep = ({ onBack, lead, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, onMoveToOutbound, onOpenServiceDialog, onOpenLocalMileDialog, onOpenShipMateDialog }: { onBack: () => void; lead: Lead; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; onOpenServiceDialog: (mode: 'Free Trial' | 'Signup') => void; onOpenLocalMileDialog: () => void; onOpenShipMateDialog: () => void; }) => {
     const router = useRouter();
+    const isScfAccepted = isScfAcceptedForLead(lead);
     
     return (
         <StepWrapper title="Finish" onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={() => {}} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound}>
@@ -745,7 +746,9 @@ const FinishStep = ({ onBack, lead, onOpenScheduleAppointment, onOpenLogOutcome,
 
                 <h3 className="text-xl font-semibold">Check-in Complete! Choose your next action.</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                    <Button size="lg" className="h-auto py-4" onClick={() => onOpenServiceDialog('Signup')}><Briefcase className="mr-2"/> Signup</Button>
+                    {isScfAccepted && (
+                        <Button size="lg" className="h-auto py-4" onClick={() => onOpenServiceDialog('Signup')}><Briefcase className="mr-2"/> Signup</Button>
+                    )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700">

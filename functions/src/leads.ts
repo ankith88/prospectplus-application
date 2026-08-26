@@ -87,6 +87,11 @@ export const onLeadUpdated = functions
           const targetValue = cond.value === true || String(cond.value).toLowerCase() === 'true';
           return isAccepted === targetValue;
         }
+
+        if (cond.field === 'cancellationCategory') {
+          const leadVal = (leadData.cancellationCategory || leadData.cancellationWhy || '').toLowerCase().trim();
+          return String(cond.value).toLowerCase().trim() === leadVal;
+        }
         
         return String(cond.value).toLowerCase().trim() === String(leadData[cond.field] || '').toLowerCase().trim();
       };

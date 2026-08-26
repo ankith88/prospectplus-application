@@ -33,6 +33,9 @@ import {
   Info,
   TrendingUp,
   Briefcase,
+  Layers,
+  HelpCircle,
+  Calendar,
   Mail,
   Phone,
   Search,
@@ -137,7 +140,8 @@ import { Calendar as CalendarPicker } from './ui/calendar'
 import { format, isValid } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { cn, formatInTimezone, parseDateString, safeFormatDate, validateABN, getLeadDisplayDateValue, getLeadDisplayDateLabel } from '@/lib/utils'
+import { cn, formatInTimezone, parseDateString, safeFormatDate, validateABN, getLeadDisplayDateValue, getLeadDisplayDateLabel, isScfAcceptedForLead } from '@/lib/utils'
+import { getMergedCancellationHierarchy, autoMapLostOutcome, getCancellationTypeInfo } from '@/lib/cancellation-reasons-mapper'
 import { sendLeadUpdateToNetSuite, sendCompanyCustomerUpdateToNetSuite } from '@/services/netsuite'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ScrollArea } from './ui/scroll-area'
@@ -386,6 +390,160 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [pendingTasks, setPendingTasks] = useState<any[]>([]);
     const [pendingLostStatus, setPendingLostStatus] = useState<string>('Lost');
     const [pendingStatusCallback, setPendingStatusCallback] = useState<(() => Promise<void>) | null>(null);
+
+    // Cancellation & Loss Details State
+    const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
+    const [isEditingLossReason, setIsEditingLossReason] = useState(false);
+    const [editThemeId, setEditThemeId] = useState('');
+    const [editWhyId, setEditWhyId] = useState('');
+    const [editReasonId, setEditReasonId] = useState('');
+    const [isSavingLossReason, setIsSavingLossReason] = useState(false);
+
+    useEffect(() => {
+        const fetchThemes = async () => {
+            try {
+                const snap = await getDocs(collection(firestore, 'cancellationThemes'));
+                if (!snap.empty) {
+                    setCancellationThemes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                }
+            } catch (e) {
+                console.warn('[LeadProfile] Could not fetch cancellationThemes:', e);
+            }
+        };
+        fetchThemes();
+    }, []);
+
+    const resolvedCancellation = useMemo(() => {
+        if (!lead) return null;
+
+        const isLostStatus = 
+            lead.status === 'Lost' ||
+            lead.customerStatus === 'Lost' ||
+            lead.status === 'Lost Customer' ||
+            lead.customerStatus === 'Lost Customer' ||
+            lead.status?.toLowerCase().includes('lost') ||
+            lead.customerStatus?.toLowerCase().includes('lost') ||
+            isLostLeadStatus(lead.status) ||
+            isLostLeadStatus(lead.customerStatus);
+
+        const hasFields = Boolean(
+            lead.cancellationTheme || 
+            lead.cancellationCategory || 
+            lead.cancellationReason || 
+            lead.cancellationThemeId || 
+            lead.cancellationWhyId || 
+            lead.cancellationReasonId ||
+            lead.cancellationdate
+        );
+
+        if (!isLostStatus && !hasFields) return null;
+
+        const activeHierarchy = getMergedCancellationHierarchy(cancellationThemes);
+        const autoMatch = autoMapLostOutcome(lead.statusReason || lead.status || lead.customerStatus || '');
+
+        // 1. Theme
+        let themeName = lead.cancellationTheme || '';
+        if (!themeName && lead.cancellationThemeId) {
+            const foundTheme = activeHierarchy.find((t: any) => String(t.id) === String(lead.cancellationThemeId));
+            if (foundTheme) themeName = foundTheme.name;
+        }
+        if (!themeName && autoMatch) {
+            themeName = autoMatch.themeName;
+        }
+
+        // 2. Category / Why
+        let categoryName = lead.cancellationCategory || '';
+        if (!categoryName && lead.cancellationWhyId) {
+            for (const t of activeHierarchy) {
+                const foundWhy = t.whys?.find((w: any) => String(w.id) === String(lead.cancellationWhyId));
+                if (foundWhy) {
+                    categoryName = foundWhy.name;
+                    if (!themeName) themeName = t.name;
+                    break;
+                }
+            }
+        }
+        if (!categoryName && autoMatch) {
+            categoryName = autoMatch.whyName;
+        }
+
+        // 3. Reason
+        let reasonName = lead.cancellationReason || '';
+        if (!reasonName && lead.cancellationReasonId) {
+            for (const t of activeHierarchy) {
+                for (const w of t.whys || []) {
+                    const foundReason = w.reasons?.find((r: any) => String(r.id) === String(lead.cancellationReasonId));
+                    if (foundReason) {
+                        reasonName = foundReason.name;
+                        if (!categoryName) categoryName = w.name;
+                        if (!themeName) themeName = t.name;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!reasonName && autoMatch) {
+            reasonName = autoMatch.reasonName;
+        }
+        if (!reasonName && lead.statusReason) {
+            reasonName = lead.statusReason;
+        }
+
+        const cancellationDateStr = lead.cancellationdate || (lead as any).cancellationDate || null;
+
+        const typeInfo = getCancellationTypeInfo({
+            cancellationReason: reasonName,
+            cancellationType: (lead as any).cancellationType,
+            cancelledByFranchisee: (lead as any).cancelledByFranchisee,
+            isFranchiseeCancelled: (lead as any).isFranchiseeCancelled
+        });
+
+        return {
+            isLost: isLostStatus,
+            themeName: themeName || 'Uncategorized Theme',
+            categoryName: categoryName || 'Uncategorized Category',
+            reasonName: reasonName || 'No specific reason specified',
+            cancellationDate: cancellationDateStr,
+            statusReason: lead.statusReason || '',
+            typeInfo,
+            raw: {
+                themeId: lead.cancellationThemeId || '',
+                whyId: lead.cancellationWhyId || '',
+                reasonId: lead.cancellationReasonId || ''
+            }
+        };
+    }, [lead, cancellationThemes]);
+
+    const handleSaveLossReason = async (themeId: string, whyId: string, reasonId: string) => {
+        if (!lead.id) return;
+        setIsSavingLossReason(true);
+        try {
+            const activeHierarchy = getMergedCancellationHierarchy(cancellationThemes);
+            const themeObj = activeHierarchy.find((t: any) => String(t.id) === String(themeId));
+            const whyObj = themeObj?.whys?.find((w: any) => String(w.id) === String(whyId));
+            const reasonObj = whyObj?.reasons?.find((r: any) => String(r.id) === String(reasonId));
+
+            const updates: Partial<Lead> = {
+                cancellationThemeId: themeId,
+                cancellationTheme: themeObj?.name || '',
+                cancellationWhyId: whyId,
+                cancellationCategory: whyObj?.name || '',
+                cancellationReasonId: reasonId,
+                cancellationReason: reasonObj?.name || '',
+                statusReason: reasonObj?.name || lead.statusReason || ''
+            };
+
+            await updateLeadDetails(lead.id, lead, updates);
+            setLead(prev => ({ ...prev, ...updates }));
+            setIsEditingLossReason(false);
+            toast({ title: 'Updated', description: 'Loss & Cancellation details updated successfully.' });
+        } catch (err) {
+            console.error('Failed to update loss reason:', err);
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update loss reason.' });
+        } finally {
+            setIsSavingLossReason(false);
+        }
+    };
 
     const checkAndPromptPendingItemsForLost = async (targetStatus: string, onProceed: () => Promise<void>) => {
         if (!isLostLeadStatus(targetStatus)) {
@@ -4436,13 +4594,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenuItem>
     ) : null;
 
-    const isQuoteAccepted = Boolean(
-        lead.status === 'Quote Accepted' ||
-        lead.customerStatus === 'Quote Accepted' ||
-        lead.scfAcceptedAt ||
-        (lead.status as string) === 'Accepted' ||
-        (lead as any).scfStatus === 'Accepted'
-    );
+    const isQuoteAccepted = isScfAcceptedForLead(lead);
 
     const isChildLpoLead = Boolean(isLpoLeadProcess && (lead.isChildLead || (lead.parentLeadId && !lead.isParentLead)));
 
@@ -4452,7 +4604,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             ? []
             : (isMailPlusPtyLtd && isLpoLeadProcess)
                 ? (isQuoteAccepted ? [quoteItem, signupItem].filter(Boolean) : [quoteItem].filter(Boolean))
-                : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
+                : (isQuoteAccepted
+                    ? [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean)
+                    : [quoteItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean));
 
     const hasSalesItems = salesItems.length > 0;
     const canShowLpoPlus = userProfile?.activeRole !== 'user' && !isLeadWonOrSigned && !isLpoNetworkBucket;
@@ -4915,6 +5069,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                               Resolve & Merge
                           </Button>
                       )}
+                  </div>
+              </AlertDescription>
+          </Alert>
+      )}
+
+      {resolvedCancellation && (
+          <Alert className="bg-rose-50/90 border-rose-200 text-rose-950 shadow-sm">
+              <AlertCircle className="h-4 w-4 !text-rose-700" />
+              <AlertTitle className="font-bold flex items-center justify-between">
+                  <span>This {isCompanyProfile ? 'Company' : 'Lead'} is marked as Lost</span>
+                  <Badge className={cn("text-[10px] font-bold px-2 py-0.5 border", resolvedCancellation.typeInfo.badgeClass)}>
+                      {resolvedCancellation.typeInfo.label}
+                  </Badge>
+              </AlertTitle>
+              <AlertDescription className="text-xs text-rose-900/90 mt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                      <span className="font-bold">Theme:</span> {resolvedCancellation.themeName} &bull; <span className="font-bold">Category:</span> {resolvedCancellation.categoryName} &bull; <span className="font-bold">Reason:</span> {resolvedCancellation.reasonName}
                   </div>
               </AlertDescription>
           </Alert>
@@ -7883,6 +8054,121 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             )}
             </TabsContent>
             <TabsContent value="history" className="flex flex-col gap-6 mt-0">
+                {resolvedCancellation && (
+                    <Card className="border-rose-200 bg-gradient-to-br from-rose-50/70 via-slate-50/50 to-amber-50/30 dark:from-rose-950/20 dark:via-slate-900/30 dark:to-amber-950/10 shadow-sm overflow-hidden">
+                        <CardHeader className="pb-3 border-b border-rose-100 dark:border-rose-900/40 flex flex-row items-center justify-between flex-wrap gap-2 bg-white/60 dark:bg-slate-900/60">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 rounded-lg">
+                                    <FileX className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-base font-bold text-rose-950 dark:text-rose-200 flex items-center gap-2">
+                                        Loss &amp; Cancellation Details
+                                    </CardTitle>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Recorded loss reason and classification parameters
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {resolvedCancellation.typeInfo && (
+                                    <Badge className={cn("text-xs font-semibold px-2.5 py-1 border", resolvedCancellation.typeInfo.badgeClass)}>
+                                        {resolvedCancellation.typeInfo.label}
+                                    </Badge>
+                                )}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        setEditThemeId(resolvedCancellation.raw.themeId);
+                                        setEditWhyId(resolvedCancellation.raw.whyId);
+                                        setEditReasonId(resolvedCancellation.raw.reasonId);
+                                        setIsEditingLossReason(true);
+                                    }}
+                                    className="h-8 text-xs border-rose-200 hover:bg-rose-100/50 text-rose-900 font-medium"
+                                >
+                                    <Edit className="w-3.5 h-3.5 mr-1 text-rose-600" />
+                                    Edit Reason
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="pt-5 pb-5">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                
+                                {/* Cancellation Theme */}
+                                <div className="bg-white/80 dark:bg-slate-900/80 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+                                    <div className="space-y-1">
+                                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                            <Tag className="w-3.5 h-3.5 text-indigo-500" />
+                                            Cancellation Theme
+                                        </span>
+                                        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 pt-1">
+                                            {resolvedCancellation.themeName}
+                                        </div>
+                                    </div>
+                                    <Badge variant="outline" className="w-fit text-[10px] mt-2 bg-indigo-50 text-indigo-700 border-indigo-200">
+                                        Top-level Theme
+                                    </Badge>
+                                </div>
+
+                                {/* Cancellation Category (Why) */}
+                                <div className="bg-white/80 dark:bg-slate-900/80 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+                                    <div className="space-y-1">
+                                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                            <Layers className="w-3.5 h-3.5 text-amber-500" />
+                                            Cancellation Category
+                                        </span>
+                                        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 pt-1">
+                                            {resolvedCancellation.categoryName}
+                                        </div>
+                                    </div>
+                                    <Badge variant="outline" className="w-fit text-[10px] mt-2 bg-amber-50 text-amber-800 border-amber-200">
+                                        Category / Driver
+                                    </Badge>
+                                </div>
+
+                                {/* Specific Reason */}
+                                <div className="bg-white/80 dark:bg-slate-900/80 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+                                    <div className="space-y-1">
+                                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                            <HelpCircle className="w-3.5 h-3.5 text-rose-500" />
+                                            Specific Loss Reason
+                                        </span>
+                                        <div className="text-sm font-semibold text-rose-950 dark:text-rose-200 pt-1">
+                                            {resolvedCancellation.reasonName}
+                                        </div>
+                                    </div>
+                                    <Badge variant="outline" className="w-fit text-[10px] mt-2 bg-rose-50 text-rose-800 border-rose-200">
+                                        Root Cause
+                                    </Badge>
+                                </div>
+
+                            </div>
+
+                            {/* Row 2: Date & Recorded Notes / Status Reason if present */}
+                            {(resolvedCancellation.cancellationDate || (resolvedCancellation.statusReason && resolvedCancellation.statusReason !== resolvedCancellation.reasonName)) && (
+                                <div className="mt-4 pt-3.5 border-t border-rose-100 dark:border-rose-900/40 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                    {resolvedCancellation.cancellationDate && (
+                                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                            <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                                            <span className="font-medium text-slate-500">Cancellation Date:</span>
+                                            <span className="font-semibold">{safeFormatDate(resolvedCancellation.cancellationDate, 'MMM d, yyyy')}</span>
+                                        </div>
+                                    )}
+                                    {resolvedCancellation.statusReason && resolvedCancellation.statusReason !== resolvedCancellation.reasonName && (
+                                        <div className="flex items-start gap-2 text-slate-700 dark:text-slate-300">
+                                            <Clipboard className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                                            <div>
+                                                <span className="font-medium text-slate-500">Recorded Notes / Status Reason: </span>
+                                                <span className="font-semibold text-slate-800 dark:text-slate-200">{resolvedCancellation.statusReason}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
                 <Card>
                     <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><ClipboardEdit className="w-5 h-5 text-muted-foreground" />Notes</CardTitle></CardHeader>
                     <CardContent className="pt-6 space-y-4">
@@ -10218,6 +10504,48 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Edit Loss & Cancellation Reason Dialog */}
+    <Dialog open={isEditingLossReason} onOpenChange={setIsEditingLossReason}>
+        <DialogContent className="max-w-xl">
+            <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-rose-900">
+                    <FileX className="w-5 h-5 text-rose-600" />
+                    Edit Loss &amp; Cancellation Details
+                </DialogTitle>
+                <DialogDescription>
+                    Select the Cancellation Theme, Category, and Specific Reason for this record.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="py-2">
+                <LossReasonPicker
+                    cancellationThemes={cancellationThemes}
+                    selectedThemeId={editThemeId}
+                    selectedWhyId={editWhyId}
+                    selectedReasonId={editReasonId}
+                    onSelect={(tId, wId, rId) => {
+                        setEditThemeId(tId);
+                        setEditWhyId(wId);
+                        setEditReasonId(rId);
+                    }}
+                    disabled={isSavingLossReason}
+                />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsEditingLossReason(false)} disabled={isSavingLossReason}>
+                    Cancel
+                </Button>
+                <Button
+                    onClick={() => handleSaveLossReason(editThemeId, editWhyId, editReasonId)}
+                    disabled={isSavingLossReason || !editReasonId}
+                    className="bg-rose-700 hover:bg-rose-800 text-white font-semibold"
+                >
+                    {isSavingLossReason ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    Save Details
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </>
   )
 }
@@ -10576,8 +10904,8 @@ function MergeDuplicatesDialog({
                             Confirm Merge ({selectedSourceIds.filter(id => id !== selectedTargetId).length})
                         </Button>
                     </div>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }

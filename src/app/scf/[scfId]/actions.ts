@@ -239,7 +239,7 @@ export async function acceptScfAction(leadId: string, scfId: string) {
         new Set([franchiseeEmail, senderAmEmail].filter(Boolean))
       ).join(', ');
 
-      const ccEmail = 'mailplusit@mailplus.com.au';
+      const ccEmail = 'mailplusit@mailplus.com.au, luke.forbes@mailplus.com.au';
 
       // Extract Contact Details
       let contactName = 'Customer';

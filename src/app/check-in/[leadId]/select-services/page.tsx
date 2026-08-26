@@ -28,6 +28,7 @@ import { initiateMPProductsTrial } from '@/services/netsuite-localmile-proxy';
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { submitServiceQuote } from '@/services/netsuite-services-proxy';
+import { isScfAcceptedForLead } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, UserPlus, ArrowLeft, Building2, Search } from 'lucide-react';
 import { isBankingServiceSelected, isH2hServiceSelected, getNearbyBanks, saveOrUpdateTaggedAddress, normalizeState } from '@/lib/bank-utils';
@@ -147,6 +148,19 @@ function SelectServicesContent() {
   }, [params.leadId, router, toast]);
 
   useEffect(() => {
+    if (lead && mode === 'signup') {
+      if (!isScfAcceptedForLead(lead)) {
+        toast({
+          variant: 'destructive',
+          title: 'SCF Acceptance Required',
+          description: 'Signup cannot be initiated until the Service Confirmation Form (SCF) has been accepted.',
+        });
+        router.push(`/check-in/${lead.id}`);
+      }
+    }
+  }, [lead, mode, router, toast]);
+
+  useEffect(() => {
     getServices().then((data) => {
       const formattedServices = data.map(s => ({
         id: s.id,
@@ -173,9 +187,11 @@ function SelectServicesContent() {
 
     const defaultContactId = (lead as any)?.serviceCommencementContactId || (lead as any)?.bookingContactId || (contacts.find(c => c.isPrimary)?.id) || (contacts[0]?.id);
 
+    const hasExistingLocalMileAccess = lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || (lead as any)?.localmileAccess === true || (contacts || []).some(c => c?.accessToLocalMile === 'yes');
+
     form.reset({
       shipmateAccess: false,
-      localmileAccess: false,
+      localmileAccess: hasExistingLocalMileAccess,
       addServices: initialSelectedServices.length > 0,
       selectedServices: initialSelectedServices,
       frequencies: initialFrequencies,
