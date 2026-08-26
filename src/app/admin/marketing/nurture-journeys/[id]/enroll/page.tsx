@@ -35,20 +35,60 @@ export default function EnrollLeadsPage() {
     }
   }, [journeyId]);
 
-  const evaluateCondition = (cond: any, leadData: any) => {
-    if (cond.field === 'localMileJobCount') {
-      return Number(cond.value) === (leadData.jobCount || 0);
+  const getFieldValue = (field: string, leadData: any) => {
+    if (field === 'cancellationCategory') {
+      return (leadData.cancellationCategory || leadData.cancellationWhy || '').toString().trim();
     }
+    if (field === 'isCompany' || field === 'recordType') {
+      const isComp = leadData.isCompany === true || String(leadData.isCompany).toLowerCase() === 'true' || leadData.recordType === 'company';
+      return isComp ? 'Company' : 'Lead';
+    }
+    if (field === 'localMileJobCount') {
+      return Number(leadData.jobCount || 0);
+    }
+    if (field === 'localMileTermsAccepted') {
+      return leadData.localMileTermsAccepted === true || String(leadData.localMileTermsAccepted).toLowerCase() === 'true';
+    }
+    return (leadData[field] ?? '').toString().trim();
+  };
+
+  const evaluateCondition = (cond: any, leadData: any) => {
+    if (!cond.field) return false;
+    const op = cond.operator || 'equals';
+
+    if (op === 'is_empty') {
+      const val = getFieldValue(cond.field, leadData);
+      if (typeof val === 'boolean') return !val;
+      if (typeof val === 'number') return false;
+      return val === '' || val === null || val === undefined;
+    }
+
+    if (op === 'is_not_empty') {
+      const val = getFieldValue(cond.field, leadData);
+      if (typeof val === 'boolean') return val;
+      if (typeof val === 'number') return true;
+      return val !== '' && val !== null && val !== undefined;
+    }
+
+    if (cond.field === 'localMileJobCount') {
+      const leadNum = Number(leadData.jobCount || 0);
+      const targetNum = Number(cond.value);
+      return op === 'not_equals' ? leadNum !== targetNum : leadNum === targetNum;
+    }
+
     if (cond.field === 'localMileTermsAccepted') {
       const isAccepted = leadData.localMileTermsAccepted === true || String(leadData.localMileTermsAccepted).toLowerCase() === 'true';
       const targetValue = cond.value === true || String(cond.value).toLowerCase() === 'true';
-      return isAccepted === targetValue;
+      return op === 'not_equals' ? isAccepted !== targetValue : isAccepted === targetValue;
     }
-    if (cond.field === 'cancellationCategory') {
-      const leadVal = (leadData.cancellationCategory || leadData.cancellationWhy || '').toLowerCase().trim();
-      return String(cond.value).toLowerCase().trim() === leadVal;
+
+    const leadVal = getFieldValue(cond.field, leadData).toLowerCase();
+    const targetVal = String(cond.value || '').toLowerCase().trim();
+
+    if (op === 'not_equals') {
+      return leadVal !== targetVal;
     }
-    return String(cond.value).toLowerCase() === String(leadData[cond.field] || '').toLowerCase();
+    return leadVal === targetVal;
   };
 
   const fetchJourneyAndEvaluate = async () => {

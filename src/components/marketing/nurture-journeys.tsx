@@ -618,13 +618,13 @@ export function NurtureJourneys() {
                                           </div>
                                           
                                           {group.conditions.map((cond: any, condIndex: number) => (
-                                            <div key={condIndex} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                                            <div key={condIndex} className="grid grid-cols-[1.1fr_0.9fr_1.1fr_auto] gap-2 items-end">
                                               <div className="space-y-1">
                                                 {condIndex === 0 ? <label className="text-[10px] font-bold text-slate-500 uppercase">Field</label> : <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">AND</div>}
                                                 <Select 
                                                   value={cond.field || 'customerStatus'} 
                                                   onValueChange={(val) => {
-                                                    const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', value: '' }] }])];
+                                                    const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', operator: 'equals', value: '' }] }])];
                                                     newGroups[groupIndex].conditions[condIndex] = { ...cond, field: val, value: '' };
                                                     handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
                                                   }}
@@ -638,37 +638,83 @@ export function NurtureJourneys() {
                                                     <SelectItem value="leadSource">Lead Source</SelectItem>
                                                     <SelectItem value="campaign">Campaign</SelectItem>
                                                     <SelectItem value="cancellationCategory">Cancellation Category</SelectItem>
+                                                    <SelectItem value="isCompany">Company or Leads</SelectItem>
+                                                    <SelectItem value="selectedServiceOption">Selected Service Option</SelectItem>
+                                                    <SelectItem value="leadType">Lead Type</SelectItem>
                                                     <SelectItem value="localMileJobCount">LocalMile Job Count</SelectItem>
                                                     <SelectItem value="localMileTermsAccepted">LocalMile Terms Accepted</SelectItem>
                                                   </SelectContent>
                                                 </Select>
                                               </div>
+
                                               <div className="space-y-1">
-                                                {condIndex === 0 && <label className="text-[10px] font-bold text-slate-500 uppercase">Target Value</label>}
-                                                <Select 
-                                                  value={cond.value || ''} 
+                                                {condIndex === 0 && <label className="text-[10px] font-bold text-slate-500 uppercase">Condition</label>}
+                                                <Select
+                                                  value={cond.operator || 'equals'}
                                                   onValueChange={(val) => {
-                                                    const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', value: '' }] }])];
-                                                    newGroups[groupIndex].conditions[condIndex] = { ...cond, value: val };
+                                                    const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', operator: 'equals', value: '' }] }])];
+                                                    newGroups[groupIndex].conditions[condIndex] = { ...cond, operator: val };
                                                     handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
                                                   }}
                                                 >
                                                   <SelectTrigger className="h-9 bg-white">
-                                                    <SelectValue placeholder="Select target value..." />
+                                                    <SelectValue />
                                                   </SelectTrigger>
                                                   <SelectContent>
-                                                    {cond.field === 'bucket' ? AVAILABLE_BUCKETS.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>) :
-                                                     cond.field === 'leadSource' ? AVAILABLE_LEAD_SOURCES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>) :
-                                                     cond.field === 'campaign' ? AVAILABLE_CAMPAIGNS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>) :
-                                                     cond.field === 'cancellationCategory' ? cancellationCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>) :
-                                                     cond.field === 'localMileJobCount' ? ['1', '2', '3', '4', '5'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>) :
-                                                     cond.field === 'localMileTermsAccepted' ? [
-                                                       <SelectItem key="true" value="true">True</SelectItem>,
-                                                       <SelectItem key="false" value="false">False</SelectItem>
-                                                     ] :
-                                                     AVAILABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                                    <SelectItem value="equals">is (=)</SelectItem>
+                                                    <SelectItem value="not_equals">is not (!=)</SelectItem>
+                                                    <SelectItem value="is_empty">is empty</SelectItem>
+                                                    <SelectItem value="is_not_empty">is not empty</SelectItem>
                                                   </SelectContent>
                                                 </Select>
+                                              </div>
+
+                                              <div className="space-y-1">
+                                                {condIndex === 0 && <label className="text-[10px] font-bold text-slate-500 uppercase">Target Value</label>}
+                                                {(cond.operator === 'is_empty' || cond.operator === 'is_not_empty') ? (
+                                                  <Input disabled placeholder="N/A for empty check" className="h-9 bg-slate-100/70 text-slate-400 text-xs" />
+                                                ) : (
+                                                  <Select 
+                                                    value={cond.value || ''} 
+                                                    onValueChange={(val) => {
+                                                      const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', operator: 'equals', value: '' }] }])];
+                                                      newGroups[groupIndex].conditions[condIndex] = { ...cond, value: val };
+                                                      handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
+                                                    }}
+                                                  >
+                                                    <SelectTrigger className="h-9 bg-white">
+                                                      <SelectValue placeholder="Select target value..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                      {cond.field === 'bucket' ? AVAILABLE_BUCKETS.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>) :
+                                                       cond.field === 'leadSource' ? AVAILABLE_LEAD_SOURCES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>) :
+                                                       cond.field === 'campaign' ? AVAILABLE_CAMPAIGNS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>) :
+                                                       cond.field === 'cancellationCategory' ? cancellationCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>) :
+                                                       cond.field === 'isCompany' ? [
+                                                         <SelectItem key="Company" value="Company">Company</SelectItem>,
+                                                         <SelectItem key="Lead" value="Lead">Lead</SelectItem>
+                                                       ] :
+                                                       cond.field === 'selectedServiceOption' ? [
+                                                         <SelectItem key="five-free" value="five-free">Five Free</SelectItem>,
+                                                         <SelectItem key="express" value="express">Express</SelectItem>,
+                                                         <SelectItem key="corporate" value="corporate">Corporate</SelectItem>,
+                                                         <SelectItem key="standard" value="standard">Standard</SelectItem>,
+                                                         <SelectItem key="localmile" value="localmile">LocalMile</SelectItem>
+                                                       ] :
+                                                       cond.field === 'leadType' ? [
+                                                         <SelectItem key="Product" value="Product">Product</SelectItem>,
+                                                         <SelectItem key="Service" value="Service">Service</SelectItem>,
+                                                         <SelectItem key="Service & Product" value="Service & Product">Service &amp; Product</SelectItem>
+                                                       ] :
+                                                       cond.field === 'localMileJobCount' ? ['1', '2', '3', '4', '5'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>) :
+                                                       cond.field === 'localMileTermsAccepted' ? [
+                                                         <SelectItem key="true" value="true">True</SelectItem>,
+                                                         <SelectItem key="false" value="false">False</SelectItem>
+                                                       ] :
+                                                       AVAILABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                                    </SelectContent>
+                                                  </Select>
+                                                )}
                                               </div>
                                               <Button type="button" variant="ghost" size="sm" className="h-9 px-2 text-destructive" disabled={group.conditions.length === 1} onClick={() => {
                                                 const newGroups = [...(node.config.enrollConditionGroups || [])];
@@ -893,37 +939,106 @@ export function NurtureJourneys() {
                             )}
 
                              {node.type === 'condition' && (
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-1">
                                   <label className="text-[10px] font-bold text-slate-500 uppercase">Evaluation Field</label>
                                   <Select 
-                                    value={node.config.field || 'bucket'} 
+                                    value={node.config.field || 'customerStatus'} 
                                     onValueChange={(val) => handleUpdateNodeConfig(node.id, 'field', val)}
                                   >
                                     <SelectTrigger className="h-9 bg-slate-50/50">
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="bucket">Lead Bucket</SelectItem>
                                       <SelectItem value="customerStatus">Lead Status</SelectItem>
+                                      <SelectItem value="bucket">Lead Bucket</SelectItem>
+                                      <SelectItem value="leadSource">Lead Source</SelectItem>
+                                      <SelectItem value="campaign">Campaign</SelectItem>
                                       <SelectItem value="cancellationCategory">Cancellation Category</SelectItem>
+                                      <SelectItem value="isCompany">Company or Leads</SelectItem>
+                                      <SelectItem value="selectedServiceOption">Selected Service Option</SelectItem>
+                                      <SelectItem value="leadType">Lead Type</SelectItem>
+                                      <SelectItem value="localMileJobCount">LocalMile Job Count</SelectItem>
+                                      <SelectItem value="localMileTermsAccepted">LocalMile Terms Accepted</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
                                 <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Field Value must equal</label>
-                                  {node.config.field === 'cancellationCategory' ? (
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Condition</label>
+                                  <Select 
+                                    value={node.config.operator || 'equals'} 
+                                    onValueChange={(val) => handleUpdateNodeConfig(node.id, 'operator', val)}
+                                  >
+                                    <SelectTrigger className="h-9 bg-slate-50/50">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="equals">is (=)</SelectItem>
+                                      <SelectItem value="not_equals">is not (!=)</SelectItem>
+                                      <SelectItem value="is_empty">is empty</SelectItem>
+                                      <SelectItem value="is_not_empty">is not empty</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Target Value</label>
+                                  {(node.config.operator === 'is_empty' || node.config.operator === 'is_not_empty') ? (
+                                    <Input disabled placeholder="N/A for empty check" className="h-9 bg-slate-100/70 text-slate-400 text-xs" />
+                                  ) : node.config.field === 'cancellationCategory' ? (
                                     <Select 
                                       value={node.config.value || ''} 
                                       onValueChange={(val) => handleUpdateNodeConfig(node.id, 'value', val)}
                                     >
                                       <SelectTrigger className="h-9 bg-slate-50/50">
-                                        <SelectValue placeholder="Select cancellation category..." />
+                                        <SelectValue placeholder="Select category..." />
                                       </SelectTrigger>
                                       <SelectContent>
                                         {cancellationCategories.map(cat => (
                                           <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                                         ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : node.config.field === 'isCompany' ? (
+                                    <Select 
+                                      value={node.config.value || ''} 
+                                      onValueChange={(val) => handleUpdateNodeConfig(node.id, 'value', val)}
+                                    >
+                                      <SelectTrigger className="h-9 bg-slate-50/50">
+                                        <SelectValue placeholder="Select type..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="Company">Company</SelectItem>
+                                        <SelectItem value="Lead">Lead</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : node.config.field === 'selectedServiceOption' ? (
+                                    <Select 
+                                      value={node.config.value || ''} 
+                                      onValueChange={(val) => handleUpdateNodeConfig(node.id, 'value', val)}
+                                    >
+                                      <SelectTrigger className="h-9 bg-slate-50/50">
+                                        <SelectValue placeholder="Select option..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="five-free">Five Free</SelectItem>
+                                        <SelectItem value="express">Express</SelectItem>
+                                        <SelectItem value="corporate">Corporate</SelectItem>
+                                        <SelectItem value="standard">Standard</SelectItem>
+                                        <SelectItem value="localmile">LocalMile</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : node.config.field === 'leadType' ? (
+                                    <Select 
+                                      value={node.config.value || ''} 
+                                      onValueChange={(val) => handleUpdateNodeConfig(node.id, 'value', val)}
+                                    >
+                                      <SelectTrigger className="h-9 bg-slate-50/50">
+                                        <SelectValue placeholder="Select lead type..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="Product">Product</SelectItem>
+                                        <SelectItem value="Service">Service</SelectItem>
+                                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
                                       </SelectContent>
                                     </Select>
                                   ) : (
