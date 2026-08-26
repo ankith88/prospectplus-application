@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { VisualIframeEditor } from './ui/visual-iframe-editor';
+import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -926,66 +927,43 @@ export function ServiceSelectionDialog({
 
     let resolved = text;
     resolved = resolved.replace(/\{\{Contact\.Name\}\}/gi, contactName);
-    resolved = resolved.replace(/\{\{Contact\.FirstName\}\}/gi, firstName);
-    resolved = resolved.replace(/\{\{contact_first_name\}\}/gi, firstName);
-    resolved = resolved.replace(/\{\{Company\.Name\}\}/gi, lead.companyName || '');
-    resolved = resolved.replace(/\{\{company_name\}\}/gi, lead.companyName || '');
-    resolved = resolved.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepName);
-    resolved = resolved.replace(/\{\{sales_rep_name\}\}/gi, salesRepName);
     const franName = franchisee?.name || franchisee?.mainContact || lead.franchisee || 'MailPlus';
     const franContact = franchisee?.mainContact || franchisee?.name || lead.franchisee || 'MailPlus';
     const franEmailVal = franchisee?.email || franchiseeEmail || '';
     const franMobileVal = franchisee?.mobile || (franchisee as any)?.phone || '';
 
-    resolved = resolved.replace(/\{\{Franchisee\.Name\}\}/gi, franName);
-    resolved = resolved.replace(/\{\{franchisee_name\}\}/gi, franName);
-    resolved = resolved.replace(/\{\{Franchisee\.MainContact\}\}/gi, franContact);
-    resolved = resolved.replace(/\{\{Franchisee\.ContactName\}\}/gi, franContact);
-    resolved = resolved.replace(/\{\{Franchisee\.Email\}\}/gi, franEmailVal);
-    resolved = resolved.replace(/\{\{franchisee_email\}\}/gi, franEmailVal);
-    resolved = resolved.replace(/\{\{Franchisee\.Mobile\}\}/gi, franMobileVal);
-    resolved = resolved.replace(/\{\{franchisee_mobile\}\}/gi, franMobileVal);
-    resolved = resolved.replace(/\{\{AccountManager\.Name\}\}/gi, lead.accountManagerAssigned || salesRepName);
-    resolved = resolved.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
-    resolved = resolved.replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly);
-    resolved = resolved.replace(/\{\{Schedule\.ServiceDate\}\}/gi, formattedStartDate);
-    resolved = resolved.replace(/\{\{service_start_date\}\}/gi, formattedStartDate);
-    resolved = resolved.replace(/\{\{start_date\}\}/gi, formattedStartDate);
-
-    resolved = resolved.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, lead.bookingUrlId ? `${window.location.origin}/book/${lead.bookingUrlId}` : '');
-    resolved = resolved.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, lead.generalBookingUrlId ? `${window.location.origin}/book/${lead.generalBookingUrlId}` : '');
-    resolved = resolved.replace(/\{\{Lead\.City\}\}/gi, lead.postalAddress?.city || lead.address?.city || '');
-    resolved = resolved.replace(/\{\{Trials\.Remaining\}\}/gi, String(lead.localMileTrialsRemaining ?? 0));
-    resolved = resolved.replace(/\{\{Lead\.SCFLink\}\}/gi, scfUrl);
-    resolved = resolved.replace(/\{\{scf_link\}\}/gi, scfUrl);
-    resolved = resolved.replace(/\{\{scf_url\}\}/gi, scfUrl);
-    resolved = resolved.replace(/\{\{acceptUrl\}\}/gi, scfUrl);
-    
     const localMileLink = lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : '');
     const localMileActivationLink = primaryContact?.localMilePlusAuthLink || (lead as any).localMileActivationLink || localMileLink;
     const localMileSecurityCode = primaryContact?.securityCode || (lead as any).securityCode || (lead as any).localMileSecurityCode || '';
-    resolved = resolved.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
-    resolved = resolved.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-    resolved = resolved.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
-    resolved = resolved.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-    resolved = resolved.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMileActivationLink);
-    resolved = resolved.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-    resolved = resolved.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-    resolved = resolved.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-    resolved = resolved.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
-
     const sofPublicLink = lead.sofLink || (lead as any).standingOrderFormLink || (lead.id ? `https://prospectplus.com.au/sof/${encryptLeadId(lead.id)}` : '');
-    resolved = resolved.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
-    resolved = resolved.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
-    resolved = resolved.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
-    resolved = resolved.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
-    resolved = resolved.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
-    resolved = resolved.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
-    resolved = resolved.replace(/\{\{sof_link\}\}/gi, sofPublicLink);
-    resolved = resolved.replace(/\{\{SOF_Link\}\}/gi, sofPublicLink);
 
-    resolved = resolved.replace(/\{\{unsubscribe_link\}\}/gi, '#');
-    resolved = resolved.replace(/\{\{unsubscribe_url\}\}/gi, '#');
+    resolved = replaceTemplatePlaceholders(resolved, {
+      lead: lead,
+      contact: { ...primaryContact, name: contactName, firstName: firstName, localMilePlusAuthLink: localMileActivationLink, securityCode: localMileSecurityCode },
+      accountManager: {
+        name: lead.accountManagerAssigned || salesRepName,
+        mobile: amMobile,
+        calendly: amCalendly
+      },
+      salesRep: salesRepName,
+      franchisee: {
+        name: franName,
+        mainContact: franContact,
+        email: franEmailVal,
+        mobile: franMobileVal
+      },
+      scheduledServiceDate: formattedStartDate,
+      customLinks: {
+        bookingUrlId: lead.bookingUrlId || '',
+        generalBookingUrlId: lead.generalBookingUrlId || '',
+        scfLink: scfUrl,
+        sofLink: sofPublicLink,
+        localMileLink,
+        localMileActivationLink,
+        localMileSecurityCode,
+        acceptUrl: scfUrl
+      }
+    });
     resolved = resolved.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, lead.prospectPlusId || '');
     resolved = resolved.replace(/\{\{prospect_plus_id\}\}/gi, lead.prospectPlusId || '');
 

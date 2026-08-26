@@ -3,6 +3,7 @@
 import React from 'react'
 import { CopyButton } from '@/components/ui/copy-button'
 import { DialerInsightsDialog, DialerInsightsData } from '@/components/dialer-insights-dialog'
+import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer'
 
 import { usePathname, useRouter } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -2353,73 +2354,43 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       const contactFirstName = contactName.split(' ')[0];
       const localMilePlusAuthLink = primaryContact?.localMilePlusAuthLink || '';
 
-      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/gi, contactName);
-      parsedBody = parsedBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
-      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
-      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || '');
-      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || userProfile?.displayName || userProfile?.firstName || 'Representative');
       const franName = franchiseeDetails?.name || franchiseeDetails?.mainContact || leadData.franchisee || 'MailPlus';
       const franContact = franchiseeDetails?.mainContact || franchiseeDetails?.name || leadData.franchisee || 'MailPlus';
       const franEmail = franchiseeDetails?.email || '';
       const franMobile = franchiseeDetails?.mobile || franchiseeDetails?.phone || franchiseeDetails?.mainContactPhone || '';
 
-      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/gi, contactName);
-      parsedBody = parsedBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
-      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
-      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || '');
-      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || userProfile?.displayName || userProfile?.firstName || 'Representative');
-      
-      parsedBody = parsedBody.replace(/\{\{Franchisee\.Name\}\}/gi, franName);
-      parsedBody = parsedBody.replace(/\{\{franchisee_name\}\}/gi, franName);
-      parsedBody = parsedBody.replace(/\{\{Franchisee\.MainContact\}\}/gi, franContact);
-      parsedBody = parsedBody.replace(/\{\{Franchisee\.ContactName\}\}/gi, franContact);
-      parsedBody = parsedBody.replace(/\{\{Franchisee\.Email\}\}/gi, franEmail);
-      parsedBody = parsedBody.replace(/\{\{franchisee_email\}\}/gi, franEmail);
-      parsedBody = parsedBody.replace(/\{\{Franchisee\.Mobile\}\}/gi, franMobile);
-      parsedBody = parsedBody.replace(/\{\{franchisee_mobile\}\}/gi, franMobile);
-
-      parsedBody = parsedBody.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
-      parsedBody = parsedBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
-      parsedBody = parsedBody.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
-      
-      const amName = leadData.accountManagerAssigned || leadData.salesRepAssigned || '';
-      parsedBody = parsedBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
-      parsedBody = parsedBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile);
-      parsedBody = parsedBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly);
-
       const rawStartDate = leadData.services?.[0]?.startDate;
       const formattedStartDate = rawStartDate ? format(new Date(rawStartDate), 'dd/MM/yyyy') : '';
-      parsedBody = parsedBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, formattedStartDate);
-      parsedBody = parsedBody.replace(/\{\{service_start_date\}\}/gi, formattedStartDate);
-      parsedBody = parsedBody.replace(/\{\{start_date\}\}/gi, formattedStartDate);
-
-      parsedBody = parsedBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `https://prospectplus.com.au/book/${leadData.bookingUrlId}` : '');
-      parsedBody = parsedBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `https://prospectplus.com.au/book/${leadData.generalBookingUrlId}` : '');
-      parsedBody = parsedBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
-      parsedBody = parsedBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
-      parsedBody = parsedBody.replace(/\{\{acceptUrl\}\}/gi, leadData.acceptUrl || '');
-
       const localMileLink = leadData.localMileRegistrationLink || (leadData.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadData.id)}` : '');
       const localMileActivationLink = primaryContact?.localMilePlusAuthLink || leadData.localMileActivationLink || localMileLink;
       const localMileSecurityCode = primaryContact?.securityCode || leadData.securityCode || leadData.localMileSecurityCode || '';
-      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
-      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-      parsedBody = parsedBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
-      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-      parsedBody = parsedBody.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-      parsedBody = parsedBody.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
-      
       const sofPublicLink = leadData.sofLink || (leadData as any).standingOrderFormLink || (leadData.id ? `https://prospectplus.com.au/sof/${encryptLeadId(leadData.id)}` : '');
-      parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{sof_link\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{SOF_Link\}\}/gi, sofPublicLink);
+      const amName = leadData.accountManagerAssigned || leadData.salesRepAssigned || '';
+
+      parsedBody = replaceTemplatePlaceholders(parsedBody, {
+        lead: leadData,
+        contact: { ...primaryContact, name: contactName, firstName: contactFirstName, localMilePlusAuthLink },
+        accountManager: {
+          name: amName,
+          mobile: accountManagerMobile,
+          calendly: accountManagerCalendly
+        },
+        salesRep: leadData.salesRepAssigned || userProfile?.displayName || userProfile?.firstName || 'Representative',
+        franchisee: {
+          name: franName,
+          mainContact: franContact,
+          email: franEmail,
+          mobile: franMobile
+        },
+        scheduledServiceDate: formattedStartDate,
+        customLinks: {
+          localMileLink,
+          localMileActivationLink,
+          localMileSecurityCode,
+          sofLink: sofPublicLink,
+          acceptUrl: leadData.acceptUrl || ''
+        }
+      });
       
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');

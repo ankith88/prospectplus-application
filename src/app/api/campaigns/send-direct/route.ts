@@ -5,6 +5,7 @@ import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 import { logEmailServer } from '@/services/firebase-server';
 
 import { encryptLeadId } from '@/lib/localmile-security';
+import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer';
 
 const db = getFirestore(adminApp);
 
@@ -251,97 +252,38 @@ export async function POST(request: Request) {
           }
         }
 
-        // Resolve body placeholders
-        compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
-        compiledBody = compiledBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
-        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, rec.localMilePlusAuthLink || '');
-        compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/gi, companyName);
-        compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
-        compiledBody = compiledBody.replace(/\{\{sender\.email\}\}/gi, customSenderEmail || senderEmail);
-        compiledBody = compiledBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
-        compiledBody = compiledBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
-        compiledBody = compiledBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, leadData.salesRepAssignedCalendlyLink || '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `https://prospectplus.com.au/book/${leadData.bookingUrlId}` : '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `https://prospectplus.com.au/book/${leadData.generalBookingUrlId}` : '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
-        compiledBody = compiledBody.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
-        compiledBody = compiledBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
-        compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
-        compiledBody = compiledBody.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
         const localMileLink = leadData.localMileRegistrationLink || (leadId ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadId)}` : '');
         const localMileActivationLink = rec.localMilePlusAuthLink || leadData.localMileActivationLink || localMileLink;
         const localMileSecurityCode = rec.securityCode || leadData.securityCode || leadData.localMileSecurityCode || '';
-        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
-        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-        compiledBody = compiledBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
-        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-        compiledBody = compiledBody.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-        compiledBody = compiledBody.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
-
-        const hasAmpoForSof = leadData.services?.some((s: any) => {
-          const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
-          const n = String(name).toLowerCase();
-          return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
-        });
         const sofPublicLink = leadData.sofLink || (leadData as any).standingOrderFormLink || (leadId ? `https://prospectplus.com.au/sof/${encryptLeadId(leadId)}` : '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{sof_link\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{SOF_Link\}\}/gi, sofPublicLink);
 
-        compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
-        compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
-        compiledBody = compiledBody.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeMainContact);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
-        compiledBody = compiledBody.replace(/\{\{franchisee_email\}\}/gi, franchiseeEmail);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);
-        compiledBody = compiledBody.replace(/\{\{franchisee_mobile\}\}/gi, franchiseeMobile);
+        const placeholderCtx = {
+          lead: { ...leadData, id: leadId },
+          contact: { name: rec.name, firstName: contactFirstName, localMilePlusAuthLink: rec.localMilePlusAuthLink, securityCode: rec.securityCode },
+          accountManager: {
+            name: amName,
+            mobile: amMobile,
+            calendly: leadData.salesRepAssignedCalendlyLink || ''
+          },
+          salesRep: salesRepAssigned,
+          franchisee: {
+            name: franchiseeName,
+            mainContact: franchiseeMainContact,
+            email: franchiseeEmail,
+            mobile: franchiseeMobile
+          },
+          senderEmail: customSenderEmail || senderEmail,
+          scheduledServiceDate,
+          customLinks: {
+            localMileLink,
+            localMileActivationLink,
+            localMileSecurityCode,
+            sofLink: sofPublicLink
+          }
+        };
 
-        // Resolve subject placeholders
-        let compiledSubject = subjectLine;
-        compiledSubject = compiledSubject.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
-        compiledSubject = compiledSubject.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
-        compiledSubject = compiledSubject.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, rec.localMilePlusAuthLink || '');
-        compiledSubject = compiledSubject.replace(/\{\{Company\.Name\}\}/gi, companyName);
-        compiledSubject = compiledSubject.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
-        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
-        compiledSubject = compiledSubject.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
-        compiledSubject = compiledSubject.replace(/\{\{sender\.email\}\}/gi, customSenderEmail || senderEmail);
-        compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
-        compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
-        compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Calendly\}\}/gi, leadData.salesRepAssignedCalendlyLink || '');
-        compiledSubject = compiledSubject.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `https://prospectplus.com.au/book/${leadData.bookingUrlId}` : '');
-        compiledSubject = compiledSubject.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `https://prospectplus.com.au/book/${leadData.generalBookingUrlId}` : '');
-        compiledSubject = compiledSubject.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
-        compiledSubject = compiledSubject.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
-        compiledSubject = compiledSubject.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
-        compiledSubject = compiledSubject.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
-        compiledSubject = compiledSubject.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
-        compiledSubject = compiledSubject.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
-        compiledSubject = compiledSubject.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-        compiledSubject = compiledSubject.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
-        compiledSubject = compiledSubject.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-        compiledSubject = compiledSubject.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-        compiledSubject = compiledSubject.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-        compiledSubject = compiledSubject.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-        compiledSubject = compiledSubject.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
-
-        compiledSubject = compiledSubject.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
-        compiledSubject = compiledSubject.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
-        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
-        compiledSubject = compiledSubject.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
-        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);
-        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeMainContact);
+        compiledBody = replaceTemplatePlaceholders(compiledBody, placeholderCtx);
+        let compiledSubject = replaceTemplatePlaceholders(subjectLine, placeholderCtx);
         compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
         compiledSubject = compiledSubject.replace(/\{\{franchisee_email\}\}/gi, franchiseeEmail);
         compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);

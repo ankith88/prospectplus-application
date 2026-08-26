@@ -326,6 +326,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [auth, userProfile]);
 
     const sendPasswordReset = useCallback(async (email: string) => {
+        try {
+            const res = await fetch('/api/admin/users/send-password-reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success) return;
+            }
+        } catch (apiErr) {
+            console.warn('[useAuth] Backend password reset dispatch failed, falling back to Firebase Auth client:', apiErr);
+        }
+
         if (!auth) throw new Error("Firebase Auth not initialized");
         const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prospectplus.com.au';
         const actionCodeSettings = {

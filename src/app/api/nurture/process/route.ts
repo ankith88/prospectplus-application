@@ -3,6 +3,7 @@ import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 import { sendSms } from '@/services/sms-service';
+import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer';
 
 const db = getFirestore(adminApp);
 
@@ -477,41 +478,25 @@ export async function POST(request: Request) {
               let bodyHtml = templateData?.body || '';
               let subject = templateData?.subject || 'Outbound Drip';
 
-              // Replace Subject Line Placeholders
-              subject = subject.replace(/\{\{Contact\.Name\}\}/gi, contactName !== 'Valued Customer' ? contactName : (leadData.companyName || 'Valued Customer'));
-              subject = subject.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
-              subject = subject.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
-              subject = subject.replace(/\{\{SalesRep\.Name\}\}/gi, amName || 'MailPlus Team');
-              subject = subject.replace(/\{\{AccountManager\.Name\}\}/gi, amName || 'MailPlus Team');
-              subject = subject.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
-              subject = subject.replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly);
-              subject = subject.replace(/\{\{(Trials\.Remaining|TrialsRemaining|trials_remaining|trials\.remaining)\}\}/gi, String(trialsRemaining));
+              const placeholderCtx = {
+                lead: { ...leadData, id: leadId },
+                contact: { name: contactName, firstName: contactFirstName, localMilePlusAuthLink, securityCode: localMileSecurityCode },
+                accountManager: {
+                  name: amName,
+                  mobile: amMobile,
+                  email: amEmail,
+                  calendly: amCalendly
+                },
+                salesRep: amName,
+                customLinks: {
+                  localMileActivationLink: localMilePlusAuthLink,
+                  localMileSecurityCode,
+                  trialsRemaining
+                }
+              };
 
-              // Replace Body Placeholders
-              bodyHtml = bodyHtml.replace(/\{\{Contact\.Name\}\}/gi, contactName !== 'Valued Customer' ? contactName : (leadData.companyName || 'Valued Customer'));
-              bodyHtml = bodyHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
-              bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
-              bodyHtml = bodyHtml.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
-              bodyHtml = bodyHtml.replace(/\{\{LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
-              bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
-              bodyHtml = bodyHtml.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-              bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-              bodyHtml = bodyHtml.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-              bodyHtml = bodyHtml.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
-              bodyHtml = bodyHtml.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
-              bodyHtml = bodyHtml.replace(/\{\{SalesRep\.Name\}\}/gi, amName || 'MailPlus Team');
-              bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Name\}\}/gi, amName || 'MailPlus Team');
-              bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
-              bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly);
-              bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Email\}\}/gi, amEmail);
-              bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Phone\}\}/gi, amPhone || amMobile);
-              bodyHtml = bodyHtml.replace(/\{\{(Trials\.Remaining|TrialsRemaining|trials_remaining|trials\.remaining)\}\}/gi, String(trialsRemaining));
-              bodyHtml = bodyHtml.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
-              bodyHtml = bodyHtml.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `https://prospectplus.com.au/book/${leadData.bookingUrlId}` : '');
-              bodyHtml = bodyHtml.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `https://prospectplus.com.au/book/${leadData.generalBookingUrlId}` : '');
-              bodyHtml = bodyHtml.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
-              bodyHtml = bodyHtml.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
-              bodyHtml = bodyHtml.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
+              subject = replaceTemplatePlaceholders(subject, placeholderCtx);
+              bodyHtml = replaceTemplatePlaceholders(bodyHtml, placeholderCtx);
 
               // 2. Personalize and inject any Action Buttons
               // We search for action buttons defined in the journey to resolve them

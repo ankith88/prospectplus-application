@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { cn } from '@/lib/utils'
+import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -563,48 +564,32 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
     const actLink = primaryContact?.localMilePlusAuthLink || (lead as any).localMileActivationLink || '';
     const securityCode = primaryContact?.securityCode || (lead as any).securityCode || (lead as any).localMileSecurityCode || '';
 
-    result = result
-      .replace(/\{\{Contact\.Name\}\}/gi, contactName)
-      .replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName)
-      .replace(/\{\{Company\.Name\}\}/gi, companyName)
-      .replace(/\{\{SalesRep\.Name\}\}/gi, salesRep)
-      .replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName)
-      .replace(/\{\{franchisee_name\}\}/gi, franchiseeName)
-      .replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeContact)
-      .replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeContact)
-      .replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail)
-      .replace(/\{\{franchisee_email\}\}/gi, franchiseeEmail)
-      .replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile)
-      .replace(/\{\{franchisee_mobile\}\}/gi, franchiseeMobile)
-      .replace(/\{\{AccountManager\.Name\}\}/gi, lead.accountManagerAssigned || salesRep)
-      .replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile || (lead as any).accountManagerMobile || '')
-      .replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly || (lead as any).salesRepAssignedCalendlyLink || '')
-      .replace(/\{\{Lead\.ContactBookingLink\}\}/gi, bookingLink)
-      .replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, generalBookingLink)
-      .replace(/\{\{Lead\.City\}\}/gi, city)
-      .replace(/\{\{Trials\.Remaining\}\}/gi, ((lead as any).localMileTrialsRemaining || 0).toString())
-      .replace(/\{\{Lead\.SCFLink\}\}/gi, scfLink)
-      .replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, lead.prospectPlusId || lead.id || '')
-      .replace(/\{\{prospect_plus_id\}\}/gi, lead.prospectPlusId || lead.id || '')
-      .replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, regLink)
-      .replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, actLink)
-      .replace(/\{\{LocalMileActivationLink\}\}/gi, actLink)
-      .replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, actLink)
-      .replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, actLink)
-      .replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, securityCode)
-      .replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, securityCode)
-      .replace(/\{\{LocalMileSecurityCode\}\}/gi, securityCode)
-      .replace(/\{\{securityCode\}\}/gi, securityCode)
-      .replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofLink)
-      .replace(/\{\{Lead\.SOFLink\}\}/gi, sofLink)
-      .replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofLink)
-      .replace(/\{\{StandingOrderFormLink\}\}/gi, sofLink)
-      .replace(/\{\{SOFLink\}\}/gi, sofLink)
-      .replace(/\{\{StandingOrderLink\}\}/gi, sofLink)
-      .replace(/\{\{sof_link\}\}/gi, sofLink)
-      .replace(/\{\{SOF_Link\}\}/gi, sofLink)
-      .replace(/\{\{Schedule\.ServiceDate\}\}/gi, (lead as any).scheduledServiceDate || '')
-      .replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, (lead as any).scheduledServiceDate || '');
+    result = replaceTemplatePlaceholders(result, {
+      lead: lead,
+      contact: { ...primaryContact, name: contactName, firstName: contactFirstName, localMilePlusAuthLink: actLink, securityCode },
+      accountManager: {
+        name: lead.accountManagerAssigned || salesRep,
+        mobile: accountManagerMobile || (lead as any).accountManagerMobile || '',
+        calendly: accountManagerCalendly || (lead as any).salesRepAssignedCalendlyLink || ''
+      },
+      salesRep: salesRep,
+      franchisee: {
+        name: franchiseeName,
+        mainContact: franchiseeContact,
+        email: franchiseeEmail,
+        mobile: franchiseeMobile
+      },
+      scheduledServiceDate: (lead as any).scheduledServiceDate || '',
+      customLinks: {
+        bookingUrlId: lead.bookingUrlId || '',
+        generalBookingUrlId: lead.generalBookingUrlId || '',
+        scfLink,
+        sofLink,
+        localMileLink: regLink,
+        localMileActivationLink: actLink,
+        localMileSecurityCode: securityCode
+      }
+    });
 
     return result;
   }, [lead, userProfile, franchiseeDetails]);

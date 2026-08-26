@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer';
 
 const db = getFirestore(adminApp);
 
@@ -133,34 +134,28 @@ export async function POST(request: Request) {
     const logoUrl = brandData?.designTokens?.logoUrl || '';
 
     // 4. Compile placeholders
-    const contactFirstName = contactName.split(' ')[0];
-
-    // Case-insensitive replacement of all standard placeholders
-    templateHtml = templateHtml.replace(/\{\{Contact\.Name\}\}/gi, contactName);
-    templateHtml = templateHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
-    templateHtml = templateHtml.replace(/\{\{contact_first_name\}\}/gi, contactFirstName);
-    templateHtml = templateHtml.replace(/\{\{Company\.Name\}\}/gi, companyName);
-    templateHtml = templateHtml.replace(/\{\{company_name\}\}/gi, companyName);
-    templateHtml = templateHtml.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepName);
-    templateHtml = templateHtml.replace(/\{\{sales_rep_name\}\}/gi, salesRepName);
-    templateHtml = templateHtml.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
-    templateHtml = templateHtml.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
-    templateHtml = templateHtml.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);
-    templateHtml = templateHtml.replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeMainContact);
-    templateHtml = templateHtml.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
-    templateHtml = templateHtml.replace(/\{\{franchisee_email\}\}/gi, franchiseeEmail);
-    templateHtml = templateHtml.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);
-    templateHtml = templateHtml.replace(/\{\{franchisee_mobile\}\}/gi, franchiseeMobile);
-    templateHtml = templateHtml.replace(/\{\{AccountManager\.Name\}\}/gi, accountManagerName);
-    templateHtml = templateHtml.replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile);
-    templateHtml = templateHtml.replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly);
-    templateHtml = templateHtml.replace(/\{\{Lead\.City\}\}/gi, leadCity);
-    templateHtml = templateHtml.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, bookingUrlId ? `https://prospectplus.com.au/book/${bookingUrlId}` : '');
-    templateHtml = templateHtml.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, generalBookingUrlId ? `https://prospectplus.com.au/book/${generalBookingUrlId}` : '');
-    templateHtml = templateHtml.replace(/\{\{Trials\.Remaining\}\}/gi, trialsRemaining.toString());
-    templateHtml = templateHtml.replace(/\{\{Lead\.SCFLink\}\}/gi, leadScfLink);
-    templateHtml = templateHtml.replace(/\{\{unsubscribe_link\}\}/gi, '#');
-    templateHtml = templateHtml.replace(/\{\{unsubscribe_url\}\}/gi, '#');
+    templateHtml = replaceTemplatePlaceholders(templateHtml, {
+      lead: leadSnap.exists ? { ...leadSnap.data(), id: leadId } : { companyName, address: { city: leadCity }, dynamicScfUrl: leadScfLink, bookingUrlId, generalBookingUrlId, localMileTrialsRemaining: trialsRemaining },
+      contact: { name: contactName, email: contactEmail },
+      accountManager: {
+        name: accountManagerName,
+        mobile: accountManagerMobile,
+        calendly: accountManagerCalendly
+      },
+      salesRep: salesRepName,
+      franchisee: {
+        name: franchiseeName,
+        mainContact: franchiseeMainContact,
+        email: franchiseeEmail,
+        mobile: franchiseeMobile
+      },
+      customLinks: {
+        bookingUrlId,
+        generalBookingUrlId,
+        scfLink: leadScfLink,
+        trialsRemaining
+      }
+    });
 
     // 5. Wrap the compiled template body in the brand layout HTML
     const wrappedHtml = `

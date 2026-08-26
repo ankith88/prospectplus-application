@@ -5,6 +5,7 @@ import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 import { logEmailServer } from '@/services/firebase-server';
 
 import { encryptLeadId } from '@/lib/localmile-security';
+import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer';
 
 const db = getFirestore(adminApp);
 
@@ -279,57 +280,35 @@ export async function POST(request: Request) {
           }
         }
 
-        compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
-        compiledBody = compiledBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
-        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, rec.localMilePlusAuthLink || '');
-        compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/gi, companyName);
-        compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
-        compiledBody = compiledBody.replace(/\{\{sender\.email\}\}/gi, leadSenderEmail);
-
-        compiledBody = compiledBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
-        compiledBody = compiledBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile || '');
-        compiledBody = compiledBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, docData.salesRepAssignedCalendlyLink || '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, docData.bookingUrlId ? `https://prospectplus.com.au/book/${docData.bookingUrlId}` : '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, docData.generalBookingUrlId ? `https://prospectplus.com.au/book/${docData.generalBookingUrlId}` : '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.City\}\}/gi, docData.address?.city || '');
-        compiledBody = compiledBody.replace(/\{\{Trials\.Remaining\}\}/gi, (docData.localMileTrialsRemaining || 0).toString());
-        compiledBody = compiledBody.replace(/\{\{Lead\.SCFLink\}\}/gi, docData.dynamicScfUrl || '');
-        compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, docData.prospectPlusId || '');
-        compiledBody = compiledBody.replace(/\{\{prospect_plus_id\}\}/gi, docData.prospectPlusId || '');
         const localMileLink = docData.localMileRegistrationLink || (docSnap.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(docSnap.id)}` : '');
         const localMileActivationLink = rec.localMilePlusAuthLink || docData.localMileActivationLink || localMileLink;
         const localMileSecurityCode = rec.securityCode || docData.securityCode || docData.localMileSecurityCode || '';
-        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
-        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-        compiledBody = compiledBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
-        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-        compiledBody = compiledBody.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-        compiledBody = compiledBody.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
-
-        const hasAmpoForSof = docData.services?.some((s: any) => {
-          const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
-          const n = String(name).toLowerCase();
-          return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
-        });
         const sofPublicLink = docData.sofLink || (docData as any).standingOrderFormLink || (docSnap.id ? `https://prospectplus.com.au/sof/${encryptLeadId(docSnap.id)}` : '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{sof_link\}\}/gi, sofPublicLink);
-        compiledBody = compiledBody.replace(/\{\{SOF_Link\}\}/gi, sofPublicLink);
 
-        compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
-        compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeMainContact);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);
+        compiledBody = replaceTemplatePlaceholders(compiledBody, {
+          lead: { ...docData, id: docSnap.id },
+          contact: { name: rec.name, firstName: contactFirstName, localMilePlusAuthLink: rec.localMilePlusAuthLink, securityCode: rec.securityCode },
+          accountManager: {
+            name: amName,
+            mobile: amMobile,
+            calendly: docData.salesRepAssignedCalendlyLink || ''
+          },
+          salesRep: salesRepAssigned,
+          franchisee: {
+            name: franchiseeName,
+            mainContact: franchiseeMainContact,
+            email: franchiseeEmail,
+            mobile: franchiseeMobile
+          },
+          senderEmail: leadSenderEmail,
+          scheduledServiceDate,
+          customLinks: {
+            localMileLink,
+            localMileActivationLink,
+            localMileSecurityCode,
+            sofLink: sofPublicLink
+          }
+        });
 
         // Inject link tracking redirector (wrap general anchor tags)
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);

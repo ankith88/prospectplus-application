@@ -10,11 +10,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { doc, getDoc, collection, getDocs, writeBatch, updateDoc } from 'firebase/firestore';
-import { Loader2, ArrowLeft, Users, CheckCircle2, PlayCircle, AlertCircle, Eye, Building2, Sparkles, Mail, Send, TestTube } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, CheckCircle2, PlayCircle, AlertCircle, Eye, Building2, Sparkles, Mail, Send, TestTube, Search, X } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/hooks/use-auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer';
 
 export default function EnrollLeadsPage() {
   const { userProfile } = useAuth();
@@ -28,6 +29,7 @@ export default function EnrollLeadsPage() {
   const [journey, setJourney] = useState<any>(null);
   const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
   const [totalLeadsCount, setTotalLeadsCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
   
   const [enrolling, setEnrolling] = useState(false);
   const [activating, setActivating] = useState(false);
@@ -360,27 +362,66 @@ export default function EnrollLeadsPage() {
         return;
       }
 
-      // Merge Lead Variables
+      // Merge Lead Variables & Resolve AM Details strictly from users collection
       const leadName = selectedLeadForTest.contactPersonName || selectedLeadForTest.companyName || 'Valued Customer';
       const companyName = selectedLeadForTest.companyName || selectedLeadForTest.tradingName || 'Your Business';
-      const firstName = leadName.split(' ')[0];
-      const amName = selectedLeadForTest.accountManagerAssigned || selectedLeadForTest.salesRepAssigned || 'MailPlus Team';
-      const amEmail = selectedLeadForTest.accountManagerEmail || 'info@mailplus.com.au';
+      let amName = selectedLeadForTest.accountManagerAssigned || selectedLeadForTest.salesRepAssigned || 'MailPlus Team';
+      let amMobile = '';
+      let amEmail = selectedLeadForTest.accountManagerEmail || '';
+      let amCalendly = selectedLeadForTest.salesRepAssignedCalendlyLink || '';
 
-      let bodyHtml = rawHtml;
+      if (amName) {
+        try {
+          const amTrimmed = amName.trim();
+          const userDocById = await getDoc(doc(firestore, 'users', amTrimmed));
+          let matchedUser: any = userDocById.exists() ? userDocById.data() : null;
 
-      // Replace placeholders
-      bodyHtml = bodyHtml.replace(/\{\{(Lead\.ContactName|contactName|contact_name|lead_name|name)\}\}/gi, leadName);
-      bodyHtml = bodyHtml.replace(/\{\{(Lead\.FirstName|firstName|first_name)\}\}/gi, firstName);
-      bodyHtml = bodyHtml.replace(/\{\{(Lead\.CompanyName|companyName|company_name|company)\}\}/gi, companyName);
-      bodyHtml = bodyHtml.replace(/\{\{(Lead\.Email|email)\}\}/gi, getLeadEmail(selectedLeadForTest) || selectedLeadForTest.email || '');
-      bodyHtml = bodyHtml.replace(/\{\{(Lead\.Phone|phone)\}\}/gi, selectedLeadForTest.phone || '');
-      bodyHtml = bodyHtml.replace(/\{\{(Lead\.City|city)\}\}/gi, selectedLeadForTest.address?.city || '');
-      bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
-      bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Email\}\}/gi, amEmail);
-      
-      subject = subject.replace(/\{\{(Lead\.ContactName|contactName|contact_name|name)\}\}/gi, leadName);
-      subject = subject.replace(/\{\{(Lead\.CompanyName|companyName|company_name|company)\}\}/gi, companyName);
+          if (!matchedUser) {
+            const usersSnap = await getDocs(collection(firestore, 'users'));
+            const targetLower = amTrimmed.toLowerCase();
+            const foundDoc = usersSnap.docs.find(d => {
+              const uData = d.data() || {};
+              const fullName = `${uData.firstName || ''} ${uData.lastName || ''}`.trim().toLowerCase();
+              const displayName = (uData.displayName || '').trim().toLowerCase();
+              const name = (uData.name || '').trim().toLowerCase();
+              const email = (uData.email || '').trim().toLowerCase();
+              return fullName === targetLower || displayName === targetLower || name === targetLower || email === targetLower || d.id.toLowerCase() === targetLower;
+            });
+            if (foundDoc) matchedUser = foundDoc.data();
+          }
+
+          if (matchedUser) {
+            amName = `${matchedUser.firstName || ''} ${matchedUser.lastName || ''}`.trim() || matchedUser.displayName || matchedUser.name || amTrimmed;
+            amMobile = extractUserMobile(matchedUser);
+            amEmail = matchedUser.email || amEmail;
+            amCalendly = matchedUser.calendlyLink || matchedUser.calendly || amCalendly;
+          }
+        } catch (e) {
+          console.error('Error resolving AM details from users collection for test email:', e);
+        }
+      }
+
+      let bodyHtml = replaceTemplatePlaceholders(rawHtml, {
+        lead: selectedLeadForTest,
+        accountManager: {
+          name: amName,
+          mobile: amMobile,
+          email: amEmail,
+          calendly: amCalendly
+        },
+        salesRep: selectedLeadForTest.salesRepAssigned
+      });
+
+      subject = replaceTemplatePlaceholders(subject, {
+        lead: selectedLeadForTest,
+        accountManager: {
+          name: amName,
+          mobile: amMobile,
+          email: amEmail,
+          calendly: amCalendly
+        },
+        salesRep: selectedLeadForTest.salesRepAssigned
+      });
 
       const leadEmailAddr = getLeadEmail(selectedLeadForTest);
       const isSentToActualLead = leadEmailAddr && testRecipientEmail.toLowerCase().trim() === leadEmailAddr.toLowerCase().trim();
@@ -433,6 +474,16 @@ export default function EnrollLeadsPage() {
   }
 
   const isDraftOrPaused = journey?.status !== 'active';
+
+  const filteredLeads = matchingLeads.filter((lead) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const companyName = (lead.companyName || '').toLowerCase();
+    const tradingName = (lead.tradingName || '').toLowerCase();
+    const contactName = (lead.contactPersonName || '').toLowerCase();
+    const email = (lead.email || getLeadEmail(lead) || '').toLowerCase();
+    return companyName.includes(q) || tradingName.includes(q) || contactName.includes(q) || email.includes(q);
+  });
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 mt-6 pb-12">
@@ -497,17 +548,38 @@ export default function EnrollLeadsPage() {
 
           {matchingLeads.length > 0 && (
             <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-slate-500" />
-                  Matching Leads Preview ({Math.min(matchingLeads.length, 50)} of {matchingLeads.length})
+                  Matching Leads Preview {searchQuery.trim() ? `(${filteredLeads.length} of ${matchingLeads.length})` : `(${Math.min(matchingLeads.length, 50)} of ${matchingLeads.length})`}
                 </h4>
-                {emailSteps.length > 0 && (
-                  <span className="text-xs text-indigo-600 font-medium flex items-center gap-1 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
-                    <Mail className="h-3.5 w-3.5" />
-                    {emailSteps.length} Email Step{emailSteps.length === 1 ? '' : 's'} Available for Testing
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <Input
+                      type="text"
+                      placeholder="Search by company name..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-8 pr-8 h-8 text-xs bg-white border-slate-200"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {emailSteps.length > 0 && (
+                    <span className="text-xs text-indigo-600 font-medium flex items-center gap-1 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100 shrink-0">
+                      <Mail className="h-3.5 w-3.5" />
+                      {emailSteps.length} Email Step{emailSteps.length === 1 ? '' : 's'} Available for Testing
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="border rounded-lg overflow-hidden bg-white max-h-96 overflow-y-auto">
                 <Table>
@@ -524,47 +596,55 @@ export default function EnrollLeadsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {matchingLeads.slice(0, 50).map((lead) => (
-                      <TableRow key={lead.id} className="hover:bg-slate-50/50 transition-colors">
-                        <TableCell className="font-medium text-xs text-slate-800">
-                          {lead.companyName || lead.tradingName || lead.contactPersonName || 'Unnamed Lead'}
+                    {filteredLeads.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={emailSteps.length > 0 ? 6 : 5} className="h-24 text-center text-xs text-slate-500">
+                          No leads matching &quot;{searchQuery}&quot; found.
                         </TableCell>
-                        <TableCell className="text-xs text-slate-600">
-                          {lead.contactPersonName || lead.email || '-'}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
-                            {lead.customerStatus || lead.status || 'New'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-600 capitalize">
-                          {lead.bucket || 'outbound'}
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-500">
-                          {lead.leadSourceName || lead.leadSource || lead.campaignName || '-'}
-                        </TableCell>
-                        {emailSteps.length > 0 && (
-                          <TableCell className="text-right text-xs">
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              className="h-7 text-xs gap-1.5 text-indigo-600 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
-                              onClick={() => handleOpenTestModal(lead)}
-                              title="Send test email using this lead's data to a test email address"
-                            >
-                              <TestTube className="h-3.5 w-3.5" />
-                              <span>Test Email</span>
-                            </Button>
-                          </TableCell>
-                        )}
                       </TableRow>
-                    ))}
+                    ) : (
+                      filteredLeads.slice(0, 50).map((lead) => (
+                        <TableRow key={lead.id} className="hover:bg-slate-50/50 transition-colors">
+                          <TableCell className="font-medium text-xs text-slate-800">
+                            {lead.companyName || lead.tradingName || lead.contactPersonName || 'Unnamed Lead'}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-600">
+                            {lead.contactPersonName || lead.email || '-'}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
+                              {lead.customerStatus || lead.status || 'New'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-600 capitalize">
+                            {lead.bucket || 'outbound'}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-500">
+                            {lead.leadSourceName || lead.leadSource || lead.campaignName || '-'}
+                          </TableCell>
+                          {emailSteps.length > 0 && (
+                            <TableCell className="text-right text-xs">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="h-7 text-xs gap-1.5 text-indigo-600 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
+                                onClick={() => handleOpenTestModal(lead)}
+                                title="Send test email using this lead's data to a test email address"
+                              >
+                                <TestTube className="h-3.5 w-3.5" />
+                                <span>Test Email</span>
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>
-              {matchingLeads.length > 50 && (
+              {filteredLeads.length > 50 && (
                 <p className="text-[11px] text-slate-400 text-right italic">
-                  Showing first 50 of {matchingLeads.length} matching leads
+                  Showing first 50 of {filteredLeads.length} matching leads
                 </p>
               )}
             </div>

@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getLeadsFromFirebase, subscribeLeadsFromFirebase } from '@/services/firebase'
+import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile, Contact } from '@/lib/types'
 import { encryptLeadId } from '@/lib/localmile-security'
@@ -681,55 +682,36 @@ export default function LeadsClientPage({
       const contactFirstName = contactName.split(' ')[0];
       const localMilePlusAuthLink = primaryContact?.localMilePlusAuthLink || '';
 
-      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/gi, contactName);
-      parsedBody = parsedBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
-      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
-      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || '');
-      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || userProfile?.displayName || userProfile?.firstName || 'Representative');
-      parsedBody = parsedBody.replace(/\{\{Franchisee\.Name\}\}/gi, leadData.franchisee || 'MailPlus');
-      parsedBody = parsedBody.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
-      parsedBody = parsedBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
-      parsedBody = parsedBody.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
-      
-      const amName = leadData.accountManagerAssigned || leadData.salesRepAssigned || '';
-      parsedBody = parsedBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
-      parsedBody = parsedBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile);
-      parsedBody = parsedBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly);
-
-      parsedBody = parsedBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `https://prospectplus.com.au/book/${leadData.bookingUrlId}` : '');
-      parsedBody = parsedBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `https://prospectplus.com.au/book/${leadData.generalBookingUrlId}` : '');
-      parsedBody = parsedBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
-      parsedBody = parsedBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
-      parsedBody = parsedBody.replace(/\{\{acceptUrl\}\}/gi, leadData.acceptUrl || '');
-      
       const localMileLink = leadData.localMileRegistrationLink || (leadData.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadData.id)}` : '');
       const localMileActivationLink = primaryContact?.localMilePlusAuthLink || leadData.localMileActivationLink || localMileLink;
       const localMileSecurityCode = primaryContact?.securityCode || leadData.securityCode || leadData.localMileSecurityCode || '';
-      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
-      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-      parsedBody = parsedBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
-      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
-      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-      parsedBody = parsedBody.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-      parsedBody = parsedBody.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
-      
       const sofPublicLink = leadData.sofLink || (leadData as any).standingOrderFormLink || (leadData.id ? `https://prospectplus.com.au/sof/${encryptLeadId(leadData.id)}` : '');
-      parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{StandingOrderFormLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{SOFLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{StandingOrderLink\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{sof_link\}\}/gi, sofPublicLink);
-      parsedBody = parsedBody.replace(/\{\{SOF_Link\}\}/gi, sofPublicLink);
-      
-      parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
-      parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');
-      parsedBody = parsedBody.replace(/\{\{Ticket\.Number\}\}/gi, leadData.ticketNumber || '');
-      parsedBody = parsedBody.replace(/\{\{Tracking\.ID\}\}/gi, leadData.trackingIdentifier || '');
-      parsedBody = parsedBody.replace(/\{\{unsubscribe_link\}\}/gi, '#');
-      parsedBody = parsedBody.replace(/\{\{unsubscribe_url\}\}/gi, '#');
+      const amName = leadData.accountManagerAssigned || leadData.salesRepAssigned || '';
+
+      parsedBody = replaceTemplatePlaceholders(parsedBody, {
+        lead: leadData,
+        contact: { ...primaryContact, name: contactName, firstName: contactFirstName, localMilePlusAuthLink },
+        accountManager: {
+          name: amName,
+          mobile: accountManagerMobile,
+          calendly: accountManagerCalendly
+        },
+        salesRep: leadData.salesRepAssigned || userProfile?.displayName || userProfile?.firstName || 'Representative',
+        franchisee: {
+          name: leadData.franchisee || 'MailPlus'
+        },
+        customLinks: {
+          localMileLink,
+          localMileActivationLink,
+          localMileSecurityCode,
+          sofLink: sofPublicLink,
+          acceptUrl: leadData.acceptUrl || '',
+          receiverName: leadData.receiverDetails?.name || '',
+          receiverAddress: leadData.receiverDetails?.address || '',
+          ticketNumber: leadData.ticketNumber || '',
+          trackingIdentifier: leadData.trackingIdentifier || ''
+        }
+      });
     }
     return parsedBody;
   }, [selectedTemplateId, templates, selectedLeads, allLeads, userProfile, accountManagerMobile, accountManagerCalendly]);

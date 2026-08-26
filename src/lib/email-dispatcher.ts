@@ -63,8 +63,21 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
 
     const { type, senderEmail } = config;
     
+    // Extract clean email address from customFrom if present
+    const cleanCustomFrom = customFrom ? extractCleanEmail(customFrom) : '';
+    const lowerSubject = (subject || '').toLowerCase();
+    const isWelcomeOrResetEmail = lowerSubject.includes('welcome') || lowerSubject.includes('password') || lowerSubject.includes('reset');
+
+    let cleanSender = cleanCustomFrom;
+    let effectiveCustomFrom = customFrom;
+
+    if (!cleanSender && isWelcomeOrResetEmail) {
+      cleanSender = 'mailplusit@mailplus.com.au';
+      effectiveCustomFrom = 'MailPlus IT Support <mailplusit@mailplus.com.au>';
+    }
+
     // Determine the actual active sender to route from
-    let finalSender = (customFrom && customFrom.endsWith('@mailplus.com.au')) ? customFrom : senderEmail;
+    let finalSender = (cleanSender && cleanSender.endsWith('@mailplus.com.au')) ? cleanSender : senderEmail;
     if (subject && subject.trim().toLowerCase().startsWith('message from customer')) {
       finalSender = 'customerservice@mailplus.com.au';
     }
@@ -211,11 +224,12 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
         return { filename: att.name, path: att.url };
       });
 
-      const fromHeader = customFrom ? customFrom : `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`;
+      const activeCustomFrom = effectiveCustomFrom || customFrom;
+      const fromHeader = activeCustomFrom ? activeCustomFrom : `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`;
 
       await transporter.sendMail({
         from: fromHeader,
-        replyTo: customFrom || undefined,
+        replyTo: activeCustomFrom || undefined,
         to,
         cc: finalCc,
         bcc,

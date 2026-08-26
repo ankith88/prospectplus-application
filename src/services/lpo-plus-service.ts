@@ -271,6 +271,8 @@ export async function provisionLpoPlusAccount(payload: LpoPlusProvisionPayload):
 
     const emailPayload = {
       to: contactEmail,
+      customFrom: "MailPlus IT Support <mailplusit@mailplus.com.au>",
+      from: "mailplusit@mailplus.com.au",
       cc: ["michael.mcdaid@mailplus.com.au", "kerry.oneill@mailplus.com.au"],
       subject: emailToLPOSubject,
       html: emailToLPOBody
@@ -550,6 +552,8 @@ export async function resetLpoPlusPassword(payload: LpoPlusResetPasswordPayload)
         },
         body: JSON.stringify({
           to: contactEmail,
+          customFrom: "MailPlus IT Support <mailplusit@mailplus.com.au>",
+          from: "mailplusit@mailplus.com.au",
           cc: ["michael.mcdaid@mailplus.com.au", "kerry.oneill@mailplus.com.au"],
           subject: emailToLPOSubject,
           html: emailToLPOBody
