@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
-import { doc, getDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { Loader2, ArrowLeft, Users, CheckCircle2, PlayCircle } from 'lucide-react';
+import { doc, getDoc, collection, getDocs, writeBatch, updateDoc } from 'firebase/firestore';
+import { Loader2, ArrowLeft, Users, CheckCircle2, PlayCircle, AlertCircle, Eye, Building2, Sparkles } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/hooks/use-auth';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 
 export default function EnrollLeadsPage() {
   const { userProfile } = useAuth();
@@ -25,6 +27,7 @@ export default function EnrollLeadsPage() {
   const [totalLeadsCount, setTotalLeadsCount] = useState(0);
   
   const [enrolling, setEnrolling] = useState(false);
+  const [activating, setActivating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [enrolledCount, setEnrolledCount] = useState(0);
   const [completed, setCompleted] = useState(false);
@@ -175,16 +178,14 @@ export default function EnrollLeadsPage() {
       const jData = jDoc.data();
       setJourney({ id: jDoc.id, ...jData });
 
-      if (jData.status !== 'active') {
-        toast({ variant: 'destructive', title: 'Journey is not active' });
-        router.push('/admin/marketing/nurture-journeys');
-        return;
-      }
-
       // 2. Extract Conditions
       const triggerNode = jData.nodes?.find((n: any) => n.type === 'trigger' && n.config?.autoEnroll);
       if (!triggerNode || !triggerNode.config.enrollConditionGroups) {
-        toast({ variant: 'destructive', title: 'No enrollment conditions', description: 'This journey does not have auto-enrollment conditions configured.' });
+        toast({ 
+          variant: 'destructive', 
+          title: 'No enrollment conditions', 
+          description: 'This journey does not have auto-enrollment conditions configured.' 
+        });
         setLoading(false);
         return;
       }
@@ -272,6 +273,23 @@ export default function EnrollLeadsPage() {
     }
   };
 
+  const activateAndStartEnrollment = async () => {
+    if (!journeyId) return;
+    setActivating(true);
+    try {
+      const jRef = doc(firestore, 'Journeys', journeyId);
+      await updateDoc(jRef, { status: 'active' });
+      setJourney((prev: any) => ({ ...prev, status: 'active' }));
+      toast({ title: 'Journey Activated', description: 'Journey status updated to Active.' });
+      await startEnrollment();
+    } catch (error) {
+      console.error('Error activating journey:', error);
+      toast({ variant: 'destructive', title: 'Failed to activate journey' });
+    } finally {
+      setActivating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-[50vh] items-center justify-center flex-col gap-4">
@@ -281,21 +299,55 @@ export default function EnrollLeadsPage() {
     );
   }
 
+  const isDraftOrPaused = journey?.status !== 'active';
+
   return (
-    <div className="max-w-3xl mx-auto space-y-6 mt-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/admin/marketing/nurture-journeys')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Retroactive Enrollment</h2>
-          <p className="text-muted-foreground">Journey: <span className="font-medium text-slate-900">{journey?.name}</span></p>
+    <div className="max-w-4xl mx-auto space-y-6 mt-6 pb-12">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.push('/admin/marketing/nurture-journeys')}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold tracking-tight">
+                {isDraftOrPaused ? 'Journey Lead Preview & Testing' : 'Retroactive Lead Enrollment'}
+              </h2>
+              {journey?.status === 'active' ? (
+                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 font-semibold border-emerald-200">
+                  Active
+                </Badge>
+              ) : journey?.status === 'paused' ? (
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-semibold">
+                  Paused (Preview Mode)
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-300 font-semibold">
+                  Draft (Testing Mode)
+                </Badge>
+              )}
+            </div>
+            <p className="text-muted-foreground mt-0.5">Journey: <span className="font-medium text-slate-900">{journey?.name}</span></p>
+          </div>
         </div>
       </div>
 
-      <Card>
+      {isDraftOrPaused && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3 text-amber-900 text-sm shadow-sm">
+          <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-semibold">Draft / Testing Mode Active</p>
+            <p className="text-amber-700 text-xs leading-relaxed">
+              You are inspecting the actual leads that match the trigger criteria for this journey while it is in <strong className="uppercase">{journey?.status}</strong> status. 
+              Review the matching leads list below to verify your auto-enrollment conditions before activating.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <Card className="shadow-sm border-slate-200">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-lg">
             <Users className="h-5 w-5 text-primary" />
             Evaluation Results
           </CardTitle>
@@ -310,8 +362,60 @@ export default function EnrollLeadsPage() {
             <span className="text-sm font-medium text-slate-500 uppercase tracking-wider">Leads Match Criteria</span>
           </div>
 
+          {matchingLeads.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-slate-500" />
+                  Matching Leads Preview ({Math.min(matchingLeads.length, 50)} of {matchingLeads.length})
+                </h4>
+              </div>
+              <div className="border rounded-lg overflow-hidden bg-white max-h-80 overflow-y-auto">
+                <Table>
+                  <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-sm">
+                    <TableRow>
+                      <TableHead className="text-xs font-semibold">Company / Name</TableHead>
+                      <TableHead className="text-xs font-semibold">Contact Person</TableHead>
+                      <TableHead className="text-xs font-semibold">Status</TableHead>
+                      <TableHead className="text-xs font-semibold">Bucket</TableHead>
+                      <TableHead className="text-xs font-semibold">Lead Source</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {matchingLeads.slice(0, 50).map((lead) => (
+                      <TableRow key={lead.id} className="hover:bg-slate-50/50 transition-colors">
+                        <TableCell className="font-medium text-xs text-slate-800">
+                          {lead.companyName || lead.tradingName || lead.contactPersonName || 'Unnamed Lead'}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-600">
+                          {lead.contactPersonName || lead.email || '-'}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
+                            {lead.customerStatus || lead.status || 'New'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-600 capitalize">
+                          {lead.bucket || 'outbound'}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500">
+                          {lead.leadSourceName || lead.leadSource || lead.campaignName || '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {matchingLeads.length > 50 && (
+                <p className="text-[11px] text-slate-400 text-right italic">
+                  Showing first 50 of {matchingLeads.length} matching leads
+                </p>
+              )}
+            </div>
+          )}
+
           {(enrolling || completed) && (
-            <div className="space-y-3">
+            <div className="space-y-3 pt-2">
               <div className="flex justify-between text-sm font-medium text-slate-700">
                 <span>Progress</span>
                 <span>{enrolledCount} / {matchingLeads.length}</span>
@@ -319,11 +423,11 @@ export default function EnrollLeadsPage() {
               <Progress value={progress} className="h-3" />
               {completed && (
                 <div className="space-y-2 mt-4">
-                  <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 p-3 rounded-md text-sm font-medium">
+                  <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 p-3 rounded-md text-sm font-medium border border-emerald-100">
                     <CheckCircle2 className="h-5 w-5" />
                     All eligible leads have been successfully queued for enrollment!
                   </div>
-                  <div className="text-xs text-slate-500 italic bg-slate-50 p-2 rounded border border-slate-100">
+                  <div className="text-xs text-slate-500 italic bg-slate-50 p-2.5 rounded border border-slate-100">
                     Note: The background Nurture Process Engine will initialize these leads and send any immediate steps at the top of the next hour.
                   </div>
                 </div>
@@ -332,25 +436,35 @@ export default function EnrollLeadsPage() {
           )}
         </CardContent>
         <CardFooter className="flex justify-between border-t bg-slate-50/50 p-6">
-          <Button variant="outline" onClick={() => router.push('/admin/marketing/nurture-journeys')} disabled={enrolling}>
-            Cancel
+          <Button variant="outline" onClick={() => router.push('/admin/marketing/nurture-journeys')} disabled={enrolling || activating}>
+            {completed ? 'Back to Dashboard' : 'Cancel'}
           </Button>
-          {!completed ? (
-            <Button 
-              onClick={startEnrollment} 
-              disabled={matchingLeads.length === 0 || enrolling}
-              className="gap-2"
-            >
-              {enrolling ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Enrolling...</>
-              ) : (
-                <><PlayCircle className="h-4 w-4" /> Start Enrollment</>
-              )}
-            </Button>
-          ) : (
-            <Button onClick={() => router.push('/admin/marketing/nurture-journeys')}>
-              Return to Dashboard
-            </Button>
+          {!completed && (
+            isDraftOrPaused ? (
+              <Button 
+                onClick={activateAndStartEnrollment} 
+                disabled={matchingLeads.length === 0 || enrolling || activating}
+                className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                {activating || enrolling ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Activating & Enrolling...</>
+                ) : (
+                  <><Sparkles className="h-4 w-4" /> Activate Journey & Enroll Leads</>
+                )}
+              </Button>
+            ) : (
+              <Button 
+                onClick={startEnrollment} 
+                disabled={matchingLeads.length === 0 || enrolling}
+                className="gap-2"
+              >
+                {enrolling ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Enrolling...</>
+                ) : (
+                  <><PlayCircle className="h-4 w-4" /> Start Enrollment</>
+                )}
+              </Button>
+            )
           )}
         </CardFooter>
       </Card>

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle, Pencil, Users, Clock, GitBranch, ExternalLink, MessageSquare, ChevronRight, ChevronDown } from 'lucide-react';
+import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle, Pencil, Users, Clock, GitBranch, ExternalLink, MessageSquare, ChevronRight, ChevronDown, Eye } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { getMergedCancellationHierarchy } from '@/lib/cancellation-reasons-mapper';
@@ -1505,9 +1505,15 @@ export function NurtureJourneys() {
                                 <span>Enroll Leads</span>
                               </Button>
                             ) : (
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none pr-1">
-                                {journey.status}
-                              </span>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 text-xs bg-white hover:bg-slate-100 hover:text-slate-900 border-slate-200 text-slate-600 shadow-sm shrink-0 gap-1.5" 
+                                onClick={() => router.push(`/admin/marketing/nurture-journeys/${journey.id}/enroll`)}
+                              >
+                                <Eye className="h-3.5 w-3.5 text-indigo-500" />
+                                <span>Preview Leads</span>
+                              </Button>
                             )}
                           </div>
                         </Card>

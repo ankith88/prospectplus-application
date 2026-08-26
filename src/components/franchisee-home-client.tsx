@@ -1263,19 +1263,18 @@ export default function FranchiseeHomeClient() {
               A step-by-step walkthrough of your dashboard — submitting leads, reading your pipeline and understanding your conversion metrics.
             </p>
 
-            {/* Video Thumbnail / Preview Container */}
+            {/* Embedded Loom Video Player */}
             <div
-              onClick={() => setIsVideoOpen(true)}
-              className="relative w-full aspect-video rounded-2xl bg-[#0b192c] overflow-hidden cursor-pointer group shadow-inner border border-slate-800 flex flex-col items-center justify-center p-4"
+              className="relative w-full rounded-2xl overflow-hidden shadow-inner border border-slate-200 bg-slate-950"
+              style={{ position: "relative", paddingBottom: "52.5%", height: 0 }}
             >
-              <div className="flex flex-col items-center gap-3 text-white">
-                <div className="p-3.5 rounded-full bg-[#095c7b] text-[#eaf143] shadow-md group-hover:scale-110 transition-transform flex items-center justify-center">
-                  <Play className="h-6 w-6 fill-[#eaf143] text-[#eaf143] ml-0.5" />
-                </div>
-                <span className="font-bold text-sm text-white group-hover:text-[#eaf143] transition-colors text-center">
-                  Watch the ProspectPlus overview
-                </span>
-              </div>
+              <iframe
+                src="https://www.loom.com/embed/0728502b4cae4de98e553af04de9f98e"
+                frameBorder="0"
+                allowFullScreen
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+                title="ProspectPlus Franchisee Training"
+              />
             </div>
           </CardContent>
           <CardFooter className="p-5 pt-0 flex gap-3">
@@ -1368,12 +1367,15 @@ export default function FranchiseeHomeClient() {
               Complete walkthrough of the ProspectPlus Franchisee Home, Lead Creation & Reporting workflow.
             </DialogDescription>
           </DialogHeader>
-          <div className="w-full aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner">
+          <div
+            className="w-full rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner"
+            style={{ position: "relative", paddingBottom: "52.5%", height: 0 }}
+          >
             <iframe
               src="https://www.loom.com/embed/0728502b4cae4de98e553af04de9f98e"
               frameBorder="0"
               allowFullScreen
-              className="w-full h-full"
+              style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
               title="ProspectPlus Franchisee Training"
             />
           </div>
