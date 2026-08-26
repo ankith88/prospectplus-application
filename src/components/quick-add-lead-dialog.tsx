@@ -400,7 +400,7 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
             franchiseeReviewPending: isFranchiseeRole && !isOutboundFranchisee
         } as any);
 
-        if (result.success && result.leadId) {
+        if (result && result.success && result.leadId) {
             toast({
                 title: 'Lead Created',
                 description: `${companyName} has been successfully created.`,

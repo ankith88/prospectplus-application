@@ -2396,7 +2396,13 @@ async function getLastActivity(leadId: string): Promise<Activity | null> {
 
 async function createNewLead(data: any): Promise<any> {
     const res = await sendNewLeadToNetSuite(data);
-    return { ...res, leadId: String(res.leadId) };
+    if (!res) {
+        return { success: false, message: 'No response from NetSuite service.' };
+    }
+    if (res.success && res.leadId) {
+        return { ...res, leadId: String(res.leadId) };
+    }
+    return { ...res, success: false, message: res.message || 'Failed to create lead in NetSuite.' };
 }
 
 async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string }): Promise<any> {

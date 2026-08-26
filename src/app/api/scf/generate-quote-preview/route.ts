@@ -192,15 +192,19 @@ export async function POST(request: Request) {
     let amCalendly = '';
     try {
       const usersSnap = await db.collection('users').get();
+      const targetRep = salesRepName.trim().toLowerCase();
       const matchedUser = usersSnap.docs.find(doc => {
-        const d = doc.data();
-        const dispName = `${d.firstName || ''} ${d.lastName || ''}`.trim();
-        return dispName.toLowerCase() === salesRepName.toLowerCase() || d.email?.toLowerCase() === salesRepName.toLowerCase();
+        const d = doc.data() || {};
+        const fullName = `${d.firstName || ''} ${d.lastName || ''}`.trim().toLowerCase();
+        const dispName = (d.displayName || '').trim().toLowerCase();
+        const name = (d.name || '').trim().toLowerCase();
+        const email = (d.email || '').trim().toLowerCase();
+        return fullName === targetRep || dispName === targetRep || name === targetRep || email === targetRep || doc.id.toLowerCase() === targetRep;
       });
       if (matchedUser) {
-        const d = matchedUser.data();
-        amMobile = d.mobileNumber || d.mobile || d.phoneNumber || '';
-        amCalendly = d.calendly || '';
+        const d = matchedUser.data() || {};
+        amMobile = d.mobileNumber || d.mobile || d.phoneNumber || d.phone || d.aircallPhoneNumber || '';
+        amCalendly = d.calendlyLink || d.calendly || '';
       }
     } catch (err) {
       console.error("Error fetching AM details in generate-quote-preview:", err);

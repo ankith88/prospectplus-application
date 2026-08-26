@@ -127,11 +127,16 @@ export async function POST(request: Request) {
     const usersSnap = await db.collection('users').get();
     const userMap = new Map<string, any>();
     usersSnap.forEach(doc => {
-      const data = doc.data();
+      const data = doc.data() || {};
       const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
-      if (fullName) {
-        userMap.set(fullName, data);
-      }
+      const displayName = (data.displayName || '').trim().toLowerCase();
+      const name = (data.name || '').trim().toLowerCase();
+      const email = (data.email || '').trim().toLowerCase();
+      if (fullName) userMap.set(fullName, data);
+      if (displayName) userMap.set(displayName, data);
+      if (name) userMap.set(name, data);
+      if (email) userMap.set(email, data);
+      userMap.set(doc.id.toLowerCase(), data);
     });
 
     let totalSent = 0;
@@ -218,7 +223,7 @@ export async function POST(request: Request) {
             const amNameLower = amName.trim().toLowerCase();
             const matchedUser = userMap.get(amNameLower);
             if (matchedUser) {
-              amMobile = matchedUser.mobileNumber || '';
+              amMobile = matchedUser.mobileNumber || matchedUser.mobile || matchedUser.phoneNumber || matchedUser.phone || matchedUser.aircallPhoneNumber || '';
             } else {
               amMobile = '';
             }

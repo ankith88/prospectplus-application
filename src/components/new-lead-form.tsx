@@ -955,7 +955,7 @@ export function NewLeadForm() {
         franchiseeReviewPending: isFranchiseeRole && !isPriority && finalValues.bucket !== 'outbound'
       });
 
-      if (result.success && result.leadId) {
+      if (result && result.success && result.leadId) {
         const leadRef = doc(firestore, 'leads', result.leadId);
         
         // Save assignment updates in Firestore

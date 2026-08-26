@@ -226,6 +226,8 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
   const [uniqueEmails, setUniqueEmails] = useState<{email: string, label: string, name: string}[]>([]);
   const [uniquePhones, setUniquePhones] = useState<{phone: string, label: string, name: string}[]>([]);
   const [accountManagerEmail, setAccountManagerEmail] = useState('');
+  const [accountManagerMobile, setAccountManagerMobile] = useState('');
+  const [accountManagerCalendly, setAccountManagerCalendly] = useState('');
   const [pendingItemsModalOpen, setPendingItemsModalOpen] = useState(false);
   const [pendingAppts, setPendingAppts] = useState<any[]>([]);
   const [pendingTasks, setPendingTasks] = useState<any[]>([]);
@@ -575,8 +577,8 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
       .replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile)
       .replace(/\{\{franchisee_mobile\}\}/gi, franchiseeMobile)
       .replace(/\{\{AccountManager\.Name\}\}/gi, lead.accountManagerAssigned || salesRep)
-      .replace(/\{\{AccountManager\.Mobile\}\}/gi, (lead as any).accountManagerMobile || '')
-      .replace(/\{\{AccountManager\.Calendly\}\}/gi, (lead as any).salesRepAssignedCalendlyLink || '')
+      .replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile || (lead as any).accountManagerMobile || '')
+      .replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly || (lead as any).salesRepAssignedCalendlyLink || '')
       .replace(/\{\{Lead\.ContactBookingLink\}\}/gi, bookingLink)
       .replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, generalBookingLink)
       .replace(/\{\{Lead\.City\}\}/gi, city)
@@ -791,35 +793,34 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
       const amAssigned = lead?.accountManagerAssigned;
       if (!amAssigned) {
         setAccountManagerEmail('');
+        setAccountManagerMobile('');
+        setAccountManagerCalendly('');
         return;
       }
       try {
         const usersRef = collection(db, 'users');
-        // Try displayName
-        const qDisplayName = query(usersRef, where('displayName', '==', amAssigned));
-        const snapDisplayName = await getDocs(qDisplayName);
-        if (!snapDisplayName.empty && snapDisplayName.docs[0].data()?.email) {
-          setAccountManagerEmail(snapDisplayName.docs[0].data().email);
-          return;
-        }
-        // Check all docs
         const qAll = query(usersRef);
         const snapAll = await getDocs(qAll);
-        const name = amAssigned.toLowerCase();
+        const name = amAssigned.toLowerCase().trim();
         const found = snapAll.docs.find(d => {
           const data = d.data();
           const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
           const dispName = (data.displayName || '').toLowerCase();
           const emailName = (data.email || '').split('@')[0].toLowerCase();
-          return fullName === name || dispName === name || emailName === name || d.id === amAssigned;
+          return fullName === name || dispName === name || emailName === name || d.id.toLowerCase() === name || (data.email || '').toLowerCase() === name;
         });
-        if (found && found.data()?.email) {
-          setAccountManagerEmail(found.data().email);
+        if (found) {
+          const data = found.data();
+          setAccountManagerEmail(data.email || '');
+          setAccountManagerMobile(data.mobileNumber || data.mobile || data.phoneNumber || data.phone || data.aircallPhoneNumber || '');
+          setAccountManagerCalendly(data.calendlyLink || data.calendly || (lead as any).salesRepAssignedCalendlyLink || '');
         } else {
           setAccountManagerEmail('');
+          setAccountManagerMobile('');
+          setAccountManagerCalendly((lead as any).salesRepAssignedCalendlyLink || '');
         }
       } catch (error) {
-        console.error("Error resolving AM email", error);
+        console.error("Error resolving AM details", error);
       }
     };
     resolveAmEmail();

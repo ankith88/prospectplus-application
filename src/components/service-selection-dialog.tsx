@@ -917,7 +917,7 @@ export function ServiceSelectionDialog({
       const amAssigned = (lead.accountManagerAssigned || '').toLowerCase().trim();
       return fullName === amAssigned || dispName === amAssigned || emailName === amAssigned || u.uid === lead.accountManagerAssigned || u.email?.toLowerCase().trim() === amAssigned;
     });
-    const amMobile = amUser?.mobileNumber || amUser?.mobile || amUser?.phoneNumber || (user as any)?.mobile || '';
+    const amMobile = amUser?.mobileNumber || amUser?.mobile || amUser?.phoneNumber || amUser?.phone || amUser?.aircallPhoneNumber || (user as any)?.mobileNumber || (user as any)?.mobile || (user as any)?.phoneNumber || (user as any)?.phone || '';
     const amCalendly = amUser?.calendly || (user as any)?.calendly || '';
 
     // Format Start Date

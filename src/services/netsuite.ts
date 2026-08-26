@@ -910,6 +910,9 @@ interface NewLeadData {
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; salesRecordInternalId?: string; message: string; }> {
+    if (!payload) {
+        return { success: false, message: 'Invalid payload provided for new lead creation.' };
+    }
     const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees, selectedServiceOption, parentLeadId, parentId, parentCustomer, lpoLeadId, linkedLpoLeadId, pageUrl, attribution } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
@@ -1091,6 +1094,9 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         
         try {
             const jsonResponse = JSON.parse(responseBody);
+            if (!jsonResponse || typeof jsonResponse !== 'object') {
+                return { success: false, message: `Unexpected response format from NetSuite: ${responseBody}` };
+            }
             const returnedId = jsonResponse.leadID || jsonResponse.leadId || jsonResponse.internalid || jsonResponse.id;
             const salesRecordId = jsonResponse.salesRecordInternalId || jsonResponse.salesrecordid || jsonResponse.salesRecordId || jsonResponse.salesRecordInternalID || jsonResponse.sales_record_id;
             if (jsonResponse.success && returnedId) {

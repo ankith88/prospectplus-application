@@ -613,8 +613,8 @@ export default function LeadsClientPage({
         }
 
         if (matchedData) {
-          setAccountManagerMobile(matchedData.mobileNumber || matchedData.mobile || matchedData.phoneNumber || '');
-          setAccountManagerCalendly(matchedData.calendlyLink || lead?.salesRepAssignedCalendlyLink || '');
+          setAccountManagerMobile(matchedData.mobileNumber || matchedData.mobile || matchedData.phoneNumber || matchedData.phone || matchedData.aircallPhoneNumber || '');
+          setAccountManagerCalendly(matchedData.calendlyLink || matchedData.calendly || lead?.salesRepAssignedCalendlyLink || '');
         } else {
           setAccountManagerMobile('');
           setAccountManagerCalendly(lead?.salesRepAssignedCalendlyLink || '');

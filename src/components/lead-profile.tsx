@@ -1811,7 +1811,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           const found = snapAll.docs.find(d => {
             const data = d.data();
             const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
-            return fullName === name || (data.email || '').toLowerCase() === name || d.id === amAssigned;
+            const dispName = (data.displayName || '').toLowerCase();
+            const emailName = (data.email || '').split('@')[0].toLowerCase();
+            return fullName === name || dispName === name || emailName === name || d.id.toLowerCase() === name || (data.email || '').toLowerCase() === name;
           });
           if (found) {
             matchedData = found.data();
@@ -1820,8 +1822,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
         if (matchedData) {
           setAccountManagerEmail(matchedData.email || '');
-          setAccountManagerMobile(matchedData.mobileNumber || matchedData.mobile || matchedData.phoneNumber || '');
-          setAccountManagerCalendly(matchedData.calendlyLink || lead?.salesRepAssignedCalendlyLink || '');
+          setAccountManagerMobile(matchedData.mobileNumber || matchedData.mobile || matchedData.phoneNumber || matchedData.phone || matchedData.aircallPhoneNumber || '');
+          setAccountManagerCalendly(matchedData.calendlyLink || matchedData.calendly || lead?.salesRepAssignedCalendlyLink || '');
         } else {
           setAccountManagerEmail('');
           setAccountManagerMobile('');

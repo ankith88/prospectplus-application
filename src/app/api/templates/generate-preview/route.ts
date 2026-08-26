@@ -93,15 +93,20 @@ export async function POST(request: Request) {
           console.error('[Template Preview] Failed to fetch franchisee details:', err);
         }
 
-        if (accountManagerName !== 'Account Manager') {
+        if (accountManagerName && accountManagerName !== 'Account Manager') {
             const usersSnap = await db.collection('users').get();
+            const targetName = accountManagerName.trim().toLowerCase();
             const matchedUser = usersSnap.docs.find(doc => {
-                const data = doc.data();
+                const data = doc.data() || {};
                 const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
-                return fullName === accountManagerName.trim().toLowerCase();
+                const displayName = (data.displayName || '').trim().toLowerCase();
+                const name = (data.name || '').trim().toLowerCase();
+                const email = (data.email || '').trim().toLowerCase();
+                return fullName === targetName || displayName === targetName || name === targetName || email === targetName || doc.id.toLowerCase() === targetName;
             });
             if (matchedUser) {
-                accountManagerMobile = matchedUser.data().mobileNumber || accountManagerMobile;
+                const data = matchedUser.data() || {};
+                accountManagerMobile = data.mobileNumber || data.mobile || data.phoneNumber || data.phone || data.aircallPhoneNumber || accountManagerMobile;
             }
         }
 
