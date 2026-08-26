@@ -1058,8 +1058,39 @@ export default function TicketDetailsPage() {
             toast.success(`Resolution email sent to ${recipients.join(', ')}`);
           } catch (emailErr) {
             console.error("Failed to send status update email:", emailErr);
-            toast.error("Status updated, but failed to send email.");
+            toast.error("Status updated, but failed to send resolution email.");
           }
+        }
+      }
+
+      // Automated notification for LIT (Lost in Transit) status
+      if (newStatus === "Lost in Transit") {
+        try {
+          await fetch("/api/notifications/email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "ticket_lit_notification",
+              payload: {
+                ticketId,
+                ticketNumber: ticket?.ticketNumber || ticketId,
+                trackingIdentifier: ticket?.trackingIdentifier || ticket?.connoteNumber || 'N/A',
+                customerCompany: ticket?.customerCompany || 'N/A',
+                customerAccountNumber: ticket?.customerAccountNumber || '',
+                enquirerName: ticket?.enquirerName || ticket?.customerContactName || '',
+                enquirerEmail: ticket?.enquirerEmail || ticket?.customerEmail || '',
+                enquirerPhone: ticket?.enquirerPhone || ticket?.customerPhone || '',
+                receiverName: ticket?.receiverName || ticket?.receiverDetails?.name || '',
+                receiverAddress: ticket?.receiverAddress || ticket?.receiverDetails?.address || '',
+                notes: notes || '',
+                freightSafeEligible: isFreightSafeEligible,
+                updatedBy: userProfile?.displayName || userProfile?.email || "Staff"
+              }
+            })
+          });
+          toast.success("Automated LIT alert sent to mailplusit@mailplus.com.au");
+        } catch (litErr) {
+          console.error("Failed to send LIT notification email:", litErr);
         }
       }
 

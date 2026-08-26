@@ -4,10 +4,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { doc, getDoc, collection, getDocs, writeBatch, updateDoc } from 'firebase/firestore';
-import { Loader2, ArrowLeft, Users, CheckCircle2, PlayCircle, AlertCircle, Eye, Building2, Sparkles } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, CheckCircle2, PlayCircle, AlertCircle, Eye, Building2, Sparkles, Mail, Send, TestTube } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/hooks/use-auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -31,6 +34,13 @@ export default function EnrollLeadsPage() {
   const [progress, setProgress] = useState(0);
   const [enrolledCount, setEnrolledCount] = useState(0);
   const [completed, setCompleted] = useState(false);
+
+  // Test Email Modal state
+  const [testModalOpen, setTestModalOpen] = useState(false);
+  const [selectedLeadForTest, setSelectedLeadForTest] = useState<any>(null);
+  const [selectedStepId, setSelectedStepId] = useState<string>('');
+  const [testRecipientEmail, setTestRecipientEmail] = useState<string>('');
+  const [sendingTest, setSendingTest] = useState(false);
 
   useEffect(() => {
     if (journeyId) {
@@ -290,6 +300,115 @@ export default function EnrollLeadsPage() {
     }
   };
 
+  // Filter email steps from journey nodes
+  const emailSteps = (journey?.nodes || []).filter(
+    (n: any) => n.type === 'action' && (n.config?.actionType === 'email' || !n.config?.actionType)
+  );
+
+  const handleOpenTestModal = (lead: any) => {
+    setSelectedLeadForTest(lead);
+    setTestRecipientEmail(userProfile?.email || '');
+    if (emailSteps.length > 0) {
+      setSelectedStepId(emailSteps[0].id);
+    }
+    setTestModalOpen(true);
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testRecipientEmail || !selectedLeadForTest || !selectedStepId) {
+      toast({ variant: 'destructive', title: 'Invalid parameters', description: 'Please select an email step and specify a test recipient email.' });
+      return;
+    }
+
+    setSendingTest(true);
+    try {
+      const stepNode = emailSteps.find((n: any) => n.id === selectedStepId);
+      if (!stepNode) {
+        toast({ variant: 'destructive', title: 'Step node not found' });
+        setSendingTest(false);
+        return;
+      }
+
+      const stepConfig = stepNode.config || {};
+      let subject = stepConfig.subject || 'Nurture Campaign Test Email';
+      let rawHtml = stepConfig.emailBody || '';
+
+      // If step uses a stored template, fetch template content
+      if (stepConfig.templateId && stepConfig.templateId !== 'custom') {
+        const tDoc = await getDoc(doc(firestore, 'marketing_templates', stepConfig.templateId));
+        if (tDoc.exists()) {
+          const tData = tDoc.data();
+          if (tData?.subject) subject = tData.subject;
+          if (tData?.body) rawHtml = tData.body;
+        }
+      }
+
+      if (!rawHtml) {
+        toast({ variant: 'destructive', title: 'No email content', description: 'The selected step has no template or email body configured.' });
+        setSendingTest(false);
+        return;
+      }
+
+      // Merge Lead Variables
+      const leadName = selectedLeadForTest.contactPersonName || selectedLeadForTest.companyName || 'Valued Customer';
+      const companyName = selectedLeadForTest.companyName || selectedLeadForTest.tradingName || 'Your Business';
+      const firstName = leadName.split(' ')[0];
+      const amName = selectedLeadForTest.accountManagerAssigned || selectedLeadForTest.salesRepAssigned || 'MailPlus Team';
+      const amEmail = selectedLeadForTest.accountManagerEmail || 'info@mailplus.com.au';
+
+      let bodyHtml = rawHtml;
+
+      // Replace placeholders
+      bodyHtml = bodyHtml.replace(/\{\{(Lead\.ContactName|contactName|contact_name|lead_name|name)\}\}/gi, leadName);
+      bodyHtml = bodyHtml.replace(/\{\{(Lead\.FirstName|firstName|first_name)\}\}/gi, firstName);
+      bodyHtml = bodyHtml.replace(/\{\{(Lead\.CompanyName|companyName|company_name|company)\}\}/gi, companyName);
+      bodyHtml = bodyHtml.replace(/\{\{(Lead\.Email|email)\}\}/gi, selectedLeadForTest.email || '');
+      bodyHtml = bodyHtml.replace(/\{\{(Lead\.Phone|phone)\}\}/gi, selectedLeadForTest.phone || '');
+      bodyHtml = bodyHtml.replace(/\{\{(Lead\.City|city)\}\}/gi, selectedLeadForTest.address?.city || '');
+      bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
+      bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Email\}\}/gi, amEmail);
+      
+      subject = subject.replace(/\{\{(Lead\.ContactName|contactName|contact_name|name)\}\}/gi, leadName);
+      subject = subject.replace(/\{\{(Lead\.CompanyName|companyName|company_name|company)\}\}/gi, companyName);
+
+      // Prepend test dispatch banner
+      const testBanner = `
+        <div style="background-color: #fef3c7; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #92400e; font-family: sans-serif; text-align: center;">
+          ⚡ <strong>NURTURE TEST DISPATCH:</strong> Previewing template step using lead <strong>${companyName}</strong> (${leadName}). Sent to test address <u>${testRecipientEmail}</u>.
+        </div>
+      `;
+      bodyHtml = testBanner + bodyHtml;
+
+      // Dispatch test email via API
+      const res = await fetch('/api/campaigns/send-custom-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: testRecipientEmail,
+          subject: `[TEST PREVIEW] ${subject}`,
+          html: bodyHtml,
+          leadId: selectedLeadForTest.id
+        })
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        toast({ 
+          title: 'Test Email Dispatched! 🚀', 
+          description: `Sent test email to ${testRecipientEmail} using variables for '${companyName}'.` 
+        });
+        setTestModalOpen(false);
+      } else {
+        toast({ variant: 'destructive', title: 'Test email failed', description: result.message || 'Failed to dispatch test email.' });
+      }
+    } catch (err: any) {
+      console.error('Error dispatching test email:', err);
+      toast({ variant: 'destructive', title: 'Error dispatching email', description: err?.message || 'An error occurred.' });
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-[50vh] items-center justify-center flex-col gap-4">
@@ -302,7 +421,7 @@ export default function EnrollLeadsPage() {
   const isDraftOrPaused = journey?.status !== 'active';
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 mt-6 pb-12">
+    <div className="max-w-5xl mx-auto space-y-6 mt-6 pb-12">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.push('/admin/marketing/nurture-journeys')}>
@@ -339,7 +458,7 @@ export default function EnrollLeadsPage() {
             <p className="font-semibold">Draft / Testing Mode Active</p>
             <p className="text-amber-700 text-xs leading-relaxed">
               You are inspecting the actual leads that match the trigger criteria for this journey while it is in <strong className="uppercase">{journey?.status}</strong> status. 
-              Review the matching leads list below to verify your auto-enrollment conditions before activating.
+              You can send test emails using lead variables to a custom email address before activating.
             </p>
           </div>
         </div>
@@ -369,8 +488,14 @@ export default function EnrollLeadsPage() {
                   <Building2 className="h-4 w-4 text-slate-500" />
                   Matching Leads Preview ({Math.min(matchingLeads.length, 50)} of {matchingLeads.length})
                 </h4>
+                {emailSteps.length > 0 && (
+                  <span className="text-xs text-indigo-600 font-medium flex items-center gap-1 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
+                    <Mail className="h-3.5 w-3.5" />
+                    {emailSteps.length} Email Step{emailSteps.length === 1 ? '' : 's'} Available for Testing
+                  </span>
+                )}
               </div>
-              <div className="border rounded-lg overflow-hidden bg-white max-h-80 overflow-y-auto">
+              <div className="border rounded-lg overflow-hidden bg-white max-h-96 overflow-y-auto">
                 <Table>
                   <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                     <TableRow>
@@ -379,6 +504,9 @@ export default function EnrollLeadsPage() {
                       <TableHead className="text-xs font-semibold">Status</TableHead>
                       <TableHead className="text-xs font-semibold">Bucket</TableHead>
                       <TableHead className="text-xs font-semibold">Lead Source</TableHead>
+                      {emailSteps.length > 0 && (
+                        <TableHead className="text-xs font-semibold text-right">Testing</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -401,6 +529,20 @@ export default function EnrollLeadsPage() {
                         <TableCell className="text-xs text-slate-500">
                           {lead.leadSourceName || lead.leadSource || lead.campaignName || '-'}
                         </TableCell>
+                        {emailSteps.length > 0 && (
+                          <TableCell className="text-right text-xs">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="h-7 text-xs gap-1.5 text-indigo-600 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
+                              onClick={() => handleOpenTestModal(lead)}
+                              title="Send test email using this lead's data to a test email address"
+                            >
+                              <TestTube className="h-3.5 w-3.5" />
+                              <span>Test Email</span>
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -444,7 +586,7 @@ export default function EnrollLeadsPage() {
               <Button 
                 onClick={activateAndStartEnrollment} 
                 disabled={matchingLeads.length === 0 || enrolling || activating}
-                className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
               >
                 {activating || enrolling ? (
                   <><Loader2 className="h-4 w-4 animate-spin" /> Activating & Enrolling...</>
@@ -468,6 +610,76 @@ export default function EnrollLeadsPage() {
           )}
         </CardFooter>
       </Card>
+
+      {/* Test Email Dispatch Modal */}
+      <Dialog open={testModalOpen} onOpenChange={setTestModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-800">
+              <TestTube className="h-5 w-5 text-indigo-600" />
+              Send Test Email for Lead
+            </DialogTitle>
+            <DialogDescription>
+              Dispatches a test nurture email populated with real lead variables to your test email address without contacting the actual lead.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <div className="bg-slate-50 p-3 rounded-lg border text-xs space-y-1">
+              <div className="font-semibold text-slate-700">Selected Preview Lead:</div>
+              <div className="text-slate-900 font-medium">
+                {selectedLeadForTest?.companyName || selectedLeadForTest?.tradingName || 'Unnamed Lead'}
+                {selectedLeadForTest?.contactPersonName && ` (${selectedLeadForTest.contactPersonName})`}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700">Select Journey Email Step</label>
+              <Select value={selectedStepId} onValueChange={setSelectedStepId}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Select email step" />
+                </SelectTrigger>
+                <SelectContent>
+                  {emailSteps.map((step: any, idx: number) => (
+                    <SelectItem key={step.id} value={step.id}>
+                      Step {idx + 1}: {step.config?.subject || 'Email Step'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700">Test Recipient Email Address</label>
+              <Input 
+                type="email" 
+                placeholder="your.email@example.com"
+                value={testRecipientEmail}
+                onChange={(e) => setTestRecipientEmail(e.target.value)}
+                className="h-9"
+              />
+              <p className="text-[11px] text-muted-foreground">The test email will be sent directly to this address.</p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setTestModalOpen(false)} disabled={sendingTest}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSendTestEmail} 
+              disabled={sendingTest || !testRecipientEmail || !selectedStepId}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
+            >
+              {sendingTest ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Dispatching...</>
+              ) : (
+                <><Send className="h-4 w-4" /> Dispatch Test Email</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
