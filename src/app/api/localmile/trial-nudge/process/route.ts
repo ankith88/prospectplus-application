@@ -106,9 +106,9 @@ export async function POST(request: Request) {
         bodyHtml = bodyHtml.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
         bodyHtml = bodyHtml.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
 
-        const recipientEmail = leadData.customerServiceEmail;
+        const recipientEmail = leadData.customerEmail || leadData.customerServiceEmail || leadData.email;
         if (!recipientEmail) {
-          console.warn(`[LocalMile Nudge Engine] Lead ${leadId} has no customerServiceEmail. Skipping email.`);
+          console.warn(`[LocalMile Nudge Engine] Lead ${leadId} has no recipient email. Skipping email.`);
           continue;
         }
         

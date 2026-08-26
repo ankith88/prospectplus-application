@@ -305,9 +305,20 @@ export default function EnrollLeadsPage() {
     (n: any) => n.type === 'action' && (n.config?.actionType === 'email' || !n.config?.actionType)
   );
 
+  const getLeadEmail = (lead: any): string => {
+    if (!lead) return '';
+    if (lead.email && typeof lead.email === 'string' && lead.email.trim()) return lead.email.trim();
+    if (lead.contactEmail && typeof lead.contactEmail === 'string' && lead.contactEmail.trim()) return lead.contactEmail.trim();
+    if (lead.contactPersonEmail && typeof lead.contactPersonEmail === 'string' && lead.contactPersonEmail.trim()) return lead.contactPersonEmail.trim();
+    if (lead.customerServiceEmail && typeof lead.customerServiceEmail === 'string' && lead.customerServiceEmail.trim()) return lead.customerServiceEmail.trim();
+    if (Array.isArray(lead.emails) && lead.emails.length > 0 && lead.emails[0]?.email) return lead.emails[0].email.trim();
+    return '';
+  };
+
   const handleOpenTestModal = (lead: any) => {
     setSelectedLeadForTest(lead);
-    setTestRecipientEmail(userProfile?.email || '');
+    const leadEmail = getLeadEmail(lead);
+    setTestRecipientEmail(leadEmail || userProfile?.email || '');
     if (emailSteps.length > 0) {
       setSelectedStepId(emailSteps[0].id);
     }
@@ -362,7 +373,7 @@ export default function EnrollLeadsPage() {
       bodyHtml = bodyHtml.replace(/\{\{(Lead\.ContactName|contactName|contact_name|lead_name|name)\}\}/gi, leadName);
       bodyHtml = bodyHtml.replace(/\{\{(Lead\.FirstName|firstName|first_name)\}\}/gi, firstName);
       bodyHtml = bodyHtml.replace(/\{\{(Lead\.CompanyName|companyName|company_name|company)\}\}/gi, companyName);
-      bodyHtml = bodyHtml.replace(/\{\{(Lead\.Email|email)\}\}/gi, selectedLeadForTest.email || '');
+      bodyHtml = bodyHtml.replace(/\{\{(Lead\.Email|email)\}\}/gi, getLeadEmail(selectedLeadForTest) || selectedLeadForTest.email || '');
       bodyHtml = bodyHtml.replace(/\{\{(Lead\.Phone|phone)\}\}/gi, selectedLeadForTest.phone || '');
       bodyHtml = bodyHtml.replace(/\{\{(Lead\.City|city)\}\}/gi, selectedLeadForTest.address?.city || '');
       bodyHtml = bodyHtml.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
@@ -371,10 +382,13 @@ export default function EnrollLeadsPage() {
       subject = subject.replace(/\{\{(Lead\.ContactName|contactName|contact_name|name)\}\}/gi, leadName);
       subject = subject.replace(/\{\{(Lead\.CompanyName|companyName|company_name|company)\}\}/gi, companyName);
 
+      const leadEmailAddr = getLeadEmail(selectedLeadForTest);
+      const isSentToActualLead = leadEmailAddr && testRecipientEmail.toLowerCase().trim() === leadEmailAddr.toLowerCase().trim();
+
       // Prepend test dispatch banner
       const testBanner = `
-        <div style="background-color: #fef3c7; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #92400e; font-family: sans-serif; text-align: center;">
-          ⚡ <strong>NURTURE TEST DISPATCH:</strong> Previewing template step using lead <strong>${companyName}</strong> (${leadName}). Sent to test address <u>${testRecipientEmail}</u>.
+        <div style="background-color: ${isSentToActualLead ? '#fef2f2' : '#fef3c7'}; border: 1px solid ${isSentToActualLead ? '#fca5a5' : '#fde68a'}; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: ${isSentToActualLead ? '#991b1b' : '#92400e'}; font-family: sans-serif; text-align: center;">
+          ⚡ <strong>NURTURE TEST DISPATCH:</strong> Previewing template step for <strong>${companyName}</strong> (${leadName}). Sent to <u>${testRecipientEmail}</u>${isSentToActualLead ? ' (Actual Lead Address)' : ''}.
         </div>
       `;
       bodyHtml = testBanner + bodyHtml;
@@ -620,47 +634,117 @@ export default function EnrollLeadsPage() {
               Send Test Email for Lead
             </DialogTitle>
             <DialogDescription>
-              Dispatches a test nurture email populated with real lead variables to your test email address without contacting the actual lead.
+              Dispatches a test nurture email populated with real lead variables. You can send it directly to the actual lead or to your own test email address.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-3">
-            <div className="bg-slate-50 p-3 rounded-lg border text-xs space-y-1">
-              <div className="font-semibold text-slate-700">Selected Preview Lead:</div>
-              <div className="text-slate-900 font-medium">
-                {selectedLeadForTest?.companyName || selectedLeadForTest?.tradingName || 'Unnamed Lead'}
-                {selectedLeadForTest?.contactPersonName && ` (${selectedLeadForTest.contactPersonName})`}
+          {(() => {
+            const actualLeadEmail = getLeadEmail(selectedLeadForTest);
+            const isActualLeadSelected = actualLeadEmail && testRecipientEmail.toLowerCase().trim() === actualLeadEmail.toLowerCase().trim();
+            const isMyEmailSelected = userProfile?.email && testRecipientEmail.toLowerCase().trim() === userProfile.email.toLowerCase().trim();
+
+            return (
+              <div className="space-y-4 py-3">
+                <div className="bg-slate-50 p-3 rounded-lg border text-xs space-y-1">
+                  <div className="font-semibold text-slate-700">Selected Preview Lead:</div>
+                  <div className="text-slate-900 font-medium flex items-center justify-between gap-2">
+                    <span className="truncate">
+                      {selectedLeadForTest?.companyName || selectedLeadForTest?.tradingName || 'Unnamed Lead'}
+                      {selectedLeadForTest?.contactPersonName && ` (${selectedLeadForTest.contactPersonName})`}
+                    </span>
+                    {actualLeadEmail ? (
+                      <Badge variant="outline" className="text-[10px] font-mono text-emerald-700 bg-emerald-50 border-emerald-200 shrink-0">
+                        {actualLeadEmail}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] font-mono text-slate-400 bg-slate-100 shrink-0">
+                        No email on lead
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-700">Select Journey Email Step</label>
+                  <Select value={selectedStepId} onValueChange={setSelectedStepId}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Select email step" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {emailSteps.map((step: any, idx: number) => (
+                        <SelectItem key={step.id} value={step.id}>
+                          Step {idx + 1}: {step.config?.subject || 'Email Step'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-700">Test Recipient Target</label>
+
+                  {/* Quick Select Cards */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={!actualLeadEmail}
+                      onClick={() => actualLeadEmail && setTestRecipientEmail(actualLeadEmail)}
+                      className={`p-2.5 text-xs rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
+                        !actualLeadEmail
+                          ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed opacity-60'
+                          : isActualLeadSelected
+                          ? 'border-emerald-600 bg-emerald-50/80 text-emerald-950 font-medium shadow-sm ring-1 ring-emerald-500'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="font-semibold flex items-center gap-1.5 text-slate-800">
+                        🎯 Send to Actual Lead
+                      </span>
+                      <span className="text-[11px] truncate text-slate-500">
+                        {actualLeadEmail || 'No email on lead'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTestRecipientEmail(userProfile?.email || '')}
+                      className={`p-2.5 text-xs rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
+                        isMyEmailSelected
+                          ? 'border-indigo-600 bg-indigo-50/80 text-indigo-950 font-medium shadow-sm ring-1 ring-indigo-500'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="font-semibold flex items-center gap-1.5 text-slate-800">
+                        👤 Send to My Email
+                      </span>
+                      <span className="text-[11px] truncate text-slate-500">{userProfile?.email || 'Admin email'}</span>
+                    </button>
+                  </div>
+
+                  <div className="pt-1">
+                    <Input 
+                      type="email" 
+                      placeholder="your.email@example.com"
+                      value={testRecipientEmail}
+                      onChange={(e) => setTestRecipientEmail(e.target.value)}
+                      className="h-9 font-mono text-xs"
+                    />
+                  </div>
+
+                  {isActualLeadSelected ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded p-2.5 text-[11px] text-amber-800 flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span>
+                        <strong>Direct Lead Dispatch:</strong> This test email will be sent directly to the actual lead's inbox (<u>{actualLeadEmail}</u>).
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">The test email will be sent directly to this target address.</p>
+                  )}
+                </div>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700">Select Journey Email Step</label>
-              <Select value={selectedStepId} onValueChange={setSelectedStepId}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Select email step" />
-                </SelectTrigger>
-                <SelectContent>
-                  {emailSteps.map((step: any, idx: number) => (
-                    <SelectItem key={step.id} value={step.id}>
-                      Step {idx + 1}: {step.config?.subject || 'Email Step'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700">Test Recipient Email Address</label>
-              <Input 
-                type="email" 
-                placeholder="your.email@example.com"
-                value={testRecipientEmail}
-                onChange={(e) => setTestRecipientEmail(e.target.value)}
-                className="h-9"
-              />
-              <p className="text-[11px] text-muted-foreground">The test email will be sent directly to this address.</p>
-            </div>
-          </div>
+            );
+          })()}
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setTestModalOpen(false)} disabled={sendingTest}>

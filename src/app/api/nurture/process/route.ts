@@ -363,32 +363,38 @@ export async function POST(request: Request) {
             const actionType = config.actionType; // 'email' | 'sms'
 
             // 1. Personalize general variables
-            let contactName = 'Valued Customer';
-            let contactFirstName = 'Valued Customer';
+            const rootContactName = leadData.contactName || leadData.mainContact || '';
+            let contactName = rootContactName || 'Valued Customer';
+            let contactFirstName = rootContactName ? rootContactName.trim().split(' ')[0] : 'Valued Customer';
             let localMilePlusAuthLink = '';
             let localMileSecurityCode = leadData.securityCode || leadData.localMileSecurityCode || '';
             let contactPhone = leadData.customerPhone || leadData.mobile || '';
-            let recipientEmail = leadData.customerServiceEmail;
+            let recipientEmail = leadData.customerEmail || leadData.customerServiceEmail || leadData.email || '';
             
             try {
-              const contactsSnap = await leadDoc.ref.collection('contacts').limit(1).get();
+              const contactsSnap = await leadDoc.ref.collection('contacts').get();
               if (!contactsSnap.empty) {
-                const firstContact = contactsSnap.docs[0].data();
-                if (firstContact.name) {
-                  contactName = firstContact.name;
-                  contactFirstName = firstContact.name.split(' ')[0];
+                // Prioritize primary contact with an email, or first contact with an email, or first contact doc
+                const primaryContactDoc = contactsSnap.docs.find((doc: any) => doc.data()?.isPrimary && doc.data()?.email?.trim());
+                const contactWithEmailDoc = contactsSnap.docs.find((doc: any) => doc.data()?.email?.trim());
+                const targetContactDoc = primaryContactDoc || contactWithEmailDoc || contactsSnap.docs[0];
+                const contactData = targetContactDoc.data() || {};
+
+                if (contactData.name) {
+                  contactName = contactData.name;
+                  contactFirstName = contactData.name.split(' ')[0];
                 }
-                if (firstContact.localMilePlusAuthLink) {
-                  localMilePlusAuthLink = firstContact.localMilePlusAuthLink;
+                if (contactData.localMilePlusAuthLink) {
+                  localMilePlusAuthLink = contactData.localMilePlusAuthLink;
                 }
-                if (firstContact.securityCode) {
-                  localMileSecurityCode = firstContact.securityCode;
+                if (contactData.securityCode) {
+                  localMileSecurityCode = contactData.securityCode;
                 }
-                if (firstContact.phone || firstContact.mobile) {
-                  contactPhone = firstContact.phone || firstContact.mobile;
+                if (contactData.phone || contactData.mobile) {
+                  contactPhone = contactData.phone || contactData.mobile;
                 }
-                if (firstContact.email) {
-                  recipientEmail = firstContact.email;
+                if (contactData.email && contactData.email.trim()) {
+                  recipientEmail = contactData.email.trim();
                 }
               }
             } catch (e) {
