@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { CalendarIcon, Plus, Users, Send, Clock, Trash2, Edit3, X, Eye, FileText, CheckCircle2, ChevronRight, ListFilter, Play, FileDown, Search, Loader2, ShieldAlert, MailOpen, CheckCircle, Folder, Save } from 'lucide-react';
+import { CalendarIcon, Plus, Users, Send, Clock, Trash2, Edit3, X, Eye, FileText, CheckCircle2, ChevronRight, ListFilter, Play, FileDown, Search, Loader2, ShieldAlert, MailOpen, CheckCircle, Folder, Save, Smartphone, Mail, TestTube } from 'lucide-react';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { salesReps } from '@/lib/constants';
 
@@ -75,12 +75,25 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
 
   // Library associations choices
   const [allJourneys, setAllJourneys] = useState<{ id: string; name: string }[]>([]);
-  const [allSmsTemplates, setAllSmsTemplates] = useState<{ id: string; name: string }[]>([]);
+  const [allSmsTemplates, setAllSmsTemplates] = useState<{ id: string; name: string; body?: string }[]>([]);
 
   // Selection states
   const [selectedJourneyIds, setSelectedJourneyIds] = useState<string[]>([]);
   const [selectedEmailTemplateIds, setSelectedEmailTemplateIds] = useState<string[]>([]);
   const [selectedSmsTemplateIds, setSelectedSmsTemplateIds] = useState<string[]>([]);
+  const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState('');
+
+  // Test dialog states
+  const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
+  const [testType, setTestType] = useState<'email' | 'sms'>('email');
+  const [testEmailTo, setTestEmailTo] = useState('');
+  const [testSmsMobile, setTestSmsMobile] = useState('');
+  const [testSelectedEmailTemplateId, setTestSelectedEmailTemplateId] = useState('');
+  const [testSelectedSmsTemplateId, setTestSelectedSmsTemplateId] = useState('');
+  const [testEmailSubject, setTestEmailSubject] = useState('');
+  const [testEmailBody, setTestEmailBody] = useState('');
+  const [testSmsBody, setTestSmsBody] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
 
   // Form states
   const [campaignName, setCampaignName] = useState('');
@@ -183,7 +196,8 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       const smsList = smsTemplatesSnap.docs.map(doc => ({
         id: doc.id,
         name: doc.data().name || 'No Name',
-      })) as { id: string; name: string }[];
+        body: doc.data().body || '',
+      })) as { id: string; name: string; body?: string }[];
       setAllSmsTemplates(smsList);
 
       const journeyList = journeysSnap.docs.map(doc => ({
@@ -212,6 +226,126 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openTestModalForCampaign = (type: 'email' | 'sms') => {
+    setTestType(type);
+    if (type === 'email') {
+      setTestSelectedEmailTemplateId(selectedTemplateId || '');
+      setTestEmailSubject(subjectLine || '');
+      const tmpl = templates.find(t => t.id === selectedTemplateId);
+      setTestEmailBody(tmpl?.body || '');
+    } else {
+      setTestSelectedSmsTemplateId(selectedSmsTemplateId || '');
+      setTestSmsBody(smsMessage || '');
+    }
+    setIsTestDialogOpen(true);
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailTo || !testEmailTo.includes('@')) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Please enter a valid recipient email address.'
+      });
+      return;
+    }
+    if (!testEmailSubject || !testEmailBody) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Subject line and email body content are required.'
+      });
+      return;
+    }
+
+    setSendingTest(true);
+    try {
+      const res = await fetch('/api/campaigns/send-custom-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: testEmailTo,
+          subject: testEmailSubject,
+          html: testEmailBody,
+          isTemplate: true
+        })
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast({
+          title: 'Test Email Dispatched',
+          description: `Sent test email to ${testEmailTo}`
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Dispatch Failed',
+          description: result.message || 'Failed to send test email.'
+        });
+      }
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: err?.message || 'Unexpected error sending test email.'
+      });
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
+  const handleSendTestSms = async () => {
+    if (!testSmsMobile || testSmsMobile.trim().length < 8) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Please enter a valid Australian mobile number (e.g. 0412345678).'
+      });
+      return;
+    }
+    if (!testSmsBody || !testSmsBody.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'SMS message body cannot be empty.'
+      });
+      return;
+    }
+
+    setSendingTest(true);
+    try {
+      const res = await fetch('/api/campaigns/send-custom-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: testSmsMobile,
+          message: testSmsBody
+        })
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast({
+          title: 'Test SMS Dispatched',
+          description: `Sent test SMS to ${testSmsMobile}`
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Dispatch Failed',
+          description: result.message || 'Failed to send test SMS.'
+        });
+      }
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: err?.message || 'Unexpected error sending test SMS.'
+      });
+    } finally {
+      setSendingTest(false);
     }
   };
 
@@ -478,6 +612,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setSelectedJourneyIds(c.nurtureJourneyIds || []);
     setSelectedEmailTemplateIds(c.emailTemplateIds || []);
     setSelectedSmsTemplateIds(c.smsTemplateIds || []);
+    setSelectedSmsTemplateId(c.smsTemplateIds?.[0] || '');
     setIsOpen(true);
   };
  
@@ -544,7 +679,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         campaignType,
         nurtureJourneyIds: selectedJourneyIds,
         emailTemplateIds: selectedEmailTemplateIds,
-        smsTemplateIds: selectedSmsTemplateIds,
+        smsTemplateIds: selectedSmsTemplateId ? [selectedSmsTemplateId] : selectedSmsTemplateIds,
         updatedAt: now,
       };
  
@@ -676,6 +811,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setTargetAudience('leads');
     setSmsMessage('');
     setSelectedTemplateId('');
+    setSelectedSmsTemplateId('');
     setSenderType('default');
     setSenderName('MailPlus Outbound Marketing');
     setReplyToEmail('marketing@mailplus.com.au');
@@ -706,12 +842,21 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
           <p className="text-xs text-muted-foreground">Queue, segments, and dispatch outbound marketing campaigns</p>
         </div>
 
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if(!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
-              <Plus className="h-4 w-4" /> Create Campaign
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setIsTestDialogOpen(true)}
+            className="border-purple-200 text-purple-700 hover:bg-purple-50 gap-2"
+          >
+            <TestTube className="h-4 w-4 text-purple-600" /> Send Test Email / SMS
+          </Button>
+
+          <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if(!open) resetForm(); }}>
+            <DialogTrigger asChild>
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+                <Plus className="h-4 w-4" /> Create Campaign
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-3xl overflow-y-auto max-h-[90vh]">
             <form onSubmit={handleScheduleSubmit}>
               <DialogHeader>
@@ -830,14 +975,57 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                   )}
 
                   {campaignType === 'sms' && (
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-600 font-semibold">SMS Message Body</label>
-                      <textarea 
-                        className="flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                        placeholder="Enter SMS copy here..."
-                        value={smsMessage}
-                        onChange={(e) => setSmsMessage(e.target.value)}
-                      />
+                    <>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-slate-600 font-semibold flex items-center justify-between">
+                          <span>SMS Template (Optional)</span>
+                          <span className="text-[10px] text-muted-foreground font-normal">Auto-fills body copy</span>
+                        </label>
+                        <Select 
+                          value={selectedSmsTemplateId} 
+                          onValueChange={(val) => {
+                            setSelectedSmsTemplateId(val === 'custom' ? '' : val);
+                            const selectedTmpl = allSmsTemplates.find(t => t.id === val);
+                            if (selectedTmpl && selectedTmpl.body) {
+                              setSmsMessage(selectedTmpl.body);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="bg-slate-50">
+                            <SelectValue placeholder="Select SMS template (or custom)..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="custom">Custom Message (No Template)</SelectItem>
+                            {allSmsTemplates.map(t => (
+                              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-slate-600 font-semibold">SMS Message Body</label>
+                        <textarea 
+                          className="flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                          placeholder="Enter SMS copy here..."
+                          value={smsMessage}
+                          onChange={(e) => setSmsMessage(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {campaignType !== 'container' && (
+                    <div className="pt-2 border-t mt-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openTestModalForCampaign(campaignType)}
+                        className="text-xs gap-1.5 border-purple-200 text-purple-700 hover:bg-purple-50 w-full"
+                      >
+                        <TestTube className="h-3.5 w-3.5" /> Send Quick Test {campaignType === 'email' ? 'Email' : 'SMS'}
+                      </Button>
                     </div>
                   )}
 
@@ -1219,6 +1407,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
           </DialogContent>
         </Dialog>
       </div>
+    </div>
 
       {/* Campaigns Queue Table */}
       <Card className="bg-card">
@@ -1379,6 +1568,172 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
           )}
         </CardContent>
       </Card>
+
+      {/* Send Test Email or SMS Dialog */}
+      <Dialog open={isTestDialogOpen} onOpenChange={setIsTestDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-800">
+              <TestTube className="h-5 w-5 text-purple-600" />
+              Send Test Email or SMS
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Manually enter recipient details to send an instant test message to your inbox or phone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            {/* Toggle Test Type */}
+            <div className="flex bg-slate-100 p-1 rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setTestType('email')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md flex items-center justify-center gap-2 transition-colors ${
+                  testType === 'email' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Mail className="h-3.5 w-3.5" /> Email Test
+              </button>
+              <button
+                type="button"
+                onClick={() => setTestType('sms')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md flex items-center justify-center gap-2 transition-colors ${
+                  testType === 'sms' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Smartphone className="h-3.5 w-3.5" /> SMS Test
+              </button>
+            </div>
+
+            {testType === 'email' ? (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">Recipient Email Address</label>
+                  <Input
+                    type="email"
+                    placeholder="e.g. yourname@mailplus.com.au"
+                    value={testEmailTo}
+                    onChange={(e) => setTestEmailTo(e.target.value)}
+                    className="bg-white text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700 font-semibold">Select Email Template</label>
+                  <Select
+                    value={testSelectedEmailTemplateId}
+                    onValueChange={(val) => {
+                      setTestSelectedEmailTemplateId(val);
+                      const t = templates.find(temp => temp.id === val);
+                      if (t) {
+                        setTestEmailSubject(t.subject);
+                        setTestEmailBody(t.body);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="bg-white text-xs">
+                      <SelectValue placeholder="Choose an email template..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templates.map(t => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">Subject Line</label>
+                  <Input
+                    placeholder="Test subject..."
+                    value={testEmailSubject}
+                    onChange={(e) => setTestEmailSubject(e.target.value)}
+                    className="bg-white text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">Email HTML Content</label>
+                  <textarea
+                    className="w-full min-h-[100px] p-2 text-xs font-mono border rounded-md bg-slate-50 resize-y"
+                    value={testEmailBody}
+                    onChange={(e) => setTestEmailBody(e.target.value)}
+                    placeholder="HTML Body..."
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">Recipient Mobile Number</label>
+                  <Input
+                    type="tel"
+                    placeholder="e.g. 0412 345 678 or +61412345678"
+                    value={testSmsMobile}
+                    onChange={(e) => setTestSmsMobile(e.target.value)}
+                    className="bg-white text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700 font-semibold">Select SMS Template</label>
+                  <Select
+                    value={testSelectedSmsTemplateId}
+                    onValueChange={(val) => {
+                      setTestSelectedSmsTemplateId(val);
+                      const t = allSmsTemplates.find(temp => temp.id === val);
+                      if (t && t.body) {
+                        setTestSmsBody(t.body);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="bg-white text-xs">
+                      <SelectValue placeholder="Choose an SMS template..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allSmsTemplates.map(t => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">SMS Message Body</label>
+                  <textarea
+                    className="w-full min-h-[100px] p-2 text-xs border rounded-md bg-white resize-y"
+                    value={testSmsBody}
+                    onChange={(e) => setTestSmsBody(e.target.value)}
+                    placeholder="Type SMS message..."
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTestDialogOpen(false)} size="sm">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={sendingTest}
+              onClick={testType === 'email' ? handleSendTestEmail : handleSendTestSms}
+              className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+            >
+              {sendingTest ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Dispatching...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" /> Send Test {testType === 'email' ? 'Email' : 'SMS'}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

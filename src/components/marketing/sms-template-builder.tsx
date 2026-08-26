@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { Loader2, Plus, Save, Trash2, FileText, Copy, ChevronDown, MessageSquare, ChevronRight } from 'lucide-react';
+import { Loader2, Plus, Save, Trash2, FileText, Copy, ChevronDown, MessageSquare, ChevronRight, TestTube, Send } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 import { useAuth } from '@/hooks/use-auth';
 
@@ -72,6 +80,64 @@ export function SmsTemplateBuilder() {
 
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+
+  // Test SMS states
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [testRecipientMobile, setTestRecipientMobile] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
+
+  const handleSendTestSms = async () => {
+    if (!testRecipientMobile || testRecipientMobile.trim().length < 8) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Please enter a valid Australian mobile number (e.g. 0412345678).'
+      });
+      return;
+    }
+    if (!body || !body.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'SMS message body cannot be empty.'
+      });
+      return;
+    }
+
+    setSendingTest(true);
+    try {
+      const res = await fetch('/api/campaigns/send-custom-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: testRecipientMobile,
+          message: body
+        })
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast({
+          title: 'Test SMS Dispatched',
+          description: `Sent test SMS to ${testRecipientMobile}`
+        });
+        setIsTestModalOpen(false);
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Dispatch Failed',
+          description: result.message || 'Failed to send test SMS.'
+        });
+      }
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: err?.message || 'Unexpected error sending test SMS.'
+      });
+    } finally {
+      setSendingTest(false);
+    }
+  };
 
   useEffect(() => {
     fetchTemplates();
@@ -449,6 +515,15 @@ export function SmsTemplateBuilder() {
             <CardDescription className="text-xs">Draft your text message using placeholders</CardDescription>
           </div>
           <div className="flex gap-2 items-center">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsTestModalOpen(true)}
+              className="h-9 border-purple-200 text-purple-700 hover:bg-purple-50 gap-1.5"
+            >
+              <TestTube className="h-4 w-4 text-purple-600" />
+              Send Test SMS
+            </Button>
             <Button onClick={handleSave} disabled={saving || !isEditable} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save
@@ -521,6 +596,55 @@ export function SmsTemplateBuilder() {
           </div>
         </div>
       </Card>
+
+      {/* Test SMS Modal */}
+      <Dialog open={isTestModalOpen} onOpenChange={setIsTestModalOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TestTube className="h-5 w-5 text-purple-600" /> Send Test SMS
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Manually enter a mobile number to test this SMS template immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">Recipient Mobile Number</label>
+              <Input
+                type="tel"
+                placeholder="e.g. 0412 345 678 or +61412345678"
+                value={testRecipientMobile}
+                onChange={(e) => setTestRecipientMobile(e.target.value)}
+                className="bg-white text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">SMS Message Content</label>
+              <Textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="SMS message text..."
+                className="bg-white text-xs min-h-[90px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setIsTestModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={sendingTest}
+              onClick={handleSendTestSms}
+              className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+            >
+              {sendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Send Test SMS
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

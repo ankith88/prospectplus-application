@@ -35,6 +35,17 @@ export default function EnrollLeadsPage() {
     }
   }, [journeyId]);
 
+  const parseLeadDate = (val: any): Date | null => {
+    if (!val) return null;
+    if (typeof val?.toDate === 'function') return val.toDate();
+    if (typeof val === 'number') return new Date(val);
+    if (typeof val === 'string') {
+      const parsed = new Date(val);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return null;
+  };
+
   const getFieldValue = (field: string, leadData: any) => {
     if (field === 'cancellationCategory') {
       return (leadData.cancellationCategory || leadData.cancellationWhy || '').toString().trim();
@@ -55,6 +66,65 @@ export default function EnrollLeadsPage() {
   const evaluateCondition = (cond: any, leadData: any) => {
     if (!cond.field) return false;
     const op = cond.operator || 'equals';
+
+    if (cond.field === 'dateLeadEntered' || cond.field === 'dateEntered' || cond.field === 'createdAt') {
+      const leadDate = parseLeadDate(leadData.dateLeadEntered || leadData.dateEntered || leadData.createdAt || leadData.createdDate);
+      if (op === 'is_empty') return !leadDate;
+      if (op === 'is_not_empty') return !!leadDate;
+      if (!leadDate) return false;
+
+      const leadTime = leadDate.getTime();
+      let fromStr = cond.valueFrom || '';
+      let toStr = cond.valueTo || '';
+
+      if (cond.value && typeof cond.value === 'string' && cond.value.includes('|')) {
+        const parts = cond.value.split('|');
+        fromStr = fromStr || parts[0];
+        toStr = toStr || parts[1];
+      } else if (!fromStr && cond.value) {
+        fromStr = String(cond.value);
+      }
+
+      if (op === 'between') {
+        let match = true;
+        if (fromStr) {
+          const fromTime = new Date(`${fromStr}T00:00:00`).getTime();
+          if (!isNaN(fromTime)) match = match && leadTime >= fromTime;
+        }
+        if (toStr) {
+          const toTime = new Date(`${toStr}T23:59:59.999`).getTime();
+          if (!isNaN(toTime)) match = match && leadTime <= toTime;
+        }
+        return match;
+      }
+
+      if (op === 'after' || op === 'greater_than') {
+        if (!fromStr) return true;
+        const fromTime = new Date(`${fromStr}T00:00:00`).getTime();
+        return !isNaN(fromTime) ? leadTime >= fromTime : true;
+      }
+
+      if (op === 'before' || op === 'less_than') {
+        const targetStr = toStr || fromStr;
+        if (!targetStr) return true;
+        const toTime = new Date(`${targetStr}T23:59:59.999`).getTime();
+        return !isNaN(toTime) ? leadTime <= toTime : true;
+      }
+
+      if (op === 'equals') {
+        if (!fromStr) return true;
+        const fromTime = new Date(`${fromStr}T00:00:00`).getTime();
+        const toTime = new Date(`${fromStr}T23:59:59.999`).getTime();
+        return leadTime >= fromTime && leadTime <= toTime;
+      }
+
+      if (op === 'not_equals') {
+        if (!fromStr) return true;
+        const fromTime = new Date(`${fromStr}T00:00:00`).getTime();
+        const toTime = new Date(`${fromStr}T23:59:59.999`).getTime();
+        return leadTime < fromTime || leadTime > toTime;
+      }
+    }
 
     if (op === 'is_empty') {
       const val = getFieldValue(cond.field, leadData);

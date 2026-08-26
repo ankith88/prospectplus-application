@@ -641,6 +641,7 @@ export function NurtureJourneys() {
                                                     <SelectItem value="isCompany">Company or Leads</SelectItem>
                                                     <SelectItem value="selectedServiceOption">Selected Service Option</SelectItem>
                                                     <SelectItem value="leadType">Lead Type</SelectItem>
+                                                    <SelectItem value="dateLeadEntered">Date Lead Entered</SelectItem>
                                                     <SelectItem value="localMileJobCount">LocalMile Job Count</SelectItem>
                                                     <SelectItem value="localMileTermsAccepted">LocalMile Terms Accepted</SelectItem>
                                                   </SelectContent>
@@ -661,10 +662,20 @@ export function NurtureJourneys() {
                                                     <SelectValue />
                                                   </SelectTrigger>
                                                   <SelectContent>
-                                                    <SelectItem value="equals">is (=)</SelectItem>
-                                                    <SelectItem value="not_equals">is not (!=)</SelectItem>
-                                                    <SelectItem value="is_empty">is empty</SelectItem>
-                                                    <SelectItem value="is_not_empty">is not empty</SelectItem>
+                                                    {cond.field === 'dateLeadEntered' ? [
+                                                      <SelectItem key="between" value="between">is between (range)</SelectItem>,
+                                                      <SelectItem key="after" value="after">is on or after (from)</SelectItem>,
+                                                      <SelectItem key="before" value="before">is on or before (to)</SelectItem>,
+                                                      <SelectItem key="equals" value="equals">is on date</SelectItem>,
+                                                      <SelectItem key="not_equals" value="not_equals">is not on date</SelectItem>,
+                                                      <SelectItem key="is_empty" value="is_empty">is empty</SelectItem>,
+                                                      <SelectItem key="is_not_empty" value="is_not_empty">is not empty</SelectItem>
+                                                    ] : [
+                                                      <SelectItem key="equals" value="equals">is (=)</SelectItem>,
+                                                      <SelectItem key="not_equals" value="not_equals">is not (!=)</SelectItem>,
+                                                      <SelectItem key="is_empty" value="is_empty">is empty</SelectItem>,
+                                                      <SelectItem key="is_not_empty" value="is_not_empty">is not empty</SelectItem>
+                                                    ]}
                                                   </SelectContent>
                                                 </Select>
                                               </div>
@@ -673,6 +684,55 @@ export function NurtureJourneys() {
                                                 {condIndex === 0 && <label className="text-[10px] font-bold text-slate-500 uppercase">Target Value</label>}
                                                 {(cond.operator === 'is_empty' || cond.operator === 'is_not_empty') ? (
                                                   <Input disabled placeholder="N/A for empty check" className="h-9 bg-slate-100/70 text-slate-400 text-xs" />
+                                                ) : cond.field === 'dateLeadEntered' ? (
+                                                  cond.operator === 'between' ? (
+                                                    <div className="flex items-center gap-1.5">
+                                                      <div className="flex-1 space-y-0.5">
+                                                        <span className="text-[9px] text-slate-500 font-semibold uppercase">From</span>
+                                                        <Input
+                                                          type="date"
+                                                          className="h-8 bg-white text-xs px-2"
+                                                          value={cond.valueFrom || (cond.value?.includes('|') ? cond.value.split('|')[0] : cond.value || '')}
+                                                          onChange={(e) => {
+                                                            const valFrom = e.target.value;
+                                                            const valTo = cond.valueTo || (cond.value?.includes('|') ? cond.value.split('|')[1] : '');
+                                                            const combined = `${valFrom}|${valTo}`;
+                                                            const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', operator: 'equals', value: '' }] }])];
+                                                            newGroups[groupIndex].conditions[condIndex] = { ...cond, valueFrom: valFrom, valueTo: valTo, value: combined };
+                                                            handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
+                                                          }}
+                                                        />
+                                                      </div>
+                                                      <div className="flex-1 space-y-0.5">
+                                                        <span className="text-[9px] text-slate-500 font-semibold uppercase">To</span>
+                                                        <Input
+                                                          type="date"
+                                                          className="h-8 bg-white text-xs px-2"
+                                                          value={cond.valueTo || (cond.value?.includes('|') ? cond.value.split('|')[1] : '')}
+                                                          onChange={(e) => {
+                                                            const valFrom = cond.valueFrom || (cond.value?.includes('|') ? cond.value.split('|')[0] : '');
+                                                            const valTo = e.target.value;
+                                                            const combined = `${valFrom}|${valTo}`;
+                                                            const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', operator: 'equals', value: '' }] }])];
+                                                            newGroups[groupIndex].conditions[condIndex] = { ...cond, valueFrom: valFrom, valueTo: valTo, value: combined };
+                                                            handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
+                                                          }}
+                                                        />
+                                                      </div>
+                                                    </div>
+                                                  ) : (
+                                                    <Input
+                                                      type="date"
+                                                      className="h-9 bg-white text-xs px-2"
+                                                      value={cond.valueFrom || cond.value || ''}
+                                                      onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', operator: 'equals', value: '' }] }])];
+                                                        newGroups[groupIndex].conditions[condIndex] = { ...cond, valueFrom: val, value: val };
+                                                        handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
+                                                      }}
+                                                    />
+                                                  )
                                                 ) : (
                                                   <Select 
                                                     value={cond.value || ''} 

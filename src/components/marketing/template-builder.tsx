@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
-import { Loader2, Plus, Save, Trash2, FileText, Code, Type, Copy, ChevronDown, AlignLeft, HelpCircle, Image as ImageIcon, Sparkles, ChevronRight } from 'lucide-react';
+import { Loader2, Plus, Save, Trash2, FileText, Code, Type, Copy, ChevronDown, AlignLeft, HelpCircle, Image as ImageIcon, Sparkles, ChevronRight, TestTube, Send } from 'lucide-react';
 import { BrandProfile } from '@/lib/types';
 import { Snippet } from '@/components/marketing/snippet-builder';
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor';
@@ -115,6 +115,66 @@ export function TemplateBuilder() {
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const subjectInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Test email states
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [testRecipientEmail, setTestRecipientEmail] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
+
+  const handleSendTestEmail = async () => {
+    if (!testRecipientEmail || !testRecipientEmail.includes('@')) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Please enter a valid recipient email address.'
+      });
+      return;
+    }
+    if (!subject || !body) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Template subject and body content are required.'
+      });
+      return;
+    }
+
+    setSendingTest(true);
+    try {
+      const res = await fetch('/api/campaigns/send-custom-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: testRecipientEmail,
+          subject: subject,
+          html: body,
+          isTemplate: true
+        })
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast({
+          title: 'Test Email Dispatched',
+          description: `Sent test email to ${testRecipientEmail}`
+        });
+        setIsTestModalOpen(false);
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Dispatch Failed',
+          description: result.message || 'Failed to send test email.'
+        });
+      }
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: err?.message || 'Unexpected error sending test email.'
+      });
+    } finally {
+      setSendingTest(false);
+    }
+  };
 
   // AI generation states
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
@@ -783,10 +843,19 @@ export function TemplateBuilder() {
                 Mobile
               </Button>
             </div>
-            <Button onClick={handleSave} disabled={saving || !isEditable} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsTestModalOpen(true)}
+                className="h-9 border-purple-200 text-purple-700 hover:bg-purple-50 gap-1.5"
+              >
+                <TestTube className="h-4 w-4 text-purple-600" />
+                Send Test Email
+              </Button>
+              <Button onClick={handleSave} disabled={saving || !isEditable} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save
+              </Button>
           </div>
         </CardHeader>
 
@@ -1061,6 +1130,55 @@ export function TemplateBuilder() {
           </div>
         </div>
       </Card>
+
+      {/* Test Email Modal */}
+      <Dialog open={isTestModalOpen} onOpenChange={setIsTestModalOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TestTube className="h-5 w-5 text-purple-600" /> Send Test Email
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Manually enter an email address to send a live test of this template.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">Recipient Email Address</label>
+              <Input
+                type="email"
+                placeholder="e.g. user@domain.com"
+                value={testRecipientEmail}
+                onChange={(e) => setTestRecipientEmail(e.target.value)}
+                className="bg-white text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">Subject Line</label>
+              <Input
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Email subject..."
+                className="bg-white text-xs"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setIsTestModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={sendingTest}
+              onClick={handleSendTestEmail}
+              className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+            >
+              {sendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Send Test Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
