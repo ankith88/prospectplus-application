@@ -23,6 +23,23 @@ export function isLeadActionableForUser(
     return true;
   }
 
+  // Operations users can action leads in the LPO Network bucket
+  const assignedRoles = (userProfile.assignedRoles || []).map(r => String(r).toLowerCase().trim());
+  const isOperationsRole = 
+    roleLower === 'operations' || 
+    roleLower === 'operations manager' || 
+    roleLower.includes('operations') ||
+    assignedRoles.some(r => r === 'operations' || r === 'operations manager' || r.includes('operations'));
+
+  const isLpoNetworkBucket = 
+    lead.bucket === 'lpo_network' || 
+    (lead.bucket as string)?.toLowerCase() === 'lpo_network' || 
+    lead.bucket === 'LPO Network';
+
+  if (isLpoNetworkBucket && isOperationsRole) {
+    return true;
+  }
+
   const userDisplayName = (userProfile.displayName || '').trim().toLowerCase();
   const userEmail = (userProfile.email || '').trim().toLowerCase();
   const userUid = (userProfile.uid || '').trim().toLowerCase();

@@ -465,6 +465,46 @@ export async function POST(request: Request) {
               }
             }
 
+            // 4. Resolve Franchisee Details
+            let franchiseeName = leadData.franchisee || 'MailPlus';
+            let franchiseeMainContact = '';
+            let franchiseeEmail = '';
+            let franchiseeMobile = '';
+            try {
+              let franchiseeData: any = null;
+              if (leadData.franchisee_id) {
+                const fIdStr = String(leadData.franchisee_id);
+                const franDoc = await db.collection('franchisees').doc(fIdStr).get();
+                if (franDoc.exists) {
+                  franchiseeData = franDoc.data();
+                } else {
+                  const franSnap1 = await db.collection('franchisees').where('internalId', '==', fIdStr).limit(1).get();
+                  if (!franSnap1.empty) {
+                    franchiseeData = franSnap1.docs[0].data();
+                  } else {
+                    const franSnap2 = await db.collection('franchisees').where('internalId', '==', Number(leadData.franchisee_id)).limit(1).get();
+                    if (!franSnap2.empty) {
+                      franchiseeData = franSnap2.docs[0].data();
+                    }
+                  }
+                }
+              }
+              if (!franchiseeData && leadData.franchisee) {
+                const franSnap = await db.collection('franchisees').where('name', '==', leadData.franchisee).limit(1).get();
+                if (!franSnap.empty) {
+                  franchiseeData = franSnap.docs[0].data();
+                }
+              }
+              if (franchiseeData) {
+                franchiseeName = franchiseeData.name || franchiseeData.mainContact || leadData.franchisee || 'MailPlus';
+                franchiseeMainContact = franchiseeData.mainContact || franchiseeData.name || '';
+                franchiseeEmail = franchiseeData.email || '';
+                franchiseeMobile = franchiseeData.mobile || franchiseeData.phone || '';
+              }
+            } catch (franErr) {
+              console.error('Error resolving Franchisee details for nurture action:', franErr);
+            }
+
             if (actionType === 'email') {
               const templateId = config.templateId;
               const templateDoc = await db.collection('marketing_templates').doc(templateId).get();
@@ -478,9 +518,13 @@ export async function POST(request: Request) {
               let bodyHtml = templateData?.body || '';
               let subject = templateData?.subject || 'Outbound Drip';
 
+              const scfLink = leadData.dynamicScfUrl || (leadId ? `https://prospectplus.com.au/scf/${leadId}` : '');
+              const sofLink = leadData.sofLink || leadData.standingOrderFormLink || '';
+              const localMileLink = leadData.localMileRegistrationLink || '';
+
               const placeholderCtx = {
                 lead: { ...leadData, id: leadId },
-                contact: { name: contactName, firstName: contactFirstName, localMilePlusAuthLink, securityCode: localMileSecurityCode },
+                contact: { name: contactName, firstName: contactFirstName, email: recipientEmail, phone: contactPhone, localMilePlusAuthLink, securityCode: localMileSecurityCode },
                 accountManager: {
                   name: amName,
                   mobile: amMobile,
@@ -488,7 +532,16 @@ export async function POST(request: Request) {
                   calendly: amCalendly
                 },
                 salesRep: amName,
+                franchisee: {
+                  name: franchiseeName,
+                  mainContact: franchiseeMainContact,
+                  email: franchiseeEmail,
+                  mobile: franchiseeMobile
+                },
                 customLinks: {
+                  scfLink,
+                  sofLink,
+                  localMileLink,
                   localMileActivationLink: localMilePlusAuthLink,
                   localMileSecurityCode,
                   trialsRemaining

@@ -401,27 +401,52 @@ export default function EnrollLeadsPage() {
         }
       }
 
-      let bodyHtml = replaceTemplatePlaceholders(rawHtml, {
-        lead: selectedLeadForTest,
-        accountManager: {
-          name: amName,
-          mobile: amMobile,
-          email: amEmail,
-          calendly: amCalendly
-        },
-        salesRep: selectedLeadForTest.salesRepAssigned
-      });
+      const primaryContact = selectedLeadForTest.contacts?.find((c: any) => c.isPrimary) || selectedLeadForTest.contacts?.[0] || null;
+      const contactName = primaryContact?.name || selectedLeadForTest.contactPersonName || selectedLeadForTest.displayName || selectedLeadForTest.companyName || 'Valued Customer';
+      const contactFirstName = primaryContact?.firstName || contactName.split(' ')[0];
+      const localMilePlusAuthLink = primaryContact?.localMilePlusAuthLink || selectedLeadForTest.localMileActivationLink || '';
+      const localMileSecurityCode = primaryContact?.securityCode || selectedLeadForTest.securityCode || selectedLeadForTest.localMileSecurityCode || '';
 
-      subject = replaceTemplatePlaceholders(subject, {
+      const scfLink = selectedLeadForTest.dynamicScfUrl || (selectedLeadForTest.id ? `https://prospectplus.com.au/scf/${selectedLeadForTest.id}` : '');
+      const sofLink = selectedLeadForTest.sofLink || selectedLeadForTest.standingOrderFormLink || '';
+      const localMileLink = selectedLeadForTest.localMileRegistrationLink || '';
+
+      const placeholderCtx = {
         lead: selectedLeadForTest,
+        contact: {
+          ...primaryContact,
+          name: contactName,
+          firstName: contactFirstName,
+          email: primaryContact?.email || selectedLeadForTest.customerServiceEmail || selectedLeadForTest.email || '',
+          phone: primaryContact?.phone || selectedLeadForTest.phone || '',
+          localMilePlusAuthLink,
+          securityCode: localMileSecurityCode
+        },
         accountManager: {
           name: amName,
           mobile: amMobile,
           email: amEmail,
           calendly: amCalendly
         },
-        salesRep: selectedLeadForTest.salesRepAssigned
-      });
+        salesRep: selectedLeadForTest.salesRepAssigned,
+        franchisee: {
+          name: selectedLeadForTest.franchisee || 'MailPlus',
+          mainContact: selectedLeadForTest.franchiseeMainContact || selectedLeadForTest.franchisee || 'MailPlus',
+          email: selectedLeadForTest.franchiseeEmail || '',
+          mobile: selectedLeadForTest.franchiseeMobile || selectedLeadForTest.franchiseePhone || ''
+        },
+        customLinks: {
+          scfLink,
+          sofLink,
+          localMileLink,
+          localMileActivationLink: localMilePlusAuthLink,
+          localMileSecurityCode,
+          trialsRemaining: selectedLeadForTest.localMileTrialsRemaining ?? 5
+        }
+      };
+
+      let bodyHtml = replaceTemplatePlaceholders(rawHtml, placeholderCtx);
+      subject = replaceTemplatePlaceholders(subject, placeholderCtx);
 
       const leadEmailAddr = getLeadEmail(selectedLeadForTest);
       const isSentToActualLead = leadEmailAddr && testRecipientEmail.toLowerCase().trim() === leadEmailAddr.toLowerCase().trim();

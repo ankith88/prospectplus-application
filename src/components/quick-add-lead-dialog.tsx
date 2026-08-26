@@ -379,11 +379,11 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
             customerServiceEmail,
             address,
             contact: {
-                firstName: 'Info',
-                lastName: companyName,
-                title: 'Primary Contact',
-                email: customerServiceEmail,
-                phone: customerPhone
+                firstName: '',
+                lastName: '',
+                title: '',
+                email: '',
+                phone: ''
             },
             dialerAssigned: isOutboundFranchisee ? 'Franchisee Generated' : ((userProfile.activeRole === 'Outbound Admin' || userProfile.activeRole === 'admin') ? '' : userProfile.displayName),
             status: isOutboundFranchisee ? 'Priority Lead' : undefined,

@@ -233,9 +233,9 @@ export function NewLeadForm() {
           if (result.email) form.setValue('customerServiceEmail', result.email);
           if (result.website) form.setValue('websiteUrl', result.website);
           if (result.personName) {
-            const parts = result.personName.split(' ');
-            form.setValue('contact.firstName', parts[0] || 'Info');
-            form.setValue('contact.lastName', parts.slice(1).join(' ') || result.companyName);
+            const parts = result.personName.trim().split(' ');
+            form.setValue('contact.firstName', parts[0] || '');
+            form.setValue('contact.lastName', parts.slice(1).join(' ') || '');
           }
           if (result.email) form.setValue('contact.email', result.email);
           if (result.phoneNumber) form.setValue('contact.phone', result.phoneNumber);
@@ -315,9 +315,9 @@ export function NewLeadForm() {
         country: 'Australia',
       },
       contact: {
-        firstName: 'Info',
+        firstName: '',
         lastName: '',
-        title: 'Primary Contact',
+        title: '',
         email: '',
         phone: '',
       },
@@ -524,11 +524,9 @@ export function NewLeadForm() {
             form.setValue('address.lng', place.geometry.location.lng());
         }
 
-        form.setValue('contact.lastName', place.name || '');
         const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
         if (websiteDomain) {
             const email = `info@${websiteDomain}`;
-            form.setValue('contact.email', email);
             form.setValue('customerServiceEmail', email);
         }
   }, [form]);
@@ -577,7 +575,7 @@ export function NewLeadForm() {
           
           const discovery = note.discoveryData;
           let contactName = '';
-          let contactTitle = 'Primary Contact';
+          let contactTitle = '';
           let contactEmail = '';
           let contactPhone = '';
 
@@ -594,7 +592,7 @@ export function NewLeadForm() {
               contactPhone = discovery.personSpokenWithPhone || '';
           }
 
-          const nameParts = (contactName).split(' ');
+          const nameParts = contactName ? contactName.trim().split(' ') : [];
           const email = contactEmail;
           const phone = contactPhone;
 
@@ -616,8 +614,8 @@ export function NewLeadForm() {
               lng: note.address?.lng,
             },
             contact: {
-              firstName: nameParts[0] || 'Info',
-              lastName: nameParts.slice(1).join(' ') || companyName,
+              firstName: nameParts[0] || '',
+              lastName: nameParts.slice(1).join(' ') || '',
               title: contactTitle,
               email: email,
               phone: phone,
@@ -1153,7 +1151,7 @@ export function NewLeadForm() {
             campaign: isFranchiseeRole ? 'Franchisee Generated' : '',
             initialNotes: '',
             address: { street: '', city: '', state: '', zip: '', country: 'Australia' },
-            contact: { firstName: 'Info', lastName: '', title: 'Primary Contact', email: '', phone: '' },
+            contact: { firstName: '', lastName: '', title: '', email: '', phone: '' },
             salesRepAssigned: '',
             dialerAssigned: '',
             fieldRepAssigned: '',

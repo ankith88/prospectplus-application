@@ -93,9 +93,9 @@ export function replaceTemplatePlaceholders(
 
   // Account Manager Details (Fetched strictly from users collection via context.accountManager)
   const amName = am.name || lead.accountManagerAssigned || lead.salesRepAssigned || context.salesRep || 'MailPlus Team';
-  const amMobile = am.mobile || '';
-  const amEmail = am.email || '';
-  const amCalendly = am.calendly || lead.salesRepAssignedCalendlyLink || '';
+  const amMobile = am.mobile || lead.accountManagerMobile || lead.accountManagerPhone || '';
+  const amEmail = am.email || lead.accountManagerEmail || '';
+  const amCalendly = am.calendly || lead.accountManagerCalendly || lead.salesRepAssignedCalendlyLink || '';
 
   // Sales Rep Name
   const salesRepName = context.salesRep || lead.salesRepAssigned || amName;
@@ -130,8 +130,8 @@ export function replaceTemplatePlaceholders(
   // Franchisee
   const franName = franchisee.name || lead.franchisee || 'MailPlus';
   const franMainContact = franchisee.mainContact || franchisee.name || franName;
-  const franEmail = franchisee.email || '';
-  const franMobile = franchisee.mobile || '';
+  const franEmail = franchisee.email || lead.franchiseeEmail || '';
+  const franMobile = franchisee.mobile || lead.franchiseeMobile || lead.franchiseePhone || '';
 
   // Prospect ID
   const prospectPlusId = lead.prospectPlusId || lead.id || '';
@@ -182,6 +182,7 @@ export function replaceTemplatePlaceholders(
     /\{\{Lead\.SCFLink\}\}/gi,
     /\{\{SCFLink\}\}/gi,
     /\{\{scf_link\}\}/gi,
+    /\{\{scf_url\}\}/gi,
   ], scfLink);
 
   content = replaceUrlPlaceholder(content, [
@@ -192,6 +193,7 @@ export function replaceTemplatePlaceholders(
     /\{\{SOFLink\}\}/gi,
     /\{\{StandingOrderLink\}\}/gi,
     /\{\{sof_link\}\}/gi,
+    /\{\{sof_url\}\}/gi,
     /\{\{SOF_Link\}\}/gi,
   ], sofLink);
 
@@ -289,6 +291,7 @@ export function replaceTemplatePlaceholders(
     .replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate)
     .replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate)
     .replace(/\{\{service_start_date\}\}/gi, scheduledServiceDate)
+    .replace(/\{\{serviceStartDate\}\}/gi, scheduledServiceDate)
     .replace(/\{\{start_date\}\}/gi, scheduledServiceDate)
     .replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, prospectPlusId)
     .replace(/\{\{prospect_plus_id\}\}/gi, prospectPlusId)

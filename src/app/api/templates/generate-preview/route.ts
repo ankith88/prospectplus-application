@@ -133,9 +133,15 @@ export async function POST(request: Request) {
     const fontFamily = brandData?.designTokens?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     const logoUrl = brandData?.designTokens?.logoUrl || '';
 
+    const leadDataForPreview = leadSnap.exists ? { ...leadSnap.data(), id: leadId } : null;
+    const sofLink = leadDataForPreview?.sofLink || (leadDataForPreview as any)?.standingOrderFormLink || '';
+    const localMileLink = leadDataForPreview?.localMileRegistrationLink || '';
+    const localMileActivationLink = leadDataForPreview?.localMileActivationLink || '';
+    const localMileSecurityCode = leadDataForPreview?.securityCode || leadDataForPreview?.localMileSecurityCode || '';
+
     // 4. Compile placeholders
     templateHtml = replaceTemplatePlaceholders(templateHtml, {
-      lead: leadSnap.exists ? { ...leadSnap.data(), id: leadId } : { companyName, address: { city: leadCity }, dynamicScfUrl: leadScfLink, bookingUrlId, generalBookingUrlId, localMileTrialsRemaining: trialsRemaining },
+      lead: leadDataForPreview || { companyName, address: { city: leadCity }, dynamicScfUrl: leadScfLink, bookingUrlId, generalBookingUrlId, localMileTrialsRemaining: trialsRemaining },
       contact: { name: contactName, email: contactEmail },
       accountManager: {
         name: accountManagerName,
@@ -153,6 +159,10 @@ export async function POST(request: Request) {
         bookingUrlId,
         generalBookingUrlId,
         scfLink: leadScfLink,
+        sofLink,
+        localMileLink,
+        localMileActivationLink,
+        localMileSecurityCode,
         trialsRemaining
       }
     });
