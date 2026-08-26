@@ -427,18 +427,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             isLostLeadStatus(lead.status) ||
             isLostLeadStatus(lead.customerStatus);
 
-        const hasFields = Boolean(
-            lead.cancellationTheme || 
-            lead.cancellationCategory || 
-            lead.cancellationReason || 
-            lead.cancellationThemeId || 
-            lead.cancellationWhyId || 
-            lead.cancellationReasonId ||
-            lead.cancellationdate
-        );
-
-        if (!isLostStatus && !hasFields) return null;
-
         const activeHierarchy = getMergedCancellationHierarchy(cancellationThemes);
         const autoMatch = autoMapLostOutcome(lead.statusReason || lead.status || lead.customerStatus || '');
 
@@ -489,6 +477,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         if (!reasonName && lead.statusReason) {
             reasonName = lead.statusReason;
         }
+
+        const hasSpecificDetails = Boolean(
+            lead.cancellationTheme || 
+            lead.cancellationCategory || 
+            lead.cancellationReason || 
+            lead.cancellationThemeId || 
+            lead.cancellationWhyId || 
+            lead.cancellationReasonId ||
+            themeName ||
+            categoryName ||
+            reasonName
+        );
+
+        if (!hasSpecificDetails) return null;
+        if (!isLostStatus && !hasSpecificDetails) return null;
 
         const cancellationDateStr = lead.cancellationdate || (lead as any).cancellationDate || null;
 
@@ -5047,7 +5050,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Alert>
       )}
 
-      {resolvedCancellation && (
+      {resolvedCancellation && resolvedCancellation.isLost && (
           <Alert className="bg-rose-50/90 border-rose-200 text-rose-950 shadow-sm">
               <AlertCircle className="h-4 w-4 !text-rose-700" />
               <AlertTitle className="font-bold flex items-center justify-between">

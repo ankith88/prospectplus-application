@@ -159,18 +159,6 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       company.status?.toLowerCase().includes('lost') ||
       company.customerStatus?.toLowerCase().includes('lost');
 
-    const hasFields = Boolean(
-      company.cancellationTheme || 
-      company.cancellationCategory || 
-      company.cancellationReason || 
-      company.cancellationThemeId || 
-      company.cancellationWhyId || 
-      company.cancellationReasonId ||
-      company.cancellationdate
-    );
-
-    if (!isLostStatus && !hasFields) return null;
-
     const activeHierarchy = getMergedCancellationHierarchy(cancellationThemes);
     const autoMatch = autoMapLostOutcome(company.statusReason || company.status || company.customerStatus || '');
 
@@ -221,6 +209,21 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     if (!reasonName && company.statusReason) {
       reasonName = company.statusReason;
     }
+
+    const hasSpecificDetails = Boolean(
+      company.cancellationTheme || 
+      company.cancellationCategory || 
+      company.cancellationReason || 
+      company.cancellationThemeId || 
+      company.cancellationWhyId || 
+      company.cancellationReasonId ||
+      themeName ||
+      categoryName ||
+      reasonName
+    );
+
+    if (!hasSpecificDetails) return null;
+    if (!isLostStatus && !hasSpecificDetails) return null;
 
     const cancellationDateStr = company.cancellationdate || (company as any).cancellationDate || null;
 
