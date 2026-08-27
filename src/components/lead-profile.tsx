@@ -2193,6 +2193,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       }
       try {
           const franchiseeId = String(franchisee.internalId || franchisee.id);
+          const oldFranchisee = lead.franchisee || 'Unassigned';
+          const newFranchisee = franchisee.name;
+
+          try {
+              await logActivity(lead.id, {
+                  type: 'Update',
+                  notes: `Franchisee updated from "${oldFranchisee}" to "${newFranchisee}" (Internal ID: ${franchiseeId})`,
+                  author: userProfile?.displayName || userProfile?.email || 'System User'
+              });
+          } catch (actErr) {
+              console.warn('[Activity Log Warning] Failed to log franchisee change activity:', actErr);
+          }
+
           await updateLeadDetails(lead.id, lead, { franchisee: franchisee.name, franchisee_id: franchiseeId });
           setLead(prev => ({ ...prev, franchisee: franchisee.name, franchisee_id: franchiseeId }));
           

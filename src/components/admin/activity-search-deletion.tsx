@@ -16,8 +16,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
-import { getAllActivities, bulkDeleteSubCollectionItems } from '@/services/firebase';
-import type { Activity } from '@/lib/types';
+import { getAllActivities, bulkDeleteSubCollectionItems, getLeadsFromFirebase } from '@/services/firebase';
+import type { Activity, Lead } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Trash2, Search } from 'lucide-react';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -28,6 +28,7 @@ type ActivityWithLeadId = Activity & { leadId: string };
 
 export function ActivitySearchDeletion() {
   const [activities, setActivities] = useState<ActivityWithLeadId[]>([]);
+  const [leadsMap, setLeadsMap] = useState<Record<string, Lead>>({});
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
@@ -47,7 +48,17 @@ export function ActivitySearchDeletion() {
     }
     setLoading(true);
     try {
-      const allActivities = await getAllActivities();
+      const [allActivities, summaryLeads] = await Promise.all([
+        getAllActivities(),
+        Object.keys(leadsMap).length === 0 ? getLeadsFromFirebase({ summary: true, includeDuplicates: true }) : Promise.resolve([])
+      ]);
+
+      if (summaryLeads.length > 0) {
+        const map: Record<string, Lead> = {};
+        summaryLeads.forEach(l => { map[l.id] = l; });
+        setLeadsMap(map);
+      }
+
       const filtered = allActivities.filter(activity =>
         activity.notes.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
       );
@@ -139,6 +150,8 @@ export function ActivitySearchDeletion() {
                 <Checkbox checked={isAllSelected} onCheckedChange={handleSelectAll} />
               </TableHead>
               <TableHead>Lead ID</TableHead>
+              <TableHead>NetSuite ID</TableHead>
+              <TableHead>Prospect+ ID</TableHead>
               <TableHead>Notes</TableHead>
               <TableHead>Date</TableHead>
             </TableRow>
@@ -146,29 +159,37 @@ export function ActivitySearchDeletion() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center"><Loader /></TableCell>
+                <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
               </TableRow>
             ) : hasSearched && activities.length > 0 ? (
-              activities.map((activity) => (
-                <TableRow key={activity.id} data-state={selectedActivities.includes(`${activity.leadId}|${activity.id}`) && "selected"}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedActivities.includes(`${activity.leadId}|${activity.id}`)}
-                      onCheckedChange={(checked) => handleSelect(`${activity.leadId}|${activity.id}`, !!checked)}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <Button variant="link" asChild className="p-0 h-auto">
-                        <Link href={`/leads/${activity.leadId}`} target="_blank">{activity.leadId}</Link>
-                    </Button>
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate">{activity.notes}</TableCell>
-                  <TableCell>{new Date(activity.date).toLocaleString()}</TableCell>
-                </TableRow>
-              ))
+              activities.map((activity) => {
+                const parentLead = leadsMap[activity.leadId];
+                const netSuiteId = parentLead?.customerEntityId || parentLead?.entityId || (parentLead as any)?.netsuiteId || (parentLead as any)?.internalid || (parentLead as any)?.internalId || 'N/A';
+                const prospectPlusId = parentLead?.prospectPlusId || (parentLead as any)?.prospectplusId || activity.leadId || 'N/A';
+
+                return (
+                  <TableRow key={activity.id} data-state={selectedActivities.includes(`${activity.leadId}|${activity.id}`) && "selected"}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedActivities.includes(`${activity.leadId}|${activity.id}`)}
+                        onCheckedChange={(checked) => handleSelect(`${activity.leadId}|${activity.id}`, !!checked)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <Button variant="link" asChild className="p-0 h-auto">
+                          <Link href={`/leads/${activity.leadId}`} target="_blank">{activity.leadId}</Link>
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground">{netSuiteId}</TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground">{prospectPlusId}</TableCell>
+                    <TableCell className="max-w-xs truncate">{activity.notes}</TableCell>
+                    <TableCell>{new Date(activity.date).toLocaleString()}</TableCell>
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-24 text-center">
                   {hasSearched ? "No results found." : "Enter a search term to begin."}
                 </TableCell>
               </TableRow>

@@ -23,6 +23,9 @@ import Link from 'next/link';
 
 interface LpoLead {
   id: string;
+  customerEntityId?: string;
+  entityId?: string;
+  netsuiteId?: string;
   prospectPlusId?: string;
   lpoName?: string;
   lpoOwnerName?: string;
@@ -188,36 +191,41 @@ export function LpoLeadDeletion() {
                       />
                     </TableHead>
                     <TableHead>LPO Name</TableHead>
-                    <TableHead>Lead ID / Doc ID</TableHead>
+                    <TableHead>NetSuite ID</TableHead>
                     <TableHead>Prospect+ ID</TableHead>
+                    <TableHead>Lead ID / Doc ID</TableHead>
                     <TableHead>Owner Name</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {results.map((lead) => (
-                    <TableRow key={lead.id}>
-                      <TableCell>
-                        <input
-                          type="checkbox"
-                          checked={selectedLeads.includes(lead.id)}
-                          onChange={(e) => handleSelectLead(lead.id, e.target.checked)}
-                          className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <Button variant="link" asChild className="p-0 h-auto">
-                          <Link href={`/lpo-leads/${lead.id}`} target="_blank">
-                            {lead.lpoName || 'N/A'}
-                          </Link>
-                        </Button>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground font-mono text-xs">{lead.id}</TableCell>
-                      <TableCell className="font-mono text-xs">{lead.prospectPlusId || 'N/A'}</TableCell>
-                      <TableCell>{lead.lpoOwnerName || 'N/A'}</TableCell>
-                      <TableCell>{lead.status || 'N/A'}</TableCell>
-                    </TableRow>
-                  ))}
+                  {results.map((lead) => {
+                    const netSuiteId = lead.customerEntityId || lead.entityId || lead.netsuiteId || 'N/A';
+                    return (
+                      <TableRow key={lead.id}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={selectedLeads.includes(lead.id)}
+                            onChange={(e) => handleSelectLead(lead.id, e.target.checked)}
+                            className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <Button variant="link" asChild className="p-0 h-auto">
+                            <Link href={`/lpo-leads/${lead.id}`} target="_blank">
+                              {lead.lpoName || 'N/A'}
+                            </Link>
+                          </Button>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{netSuiteId}</TableCell>
+                        <TableCell className="font-mono text-xs">{lead.prospectPlusId || 'N/A'}</TableCell>
+                        <TableCell className="text-muted-foreground font-mono text-xs">{lead.id}</TableCell>
+                        <TableCell>{lead.lpoOwnerName || 'N/A'}</TableCell>
+                        <TableCell>{lead.status || 'N/A'}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

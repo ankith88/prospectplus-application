@@ -43,7 +43,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   amReporting: ['Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
   archivedLeads: ['admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'user', 'Outbound Admin'],
   deploymentHistory: ['Sales Manager', 'Field Sales Admin'],
-  signedCustomers: ['Marketing Manager', 'Lead Gen Admin', 'Franchisee', 'Account Managers', 'Account Manager', 'account managers', 'Customer Success', 'Sales Manager', 'Customer Service'],
+  signedCustomers: ['Marketing Manager', 'Lead Gen Admin', 'Franchisee', 'Account Managers', 'Account Manager', 'account managers', 'Customer Success', 'Sales Manager', 'Customer Service', 'Operations', 'operations', 'Operations Manager', 'operations manager'],
   scans: ['superadmin', 'Customer Success', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager', 'Marketing Manager', 'Customer Service'],
   historyAppointments: ['Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee
   historyCallsTranscripts: ['Marketing Manager', 'user', 'Outbound Admin', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee/Field Sales Admin
@@ -110,6 +110,15 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
                         'Customer Success', 'customer success', 'customer_success',
                         'Franchisee', 'franchisee', 'Executive', 'executive', 'Outbound Admin', 'outbound admin',
                         'Operations', 'operations'
+                    ]));
+                    needsUpdate = true;
+                }
+
+                const currentSignedCustomers: string[] = currentFeatures.signedCustomers || DEFAULT_ROLE_ACCESS.signedCustomers;
+                if (!currentSignedCustomers.includes('Operations') || !currentSignedCustomers.includes('operations')) {
+                    currentFeatures.signedCustomers = Array.from(new Set([
+                        ...currentSignedCustomers,
+                        'Operations', 'operations', 'Operations Manager', 'operations manager'
                     ]));
                     needsUpdate = true;
                 }
@@ -217,6 +226,14 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
     if (feature === 'franchisees') {
       const roleLower = userProfile.activeRole.toLowerCase();
       if (['admin', 'superadmin', 'operations'].includes(roleLower) || roleLower.includes('operations')) {
+        return true;
+      }
+    }
+
+    // Signed Customers override
+    if (feature === 'signedCustomers') {
+      const roleLower = userProfile.activeRole.toLowerCase();
+      if (['admin', 'superadmin', 'operations', 'operations manager'].includes(roleLower) || roleLower.includes('operations')) {
         return true;
       }
     }

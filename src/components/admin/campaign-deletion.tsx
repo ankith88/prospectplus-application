@@ -111,22 +111,30 @@ export function CampaignDeletion() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Company Name</TableHead>
+                                    <TableHead>NetSuite ID</TableHead>
+                                    <TableHead>Prospect+ ID</TableHead>
                                     <TableHead>Lead ID</TableHead>
                                     <TableHead>Status</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {leadsInCampaign.map(lead => (
-                                    <TableRow key={lead.id}>
-                                        <TableCell>
-                                            <Button variant="link" asChild className="p-0 h-auto">
-                                                <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
-                                            </Button>
-                                        </TableCell>
-                                        <TableCell>{lead.id}</TableCell>
-                                        <TableCell>{lead.status}</TableCell>
-                                    </TableRow>
-                                ))}
+                                {leadsInCampaign.map(lead => {
+                                    const netSuiteId = lead.customerEntityId || lead.entityId || (lead as any).netsuiteId || (lead as any).internalid || (lead as any).internalId || 'N/A';
+                                    const prospectPlusId = lead.prospectPlusId || (lead as any).prospectplusId || lead.id || 'N/A';
+                                    return (
+                                        <TableRow key={lead.id}>
+                                            <TableCell>
+                                                <Button variant="link" asChild className="p-0 h-auto">
+                                                    <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
+                                                </Button>
+                                            </TableCell>
+                                            <TableCell className="text-xs font-mono text-muted-foreground">{netSuiteId}</TableCell>
+                                            <TableCell className="text-xs font-mono text-muted-foreground">{prospectPlusId}</TableCell>
+                                            <TableCell className="text-xs font-mono">{lead.id}</TableCell>
+                                            <TableCell>{lead.status}</TableCell>
+                                        </TableRow>
+                                    );
+                                })}
                             </TableBody>
                         </Table>
                     </div>

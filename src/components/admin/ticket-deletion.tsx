@@ -28,6 +28,11 @@ interface Ticket {
   enquiryType?: string;
   status?: string;
   createdAt?: any;
+  customerEntityId?: string;
+  entityId?: string;
+  netsuiteId?: string;
+  prospectPlusId?: string;
+  leadId?: string;
 }
 
 export function TicketDeletion() {
@@ -222,6 +227,8 @@ export function TicketDeletion() {
                       />
                     </TableHead>
                     <TableHead>Ticket Number</TableHead>
+                    <TableHead>NetSuite ID</TableHead>
+                    <TableHead>Prospect+ ID</TableHead>
                     <TableHead>Document ID</TableHead>
                     <TableHead>Company Name</TableHead>
                     <TableHead>Enquiry Type</TableHead>
@@ -229,29 +236,35 @@ export function TicketDeletion() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {results.map((ticket) => (
-                    <TableRow key={ticket.id}>
-                      <TableCell>
-                        <input
-                          type="checkbox"
-                          checked={selectedTickets.includes(ticket.id)}
-                          onChange={(e) => handleSelectTicket(ticket.id, e.target.checked)}
-                          className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <Button variant="link" asChild className="p-0 h-auto">
-                          <Link href={`/admin/tickets/${ticket.id}`} target="_blank">
-                            {ticket.ticketNumber || 'N/A'}
-                          </Link>
-                        </Button>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground font-mono text-xs">{ticket.id}</TableCell>
-                      <TableCell>{ticket.companyName || 'N/A'}</TableCell>
-                      <TableCell>{ticket.enquiryType || 'N/A'}</TableCell>
-                      <TableCell>{ticket.status || 'N/A'}</TableCell>
-                    </TableRow>
-                  ))}
+                  {results.map((ticket) => {
+                    const netSuiteId = ticket.customerEntityId || ticket.entityId || ticket.netsuiteId || 'N/A';
+                    const prospectPlusId = ticket.prospectPlusId || ticket.leadId || 'N/A';
+                    return (
+                      <TableRow key={ticket.id}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={selectedTickets.includes(ticket.id)}
+                            onChange={(e) => handleSelectTicket(ticket.id, e.target.checked)}
+                            className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <Button variant="link" asChild className="p-0 h-auto">
+                            <Link href={`/admin/tickets/${ticket.id}`} target="_blank">
+                              {ticket.ticketNumber || 'N/A'}
+                            </Link>
+                          </Button>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground font-mono text-xs">{netSuiteId}</TableCell>
+                        <TableCell className="text-muted-foreground font-mono text-xs">{prospectPlusId}</TableCell>
+                        <TableCell className="text-muted-foreground font-mono text-xs">{ticket.id}</TableCell>
+                        <TableCell>{ticket.companyName || 'N/A'}</TableCell>
+                        <TableCell>{ticket.enquiryType || 'N/A'}</TableCell>
+                        <TableCell>{ticket.status || 'N/A'}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

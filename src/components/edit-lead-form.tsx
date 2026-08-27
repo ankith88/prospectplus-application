@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { updateLeadDetails } from "@/services/firebase"
+import { updateLeadDetails, logActivity } from "@/services/firebase"
 import { sendLeadUpdateToNetSuite, sendAddressUpdateToNetSuite, sendCompanyCustomerUpdateToNetSuite } from "@/services/netsuite"
 import type { Lead, Address } from "@/lib/types"
 import { industryCategories } from "@/lib/constants"
@@ -66,6 +66,41 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+      // Record activity log detailing changed fields before calling APIs
+      const changes: string[] = [];
+      if (values.companyName && values.companyName !== lead.companyName) {
+        changes.push(`Company Name ("${lead.companyName || 'None'}" → "${values.companyName}")`);
+      }
+      if (values.customerServiceEmail !== (lead.customerServiceEmail ?? '')) {
+        changes.push(`Email ("${lead.customerServiceEmail || 'None'}" → "${values.customerServiceEmail || 'None'}")`);
+      }
+      if (values.customerPhone !== (lead.customerPhone ?? '')) {
+        changes.push(`Phone ("${lead.customerPhone || 'None'}" → "${values.customerPhone || 'None'}")`);
+      }
+      if (values.websiteUrl !== (lead.websiteUrl ?? '')) {
+        changes.push(`Website ("${lead.websiteUrl || 'None'}" → "${values.websiteUrl || 'None'}")`);
+      }
+      if (values.industryCategory !== (lead.industryCategory ?? '')) {
+        changes.push(`Industry ("${lead.industryCategory || 'None'}" → "${values.industryCategory || 'None'}")`);
+      }
+      if (values.leadType !== (lead.leadType ?? '')) {
+        changes.push(`Lead Type ("${lead.leadType || 'None'}" → "${values.leadType || 'None'}")`);
+      }
+      if (values.abn !== (lead.abn ?? '')) {
+        changes.push(`ABN ("${lead.abn || 'None'}" → "${values.abn || 'None'}")`);
+      }
+
+      if (changes.length > 0) {
+        try {
+          await logActivity(lead.id, {
+            type: 'Update',
+            notes: `Company details updated: ${changes.join(', ')}`,
+          });
+        } catch (actErr) {
+          console.warn('[Activity Log Warning] Failed to log company details update activity:', actErr);
+        }
+      }
+
       await updateLeadDetails(lead.id, lead, values);
       onLeadUpdated(values, lead);
 

@@ -777,7 +777,25 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       }
       try {
           const franchiseeId = String(franchisee.internalId || franchisee.id);
+          const oldFranchisee = company.franchisee || 'Unassigned';
+          const newFranchisee = franchisee.name;
           const compRef = doc(firestore, 'companies', company.id);
+
+          // Log activity before updating and calling NetSuite API
+          try {
+              await logActivity(
+                  company.id,
+                  {
+                      type: 'Update',
+                      notes: `Franchisee updated from "${oldFranchisee}" to "${newFranchisee}" (Internal ID: ${franchiseeId})`,
+                      author: userProfile?.displayName || userProfile?.email || 'System User',
+                  },
+                  'companies'
+              );
+          } catch (actErr) {
+              console.warn('[Activity Log Warning] Failed to log franchisee change activity:', actErr);
+          }
+
           await updateDoc(compRef, { franchisee: franchisee.name, franchisee_id: franchiseeId });
           
           try {

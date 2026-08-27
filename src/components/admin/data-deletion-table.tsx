@@ -357,7 +357,9 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
                 />
               </TableHead>
               <TableHead>Name</TableHead>
-              <TableHead>ID</TableHead>
+              <TableHead>NetSuite ID</TableHead>
+              <TableHead>Prospect+ ID</TableHead>
+              <TableHead>Doc ID</TableHead>
               <TableHead>Campaign</TableHead>
               {collectionName === 'leads' && <TableHead>Bucket</TableHead>}
               {collectionName === 'leads' && <TableHead>Source</TableHead>}
@@ -367,11 +369,13 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={collectionName === 'leads' ? 7 : 5} className="text-center py-8"><Loader /></TableCell>
+                <TableCell colSpan={collectionName === 'leads' ? 9 : 7} className="text-center py-8"><Loader /></TableCell>
               </TableRow>
             ) : displayedItems.length > 0 ? (
               displayedItems.map((item) => {
                 const isSelected = selectedItems.includes(item.id);
+                const netSuiteId = item.customerEntityId || item.entityId || (item as any).netsuiteId || (item as any).internalid || (item as any).internalId || 'N/A';
+                const prospectPlusId = item.prospectPlusId || (item as any).prospectplusId || item.id || 'N/A';
                 return (
                   <TableRow key={item.id} data-state={isSelected && "selected"}>
                     <TableCell>
@@ -381,6 +385,8 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
                       />
                     </TableCell>
                     <TableCell className="font-medium">{item.companyName}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-xs">{netSuiteId}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-xs">{prospectPlusId}</TableCell>
                     <TableCell className="text-muted-foreground font-mono text-xs">{item.id}</TableCell>
                     <TableCell>{item.campaign || 'N/A'}</TableCell>
                     {collectionName === 'leads' && <TableCell className="capitalize">{item.bucket || 'N/A'}</TableCell>}
@@ -391,7 +397,7 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={collectionName === 'leads' ? 7 : 5} className="h-24 text-center text-muted-foreground text-sm">
+                <TableCell colSpan={collectionName === 'leads' ? 9 : 7} className="h-24 text-center text-muted-foreground text-sm">
                   No results found.
                 </TableCell>
               </TableRow>

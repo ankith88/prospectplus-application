@@ -2013,8 +2013,36 @@ async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLea
     if (newLeadData.dialerAssigned !== undefined && newLeadData.dialerAssigned !== (oldLead as any).dialerAssigned) {
         dataToSave.assignedToDialerAt = now;
     }
+
+    const fieldDiffs: string[] = [];
+    const fieldsToTrack: Array<{ key: keyof Lead; label: string }> = [
+        { key: 'companyName', label: 'Company Name' },
+        { key: 'customerServiceEmail', label: 'Email' },
+        { key: 'customerPhone', label: 'Phone' },
+        { key: 'websiteUrl', label: 'Website' },
+        { key: 'industryCategory', label: 'Industry' },
+        { key: 'abn', label: 'ABN' },
+        { key: 'franchisee', label: 'Franchisee' },
+        { key: 'status', label: 'Status' },
+        { key: 'customerStatus', label: 'Customer Status' },
+        { key: 'dialerAssigned', label: 'Dialer Assigned' },
+        { key: 'salesRepAssigned', label: 'Sales Rep Assigned' },
+    ];
+
+    for (const item of fieldsToTrack) {
+        const valNew = newLeadData[item.key];
+        const valOld = (oldLead as any)?.[item.key];
+        if (valNew !== undefined && String(valNew) !== String(valOld ?? '')) {
+            fieldDiffs.push(`${item.label} ("${valOld || 'None'}" → "${valNew || 'None'}")`);
+        }
+    }
+
+    const activityNote = fieldDiffs.length > 0
+        ? `Details updated: ${fieldDiffs.join(', ')}`
+        : 'Lead details updated.';
+
     await updateDoc(doc(firestore, col, leadId), prepareForFirestore(dataToSave));
-    await logActivity(leadId, { type: 'Update', notes: 'Lead details updated.' });
+    await logActivity(leadId, { type: 'Update', notes: activityNote }, col);
 }
 
 async function updateTranscriptAnalysis(leadId: string, transcriptId: string, analysis: TranscriptAnalysis): Promise<void> {

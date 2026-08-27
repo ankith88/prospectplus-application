@@ -442,6 +442,8 @@ export function DialerAssignmentDateUpdater() {
                 />
               </TableHead>
               <TableHead>Company Name</TableHead>
+              <TableHead>NetSuite ID</TableHead>
+              <TableHead>Prospect+ ID</TableHead>
               <TableHead>Franchisee</TableHead>
               <TableHead>Bucket</TableHead>
               <TableHead>Dialer Assigned</TableHead>
@@ -452,7 +454,7 @@ export function DialerAssignmentDateUpdater() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={9} className="text-center py-8">
                   <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                     <Loader />
                     <span>Loading leads...</span>
@@ -462,6 +464,8 @@ export function DialerAssignmentDateUpdater() {
             ) : displayedItems.length > 0 ? (
               displayedItems.map((item) => {
                 const isSelected = selectedItems.includes(item.id);
+                const netSuiteId = item.customerEntityId || item.entityId || (item as any).netsuiteId || (item as any).internalid || (item as any).internalId || 'N/A';
+                const prospectPlusId = item.prospectPlusId || (item as any).prospectplusId || item.id || 'N/A';
                 return (
                   <TableRow key={item.id} data-state={isSelected && "selected"}>
                     <TableCell>
@@ -473,9 +477,11 @@ export function DialerAssignmentDateUpdater() {
                     <TableCell className="font-semibold text-sm">
                       <div className="flex flex-col">
                         <span>{item.companyName}</span>
-                        <span className="text-xs text-muted-foreground font-mono">{item.id}</span>
+                        <span className="text-xs text-muted-foreground font-mono">ID: {item.id}</span>
                       </div>
                     </TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono">{netSuiteId}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono">{prospectPlusId}</TableCell>
                     <TableCell className="text-sm">{item.franchisee || 'N/A'}</TableCell>
                     <TableCell className="capitalize text-sm">{item.bucket || 'N/A'}</TableCell>
                     <TableCell className="text-sm">{item.dialerAssigned || 'Unassigned'}</TableCell>
@@ -488,7 +494,7 @@ export function DialerAssignmentDateUpdater() {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground text-sm">
+                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground text-sm">
                   No leads match your selected filters.
                 </TableCell>
               </TableRow>

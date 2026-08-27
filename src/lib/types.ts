@@ -529,6 +529,7 @@ export interface FieldSalesSchedule {
 
 export interface Lead {
   id: string
+  customerEntityId?: string
   internalid?: string
   internalId?: string
   entityId?: string

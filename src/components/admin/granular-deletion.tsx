@@ -127,7 +127,7 @@ export function GranularDeletion() {
       <form onSubmit={handleSearch} className="flex items-center gap-2">
         <Search className="h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by Lead ID..."
+          placeholder="Search by Lead ID, NetSuite ID, or Prospect+ ID..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-sm"
@@ -141,7 +141,11 @@ export function GranularDeletion() {
         <Card>
             <CardHeader>
                 <CardTitle>{lead.companyName}</CardTitle>
-                <CardDescription>ID: {lead.id}</CardDescription>
+                <CardDescription className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs mt-1">
+                    <span><strong>NetSuite ID:</strong> <code className="font-mono text-foreground">{lead.customerEntityId || lead.entityId || (lead as any).netsuiteId || (lead as any).internalid || (lead as any).internalId || 'N/A'}</code></span>
+                    <span><strong>Prospect+ ID:</strong> <code className="font-mono text-foreground">{lead.prospectPlusId || (lead as any).prospectplusId || lead.id || 'N/A'}</code></span>
+                    <span><strong>Doc ID:</strong> <code className="font-mono text-foreground">{lead.id}</code></span>
+                </CardDescription>
             </CardHeader>
             <CardContent>
                 <Tabs defaultValue="contacts">
