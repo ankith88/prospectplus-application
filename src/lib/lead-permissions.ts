@@ -97,6 +97,25 @@ export function isAccountManagerUser(userProfile?: UserProfile | null): boolean 
   return amRoles.includes(roleLower) || assignedRoles.some(r => amRoles.includes(r));
 }
 
+export function isAccountOrSalesManager(userProfile?: UserProfile | null, isSuperAdmin: boolean = false): boolean {
+  if (isSuperAdmin) return true;
+  if (!userProfile) return false;
+  if ((userProfile as any)?.superAdmin || (userProfile as any)?.isSuperAdmin) return true;
+
+  const roleLower = (userProfile.activeRole || userProfile.role || '').toLowerCase().trim();
+  const assignedRoles = (userProfile.assignedRoles || []).map(r => String(r).toLowerCase().trim());
+  const allowedRoles = [
+    'account manager',
+    'account managers',
+    'sales manager',
+    'admin',
+    'superadmin',
+    'super user'
+  ];
+
+  return allowedRoles.includes(roleLower) || assignedRoles.some(r => allowedRoles.includes(r));
+}
+
 export function canReassignLead(
   userProfile: UserProfile | null | undefined,
   isSuperAdmin: boolean = false

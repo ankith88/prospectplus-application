@@ -71,9 +71,11 @@ export function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targ
         try {
             await bulkMoveLeadsToBucket({
                 leadIds: leads.map(l => l.id),
+                targetBucket,
                 fieldSales: targetBucket === 'field' || targetBucket === 'field_sales',
                 assigneeDisplayName: selectedUser,
             });
+
             toast({ title: 'Success', description: `${leads.length} lead(s) have been moved and reassigned.` });
             onLeadsMoved();
             onOpenChange(false);

@@ -52,6 +52,7 @@ import { REVERSE_OUTCOME_TO_STATUS_MAP } from '@/lib/status-outcome-mapping'
 import { CallAttemptBadge } from './call-attempt-badge'
 import { triggerVictoryConfetti } from '@/lib/confetti'
 import { getPmpoServiceForLead, isDialerUser } from '@/lib/localmile-utils'
+import { isAccountOrSalesManager } from '@/lib/lead-permissions'
 
 
 const formSchema = z.object({
@@ -2108,14 +2109,15 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                       </div>
                     )}
 
-                    {userProfile?.activeRole === 'user' && !outcomeGroups["Lost / Disqualified"].includes(outcome) && outcome && (() => {
+                    {(userProfile?.activeRole === 'user' || isAccountOrSalesManager(userProfile)) && !outcomeGroups["Lost / Disqualified"].includes(outcome) && outcome && (() => {
                       const currentHasAccount = hasMyPostBusinessAccount || lead.hasMyPostBusinessAccount || '';
                       const currentParcelVol = parcelVolumeGreaterThan20 || lead.parcelVolumeGreaterThan20 || '';
                       const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
                       const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
                       
+                      const isAmOrSalesMgr = isAccountOrSalesManager(userProfile);
                       const hasValidLpoAnswers = (currentHasAccount === 'No' && currentParcelVol === 'Yes');
-                      const canPushToLpo = (lpoConnectActive ?? true) && !isTrialingLocalMile && !isLost && hasValidLpoAnswers;
+                      const canPushToLpo = (lpoConnectActive ?? true) && !isTrialingLocalMile && !isLost && (hasValidLpoAnswers || isAmOrSalesMgr);
 
                       return (
                         <div className="space-y-3 border p-3.5 rounded-lg bg-slate-50/70 border-slate-200">
@@ -2124,7 +2126,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                             <span>Local LPO Account Details (LPO.Plus Qualification)</span>
                           </div>
                           <p className="text-[11px] text-slate-600">
-                            Answer the LPO account questions below. Existing Account = &apos;No&apos; AND Volume &gt; 20 = &apos;Yes&apos; enables the option to push to LPO.Plus.
+                            Answer the LPO account questions below. Existing Account = &apos;No&apos; AND Volume &gt; 20 = &apos;Yes&apos; enables the option to push to LPO.Plus. Account &amp; Sales Managers can push to LPO.Plus directly.
                           </p>
 
                           <div className="space-y-1.5">
@@ -2203,25 +2205,29 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                               <p className="text-[11px] text-slate-600">
                                 {pushToLpoPlusRequested
                                   ? "Lead will be saved as 'LPO Opportunity' and moved to the LPO.Plus bucket."
-                                  : `Based on LPO answers, this lead is eligible for LPO.Plus. Click 'Push to LPO.Plus' to push, or leave unclicked to log as '${outcome}'.`}
+                                  : isAmOrSalesMgr
+                                    ? "As an Account / Sales Manager, you can push this lead to LPO.Plus directly."
+                                    : `Based on LPO answers, this lead is eligible for LPO.Plus. Click 'Push to LPO.Plus' to push, or leave unclicked to log as '${outcome}'.`}
                               </p>
                             </div>
                           )}
                         </div>
+
                       );
                     })()}
 
                     {outcomeGroups["Lost / Disqualified"].includes(outcome) && (
                       <div className="space-y-4 border p-4 rounded-lg bg-slate-50/50">
-                        {userProfile?.activeRole === 'user' && (() => {
-                          const isMandatory = !isLpoExemptOutcome(outcome);
+                        {(userProfile?.activeRole === 'user' || isAccountOrSalesManager(userProfile)) && (() => {
+                          const isMandatory = !isLpoExemptOutcome(outcome) && userProfile?.activeRole === 'user';
                           const currentHasAccount = hasMyPostBusinessAccount || lead.hasMyPostBusinessAccount || '';
                           const currentParcelVol = parcelVolumeGreaterThan20 || lead.parcelVolumeGreaterThan20 || '';
                           const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
                           const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
 
+                          const isAmOrSalesMgr = isAccountOrSalesManager(userProfile);
                           const hasValidLpoAnswers = (currentHasAccount === 'No' && currentParcelVol === 'Yes');
-                          const canPushToLpo = (lpoConnectActive ?? true) && !isTrialingLocalMile && !isLost && hasValidLpoAnswers;
+                          const canPushToLpo = (lpoConnectActive ?? true) && !isTrialingLocalMile && !isLost && (hasValidLpoAnswers || isAmOrSalesMgr);
 
                           return (
                             <div className={`space-y-3 border p-3.5 rounded-md ${isMandatory ? 'bg-amber-50/80 border-amber-300' : 'bg-slate-100/60 border-slate-200'}`}>
@@ -2311,13 +2317,16 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                                   <p className="text-[11px] text-slate-600">
                                     {pushToLpoPlusRequested
                                       ? "Lead will be saved as 'LPO Opportunity' and moved to the LPO.Plus bucket."
-                                      : `Based on LPO answers, this lead is eligible for LPO.Plus. Click 'Push to LPO.Plus' to push, or leave unclicked to log as '${outcome}'.`}
+                                      : isAmOrSalesMgr
+                                        ? "As an Account / Sales Manager, you can push this lead to LPO.Plus directly."
+                                        : `Based on LPO answers, this lead is eligible for LPO.Plus. Click 'Push to LPO.Plus' to push, or leave unclicked to log as '${outcome}'.`}
                                   </p>
                                 </div>
                               )}
                             </div>
                           );
                         })()}
+
 
                         <LossReasonPicker
                           cancellationThemes={cancellationThemes}

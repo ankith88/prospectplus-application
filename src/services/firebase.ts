@@ -2672,7 +2672,7 @@ function addBucketChangeToBatch(batch: any, leadId: string, oldBucket: string, n
 
 async function bulkMoveLeadsToBucket(data: any): Promise<void> {
     const batch = writeBatch(firestore);
-    const newBucket = data.fieldSales ? 'field_sales' : 'outbound';
+    const newBucket = data.targetBucket || (data.fieldSales ? 'field_sales' : 'outbound');
     const oldBuckets: Record<string, string> = {};
     try {
         for (const id of data.leadIds) {
@@ -2687,15 +2687,23 @@ async function bulkMoveLeadsToBucket(data: any): Promise<void> {
     }
 
     data.leadIds.forEach((id: string) => {
-        batch.update(doc(firestore, 'leads', id), { 
-            fieldSales: data.fieldSales, 
+        const updatePayload: any = { 
+            fieldSales: data.fieldSales || newBucket === 'field_sales', 
             dialerAssigned: data.assigneeDisplayName,
             bucket: newBucket
-        });
+        };
+        if (newBucket === 'lpo_plus') {
+            updatePayload.lpoPlusOpportunity = true;
+            updatePayload.status = 'LPO Opportunity';
+            updatePayload.customerStatus = 'LPO Opportunity';
+            updatePayload.accountManagerAssigned = data.assigneeDisplayName || "Kerry O'Neill";
+        }
+        batch.update(doc(firestore, 'leads', id), updatePayload);
         addBucketChangeToBatch(batch, id, oldBuckets[id] || 'unknown', newBucket, 'System');
     });
     await batch.commit();
 }
+
 
 async function bulkAssignUnassignedLeads(leadIds: string[], newBucket: string, assignmentMap: Record<string, string>, author: string): Promise<void> {
     const batch = writeBatch(firestore);

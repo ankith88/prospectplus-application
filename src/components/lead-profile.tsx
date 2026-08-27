@@ -82,7 +82,7 @@ import {
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
-import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isFranchiseeRole } from '@/lib/lead-permissions'
+import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isFranchiseeRole, isAccountOrSalesManager } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
 import { Pencil } from 'lucide-react'
 import { EditTaskDialog } from '@/components/edit-task-dialog'
@@ -3332,7 +3332,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleBucketChange = async (newBucket: string) => {
     const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
-    if (newBucket === 'lpo_plus' && isLost) {
+    const isAmOrSalesMgr = isAccountOrSalesManager(userProfile, isSuperAdmin);
+    if (newBucket === 'lpo_plus' && isLost && !isAmOrSalesMgr) {
       toast({
         variant: 'destructive',
         title: 'Action Denied',
@@ -3364,8 +3365,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         if (isLpoBucket) {
           extraUpdates.accountManagerAssigned = "Kerry O'Neill";
         }
+        if (newBucket === 'lpo_plus') {
+          extraUpdates.lpoPlusOpportunity = true;
+          extraUpdates.status = 'LPO Opportunity';
+          extraUpdates.customerStatus = 'LPO Opportunity';
+        }
         await updateLeadDetails(lead.id, lead, extraUpdates);
         await logBucketChange(lead.id, oldBucket, newBucket, author);
+
 
         setLead(prev => {
             const updatedHistory = [
@@ -9179,7 +9186,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <SelectItem value="customer_success">Customer Success</SelectItem>
                                     <SelectItem value="nurture">Nurture</SelectItem>
                                     <SelectItem value="marketing">Marketing</SelectItem>
-                                    <SelectItem value="lpo_plus" disabled={lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost')}>LPO.Plus</SelectItem>
+                                    <SelectItem value="lpo_plus" disabled={!isAccountOrSalesManager(userProfile, isSuperAdmin) && (lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost'))}>LPO.Plus</SelectItem>
                                 </SelectContent>
                             </Select>
                         ) : (
