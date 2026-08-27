@@ -257,6 +257,9 @@ export async function POST(req: NextRequest) {
     }
     // ---------------------------------------------------
 
+    const rawSource = body.customerSource || body.source || body.leadSource || '';
+    const isWebsiteSource = typeof rawSource === 'string' && (rawSource === 'Website' || rawSource.toLowerCase() === 'website');
+
     // Prepare lead data
     const prospectPlusId = await generateUniqueProspectPlusId(db);
     const leadData: any = {
@@ -282,6 +285,7 @@ export async function POST(req: NextRequest) {
       accountManagerAssigned: isMultisite ? (accountManagerName || MULTISITE_ACCOUNT_MANAGER_UID) : (accountManagerName || assignedAccountManager || undefined),
       salesRepAssigned: isMultisite ? (accountManagerName || MULTISITE_ACCOUNT_MANAGER_UID) : (body.salesRepAssigned || undefined),
       bucket: isMultisite ? 'account_manager' : (body.bucket || 'inbound'),
+      originalBucket: isWebsiteSource ? 'inbound' : (body.originalBucket || undefined),
       fieldSales: body.fieldSales === true || body.fieldSales === 'true',
       dateLeadEntered: new Date().toISOString(),
       createdAt: FieldValue.serverTimestamp(),
@@ -632,6 +636,31 @@ export async function POST(req: NextRequest) {
     }
 
     const createdLeadId = docRef ? docRef.id : netSuiteId;
+
+    if (createdLeadId && isWebsiteSource && leadData.bucket === 'account_manager') {
+      try {
+        const bucketHistoryRef = db.collection('leads').doc(createdLeadId).collection('bucket_history');
+        const existingBhSnap = await bucketHistoryRef.get();
+        if (existingBhSnap.empty) {
+          const nowIso = new Date().toISOString();
+          const bhEntry = {
+            id: `bh-${Date.now()}`,
+            oldBucket: 'inbound',
+            newBucket: 'account_manager',
+            date: nowIso,
+            author: 'NetSuite API (Website Inbound)'
+          };
+          await bucketHistoryRef.add(bhEntry);
+          await db.collection('leads').doc(createdLeadId).set({
+            originalBucket: 'inbound',
+            bucketHistory: FieldValue.arrayUnion(bhEntry)
+          }, { merge: true });
+        }
+      } catch (bhErr) {
+        console.error('Failed to record Website lead initial bucket history:', bhErr);
+      }
+    }
+
     if (createdLeadId && /^\d+$/.test(createdLeadId)) {
       try {
         const leadDocSnap = await db.collection('leads').doc(createdLeadId).get();

@@ -2676,9 +2676,25 @@ async function bulkMoveLeadsToNurtureCampaign(
 
 async function logBucketChange(leadId: string, oldBucket: string, newBucket: string, author: string): Promise<void> {
     try {
+        let effectiveOldBucket = oldBucket || 'unassigned';
+        if ((!oldBucket || oldBucket === 'unassigned') && newBucket === 'account_manager') {
+            try {
+                const leadRef = doc(firestore, 'leads', leadId);
+                const leadSnap = await getDoc(leadRef);
+                if (leadSnap.exists()) {
+                    const data = leadSnap.data();
+                    const src = data?.customerSource || data?.source || data?.leadSource || '';
+                    if (typeof src === 'string' && (src === 'Website' || src.toLowerCase() === 'website')) {
+                        effectiveOldBucket = 'inbound';
+                    }
+                }
+            } catch (err) {
+                // Ignore lookup error and proceed with default
+            }
+        }
         const historyRef = collection(firestore, 'leads', leadId, 'bucket_history');
         await addDoc(historyRef, {
-            oldBucket: oldBucket || 'unassigned',
+            oldBucket: effectiveOldBucket,
             newBucket: newBucket || 'unassigned',
             date: new Date().toISOString(),
             author: author || 'System'

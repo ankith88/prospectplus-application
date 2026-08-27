@@ -108,6 +108,35 @@ export async function PATCH(
       updateData.bucket = 'account_manager';
     }
 
+    const effectiveSource = updateData.customerSource || updateData.source || updateData.leadSource || existingData.customerSource || existingData.source || existingData.leadSource || '';
+    const isWebsiteSourceLead = typeof effectiveSource === 'string' && (effectiveSource === 'Website' || effectiveSource.toLowerCase() === 'website');
+
+    if (isWebsiteSourceLead) {
+      if (!existingData.originalBucket) {
+        updateData.originalBucket = 'inbound';
+      }
+      const finalBucket = updateData.bucket || currentBucket;
+      if (finalBucket === 'account_manager') {
+        try {
+          const bhSnap = await leadRef.collection('bucket_history').get();
+          if (bhSnap.empty && (!existingData.bucketHistory || existingData.bucketHistory.length === 0)) {
+            const nowIso = new Date().toISOString();
+            const bhEntry = {
+              id: `bh-${Date.now()}`,
+              oldBucket: 'inbound',
+              newBucket: 'account_manager',
+              date: existingData.dateLeadEntered || existingData.createdAt || nowIso,
+              author: 'NetSuite API (Website Inbound)'
+            };
+            await leadRef.collection('bucket_history').add(bhEntry);
+            updateData.bucketHistory = FieldValue.arrayUnion(bhEntry);
+          }
+        } catch (bhErr) {
+          console.error('Failed to log Website lead bucket history in PATCH:', bhErr);
+        }
+      }
+    }
+
     // Perform update
     await leadRef.update(updateData);
 

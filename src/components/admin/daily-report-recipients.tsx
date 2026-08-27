@@ -60,6 +60,14 @@ const REPORTS: ReportConfig[] = [
     defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
     testEndpoint: '/api/admin/scans/send-test-sales-snapshot-report',
   },
+  {
+    id: 'franchisee_leads',
+    title: 'Daily Franchisee Generated Leads Report',
+    description: 'Daily report of leads created yesterday by users with the Franchisee role, grouped by individual franchisee.',
+    docId: 'daily_franchisee_leads_report',
+    defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
+    testEndpoint: '/api/admin/scans/send-test-franchisee-leads-report',
+  },
 ];
 
 const FREQUENCY_OPTIONS = [
@@ -363,18 +371,24 @@ export function DailyReportRecipients() {
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-4 max-w-2xl bg-slate-100 p-1">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 max-w-4xl bg-slate-100 p-1">
           <TabsTrigger value="barcodes" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
             Barcodes Sync
           </TabsTrigger>
           <TabsTrigger value="leads" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
             Website Leads
           </TabsTrigger>
+          <TabsTrigger value="franchisee_leads" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
+            Franchisee Leads
+          </TabsTrigger>
           <TabsTrigger value="tickets" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
             Tickets by Source
           </TabsTrigger>
           <TabsTrigger value="calls" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
             Call Report
+          </TabsTrigger>
+          <TabsTrigger value="sales_snapshot" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
+            Sales Snapshot
           </TabsTrigger>
         </TabsList>
 
