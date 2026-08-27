@@ -113,25 +113,25 @@ export default function CSRequestsDashboard() {
     try {
       const userDisplayName = userProfile?.displayName || userProfile?.email || 'Customer Success Rep';
       const processedAt = new Date().toISOString();
+      const activeStrategy = cancelSaveStrategy || 'Change Frequency & Update Price';
 
-      await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
-        status: 'Saved',
-        saveStrategy: cancelSaveStrategy,
-        notes: cancelNotes ? `Resell / Quote issued. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}` : 'Resell / Quote issued to customer',
+      const requestUpdates = {
+        status: 'Saved' as const,
+        saveStrategy: activeStrategy,
+        notes: cancelNotes ? `Resell / Quote issued. Strategy: ${activeStrategy}. Notes: ${cancelNotes}` : `Resell / Quote issued to customer (Strategy: ${activeStrategy})`,
         attachments: proofAttachments,
         processedBy: userDisplayName,
         processedAt
-      });
+      };
 
       try {
-        await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), {
-          status: 'Saved',
-          saveStrategy: cancelSaveStrategy,
-          notes: cancelNotes ? `Resell / Quote issued. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}` : 'Resell / Quote issued to customer',
-          attachments: proofAttachments,
-          processedBy: userDisplayName,
-          processedAt
-        });
+        await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), requestUpdates);
+      } catch (e) {
+        console.warn('Could not update cs_requests document directly:', e);
+      }
+
+      try {
+        await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), requestUpdates);
       } catch (e) { /* ignore if not found */ }
 
       const saveCompRef = doc(firestore, 'companies', selectedRequest.leadId);
@@ -151,7 +151,7 @@ export default function CSRequestsDashboard() {
         await logActivity(selectedRequest.leadId, {
           type: 'Update',
           date: processedAt,
-          notes: `Customer Saved from Cancellation via Resell / Quote Update. Strategy: ${cancelSaveStrategy}`,
+          notes: `Customer Saved from Cancellation via Resell / Quote Update. Strategy: ${activeStrategy}`,
           author: userDisplayName,
         }, 'companies');
       }
@@ -161,14 +161,14 @@ export default function CSRequestsDashboard() {
         await logActivity(selectedRequest.leadId, {
           type: 'Update',
           date: processedAt,
-          notes: `Customer Saved from Cancellation via Resell / Quote Update. Strategy: ${cancelSaveStrategy}`,
+          notes: `Customer Saved from Cancellation via Resell / Quote Update. Strategy: ${activeStrategy}`,
           author: userDisplayName,
         }, 'leads');
       }
 
       toast({
-        title: 'Resell Quote Sent',
-        description: `${selectedRequest.companyName} retention quote sent & customer marked as Saved!`,
+        title: 'Resell Completed',
+        description: `${selectedRequest.companyName} marked as Saved and services updated!`,
       });
 
       setIsResellDialogOpen(false);

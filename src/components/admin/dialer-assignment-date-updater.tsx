@@ -112,7 +112,11 @@ export function DialerAssignmentDateUpdater() {
         const matchesName = item.companyName.toLowerCase().includes(lowerSearch);
         const matchesId = item.id.toLowerCase().includes(lowerSearch);
         const matchesEntityId = item.entityId?.toLowerCase().includes(lowerSearch);
-        if (!matchesName && !matchesId && !matchesEntityId) return false;
+        const matchesCustomerEntityId = item.customerEntityId?.toLowerCase().includes(lowerSearch);
+        const matchesProspectPlusId = item.prospectPlusId?.toLowerCase().includes(lowerSearch);
+        const matchesNetsuiteId = (item as any).netsuiteId?.toString().toLowerCase().includes(lowerSearch);
+        const matchesInternalId = (item as any).internalid?.toString().toLowerCase().includes(lowerSearch) || (item as any).internalId?.toString().toLowerCase().includes(lowerSearch);
+        if (!matchesName && !matchesId && !matchesEntityId && !matchesCustomerEntityId && !matchesProspectPlusId && !matchesNetsuiteId && !matchesInternalId) return false;
       }
 
       // Franchisee match
@@ -250,7 +254,7 @@ export function DialerAssignmentDateUpdater() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9 h-10"
-              placeholder="Search leads..."
+              placeholder="Search name, NetSuite ID, Prospect+ ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />

@@ -118,8 +118,13 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
               companyName.toLowerCase().includes(lowercasedSearchTerm) ||
               (item.id && item.id.toLowerCase().includes(lowercasedSearchTerm)) ||
               (item.entityId && item.entityId.toLowerCase().includes(lowercasedSearchTerm)) ||
+              (item.customerEntityId && item.customerEntityId.toLowerCase().includes(lowercasedSearchTerm)) ||
               (item.salesRecordInternalId && String(item.salesRecordInternalId).toLowerCase().includes(lowercasedSearchTerm)) ||
-              (item.prospectPlusId && String(item.prospectPlusId).toLowerCase().includes(lowercasedSearchTerm))
+              ((item as any).netsuiteId && String((item as any).netsuiteId).toLowerCase().includes(lowercasedSearchTerm)) ||
+              ((item as any).internalid && String((item as any).internalid).toLowerCase().includes(lowercasedSearchTerm)) ||
+              ((item as any).internalId && String((item as any).internalId).toLowerCase().includes(lowercasedSearchTerm)) ||
+              (item.prospectPlusId && String(item.prospectPlusId).toLowerCase().includes(lowercasedSearchTerm)) ||
+              ((item as any).prospectplusId && String((item as any).prospectplusId).toLowerCase().includes(lowercasedSearchTerm))
             )
           : true;
         
@@ -231,9 +236,9 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         <div className="space-y-2">
-            <label className="text-sm font-medium">Search by Name or ID</label>
+            <label className="text-sm font-medium">Search by Name, NetSuite ID, or Prospect+ ID</label>
             <Input
-              placeholder={`Search by name or ID...`}
+              placeholder={`Search name, NetSuite ID, Prospect+ ID...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />

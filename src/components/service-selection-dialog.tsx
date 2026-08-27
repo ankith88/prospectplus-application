@@ -1572,7 +1572,7 @@ export function ServiceSelectionDialog({
           };
         });
 
-        const opName = (mode === 'Quote' || mode === 'Resell') ? 'quoteCustomer' : 'signCustomer';
+        const opName = mode === 'Quote' ? 'quoteCustomer' : 'signCustomer';
         const customerIdVal = (lead as any).internalid || lead.id;
         
         const rawSelContactId = values.selectedContactId || (values.selectedContactIds && values.selectedContactIds.length > 0 ? values.selectedContactIds[0] : "");
@@ -1616,7 +1616,7 @@ export function ServiceSelectionDialog({
                                 !!lead.commRegId || 
                                 ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won'].includes(lead.status || '');
 
-          const servicesToPassToQuote = isLpoProcessLead 
+          const servicesToPassToQuote = (isLpoProcessLead || mode === 'Resell') 
             ? mappedServices 
             : (hasPriorQuote 
                 ? (newlyAddedServicesForQuote.length > 0 ? newlyAddedServicesForQuote : []) 
@@ -1778,14 +1778,44 @@ export function ServiceSelectionDialog({
             
             try {
               setSubmittingProgress(85);
+              
+              if (skipEmail) {
+                await updateLeadServices(lead.id, serviceSelections);
+                const isCompanyOrSignedCustomer = 
+                  mode === 'Resell' ||
+                  (lead as any).leadType === 'Company' ||
+                  ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(lead.status || '') ||
+                  (typeof window !== 'undefined' && window.location.pathname.startsWith('/companies/'));
+
+                const isResendingQuote = 
+                  !!scfId ||
+                  ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won', 'Signed Customer'].includes(lead.status || '');
+
+                if (!isCompanyOrSignedCustomer && !isResendingQuote) {
+                  await updateLeadStatus(lead.id, 'Quote Sent');
+                }
+                await logActivity(lead.id, {
+                    type: 'Update',
+                    notes: `Processed sales option: Resell / Quote for services (no email sent).`,
+                    author: user?.displayName || 'Unknown'
+                });
+                toast({ title: 'Success!', description: 'The resell process has been completed without sending an email.' });
+                setIsSubmitting(false);
+                onOpenChange(false);
+                onSuccess?.();
+                return;
+              }
+
               setSubmittingStep('Compiling quote & resell email preview template...');
+
+              const contactIdForPreview = values.selectedContactIds?.join(',') || (lead as any)?.bookingContactId || (lead as any)?.serviceCommencementContactId || (contacts.find(c => c.isPrimary)?.id || (contacts.length > 0 ? contacts[0].id : ''));
 
               const res = await fetch('/api/scf/generate-quote-preview', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                       leadId: lead.id,
-                      contactId: values.selectedContactIds?.join(','),
+                      contactId: contactIdForPreview,
                       scfUrl,
                       startDate: values.startDate ? format(values.startDate, 'MMM dd, yyyy') : '',
                       services: serviceSelections,
@@ -1795,32 +1825,6 @@ export function ServiceSelectionDialog({
               const data = await res.json();
               if (data.success) {
                   await updateLeadServices(lead.id, serviceSelections);
-                  
-                  if (skipEmail) {
-                    const isCompanyOrSignedCustomer = 
-                      mode === 'Resell' ||
-                      (lead as any).leadType === 'Company' ||
-                      ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(lead.status || '') ||
-                      (typeof window !== 'undefined' && window.location.pathname.startsWith('/companies/'));
-
-                    const isResendingQuote = 
-                      !!scfId ||
-                      ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won', 'Signed Customer'].includes(lead.status || '');
-
-                    if (!isCompanyOrSignedCustomer && !isResendingQuote) {
-                      await updateLeadStatus(lead.id, 'Quote Sent');
-                    }
-                    await logActivity(lead.id, {
-                        type: 'Update',
-                        notes: `Processed sales option: Quote for services (no email sent).`,
-                        author: user?.displayName || 'Unknown'
-                    });
-                    toast({ title: 'Success!', description: 'The quote process has been completed without sending an email.' });
-                    setIsSubmitting(false);
-                    onOpenChange(false);
-                    onSuccess?.();
-                    return;
-                  }
 
                   const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
                   const defaultSenderEmail = amUser?.email || user?.email || '';

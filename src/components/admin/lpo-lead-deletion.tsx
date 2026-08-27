@@ -73,7 +73,10 @@ export function LpoLeadDeletion() {
         const matchesName = nameTerm ? lead.lpoName?.toLowerCase().includes(nameTerm) : true;
         const matchesId = idTerm ? (
           lead.id?.toLowerCase().includes(idTerm) || 
-          lead.prospectPlusId?.toLowerCase().includes(idTerm)
+          lead.prospectPlusId?.toLowerCase().includes(idTerm) ||
+          lead.customerEntityId?.toLowerCase().includes(idTerm) ||
+          lead.entityId?.toLowerCase().includes(idTerm) ||
+          lead.netsuiteId?.toLowerCase().includes(idTerm)
         ) : true;
         return matchesName && matchesId;
       });
@@ -145,11 +148,11 @@ export function LpoLeadDeletion() {
             onChange={(e) => setLpoNameSearch(e.target.value)}
           />
         </div>
-        <div className="space-y-2">
-          <label htmlFor="lpo-id-search" className="text-sm font-medium">Lead ID or Prospect+ ID</label>
+        <div className="flex-1 space-y-2">
+          <label htmlFor="lpo-id-search" className="text-sm font-medium">Lead ID, NetSuite ID, or Prospect+ ID</label>
           <Input
             id="lpo-id-search"
-            placeholder="Search by Lead/Prospect+ ID..."
+            placeholder="Search by NetSuite ID / Prospect+ ID / Lead ID..."
             value={leadIdSearch}
             onChange={(e) => setLeadIdSearch(e.target.value)}
           />

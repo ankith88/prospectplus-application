@@ -109,14 +109,23 @@ export default function CancellationDashboard() {
     try {
       const userDisplayName = userProfile?.displayName || userProfile?.email || 'System';
       const processedAt = new Date().toISOString();
+      const activeStrategy = saveStrategy || 'Change Frequency & Update Price';
 
-      await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), {
-        status: 'Saved',
-        saveStrategy: saveStrategy || 'Change Frequency & Update Price',
-        notes: saveNotes ? `Resell / Quote issued. Notes: ${saveNotes}` : 'Resell / Quote issued to customer',
+      const requestUpdates = {
+        status: 'Saved' as const,
+        saveStrategy: activeStrategy,
+        notes: saveNotes ? `Resell / Quote issued. Strategy: ${activeStrategy}. Notes: ${saveNotes}` : `Resell / Quote issued to customer (Strategy: ${activeStrategy})`,
         processedBy: userDisplayName,
         processedAt
-      });
+      };
+
+      try {
+        await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), requestUpdates);
+      } catch (e) { /* ignore */ }
+
+      try {
+        await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), requestUpdates);
+      } catch (e) { /* ignore */ }
 
       const compRef = doc(firestore, 'companies', selectedRequest.leadId);
       const leadRef = doc(firestore, 'leads', selectedRequest.leadId);
@@ -135,7 +144,7 @@ export default function CancellationDashboard() {
         await logActivity(selectedRequest.leadId, {
           type: 'Update',
           date: processedAt,
-          notes: `Customer Saved from Cancellation via Resell / Quote Update.`,
+          notes: `Customer Saved from Cancellation via Resell / Quote Update. Strategy: ${activeStrategy}`,
           author: userDisplayName,
         }, 'companies');
       }
@@ -145,7 +154,7 @@ export default function CancellationDashboard() {
         await logActivity(selectedRequest.leadId, {
           type: 'Update',
           date: processedAt,
-          notes: `Customer Saved from Cancellation via Resell / Quote Update.`,
+          notes: `Customer Saved from Cancellation via Resell / Quote Update. Strategy: ${activeStrategy}`,
           author: userDisplayName,
         }, 'leads');
       }

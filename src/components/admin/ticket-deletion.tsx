@@ -104,15 +104,17 @@ export function TicketDeletion() {
         });
       });
 
-      // Also try prefix search with MP-
-      if (!qVal.startsWith('MP-')) {
-        const mpPrefixQuery = query(
-          collection(firestore, 'tickets'),
-          where('ticketNumber', '>=', `MP-${qVal}`),
-          where('ticketNumber', '<=', `MP-${qVal}` + '\uf8ff')
-        );
-        const mpPrefixSnap = await getDocs(mpPrefixQuery);
-        mpPrefixSnap.forEach((doc) => {
+      // 4. Query by NetSuite ID / Prospect+ ID / Lead ID
+      const extraQueries = [
+        query(collection(firestore, 'tickets'), where('customerEntityId', '==', term)),
+        query(collection(firestore, 'tickets'), where('entityId', '==', term)),
+        query(collection(firestore, 'tickets'), where('netsuiteId', '==', term)),
+        query(collection(firestore, 'tickets'), where('prospectPlusId', '==', term)),
+        query(collection(firestore, 'tickets'), where('leadId', '==', term)),
+      ];
+      for (const eq of extraQueries) {
+        const eqSnap = await getDocs(eq);
+        eqSnap.forEach((doc) => {
           ticketsMap.set(doc.id, {
             id: doc.id,
             ...doc.data(),
@@ -182,10 +184,10 @@ export function TicketDeletion() {
     <div className="space-y-4">
       <form onSubmit={handleSearch} className="flex items-end gap-4">
         <div className="flex-grow max-w-sm space-y-2">
-          <label htmlFor="ticket-search" className="text-sm font-medium">Ticket Number or Document ID</label>
+          <label htmlFor="ticket-search" className="text-sm font-medium">Ticket Number, NetSuite ID, Prospect+ ID, or Doc ID</label>
           <Input
             id="ticket-search"
-            placeholder="Enter ticket number (e.g. MP-1234 or 1234)..."
+            placeholder="Search ticket number, NetSuite ID, Prospect+ ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />

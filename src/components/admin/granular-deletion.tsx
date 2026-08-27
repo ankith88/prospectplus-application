@@ -24,6 +24,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Checkbox } from '../ui/checkbox';
 
+import { firestore } from '@/lib/firebase';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+
 type SubcollectionType = 'contacts' | 'notes' | 'activity' | 'appointments';
 type ItemToDelete = {
     leadId: string;
@@ -59,6 +62,29 @@ export function GranularDeletion() {
       if (!fetchedLead) {
         fetchedLead = await getCompanyFromFirebase(cleanId, true);
       }
+
+      // If not found by doc ID, search by prospectPlusId, customerEntityId, entityId, internalid
+      if (!fetchedLead) {
+        const leadQueries = [
+          query(collection(firestore, 'leads'), where('prospectPlusId', '==', cleanId), limit(1)),
+          query(collection(firestore, 'leads'), where('customerEntityId', '==', cleanId), limit(1)),
+          query(collection(firestore, 'leads'), where('entityId', '==', cleanId), limit(1)),
+          query(collection(firestore, 'leads'), where('internalid', '==', cleanId), limit(1)),
+          query(collection(firestore, 'companies'), where('prospectPlusId', '==', cleanId), limit(1)),
+          query(collection(firestore, 'companies'), where('customerEntityId', '==', cleanId), limit(1)),
+          query(collection(firestore, 'companies'), where('entityId', '==', cleanId), limit(1)),
+        ];
+
+        for (const q of leadQueries) {
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            const matchedDocId = snap.docs[0].id;
+            fetchedLead = await getLeadFromFirebase(matchedDocId, true) || await getCompanyFromFirebase(matchedDocId, true);
+            if (fetchedLead) break;
+          }
+        }
+      }
+
       if (fetchedLead) {
         setLead(fetchedLead);
       } else {
