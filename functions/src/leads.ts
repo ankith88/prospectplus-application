@@ -845,6 +845,23 @@ export const sendDailyWebsiteLeadsReport = functions
     }
   });
 
+function formatBucketName(bucketStr: string): string {
+  if (!bucketStr) return 'Unassigned / Default';
+  const b = String(bucketStr).toLowerCase().trim();
+  if (b === 'account_manager' || b === 'account manager') return 'Account Manager';
+  if (b === 'outbound') return 'Outbound';
+  if (b === 'field_sales' || b === 'field sales') return 'Field Sales';
+  if (b === 'inbound') return 'Inbound';
+  if (b === 'customer_success' || b === 'customer success') return 'Customer Success';
+  if (b === 'nurture') return 'Nurture';
+  if (b === 'marketing') return 'Marketing';
+  if (b === 'lpo_plus') return 'LPO Plus';
+  if (b === 'lpo_network') return 'LPO Network';
+  if (b === 'in_review') return 'In Review';
+  if (b === 'multisite') return 'MultiSite';
+  return b.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
 export async function runFranchiseeLeadsReport(dateString: string, recipients: string[], fromAddress?: string) {
   const db = admin.firestore();
 
@@ -945,13 +962,34 @@ export async function runFranchiseeLeadsReport(dateString: string, recipients: s
   });
 
   const franchiseeCounts: Record<string, number> = {};
+  const bucketCounts: Record<string, number> = {};
+  const amCounts: Record<string, number> = {};
+
   filteredLeads.forEach(l => {
     const fran = l.franchisee || l.franchiseeName || "Unassigned Franchisee";
     franchiseeCounts[fran] = (franchiseeCounts[fran] || 0) + 1;
+
+    const rawBucket = l.bucket || (l.fieldSales ? 'field_sales' : 'outbound');
+    const formattedBucket = formatBucketName(rawBucket);
+    bucketCounts[formattedBucket] = (bucketCounts[formattedBucket] || 0) + 1;
+
+    const isAmBucket = rawBucket === 'account_manager' || rawBucket === 'account manager' || formattedBucket === 'Account Manager';
+    if (isAmBucket) {
+      const am = l.accountManagerAssigned || l.salesRepAssigned || "Unassigned AM";
+      amCounts[am] = (amCounts[am] || 0) + 1;
+    }
   });
 
   const franReport = Object.entries(franchiseeCounts)
     .map(([fran, count]) => ({ fran, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const bucketReport = Object.entries(bucketCounts)
+    .map(([bucket, count]) => ({ bucket, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const amReport = Object.entries(amCounts)
+    .map(([am, count]) => ({ am, count }))
     .sort((a, b) => b.count - a.count);
 
   const leadRowsHtml = filteredLeads.length > 0
@@ -964,16 +1002,20 @@ export async function runFranchiseeLeadsReport(dateString: string, recipients: s
         ].filter(Boolean);
         const address = addressParts.join(", ") || "N/A";
         const creator = l.createdBy || l.createdByName || l.createdByEmail || l.author || l.creator || "Franchisee User";
+        const formattedBucket = formatBucketName(l.bucket || (l.fieldSales ? 'field_sales' : 'outbound'));
+        const assignedAm = l.accountManagerAssigned || l.salesRepAssigned || "-";
 
         return `
         <tr style="border-bottom: 1px solid #edf2f7;">
           <td style="padding: 10px 12px; font-size: 13px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;"><strong>${l.companyName || 'Unknown Company'}</strong></td>
           <td style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${address}</td>
           <td style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${l.franchisee || l.franchiseeName || 'Unassigned'}</td>
+          <td style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${formattedBucket}</td>
+          <td style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${assignedAm}</td>
           <td style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${creator}</td>
         </tr>`;
       }).join("")
-    : `<tr><td colspan="4" style="padding: 20px; text-align: center; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif;">No franchisee generated leads were created yesterday.</td></tr>`;
+    : `<tr><td colspan="6" style="padding: 20px; text-align: center; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif;">No franchisee generated leads were created yesterday.</td></tr>`;
 
   const franRowsHtml = franReport.length > 0
     ? franReport.map(r => `
@@ -982,6 +1024,22 @@ export async function runFranchiseeLeadsReport(dateString: string, recipients: s
           <td align="right" style="padding: 8px 12px; font-size: 13px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: bold;">${r.count}</td>
         </tr>`).join("")
     : `<tr><td colspan="2" style="padding: 10px; text-align: center; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif;">No Franchisee breakdown data.</td></tr>`;
+
+  const bucketRowsHtml = bucketReport.length > 0
+    ? bucketReport.map(r => `
+        <tr style="border-bottom: 1px solid #edf2f7;">
+          <td style="padding: 8px 12px; font-size: 13px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;"><strong>${r.bucket}</strong></td>
+          <td align="right" style="padding: 8px 12px; font-size: 13px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: bold;">${r.count}</td>
+        </tr>`).join("")
+    : `<tr><td colspan="2" style="padding: 10px; text-align: center; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif;">No bucket breakdown data.</td></tr>`;
+
+  const amRowsHtml = amReport.length > 0
+    ? amReport.map(r => `
+        <tr style="border-bottom: 1px solid #edf2f7;">
+          <td style="padding: 8px 12px; font-size: 13px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;"><strong>${r.am}</strong></td>
+          <td align="right" style="padding: 8px 12px; font-size: 13px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: bold;">${r.count}</td>
+        </tr>`).join("")
+    : `<tr><td colspan="2" style="padding: 10px; text-align: center; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif;">No leads assigned to Account Managers.</td></tr>`;
 
   const emailHtml = `
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -1029,6 +1087,34 @@ export async function runFranchiseeLeadsReport(dateString: string, recipients: s
                 </tbody>
               </table>
 
+              <!-- Bucket Breakdown -->
+              <h3 style="margin: 25px 0 10px; font-size: 16px; color: #1a202c; border-bottom: 2px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Breakdown by Lead Bucket</h3>
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 25px;">
+                <thead>
+                  <tr style="background-color: #f7fafc; border-bottom: 2px solid #edf2f7;">
+                    <th align="left" style="padding: 8px 12px; font-size: 11px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">Bucket</th>
+                    <th align="right" style="padding: 8px 12px; font-size: 11px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold; width: 80px;">Leads Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${bucketRowsHtml}
+                </tbody>
+              </table>
+
+              <!-- Account Manager Breakdown for Account Manager Bucket -->
+              <h3 style="margin: 25px 0 10px; font-size: 16px; color: #1a202c; border-bottom: 2px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Account Manager Assignments (Account Manager Bucket)</h3>
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 25px;">
+                <thead>
+                  <tr style="background-color: #f7fafc; border-bottom: 2px solid #edf2f7;">
+                    <th align="left" style="padding: 8px 12px; font-size: 11px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">Account Manager</th>
+                    <th align="right" style="padding: 8px 12px; font-size: 11px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold; width: 80px;">Leads Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${amRowsHtml}
+                </tbody>
+              </table>
+
               <!-- List of leads -->
               <h3 style="margin: 25px 0 10px; font-size: 16px; color: #1a202c; border-bottom: 2px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Franchisee Leads Details</h3>
               <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
@@ -1037,6 +1123,8 @@ export async function runFranchiseeLeadsReport(dateString: string, recipients: s
                     <th align="left" style="padding: 8px 12px; font-size: 11px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">Company</th>
                     <th align="left" style="padding: 8px 12px; font-size: 11px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">Address</th>
                     <th align="left" style="padding: 8px 12px; font-size: 11px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">Franchisee</th>
+                    <th align="left" style="padding: 8px 12px; font-size: 11px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">Bucket</th>
+                    <th align="left" style="padding: 8px 12px; font-size: 11px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">AM</th>
                     <th align="left" style="padding: 8px 12px; font-size: 11px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">Created By</th>
                   </tr>
                 </thead>
