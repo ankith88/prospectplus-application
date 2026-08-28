@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -22,15 +23,20 @@ import {
   X,
   FileText,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Shield,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Filter
 } from 'lucide-react';
-import { format } from 'date-fns';
 
 interface LoginRecord {
   id: string;
   userId: string;
   userEmail: string;
   userDisplayName: string;
+  userRole: string;
   dateStr: string;
   timestamp: any; // Firestore Timestamp (session start)
   lastActiveTimestamp?: any; // Firestore Timestamp (last activity in session)
@@ -39,10 +45,47 @@ interface LoginRecord {
   userAgent: string;
 }
 
+export type SortOption = 
+  | 'lastActive_desc' 
+  | 'lastActive_asc' 
+  | 'firstLogin_desc' 
+  | 'firstLogin_asc' 
+  | 'userName_asc' 
+  | 'userName_desc' 
+  | 'role_asc'
+  | 'role_desc'
+  | 'sessions_desc';
+
 const getSydneyTodayStr = () => {
   const options = { timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit' } as const;
   const formatter = new Intl.DateTimeFormat('en-CA', options); // YYYY-MM-DD
   return formatter.format(new Date());
+};
+
+const getRoleBadgeStyle = (role: string) => {
+  const r = (role || '').toLowerCase();
+  if (r.includes('super admin')) {
+    return 'bg-purple-100 text-purple-900 border-purple-200';
+  }
+  if (r.includes('franchisee')) {
+    return 'bg-teal-100 text-teal-900 border-teal-200';
+  }
+  if (r.includes('admin')) {
+    return 'bg-blue-100 text-blue-900 border-blue-200';
+  }
+  if (r.includes('field sales')) {
+    return 'bg-amber-100 text-amber-900 border-amber-200';
+  }
+  if (r.includes('lead gen') || r.includes('dialer') || r.includes('bdr')) {
+    return 'bg-emerald-100 text-emerald-900 border-emerald-200';
+  }
+  if (r.includes('account manager')) {
+    return 'bg-indigo-100 text-indigo-900 border-indigo-200';
+  }
+  if (r.includes('customer success') || r.includes('customer service')) {
+    return 'bg-sky-100 text-sky-900 border-sky-200';
+  }
+  return 'bg-slate-100 text-slate-800 border-slate-200';
 };
 
 export default function LoginActivityReport() {
@@ -52,11 +95,30 @@ export default function LoginActivityReport() {
   const [loginRecords, setLoginRecords] = useState<LoginRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRole, setSelectedRole] = useState<string>('ALL');
+  const [sortOption, setSortOption] = useState<SortOption>('lastActive_desc');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const fetchLogins = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Load user roles map from Firestore users collection for accurate role fallback
+      const usersMap: Record<string, { role: string; email?: string; name?: string }> = {};
+      try {
+        const usersSnap = await getDocs(collection(firestore, 'users'));
+        usersSnap.forEach((uDoc) => {
+          const uData = uDoc.data();
+          const role = uData.activeRole || uData.defaultRole || uData.role || (uData.assignedRoles && uData.assignedRoles[0]) || 'User';
+          usersMap[uDoc.id] = {
+            role,
+            email: uData.email,
+            name: `${uData.firstName || ''} ${uData.lastName || ''}`.trim(),
+          };
+        });
+      } catch (uErr) {
+        console.warn("Could not load users for role mapping:", uErr);
+      }
+
       const loginsRef = collection(firestore, 'logins');
       const q = query(loginsRef, where('dateStr', '==', selectedDate));
       const querySnapshot = await getDocs(q);
@@ -64,11 +126,16 @@ export default function LoginActivityReport() {
       const records: LoginRecord[] = [];
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
+        const userId = data.userId || '';
+        const fallbackUser = usersMap[userId];
+        const role = data.userRole || fallbackUser?.role || 'User';
+
         records.push({
           id: docSnap.id,
-          userId: data.userId || '',
-          userEmail: data.userEmail || '',
-          userDisplayName: data.userDisplayName || 'Unknown User',
+          userId: userId,
+          userEmail: data.userEmail || fallbackUser?.email || '',
+          userDisplayName: data.userDisplayName || fallbackUser?.name || 'Unknown User',
+          userRole: role,
           dateStr: data.dateStr || '',
           timestamp: data.timestamp,
           lastActiveTimestamp: data.lastActiveTimestamp || data.timestamp,
@@ -102,37 +169,64 @@ export default function LoginActivityReport() {
     fetchLogins();
   }, [fetchLogins]);
 
-  // Filtering based on search query
+  // Extract unique roles present in current records
+  const availableRoles = useMemo(() => {
+    const rolesSet = new Set<string>();
+    loginRecords.forEach(rec => {
+      if (rec.userRole) rolesSet.add(rec.userRole);
+    });
+    return Array.from(rolesSet).sort();
+  }, [loginRecords]);
+
+  // Filtering based on search query and selected role
   const filteredRecords = useMemo(() => {
     return loginRecords.filter(record => {
-      if (!searchQuery) return true;
-      const q = searchQuery.toLowerCase();
-      return (
-        (record.userDisplayName || '').toLowerCase().includes(q) ||
-        (record.userEmail || '').toLowerCase().includes(q) ||
-        (record.clientTimezone || '').toLowerCase().includes(q)
-      );
+      // Role dropdown filter
+      if (selectedRole !== 'ALL' && record.userRole !== selectedRole) {
+        return false;
+      }
+      
+      // Text search query filter (name, email, role, timezone)
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchName = (record.userDisplayName || '').toLowerCase().includes(q);
+        const matchEmail = (record.userEmail || '').toLowerCase().includes(q);
+        const matchRole = (record.userRole || '').toLowerCase().includes(q);
+        const matchTz = (record.clientTimezone || '').toLowerCase().includes(q);
+        if (!matchName && !matchEmail && !matchRole && !matchTz) {
+          return false;
+        }
+      }
+      return true;
     });
-  }, [loginRecords, searchQuery]);
+  }, [loginRecords, searchQuery, selectedRole]);
 
-  // Unique Active Users Today count
-  const uniqueUsersCount = useMemo(() => {
+  // Total Unique Active Users count
+  const totalUniqueUsersCount = useMemo(() => {
     const uniqueIds = new Set(loginRecords.map(rec => rec.userId || rec.userEmail || rec.userDisplayName));
     return uniqueIds.size;
   }, [loginRecords]);
 
-  // Grouped by User Name
+  // Filtered Unique Users count
+  const filteredUniqueUsersCount = useMemo(() => {
+    const uniqueIds = new Set(filteredRecords.map(rec => rec.userId || rec.userEmail || rec.userDisplayName));
+    return uniqueIds.size;
+  }, [filteredRecords]);
+
+  // Grouped by User and sorted by activity time / user preferences
   const groupedRecords = useMemo(() => {
     const groups: Record<string, LoginRecord[]> = {};
     filteredRecords.forEach(record => {
-      const key = record.userDisplayName || record.userEmail || 'Unknown User';
+      const key = record.userId || record.userEmail || record.userDisplayName || 'Unknown User';
       if (!groups[key]) {
         groups[key] = [];
       }
       groups[key].push(record);
     });
 
-    return Object.entries(groups).map(([userName, records]) => {
+    const list = Object.entries(groups).map(([groupKey, records]) => {
+      records.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
       const latestRecord = records[0];
       const earliestRecord = records[records.length - 1];
       const explicitFirstLogin = records.find(r => r.isFirstLoginOfDay);
@@ -140,19 +234,48 @@ export default function LoginActivityReport() {
       const lastActiveTimestamp = latestRecord.lastActiveTimestamp || latestRecord.timestamp;
 
       return {
-        userName,
-        userEmail: latestRecord.userEmail,
+        groupKey,
+        userName: latestRecord.userDisplayName || 'Unknown User',
+        userEmail: latestRecord.userEmail || '',
+        userRole: latestRecord.userRole || 'User',
         userId: latestRecord.userId,
         firstLogin: firstLoginTimestamp,
         lastActive: lastActiveTimestamp,
         records
       };
-    }).sort((a, b) => {
-      const timeA = a.lastActive?.seconds || 0;
-      const timeB = b.lastActive?.seconds || 0;
-      return timeB - timeA;
     });
-  }, [filteredRecords]);
+
+    // Apply sorting based on sortOption
+    return list.sort((a, b) => {
+      const timeLastA = a.lastActive?.seconds || 0;
+      const timeLastB = b.lastActive?.seconds || 0;
+      const timeFirstA = a.firstLogin?.seconds || 0;
+      const timeFirstB = b.firstLogin?.seconds || 0;
+
+      switch (sortOption) {
+        case 'lastActive_desc':
+          return timeLastB - timeLastA;
+        case 'lastActive_asc':
+          return timeLastA - timeLastB;
+        case 'firstLogin_desc':
+          return timeFirstB - timeFirstA;
+        case 'firstLogin_asc':
+          return timeFirstA - timeFirstB;
+        case 'userName_asc':
+          return a.userName.localeCompare(b.userName);
+        case 'userName_desc':
+          return b.userName.localeCompare(a.userName);
+        case 'role_asc':
+          return a.userRole.localeCompare(b.userRole);
+        case 'role_desc':
+          return b.userRole.localeCompare(a.userRole);
+        case 'sessions_desc':
+          return b.records.length - a.records.length;
+        default:
+          return timeLastB - timeLastA;
+      }
+    });
+  }, [filteredRecords, sortOption]);
 
   const toggleGroup = (userName: string) => {
     setExpandedGroups(prev => ({
@@ -171,6 +294,12 @@ export default function LoginActivityReport() {
 
   const collapseAll = () => {
     setExpandedGroups({});
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedRole('ALL');
+    setSortOption('lastActive_desc');
   };
 
   const formatSydneyTime = (timestamp: any) => {
@@ -195,9 +324,20 @@ export default function LoginActivityReport() {
       toast({ title: 'No Data', description: 'The logins list is empty.' });
       return;
     }
-    const headers = ['User Name', 'Email', 'Login Date (Sydney)', 'Session Start Time (Sydney)', 'Last Activity Time (Sydney)', 'First Login of Day?', 'Client Timezone', 'User Agent'];
+    const headers = [
+      'User Name', 
+      'Role', 
+      'Email', 
+      'Login Date (Sydney)', 
+      'Session Start Time (Sydney)', 
+      'Last Activity Time (Sydney)', 
+      'First Login of Day?', 
+      'Client Timezone', 
+      'User Agent'
+    ];
     const rows = filteredRecords.map(rec => [
       rec.userDisplayName,
+      rec.userRole,
       rec.userEmail,
       rec.dateStr,
       formatSydneyTime(rec.timestamp),
@@ -216,6 +356,8 @@ export default function LoginActivityReport() {
     document.body.removeChild(link);
   };
 
+  const isFilterActive = searchQuery !== '' || selectedRole !== 'ALL' || sortOption !== 'lastActive_desc';
+
   return (
     <div className="flex flex-col gap-6 p-6 bg-[#d0dfcd]/50 min-h-screen">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -225,7 +367,7 @@ export default function LoginActivityReport() {
             Daily Login Activity Report
           </h1>
           <p className="text-muted-foreground mt-1">
-            Track daily user interactions, access times, and client device properties. Restricted to Super Admin.
+            Track daily user interactions, access times, user roles, and client device properties.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -238,14 +380,17 @@ export default function LoginActivityReport() {
         </div>
       </header>
 
-      {/* KPI Stats / Filters Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* KPI Stats & Control Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Date Selection */}
         <Card className="bg-white border-[#095c7b]/10 shadow-sm flex flex-col justify-between">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs text-slate-500 font-medium uppercase tracking-wider">Date Selection (Sydney Time)</CardTitle>
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-xs text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1.5">
+              <Calendar className="h-4 w-4 text-[#095c7b]" />
+              Date (Sydney Time)
+            </CardTitle>
           </CardHeader>
-          <CardContent className="pb-4 flex items-center gap-3">
-            <Calendar className="h-5 w-5 text-[#095c7b] shrink-0" />
+          <CardContent className="pb-4 px-4">
             <Input 
               type="date" 
               value={selectedDate}
@@ -255,42 +400,109 @@ export default function LoginActivityReport() {
           </CardContent>
         </Card>
 
+        {/* Active Users KPI */}
         <Card className="bg-white border-[#095c7b]/10 shadow-sm flex flex-col justify-between">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs text-slate-500 font-medium uppercase tracking-wider">Total Active Users Today</CardTitle>
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-xs text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1.5">
+              <UserCheck className="h-4 w-4 text-[#095c7b]" />
+              Active Users Today
+            </CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="text-3xl font-extrabold text-[#095c7b] flex items-center gap-2">
-              <UserCheck className="h-7 w-7 text-[#095c7b]" />
-              {uniqueUsersCount}
+          <CardContent className="pb-4 px-4 flex items-center justify-between">
+            <div className="text-2xl font-extrabold text-[#095c7b]">
+              {filteredUniqueUsersCount}
+              {filteredUniqueUsersCount !== totalUniqueUsersCount && (
+                <span className="text-xs font-normal text-slate-500 ml-1.5">
+                  of {totalUniqueUsersCount} total
+                </span>
+              )}
             </div>
+            {isFilterActive && (
+              <Badge variant="secondary" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                Filtered
+              </Badge>
+            )}
           </CardContent>
         </Card>
 
-        <Card className="bg-white border-[#095c7b]/10 shadow-sm flex flex-col justify-between">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs text-slate-500 font-medium uppercase tracking-wider">Filter Results</CardTitle>
+        {/* Filter Controls: Name/Email/Role Search & Dropdown */}
+        <Card className="bg-white border-[#095c7b]/10 shadow-sm flex flex-col justify-between col-span-1 md:col-span-2 lg:col-span-1">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-xs text-slate-500 font-medium uppercase tracking-wider flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Filter className="h-4 w-4 text-[#095c7b]" />
+                Filter by Role & Text
+              </span>
+              {isFilterActive && (
+                <button 
+                  onClick={clearFilters}
+                  className="text-[11px] text-[#095c7b] hover:underline font-normal capitalize"
+                >
+                  Clear all
+                </button>
+              )}
+            </CardTitle>
           </CardHeader>
-          <CardContent className="pb-4 relative">
+          <CardContent className="pb-4 px-4 flex flex-col gap-2">
             <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
               <Input 
-                placeholder="Filter by name, email, timezone..."
+                placeholder="Search name, email, role..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-slate-50 border-[#095c7b]/20 focus:border-[#095c7b]"
+                className="pl-8 bg-slate-50 border-[#095c7b]/20 focus:border-[#095c7b] text-xs h-9"
               />
               {searchQuery && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-1 top-1 h-8 w-8 p-0"
+                  className="absolute right-1 top-1 h-7 w-7 p-0 text-slate-400 hover:text-slate-600"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
+            <Select value={selectedRole} onValueChange={setSelectedRole}>
+              <SelectTrigger className="bg-slate-50 border-[#095c7b]/20 text-xs h-8">
+                <SelectValue placeholder="All Roles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Roles ({loginRecords.length})</SelectItem>
+                {availableRoles.map(role => (
+                  <SelectItem key={role} value={role}>
+                    {role}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        {/* Sort Controls: Daily Activity Times & Name */}
+        <Card className="bg-white border-[#095c7b]/10 shadow-sm flex flex-col justify-between col-span-1 md:col-span-2 lg:col-span-1">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-xs text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1.5">
+              <ArrowUpDown className="h-4 w-4 text-[#095c7b]" />
+              Sort Activity Times
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4 px-4">
+            <Select value={sortOption} onValueChange={(val) => setSortOption(val as SortOption)}>
+              <SelectTrigger className="bg-slate-50 border-[#095c7b]/20 text-xs h-9">
+                <SelectValue placeholder="Sort order..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="lastActive_desc">Last Active (Newest First)</SelectItem>
+                <SelectItem value="lastActive_asc">Last Active (Oldest First)</SelectItem>
+                <SelectItem value="firstLogin_desc">First Login (Latest First)</SelectItem>
+                <SelectItem value="firstLogin_asc">First Login (Earliest First)</SelectItem>
+                <SelectItem value="userName_asc">User Name (A - Z)</SelectItem>
+                <SelectItem value="userName_desc">User Name (Z - A)</SelectItem>
+                <SelectItem value="role_asc">Role (A - Z)</SelectItem>
+                <SelectItem value="sessions_desc">Total Sessions (Most Active)</SelectItem>
+              </SelectContent>
+            </Select>
           </CardContent>
         </Card>
       </div>
@@ -325,9 +537,42 @@ export default function LoginActivityReport() {
             <Table>
               <TableHeader className="bg-slate-50/70">
                 <TableRow>
-                  <TableHead className="font-semibold">User Name</TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer select-none hover:text-[#095c7b]"
+                    onClick={() => setSortOption(prev => prev === 'userName_asc' ? 'userName_desc' : 'userName_asc')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>User Name</span>
+                      {sortOption === 'userName_asc' && <ArrowUp className="h-3.5 w-3.5 text-[#095c7b]" />}
+                      {sortOption === 'userName_desc' && <ArrowDown className="h-3.5 w-3.5 text-[#095c7b]" />}
+                      {sortOption !== 'userName_asc' && sortOption !== 'userName_desc' && <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer select-none hover:text-[#095c7b]"
+                    onClick={() => setSortOption(prev => prev === 'role_asc' ? 'role_desc' : 'role_asc')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Role</span>
+                      {sortOption === 'role_asc' && <ArrowUp className="h-3.5 w-3.5 text-[#095c7b]" />}
+                      {sortOption === 'role_desc' && <ArrowDown className="h-3.5 w-3.5 text-[#095c7b]" />}
+                      {sortOption !== 'role_asc' && sortOption !== 'role_desc' && <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />}
+                    </div>
+                  </TableHead>
                   <TableHead className="font-semibold">Email</TableHead>
-                  <TableHead className="font-semibold">Daily Activity Times (Sydney)</TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer select-none hover:text-[#095c7b]"
+                    onClick={() => setSortOption(prev => prev === 'lastActive_desc' ? 'firstLogin_desc' : prev === 'firstLogin_desc' ? 'lastActive_asc' : 'lastActive_desc')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Daily Activity Times (Sydney)</span>
+                      {sortOption === 'lastActive_desc' && <ArrowDown className="h-3.5 w-3.5 text-[#095c7b]" />}
+                      {sortOption === 'lastActive_asc' && <ArrowUp className="h-3.5 w-3.5 text-[#095c7b]" />}
+                      {sortOption === 'firstLogin_desc' && <ArrowDown className="h-3.5 w-3.5 text-emerald-600" />}
+                      {sortOption === 'firstLogin_asc' && <ArrowUp className="h-3.5 w-3.5 text-emerald-600" />}
+                      {!['lastActive_desc', 'lastActive_asc', 'firstLogin_desc', 'firstLogin_asc'].includes(sortOption) && <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />}
+                    </div>
+                  </TableHead>
                   <TableHead className="font-semibold">Client Timezone</TableHead>
                   <TableHead className="font-semibold">User Agent / Device info</TableHead>
                 </TableRow>
@@ -336,7 +581,7 @@ export default function LoginActivityReport() {
                 {groupedRecords.map((group) => {
                   const isExpanded = !!expandedGroups[group.userName];
                   return (
-                    <React.Fragment key={group.userName}>
+                    <React.Fragment key={group.groupKey}>
                       <TableRow 
                         className="bg-slate-50/80 hover:bg-slate-100/80 cursor-pointer transition-colors border-b font-medium"
                         onClick={() => toggleGroup(group.userName)}
@@ -351,13 +596,19 @@ export default function LoginActivityReport() {
                             <span>{group.userName}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-slate-700 text-xs py-3">{group.userEmail}</TableCell>
+                        <TableCell className="py-3">
+                          <Badge variant="outline" className={`font-semibold px-2 py-0.5 text-[11px] ${getRoleBadgeStyle(group.userRole)}`}>
+                            <Shield className="h-3 w-3 mr-1 inline-block shrink-0" />
+                            {group.userRole}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-slate-700 text-xs py-3">{group.userEmail || '-'}</TableCell>
                         <TableCell className="text-slate-600 text-xs py-3" colSpan={3}>
-                          <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-2.5">
                             <span className="font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded text-[11px]">
                               First login: {formatSydneyTime(group.firstLogin)}
                             </span>
-                            <span className="font-medium text-slate-500 text-xs">
+                            <span className="font-medium text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px]">
                               Last active: {formatSydneyTime(group.lastActive)}
                             </span>
                             <Badge className="bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b]/20 border-none px-2 py-0.5 text-[10px] font-bold">
@@ -375,7 +626,7 @@ export default function LoginActivityReport() {
 
                         return (
                           <TableRow key={record.id} className="bg-slate-50/20 hover:bg-slate-100/30 transition-colors border-b">
-                            <TableCell className="pl-8 text-slate-500 text-xs font-medium">
+                            <TableCell className="pl-8 text-slate-500 text-xs font-medium" colSpan={2}>
                               <div className="flex items-center gap-1.5">
                                 <span>Session Detail</span>
                                 {record.isFirstLoginOfDay && (
@@ -386,7 +637,7 @@ export default function LoginActivityReport() {
                               </div>
                             </TableCell>
                             <TableCell className="text-slate-400 text-xs">
-                              -
+                              {record.userEmail}
                             </TableCell>
                             <TableCell className="text-slate-700 text-xs font-mono">
                               <div>
@@ -419,7 +670,7 @@ export default function LoginActivityReport() {
               </TableBody>
             </Table>
           ) : (
-            <div className="p-16 text-center text-slate-500 italic">No login records found for this date.</div>
+            <div className="p-16 text-center text-slate-500 italic">No login records match the selected date or filters.</div>
           )}
         </CardContent>
       </Card>

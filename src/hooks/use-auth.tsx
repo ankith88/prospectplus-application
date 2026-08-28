@@ -43,7 +43,7 @@ const getSessionId = () => {
     return sessionId;
 };
 
-const trackDailyLogin = async (uid: string, email: string, displayName: string) => {
+const trackDailyLogin = async (uid: string, email: string, displayName: string, userRole?: string) => {
     try {
         const dateStr = getSydneyDateString();
         const sessionId = getSessionId();
@@ -56,6 +56,7 @@ const trackDailyLogin = async (uid: string, email: string, displayName: string) 
 
         const userData = userDoc.exists() ? userDoc.data() : {};
         const isFirstLoginToday = userData.lastLoginDateStr !== dateStr;
+        const roleToSave = userRole || userData.activeRole || userData.defaultRole || userData.role || (userData.assignedRoles && userData.assignedRoles[0]) || 'User';
 
         if (!existingLoginDoc.exists()) {
             // New session creation - set initial timestamp & lastActiveTimestamp
@@ -63,6 +64,7 @@ const trackDailyLogin = async (uid: string, email: string, displayName: string) 
                 userId: uid,
                 userEmail: email,
                 userDisplayName: displayName,
+                userRole: roleToSave,
                 dateStr,
                 sessionId,
                 timestamp: serverTimestamp(),
@@ -74,6 +76,7 @@ const trackDailyLogin = async (uid: string, email: string, displayName: string) 
         } else {
             // Session already exists for this tab - ONLY update lastActiveTimestamp, DO NOT overwrite initial timestamp
             await setDoc(loginDocRef, {
+                userRole: roleToSave,
                 lastActiveTimestamp: serverTimestamp(),
                 clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
                 userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
@@ -201,7 +204,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         setUserProfile(fullProfile);
 
                         // Track daily login only when tab is actively visible (prevents background tab refreshes overnight)
-                        const runTracking = () => trackDailyLogin(user.uid, user.email || '', displayName || user.email || '');
+                        const runTracking = () => trackDailyLogin(user.uid, user.email || '', displayName || user.email || '', fullProfile.activeRole || fullProfile.defaultRole || fullProfile.role);
                         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
                             const handleVisibilityChange = () => {
                                 if (document.visibilityState === 'visible') {
@@ -544,7 +547,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!user || !userProfile) return;
 
         const handleActivity = () => {
-            trackDailyLogin(user.uid, user.email || '', userProfile.displayName || user.email || '');
+            trackDailyLogin(user.uid, user.email || '', userProfile.displayName || user.email || '', userProfile.activeRole || userProfile.defaultRole || userProfile.role);
         };
 
         window.addEventListener('focus', handleActivity);
