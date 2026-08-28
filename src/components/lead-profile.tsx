@@ -5881,7 +5881,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </div>
             
             <TabsContent value="profile" className="flex flex-col gap-6 mt-0">
-                {renderLpoCredentialsCard()}
                 <Card>
              <CardHeader className="pb-4 border-b flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
