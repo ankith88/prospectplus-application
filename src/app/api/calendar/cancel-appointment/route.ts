@@ -107,26 +107,21 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Send Cancellation Email Notification & iCalendar (METHOD:CANCEL) export
-    const dateVal = apptData.duedate || apptData.appointmentDate || apptData.createdAt;
-    const dateObj = dateVal ? new Date(dateVal) : new Date();
-    const formattedDate = !isNaN(dateObj.getTime()) ? format(dateObj, 'EEEE, d MMMM yyyy') : 'Scheduled Date';
+    const dateVal = apptData.duedate || apptData.createdAt;
+    const startDateTime = dateVal ? new Date(dateVal) : new Date();
+    const endDateTime = new Date(startDateTime.getTime() + 30 * 60 * 1000);
+    const formattedDate = !isNaN(startDateTime.getTime())
+      ? new Intl.DateTimeFormat('en-AU', {
+          timeZone: 'Australia/Sydney',
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        }).format(startDateTime)
+      : 'Scheduled Date';
     const timeSlot = apptData.starttime || apptData.timeSlot || 'Scheduled Time';
     const leadName = apptData.leadName || 'ProspectPlus Session';
     const franchiseeTerritory = apptData.franchisee || apptData.franchiseeName || 'Franchisee Territory';
-
-    // Parse start & end times for .ics CANCEL event
-    let hours = 10;
-    let minutes = 0;
-    if (typeof timeSlot === 'string' && timeSlot.includes(':')) {
-      const parts = timeSlot.split(' ');
-      const timeParts = parts[0].split(':');
-      hours = parseInt(timeParts[0], 10);
-      minutes = parseInt(timeParts[1], 10) || 0;
-      if (parts[1] && parts[1].toUpperCase() === 'PM' && hours < 12) hours += 12;
-      if (parts[1] && parts[1].toUpperCase() === 'AM' && hours === 12) hours = 0;
-    }
-    const startDateTime = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), hours, minutes, 0);
-    const endDateTime = new Date(startDateTime.getTime() + 30 * 60 * 1000);
 
     const formatIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     const dtStartStr = formatIcsDate(startDateTime);

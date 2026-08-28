@@ -49,16 +49,34 @@ export async function POST(req: NextRequest) {
     const fallbackTeamsMeetingId = `teams-training-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const fallbackTeamsJoinUrl = `https://teams.microsoft.com/l/meetup-join/19%3ameeting_${fallbackTeamsMeetingId}%40thread.v2/0?context=%7b%22Tid%22%3a%22mailplus-training%22%7d`;
 
-    // Calculate full dates & times for iCalendar (.ics) export & Microsoft Graph
-    const dateObj = new Date(date);
-    const formattedDate = format(dateObj, 'EEEE, d MMMM yyyy');
-    const isoDueDate = dateObj.toISOString();
+    // Helper to get Sydney offset (+10:00 or +11:00) for a given date
+    const getSydneyOffset = (dateStr: string): string => {
+      try {
+        const sampleDate = new Date(`${dateStr}T12:00:00Z`);
+        const formattedStr = sampleDate.toLocaleString('en-US', { timeZone: 'Australia/Sydney', timeZoneName: 'longOffset' });
+        const match = formattedStr.match(/GMT([+-])(\d+)(?::(\d+))?/);
+        if (!match) return '+10:00';
+        const [_, sign, h, m = '00'] = match;
+        return `${sign}${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
+      } catch (e) {
+        return '+10:00';
+      }
+    };
 
-    // Parse timeSlot string (e.g., "10:00 AM")
+    // Extract target YYYY-MM-DD date in Sydney timezone
+    let targetDateStr = '';
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+      targetDateStr = date.trim();
+    } else {
+      const rawDateObj = new Date(date);
+      targetDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(rawDateObj);
+    }
+
+    // Parse timeSlot string (e.g., "10:00 AM" or "09:30 AM")
     let hours = 10;
     let minutes = 0;
     if (typeof timeSlot === 'string' && timeSlot.includes(':')) {
-      const parts = timeSlot.split(' ');
+      const parts = timeSlot.trim().split(/\s+/);
       const timeParts = parts[0].split(':');
       hours = parseInt(timeParts[0], 10);
       minutes = parseInt(timeParts[1], 10) || 0;
@@ -66,8 +84,46 @@ export async function POST(req: NextRequest) {
       if (parts[1] && parts[1].toUpperCase() === 'AM' && hours === 12) hours = 0;
     }
 
-    const startDateTime = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), hours, minutes, 0);
+    const startHStr = String(hours).padStart(2, '0');
+    const startMStr = String(minutes).padStart(2, '0');
+    const tzOffset = getSydneyOffset(targetDateStr);
+
+    const startLocalIso = `${targetDateStr}T${startHStr}:${startMStr}:00`;
+    const startDateTime = new Date(`${startLocalIso}${tzOffset}`);
     const endDateTime = new Date(startDateTime.getTime() + 30 * 60 * 1000); // 30 min duration
+
+    const endParts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Australia/Sydney',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).formatToParts(endDateTime).reduce<Record<string, string>>((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {});
+
+    const endH = endParts.hour === '24' ? '00' : endParts.hour;
+    const endLocalIsoStr = `${endParts.year}-${endParts.month}-${endParts.day}T${endH}:${endParts.minute}:${endParts.second}`;
+
+    const formattedDate = new Intl.DateTimeFormat('en-AU', {
+      timeZone: 'Australia/Sydney',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(startDateTime);
+
+    const isoDueDate = startDateTime.toISOString();
+    const appointmentDateStr = new Intl.DateTimeFormat('en-AU', {
+      timeZone: 'Australia/Sydney',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(startDateTime);
 
     let teamsJoinUrl = fallbackTeamsJoinUrl;
     let msGraphEventId: string | null = null;
@@ -131,12 +187,12 @@ export async function POST(req: NextRequest) {
               content: meetingBody
             },
             start: {
-              dateTime: startDateTime.toISOString(),
-              timeZone: 'UTC'
+              dateTime: startLocalIso,
+              timeZone: 'AUS Eastern Standard Time'
             },
             end: {
-              dateTime: endDateTime.toISOString(),
-              timeZone: 'UTC'
+              dateTime: endLocalIsoStr,
+              timeZone: 'AUS Eastern Standard Time'
             },
             attendees: attendeesList,
             isOnlineMeeting: true,
@@ -174,7 +230,7 @@ export async function POST(req: NextRequest) {
       assignedTo: 'Aleyna Harnett',
       duedate: isoDueDate,
       starttime: timeSlot,
-      appointmentDate: format(new Date(), 'dd/MM/yyyy'),
+      appointmentDate: appointmentDateStr,
       appointmentStatus: 'Pending',
       type: 'Teams Training Session',
       meetingType: 'teams',

@@ -37,9 +37,37 @@ export interface TemplateReplacementContext {
   };
 }
 
+export function formatMobileForDisplay(phone: string | null | undefined): string {
+  if (!phone) return '';
+  const trimmed = String(phone).trim();
+  if (!trimmed) return '';
+
+  // Extract clean digits and optional leading +
+  let cleaned = trimmed.replace(/[^\d+]/g, '');
+
+  // Normalize international Australian format (+614... or 614...) to local 04...
+  if (cleaned.startsWith('+614') && cleaned.length === 12) {
+    cleaned = '0' + cleaned.slice(3);
+  } else if (cleaned.startsWith('614') && cleaned.length === 11) {
+    cleaned = '0' + cleaned.slice(2);
+  }
+
+  // Australian 10-digit mobile numbers starting with 04 (e.g. 0436930218 -> 0436 930 218)
+  if (cleaned.startsWith('04') && cleaned.length === 10) {
+    return `${cleaned.slice(0, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7)}`;
+  }
+
+  // Australian 10-digit landline numbers starting with 02, 03, 07, 08 (e.g. 0283599676 -> 02 8359 9676)
+  if (/^0[2378]\d{8}$/.test(cleaned)) {
+    return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 6)} ${cleaned.slice(6)}`;
+  }
+
+  return trimmed;
+}
+
 export function extractUserMobile(user: any): string {
   if (!user) return '';
-  return (
+  const raw = (
     user.mobileNumber ||
     user.mobile ||
     user.phoneNumber ||
@@ -49,6 +77,7 @@ export function extractUserMobile(user: any): string {
     user.telephone ||
     ''
   ).trim();
+  return formatMobileForDisplay(raw);
 }
 
 /**
@@ -93,7 +122,8 @@ export function replaceTemplatePlaceholders(
 
   // Account Manager Details (Fetched strictly from users collection via context.accountManager)
   const amName = am.name || lead.accountManagerAssigned || lead.salesRepAssigned || context.salesRep || 'MailPlus Team';
-  const amMobile = am.mobile || lead.accountManagerMobile || lead.accountManagerPhone || '';
+  const rawAmMobile = am.mobile || lead.accountManagerMobile || lead.accountManagerPhone || '';
+  const amMobile = formatMobileForDisplay(rawAmMobile);
   const amEmail = am.email || lead.accountManagerEmail || '';
   const amCalendly = am.calendly || lead.accountManagerCalendly || lead.salesRepAssignedCalendlyLink || '';
 
@@ -131,7 +161,8 @@ export function replaceTemplatePlaceholders(
   const franName = franchisee.name || lead.franchisee || 'MailPlus';
   const franMainContact = franchisee.mainContact || franchisee.name || franName;
   const franEmail = franchisee.email || lead.franchiseeEmail || '';
-  const franMobile = franchisee.mobile || lead.franchiseeMobile || lead.franchiseePhone || '';
+  const rawFranMobile = franchisee.mobile || lead.franchiseeMobile || lead.franchiseePhone || '';
+  const franMobile = formatMobileForDisplay(rawFranMobile);
 
   // Prospect ID
   const prospectPlusId = lead.prospectPlusId || lead.id || '';

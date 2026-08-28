@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     const db = adminApp.firestore();
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date());
 
     // Query collectionGroup for appointments
     const snapshot = await db.collectionGroup('appointments').get();
@@ -28,13 +28,23 @@ export async function GET(req: NextRequest) {
       if (data.appointmentStatus === 'Cancelled' || data.appointmentStatus === 'Completed') continue;
 
       // Check date
-      const apptDateStr = data.duedate ? format(new Date(data.duedate), 'yyyy-MM-dd') : '';
+      const apptDateStr = data.duedate
+        ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date(data.duedate))
+        : '';
       const isToday = apptDateStr === todayStr;
 
       if (isToday && (data.franchiseeEmail || data.customerServiceEmail)) {
         const recipientEmail = data.franchiseeEmail || data.customerServiceEmail;
         const recipientName = data.franchiseeUserName || 'Franchisee';
-        const formattedDate = format(new Date(data.duedate), 'EEEE, d MMMM yyyy');
+        const formattedDate = data.duedate
+          ? new Intl.DateTimeFormat('en-AU', {
+              timeZone: 'Australia/Sydney',
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric'
+            }).format(new Date(data.duedate))
+          : 'Today';
         const timeSlot = data.starttime || 'Scheduled Time';
         const joinUrl = data.joinUrl || 'https://teams.microsoft.com';
 

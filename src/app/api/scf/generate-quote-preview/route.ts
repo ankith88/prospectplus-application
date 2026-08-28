@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { formatMobileForDisplay } from '@/lib/template-replacer';
 
 const db = getFirestore(adminApp);
 
@@ -203,7 +204,7 @@ export async function POST(request: Request) {
       });
       if (matchedUser) {
         const d = matchedUser.data() || {};
-        amMobile = d.mobileNumber || d.mobile || d.phoneNumber || d.phone || d.aircallPhoneNumber || '';
+        amMobile = formatMobileForDisplay(d.mobileNumber || d.mobile || d.phoneNumber || d.phone || d.aircallPhoneNumber || '');
         amCalendly = d.calendlyLink || d.calendly || '';
       }
     } catch (err) {

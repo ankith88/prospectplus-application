@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { addDays, startOfDay, isBefore, format } from 'date-fns';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { isWeekendOrPublicHoliday } from '@/lib/australian-holidays';
+import { formatInTimezone } from '@/lib/utils';
 
 import {
   Dialog,
@@ -573,10 +574,10 @@ export default function FranchiseeHomeClient() {
   // Agenda appointments for selected date on home calendar widget
   const dayAppointments = useMemo(() => {
     if (!selectedDate) return franchiseeAppointments.slice(0, 5);
-    const dateStr = selectedDate.toISOString().split('T')[0];
+    const dateStr = formatInTimezone(selectedDate, 'Australia/Sydney', 'yyyy-MM-dd');
     return franchiseeAppointments.filter((a) => {
-      if (!a.duedate) return false;
-      const apptDateStr = new Date(a.duedate).toISOString().split('T')[0];
+      if (!a.duedate && !a.appointmentDate) return false;
+      const apptDateStr = formatInTimezone(a.duedate || a.appointmentDate, 'Australia/Sydney', 'yyyy-MM-dd');
       return apptDateStr === dateStr;
     });
   }, [franchiseeAppointments, selectedDate]);
@@ -586,27 +587,26 @@ export default function FranchiseeHomeClient() {
     if (loadingData) {
       return (
         <div className="py-12 flex justify-center">
-          <Loader />
+          <Loader size="lg" label="Loading scheduled appointments..." />
         </div>
       );
     }
 
-    if (!list || list.length === 0) {
+    if (list.length === 0) {
       return (
-        <div className="py-10 flex flex-col items-center justify-center text-center space-y-3 border-2 border-dashed rounded-xl bg-slate-50/40">
-          <div className="p-3 rounded-full bg-slate-100 text-slate-500">
-            <CheckCircle2 className="h-6 w-6" />
-          </div>
-          <p className="text-xs text-slate-500 max-w-sm">{emptyMsg}</p>
+        <div className="py-10 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+          <CalendarIcon className="h-8 w-8 text-slate-400 mx-auto mb-2 opacity-60" />
+          <p className="text-sm font-semibold text-slate-600">{emptyMsg}</p>
+          <p className="text-xs text-slate-400 mt-1">Book 1-on-1 sessions with Aleyna using the schedule button above.</p>
         </div>
       );
     }
 
     return (
-      <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         {list.map((appt) => {
-          const rawName = (appt as any).leadName && (appt as any).leadName !== 'Unknown Lead' ? (appt as any).leadName : null;
-          const leadCompanyName =
+          const rawName = (appt as any).leadName || (appt as any).companyName;
+          const displayLeadName =
             (appt as any).isTraining || appt.type === 'Teams Training Session' || !rawName
               ? 'Prospect+ Training x Aleyna'
               : rawName || leadsMap.get(appt.leadId) || 'Prospect+ Training x Aleyna';
@@ -614,11 +614,11 @@ export default function FranchiseeHomeClient() {
           const apptDate = appt.duedate ? new Date(appt.duedate) : appt.appointmentDate ? new Date(appt.appointmentDate) : null;
           let dateFormatted = 'N/A';
           if (apptDate && !isNaN(apptDate.getTime())) {
-            const todayStr = format(new Date(), 'yyyy-MM-dd');
-            const apptStr = format(apptDate, 'yyyy-MM-dd');
+            const todayStr = formatInTimezone(new Date(), 'Australia/Sydney', 'yyyy-MM-dd');
+            const apptStr = formatInTimezone(apptDate, 'Australia/Sydney', 'yyyy-MM-dd');
             dateFormatted = apptStr === todayStr
               ? `Today at ${appt.starttime || 'Scheduled time'}`
-              : `${apptDate.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })}${appt.starttime ? ` at ${appt.starttime}` : ''}`;
+              : `${formatInTimezone(apptDate, 'Australia/Sydney', 'EEE, MMM d')}${appt.starttime ? ` at ${appt.starttime}` : ''}`;
           }
 
           const isTeams = (appt as any).isTeams || appt.type === 'Teams Training Session' || (appt as any).meetingType === 'teams';
@@ -712,7 +712,7 @@ export default function FranchiseeHomeClient() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: bookingDate.toISOString(),
+          date: formatInTimezone(bookingDate, 'Australia/Sydney', 'yyyy-MM-dd'),
           timeSlot: selectedSlot,
           franchiseeName: activeFranName,
           userEmail: user?.email || userProfile?.email || 'franchisee@mailplus.com.au',

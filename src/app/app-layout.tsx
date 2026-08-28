@@ -185,7 +185,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     if (path.startsWith('/lpo-leads') || path.startsWith('/lpo-opportunities') || path.startsWith('/lpo-reporting')) {
       return 'partners-group';
     }
-    if (path.startsWith('/admin/tickets') || path.startsWith('/scans') || path.startsWith('/appointments') || path.startsWith('/calls') || path.startsWith('/unassigned_calls') || path.startsWith('/transcripts') || path.startsWith('/check-ins')) {
+    if (path.startsWith('/admin/tickets') || path.startsWith('/scans') || path.startsWith('/appointments') || path.startsWith('/calls') || path.startsWith('/unassigned_calls') || path.startsWith('/transcripts') || path.startsWith('/check-ins') || path.startsWith('/operations/training-appointments')) {
       if (path === '/admin/tickets/reporting' || path === '/scans/report') return 'analytics-reports';
       return 'ops-history';
     }
@@ -356,6 +356,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/scans/top-users': { label: 'Top Users', category: 'Operations & History', icon: Star, href: '/scans/top-users' },
     '/scans/top-users/contact-report': { label: 'Top Users Contact Report', category: 'Operations & History', icon: Phone, href: '/scans/top-users/contact-report' },
     '/appointments': { label: 'All Appointments', category: 'Operations & History', icon: Calendar, href: '/appointments' },
+    '/operations/training-appointments': { label: 'Franchisee Training', category: 'Operations & History', icon: CalendarCheck, href: '/operations/training-appointments' },
     '/calls': { label: 'All Calls', category: 'Operations & History', icon: Phone, href: '/calls' },
     '/unassigned_calls': { label: 'Unassigned Calls', category: 'Operations & History', icon: HelpCircle, href: '/unassigned_calls' },
     '/transcripts': { label: 'All Transcripts', category: 'Operations & History', icon: FileText, href: '/transcripts' },
@@ -732,6 +733,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewLpoLeads = canView('lpoLeads');
   const canAccessAsk = !!userProfile?.uid && ALLOWED_ASK_UIDS.includes(userProfile.uid);
   const activeRoleStr = userProfile?.activeRole as string;
+  const isAleynaUser = userProfile?.email?.toLowerCase() === 'aleyna.harnett@mailplus.com.au' || userProfile?.displayName?.toLowerCase().includes('aleyna') || user?.uid === 'a543AEr3TcaHyj4c1Gh0fJoQ6UB2';
+  const canViewAleynaTraining = isSuperAdmin || isAleynaUser || ['admin', 'super user', 'Operations', 'operations', 'Operations Manager', 'operations manager'].includes(activeRoleStr) || isOperationsRole;
   const canViewFranchiseProspects = isSuperAdmin || ['admin', 'super user', 'Operations', 'operations', 'Operations Manager', 'operations manager'].includes(activeRoleStr) || isOperationsRole;
   const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Outbound Admin' || activeRoleStr === 'Lead Gen Admin';
   const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
@@ -1898,8 +1901,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         )}
 
                         {/* History */}
-                        {canViewHistory && (
+                        {(canViewHistory || canViewAleynaTraining) && (
                           <>
+                            {canViewAleynaTraining && (
+                              <SidebarMenuItem>
+                                <SidebarMenuButton asChild isActive={isActive("/operations/training-appointments")} tooltip="Franchisee Training">
+                                  <Link href="/operations/training-appointments">
+                                    <CalendarCheck />
+                                    <span>Franchisee Training</span>
+                                  </Link>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            )}
                             {canViewHistoryAppointments && (
                               <SidebarMenuItem>
                                 <SidebarMenuButton asChild isActive={isActive("/appointments")} tooltip="All Appointments">
