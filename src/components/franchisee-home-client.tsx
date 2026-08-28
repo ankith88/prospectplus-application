@@ -587,7 +587,7 @@ export default function FranchiseeHomeClient() {
     if (loadingData) {
       return (
         <div className="py-12 flex justify-center">
-          <Loader size="lg" label="Loading scheduled appointments..." />
+          <Loader />
         </div>
       );
     }
@@ -606,7 +606,7 @@ export default function FranchiseeHomeClient() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         {list.map((appt) => {
           const rawName = (appt as any).leadName || (appt as any).companyName;
-          const displayLeadName =
+          const leadCompanyName =
             (appt as any).isTraining || appt.type === 'Teams Training Session' || !rawName
               ? 'Prospect+ Training x Aleyna'
               : rawName || leadsMap.get(appt.leadId) || 'Prospect+ Training x Aleyna';
@@ -618,7 +618,7 @@ export default function FranchiseeHomeClient() {
             const apptStr = formatInTimezone(apptDate, 'Australia/Sydney', 'yyyy-MM-dd');
             dateFormatted = apptStr === todayStr
               ? `Today at ${appt.starttime || 'Scheduled time'}`
-              : `${formatInTimezone(apptDate, 'Australia/Sydney', 'EEE, MMM d')}${appt.starttime ? ` at ${appt.starttime}` : ''}`;
+              : `${formatInTimezone(apptDate, 'Australia/Sydney', { weekday: 'short', month: 'short', day: 'numeric' })}${appt.starttime ? ` at ${appt.starttime}` : ''}`;
           }
 
           const isTeams = (appt as any).isTeams || appt.type === 'Teams Training Session' || (appt as any).meetingType === 'teams';
