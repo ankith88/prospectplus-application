@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { doc, getDoc, updateDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDocs, where, deleteDoc, deleteField } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { logActivity } from '@/services/firebase';
+import { logActivity, getAllFranchisees } from '@/services/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw, Lock, Trash2, RotateCcw, Copy, Key, ExternalLink, Ban } from 'lucide-react';
+import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw, Lock, Trash2, RotateCcw, Copy, Key, ExternalLink, Ban, Loader2 } from 'lucide-react';
 import { LpoConversionWizard, buildLpoServicesArray } from './lpo-conversion-wizard';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 
@@ -68,6 +68,210 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
 
   const isScfAccepted = ['SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In'].includes(lead?.status || status);
   const hasLinkedCustomer = Boolean(lead.linkedLeadId || lead.linkedLeadCompanyName || lead.rawCustomerName || lead.linkedCustomerId);
+
+  // LPO.Plus Suburb Validation & Syncing
+  const [lpoSuburbs, setLpoSuburbs] = useState<any[]>([]);
+  const [loadingLpoSuburbs, setLoadingLpoSuburbs] = useState(false);
+  const [isSyncingLpoSuburbs, setIsSyncingLpoSuburbs] = useState(false);
+
+  useEffect(() => {
+    if (!lead?.id) return;
+
+    async function checkLpoSuburbs() {
+      setLoadingLpoSuburbs(true);
+      try {
+        const franchiseeRefs = new Set<string>();
+        const parentLpoId = (lead as any).ausPostParentLpoId || lead.lpoLeadId || lead.linkedLpoLeadId || lead.id;
+        const extractedSuburbs: any[] = [];
+
+        if (lead.franchisee_id) franchiseeRefs.add(String(lead.franchisee_id));
+        if ((lead as any).franchiseeInternalId) franchiseeRefs.add(String((lead as any).franchiseeInternalId));
+        if ((lead as any).franchisee) franchiseeRefs.add(String((lead as any).franchisee));
+
+        // Check linkedFranchisees array on lead
+        const linkedFrans = (lead as any).linkedFranchisees;
+        if (Array.isArray(linkedFrans)) {
+          linkedFrans.forEach((lf: any) => {
+            if (!lf) return;
+            if (lf.franchiseeId) franchiseeRefs.add(String(lf.franchiseeId));
+            if (lf.internalId) franchiseeRefs.add(String(lf.internalId));
+            if (lf.id) franchiseeRefs.add(String(lf.id));
+            if (lf.name) franchiseeRefs.add(String(lf.name));
+            if (lf.franchiseeName) franchiseeRefs.add(String(lf.franchiseeName));
+
+            let embedded = lf.ausPostSuburbsJson || lf.ausPostTerritoryJson || lf.suburbs;
+            if (typeof embedded === 'string') {
+              try { embedded = JSON.parse(embedded); } catch (e) {}
+            }
+            if (Array.isArray(embedded) && embedded.length > 0) {
+              extractedSuburbs.push(...embedded);
+            }
+          });
+        }
+
+        // Check linkedFranchiseeIds array on lead
+        const linkedFranIds = (lead as any).linkedFranchiseeIds;
+        if (Array.isArray(linkedFranIds)) {
+          linkedFranIds.forEach((id: any) => {
+            if (id) franchiseeRefs.add(String(id));
+          });
+        }
+
+        // Candidate parent IDs to match child companies / leads
+        const parentIdSet = new Set<string>();
+        if (lead.id) parentIdSet.add(String(lead.id));
+        if ((lead as any).internalId) parentIdSet.add(String((lead as any).internalId));
+        if ((lead as any).netsuiteId) parentIdSet.add(String((lead as any).netsuiteId));
+        if ((lead as any).prospectPlusId) parentIdSet.add(String((lead as any).prospectPlusId));
+        if (lead.lpoLeadId) parentIdSet.add(String(lead.lpoLeadId));
+        if ((lead as any).linkedLpoLeadId) parentIdSet.add(String((lead as any).linkedLpoLeadId));
+        if ((lead as any).ausPostParentLpoId) parentIdSet.add(String((lead as any).ausPostParentLpoId));
+        if (parentLpoId) parentIdSet.add(String(parentLpoId));
+
+        // Build queries across leads and companies collections
+        const childQueries: any[] = [];
+        for (const pId of Array.from(parentIdSet)) {
+          childQueries.push(
+            query(collection(firestore, 'leads'), where('parentLeadId', '==', pId)),
+            query(collection(firestore, 'leads'), where('parentCompanyId', '==', pId)),
+            query(collection(firestore, 'leads'), where('createdParentLeadId', '==', pId)),
+            query(collection(firestore, 'leads'), where('ausPostParentLpoId', '==', pId)),
+            query(collection(firestore, 'companies'), where('parentCompanyId', '==', pId)),
+            query(collection(firestore, 'companies'), where('parentLeadId', '==', pId)),
+            query(collection(firestore, 'companies'), where('createdParentLeadId', '==', pId)),
+            query(collection(firestore, 'companies'), where('ausPostParentLpoId', '==', pId))
+          );
+        }
+
+        const childSnaps = await Promise.all(childQueries.map(q => getDocs(q).catch(() => ({ docs: [] }))));
+
+        childSnaps.forEach(snap => {
+          snap.docs.forEach((docSnap: any) => {
+            const d = docSnap.data();
+            if (!d) return;
+
+            if (d.franchisee_id) franchiseeRefs.add(String(d.franchisee_id));
+            if (d.franchiseeInternalId) franchiseeRefs.add(String(d.franchiseeInternalId));
+            if (d.franchisee) franchiseeRefs.add(String(d.franchisee));
+            if (Array.isArray(d.linkedFranchiseeIds)) {
+              d.linkedFranchiseeIds.forEach((id: any) => { if (id) franchiseeRefs.add(String(id)); });
+            }
+            if (Array.isArray(d.linkedFranchisees)) {
+              d.linkedFranchisees.forEach((lf: any) => {
+                if (!lf) return;
+                if (lf.franchiseeId) franchiseeRefs.add(String(lf.franchiseeId));
+                if (lf.internalId) franchiseeRefs.add(String(lf.internalId));
+                if (lf.id) franchiseeRefs.add(String(lf.id));
+                if (lf.name) franchiseeRefs.add(String(lf.name));
+                if (lf.franchiseeName) franchiseeRefs.add(String(lf.franchiseeName));
+
+                let embedded = lf.ausPostSuburbsJson || lf.ausPostTerritoryJson || lf.suburbs;
+                if (typeof embedded === 'string') {
+                  try { embedded = JSON.parse(embedded); } catch (e) {}
+                }
+                if (Array.isArray(embedded) && embedded.length > 0) {
+                  extractedSuburbs.push(...embedded);
+                }
+              });
+            }
+          });
+        });
+
+        // Load all franchisees from franchisees collection
+        const allFranchisees = await getAllFranchisees();
+
+        for (const ref of Array.from(franchiseeRefs)) {
+          if (!ref) continue;
+          const cleanRef = String(ref).trim().toLowerCase();
+
+          // Match franchisee document from franchisees collection
+          const fData = allFranchisees.find(f => {
+            if (!f) return false;
+            return (
+              String(f.id || '').trim().toLowerCase() === cleanRef ||
+              String(f.internalId || '').trim().toLowerCase() === cleanRef ||
+              String((f as any).prospectPlusId || '').trim().toLowerCase() === cleanRef ||
+              String(f.name || '').trim().toLowerCase() === cleanRef ||
+              String((f as any).code || '').trim().toLowerCase() === cleanRef
+            );
+          });
+
+          if (fData) {
+            let suburbs = fData.ausPostSuburbsJson || (fData as any).ausPostTerritoryJson || (fData as any).territoryJson || (fData as any).ausPostSuburbsRaw || (fData as any).custentity_ap_suburbs_json;
+            if (typeof suburbs === 'string') {
+              try { suburbs = JSON.parse(suburbs); } catch (e) {}
+            }
+            if (Array.isArray(suburbs) && suburbs.length > 0) {
+              extractedSuburbs.push(...suburbs);
+            }
+          }
+        }
+
+        setLpoSuburbs(extractedSuburbs);
+      } catch (err) {
+        console.error('Error checking LPO franchisee suburbs:', err);
+      } finally {
+        setLoadingLpoSuburbs(false);
+      }
+    }
+
+    checkLpoSuburbs();
+  }, [lead?.id]);
+
+  const handleSyncLpoSuburbs = async () => {
+    const targetNetsuiteId = lead?.netsuiteId || lead?.id;
+    if (!targetNetsuiteId) return;
+
+    if (lpoSuburbs.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'No Suburbs Found',
+        description: 'Linked franchisee does not have active Australia Post suburb mappings (ausPostSuburbsJson).'
+      });
+      return;
+    }
+
+    setIsSyncingLpoSuburbs(true);
+    try {
+      const res = await fetch('/api/lpo-plus/sync-territory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          netsuiteId: targetNetsuiteId,
+          territorySuburbs: lpoSuburbs
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          title: 'Territory Suburbs Synced',
+          description: `Successfully synced ${data.count || lpoSuburbs.length} suburb mapping(s) into mp-lpo-connect database.`
+        });
+
+        await logActivity(
+          lead.id,
+          {
+            type: 'Update',
+            notes: `Synced ${data.count || lpoSuburbs.length} franchisee LPO suburb mapping(s) into 'franchiseeTerritoryJSON' in mp-lpo-connect DB.`,
+            author: userProfile?.displayName || userProfile?.email || 'System User',
+          },
+          'lpo_leads'
+        );
+      } else {
+        throw new Error(data.error || 'Failed to sync territory suburbs');
+      }
+    } catch (err: any) {
+      console.error('Error syncing LPO territory suburbs:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Sync Error',
+        description: err.message || 'Failed to sync LPO territory suburbs.'
+      });
+    } finally {
+      setIsSyncingLpoSuburbs(false);
+    }
+  };
 
   // Sync real-time updates for activities/notes
   useEffect(() => {
@@ -839,23 +1043,45 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                         <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Default Password</p>
                         <p className="text-xs font-mono font-bold text-[#095c7b] mt-0.5">{lead.defaultPassword || 'MailPlus2026!'}</p>
                       </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          const credText = `LPO.PLUS Credentials:\nPortal: https://lpo.plus/signin\nUsername: ${lead.email}\nPassword: ${lead.defaultPassword || 'MailPlus2026!'}`;
-                          navigator.clipboard.writeText(credText);
-                          toast({
-                            title: 'Credentials Copied',
-                            description: 'LPO.PLUS sign-in details copied to clipboard.',
-                          });
-                        }}
-                        className="h-8 px-2 text-slate-600 hover:text-[#095c7b] hover:bg-slate-100"
-                        title="Copy Credentials"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={handleSyncLpoSuburbs}
+                          disabled={isSyncingLpoSuburbs || loadingLpoSuburbs}
+                          className="h-8 border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5 font-medium text-xs px-2.5"
+                        >
+                          {isSyncingLpoSuburbs ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                              Syncing...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 mr-1 text-[#095c7b]" />
+                              Sync Suburbs ({lpoSuburbs.length})
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const credText = `LPO.PLUS Credentials:\nPortal: https://lpo.plus/signin\nUsername: ${lead.email}\nPassword: ${lead.defaultPassword || 'MailPlus2026!'}`;
+                            navigator.clipboard.writeText(credText);
+                            toast({
+                              title: 'Credentials Copied',
+                              description: 'LPO.PLUS sign-in details copied to clipboard.',
+                            });
+                          }}
+                          className="h-8 px-2 text-slate-600 hover:text-[#095c7b] hover:bg-slate-100"
+                          title="Copy Credentials"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
