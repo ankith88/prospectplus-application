@@ -3092,6 +3092,63 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
+  const [isSyncingLpoSuburbs, setIsSyncingLpoSuburbs] = useState(false);
+
+  const handleSyncLpoSuburbs = async () => {
+    if (!lead?.id) return;
+
+    if (lpoSuburbs.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'No Suburbs Found',
+        description: 'Linked franchisee does not have active Australia Post suburb mappings (ausPostSuburbsJson).'
+      });
+      return;
+    }
+
+    setIsSyncingLpoSuburbs(true);
+    try {
+      const res = await fetch('/api/lpo-plus/sync-territory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          netsuiteId: lead.id,
+          territorySuburbs: lpoSuburbs
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          title: 'Territory Suburbs Synced',
+          description: `Successfully synced ${data.count || lpoSuburbs.length} suburb mapping(s) into mp-lpo-connect database.`
+        });
+
+        const targetCollection = isCompanyProfile ? 'companies' : 'leads';
+        await logActivity(
+          lead.id,
+          {
+            type: 'Update',
+            notes: `Synced ${data.count || lpoSuburbs.length} franchisee LPO suburb mapping(s) into 'franchiseeTerritoryJSON' in mp-lpo-connect DB.`,
+            author: userProfile?.displayName || userProfile?.email || 'System User',
+          },
+          targetCollection
+        );
+      } else {
+        throw new Error(data.error || 'Failed to sync territory suburbs');
+      }
+    } catch (err: any) {
+      console.error('Error syncing LPO territory suburbs:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Sync Error',
+        description: err.message || 'Failed to sync LPO territory suburbs.'
+      });
+    } finally {
+      setIsSyncingLpoSuburbs(false);
+    }
+  };
+
   // Reset Password State
   const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
   const [resetPasswordInput, setResetPasswordInput] = useState('MailPlus2026!');
@@ -6347,6 +6404,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     Account created in <code>lpoconnect</code> DB (Doc ID: <strong>{lead.id}</strong>).
                                   </p>
                                   <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={handleSyncLpoSuburbs}
+                                      disabled={isSyncingLpoSuburbs || loadingLpoSuburbs}
+                                      className="border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5 font-medium text-xs h-8"
+                                    >
+                                      {isSyncingLpoSuburbs ? (
+                                        <>
+                                          <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                          Syncing Suburbs...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <RefreshCw className="w-3.5 h-3.5 mr-1.5 text-[#095c7b]" />
+                                          Sync Suburb Mapping ({lpoSuburbs.length})
+                                        </>
+                                      )}
+                                    </Button>
                                     <Button
                                       variant="outline"
                                       size="sm"

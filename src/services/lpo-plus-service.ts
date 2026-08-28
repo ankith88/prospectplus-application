@@ -575,3 +575,62 @@ export async function resetLpoPlusPassword(payload: LpoPlusResetPasswordPayload)
     };
   }
 }
+
+export interface LpoPlusSyncTerritoryPayload {
+  netsuiteId: string;
+  territorySuburbs: any[];
+}
+
+/**
+ * Syncs/Updates franchisee territory suburb mapping into 'franchiseeTerritoryJSON' in lpoconnect Firestore database.
+ */
+export async function syncLpoTerritorySuburbs(payload: LpoPlusSyncTerritoryPayload): Promise<{ success: boolean; message: string; count?: number }> {
+  try {
+    const { netsuiteId, territorySuburbs = [] } = payload;
+
+    if (!netsuiteId) {
+      return { success: false, message: 'netsuiteId is required for syncing territory suburbs.' };
+    }
+
+    const formattedTerritory: string[] = Array.from(
+      new Set(
+        territorySuburbs
+          .map((sub: any) => {
+            if (typeof sub === 'string') return sub.trim();
+            const subName = sub.suburbs || sub.suburb || sub.name || '';
+            const subState = sub.state || '';
+            const subPostcode = sub.post_code || sub.postcode || sub.zip || '';
+            return `${subName}, ${subState} ${subPostcode}`.trim();
+          })
+          .filter(Boolean)
+      )
+    );
+
+    const lpoConnectDb = getLpoConnectDb();
+    const lpoDocId = String(netsuiteId);
+
+    await lpoConnectDb.collection('lpo').doc(lpoDocId).set(
+      {
+        franchiseeTerritoryJSON: formattedTerritory,
+        lastTerritorySyncedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      { merge: true }
+    );
+
+    console.log(`[LPO.Plus Firestore] Successfully synced ${formattedTerritory.length} territory suburb(s) for LPO #${lpoDocId}`);
+
+    return {
+      success: true,
+      count: formattedTerritory.length,
+      message: `Successfully synced ${formattedTerritory.length} suburb mapping(s) to mp-lpo-connect database.`
+    };
+  } catch (error: any) {
+    console.error('[LPO.Plus Sync Territory Error]:', error);
+    return {
+      success: false,
+      message: error.message || 'Failed to sync LPO territory suburbs.'
+    };
+  }
+}
+

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
+import { getGraphClient } from '@/services/microsoft-graph';
 import { format } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
@@ -42,13 +43,13 @@ export async function POST(req: NextRequest) {
 
     const db = adminApp.firestore();
 
-    // 1. Generate Teams Meeting Join URL & Appointment IDs
+    // 1. Generate Appointment IDs & Calculate Dates
     const apptId = `appt-training-${Date.now()}`;
     const parentId = userId || 'training-sessions';
-    const teamsMeetingId = `teams-training-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const teamsJoinUrl = `https://teams.microsoft.com/l/meetup-join/19%3ameeting_${teamsMeetingId}%40thread.v2/0?context=%7b%22Tid%22%3a%22mailplus-training%22%7d`;
+    const fallbackTeamsMeetingId = `teams-training-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const fallbackTeamsJoinUrl = `https://teams.microsoft.com/l/meetup-join/19%3ameeting_${fallbackTeamsMeetingId}%40thread.v2/0?context=%7b%22Tid%22%3a%22mailplus-training%22%7d`;
 
-    // Calculate full dates & times for iCalendar (.ics) export
+    // Calculate full dates & times for iCalendar (.ics) export & Microsoft Graph
     const dateObj = new Date(date);
     const formattedDate = format(dateObj, 'EEEE, d MMMM yyyy');
     const isoDueDate = dateObj.toISOString();
@@ -68,16 +69,106 @@ export async function POST(req: NextRequest) {
     const startDateTime = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), hours, minutes, 0);
     const endDateTime = new Date(startDateTime.getTime() + 30 * 60 * 1000); // 30 min duration
 
+    let teamsJoinUrl = fallbackTeamsJoinUrl;
+    let msGraphEventId: string | null = null;
+    let aleynaUserId: string | null = null;
+
+    // 2. Fetch Aleyna's User Record from Firestore to check for Microsoft Graph Calendar connection
+    try {
+      const usersRef = db.collection('users');
+      let aleynaUserDoc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot | null = null;
+      
+      const aleynaSnap = await usersRef.where('email', '==', 'aleyna.harnett@mailplus.com.au').limit(1).get();
+      if (!aleynaSnap.empty) {
+        aleynaUserDoc = aleynaSnap.docs[0];
+      } else {
+        const idSnap = await usersRef.doc('a543AEr3TcaHyj4c1Gh0fJoQ6UB2').get();
+        if (idSnap.exists) {
+          aleynaUserDoc = idSnap;
+        } else {
+          const allSnap = await usersRef.get();
+          aleynaUserDoc = allSnap.docs.find((d) => {
+            const u = d.data();
+            return (
+              (u.email && u.email.toLowerCase() === 'aleyna.harnett@mailplus.com.au') ||
+              (u.displayName && u.displayName.toLowerCase().includes('aleyna'))
+            );
+          }) || null;
+        }
+      }
+
+      if (aleynaUserDoc && aleynaUserDoc.exists) {
+        aleynaUserId = aleynaUserDoc.id;
+        const aleynaData = aleynaUserDoc.data();
+
+        if (aleynaData?.microsoftRefreshToken) {
+          const client = await getGraphClient(aleynaUserId);
+
+          const attendeesList = [
+            {
+              emailAddress: {
+                address: userEmail,
+                name: userName || franchiseeName || 'Franchisee'
+              },
+              type: 'required'
+            },
+            ...parsedAdditionalEmails.map((addEmail) => ({
+              emailAddress: {
+                address: addEmail,
+                name: addEmail
+              },
+              type: 'required'
+            }))
+          ];
+
+          const meetingSubject = `ProspectPlus Training Session: ${franchiseeName || userName} x Aleyna`;
+          const meetingBody = `1-on-1 ProspectPlus Training Session via Microsoft Teams.<br><br>Franchisee: ${franchiseeName || 'N/A'}<br>Attendee: ${userName || 'Franchisee'} (${userEmail})${notes ? `<br><br>Notes: ${notes}` : ''}`;
+
+          const event = {
+            subject: meetingSubject,
+            body: {
+              contentType: 'HTML',
+              content: meetingBody
+            },
+            start: {
+              dateTime: startDateTime.toISOString(),
+              timeZone: 'UTC'
+            },
+            end: {
+              dateTime: endDateTime.toISOString(),
+              timeZone: 'UTC'
+            },
+            attendees: attendeesList,
+            isOnlineMeeting: true,
+            onlineMeetingProvider: 'teamsForBusiness'
+          };
+
+          const createdEvent = await client.api('/me/events').post(event);
+          if (createdEvent?.id) {
+            msGraphEventId = createdEvent.id;
+          }
+          if (createdEvent?.onlineMeeting?.joinUrl) {
+            teamsJoinUrl = createdEvent.onlineMeeting.joinUrl;
+          }
+          console.log(`Successfully created MS Graph event for Aleyna (Event ID: ${msGraphEventId})`);
+        }
+      }
+    } catch (graphErr) {
+      console.error('Error creating MS Graph event for Aleyna training session (falling back to ICS/manual link):', graphErr);
+    }
+
     const formatIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     const dtStartStr = formatIcsDate(startDateTime);
     const dtEndStr = formatIcsDate(endDateTime);
     const dtStampStr = formatIcsDate(new Date());
 
-    // 2. Store Appointment Document in dedicated training_sessions collection (NOT in leads collection)
+    // 3. Store Appointment Document in dedicated training_sessions collection
     const apptRef = db.collection('training_sessions').doc(parentId).collection('appointments').doc(apptId);
 
     const apptData = {
       id: apptId,
+      eventId: msGraphEventId || undefined,
+      amId: aleynaUserId || undefined,
       leadId: `training-${parentId}`,
       leadName: 'Prospect+ Training x Aleyna',
       assignedTo: 'Aleyna Harnett',
