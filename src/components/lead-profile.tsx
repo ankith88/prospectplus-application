@@ -3149,6 +3149,172 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
+  const renderLpoCredentialsCard = () => {
+    const isLeadSignedUp = (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed' || lead.status === 'Won' || lead.customerStatus === 'Won' || lead.lpoPlusStatus === 'Provisioned' || Boolean(lead.defaultPassword);
+
+    if (!isLpoParentLeadDoc || !isLeadSignedUp) return null;
+
+    const isAccountActive = lead.lpoPlusStatus === 'Provisioned' || Boolean(lead.defaultPassword) || (lead.status as string) === 'LPO.Plus Access Sent';
+
+    return (
+      <Card className="border-[#095c7b]/30 bg-gradient-to-r from-slate-50 via-sky-50/20 to-white shadow-sm mb-4">
+        <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
+              <Key className="w-4 h-4 text-[#095c7b]" />
+              LPO.PLUS Account & Access Credentials
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              LPO.PLUS Portal access and sign-in details for this participating LPO contact.
+            </p>
+          </div>
+          {isAccountActive ? (
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold px-2.5 py-1">
+              <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> LPO.Plus Access Active
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 font-semibold px-2.5 py-1">
+              Not Created Yet
+            </Badge>
+          )}
+        </CardHeader>
+
+        <CardContent className="pt-4">
+          {isAccountActive ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-3.5 rounded-lg border border-slate-200">
+                <div>
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground block">
+                    Portal Sign-In URL
+                  </span>
+                  <a
+                    href="https://lpo.plus/signin"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-[#095c7b] hover:underline flex items-center gap-1 mt-0.5"
+                  >
+                    https://lpo.plus/signin <ExternalLink className="w-3 h-3 inline" />
+                  </a>
+                </div>
+
+                <div>
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground block">
+                    Username (Email)
+                  </span>
+                  <span className="text-xs font-semibold text-foreground mt-0.5 block">
+                    {lead.contacts?.[0]?.email || lead.customerServiceEmail || 'N/A'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground block">
+                    Default Password
+                  </span>
+                  <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
+                    {lead.defaultPassword || 'MailPlus2026!'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <p className="text-xs text-slate-500 italic">
+                  Account created in <code>lpoconnect</code> DB (Doc ID: <strong>{lead.id}</strong>).
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncLpoSuburbs}
+                    disabled={isSyncingLpoSuburbs || loadingLpoSuburbs}
+                    className="border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5 font-medium text-xs h-8"
+                  >
+                    {isSyncingLpoSuburbs ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                        Syncing Suburbs...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5 text-[#095c7b]" />
+                        Sync Suburb Mapping ({lpoSuburbs.length})
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setResetPasswordInput(lead.defaultPassword || 'MailPlus2026!');
+                      setIsResetPasswordDialogOpen(true);
+                    }}
+                    className="border-amber-300 text-amber-800 hover:bg-amber-50 font-medium text-xs h-8"
+                  >
+                    <Key className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+                    Reset Password
+                  </Button>
+                  <CopyButton
+                    textToCopy={`Portal: https://lpo.plus/signin\nUsername: ${lead.contacts?.[0]?.email || lead.customerServiceEmail || ''}\nPassword: ${lead.defaultPassword || 'MailPlus2026!'}`}
+                    label="Copy Sign-in Details"
+                    variant="outline"
+                    size="sm"
+                    className="border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5 h-8 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {loadingLpoSuburbs ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#095c7b]" />
+                  Checking linked franchisee Australia Post suburb mappings...
+                </div>
+              ) : lpoSuburbs.length === 0 ? (
+                <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-900 py-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertTitle className="font-bold text-xs uppercase tracking-wider text-amber-900">
+                    Cannot Create LPO.Plus Account
+                  </AlertTitle>
+                  <AlertDescription className="text-xs text-amber-800 mt-1">
+                    The linked franchisee(s) do not have active Australia Post suburb mappings (<code>ausPostSuburbsJson</code>) assigned. Please assign Australia Post suburb mappings to the franchisee first before creating the LPO.Plus account.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200">
+                  <div>
+                    <p className="text-xs text-slate-700 font-medium">
+                      Ready to create LPO.Plus Account with <strong>{lpoSuburbs.length}</strong> Australia Post suburb mapping(s) from linked franchisee(s).
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Document ID in <code>lpoconnect</code> database will match Parent Lead ID: <strong>{lead.id}</strong>.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleProvisionLpoPlus}
+                    disabled={isProvisioningLpoPlus}
+                    className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold text-sm shadow-sm shrink-0"
+                  >
+                    {isProvisioningLpoPlus ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Creating LPO.Plus Account...
+                      </>
+                    ) : (
+                      <>
+                        <Key className="w-4 h-4 mr-2 text-[#EAF044]" />
+                        Create LPO.Plus Account
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   // Reset Password State
   const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
   const [resetPasswordInput, setResetPasswordInput] = useState('MailPlus2026!');
@@ -5715,6 +5881,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </div>
             
             <TabsContent value="profile" className="flex flex-col gap-6 mt-0">
+                {renderLpoCredentialsCard()}
                 <Card>
              <CardHeader className="pb-4 border-b flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
@@ -6332,171 +6499,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                           );
                       })()}
 
-                      {(() => {
-                        const isLeadSignedUp = (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed' || lead.status === 'Won' || lead.customerStatus === 'Won' || lead.lpoPlusStatus === 'Provisioned' || Boolean(lead.defaultPassword);
-
-                        if (!isLpoParentLeadDoc || !isLeadSignedUp) return null;
-
-                        const isAccountActive = lead.lpoPlusStatus === 'Provisioned' || Boolean(lead.defaultPassword) || (lead.status as string) === 'LPO.Plus Access Sent';
-
-                        return (
-                          <Card className="border-[#095c7b]/30 bg-gradient-to-r from-slate-50 via-sky-50/20 to-white shadow-sm mb-4">
-                          <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
-                            <div>
-                              <CardTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
-                                <Key className="w-4 h-4 text-[#095c7b]" />
-                                LPO.PLUS Account & Access Credentials
-                              </CardTitle>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                LPO.PLUS Portal access and sign-in details for this participating LPO contact.
-                              </p>
-                            </div>
-                            {isAccountActive ? (
-                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold px-2.5 py-1">
-                                <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> LPO.Plus Access Active
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 font-semibold px-2.5 py-1">
-                                Not Created Yet
-                              </Badge>
-                            )}
-                          </CardHeader>
-
-                          <CardContent className="pt-4">
-                            {isAccountActive ? (
-                              <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-3.5 rounded-lg border border-slate-200">
-                                  <div>
-                                    <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground block">
-                                      Portal Sign-In URL
-                                    </span>
-                                    <a
-                                      href="https://lpo.plus/signin"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs font-semibold text-[#095c7b] hover:underline flex items-center gap-1 mt-0.5"
-                                    >
-                                      https://lpo.plus/signin <ExternalLink className="w-3 h-3 inline" />
-                                    </a>
-                                  </div>
-
-                                  <div>
-                                    <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground block">
-                                      Username (Email)
-                                    </span>
-                                    <span className="text-xs font-semibold text-foreground mt-0.5 block">
-                                      {lead.contacts?.[0]?.email || lead.customerServiceEmail || 'N/A'}
-                                    </span>
-                                  </div>
-
-                                  <div>
-                                    <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground block">
-                                      Default Password
-                                    </span>
-                                    <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
-                                      {lead.defaultPassword || 'MailPlus2026!'}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                                  <p className="text-xs text-slate-500 italic">
-                                    Account created in <code>lpoconnect</code> DB (Doc ID: <strong>{lead.id}</strong>).
-                                  </p>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={handleSyncLpoSuburbs}
-                                      disabled={isSyncingLpoSuburbs || loadingLpoSuburbs}
-                                      className="border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5 font-medium text-xs h-8"
-                                    >
-                                      {isSyncingLpoSuburbs ? (
-                                        <>
-                                          <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                          Syncing Suburbs...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <RefreshCw className="w-3.5 h-3.5 mr-1.5 text-[#095c7b]" />
-                                          Sync Suburb Mapping ({lpoSuburbs.length})
-                                        </>
-                                      )}
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        setResetPasswordInput(lead.defaultPassword || 'MailPlus2026!');
-                                        setIsResetPasswordDialogOpen(true);
-                                      }}
-                                      className="border-amber-300 text-amber-800 hover:bg-amber-50 font-medium text-xs h-8"
-                                    >
-                                      <Key className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
-                                      Reset Password
-                                    </Button>
-                                    <CopyButton
-                                      textToCopy={`Portal: https://lpo.plus/signin\nUsername: ${lead.contacts?.[0]?.email || lead.customerServiceEmail || ''}\nPassword: ${lead.defaultPassword || 'MailPlus2026!'}`}
-                                      label="Copy Sign-in Details"
-                                      variant="outline"
-                                      size="sm"
-                                      className="border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/5 h-8 text-xs"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-3">
-                                {loadingLpoSuburbs ? (
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                                    <Loader2 className="w-4 h-4 animate-spin text-[#095c7b]" />
-                                    Checking linked franchisee Australia Post suburb mappings...
-                                  </div>
-                                ) : lpoSuburbs.length === 0 ? (
-                                  <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-900 py-2.5">
-                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                    <AlertTitle className="font-bold text-xs uppercase tracking-wider text-amber-900">
-                                      Cannot Create LPO.Plus Account
-                                    </AlertTitle>
-                                    <AlertDescription className="text-xs text-amber-800 mt-1">
-                                      The linked franchisee(s) do not have active Australia Post suburb mappings (<code>ausPostSuburbsJson</code>) assigned. Please assign Australia Post suburb mappings to the franchisee first before creating the LPO.Plus account.
-                                    </AlertDescription>
-                                  </Alert>
-                                ) : (
-                                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200">
-                                    <div>
-                                      <p className="text-xs text-slate-700 font-medium">
-                                        Ready to create LPO.Plus Account with <strong>{lpoSuburbs.length}</strong> Australia Post suburb mapping(s) from linked franchisee(s).
-                                      </p>
-                                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                                        Document ID in <code>lpoconnect</code> database will match Parent Lead ID: <strong>{lead.id}</strong>.
-                                      </p>
-                                    </div>
-                                    <Button
-                                      onClick={handleProvisionLpoPlus}
-                                      disabled={isProvisioningLpoPlus}
-                                      className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold text-sm shadow-sm shrink-0"
-                                    >
-                                      {isProvisioningLpoPlus ? (
-                                        <>
-                                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                          Creating LPO.Plus Account...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Key className="w-4 h-4 mr-2 text-[#EAF044]" />
-                                          Create LPO.Plus Account
-                                        </>
-                                      )}
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                        );
-                      })()}
+                      {renderLpoCredentialsCard()}
                       {lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
                          <>
                            <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
