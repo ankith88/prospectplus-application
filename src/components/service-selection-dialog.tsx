@@ -1202,7 +1202,15 @@ export function ServiceSelectionDialog({
   const selectedServices = form.watch('selectedServices');
   const selectedContactId = form.watch('selectedContactId');
   const primaryContactRender = contacts.find(c => c.id === selectedContactId) || (contacts.length > 0 ? contacts[0] : null);
-  const hasLocalMileAccessRender = primaryContactRender?.accessToLocalMile === 'yes';
+  const watchCreateLocalMileAccount = form.watch('createLocalMileAccount');
+  const hasLocalMileAccessRender = Boolean(
+    watchCreateLocalMileAccount ||
+    lead?.hasCreatedJob === true ||
+    lead?.localMileTrialsRemaining !== undefined ||
+    (lead as any)?.localmileAccess === true ||
+    (contacts || []).some(c => c?.accessToLocalMile === 'yes') ||
+    primaryContactRender?.accessToLocalMile === 'yes'
+  );
   const watchedStartDate = form.watch('startDate');
   const watchedContactIds = form.watch('selectedContactIds');
 
@@ -3015,7 +3023,7 @@ export function ServiceSelectionDialog({
                                               <FormItem className="flex flex-row items-start space-x-2 space-y-0 pt-2">
                                                 <FormControl>
                                                   <Checkbox
-                                                    checked={field.value || false}
+                                                    checked={field.value !== false}
                                                     onCheckedChange={field.onChange}
                                                   />
                                                 </FormControl>
