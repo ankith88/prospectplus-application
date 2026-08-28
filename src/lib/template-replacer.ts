@@ -163,143 +163,143 @@ export function replaceTemplatePlaceholders(
 
   // Replace URL placeholders cleanly
   content = replaceUrlPlaceholder(content, [
-    /\{\{Lead\.GeneralBookingLink\}\}/gi,
-    /\{\{GeneralBookingLink\}\}/gi,
-    /\{\{Lead\.GeneralBookingUrl\}\}/gi,
-    /\{\{GeneralBookingUrl\}\}/gi,
-    /\{\{Lead\.BookingLink\}\}/gi,
-    /\{\{booking_link\}\}/gi,
-    /\{\{booking_url\}\}/gi,
+    /\{\{\s*Lead\.GeneralBookingLink\s*\}\}/gi,
+    /\{\{\s*GeneralBookingLink\s*\}\}/gi,
+    /\{\{\s*Lead\.GeneralBookingUrl\s*\}\}/gi,
+    /\{\{\s*GeneralBookingUrl\s*\}\}/gi,
+    /\{\{\s*Lead\.BookingLink\s*\}\}/gi,
+    /\{\{\s*booking_link\s*\}\}/gi,
+    /\{\{\s*booking_url\s*\}\}/gi,
   ], generalBookingLink);
 
   content = replaceUrlPlaceholder(content, [
-    /\{\{Lead\.ContactBookingLink\}\}/gi,
-    /\{\{ContactBookingLink\}\}/gi,
-    /\{\{Lead\.BookingUrlId\}\}/gi,
+    /\{\{\s*Lead\.ContactBookingLink\s*\}\}/gi,
+    /\{\{\s*ContactBookingLink\s*\}\}/gi,
+    /\{\{\s*Lead\.BookingUrlId\s*\}\}/gi,
   ], contactBookingLink);
 
   content = replaceUrlPlaceholder(content, [
-    /\{\{Lead\.SCFLink\}\}/gi,
-    /\{\{SCFLink\}\}/gi,
-    /\{\{scf_link\}\}/gi,
-    /\{\{scf_url\}\}/gi,
+    /\{\{\s*Lead\.SCFLink\s*\}\}/gi,
+    /\{\{\s*SCFLink\s*\}\}/gi,
+    /\{\{\s*scf_link\s*\}\}/gi,
+    /\{\{\s*scf_url\s*\}\}/gi,
   ], scfLink);
 
   content = replaceUrlPlaceholder(content, [
-    /\{\{Lead\.StandingOrderFormLink\}\}/gi,
-    /\{\{Lead\.SOFLink\}\}/gi,
-    /\{\{Lead\.StandingOrderLink\}\}/gi,
-    /\{\{StandingOrderFormLink\}\}/gi,
-    /\{\{SOFLink\}\}/gi,
-    /\{\{StandingOrderLink\}\}/gi,
-    /\{\{sof_link\}\}/gi,
-    /\{\{sof_url\}\}/gi,
-    /\{\{SOF_Link\}\}/gi,
+    /\{\{\s*Lead\.StandingOrderFormLink\s*\}\}/gi,
+    /\{\{\s*Lead\.SOFLink\s*\}\}/gi,
+    /\{\{\s*Lead\.StandingOrderLink\s*\}\}/gi,
+    /\{\{\s*StandingOrderFormLink\s*\}\}/gi,
+    /\{\{\s*SOFLink\s*\}\}/gi,
+    /\{\{\s*StandingOrderLink\s*\}\}/gi,
+    /\{\{\s*sof_link\s*\}\}/gi,
+    /\{\{\s*sof_url\s*\}\}/gi,
+    /\{\{\s*SOF_Link\s*\}\}/gi,
   ], sofLink);
 
   content = replaceUrlPlaceholder(content, [
-    /\{\{Lead\.LocalMileRegistrationLink\}\}/gi,
+    /\{\{\s*Lead\.LocalMileRegistrationLink\s*\}\}/gi,
   ], localMileLink);
 
   content = replaceUrlPlaceholder(content, [
-    /\{\{Lead\.LocalMileActivationLink\}\}/gi,
-    /\{\{LocalMileActivationLink\}\}/gi,
-    /\{\{Contact\.LocalMileActivationLink\}\}/gi,
-    /\{\{Contact\.LocalMilePlusAuthLink\}\}/gi,
+    /\{\{\s*Lead\.LocalMileActivationLink\s*\}\}/gi,
+    /\{\{\s*LocalMileActivationLink\s*\}\}/gi,
+    /\{\{\s*Contact\.LocalMileActivationLink\s*\}\}/gi,
+    /\{\{\s*Contact\.LocalMilePlusAuthLink\s*\}\}/gi,
   ], localMileActivationLink);
 
   content = replaceUrlPlaceholder(content, [
-    /\{\{acceptUrl\}\}/gi,
+    /\{\{\s*acceptUrl\s*\}\}/gi,
   ], acceptUrl);
 
   content = replaceUrlPlaceholder(content, [
-    /\{\{unsubscribe_link\}\}/gi,
-    /\{\{unsubscribe_url\}\}/gi,
+    /\{\{\s*unsubscribe_link\s*\}\}/gi,
+    /\{\{\s*unsubscribe_url\s*\}\}/gi,
   ], '#');
 
   // Replace Text Placeholders
   content = content
     // Account Manager
-    .replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile)
-    .replace(/\{\{AccountManager\.Phone\}\}/gi, amMobile)
-    .replace(/\{\{account_manager_mobile\}\}/gi, amMobile)
-    .replace(/\{\{account_manager_phone\}\}/gi, amMobile)
-    .replace(/\{\{AM\.Mobile\}\}/gi, amMobile)
-    .replace(/\{\{AMMobile\}\}/gi, amMobile)
-    .replace(/\{\{AccountManager\.Name\}\}/gi, amName)
-    .replace(/\{\{account_manager_name\}\}/gi, amName)
-    .replace(/\{\{AM\.Name\}\}/gi, amName)
-    .replace(/\{\{AMName\}\}/gi, amName)
-    .replace(/\{\{AccountManager\.Email\}\}/gi, amEmail)
-    .replace(/\{\{account_manager_email\}\}/gi, amEmail)
-    .replace(/\{\{AM\.Email\}\}/gi, amEmail)
-    .replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly)
-    .replace(/\{\{account_manager_calendly\}\}/gi, amCalendly)
-    .replace(/\{\{AM\.Calendly\}\}/gi, amCalendly)
+    .replace(/\{\{\s*AccountManager\.Mobile\s*\}\}/gi, amMobile)
+    .replace(/\{\{\s*AccountManager\.Phone\s*\}\}/gi, amMobile)
+    .replace(/\{\{\s*account_manager_mobile\s*\}\}/gi, amMobile)
+    .replace(/\{\{\s*account_manager_phone\s*\}\}/gi, amMobile)
+    .replace(/\{\{\s*AM\.Mobile\s*\}\}/gi, amMobile)
+    .replace(/\{\{\s*AMMobile\s*\}\}/gi, amMobile)
+    .replace(/\{\{\s*AccountManager\.Name\s*\}\}/gi, amName)
+    .replace(/\{\{\s*account_manager_name\s*\}\}/gi, amName)
+    .replace(/\{\{\s*AM\.Name\s*\}\}/gi, amName)
+    .replace(/\{\{\s*AMName\s*\}\}/gi, amName)
+    .replace(/\{\{\s*AccountManager\.Email\s*\}\}/gi, amEmail)
+    .replace(/\{\{\s*account_manager_email\s*\}\}/gi, amEmail)
+    .replace(/\{\{\s*AM\.Email\s*\}\}/gi, amEmail)
+    .replace(/\{\{\s*AccountManager\.Calendly\s*\}\}/gi, amCalendly)
+    .replace(/\{\{\s*account_manager_calendly\s*\}\}/gi, amCalendly)
+    .replace(/\{\{\s*AM\.Calendly\s*\}\}/gi, amCalendly)
 
     // Sales Rep
-    .replace(/\{\{SalesRep\.Name\}\}/gi, salesRepName)
-    .replace(/\{\{sales_rep_name\}\}/gi, salesRepName)
+    .replace(/\{\{\s*SalesRep\.Name\s*\}\}/gi, salesRepName)
+    .replace(/\{\{\s*sales_rep_name\s*\}\}/gi, salesRepName)
 
     // Contact & Lead
-    .replace(/\{\{Contact\.Name\}\}/gi, contactName)
-    .replace(/\{\{Lead\.ContactName\}\}/gi, contactName)
-    .replace(/\{\{contact_name\}\}/gi, contactName)
-    .replace(/\{\{contactName\}\}/gi, contactName)
-    .replace(/\{\{lead_name\}\}/gi, contactName)
-    .replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName)
-    .replace(/\{\{Lead\.FirstName\}\}/gi, contactFirstName)
-    .replace(/\{\{contact_first_name\}\}/gi, contactFirstName)
-    .replace(/\{\{firstName\}\}/gi, contactFirstName)
-    .replace(/\{\{first_name\}\}/gi, contactFirstName)
-    .replace(/\{\{Company\.Name\}\}/gi, companyName)
-    .replace(/\{\{Lead\.CompanyName\}\}/gi, companyName)
-    .replace(/\{\{company_name\}\}/gi, companyName)
-    .replace(/\{\{companyName\}\}/gi, companyName)
-    .replace(/\{\{company\}\}/gi, companyName)
-    .replace(/\{\{Lead\.Email\}\}/gi, contactEmail)
-    .replace(/\{\{Contact\.Email\}\}/gi, contactEmail)
-    .replace(/\{\{email\}\}/gi, contactEmail)
-    .replace(/\{\{Lead\.Phone\}\}/gi, contactPhone)
-    .replace(/\{\{Contact\.Phone\}\}/gi, contactPhone)
-    .replace(/\{\{phone\}\}/gi, contactPhone)
-    .replace(/\{\{Lead\.City\}\}/gi, leadCity)
-    .replace(/\{\{city\}\}/gi, leadCity)
+    .replace(/\{\{\s*Contact\.Name\s*\}\}/gi, contactName)
+    .replace(/\{\{\s*Lead\.ContactName\s*\}\}/gi, contactName)
+    .replace(/\{\{\s*contact_name\s*\}\}/gi, contactName)
+    .replace(/\{\{\s*contactName\s*\}\}/gi, contactName)
+    .replace(/\{\{\s*lead_name\s*\}\}/gi, contactName)
+    .replace(/\{\{\s*Contact\.FirstName\s*\}\}/gi, contactFirstName)
+    .replace(/\{\{\s*Lead\.FirstName\s*\}\}/gi, contactFirstName)
+    .replace(/\{\{\s*contact_first_name\s*\}\}/gi, contactFirstName)
+    .replace(/\{\{\s*firstName\s*\}\}/gi, contactFirstName)
+    .replace(/\{\{\s*first_name\s*\}\}/gi, contactFirstName)
+    .replace(/\{\{\s*Company\.Name\s*\}\}/gi, companyName)
+    .replace(/\{\{\s*Lead\.CompanyName\s*\}\}/gi, companyName)
+    .replace(/\{\{\s*company_name\s*\}\}/gi, companyName)
+    .replace(/\{\{\s*companyName\s*\}\}/gi, companyName)
+    .replace(/\{\{\s*company\s*\}\}/gi, companyName)
+    .replace(/\{\{\s*Lead\.Email\s*\}\}/gi, contactEmail)
+    .replace(/\{\{\s*Contact\.Email\s*\}\}/gi, contactEmail)
+    .replace(/\{\{\s*email\s*\}\}/gi, contactEmail)
+    .replace(/\{\{\s*Lead\.Phone\s*\}\}/gi, contactPhone)
+    .replace(/\{\{\s*Contact\.Phone\s*\}\}/gi, contactPhone)
+    .replace(/\{\{\s*phone\s*\}\}/gi, contactPhone)
+    .replace(/\{\{\s*Lead\.City\s*\}\}/gi, leadCity)
+    .replace(/\{\{\s*city\s*\}\}/gi, leadCity)
 
     // LocalMile Security Code
-    .replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode)
-    .replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode)
-    .replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode)
-    .replace(/\{\{securityCode\}\}/gi, localMileSecurityCode)
+    .replace(/\{\{\s*Lead\.LocalMileSecurityCode\s*\}\}/gi, localMileSecurityCode)
+    .replace(/\{\{\s*Contact\.LocalMileSecurityCode\s*\}\}/gi, localMileSecurityCode)
+    .replace(/\{\{\s*LocalMileSecurityCode\s*\}\}/gi, localMileSecurityCode)
+    .replace(/\{\{\s*securityCode\s*\}\}/gi, localMileSecurityCode)
 
     // Trials Remaining
-    .replace(/\{\{Trials\.Remaining\}\}/gi, trialsRemainingStr)
-    .replace(/\{\{TrialsRemaining\}\}/gi, trialsRemainingStr)
-    .replace(/\{\{trials_remaining\}\}/gi, trialsRemainingStr)
+    .replace(/\{\{\s*Trials\.Remaining\s*\}\}/gi, trialsRemainingStr)
+    .replace(/\{\{\s*TrialsRemaining\s*\}\}/gi, trialsRemainingStr)
+    .replace(/\{\{\s*trials_remaining\s*\}\}/gi, trialsRemainingStr)
 
     // Franchisee
-    .replace(/\{\{Franchisee\.Name\}\}/gi, franName)
-    .replace(/\{\{franchisee_name\}\}/gi, franName)
-    .replace(/\{\{Franchisee\.MainContact\}\}/gi, franMainContact)
-    .replace(/\{\{Franchisee\.ContactName\}\}/gi, franMainContact)
-    .replace(/\{\{Franchisee\.Email\}\}/gi, franEmail)
-    .replace(/\{\{franchisee_email\}\}/gi, franEmail)
-    .replace(/\{\{Franchisee\.Mobile\}\}/gi, franMobile)
-    .replace(/\{\{franchisee_mobile\}\}/gi, franMobile)
+    .replace(/\{\{\s*Franchisee\.Name\s*\}\}/gi, franName)
+    .replace(/\{\{\s*franchisee_name\s*\}\}/gi, franName)
+    .replace(/\{\{\s*Franchisee\.MainContact\s*\}\}/gi, franMainContact)
+    .replace(/\{\{\s*Franchisee\.ContactName\s*\}\}/gi, franMainContact)
+    .replace(/\{\{\s*Franchisee\.Email\s*\}\}/gi, franEmail)
+    .replace(/\{\{\s*franchisee_email\s*\}\}/gi, franEmail)
+    .replace(/\{\{\s*Franchisee\.Mobile\s*\}\}/gi, franMobile)
+    .replace(/\{\{\s*franchisee_mobile\s*\}\}/gi, franMobile)
 
     // Schedule & ID
-    .replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate)
-    .replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate)
-    .replace(/\{\{service_start_date\}\}/gi, scheduledServiceDate)
-    .replace(/\{\{serviceStartDate\}\}/gi, scheduledServiceDate)
-    .replace(/\{\{start_date\}\}/gi, scheduledServiceDate)
-    .replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, prospectPlusId)
-    .replace(/\{\{prospect_plus_id\}\}/gi, prospectPlusId)
-    .replace(/\{\{Receiver\.Name\}\}/gi, receiverName)
-    .replace(/\{\{Receiver\.FullAddress\}\}/gi, receiverAddress)
-    .replace(/\{\{Ticket\.Number\}\}/gi, ticketNumber)
-    .replace(/\{\{Tracking\.ID\}\}/gi, trackingId)
-    .replace(/\{\{sender\.email\}\}/gi, senderEmail);
+    .replace(/\{\{\s*Schedule\.ServiceDate\s*\}\}/gi, scheduledServiceDate)
+    .replace(/\{\{\s*Schedule\.ScheduledServiceDate\s*\}\}/gi, scheduledServiceDate)
+    .replace(/\{\{\s*service_start_date\s*\}\}/gi, scheduledServiceDate)
+    .replace(/\{\{\s*serviceStartDate\s*\}\}/gi, scheduledServiceDate)
+    .replace(/\{\{\s*start_date\s*\}\}/gi, scheduledServiceDate)
+    .replace(/\{\{\s*Prospect\.ProspectPlusID\s*\}\}/gi, prospectPlusId)
+    .replace(/\{\{\s*prospect_plus_id\s*\}\}/gi, prospectPlusId)
+    .replace(/\{\{\s*Receiver\.Name\s*\}\}/gi, receiverName)
+    .replace(/\{\{\s*Receiver\.FullAddress\s*\}\}/gi, receiverAddress)
+    .replace(/\{\{\s*Ticket\.Number\s*\}\}/gi, ticketNumber)
+    .replace(/\{\{\s*Tracking\.ID\s*\}\}/gi, trackingId)
+    .replace(/\{\{\s*sender\.email\s*\}\}/gi, senderEmail);
 
   // Clean up any remaining double https:// in href attributes
   content = content.replace(/href=["']https?:\/\/https?:\/\//gi, 'href="https://');

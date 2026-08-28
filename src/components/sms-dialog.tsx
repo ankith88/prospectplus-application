@@ -16,14 +16,18 @@ import { useAuth } from '@/hooks/use-auth';
 import { sendSms } from '@/services/sms-service';
 import { Loader2, Send, AlertTriangle } from 'lucide-react';
 
+import { replaceTemplatePlaceholders } from '@/lib/template-replacer';
+
 interface SmsDialogProps {
   isOpen: boolean;
   onClose: () => void;
   phoneNumber: string;
   recipientName?: string;
+  lead?: any;
+  leadId?: string;
 }
 
-export function SmsDialog({ isOpen, onClose, phoneNumber, recipientName }: SmsDialogProps) {
+export function SmsDialog({ isOpen, onClose, phoneNumber, recipientName, lead, leadId }: SmsDialogProps) {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
@@ -44,7 +48,20 @@ export function SmsDialog({ isOpen, onClose, phoneNumber, recipientName }: SmsDi
 
     setIsSending(true);
     try {
-      const result = await sendSms(phoneNumber, message, userProfile?.activeRole || userProfile?.role);
+      const activeLead = lead || (leadId ? { id: leadId } : undefined);
+      const finalMessage = activeLead 
+        ? replaceTemplatePlaceholders(message, {
+            lead: activeLead,
+            accountManager: {
+              name: userProfile?.displayName || '',
+              mobile: userProfile?.mobileNumber || userProfile?.phoneNumber || '',
+              email: userProfile?.email || ''
+            },
+            salesRep: userProfile?.displayName || ''
+          })
+        : replaceTemplatePlaceholders(message, {});
+
+      const result = await sendSms(phoneNumber, finalMessage, userProfile?.activeRole || userProfile?.role);
       if (result.success) {
         toast({ title: 'SMS Sent', description: 'Your message has been dispatched successfully.' });
         setMessage('');

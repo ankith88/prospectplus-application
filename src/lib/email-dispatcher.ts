@@ -325,7 +325,7 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
         mailPayload.message.bccRecipients = bcc.split(',').map(e => ({ emailAddress: { address: e.trim() } }));
       }
 
-      const graphRes = await fetch(sendMailUrl, {
+      let graphRes = await fetch(sendMailUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -336,6 +336,29 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
 
       if (!graphRes.ok) {
         const errText = await graphRes.text();
+        console.warn(`[Email Dispatcher] Send as ${finalSender} failed: ${errText}`);
+
+        if (senderEmail && finalSender.toLowerCase() !== senderEmail.toLowerCase()) {
+          console.log(`[Email Dispatcher] Retrying dispatch from primary integration sender: ${senderEmail}`);
+          const fallbackMailUrl = `https://graph.microsoft.com/v1.0/users/${senderEmail}/sendMail`;
+          const fallbackRes = await fetch(fallbackMailUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(mailPayload)
+          });
+
+          if (fallbackRes.ok) {
+            console.log(`[Email Dispatcher] Fallback dispatch from ${senderEmail} succeeded!`);
+            return { success: true, simulated: false };
+          } else {
+            const fallbackErr = await fallbackRes.text();
+            throw new Error(`Microsoft Graph API Failed (Primary: ${errText} | Fallback: ${fallbackErr})`);
+          }
+        }
+
         throw new Error(`Microsoft Graph API Failed: ${errText}`);
       }
 

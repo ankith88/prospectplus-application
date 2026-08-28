@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { sendSms } from '@/services/sms-service';
+import { replaceTemplatePlaceholders } from '@/lib/template-replacer';
 
 const db = getFirestore(adminApp);
 
@@ -17,7 +18,72 @@ export async function POST(request: Request) {
       );
     }
 
-    const sendResult = await sendSms(to, message);
+    let finalMessage = message;
+
+    if (leadId) {
+      try {
+        const leadRef = db.collection('leads').doc(leadId);
+        const leadDoc = await leadRef.get();
+        if (leadDoc.exists) {
+          const leadData = leadDoc.data() || {};
+          const contactsSnap = await leadRef.collection('contacts').get();
+          let primaryContact: any = {};
+          if (!contactsSnap.empty) {
+            primaryContact = contactsSnap.docs[0].data();
+          }
+
+          // Resolve Account Manager info
+          const amName = leadData.accountManagerAssigned || leadData.salesRepAssigned || '';
+          let amMobile = '';
+          let amEmail = '';
+          let amCalendly = leadData.salesRepAssignedCalendlyLink || '';
+          if (amName) {
+            const usersSnap = await db.collection('users').where('displayName', '==', amName).limit(1).get();
+            if (!usersSnap.empty) {
+              const uData = usersSnap.docs[0].data();
+              amMobile = uData.mobileNumber || uData.mobile || uData.phoneNumber || uData.phone || '';
+              amEmail = uData.email || '';
+              amCalendly = amCalendly || uData.calendlyLink || uData.calendly || '';
+            }
+          }
+
+          // Resolve Franchisee info
+          let franchiseeMainContact = '';
+          let franchiseeEmail = '';
+          let franchiseeMobile = '';
+          if (leadData.franchisee) {
+            const franSnap = await db.collection('franchisees').where('name', '==', leadData.franchisee).limit(1).get();
+            if (!franSnap.empty) {
+              const franData = franSnap.docs[0].data();
+              franchiseeMainContact = franData.mainContact || '';
+              franchiseeEmail = franData.email || '';
+              franchiseeMobile = franData.mobile || '';
+            }
+          }
+
+          finalMessage = replaceTemplatePlaceholders(message, {
+            lead: { ...leadData, id: leadId },
+            contact: primaryContact,
+            accountManager: { name: amName, mobile: amMobile, email: amEmail, calendly: amCalendly },
+            salesRep: amName,
+            franchisee: { name: leadData.franchisee || '', mainContact: franchiseeMainContact, email: franchiseeEmail, mobile: franchiseeMobile },
+            customLinks: {
+              bookingUrlId: leadData.bookingUrlId || '',
+              generalBookingUrlId: leadData.generalBookingUrlId || ''
+            }
+          });
+        } else {
+          finalMessage = replaceTemplatePlaceholders(message, {});
+        }
+      } catch (err) {
+        console.error('Error in send-custom-sms placeholder resolution:', err);
+        finalMessage = replaceTemplatePlaceholders(message, {});
+      }
+    } else {
+      finalMessage = replaceTemplatePlaceholders(message, {});
+    }
+
+    const sendResult = await sendSms(to, finalMessage);
 
     if (!sendResult.success) {
       // If a leadId is provided, optionally log the failure

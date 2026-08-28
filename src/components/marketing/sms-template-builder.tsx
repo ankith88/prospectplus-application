@@ -561,11 +561,16 @@ export function SmsTemplateBuilder() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => insertContent('{{Lead.GeneralBookingLink}}')}>+ General Booking Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Contact.Name}}')}>+ Contact Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Contact.FirstName}}')}>+ Contact First Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Company.Name}}')}>+ Company Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Prospect.ProspectPlusID}}')}>+ Prospect+ ID</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{SalesRep.Name}}')}>+ Sales Rep Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Name}}')}>+ Account Manager Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Mobile}}')}>+ Account Manager Mobile</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Calendly}}')}>+ Account Manager Calendly</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Email}}')}>+ Account Manager Email</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Contact.LocalMilePlusAuthLink}}')}>+ LocalMile Plus Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileActivationLink}}')}>+ LocalMile Activation Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileSecurityCode}}')}>+ LocalMile Security Code</DropdownMenuItem>

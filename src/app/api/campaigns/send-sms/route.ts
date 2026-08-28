@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { sendSms } from '@/services/sms-service';
+import { replaceTemplatePlaceholders } from '@/lib/template-replacer';
+import { encryptLeadId } from '@/lib/localmile-security';
 
 const db = getFirestore(adminApp);
 
@@ -47,6 +49,17 @@ export async function POST(request: Request) {
     await campaignRef.update({ status: 'sending' });
 
     const smsMessageTemplate = campaignData.smsMessage || '';
+
+    // Fetch users for Account Manager mapping
+    const usersSnap = await db.collection('users').get();
+    const userMap = new Map<string, any>();
+    usersSnap.docs.forEach(doc => {
+      const uData = doc.data();
+      const uName = (uData.displayName || uData.name || `${uData.firstName || ''} ${uData.lastName || ''}`).trim().toLowerCase();
+      if (uName) {
+        userMap.set(uName, uData);
+      }
+    });
 
     // 2. Fetch targets based on filters
     const targetAudience = campaignData.targetAudience || 'leads';
@@ -102,7 +115,7 @@ export async function POST(request: Request) {
       return true;
     });
     
-    // Get all global suppressed emails (might not apply to SMS directly unless phone numbers are added to suppression, but we check email for now if needed, typically you'd have SMS opt outs, but we will skip for now or use the same list if email matches)
+    // Get all global suppressed emails
     const suppressionSnap = await db.collection('marketing_suppression_list').get();
     const suppressedEmails = new Set(suppressionSnap.docs.map(doc => doc.id.toLowerCase().trim()));
 
@@ -165,6 +178,20 @@ export async function POST(request: Request) {
         const deliveryRef = db.collection('campaign_deliveries').doc();
         const deliveryId = deliveryRef.id;
 
+        // Account Manager details lookup
+        const amName = docData.accountManagerAssigned || docData.salesRepAssigned || salesRepAssigned || '';
+        let amMobile = '';
+        let amEmail = '';
+        let amCalendly = docData.salesRepAssignedCalendlyLink || '';
+        if (amName) {
+          const matchedUser = userMap.get(amName.trim().toLowerCase());
+          if (matchedUser) {
+            amMobile = matchedUser.mobileNumber || matchedUser.mobile || matchedUser.phoneNumber || matchedUser.phone || matchedUser.aircallPhoneNumber || '';
+            amEmail = matchedUser.email || '';
+            amCalendly = amCalendly || matchedUser.calendlyLink || matchedUser.calendly || '';
+          }
+        }
+
         // Fetch Franchisee contact details
         let franchiseeMainContact = '';
         let franchiseeEmail = '';
@@ -211,28 +238,48 @@ export async function POST(request: Request) {
           }
         }
 
-        // Compile Body
-        let compiledBody = smsMessageTemplate;
+        // Compile Body with full placeholder replacement
+        const contactFirstName = (rec.name || 'Valued Customer').split(' ')[0];
+        const scfLink = docData.dynamicScfUrl || (docSnap.id ? `https://prospectplus.com.au/scf/${encryptLeadId(docSnap.id)}` : '');
+        const sofPublicLink = docData.sofLink || (docData as any).standingOrderFormLink || (docSnap.id ? `https://prospectplus.com.au/sof/${encryptLeadId(docSnap.id)}` : '');
+        const localMileLink = docData.localMileRegistrationLink || (docSnap.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(docSnap.id)}` : '');
+        const localMileActivationLink = rec.localMilePlusAuthLink || docData.localMileActivationLink || localMileLink;
         const localMileSecurityCode = rec.securityCode || docData.securityCode || docData.localMileSecurityCode || '';
-        compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/g, rec.name);
-        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/g, rec.localMilePlusAuthLink || '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/g, rec.localMilePlusAuthLink || docData.localMileActivationLink || '');
-        compiledBody = compiledBody.replace(/\{\{LocalMileActivationLink\}\}/g, rec.localMilePlusAuthLink || docData.localMileActivationLink || '');
-        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/g, rec.localMilePlusAuthLink || docData.localMileActivationLink || '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/g, localMileSecurityCode);
-        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/g, localMileSecurityCode);
-        compiledBody = compiledBody.replace(/\{\{LocalMileSecurityCode\}\}/g, localMileSecurityCode);
-        compiledBody = compiledBody.replace(/\{\{securityCode\}\}/g, localMileSecurityCode);
-        compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/g, companyName);
-        compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/g, salesRepAssigned);
-        compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/g, docData.prospectPlusId || '');
 
-        compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/g, scheduledServiceDate);
-        compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/g, scheduledServiceDate);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.MainContact\}\}/g, franchiseeMainContact);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.ContactName\}\}/g, franchiseeMainContact);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.Email\}\}/g, franchiseeEmail);
-        compiledBody = compiledBody.replace(/\{\{Franchisee\.Mobile\}\}/g, franchiseeMobile);
+        const compiledBody = replaceTemplatePlaceholders(smsMessageTemplate, {
+          lead: { ...docData, id: docSnap.id },
+          contact: {
+            name: rec.name,
+            firstName: contactFirstName,
+            email: rec.email,
+            phone: rec.phone,
+            localMilePlusAuthLink: rec.localMilePlusAuthLink,
+            securityCode: rec.securityCode
+          },
+          accountManager: {
+            name: amName,
+            mobile: amMobile,
+            email: amEmail,
+            calendly: amCalendly
+          },
+          salesRep: salesRepAssigned,
+          franchisee: {
+            name: docData.franchisee || '',
+            mainContact: franchiseeMainContact,
+            email: franchiseeEmail,
+            mobile: franchiseeMobile
+          },
+          scheduledServiceDate,
+          customLinks: {
+            bookingUrlId: docData.bookingUrlId || '',
+            generalBookingUrlId: docData.generalBookingUrlId || '',
+            scfLink,
+            sofLink: sofPublicLink,
+            localMileLink,
+            localMileActivationLink,
+            localMileSecurityCode
+          }
+        });
 
         // Attempt SMS Dispatch
         const sendResult = await sendSms(rec.phone, compiledBody);

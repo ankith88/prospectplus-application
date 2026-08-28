@@ -109,6 +109,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: 'No leads in active nurture campaigns.' });
     }
 
+    let primarySender = 'ankith.ravindran@mailplus.com.au';
+    try {
+      const integrationSnap = await db.collection('outlook_integrations').doc('active_config').get();
+      if (integrationSnap.exists && integrationSnap.data()?.senderEmail) {
+        primarySender = integrationSnap.data()?.senderEmail;
+      }
+    } catch (e) {}
+
     let leadsProcessed = 0;
     let actionsExecuted = 0;
 
@@ -505,48 +513,69 @@ export async function POST(request: Request) {
               console.error('Error resolving Franchisee details for nurture action:', franErr);
             }
 
+            const scfLink = leadData.dynamicScfUrl || (leadId ? `https://prospectplus.com.au/scf/${leadId}` : '');
+            const sofLink = leadData.sofLink || leadData.standingOrderFormLink || '';
+            const localMileLink = leadData.localMileRegistrationLink || '';
+
+            const placeholderCtx = {
+              lead: { ...leadData, id: leadId },
+              contact: { name: contactName, firstName: contactFirstName, email: recipientEmail, phone: contactPhone, localMilePlusAuthLink, securityCode: localMileSecurityCode },
+              accountManager: {
+                name: amName,
+                mobile: amMobile,
+                email: amEmail,
+                calendly: amCalendly
+              },
+              salesRep: amName,
+              franchisee: {
+                name: franchiseeName,
+                mainContact: franchiseeMainContact,
+                email: franchiseeEmail,
+                mobile: franchiseeMobile
+              },
+              customLinks: {
+                bookingUrlId: leadData.bookingUrlId || '',
+                generalBookingUrlId: leadData.generalBookingUrlId || '',
+                scfLink,
+                sofLink,
+                localMileLink,
+                localMileActivationLink: localMilePlusAuthLink,
+                localMileSecurityCode,
+                trialsRemaining
+              }
+            };
+
             if (actionType === 'email') {
               const templateId = config.templateId;
+              if (!templateId) {
+                console.error(`[Nurture] Action node ${currentNode.id} has no templateId defined.`);
+                state.executionHistory.push({
+                  nodeId: currentNode.id,
+                  nodeType: 'action',
+                  executedAt: nowStr,
+                  actionResult: `Action skipped: No email template configured for this step.`
+                });
+                stateUpdated = true;
+                break;
+              }
+
               const templateDoc = await db.collection('marketing_templates').doc(templateId).get();
 
               if (!templateDoc.exists) {
                 console.error(`[Nurture] Template ${templateId} not found.`);
+                state.executionHistory.push({
+                  nodeId: currentNode.id,
+                  nodeType: 'action',
+                  executedAt: nowStr,
+                  actionResult: `Action skipped: Email template '${templateId}' not found.`
+                });
+                stateUpdated = true;
                 break;
               }
 
               const templateData = templateDoc.data();
               let bodyHtml = templateData?.body || '';
               let subject = templateData?.subject || 'Outbound Drip';
-
-              const scfLink = leadData.dynamicScfUrl || (leadId ? `https://prospectplus.com.au/scf/${leadId}` : '');
-              const sofLink = leadData.sofLink || leadData.standingOrderFormLink || '';
-              const localMileLink = leadData.localMileRegistrationLink || '';
-
-              const placeholderCtx = {
-                lead: { ...leadData, id: leadId },
-                contact: { name: contactName, firstName: contactFirstName, email: recipientEmail, phone: contactPhone, localMilePlusAuthLink, securityCode: localMileSecurityCode },
-                accountManager: {
-                  name: amName,
-                  mobile: amMobile,
-                  email: amEmail,
-                  calendly: amCalendly
-                },
-                salesRep: amName,
-                franchisee: {
-                  name: franchiseeName,
-                  mainContact: franchiseeMainContact,
-                  email: franchiseeEmail,
-                  mobile: franchiseeMobile
-                },
-                customLinks: {
-                  scfLink,
-                  sofLink,
-                  localMileLink,
-                  localMileActivationLink: localMilePlusAuthLink,
-                  localMileSecurityCode,
-                  trialsRemaining
-                }
-              };
 
               subject = replaceTemplatePlaceholders(subject, placeholderCtx);
               bodyHtml = replaceTemplatePlaceholders(bodyHtml, placeholderCtx);
@@ -572,12 +601,12 @@ export async function POST(request: Request) {
               }
 
               // Route SMTP dynamically or use custom static email
-              let sender = 'info@mailplus.com.au';
+              let sender = primarySender;
               const fromEmailMode = config.fromEmailMode || 'dynamic';
               if (fromEmailMode === 'static') {
-                sender = config.customFromEmail || 'info@mailplus.com.au';
+                sender = config.customFromEmail || primarySender;
               } else {
-                const fallbackSender = config.fallbackFromEmail || 'info@mailplus.com.au';
+                const fallbackSender = config.fallbackFromEmail || primarySender;
                 const manager = (amName || leadData.accountManagerAssigned || leadData.salesRepAssigned || '').trim().toLowerCase();
                 sender = fallbackSender;
                 if (manager === 'lee russell') {
@@ -595,6 +624,13 @@ export async function POST(request: Request) {
 
               if (!recipientEmail) {
                 console.warn(`[Nurture] Lead ${leadId} has no recipient email. Skipping email step.`);
+                state.executionHistory.push({
+                  nodeId: currentNode.id,
+                  nodeType: 'action',
+                  executedAt: nowStr,
+                  actionResult: `Action skipped: Lead has no valid recipient email address.`
+                });
+                stateUpdated = true;
                 break;
               }
 
@@ -611,23 +647,29 @@ export async function POST(request: Request) {
                 trackingCategory: 'nurture'
               });
 
-              // Log delivery record
-              await db.collection('campaign_deliveries').add({
-                campaignId: journeyId,
-                leadId,
-                leadEmail: recipientEmail,
-                companyName: leadData.companyName || 'Unknown',
-                sentAt: nowStr,
-                status: sendResult.success ? (sendResult.simulated ? 'simulated' : 'delivered') : 'failed',
-                subject,
-                isNurture: true
-              });
+              if (!sendResult.success) {
+                console.error(`[Nurture] Email dispatch failed for lead ${leadId}:`, sendResult.error);
+                await leadDoc.ref.collection('activity').add({
+                  type: 'Email',
+                  date: nowStr,
+                  notes: `Nurture email failed to send: '${subject}'. Error: ${sendResult.error || 'Unknown error'}`,
+                  author: 'Nurture Campaign Engine'
+                });
+                state.executionHistory.push({
+                  nodeId: currentNode.id,
+                  nodeType: 'action',
+                  executedAt: nowStr,
+                  actionResult: `Action 'email' failed: ${sendResult.error || 'Transmission failure.'}`
+                });
+                stateUpdated = true;
+                break;
+              }
 
               // Log Activity on the Lead
               await leadDoc.ref.collection('activity').add({
                 type: 'Email',
                 date: nowStr,
-                notes: `Nurture email dispatched: '${subject}'. Status: ${sendResult.success ? 'Delivered' : 'Failed'}.`,
+                notes: `Nurture email dispatched: '${subject}'. Status: ${sendResult.simulated ? 'Simulated' : 'Delivered'}.`,
                 author: 'Nurture Campaign Engine'
               });
 
@@ -649,50 +691,45 @@ export async function POST(request: Request) {
                 }
               }
               
-              smsMessage = smsMessage.replace(/\{\{Contact\.Name\}\}/gi, contactName !== 'Valued Customer' ? contactName : (leadData.companyName || 'Valued Customer'));
-              smsMessage = smsMessage.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
-              smsMessage = smsMessage.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
-              smsMessage = smsMessage.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
-              smsMessage = smsMessage.replace(/\{\{LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
-              smsMessage = smsMessage.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
-              smsMessage = smsMessage.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-              smsMessage = smsMessage.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-              smsMessage = smsMessage.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
-              smsMessage = smsMessage.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
-              smsMessage = smsMessage.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
-              smsMessage = smsMessage.replace(/\{\{SalesRep\.Name\}\}/gi, amName || 'MailPlus Team');
-              smsMessage = smsMessage.replace(/\{\{AccountManager\.Name\}\}/gi, amName || 'MailPlus Team');
-              smsMessage = smsMessage.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
-              smsMessage = smsMessage.replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly);
-              smsMessage = smsMessage.replace(/\{\{AccountManager\.Email\}\}/gi, amEmail);
-              smsMessage = smsMessage.replace(/\{\{AccountManager\.Phone\}\}/gi, amPhone || amMobile);
-              smsMessage = smsMessage.replace(/\{\{(Trials\.Remaining|TrialsRemaining|trials_remaining|trials\.remaining)\}\}/gi, String(trialsRemaining));
+              smsMessage = replaceTemplatePlaceholders(smsMessage, placeholderCtx);
 
               if (!contactPhone) {
                 console.warn(`[Nurture] Lead ${leadId} has no phone number. Skipping SMS step.`);
+                state.executionHistory.push({
+                  nodeId: currentNode.id,
+                  nodeType: 'action',
+                  executedAt: nowStr,
+                  actionResult: `Action skipped: Lead has no valid phone number.`
+                });
+                stateUpdated = true;
                 break;
               }
 
               const sendResult = await sendSms(contactPhone, smsMessage);
 
-              // Log delivery record
-              await db.collection('campaign_deliveries').add({
-                campaignId: journeyId,
-                leadId,
-                leadPhone: contactPhone,
-                companyName: leadData.companyName || 'Unknown',
-                sentAt: nowStr,
-                status: sendResult.success ? 'delivered' : 'failed',
-                errorMessage: sendResult.success ? null : sendResult.message,
-                type: 'sms',
-                isNurture: true
-              });
+              if (!sendResult.success) {
+                console.error(`[Nurture] SMS dispatch failed for lead ${leadId}:`, sendResult.message);
+                await leadDoc.ref.collection('activity').add({
+                  type: 'SMS',
+                  date: nowStr,
+                  notes: `Nurture SMS failed to send: '${smsMessage.substring(0, 50)}...'. Error: ${sendResult.message}`,
+                  author: 'Nurture Campaign Engine'
+                });
+                state.executionHistory.push({
+                  nodeId: currentNode.id,
+                  nodeType: 'action',
+                  executedAt: nowStr,
+                  actionResult: `Action 'sms' failed: ${sendResult.message}`
+                });
+                stateUpdated = true;
+                break;
+              }
 
               // Log Activity on the Lead
               await leadDoc.ref.collection('activity').add({
                 type: 'SMS',
                 date: nowStr,
-                notes: `Nurture SMS dispatched: '${smsMessage.substring(0, 50)}...'. Status: ${sendResult.success ? 'Delivered' : 'Failed'}.`,
+                notes: `Nurture SMS dispatched: '${smsMessage.substring(0, 50)}...'. Status: Delivered.`,
                 author: 'Nurture Campaign Engine'
               });
               actionsExecuted++;
@@ -711,7 +748,7 @@ export async function POST(request: Request) {
               });
               stateUpdated = true;
               currentNode = journey.nodes?.find((n: any) => n.id === state.currentNodeId);
-              continue;
+              break;
             } else {
               state.status = 'completed';
               state.executionHistory.push({

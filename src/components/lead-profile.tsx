@@ -4822,6 +4822,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onClose={() => setSmsDialogOpen(false)}
         phoneNumber={smsTargetPhone}
         recipientName={smsTargetName}
+        lead={lead}
     />
     <Dialog open={isMissingLeadTypeDialogOpen} onOpenChange={setIsMissingLeadTypeDialogOpen}>
         <DialogContent>
