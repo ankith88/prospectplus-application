@@ -1687,7 +1687,14 @@ async function updateLeadSingleBucket(
     leadId: string,
     newBucket: string,
     reason?: string,
-    options?: { source?: string; isDataManagement?: boolean; author?: string }
+    options?: { 
+        source?: string; 
+        isDataManagement?: boolean; 
+        author?: string;
+        assignee?: string;
+        assigneeField?: 'dialerAssigned' | 'accountManagerAssigned' | 'fieldRepAssigned' | 'salesRepAssigned' | 'customerSuccessAssigned';
+        extraUpdates?: Record<string, any>;
+    }
 ): Promise<void> {
     try {
         const colName = await getLeadOrCompanyCollection(leadId);
@@ -1704,8 +1711,16 @@ async function updateLeadSingleBucket(
         const updates: any = {
             bucket: newBucket,
             fieldSales: newBucket === 'field_sales',
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            ...(options?.extraUpdates || {})
         };
+
+        if (options?.assigneeField && options.assignee) {
+            updates[options.assigneeField] = options.assignee;
+            if (options.assigneeField === 'dialerAssigned') {
+                updates.assignedToDialerAt = new Date().toISOString();
+            }
+        }
 
         if (newBucket === 'lpo_plus') {
             updates.lpoPlusOpportunity = true;
@@ -1724,7 +1739,10 @@ async function updateLeadSingleBucket(
 
         // Log activity note
         const isDataMgmt = options?.isDataManagement || options?.source === 'data_management' || (reason && reason.toLowerCase().includes('data management'));
-        const logNotes = `Bucket changed from ${oldBucket || 'unassigned'} to ${newBucket} via Data Management${reason ? ` (${reason})` : ''}`;
+        let logNotes = `Bucket changed from ${oldBucket || 'unassigned'} to ${newBucket} via Data Management${reason ? ` (${reason})` : ''}`;
+        if (options?.assignee) {
+            logNotes = `Bucket changed to ${newBucket} and assigned to ${options.assignee} via Data Management${reason ? ` (${reason})` : ''}`;
+        }
         
         await logActivity(leadId, { 
             type: 'Update', 

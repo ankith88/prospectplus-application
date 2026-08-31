@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Loader } from '@/components/ui/loader';
 import { getLeadsFromFirebase, updateLeadSingleBucket } from '@/services/firebase';
+import { firestore } from '@/lib/firebase';
 import type { Lead, LeadBucket } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -22,17 +23,20 @@ import {
   Filter,
   Layers,
   CheckSquare,
-  Square
+  Shuffle,
+  UserCheck,
+  Users
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Checkbox } from '@/components/ui/checkbox';
-import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { cn, parseDateString } from '@/lib/utils';
 import { formatBucketLabel } from '@/lib/lead-stage-analytics';
+import { collection, getDocs } from 'firebase/firestore';
 
 export const BUCKET_OPTIONS: { value: string; label: string }[] = [
   { value: 'outbound', label: 'Outbound' },
@@ -47,8 +51,48 @@ export const BUCKET_OPTIONS: { value: string; label: string }[] = [
   { value: 'multisite', label: 'Multi-site' },
 ];
 
+export interface StaffUser {
+  id: string;
+  name: string;
+  role?: string;
+}
+
+/**
+ * Shuffles leadIds using Fisher-Yates algorithm and assigns them
+ * in round-robin fashion across target assignees for equal, random distribution.
+ */
+function allocateLeadsRandomlyAndEqually(
+  leadIds: string[],
+  assigneeNames: string[]
+): Record<string, string> {
+  const allocation: Record<string, string> = {};
+  if (assigneeNames.length === 0 || leadIds.length === 0) return allocation;
+
+  if (assigneeNames.length === 1) {
+    leadIds.forEach(id => {
+      allocation[id] = assigneeNames[0];
+    });
+    return allocation;
+  }
+
+  // Fisher-Yates Shuffle
+  const shuffledIds = [...leadIds];
+  for (let i = shuffledIds.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffledIds[i], shuffledIds[j]] = [shuffledIds[j], shuffledIds[i]];
+  }
+
+  // Round-robin equal allocation
+  shuffledIds.forEach((id, index) => {
+    allocation[id] = assigneeNames[index % assigneeNames.length];
+  });
+
+  return allocation;
+}
+
 export function BulkBucketUpdater() {
   const [items, setItems] = useState<Lead[]>([]);
+  const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Filters State
@@ -68,27 +112,48 @@ export function BulkBucketUpdater() {
   // Bulk Operations State
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [targetBucket, setTargetBucket] = useState<string>('');
+  const [targetAssignees, setTargetAssignees] = useState<string[]>([]);
   const [updating, setUpdating] = useState(false);
   const [updateProgress, setUpdateProgress] = useState<{ current: number; total: number } | null>(null);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const { toast } = useToast();
 
-  const fetchLeads = async () => {
+  const fetchLeadsAndUsers = async () => {
     setLoading(true);
     try {
-      const data = await getLeadsFromFirebase({ summary: true });
-      setItems(data);
+      const [leadsData, usersSnap] = await Promise.all([
+        getLeadsFromFirebase({ summary: true }),
+        getDocs(collection(firestore, 'users')).catch(() => ({ docs: [] }))
+      ]);
+
+      setItems(leadsData);
+
+      const users: StaffUser[] = [];
+      if ('docs' in usersSnap) {
+        usersSnap.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          const name = (data.displayName || `${data.firstName || ''} ${data.lastName || ''}`).trim() || data.email || docSnap.id;
+          if (name) {
+            users.push({
+              id: docSnap.id,
+              name,
+              role: data.activeRole || data.role
+            });
+          }
+        });
+      }
+      setStaffUsers(users);
     } catch (error) {
-      console.error('Failed to fetch leads:', error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch leads.' });
+      console.error('Failed to fetch leads or users:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not load leads or user list.' });
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchLeads();
+    fetchLeadsAndUsers();
   }, []);
 
   // Reset pagination to page 1 whenever filters or page size change
@@ -96,6 +161,11 @@ export function BulkBucketUpdater() {
     setCurrentPage(1);
     setJumpPageInput('');
   }, [debouncedSearchTerm, statusFilter, bucketFilter, amFilter, dialerFilter, franchiseeFilter, dateRange, pageSize]);
+
+  // Reset target assignees when target bucket changes
+  useEffect(() => {
+    setTargetAssignees([]);
+  }, [targetBucket]);
 
   // Unique values for filter dropdowns
   const uniqueStatuses = useMemo(() => {
@@ -114,22 +184,70 @@ export function BulkBucketUpdater() {
   }, [items]);
 
   const uniqueAMs = useMemo(() => {
-    const ams = new Set(items.map(item => item.accountManagerAssigned).filter(Boolean));
-    const list = Array.from(ams).map(am => ({ value: am!, label: am! })).sort((a, b) => a.label.localeCompare(b.label));
+    const amSet = new Set<string>();
+    items.forEach(item => { if (item.accountManagerAssigned) amSet.add(item.accountManagerAssigned); });
+    staffUsers.forEach(u => {
+      const r = (u.role || '').toLowerCase();
+      if (r.includes('account manager') || r.includes('am') || r.includes('admin') || r.includes('superadmin')) {
+        amSet.add(u.name);
+      }
+    });
+    const list = Array.from(amSet).map(am => ({ value: am, label: am })).sort((a, b) => a.label.localeCompare(b.label));
     return [...list, { value: 'none', label: 'Unassigned' }];
-  }, [items]);
+  }, [items, staffUsers]);
 
   const uniqueDialers = useMemo(() => {
-    const dialers = new Set(items.map(item => item.dialerAssigned).filter(Boolean));
-    const list = Array.from(dialers).map(d => ({ value: d!, label: d! })).sort((a, b) => a.label.localeCompare(b.label));
+    const dialerSet = new Set<string>();
+    items.forEach(item => { if (item.dialerAssigned) dialerSet.add(item.dialerAssigned); });
+    staffUsers.forEach(u => {
+      const r = (u.role || '').toLowerCase();
+      if (r.includes('dialer') || r.includes('outbound') || r.includes('bdm') || r.includes('user') || r.includes('admin')) {
+        dialerSet.add(u.name);
+      }
+    });
+    const list = Array.from(dialerSet).map(d => ({ value: d, label: d })).sort((a, b) => a.label.localeCompare(b.label));
     return [...list, { value: 'none', label: 'Unassigned' }];
-  }, [items]);
+  }, [items, staffUsers]);
 
   const uniqueFranchisees = useMemo(() => {
     const franchisees = new Set(items.map(item => item.franchisee).filter(Boolean));
     const list = Array.from(franchisees).map(f => ({ value: f!, label: f! })).sort((a, b) => a.label.localeCompare(b.label));
     return [...list, { value: 'none', label: 'Unassigned' }];
   }, [items]);
+
+  // Options for Target Assignee selection depending on Target Bucket
+  const targetAssigneeOptions = useMemo((): { options: Option[]; label: string; fieldName: 'dialerAssigned' | 'accountManagerAssigned' | 'fieldRepAssigned' | 'customerSuccessAssigned' | 'salesRepAssigned' } | null => {
+    if (targetBucket === 'outbound') {
+      const opts = uniqueDialers.filter(d => d.value !== 'none');
+      return { options: opts, label: 'Select Dialer(s)', fieldName: 'dialerAssigned' };
+    }
+    if (targetBucket === 'account_manager') {
+      const opts = uniqueAMs.filter(am => am.value !== 'none');
+      return { options: opts, label: 'Select Account Manager(s)', fieldName: 'accountManagerAssigned' };
+    }
+    if (targetBucket === 'field_sales') {
+      const fieldSet = new Set<string>();
+      items.forEach(item => { if ((item as any).fieldRepAssigned) fieldSet.add((item as any).fieldRepAssigned); });
+      staffUsers.forEach(u => fieldSet.add(u.name));
+      const opts = Array.from(fieldSet).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+      return { options: opts, label: 'Select Field Rep(s)', fieldName: 'fieldRepAssigned' };
+    }
+    if (targetBucket === 'customer_success') {
+      const csSet = new Set<string>();
+      items.forEach(item => { if ((item as any).customerSuccessAssigned) csSet.add((item as any).customerSuccessAssigned); });
+      staffUsers.forEach(u => csSet.add(u.name));
+      const opts = Array.from(csSet).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
+      return { options: opts, label: 'Select Customer Success Rep(s)', fieldName: 'customerSuccessAssigned' };
+    }
+    if (targetBucket === 'inbound') {
+      const salesSet = new Set<string>();
+      items.forEach(item => { if ((item as any).salesRepAssigned) salesSet.add((item as any).salesRepAssigned); });
+      staffUsers.forEach(u => salesSet.add(u.name));
+      const opts = Array.from(salesSet).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
+      return { options: opts, label: 'Select Sales Rep(s)', fieldName: 'salesRepAssigned' };
+    }
+    return null;
+  }, [targetBucket, uniqueDialers, uniqueAMs, items, staffUsers]);
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {
@@ -285,7 +403,7 @@ export function BulkBucketUpdater() {
     }
   };
 
-  // Chunked Bulk Bucket Update
+  // Chunked Bulk Bucket Update with Random Equal Allocation across selected assignees
   const handleBulkBucketUpdate = async () => {
     if (selectedItems.length === 0 || !targetBucket) return;
     setUpdating(true);
@@ -295,29 +413,64 @@ export function BulkBucketUpdater() {
     const selectedSet = new Set(selectedItems);
     let completedCount = 0;
 
+    // Calculate allocation if assignees were selected
+    const allocationMap = allocateLeadsRandomlyAndEqually(selectedItems, targetAssignees);
+    const assigneeField = targetAssigneeOptions?.fieldName;
+
     try {
       for (let i = 0; i < selectedItems.length; i += CHUNK_SIZE) {
         const chunk = selectedItems.slice(i, i + CHUNK_SIZE);
         await Promise.all(
-          chunk.map(leadId =>
-            updateLeadSingleBucket(leadId, targetBucket, 'Data Management bulk bucket update', { source: 'data_management', isDataManagement: true })
-          )
+          chunk.map(leadId => {
+            const assignedPerson = allocationMap[leadId];
+            return updateLeadSingleBucket(
+              leadId, 
+              targetBucket, 
+              'Data Management bulk bucket update', 
+              { 
+                source: 'data_management', 
+                isDataManagement: true,
+                assignee: assignedPerson,
+                assigneeField: assigneeField
+              }
+            );
+          })
         );
         completedCount += chunk.length;
         setUpdateProgress({ current: completedCount, total: selectedItems.length });
       }
 
       setItems(prev =>
-        prev.map(item => (selectedSet.has(item.id) ? { ...item, bucket: targetBucket as LeadBucket, fieldSales: targetBucket === 'field_sales' } : item))
+        prev.map(item => {
+          if (!selectedSet.has(item.id)) return item;
+          const assignedPerson = allocationMap[item.id];
+          const updatedItem: Lead = { 
+            ...item, 
+            bucket: targetBucket as LeadBucket, 
+            fieldSales: targetBucket === 'field_sales' 
+          };
+          if (assigneeField && assignedPerson) {
+            (updatedItem as any)[assigneeField] = assignedPerson;
+          }
+          return updatedItem;
+        })
       );
+
+      let successDescription = `Successfully moved ${selectedItems.length} leads to bucket "${formatBucketLabel(targetBucket)}".`;
+      if (targetAssignees.length === 1) {
+        successDescription += ` Assigned to ${targetAssignees[0]}.`;
+      } else if (targetAssignees.length > 1) {
+        successDescription += ` Randomly & equally distributed among ${targetAssignees.length} assignees (${targetAssignees.join(', ')}).`;
+      }
 
       toast({
         title: 'Bulk Update Complete',
-        description: `Successfully moved ${selectedItems.length} leads to bucket "${formatBucketLabel(targetBucket)}".`,
+        description: successDescription,
       });
 
       setSelectedItems([]);
       setTargetBucket('');
+      setTargetAssignees([]);
     } catch (err) {
       console.error(err);
       toast({
@@ -463,74 +616,108 @@ export function BulkBucketUpdater() {
 
       {/* Selection Summary & Action Bar */}
       {selectedItems.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3 rounded-lg border bg-primary/5 border-primary/20">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-primary flex items-center gap-1.5">
-              <CheckSquare className="h-4 w-4" />
-              {selectedItems.length.toLocaleString()} {selectedItems.length === 1 ? 'lead' : 'leads'} selected
-            </span>
+        <div className="flex flex-col gap-3 p-4 rounded-lg border bg-primary/5 border-primary/20">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-primary flex items-center gap-1.5">
+                <CheckSquare className="h-4 w-4" />
+                {selectedItems.length.toLocaleString()} {selectedItems.length === 1 ? 'lead' : 'leads'} selected
+              </span>
 
-            {!isAllMatchingSelected && filteredItems.length > 0 && (
+              {!isAllMatchingSelected && filteredItems.length > 0 && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleSelectAllMatching}
+                  className="h-8 text-xs bg-primary/10 border-primary/30 hover:bg-primary/20 text-primary font-medium"
+                >
+                  <ListChecks className="mr-1.5 h-3.5 w-3.5" />
+                  Select all {filteredItems.length.toLocaleString()} matching leads
+                </Button>
+              )}
+
+              {isAllMatchingSelected && (
+                <Badge variant="secondary" className="bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 font-medium text-xs">
+                  All {filteredItems.length.toLocaleString()} matching leads selected across all pages
+                </Badge>
+              )}
+
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="sm" 
-                onClick={handleSelectAllMatching}
-                className="h-8 text-xs bg-primary/10 border-primary/30 hover:bg-primary/20 text-primary font-medium"
+                onClick={handleDeselectAll}
+                className="h-8 text-xs text-muted-foreground hover:text-foreground"
               >
-                <ListChecks className="mr-1.5 h-3.5 w-3.5" />
-                Select all {filteredItems.length.toLocaleString()} matching leads
+                <X className="mr-1 h-3.5 w-3.5" />
+                Clear Selection
               </Button>
-            )}
+            </div>
 
-            {isAllMatchingSelected && (
-              <Badge variant="secondary" className="bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 font-medium text-xs">
-                All {filteredItems.length.toLocaleString()} matching leads selected across all pages
-              </Badge>
-            )}
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              {/* Target Bucket Selector */}
+              <Select value={targetBucket} onValueChange={setTargetBucket} disabled={updating}>
+                <SelectTrigger className="w-full sm:w-[200px] text-sm bg-background">
+                  <SelectValue placeholder="Select Target Bucket" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BUCKET_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={handleDeselectAll}
-              className="h-8 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <X className="mr-1 h-3.5 w-3.5" />
-              Clear Selection
-            </Button>
+              {/* Target Assignees Selector (Dialers / AMs / Reps) */}
+              {targetAssigneeOptions && (
+                <div className="w-full sm:w-[240px]">
+                  <MultiSelectCombobox
+                    options={targetAssigneeOptions.options}
+                    selected={targetAssignees}
+                    onSelectedChange={setTargetAssignees}
+                    placeholder={targetAssigneeOptions.label}
+                  />
+                </div>
+              )}
+
+              <Button
+                onClick={handleBulkBucketUpdate}
+                disabled={selectedItems.length === 0 || !targetBucket || updating}
+                className="flex items-center gap-2 font-medium"
+              >
+                {updating ? (
+                  <>
+                    <Loader className="h-4 w-4 animate-spin" />
+                    Updating {updateProgress?.current}/{updateProgress?.total}...
+                  </>
+                ) : (
+                  <>
+                    <Layers className="h-4 w-4" />
+                    Move to Bucket ({selectedItems.length})
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            <Select value={targetBucket} onValueChange={setTargetBucket} disabled={updating}>
-              <SelectTrigger className="w-full sm:w-[200px] text-sm bg-background">
-                <SelectValue placeholder="Select Target Bucket" />
-              </SelectTrigger>
-              <SelectContent>
-                {BUCKET_OPTIONS.map(opt => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button
-              onClick={handleBulkBucketUpdate}
-              disabled={selectedItems.length === 0 || !targetBucket || updating}
-              className="flex items-center gap-2 font-medium"
-            >
-              {updating ? (
+          {/* Random & Equal Distribution Info Banner */}
+          {targetBucket && targetAssignees.length > 0 && (
+            <div className="mt-1 pt-2 border-t border-primary/10 flex items-center gap-2 text-xs text-primary/90 font-medium">
+              {targetAssignees.length === 1 ? (
                 <>
-                  <Loader className="h-4 w-4 animate-spin" />
-                  Updating {updateProgress?.current}/{updateProgress?.total}...
+                  <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span>All {selectedItems.length} selected leads will be assigned to <strong>{targetAssignees[0]}</strong>.</span>
                 </>
               ) : (
                 <>
-                  <Layers className="h-4 w-4" />
-                  Move to Bucket ({selectedItems.length})
+                  <Shuffle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>
+                    <strong>Random & Equal Allocation:</strong> The {selectedItems.length} selected leads will be randomly and equally split among {targetAssignees.length} selected assignees ({targetAssignees.join(', ')}). (~{Math.ceil(selectedItems.length / targetAssignees.length)} leads each)
+                  </span>
                 </>
               )}
-            </Button>
-          </div>
+            </div>
+          )}
         </div>
       )}
 
