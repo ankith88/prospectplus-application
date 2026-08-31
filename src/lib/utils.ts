@@ -572,6 +572,9 @@ export function getLeadDisplayDateValue(lead: any): string | undefined {
       lead.dateLeadEntered
     );
   }
+  if (typeof lead === 'object' && lead !== null) {
+    return lead.lostAt || lead.archivedAt || lead.dateLocalmileAccepted || lead.localMileAcceptedAt || lead.dateRegistrationSent || lead.dateLeadEntered;
+  }
   return typeof lead === 'string' ? undefined : lead.dateLeadEntered;
 }
 
@@ -583,6 +586,9 @@ export function getLeadDisplayDateLabel(lead: any): string {
   }
   if (status === 'LocalMile Pending' || status.includes('LocalMile Pending')) {
     return 'Date LocalMile Accepted';
+  }
+  if (typeof lead === 'string' && (lead.includes('Lost') || lead.includes('LM Opp'))) {
+    return 'Date Lost / Entered';
   }
   return 'Date Lead Entered';
 }

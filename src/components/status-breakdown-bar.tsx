@@ -12,6 +12,7 @@ interface StatusBreakdownBarProps<T = any> {
   getStatus?: (item: T) => string;
   className?: string;
   title?: string;
+  unitLabel?: string;
 }
 
 export function StatusBreakdownBar<T = any>({
@@ -21,6 +22,7 @@ export function StatusBreakdownBar<T = any>({
   getStatus = (item: any) => item.customerStatus || item.status || item.leadStatus || 'New',
   className,
   title = "Status Breakdown",
+  unitLabel = "lead",
 }: StatusBreakdownBarProps<T>) {
   const statusBreakdown = useMemo(() => {
     if (!items || items.length === 0) return [];
@@ -73,7 +75,7 @@ export function StatusBreakdownBar<T = any>({
               title={`Click to filter list by status: ${status}`}
             >
               <LeadStatusBadge status={status as LeadStatus} />
-              <span className="font-bold text-slate-800 text-xs">{count} lead{count === 1 ? '' : 's'}</span>
+              <span className="font-bold text-slate-800 text-xs">{count} {unitLabel}{count === 1 ? '' : 's'}</span>
               <span className="text-[10px] text-slate-500 font-medium">({percentage}%)</span>
             </button>
           );
