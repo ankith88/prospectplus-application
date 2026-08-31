@@ -218,6 +218,38 @@ export async function POST(req: NextRequest) {
     const dtEndStr = formatIcsDate(endDateTime);
     const dtStampStr = formatIcsDate(new Date());
 
+    // Enrich Franchisee User Info from Firestore User Doc if available
+    let finalUserName = userName;
+    let finalUserEmail = userEmail;
+    let finalFranchiseeName = franchiseeName;
+
+    try {
+      let dbUserDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+      if (userId) {
+        const uDoc = await db.collection('users').doc(userId).get();
+        if (uDoc.exists) dbUserDoc = uDoc;
+      }
+      if (!dbUserDoc && userEmail) {
+        const uSnap = await db.collection('users').where('email', '==', userEmail).limit(1).get();
+        if (!uSnap.empty) dbUserDoc = uSnap.docs[0];
+      }
+
+      if (dbUserDoc && dbUserDoc.exists) {
+        const uData = dbUserDoc.data() || {};
+        if (!finalUserName || finalUserName === 'Franchisee User' || finalUserName === 'Franchisee') {
+          finalUserName = uData.displayName || `${uData.firstName || ''} ${uData.lastName || ''}`.trim() || uData.name || uData.email || finalUserName;
+        }
+        if (!finalUserEmail || finalUserEmail === 'N/A' || !finalUserEmail.includes('@')) {
+          finalUserEmail = uData.email || finalUserEmail;
+        }
+        if (!finalFranchiseeName || finalFranchiseeName === 'Franchisee Territory' || finalFranchiseeName === 'Franchise Territory' || finalFranchiseeName === 'My Franchise') {
+          finalFranchiseeName = uData.franchisee || uData.linkedFranchisees?.[0]?.franchiseeName || finalFranchiseeName;
+        }
+      }
+    } catch (e) {
+      console.warn('Error fetching user profile for training appointment enrichment:', e);
+    }
+
     // 3. Store Appointment Document in dedicated training_sessions collection
     const apptRef = db.collection('training_sessions').doc(parentId).collection('appointments').doc(apptId);
 
@@ -237,10 +269,10 @@ export async function POST(req: NextRequest) {
       isTeams: true,
       isTraining: true,
       joinUrl: teamsJoinUrl,
-      franchisee: franchiseeName || 'Franchisee Territory',
+      franchisee: finalFranchiseeName || 'MailPlus Territory',
       franchiseeUserId: userId || '',
-      franchiseeEmail: userEmail,
-      franchiseeUserName: userName || 'Franchisee',
+      franchiseeEmail: finalUserEmail || 'N/A',
+      franchiseeUserName: finalUserName || 'Franchisee User',
       notes: notes || '1-on-1 ProspectPlus Training Session with Aleyna Harnett via Microsoft Teams',
       additionalEmails: parsedAdditionalEmails,
       reminderEmailSent: false,

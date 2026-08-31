@@ -282,7 +282,7 @@ export async function POST(req: NextRequest) {
       franchisee: assignedFranchisee,
       franchiseeName: assignedFranchiseeName,
       ...(potentialFranchisees && { potentialFranchisees }),
-      accountManagerAssigned: isMultisite ? (accountManagerName || MULTISITE_ACCOUNT_MANAGER_UID) : (accountManagerName || assignedAccountManager || undefined),
+      accountManagerAssigned: (isMultisite ? (accountManagerName || MULTISITE_ACCOUNT_MANAGER_UID) : ((body.bucket === 'lpo_network' || body.bucket === 'LPO Network' || lpoLeadId || lpo_lead_id) ? "Kerry O'Neill" : (accountManagerName || assignedAccountManager || undefined))),
       salesRepAssigned: isMultisite ? (accountManagerName || MULTISITE_ACCOUNT_MANAGER_UID) : (body.salesRepAssigned || undefined),
       bucket: isMultisite ? 'account_manager' : (body.bucket || 'inbound'),
       originalBucket: isWebsiteSource ? 'inbound' : (body.originalBucket || undefined),
@@ -456,6 +456,13 @@ export async function POST(req: NextRequest) {
           if (netSuiteLeadData.customerEntityId) customerEntityId = netSuiteLeadData.customerEntityId;
           
           const updates: any = {};
+          
+          // Ensure Kerry O'Neill is assigned as Account Manager post-NetSuite sync for LPO Network leads
+          const targetBucket = netSuiteLeadData.bucket || leadData.bucket;
+          if (targetBucket === 'lpo_network' || targetBucket === 'LPO Network' || netSuiteLeadData.lpoLeadId || leadData.lpoLeadId) {
+            updates.accountManagerAssigned = "Kerry O'Neill";
+          }
+
           if (netSuiteLeadData.bookingUrlId) {
             bookingUrlId = netSuiteLeadData.bookingUrlId;
           } else {

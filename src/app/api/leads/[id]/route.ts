@@ -108,6 +108,11 @@ export async function PATCH(
       updateData.bucket = 'account_manager';
     }
 
+    const effectiveBucket = updateData.bucket || currentBucket;
+    if (effectiveBucket === 'lpo_network' || effectiveBucket === 'LPO Network' || existingData.lpoLeadId || updateData.lpoLeadId) {
+      updateData.accountManagerAssigned = "Kerry O'Neill";
+    }
+
     const effectiveSource = updateData.customerSource || updateData.source || updateData.leadSource || existingData.customerSource || existingData.source || existingData.leadSource || '';
     const isWebsiteSourceLead = typeof effectiveSource === 'string' && (effectiveSource === 'Website' || effectiveSource.toLowerCase() === 'website');
 

@@ -714,9 +714,18 @@ export default function FranchiseeHomeClient() {
         body: JSON.stringify({
           date: formatInTimezone(bookingDate, 'Australia/Sydney', 'yyyy-MM-dd'),
           timeSlot: selectedSlot,
-          franchiseeName: activeFranName,
-          userEmail: user?.email || userProfile?.email || 'franchisee@mailplus.com.au',
-          userName: userProfile?.displayName || user?.displayName || 'Franchisee User',
+          franchiseeName:
+            activeFranName !== 'Franchise Territory' && activeFranName !== 'My Franchise'
+              ? activeFranName
+              : userProfile?.franchisee || (userProfile as any)?.linkedFranchisees?.[0]?.franchiseeName || 'MailPlus Territory',
+          userEmail: userProfile?.email || user?.email || '',
+          userName:
+            userProfile?.displayName ||
+            (userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : '') ||
+            userProfile?.name ||
+            user?.displayName ||
+            user?.email ||
+            'Franchisee User',
           userId: user?.uid || '',
           notes: bookingNotes,
           additionalEmails

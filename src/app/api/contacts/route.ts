@@ -24,6 +24,40 @@ function unwrapValue(val: any): any {
   return val;
 }
 
+async function resolveParentRef(db: any, parentId: string, parentType: string = 'leads') {
+  const initialCollection = parentType === 'companies' ? 'companies' : 'leads';
+  const initialRef = db.collection(initialCollection).doc(parentId);
+  const initialSnap = await initialRef.get();
+
+  if (initialSnap.exists) {
+    return { parentRef: initialRef, parentSnap: initialSnap, parentCollection: initialCollection };
+  }
+
+  // Fallback 1: Check alternate collection (e.g. if lead was converted to company)
+  const altCollection = initialCollection === 'leads' ? 'companies' : 'leads';
+  const altRef = db.collection(altCollection).doc(parentId);
+  const altSnap = await altRef.get();
+  if (altSnap.exists) {
+    return { parentRef: altRef, parentSnap: altSnap, parentCollection: altCollection };
+  }
+
+  // Fallback 2: Check by netsuiteId field in 'leads'
+  const leadNsSnap = await db.collection('leads').where('netsuiteId', '==', String(parentId)).limit(1).get();
+  if (!leadNsSnap.empty) {
+    const docSnap = leadNsSnap.docs[0];
+    return { parentRef: docSnap.ref, parentSnap: docSnap, parentCollection: 'leads' };
+  }
+
+  // Fallback 3: Check by netsuiteId field in 'companies'
+  const compNsSnap = await db.collection('companies').where('netsuiteId', '==', String(parentId)).limit(1).get();
+  if (!compNsSnap.empty) {
+    const docSnap = compNsSnap.docs[0];
+    return { parentRef: docSnap.ref, parentSnap: docSnap, parentCollection: 'companies' };
+  }
+
+  return { parentRef: null, parentSnap: null, parentCollection: initialCollection };
+}
+
 export async function POST(req: NextRequest) {
   const apiKeyHeader = req.headers.get('x-api-key');
 
@@ -58,12 +92,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'name (or firstName/lastName) is required' }, { status: 400 });
     }
 
-    const parentCollection = parentType === 'companies' ? 'companies' : 'leads';
-    const parentRef = db.collection(parentCollection).doc(parentId);
-    
-    // Verify parent document exists
-    const parentSnap = await parentRef.get();
-    if (!parentSnap.exists) {
+    const { parentRef, parentSnap, parentCollection } = await resolveParentRef(db, parentId, parentType);
+    if (!parentRef || !parentSnap || !parentSnap.exists) {
       return NextResponse.json({ error: `${parentType === 'companies' ? 'Company' : 'Lead'} not found` }, { status: 404 });
     }
 
@@ -164,12 +194,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'parentId is required' }, { status: 400 });
     }
 
-    const parentCollection = parentType === 'companies' ? 'companies' : 'leads';
-    const parentRef = db.collection(parentCollection).doc(parentId);
-    
-    // Verify parent document exists
-    const parentSnap = await parentRef.get();
-    if (!parentSnap.exists) {
+    const { parentRef, parentSnap, parentCollection } = await resolveParentRef(db, parentId, parentType);
+    if (!parentRef || !parentSnap || !parentSnap.exists) {
       return NextResponse.json({ error: `${parentType === 'companies' ? 'Company' : 'Lead'} not found` }, { status: 404 });
     }
 

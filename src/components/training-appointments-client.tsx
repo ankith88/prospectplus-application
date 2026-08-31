@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { getAllAppointments } from '@/services/firebase';
-import type { Appointment } from '@/lib/types';
+import { getAllAppointments, getAllUsers } from '@/services/firebase';
+import type { Appointment, UserProfile } from '@/lib/types';
 import { AccessDenied } from '@/components/access-denied';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -80,16 +80,66 @@ export function TrainingAppointmentsClient() {
   const fetchTrainingAppointments = async () => {
     setLoading(true);
     try {
-      const allAppts = await getAllAppointments();
-      const trainingAppts = allAppts.filter(
+      const [allAppts, allUsers] = await Promise.all([
+        getAllAppointments(),
+        getAllUsers().catch(() => [])
+      ]);
+
+      const usersMap = new Map<string, UserProfile>();
+      const usersEmailMap = new Map<string, UserProfile>();
+      allUsers.forEach((u) => {
+        if (u.uid) usersMap.set(u.uid, u);
+        if (u.email) usersEmailMap.set(u.email.toLowerCase(), u);
+      });
+
+      const rawTrainingAppts = allAppts.filter(
         (a: any) =>
-          a.assignedTo === 'Aleyna Harnett' ||
-          a.type === 'Teams Training Session' ||
-          a.isTeams === true ||
           a.isTraining === true ||
-          (a.leadName && a.leadName.toLowerCase().includes('aleyna'))
+          a.type === 'Teams Training Session' ||
+          (a.leadId && String(a.leadId).startsWith('training-')) ||
+          (a.notes && String(a.notes).toLowerCase().includes('prospectplus training session'))
       );
-      setAppointments(trainingAppts);
+
+      const enrichedAppts = rawTrainingAppts.map((a: any) => {
+        const userId =
+          a.franchiseeUserId ||
+          a.userId ||
+          (a.leadId && a.leadId.startsWith('training-') ? a.leadId.replace('training-', '') : null);
+        const email = (a.franchiseeEmail || a.userEmail || '').toLowerCase();
+
+        const userObj = (userId ? usersMap.get(userId) : null) || (email ? usersEmailMap.get(email) : null);
+
+        let franName = a.franchisee || a.franchiseeName;
+        if (!franName || franName === 'Franchisee Territory' || franName === 'Franchise Territory' || franName === 'My Franchise') {
+          if (userObj?.franchisee) franName = userObj.franchisee;
+          else if ((userObj as any)?.linkedFranchisees?.[0]?.franchiseeName) franName = (userObj as any).linkedFranchisees[0].franchiseeName;
+          else franName = 'MailPlus Territory';
+        }
+
+        let userName = a.franchiseeUserName || a.userName;
+        if (!userName || userName === 'Franchisee User' || userName === 'Franchisee') {
+          if (userObj) {
+            userName = userObj.displayName || `${userObj.firstName || ''} ${userObj.lastName || ''}`.trim() || userObj.name || userObj.email;
+          } else {
+            userName = 'Franchisee User';
+          }
+        }
+
+        let userEmail = a.franchiseeEmail || a.userEmail;
+        if (!userEmail || userEmail === 'N/A' || !userEmail.includes('@')) {
+          if (userObj?.email) userEmail = userObj.email;
+          else userEmail = 'N/A';
+        }
+
+        return {
+          ...a,
+          franchisee: franName,
+          franchiseeUserName: userName,
+          franchiseeEmail: userEmail
+        };
+      });
+
+      setAppointments(enrichedAppts);
     } catch (err) {
       console.error('Failed to fetch training appointments:', err);
       toast.error('Failed to load training appointments');
