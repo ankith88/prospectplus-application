@@ -195,7 +195,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     if (path.startsWith('/my-franchise')) {
       return 'my-franchise-group';
     }
-    if (path.startsWith('/admin/franchisees') || path.startsWith('/operations/franchise-prospects')) {
+    if (path.startsWith('/admin/franchisees') || path.startsWith('/operations/franchise-prospects') || path.startsWith('/admin/partner-locations')) {
       return 'network-group';
     }
     return null;
@@ -376,6 +376,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/admin/franchisee-invoicing': { label: 'Franchisee Invoicing', category: 'Analytics & Reports', icon: DollarSign, href: '/admin/franchisee-invoicing' },
 
     // Network
+    '/admin/partner-locations': { label: 'Partner Locations', category: 'Network', icon: MapPin, href: '/admin/partner-locations' },
     '/admin/franchisees/directory': { label: 'Franchisees Directory', category: 'Network', icon: Building, href: '/admin/franchisees/directory' },
     '/admin/franchisees/presales': { label: 'Territory Presales', category: 'Network', icon: Tag, href: '/admin/franchisees/presales' },
     '/operations/franchise-prospects': { label: 'Franchise Prospects', category: 'Network', icon: UserCheck, href: '/operations/franchise-prospects' },
@@ -2157,6 +2158,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   {!isGroupCollapsed('network-group') && (
                     <SidebarGroupContent>
                       <SidebarMenu>
+                        {isSuperAdmin && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/partner-locations")} tooltip="Partner Locations">
+                              <Link href="/admin/partner-locations">
+                                <MapPin />
+                                <span>Partner Locations</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
                         <SidebarMenuItem>
                           <SidebarMenuButton asChild isActive={isActive("/admin/franchisees/directory")} tooltip="Franchisees Directory">
                             <Link href="/admin/franchisees/directory">
