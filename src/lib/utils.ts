@@ -129,7 +129,7 @@ export function isOutsideOfficeHours(date: Date) {
 export function formatInTimezone(
   date: Date | string | undefined, 
   timezone: string | undefined, 
-  options: Intl.DateTimeFormatOptions | 'PP' | 'PPP' | 'PPpp' | 'yyyy-MM-dd' | 'HH:mm' = { dateStyle: 'medium' }
+  options: Intl.DateTimeFormatOptions | 'PP' | 'PPP' | 'PPpp' | 'yyyy-MM-dd' | 'HH:mm' | 'yyyy-MM' = { dateStyle: 'medium' }
 ) {
   if (!date) return 'N/A';
   const d = typeof date === 'string' ? new Date(date) : date;
@@ -152,6 +152,11 @@ export function formatInTimezone(
       const month = new Intl.DateTimeFormat('en-AU', { timeZone: tz, month: '2-digit' }).format(d);
       const day = new Intl.DateTimeFormat('en-AU', { timeZone: tz, day: '2-digit' }).format(d);
       return `${year}-${month}-${day}`;
+    }
+    if (options === 'yyyy-MM') {
+      const year = new Intl.DateTimeFormat('en-AU', { timeZone: tz, year: 'numeric' }).format(d);
+      const month = new Intl.DateTimeFormat('en-AU', { timeZone: tz, month: '2-digit' }).format(d);
+      return `${year}-${month}`;
     }
     if (options === 'HH:mm') {
       const hour = new Intl.DateTimeFormat('en-AU', { timeZone: tz, hour: '2-digit', hour12: false }).format(d);

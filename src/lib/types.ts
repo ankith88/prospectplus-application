@@ -161,6 +161,16 @@ export interface Appointment {
   eventId?: string;
   joinUrl?: string;
   createdAt?: string;
+  franchisee?: string;
+  franchiseeName?: string;
+  franchiseeUserName?: string;
+  franchiseeEmail?: string;
+  userName?: string;
+  userEmail?: string;
+  leadName?: string;
+  companyName?: string;
+  notes?: string;
+  statusNotes?: string;
 }
 
 export interface TranscriptAnalysis {

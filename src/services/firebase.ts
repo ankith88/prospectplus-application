@@ -115,7 +115,7 @@ export async function getLeadOrCompanyCollection(id: string, leadObject?: any): 
 async function logActivity(
   leadId: string,
   activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string },
-  collectionName?: 'leads' | 'companies'
+  collectionName?: 'leads' | 'companies' | 'lpo_leads' | string
 ): Promise<string> {
     try {
         const colName = collectionName || await getLeadOrCompanyCollection(leadId);

@@ -257,14 +257,15 @@ export function TrainingAppointmentsClient() {
 
   if (authLoading) {
     return (
-      <div className="py-20 flex justify-center">
-        <Loader size="lg" label="Authenticating session..." />
+      <div className="py-20 flex flex-col items-center justify-center gap-3">
+        <Loader className="h-6 w-6 text-[#095c7b]" />
+        <p className="text-xs font-semibold text-slate-500">Authenticating session...</p>
       </div>
     );
   }
 
   if (!hasAccess) {
-    return <AccessDenied message="You do not have permission to access the Franchisee Training Sessions page." />;
+    return <AccessDenied customPageName="Franchisee Training Sessions" />;
   }
 
   return (
@@ -526,8 +527,9 @@ export function TrainingAppointmentsClient() {
 
         <CardContent className="p-0">
           {loading ? (
-            <div className="py-16 flex justify-center">
-              <Loader size="lg" label="Loading franchisee appointments..." />
+            <div className="py-16 flex flex-col items-center justify-center gap-3">
+              <Loader className="h-6 w-6 text-[#095c7b]" />
+              <p className="text-xs font-semibold text-slate-500">Loading franchisee appointments...</p>
             </div>
           ) : filteredAppointments.length === 0 ? (
             <div className="py-16 text-center border-b border-slate-100 bg-slate-50/30">
