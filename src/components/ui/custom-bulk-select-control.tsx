@@ -44,6 +44,7 @@ export function CustomBulkSelectControl({
   const [customAmount, setCustomAmount] = useState<string>('');
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [mode, setMode] = useState<'replace' | 'append'>('replace');
+  const [targetPool, setTargetPool] = useState<'available' | 'preselected'>('available');
 
   // Role verification: check if user is admin or superadmin
   const role = (userProfile?.activeRole || userProfile?.role || '').toLowerCase();
@@ -65,12 +66,14 @@ export function CustomBulkSelectControl({
     return null;
   }
 
-  const totalAvailable = allAvailableIds.length;
   const selectedCount = selectedIds.length;
+  const isPreselectedTarget = targetPool === 'preselected' && selectedCount > 0;
+  const activePoolIds = isPreselectedTarget ? selectedIds : allAvailableIds;
+  const totalAvailable = activePoolIds.length;
 
   const handleSelectCount = (count: number, isRandom = false) => {
     if (totalAvailable === 0) {
-      toast({ title: 'No leads available', description: 'There are no leads in the current view to select.', variant: 'destructive' });
+      toast({ title: 'No leads available', description: 'There are no leads in the target pool to select.', variant: 'destructive' });
       return;
     }
 
@@ -79,15 +82,15 @@ export function CustomBulkSelectControl({
 
     if (isRandom) {
       // Shuffle copy of array and take N
-      const shuffled = [...allAvailableIds].sort(() => 0.5 - Math.random());
+      const shuffled = [...activePoolIds].sort(() => 0.5 - Math.random());
       targetIds = shuffled.slice(0, targetCount);
     } else {
       // Top-down sequential N
-      targetIds = allAvailableIds.slice(0, targetCount);
+      targetIds = activePoolIds.slice(0, targetCount);
     }
 
     let finalIds: string[] = [];
-    if (mode === 'append') {
+    if (mode === 'append' && !isPreselectedTarget) {
       finalIds = Array.from(new Set([...selectedIds, ...targetIds]));
     } else {
       finalIds = targetIds;
@@ -98,8 +101,8 @@ export function CustomBulkSelectControl({
     toast({
       title: `Selected ${targetIds.length} ${label}`,
       description: isRandom
-        ? `Randomly selected ${targetIds.length} ${label.toLowerCase()} from current view.`
-        : `Selected top ${targetIds.length} ${label.toLowerCase()} in current list order.`,
+        ? `Randomly selected ${targetIds.length} ${label.toLowerCase()} from ${isPreselectedTarget ? 'preselected leads' : 'current view'}.`
+        : `Selected top ${targetIds.length} ${label.toLowerCase()} in ${isPreselectedTarget ? 'preselected leads' : 'current list order'}.`,
     });
   };
 
@@ -129,10 +132,23 @@ export function CustomBulkSelectControl({
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9 px-3 gap-1.5 border-primary/40 hover:border-primary text-xs md:text-sm font-medium bg-background shadow-sm">
-            <MousePointerClick className="h-4 w-4 text-primary shrink-0" />
-            <span>Select Amount...</span>
-          </Button>
+          {compact ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full">
+                    <MousePointerClick className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent text-xs>Select specific quantity...</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <Button variant="outline" size="sm" className="h-9 px-3 gap-1.5 border-primary/40 hover:border-primary text-xs md:text-sm font-medium bg-background shadow-sm">
+              <MousePointerClick className="h-4 w-4 text-primary shrink-0" />
+              <span>Select Amount...</span>
+            </Button>
+          )}
         </PopoverTrigger>
         <PopoverContent className="w-80 p-4 shadow-xl border-border bg-card" align="start">
           <div className="space-y-3">
@@ -142,9 +158,36 @@ export function CustomBulkSelectControl({
                 <span>Bulk Select {label}</span>
               </div>
               <Badge variant="secondary" className="text-xs">
-                {totalAvailable.toLocaleString()} Available
+                {totalAvailable.toLocaleString()} {isPreselectedTarget ? 'Selected' : 'Available'}
               </Badge>
             </div>
+
+            {/* Target Pool Selection (All vs Preselected) */}
+            {selectedCount > 0 && (
+              <div className="flex items-center justify-between text-xs bg-muted/60 p-1.5 rounded-md border border-border/60">
+                <span className="font-medium text-muted-foreground">Source Pool:</span>
+                <div className="flex items-center gap-1 bg-background p-0.5 rounded border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setTargetPool('available')}
+                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                      targetPool === 'available' ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    All ({allAvailableIds.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTargetPool('preselected')}
+                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                      targetPool === 'preselected' ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Preselected ({selectedCount})
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Quick Presets */}
             <div className="space-y-1.5">
@@ -213,35 +256,37 @@ export function CustomBulkSelectControl({
             </form>
 
             {/* Mode selection (Replace vs Add) */}
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-border text-muted-foreground">
-              <span>Mode:</span>
-              <div className="flex items-center gap-1 bg-muted p-0.5 rounded">
-                <button
-                  type="button"
-                  onClick={() => setMode('replace')}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
-                    mode === 'replace' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Replace
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('append')}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
-                    mode === 'append' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Add to existing
-                </button>
+            {!isPreselectedTarget && (
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-border text-muted-foreground">
+                <span>Mode:</span>
+                <div className="flex items-center gap-1 bg-muted p-0.5 rounded">
+                  <button
+                    type="button"
+                    onClick={() => setMode('replace')}
+                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                      mode === 'replace' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('append')}
+                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                      mode === 'append' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Add to existing
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </PopoverContent>
       </Popover>
 
       {/* Selected Counter & Clear Badge */}
-      {selectedCount > 0 && (
+      {!compact && selectedCount > 0 && (
         <div className="flex items-center gap-1.5 animate-in fade-in duration-200">
           <Badge variant="default" className="h-8 px-2.5 text-xs font-semibold gap-1 bg-primary text-primary-foreground">
             <Check className="h-3.5 w-3.5" />

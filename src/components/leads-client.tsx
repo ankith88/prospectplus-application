@@ -540,6 +540,9 @@ export default function LeadsClientPage({
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [leadsToMove, setLeadsToMove] = useState<Lead[]>([]);
   const [idsForReassignment, setIdsForReassignment] = useState<string[]>([]);
+  const [reassignQuantityMode, setReassignQuantityMode] = useState<'all' | 'custom'>('all');
+  const [reassignCustomCount, setReassignCustomCount] = useState<string>('');
+  const [reassignSelectionStrategy, setReassignSelectionStrategy] = useState<'random' | 'sequential'>('random');
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [masterLeadForMerge, setMasterLeadForMerge] = useState<Lead | null>(null);
   const [similarLeadsForMerge, setSimilarLeadsForMerge] = useState<Lead[]>([]);
@@ -1416,12 +1419,28 @@ export default function LeadsClientPage({
   
   const handleBulkReassign = async () => {
     if (idsForReassignment.length === 0 || reassignToUsers.length === 0) return;
+    let targetIdsToReassign = idsForReassignment;
+
+    const totalPreselected = idsForReassignment.length;
+    const parsedCount = parseInt(reassignCustomCount, 10);
+    const effectiveCount = reassignQuantityMode === 'custom' && !isNaN(parsedCount) && parsedCount > 0
+      ? Math.min(parsedCount, totalPreselected)
+      : totalPreselected;
+
+    if (reassignQuantityMode === 'custom' && effectiveCount < totalPreselected) {
+      if (reassignSelectionStrategy === 'random') {
+        targetIdsToReassign = [...idsForReassignment].sort(() => 0.5 - Math.random()).slice(0, effectiveCount);
+      } else {
+        targetIdsToReassign = idsForReassignment.slice(0, effectiveCount);
+      }
+    }
+
     try {
         const isInbound = filters.bucket === 'inbound';
-        await bulkUpdateLeadDialerRep(idsForReassignment, reassignToUsers, isInbound);
+        await bulkUpdateLeadDialerRep(targetIdsToReassign, reassignToUsers, isInbound);
         
         const assignedLeadsMap = new Map<string, string>();
-        idsForReassignment.forEach((leadId, index) => {
+        targetIdsToReassign.forEach((leadId, index) => {
             const userToAssign = reassignToUsers[index % reassignToUsers.length];
             assignedLeadsMap.set(leadId, userToAssign);
         });
@@ -1437,14 +1456,19 @@ export default function LeadsClientPage({
         });
         setAllLeads(updatedLeads);
 
-        toast({ title: "Success", description: `${idsForReassignment.length} lead(s) randomly reassigned to ${reassignToUsers.length} user(s).` });
+        toast({ 
+          title: "Success", 
+          description: `${targetIdsToReassign.length} lead(s) ${reassignQuantityMode === 'custom' ? `(out of ${totalPreselected} preselected)` : ''} reassigned to ${reassignToUsers.length} user(s).` 
+        });
     } catch (error) {
         console.error("Failed to bulk reassign leads:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to reassign leads." });
     } finally {
-        setSelectedLeads(prev => prev.filter(id => !idsForReassignment.includes(id)));
+        setSelectedLeads(prev => prev.filter(id => !targetIdsToReassign.includes(id)));
         setIdsForReassignment([]);
         setReassignToUsers([]);
+        setReassignQuantityMode('all');
+        setReassignCustomCount('');
         setIsReassignDialogOpen(false);
     }
   };
@@ -2470,6 +2494,15 @@ export default function LeadsClientPage({
                               id={`select-all-${dialer}`}
                               aria-label={`Select all leads for ${dialer}`}
                           />
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <CustomBulkSelectControl
+                                compact={true}
+                                label={`Leads for ${dialer}`}
+                                allAvailableIds={Object.values(statusGroups).flat().map(l => l.id)}
+                                selectedIds={selectedLeads}
+                                onSelect={setSelectedLeads}
+                            />
+                          </div>
                           <AccordionTrigger className="py-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="font-semibold">{dialer}</span>
@@ -2499,6 +2532,15 @@ export default function LeadsClientPage({
                                         className="mr-2"
                                         aria-label={`Select all leads for ${dialer} with status ${status}`}
                                     />
+                                    <div onClick={(e) => e.stopPropagation()} className="mr-1">
+                                      <CustomBulkSelectControl
+                                          compact={true}
+                                          label={`Leads for ${dialer} (${status})`}
+                                          allAvailableIds={leads.map(l => l.id)}
+                                          selectedIds={selectedLeads}
+                                          onSelect={setSelectedLeads}
+                                      />
+                                    </div>
                                     <AccordionTrigger className="py-2 text-sm flex-1">
                                       <div className="flex items-center gap-2">
                                           <LeadStatusBadge status={status as LeadStatus} />
@@ -2858,44 +2900,151 @@ export default function LeadsClientPage({
         setIsReassignDialogOpen(open);
         if (!open) {
             setReassignToUsers([]);
+            setReassignQuantityMode('all');
+            setReassignCustomCount('');
         }
     }}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
             <DialogHeader>
-                <DialogTitle>Reassign Leads</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                    <UserCog className="h-5 w-5 text-primary" />
+                    <span>Reassign Leads</span>
+                </DialogTitle>
                 <DialogDescription>
-                    You are about to reassign {idsForReassignment.length} lead(s). Select one or more users to randomly distribute the leads to.
+                    You have selected <strong>{idsForReassignment.length}</strong> lead(s). Choose how many to reassign and select target users for distribution.
                 </DialogDescription>
             </DialogHeader>
-            <div className="py-4">
-                <Label>Assign to</Label>
-                <ScrollArea className="h-48 mt-2 border rounded-md p-2">
-                    <div className="space-y-2">
-                        {reassignUserList.map((u) => (
-                            <div key={u.uid} className="flex items-center space-x-2">
-                                <Checkbox
-                                    id={`reassign-${u.uid}`}
-                                    checked={reassignToUsers.includes(u.displayName!)}
-                                    onCheckedChange={(checked) => handleReassignUserSelect(!!checked, u.displayName!)}
-                                />
-                                <Label htmlFor={`reassign-${u.uid}`} className="font-normal">
-                                    {u.displayName}
-                                </Label>
-                            </div>
-                        ))}
+            <div className="py-3 space-y-4">
+                {/* Quantity Mode Selection */}
+                <div className="space-y-2 border rounded-md p-3 bg-muted/30">
+                    <Label className="text-xs font-semibold text-foreground">Reassign Quantity</Label>
+                    <div className="flex items-center gap-2 pt-1">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={reassignQuantityMode === 'all' ? 'default' : 'outline'}
+                            onClick={() => setReassignQuantityMode('all')}
+                            className="h-8 text-xs flex-1"
+                        >
+                            All ({idsForReassignment.length})
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={reassignQuantityMode === 'custom' ? 'default' : 'outline'}
+                            onClick={() => {
+                                setReassignQuantityMode('custom');
+                                if (!reassignCustomCount) setReassignCustomCount(Math.min(25, idsForReassignment.length).toString());
+                            }}
+                            className="h-8 text-xs flex-1"
+                        >
+                            Custom Quantity
+                        </Button>
                     </div>
-                </ScrollArea>
+
+                    {reassignQuantityMode === 'custom' && (
+                        <div className="space-y-2 pt-2 border-t border-border mt-2 animate-in fade-in duration-150">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>Amount from preselected (max {idsForReassignment.length}):</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    max={idsForReassignment.length}
+                                    value={reassignCustomCount}
+                                    onChange={(e) => setReassignCustomCount(e.target.value)}
+                                    placeholder={`1 - ${idsForReassignment.length}`}
+                                    className="h-8 text-xs font-mono"
+                                />
+                                <div className="flex gap-1">
+                                    {[10, 25, 50, 100].filter(n => n < idsForReassignment.length).map(n => (
+                                        <Button
+                                            key={n}
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setReassignCustomCount(n.toString())}
+                                            className="h-8 px-2 text-[11px] font-mono"
+                                        >
+                                            {n}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between text-xs pt-1">
+                                <span className="text-muted-foreground">Selection Strategy:</span>
+                                <div className="flex gap-1 bg-background p-0.5 rounded border border-border">
+                                    <button
+                                        type="button"
+                                        onClick={() => setReassignSelectionStrategy('random')}
+                                        className={`px-2 py-0.5 rounded text-[11px] font-medium ${
+                                            reassignSelectionStrategy === 'random' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+                                        }`}
+                                    >
+                                        Random Sample
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReassignSelectionStrategy('sequential')}
+                                        className={`px-2 py-0.5 rounded text-[11px] font-medium ${
+                                            reassignSelectionStrategy === 'sequential' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+                                        }`}
+                                    >
+                                        Top / First N
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Target Users */}
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold">Assign to</Label>
+                        <span className="text-xs text-muted-foreground">{reassignToUsers.length} user(s) selected</span>
+                    </div>
+                    <ScrollArea className="h-44 border rounded-md p-2 bg-background">
+                        <div className="space-y-2">
+                            {reassignUserList.map((u) => (
+                                <div key={u.uid} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`reassign-${u.uid}`}
+                                        checked={reassignToUsers.includes(u.displayName!)}
+                                        onCheckedChange={(checked) => handleReassignUserSelect(!!checked, u.displayName!)}
+                                    />
+                                    <Label htmlFor={`reassign-${u.uid}`} className="font-normal text-xs cursor-pointer">
+                                        {u.displayName}
+                                    </Label>
+                                </div>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="gap-2">
                 <DialogClose asChild>
-                    <Button variant="outline">Cancel</Button>
+                    <Button variant="outline" size="sm">Cancel</Button>
                 </DialogClose>
-                <Button onClick={handleBulkReassign} disabled={reassignToUsers.length === 0}>
-                    Confirm Reassignment
+                <Button 
+                    onClick={handleBulkReassign} 
+                    disabled={
+                        reassignToUsers.length === 0 || 
+                        (reassignQuantityMode === 'custom' && (!reassignCustomCount || parseInt(reassignCustomCount, 10) <= 0))
+                    }
+                    size="sm"
+                >
+                    Confirm Reassignment ({
+                        reassignQuantityMode === 'custom' && parseInt(reassignCustomCount, 10) > 0
+                            ? Math.min(parseInt(reassignCustomCount, 10), idsForReassignment.length)
+                            : idsForReassignment.length
+                    })
                 </Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
+
     <AlertDialog open={leadsToDelete.length > 0} onOpenChange={(open) => !open && setLeadsToDelete([])}>
         <AlertDialogContent>
             <AlertDialogHeader>

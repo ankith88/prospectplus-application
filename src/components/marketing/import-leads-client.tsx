@@ -231,7 +231,12 @@ export function ImportLeadsClient() {
     };
   }, [isImporting, importStartTime]);
 
-  const requiredFields = useMemo(() => standardFields.filter(f => f.required), []);
+  const requiredFields = useMemo(() => {
+    if (duplicateStrategy === 'update') {
+      return standardFields.filter(f => f.key === 'companyName');
+    }
+    return standardFields.filter(f => f.required);
+  }, [duplicateStrategy]);
   const missingRequiredMappings = useMemo(() => {
     return requiredFields.filter(f => !Object.values(columnMappings).includes(f.key));
   }, [columnMappings, requiredFields]);
@@ -869,7 +874,10 @@ export function ImportLeadsClient() {
       const normName = normalizeCompanyName(companyName);
       
       standardFields.forEach(field => {
-        if (field.required) {
+        const isFieldRequired = duplicateStrategy === 'update' 
+          ? (field.key === 'companyName') 
+          : field.required;
+        if (isFieldRequired) {
           const header = Object.keys(columnMappings).find(k => columnMappings[k] === field.key);
           const val = header ? row[header]?.trim() : '';
           if (!val) {
@@ -1019,27 +1027,6 @@ export function ImportLeadsClient() {
 
         const companyName = getVal('companyName');
         
-        let hasMissingRequired = false;
-        standardFields.forEach(field => {
-          if (field.required) {
-            const val = getVal(field.key);
-            if (!val) {
-              hasMissingRequired = true;
-            }
-          }
-        });
-        
-        if (hasMissingRequired) {
-          failedCount++;
-          importLogs.push({
-            rowNum: rowIdx + 1,
-            companyName: companyName || `Row ${rowIdx + 1}`,
-            status: 'Failed',
-            details: 'Missing required company name or required fields'
-          });
-          continue;
-        }
-
         // Duplicate & Existing Customer handling
         let isDuplicateMatch = duplicateLeads[rowIdx];
         if (isDuplicateMatch === undefined) {
@@ -1074,20 +1061,59 @@ export function ImportLeadsClient() {
 
         const isUpdatingExistingLead = (duplicateStrategy === 'update' && !!isDuplicateMatch);
 
-        // Address resolution
-        const address = {
-          street: getVal('street') || '',
-          city: getVal('city') || '',
-          state: getVal('state') || '',
-          zip: getVal('zip') || '',
+        let hasMissingRequired = false;
+        standardFields.forEach(field => {
+          const isFieldRequired = isUpdatingExistingLead 
+            ? (field.key === 'companyName') 
+            : field.required;
+
+          if (isFieldRequired) {
+            const val = getVal(field.key);
+            if (!val) {
+              hasMissingRequired = true;
+            }
+          }
+        });
+        
+        if (hasMissingRequired) {
+          failedCount++;
+          importLogs.push({
+            rowNum: rowIdx + 1,
+            companyName: companyName || `Row ${rowIdx + 1}`,
+            status: 'Failed',
+            details: isUpdatingExistingLead 
+              ? 'Missing required company name' 
+              : 'Missing required company name or required address fields'
+          });
+          continue;
+        }
+
+        // Address resolution (Only construct address if provided or if creating new lead)
+        const streetVal = getVal('street');
+        const cityVal = getVal('city');
+        const stateVal = getVal('state');
+        const zipVal = getVal('zip');
+        const hasAddressInput = Boolean(streetVal || cityVal || stateVal || zipVal);
+
+        const address = hasAddressInput ? {
+          street: streetVal || '',
+          city: cityVal || '',
+          state: stateVal || '',
+          zip: zipVal || '',
           country: 'Australia'
-        };
+        } : (isUpdatingExistingLead ? undefined : {
+          street: '',
+          city: '',
+          state: '',
+          zip: '',
+          country: 'Australia'
+        });
 
         // Franchisee Assignment
         let assignedFranchisee = 'MailPlus Pty Ltd';
         let assignedFranchiseeId = '435';
         if (defaultFranchiseeId === 'Auto-resolve') {
-          const resolved = resolveLeadFranchisee(address.city, address.state, address.zip);
+          const resolved = resolveLeadFranchisee(address?.city || '', address?.state || '', address?.zip || '');
           assignedFranchisee = resolved.name || 'MailPlus Pty Ltd';
           assignedFranchiseeId = resolved.internalId || '435';
         } else if (defaultFranchiseeId) {
@@ -1151,7 +1177,7 @@ export function ImportLeadsClient() {
           ...(getVal('customerPhone') && { customerPhone: getVal('customerPhone') }),
           ...(getVal('customerServiceEmail') && { customerServiceEmail: getVal('customerServiceEmail') }),
           ...(getVal('abn') && { abn: getVal('abn') }),
-          address,
+          ...(address && { address }),
           ...(postalAddress && { postalAddress }),
           ...(additionalAddresses.length > 0 && { additionalAddresses }),
           // Enrichment Fields (BR - BZ)
@@ -1526,15 +1552,10 @@ export function ImportLeadsClient() {
                   <CheckCircle2 className="h-4 w-4" /> Formatting Rules & Mandatory Columns
                 </h4>
                 <div className="text-xs text-slate-700 space-y-2">
-                  <p>To match the requirements of the <strong>Create Lead form</strong>, the following columns are mandatory and must be mapped:</p>
+                  <p>Column requirements depend on your import action:</p>
                   <ul className="list-disc list-inside pl-2 space-y-1 font-semibold text-[#095c7b]">
-                    <li>Company Name</li>
-                    <li>Company Phone</li>
-                    <li>Company Email</li>
-                    <li>Street Address</li>
-                    <li>Suburb / City</li>
-                    <li>State</li>
-                    <li>Postcode</li>
+                    <li>Company Name (Mandatory for all imports)</li>
+                    <li>Street Address, Suburb / City, State, Postcode (Mandatory when creating new leads; optional when updating existing leads)</li>
                   </ul>
                   <p className="pt-1">
                     <strong>Optional Lead & Contact Columns:</strong> Website URL, ABN.
@@ -1691,6 +1712,28 @@ export function ImportLeadsClient() {
                   placeholder="e.g. ZoomInfo, Purchased List" 
                   className="bg-white"
                 />
+              </div>
+
+              {/* Import Strategy Selection */}
+              <div className="space-y-2 col-span-full border-t pt-4">
+                <Label htmlFor="import-strategy-select-step2" className="font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Zap className="h-4 w-4 text-[#095c7b]" /> Import Strategy & Handling Intent *
+                </Label>
+                <Select value={duplicateStrategy} onValueChange={(val) => setDuplicateStrategy(val as 'skip' | 'import' | 'update')}>
+                  <SelectTrigger id="import-strategy-select-step2" className="bg-white">
+                    <SelectValue placeholder="Select import handling strategy" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="skip">Create New Leads (Skip matched duplicates & existing customers)</SelectItem>
+                    <SelectItem value="update">Update Existing Lead Records Only (Do not create new leads)</SelectItem>
+                    <SelectItem value="import">Import All as New Leads (Flag matched duplicates)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground font-medium text-[#095c7b]">
+                  {duplicateStrategy === 'update' 
+                    ? 'Updating existing leads only — Address fields (Street, Suburb/City, State, Postcode) are optional.' 
+                    : 'Creating new leads — Address fields (Street, Suburb/City, State, Postcode) are mandatory.'}
+                </p>
               </div>
 
               {/* Parent Account Selection */}
@@ -1911,6 +1954,26 @@ export function ImportLeadsClient() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
+            {duplicateStrategy === 'update' ? (
+              <Alert className="bg-blue-50/80 border-blue-200 text-blue-900">
+                <AlertTitle className="font-bold flex items-center gap-1.5 text-blue-900">
+                  <CheckCircle2 className="h-4 w-4 text-blue-600" /> Mode: Updating Existing Lead Records Only
+                </AlertTitle>
+                <AlertDescription className="text-xs text-blue-800">
+                  Address fields (Street Address, Suburb/City, State, Postcode) are <strong>optional</strong> when updating existing leads. Only <strong>Company Name</strong> (or match identifier) is required to map.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert className="bg-slate-50 border-slate-200 text-slate-800">
+                <AlertTitle className="font-bold flex items-center gap-1.5 text-slate-800">
+                  <HelpCircle className="h-4 w-4 text-[#095c7b]" /> Mode: Creating New Leads
+                </AlertTitle>
+                <AlertDescription className="text-xs text-slate-600">
+                  Company Name and Address fields (Street, Suburb/City, State, Postcode) are <strong>mandatory</strong> when creating new lead records.
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="rounded-lg border overflow-hidden">
               <Table>
                 <TableHeader className="bg-slate-50">
@@ -1925,11 +1988,12 @@ export function ImportLeadsClient() {
                   {standardFields.map((field) => {
                     // Find mapped value
                     const mappedHeader = Object.keys(columnMappings).find(k => columnMappings[k] === field.key) || '';
+                    const isFieldRequired = duplicateStrategy === 'update' ? field.key === 'companyName' : field.required;
                     
                     return (
                       <TableRow key={field.key}>
                         <TableCell className="font-medium text-slate-800">
-                          {field.label} {field.required && <span className="text-red-500">*</span>}
+                          {field.label} {isFieldRequired && <span className="text-red-500">*</span>}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {field.desc}
