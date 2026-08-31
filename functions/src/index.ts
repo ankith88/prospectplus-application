@@ -201,3 +201,5 @@ export * from './salesSnapshotReport';
 export * from './salesSnapshotAggregator';
 export * from './reportsAggregation';
 export * from './franchiseeSync';
+export * from './overdueHotLeadsReport';
+
