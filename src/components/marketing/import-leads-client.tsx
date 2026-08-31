@@ -931,38 +931,40 @@ export function ImportLeadsClient() {
       });
     }
 
-    // Run duplicate & parent check stats on next 80 entries concurrently
-    const remainingRows = csvRows.slice(20, 100);
-    const checks = remainingRows.map(async (row, offsetIdx) => {
-      const actualIdx = offsetIdx + 20;
-      const getVal = (key: string) => {
-        const colHeader = Object.keys(columnMappings).find(k => columnMappings[k] === key);
-        return colHeader ? row[colHeader]?.trim() : '';
-      };
+    // Run duplicate & parent check stats on all remaining entries concurrently in chunks of 50
+    const remainingRows = csvRows.slice(20);
+    const validationChunkSize = 50;
+    for (let i = 0; i < remainingRows.length; i += validationChunkSize) {
+      const chunk = remainingRows.slice(i, i + validationChunkSize);
+      await Promise.all(chunk.map(async (row, offsetIdx) => {
+        const actualIdx = 20 + i + offsetIdx;
+        const getVal = (key: string) => {
+          const colHeader = Object.keys(columnMappings).find(k => columnMappings[k] === key);
+          return colHeader ? row[colHeader]?.trim() : '';
+        };
 
-      const compName = getVal('companyName');
-      const abnVal = cleanAbn(getVal('abn'));
-      const normName = normalizeCompanyName(compName);
+        const compName = getVal('companyName');
+        const abnVal = cleanAbn(getVal('abn'));
+        const normName = normalizeCompanyName(compName);
 
-      // Parent Account resolution logic
-      pMatches[actualIdx] = await resolveParentAccountByAnyId(
-        getVal('parentProspectPlusId'),
-        getVal('parentAbn'),
-        getVal('parentCompanyName')
-      );
+        // Parent Account resolution logic
+        pMatches[actualIdx] = await resolveParentAccountByAnyId(
+          getVal('parentProspectPlusId'),
+          getVal('parentAbn'),
+          getVal('parentCompanyName')
+        );
 
-      if (abnVal && existingCompaniesCache.has(abnVal)) {
-        compMatches[actualIdx] = existingCompaniesCache.get(abnVal)!;
-      } else if (normName && existingCompaniesCache.has(normName)) {
-        compMatches[actualIdx] = existingCompaniesCache.get(normName)!;
-      } else {
-        compMatches[actualIdx] = null;
-      }
+        if (abnVal && existingCompaniesCache.has(abnVal)) {
+          compMatches[actualIdx] = existingCompaniesCache.get(abnVal)!;
+        } else if (normName && existingCompaniesCache.has(normName)) {
+          compMatches[actualIdx] = existingCompaniesCache.get(normName)!;
+        } else {
+          compMatches[actualIdx] = null;
+        }
 
-      duplicates[actualIdx] = await findMatchingLead(row, getVal, compName, activeMatchKey);
-    });
-    
-    await Promise.all(checks);
+        duplicates[actualIdx] = await findMatchingLead(row, getVal, compName, activeMatchKey);
+      }));
+    }
     
     setPreviewRows(previewData);
     setValidationErrors(errors);
@@ -1463,6 +1465,11 @@ export function ImportLeadsClient() {
     Object.values(duplicateLeads).filter(val => val !== null).length, 
     [duplicateLeads]
   );
+  const matchRatePercentage = useMemo(() => {
+    if (!csvRows.length) return '0';
+    const rate = (duplicateCount / csvRows.length) * 100;
+    return rate % 1 === 0 ? rate.toFixed(0) : rate.toFixed(2);
+  }, [duplicateCount, csvRows.length]);
   const customerMatchCount = useMemo(() =>
     Object.values(existingCompanyMatches).filter(val => val !== null).length,
     [existingCompanyMatches]
@@ -2014,23 +2021,23 @@ export function ImportLeadsClient() {
                   <div className="space-y-1.5 text-left max-w-xl">
                     <h4 className="font-bold text-amber-900 text-sm flex items-center gap-1.5">
                       <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0" /> 
-                      Lead Matching Summary: <span className="text-blue-900">{duplicateCount} Matched</span> ({Math.round((duplicateCount / (csvRows.length || 1)) * 100)}%), <span className="text-amber-900">{csvRows.length - duplicateCount} Unmatched</span> out of {csvRows.length} Total Rows
+                      Lead Matching Summary: <span className="text-blue-900 font-extrabold">{matchRatePercentage}% Match Rate</span> ({duplicateCount.toLocaleString()} Matched, <span className="text-amber-900">{(csvRows.length - duplicateCount).toLocaleString()} Unmatched</span> out of {csvRows.length.toLocaleString()} Total Rows)
                     </h4>
                     <p className="text-xs text-amber-800 leading-relaxed">
                       {duplicateStrategy === 'update' ? (
                         <>
-                          <strong className="font-bold text-blue-900">{duplicateCount} leads</strong> matched database records and <strong className="font-bold text-blue-900">will be updated</strong>. 
-                          <strong className="font-bold text-amber-900"> {csvRows.length - duplicateCount} unmatched leads</strong> have no database match and <strong className="font-bold text-amber-900">will be skipped</strong> (0 new leads created).
+                          <strong className="font-bold text-blue-900">{duplicateCount.toLocaleString()} leads ({matchRatePercentage}% match rate)</strong> matched database records and <strong className="font-bold text-blue-900">will be updated</strong>. 
+                          <strong className="font-bold text-amber-900"> {(csvRows.length - duplicateCount).toLocaleString()} unmatched leads</strong> have no database match and <strong className="font-bold text-amber-900">will be skipped</strong> (0 new leads created).
                         </>
                       ) : duplicateStrategy === 'skip' ? (
                         <>
-                          <strong className="font-bold text-amber-900">{duplicateCount} duplicate leads</strong> matched and <strong className="font-bold text-amber-900">will be skipped</strong>. 
-                          <strong className="font-bold text-green-800"> {csvRows.length - duplicateCount} new leads</strong> will be <strong className="font-bold text-green-800">created</strong>.
+                          <strong className="font-bold text-amber-900">{duplicateCount.toLocaleString()} duplicate leads ({matchRatePercentage}% match rate)</strong> matched and <strong className="font-bold text-amber-900">will be skipped</strong>. 
+                          <strong className="font-bold text-green-800"> {(csvRows.length - duplicateCount).toLocaleString()} new leads</strong> will be <strong className="font-bold text-green-800">created</strong>.
                         </>
                       ) : (
                         <>
-                          <strong className="font-bold text-purple-900">{duplicateCount} duplicate leads</strong> matched (flagged for review). 
-                          All <strong className="font-bold text-purple-900">{csvRows.length} records</strong> will be imported as new leads.
+                          <strong className="font-bold text-purple-900">{duplicateCount.toLocaleString()} duplicate leads ({matchRatePercentage}% match rate)</strong> matched (flagged for review). 
+                          All <strong className="font-bold text-purple-900">{csvRows.length.toLocaleString()} records</strong> will be imported as new leads.
                         </>
                       )}
                     </p>
