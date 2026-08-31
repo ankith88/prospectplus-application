@@ -1683,6 +1683,60 @@ async function updateLeadStatus(
     }
 }
 
+async function updateLeadSingleBucket(
+    leadId: string,
+    newBucket: string,
+    reason?: string,
+    options?: { source?: string; isDataManagement?: boolean; author?: string }
+): Promise<void> {
+    try {
+        const colName = await getLeadOrCompanyCollection(leadId);
+        const leadRef = doc(firestore, colName, leadId);
+        let leadSnap = await getDoc(leadRef);
+        if (!leadSnap.exists() && colName === 'companies') {
+            const altRef = doc(firestore, 'leads', leadId);
+            const altSnap = await getDoc(altRef);
+            if (altSnap.exists()) leadSnap = altSnap;
+        }
+        const leadData = leadSnap.exists() ? leadSnap.data() : {};
+        const oldBucket = leadData?.bucket || (leadData?.fieldSales ? 'field_sales' : 'outbound');
+
+        const updates: any = {
+            bucket: newBucket,
+            fieldSales: newBucket === 'field_sales',
+            updatedAt: new Date().toISOString()
+        };
+
+        if (newBucket === 'lpo_plus') {
+            updates.lpoPlusOpportunity = true;
+        }
+
+        await updateDoc(leadRef, updates);
+
+        // Log bucket history
+        const historyRef = collection(firestore, 'leads', leadId, 'bucket_history');
+        await addDoc(historyRef, {
+            oldBucket: oldBucket || 'unassigned',
+            newBucket: newBucket,
+            date: new Date().toISOString(),
+            author: options?.author || 'Data Management'
+        });
+
+        // Log activity note
+        const isDataMgmt = options?.isDataManagement || options?.source === 'data_management' || (reason && reason.toLowerCase().includes('data management'));
+        const logNotes = `Bucket changed from ${oldBucket || 'unassigned'} to ${newBucket} via Data Management${reason ? ` (${reason})` : ''}`;
+        
+        await logActivity(leadId, { 
+            type: 'Update', 
+            notes: logNotes,
+            ...(isDataMgmt ? { source: 'data_management', isDataManagement: true, isAutomated: true } : {})
+        });
+    } catch (err) {
+        console.error('Failed to update lead bucket:', err);
+        throw new Error('Failed to update bucket');
+    }
+}
+
 async function updateLeadAiScore(leadId: string, score: number, reason: string): Promise<void> {
     try {
         await updateDoc(doc(firestore, 'leads', leadId), { aiScore: score, aiReason: reason });
@@ -3727,6 +3781,7 @@ export {
     updateLeadSalesRep,
     updateLeadDialerRep,
     updateLeadStatus,
+    updateLeadSingleBucket,
     duplicateLeadToCompanies,
     logCallActivity,
     logCsCallActivity,

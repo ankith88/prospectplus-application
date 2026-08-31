@@ -19,6 +19,7 @@ import { BulkImportProducts } from '@/components/admin/bulk-import-products';
 import { BulkImportServices } from '@/components/admin/bulk-import-services';
 import { BulkImportInvoices } from '@/components/admin/bulk-import-invoices';
 import { LeadStatusUpdater } from '@/components/admin/lead-status-updater';
+import { BulkBucketUpdater } from '@/components/admin/bulk-bucket-updater';
 import { DialerAssignmentDateUpdater } from '@/components/admin/dialer-assignment-date-updater';
 import { DailyReportRecipients } from '@/components/admin/daily-report-recipients';
 
@@ -93,6 +94,13 @@ export default function AdminDataPage() {
         description="Filter leads by source, bucket, status, assignees, and date entered to update their status individually or in bulk."
       >
         <LeadStatusUpdater />
+      </CollapsibleCard>
+
+      <CollapsibleCard
+        title="Bulk Bucket Updater"
+        description="Filter leads by status, current bucket, account manager, dialer, franchisee, and date created to update their bucket individually or in bulk."
+      >
+        <BulkBucketUpdater />
       </CollapsibleCard>
 
       <CollapsibleCard
