@@ -1617,17 +1617,27 @@ export function ServiceSelectionDialog({
             ? latestScfForQuote.services
             : (lead?.services || []);
 
-          const priorServiceNamesForQuote = new Set(priorServicesListForQuote.map((s: any) => (s.name || (s as any).service || '').toLowerCase().trim()));
-          const newlyAddedServicesForQuote = mappedServices.filter(s => !priorServiceNamesForQuote.has((s.name || (s as any).service || '').toLowerCase().trim()));
+          const isServiceModifiedOrNew = (s: any, priorList: any[]) => {
+            const sName = (s.name || s.service || '').toLowerCase().trim();
+            const priorMatch = priorList.find((p: any) => (p.name || p.service || '').toLowerCase().trim() === sName);
+            if (!priorMatch) return true;
+            const newPrice = Number(s.price || s.rate || 0);
+            const oldPrice = Number(priorMatch.price || priorMatch.rate || 0);
+            if (Math.abs(newPrice - oldPrice) > 0.001) return true;
+            const formatFreq = (f: any) => Array.isArray(f) ? [...f].sort().join(',') : String(f || '').trim();
+            return formatFreq(s.freq || s.frequency) !== formatFreq(priorMatch.freq || priorMatch.frequency);
+          };
+
+          const modifiedOrNewServicesForQuote = mappedServices.filter(s => isServiceModifiedOrNew(s, priorServicesListForQuote));
 
           const hasPriorQuote = (existingScfsForQuote && existingScfsForQuote.length > 0) || 
                                 !!lead.commRegId || 
                                 ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won'].includes(lead.status || '');
 
-          const servicesToPassToQuote = isLpoProcessLead 
+          const servicesToPassToQuote = (mode === 'Resell' || isLpoProcessLead) 
             ? mappedServices 
             : (hasPriorQuote 
-                ? (newlyAddedServicesForQuote.length > 0 ? newlyAddedServicesForQuote : []) 
+                ? (modifiedOrNewServicesForQuote.length > 0 ? modifiedOrNewServicesForQuote : mappedServices) 
                 : mappedServices);
 
           const expectedPayloadQuote = {
@@ -1913,8 +1923,18 @@ export function ServiceSelectionDialog({
                 ? latestScf.services
                 : (lead?.services || []);
               
-              const priorServiceNames = new Set(priorServicesList.map((s: any) => (s.name || (s as any).service || '').toLowerCase().trim()));
-              const newlyAddedServices = mappedServices.filter(s => !priorServiceNames.has((s.name || (s as any).service || '').toLowerCase().trim()));
+              const isServiceModifiedOrNewSignup = (s: any, priorList: any[]) => {
+                const sName = (s.name || s.service || '').toLowerCase().trim();
+                const priorMatch = priorList.find((p: any) => (p.name || p.service || '').toLowerCase().trim() === sName);
+                if (!priorMatch) return true;
+                const newPrice = Number(s.price || s.rate || 0);
+                const oldPrice = Number(priorMatch.price || priorMatch.rate || 0);
+                if (Math.abs(newPrice - oldPrice) > 0.001) return true;
+                const formatFreq = (f: any) => Array.isArray(f) ? [...f].sort().join(',') : String(f || '').trim();
+                return formatFreq(s.freq || s.frequency) !== formatFreq(priorMatch.freq || priorMatch.frequency);
+              };
+
+              const modifiedOrNewServices = mappedServices.filter(s => isServiceModifiedOrNewSignup(s, priorServicesList));
 
               const hasPriorQuote = (existingScfs && existingScfs.length > 0) || 
                                     !!lead.commRegId || 
@@ -1923,7 +1943,7 @@ export function ServiceSelectionDialog({
               const signupServices = isLpoProcessLead 
                 ? mappedServices 
                 : (hasPriorQuote 
-                    ? (newlyAddedServices.length > 0 ? newlyAddedServices : []) 
+                    ? (modifiedOrNewServices.length > 0 ? modifiedOrNewServices : mappedServices) 
                     : mappedServices);
 
              const nsResponse = await submitServiceQuote({
