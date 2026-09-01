@@ -1846,6 +1846,26 @@ export default function AMReportsDashboard() {
         ]);
         addSection('8. OUT OF TERRITORY SUMMARY', ootHeaders, ootRows);
 
+        // 9. Pipeline Revenue Analysis (By Status)
+        const revStatusHeaders = ['Status', 'Lead Count', 'Potential MRR ($)'];
+        const revStatusRows = statusChartData.map(d => [d.status, d.leadCount, d.value.toFixed(2)]);
+        addSection('9. PIPELINE REVENUE BY STATUS', revStatusHeaders, revStatusRows);
+
+        // 10. Pipeline Revenue Analysis (By Lead Type)
+        const revTypeHeaders = ['Lead Type', 'Lead Count', 'Potential MRR ($)'];
+        const revTypeRows = leadTypeChartData.map(d => [d.type, d.leadCount, d.value.toFixed(2)]);
+        addSection('10. PIPELINE REVENUE BY LEAD TYPE', revTypeHeaders, revTypeRows);
+
+        // 11. Pipeline Revenue Analysis (By Bucket)
+        const revBucketHeaders = ['Bucket', 'Lead Count', 'Potential MRR ($)'];
+        const revBucketRows = bucketChartData.map(d => [d.bucket, d.leadCount, d.value.toFixed(2)]);
+        addSection('11. PIPELINE REVENUE BY BUCKET', revBucketHeaders, revBucketRows);
+
+        // 12. Pipeline Revenue Analysis (By Account Manager)
+        const revAmHeaders = ['Account Manager', 'Lead Count', 'Potential MRR ($)'];
+        const revAmRows = amChartData.map(d => [d.am, d.leadCount, d.value.toFixed(2)]);
+        addSection('12. PIPELINE REVENUE BY ACCOUNT MANAGER', revAmHeaders, revAmRows);
+
         // Generate download
         const csvContent = csvParts.join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1859,6 +1879,40 @@ export default function AMReportsDashboard() {
         toast({
             title: 'Export Complete',
             description: 'All AM reporting sections exported to CSV successfully.'
+        });
+    };
+
+    const handleExportRevenueAnalysisCSV = () => {
+        const csvParts: string[] = [];
+        const dateStr = new Date().toISOString().split('T')[0];
+        const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+        const addSection = (title: string, headers: string[], rows: any[][]) => {
+            csvParts.push(`=== ${title.toUpperCase()} ===`);
+            csvParts.push(headers.map(h => escapeCsv(h)).join(','));
+            rows.forEach(row => {
+                csvParts.push(row.map(cell => escapeCsv(cell)).join(','));
+            });
+            csvParts.push('');
+        };
+
+        addSection('PIPELINE REVENUE BY STATUS', ['Status', 'Lead Count', 'Potential MRR ($)'], statusChartData.map(d => [d.status, d.leadCount, d.value.toFixed(2)]));
+        addSection('PIPELINE REVENUE BY LEAD TYPE', ['Lead Type', 'Lead Count', 'Potential MRR ($)'], leadTypeChartData.map(d => [d.type, d.leadCount, d.value.toFixed(2)]));
+        addSection('PIPELINE REVENUE BY BUCKET', ['Bucket', 'Lead Count', 'Potential MRR ($)'], bucketChartData.map(d => [d.bucket, d.leadCount, d.value.toFixed(2)]));
+        addSection('PIPELINE REVENUE BY ACCOUNT MANAGER', ['Account Manager', 'Lead Count', 'Potential MRR ($)'], amChartData.map(d => [d.am, d.leadCount, d.value.toFixed(2)]));
+
+        const csvContent = csvParts.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `revenue_analysis_${dateStr}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast({
+            title: 'Export Complete',
+            description: 'Revenue Analysis data exported to CSV successfully.'
         });
     };
 
@@ -1941,6 +1995,9 @@ export default function AMReportsDashboard() {
                                 document.body.removeChild(link);
                             }} className="cursor-pointer">
                                 Export AM Responsiveness Data (CSV)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleExportRevenueAnalysisCSV} className="cursor-pointer">
+                                Export Revenue Analysis (CSV)
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleExportAppointments(appointmentMetrics.relevantAppointments, 'appointment_metrics')} className="cursor-pointer">
                                 Export Appointment Metrics (CSV)
@@ -2837,7 +2894,21 @@ export default function AMReportsDashboard() {
                     </Card>
                 </TabsContent>
                 
-                <TabsContent value="revenue" className="flex-1 mt-0">
+                <TabsContent value="revenue" className="flex-1 mt-0 space-y-4">
+                    <div className="flex justify-between items-center bg-white/80 p-3 rounded-lg border border-[#095c7b]/10 backdrop-blur-sm">
+                        <div>
+                            <h2 className="text-base font-bold text-[#095c7b]">Revenue &amp; Pipeline MRR Breakdown</h2>
+                            <p className="text-xs text-slate-500">Overview of active pipeline revenue distributions across statuses, lead types, buckets, and account managers.</p>
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-xs font-semibold border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/10"
+                            onClick={handleExportRevenueAnalysisCSV}
+                        >
+                            <Download className="mr-1.5 h-3.5 w-3.5" /> Export Revenue CSV
+                        </Button>
+                    </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
                         <Card className="border-[#095c7b]/10 shadow-sm">
                             <CardHeader>
