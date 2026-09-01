@@ -7922,6 +7922,121 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardContent>
                 </Card>
 
+                {/* Scheduled Future Services (Accepted) */}
+                {(lead as any).scheduledServiceChange && (lead as any).scheduledServiceChange.services && (
+                    <Card className="border-2 border-amber-200 bg-amber-50/20 dark:bg-amber-950/10">
+                        <CardHeader className="pb-3 border-b flex flex-row items-center justify-between space-y-0">
+                            <div>
+                                <CardTitle className="flex items-center gap-2 text-amber-900 dark:text-amber-300">
+                                    <Clock className="w-5 h-5 text-amber-600" />
+                                    Scheduled Future Services (Accepted)
+                                </CardTitle>
+                                <CardDescription className="text-xs text-amber-700 dark:text-amber-400">
+                                    Services &amp; rates accepted by customer, scheduled to commence on {safeFormatDate((lead as any).scheduledServiceChange.effectiveDate, 'MMM d, yyyy')}
+                                </CardDescription>
+                            </div>
+                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 font-bold">
+                                Commences {safeFormatDate((lead as any).scheduledServiceChange.effectiveDate, 'MMM d, yyyy')}
+                            </Badge>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="rounded-md border bg-white dark:bg-slate-900">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Service Name</TableHead>
+                                            <TableHead>Frequency</TableHead>
+                                            <TableHead>Quoted Rate</TableHead>
+                                            <TableHead>Effective Date</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {(lead as any).scheduledServiceChange.services.map((svc: any, idx: number) => (
+                                            <TableRow key={idx}>
+                                                <TableCell className="font-medium">{svc.name || svc.service}</TableCell>
+                                                <TableCell>
+                                                    {Array.isArray(svc.frequency) 
+                                                        ? (svc.frequency.length === 5 ? 'Daily' : svc.frequency.join(', '))
+                                                        : (svc.frequency || svc.freq || 'N/A')}
+                                                </TableCell>
+                                                <TableCell className="font-semibold text-amber-900 dark:text-amber-300">
+                                                    {svc.rate || svc.price ? `$${Number(svc.rate || svc.price).toFixed(2)}` : '-'}
+                                                </TableCell>
+                                                <TableCell className="font-medium text-amber-700">
+                                                    {safeFormatDate((lead as any).scheduledServiceChange.effectiveDate, 'MMM d, yyyy')}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Pending Resell Quote Services (Awaiting Acceptance) */}
+                {(() => {
+                    const pendingScf = scfLinks.find(s => s.status === 'Pending');
+                    if (!pendingScf || !Array.isArray(pendingScf.services) || pendingScf.services.length === 0) return null;
+                    return (
+                        <Card className="border border-blue-200 bg-blue-50/20 dark:bg-blue-950/10">
+                            <CardHeader className="pb-3 border-b flex flex-row items-center justify-between space-y-0">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2 text-blue-900 dark:text-blue-300">
+                                        <Sparkles className="w-5 h-5 text-blue-600" />
+                                        Pending Resell Quote Services (Awaiting Sign-off)
+                                    </CardTitle>
+                                    <CardDescription className="text-xs text-blue-700 dark:text-blue-400">
+                                        Proposed service package sent to customer, pending SCF agreement acceptance
+                                    </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300 font-bold">
+                                        Pending Acceptance
+                                    </Badge>
+                                    <Button variant="outline" size="sm" asChild className="h-7 text-xs bg-white hover:bg-slate-50 text-blue-700 border-blue-300">
+                                        <a href={`/scf/${pendingScf.id}`} target="_blank" rel="noopener noreferrer">
+                                            View Form <ExternalLink className="h-3 w-3 ml-1" />
+                                        </a>
+                                    </Button>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="pt-6 space-y-3">
+                                <div className="rounded-md border bg-white dark:bg-slate-900">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Proposed Service</TableHead>
+                                                <TableHead>Proposed Frequency</TableHead>
+                                                <TableHead>Quoted Rate</TableHead>
+                                                <TableHead>Target Start Date</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {pendingScf.services.map((svc: any, idx: number) => (
+                                                <TableRow key={idx}>
+                                                    <TableCell className="font-medium">{svc.name || svc.service}</TableCell>
+                                                    <TableCell>
+                                                        {Array.isArray(svc.frequency) 
+                                                            ? (svc.frequency.length === 5 ? 'Daily' : svc.frequency.join(', '))
+                                                            : (svc.frequency || svc.freq || 'N/A')}
+                                                    </TableCell>
+                                                    <TableCell className="font-semibold text-blue-900 dark:text-blue-300">
+                                                        {svc.rate || svc.price ? `$${Number(svc.rate || svc.price).toFixed(2)}` : '-'}
+                                                    </TableCell>
+                                                    <TableCell className="font-medium text-slate-600">
+                                                        {pendingScf.startDate ? safeFormatDate(pendingScf.startDate, 'MMM d, yyyy') : '-'}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    );
+                })()}
+
                 <LeadProducts lead={lead} onSendQuote={() => {
                     setServiceSelectionMode(isCompanyProfile ? 'Resell' : 'Quote');
                     setIsServiceSelectionOpen(true);
