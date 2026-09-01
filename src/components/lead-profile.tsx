@@ -2412,6 +2412,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');
       parsedBody = parsedBody.replace(/\{\{Ticket\.Number\}\}/gi, leadData.ticketNumber || '');
       parsedBody = parsedBody.replace(/\{\{Tracking\.ID\}\}/gi, leadData.trackingIdentifier || '');
+      const pkgCode = leadData.packageCode || leadData.packages?.code || leadData.packageInfo?.code || leadData.trackingIdentifier || '';
+      const connoteNum = leadData.connoteNumber || leadData.connote_number || leadData.packages?.connote_number || leadData.packageInfo?.connoteNumber || '';
+      parsedBody = parsedBody.replace(/\{\{Packages\.Code\}\}/gi, pkgCode);
+      parsedBody = parsedBody.replace(/\{\{Package\.Code\}\}/gi, pkgCode);
+      parsedBody = parsedBody.replace(/\{\{packages\.code\}\}/gi, pkgCode);
+      parsedBody = parsedBody.replace(/\{\{package\.code\}\}/gi, pkgCode);
+      parsedBody = parsedBody.replace(/\{\{Packages\.ConnoteNumber\}\}/gi, connoteNum);
+      parsedBody = parsedBody.replace(/\{\{Package\.ConnoteNumber\}\}/gi, connoteNum);
+      parsedBody = parsedBody.replace(/\{\{packages\.connote_number\}\}/gi, connoteNum);
+      parsedBody = parsedBody.replace(/\{\{package\.connote_number\}\}/gi, connoteNum);
       parsedBody = parsedBody.replace(/\{\{unsubscribe_link\}\}/gi, '#');
       parsedBody = parsedBody.replace(/\{\{unsubscribe_url\}\}/gi, '#');
       parsedBody = parsedBody.replace(/\{\{Service\.Table\}\}/gi, serviceTableHtml);
@@ -9969,6 +9979,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
                                     { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
                                     { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
+                                    { label: 'Package Code', placeholder: '{{Packages.Code}}' },
+                                    { label: 'Connote Number', placeholder: '{{Packages.ConnoteNumber}}' },
                                     { label: 'Unsubscribe Link', placeholder: '{{unsubscribe_link}}' },
                                     { label: 'Service Table', placeholder: '{{Service.Table}}' },
                                     { label: 'Product Table', placeholder: '{{Product.Table}}' },

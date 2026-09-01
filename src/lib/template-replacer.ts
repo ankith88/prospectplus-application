@@ -32,6 +32,8 @@ export interface TemplateReplacementContext {
     trialsRemaining?: number | string;
     ticketNumber?: string;
     trackingIdentifier?: string;
+    packageCode?: string;
+    connoteNumber?: string;
     receiverName?: string;
     receiverAddress?: string;
   };
@@ -172,6 +174,8 @@ export function replaceTemplatePlaceholders(
   const receiverAddress = links.receiverAddress || lead.receiverDetails?.address || '';
   const ticketNumber = links.ticketNumber || lead.ticketNumber || '';
   const trackingId = links.trackingIdentifier || lead.trackingIdentifier || '';
+  const packageCode = links.packageCode || lead.packageCode || lead.packages?.code || lead.packageInfo?.code || trackingId;
+  const connoteNumber = links.connoteNumber || lead.connoteNumber || lead.connote_number || lead.packages?.connote_number || lead.packageInfo?.connoteNumber || '';
   const acceptUrl = links.acceptUrl || lead.acceptUrl || '';
   const scheduledServiceDate = context.scheduledServiceDate || lead.scheduledServiceDate || '';
   const senderEmail = context.senderEmail || '';
@@ -330,6 +334,17 @@ export function replaceTemplatePlaceholders(
     .replace(/\{\{\s*Receiver\.FullAddress\s*\}\}/gi, receiverAddress)
     .replace(/\{\{\s*Ticket\.Number\s*\}\}/gi, ticketNumber)
     .replace(/\{\{\s*Tracking\.ID\s*\}\}/gi, trackingId)
+    .replace(/\{\{\s*Packages\.Code\s*\}\}/gi, packageCode)
+    .replace(/\{\{\s*Package\.Code\s*\}\}/gi, packageCode)
+    .replace(/\{\{\s*packages\.code\s*\}\}/gi, packageCode)
+    .replace(/\{\{\s*package\.code\s*\}\}/gi, packageCode)
+    .replace(/\{\{\s*PackageCode\s*\}\}/gi, packageCode)
+    .replace(/\{\{\s*Packages\.ConnoteNumber\s*\}\}/gi, connoteNumber)
+    .replace(/\{\{\s*Package\.ConnoteNumber\s*\}\}/gi, connoteNumber)
+    .replace(/\{\{\s*packages\.connote_number\s*\}\}/gi, connoteNumber)
+    .replace(/\{\{\s*package\.connote_number\s*\}\}/gi, connoteNumber)
+    .replace(/\{\{\s*Connote\.Number\s*\}\}/gi, connoteNumber)
+    .replace(/\{\{\s*connote_number\s*\}\}/gi, connoteNumber)
     .replace(/\{\{\s*sender\.email\s*\}\}/gi, senderEmail);
 
   // Clean up any remaining double https:// in href attributes

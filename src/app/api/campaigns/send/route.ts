@@ -285,7 +285,7 @@ export async function POST(request: Request) {
         const localMileSecurityCode = rec.securityCode || docData.securityCode || docData.localMileSecurityCode || '';
         const sofPublicLink = docData.sofLink || (docData as any).standingOrderFormLink || (docSnap.id ? `https://prospectplus.com.au/sof/${encryptLeadId(docSnap.id)}` : '');
 
-        compiledBody = replaceTemplatePlaceholders(compiledBody, {
+        const placeholderCtx = {
           lead: { ...docData, id: docSnap.id },
           contact: { name: rec.name, firstName: contactFirstName, localMilePlusAuthLink: rec.localMilePlusAuthLink, securityCode: rec.securityCode },
           accountManager: {
@@ -308,7 +308,10 @@ export async function POST(request: Request) {
             localMileSecurityCode,
             sofLink: sofPublicLink
           }
-        });
+        };
+
+        compiledBody = replaceTemplatePlaceholders(compiledBody, placeholderCtx);
+        const compiledSubject = replaceTemplatePlaceholders(campaignData.subjectLine || '', placeholderCtx);
 
         // Inject link tracking redirector (wrap general anchor tags)
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);
@@ -350,7 +353,7 @@ export async function POST(request: Request) {
           // Attempt real sending via physical transmission module
           const sendResult = await sendPhysicalEmail({
             to: rec.email,
-            subject: campaignData.subjectLine,
+            subject: compiledSubject,
             html: finalHtml,
             customFrom: leadSenderEmail
           });

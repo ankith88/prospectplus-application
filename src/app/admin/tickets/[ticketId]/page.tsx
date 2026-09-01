@@ -3927,6 +3927,8 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
                     { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
                     { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
                     { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
+                    { label: 'Package Code', placeholder: '{{Packages.Code}}' },
+                    { label: 'Connote Number', placeholder: '{{Packages.ConnoteNumber}}' },
                     { label: 'Contact Name', placeholder: '{{Contact.Name}}' },
                     { label: 'Company Name', placeholder: '{{Company.Name}}' },
                     { label: 'Prospect+ ID', placeholder: '{{Prospect.ProspectPlusID}}' },

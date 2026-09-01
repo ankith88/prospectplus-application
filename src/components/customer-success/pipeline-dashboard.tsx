@@ -696,6 +696,8 @@ export default function CustomerSuccessDashboard() {
         const today = startOfDay(new Date()).getTime();
         return filteredLeads.filter(lead => {
             const currentStatus = lead.customerStatus || lead.status;
+            if (currentStatus === 'Quote Sent') return false;
+
             const isPriorityStatus = ['Priority Lead', 'High Touch', 'Reschedule', 'Hot Lead'].includes(currentStatus);
             
             const hasAppointmentToday = lead.appointments?.some(app => {

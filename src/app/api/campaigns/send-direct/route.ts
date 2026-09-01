@@ -294,6 +294,8 @@ export async function POST(request: Request) {
         // Resolve ticket placeholders in case they are used in subject or body
         const ticketNumber = leadData.ticketNumber || "";
         const trackingId = leadData.trackingIdentifier || "";
+        const packageCode = leadData.packageCode || leadData.packages?.code || leadData.packageInfo?.code || trackingId;
+        const connoteNumber = leadData.connoteNumber || leadData.connote_number || leadData.packages?.connote_number || leadData.packageInfo?.connoteNumber || '';
         const receiverName = leadData.receiverDetails?.name || "";
         const receiverAddress = leadData.receiverDetails?.address || "";
 
@@ -301,12 +303,32 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, receiverAddress);
         compiledBody = compiledBody.replace(/\{\{Ticket\.Number\}\}/gi, ticketNumber);
         compiledBody = compiledBody.replace(/\{\{Tracking\.ID\}\}/gi, trackingId);
+        compiledBody = compiledBody.replace(/\{\{Packages\.Code\}\}/gi, packageCode);
+        compiledBody = compiledBody.replace(/\{\{Package\.Code\}\}/gi, packageCode);
+        compiledBody = compiledBody.replace(/\{\{packages\.code\}\}/gi, packageCode);
+        compiledBody = compiledBody.replace(/\{\{package\.code\}\}/gi, packageCode);
+        compiledBody = compiledBody.replace(/\{\{Packages\.ConnoteNumber\}\}/gi, connoteNumber);
+        compiledBody = compiledBody.replace(/\{\{Package\.ConnoteNumber\}\}/gi, connoteNumber);
+        compiledBody = compiledBody.replace(/\{\{packages\.connote_number\}\}/gi, connoteNumber);
+        compiledBody = compiledBody.replace(/\{\{package\.connote_number\}\}/gi, connoteNumber);
+        compiledBody = compiledBody.replace(/\{\{Connote\.Number\}\}/gi, connoteNumber);
+        compiledBody = compiledBody.replace(/\{\{connote_number\}\}/gi, connoteNumber);
         compiledBody = compiledBody.replace(/\{\{Ticket\.Id\}\}/gi, leadData.ticketId || leadId || '');
 
         compiledSubject = compiledSubject.replace(/\{\{Receiver\.Name\}\}/gi, receiverName);
         compiledSubject = compiledSubject.replace(/\{\{Receiver\.FullAddress\}\}/gi, receiverAddress);
         compiledSubject = compiledSubject.replace(/\{\{Ticket\.Number\}\}/gi, ticketNumber);
         compiledSubject = compiledSubject.replace(/\{\{Tracking\.ID\}\}/gi, trackingId);
+        compiledSubject = compiledSubject.replace(/\{\{Packages\.Code\}\}/gi, packageCode);
+        compiledSubject = compiledSubject.replace(/\{\{Package\.Code\}\}/gi, packageCode);
+        compiledSubject = compiledSubject.replace(/\{\{packages\.code\}\}/gi, packageCode);
+        compiledSubject = compiledSubject.replace(/\{\{package\.code\}\}/gi, packageCode);
+        compiledSubject = compiledSubject.replace(/\{\{Packages\.ConnoteNumber\}\}/gi, connoteNumber);
+        compiledSubject = compiledSubject.replace(/\{\{Package\.ConnoteNumber\}\}/gi, connoteNumber);
+        compiledSubject = compiledSubject.replace(/\{\{packages\.connote_number\}\}/gi, connoteNumber);
+        compiledSubject = compiledSubject.replace(/\{\{package\.connote_number\}\}/gi, connoteNumber);
+        compiledSubject = compiledSubject.replace(/\{\{Connote\.Number\}\}/gi, connoteNumber);
+        compiledSubject = compiledSubject.replace(/\{\{connote_number\}\}/gi, connoteNumber);
         compiledSubject = compiledSubject.replace(/\{\{Ticket\.Id\}\}/gi, leadData.ticketId || leadId || '');
 
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);

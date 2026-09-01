@@ -1817,6 +1817,8 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                                     { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
                                     { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
                                     { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
+                                    { label: 'Package Code', placeholder: '{{Packages.Code}}' },
+                                    { label: 'Connote Number', placeholder: '{{Packages.ConnoteNumber}}' },
                                     { label: 'Unsubscribe Link', placeholder: '{{unsubscribe_link}}' },
                                     { label: 'Service Table', placeholder: '{{Service.Table}}' },
                                     { label: 'Product Table', placeholder: '{{Product.Table}}' },

@@ -2478,6 +2478,8 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{Receiver.FullAddress}}')}>Receiver Full Address</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Ticket.Number}}')}>Ticket Number</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Tracking.ID}}')}>Tracking ID</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Packages.Code}}')}>Package Code</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Packages.ConnoteNumber}}')}>Connote Number</DropdownMenuItem>
                            <DropdownMenuSeparator />
                            <DropdownMenuItem onClick={() => insertContent('{{unsubscribe_link}}')}>Unsubscribe Link</DropdownMenuItem>
                          </DropdownMenuContent>

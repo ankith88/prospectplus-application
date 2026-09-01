@@ -901,6 +901,8 @@ export function TemplateBuilder() {
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Receiver.Name}}')}>Receiver Name</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Ticket.Number}}')}>Ticket Number</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Tracking.ID}}')}>Tracking ID</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Packages.Code}}')}>Package Code</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Packages.ConnoteNumber}}')}>Connote Number</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -1047,6 +1049,8 @@ export function TemplateBuilder() {
                   <DropdownMenuItem onClick={() => insertContent('{{Receiver.FullAddress}}')}>+ Receiver Full Address</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Ticket.Number}}')}>+ Ticket Number</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Tracking.ID}}')}>+ Tracking ID</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Packages.Code}}')}>+ Package Code</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Packages.ConnoteNumber}}')}>+ Connote Number</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => insertContent('{{unsubscribe_link}}')}>+ Unsubscribe Link URL</DropdownMenuItem>
                 </DropdownMenuContent>
