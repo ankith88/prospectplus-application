@@ -168,6 +168,22 @@ export async function acceptScfAction(leadId: string, scfId: string) {
         statusUpdates.customerStatus = 'Quote Accepted';
       }
 
+      // Archive current live services into serviceHistory before applying changes
+      const currentServices = leadData?.services || [];
+      const currentHistory = leadData?.serviceHistory || [];
+
+      if (acceptedServices.length > 0 && currentServices.length > 0) {
+        const historyRecord = {
+          services: currentServices,
+          products: leadData?.products || [],
+          replacedAt: nowStr,
+          replacedBy: 'Customer (SCF Acceptance)',
+          scfId: scfId,
+          effectiveDate: effectiveDateStr
+        };
+        statusUpdates.serviceHistory = [historyRecord, ...currentHistory];
+      }
+
       if (isFutureEffectiveDate && acceptedServices.length > 0) {
         statusUpdates.scheduledServiceChange = {
           effectiveDate: effectiveDateStr,

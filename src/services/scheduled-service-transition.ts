@@ -34,6 +34,21 @@ export async function processScheduledServiceChanges(): Promise<{
           try {
             console.log(`[Scheduled Transition] Promoting service change for ${colName}/${docSnap.id} (Effective: ${effectiveDateStr})...`);
             
+            // Archive current live services before promoting new services
+            const currentServices = data.services || [];
+            const currentHistory = data.serviceHistory || [];
+            if (currentServices.length > 0) {
+              const historyRecord = {
+                services: currentServices,
+                products: data.products || [],
+                replacedAt: nowStr,
+                replacedBy: 'System (Scheduled Transition)',
+                scfId: sched.scfId || null,
+                effectiveDate: effectiveDateStr
+              };
+              updates.serviceHistory = [historyRecord, ...currentHistory];
+            }
+
             const updates: any = {
               services: sched.services,
               scheduledServiceChange: null,
