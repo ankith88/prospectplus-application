@@ -4,6 +4,7 @@ import { adminDb, duplicateLeadToCompaniesServer } from '@/services/firebase-ser
 import { sendLeadUpdateToNetSuite } from '@/services/netsuite';
 import { validateABN } from '@/lib/utils';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
+import { syncPmpoToLocalMileServer } from '@/services/localmile-sync-server';
 
 async function getAdminLeadOrCompanyRef(leadId: string) {
   let ref = adminDb.collection('companies').doc(leadId);
@@ -129,23 +130,66 @@ export async function acceptScfAction(leadId: string, scfId: string) {
         console.log(`[SCF Accept] Lead ${leadId} is not synced with NetSuite (syncedWithNetSuite: ${leadData?.syncedWithNetSuite}). Skipping NetSuite Scriptlets 1900 & 2514.`);
       }
 
+      // Extract accepted SCF services & products
+      const acceptedScfData = scfDocSnap.exists ? scfDocSnap.data() : null;
+      const acceptedServices = acceptedScfData?.services || [];
+      const acceptedProducts = acceptedScfData?.products || [];
+      const rawScfStartDate = acceptedScfData?.startDate || '';
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      let effectiveDateStr = todayStr;
+      if (rawScfStartDate) {
+        if (typeof rawScfStartDate === 'object' && rawScfStartDate && '_seconds' in rawScfStartDate) {
+          effectiveDateStr = new Date(rawScfStartDate._seconds * 1000).toISOString().split('T')[0];
+        } else if (typeof rawScfStartDate === 'string' && rawScfStartDate.trim()) {
+          try {
+            effectiveDateStr = new Date(rawScfStartDate).toISOString().split('T')[0];
+          } catch (e) {
+            effectiveDateStr = todayStr;
+          }
+        }
+      }
+
+      const isFutureEffectiveDate = Boolean(effectiveDateStr && effectiveDateStr > todayStr);
+
       // Status update in Firestore
       const currentStatus = leadData?.status || leadData?.customerStatus || '';
       const isCompanyOrSignedCustomer = 
         leadData?.leadType === 'Company' ||
         ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(currentStatus);
 
+      const statusUpdates: any = {
+        scfAcceptedAt: nowStr,
+        updatedAt: nowStr
+      };
+
       if (!isCompanyOrSignedCustomer) {
-        await leadRef.update({ 
-          status: 'Quote Accepted', 
-          customerStatus: 'Quote Accepted',
-          scfAcceptedAt: nowStr
-        });
-      } else {
-        await leadRef.update({ 
-          scfAcceptedAt: nowStr
-        });
+        statusUpdates.status = 'Quote Accepted';
+        statusUpdates.customerStatus = 'Quote Accepted';
       }
+
+      if (isFutureEffectiveDate && acceptedServices.length > 0) {
+        statusUpdates.scheduledServiceChange = {
+          effectiveDate: effectiveDateStr,
+          services: acceptedServices,
+          products: acceptedProducts,
+          scfId: scfId,
+          createdAt: nowStr
+        };
+        console.log(`[SCF Accept] Staged future service change for lead ${leadId} effective on ${effectiveDateStr}.`);
+      } else if (acceptedServices.length > 0) {
+        statusUpdates.services = acceptedServices;
+        if (acceptedProducts.length > 0) {
+          statusUpdates.products = acceptedProducts;
+        }
+        statusUpdates.scheduledServiceChange = null;
+        console.log(`[SCF Accept] Updated live services for lead ${leadId} immediately.`);
+
+        // Sync PMPO service to LocalMile scheduled_jobs for immediate effective dates
+        await syncPmpoToLocalMileServer(leadId, leadData, acceptedServices, effectiveDateStr);
+      }
+
+      await leadRef.update(statusUpdates);
 
       // Propagate Quote Accepted status to all child leads if this is part of the LPO process
       const isLpoProcessLead = Boolean(

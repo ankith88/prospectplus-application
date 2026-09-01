@@ -1802,8 +1802,6 @@ export function ServiceSelectionDialog({
               });
               const data = await res.json();
               if (data.success) {
-                  await updateLeadServices(lead.id, serviceSelections);
-                  
                   if (skipEmail) {
                     const isCompanyOrSignedCustomer = 
                       mode === 'Resell' ||
