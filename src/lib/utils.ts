@@ -616,8 +616,15 @@ export function isScfAcceptedForLead(lead: any): boolean {
   );
 }
 
-
-
-
+/**
+ * Determines if a lead or company is a test entity (e.g. used for testing where company name contains 'test').
+ */
+export function isTestLeadOrCompany(lead?: any): boolean {
+  if (!lead) return false;
+  if (lead.isTest || lead.testing) return true;
+  const name = (lead.companyName || lead.company || lead.name || lead.leadName || '').toString().trim();
+  if (!name) return false;
+  return name.toLowerCase().includes('test');
+}
 
 

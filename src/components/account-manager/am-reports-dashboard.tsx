@@ -23,13 +23,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info, CheckCircle, AlertTriangle, MapPin, Store } from 'lucide-react';
 import { MultiSelectCombobox, type Option } from '../ui/multi-select-combobox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
-import { cn, parseDateString, isManualActivity, getLeadDisplayDateValue, getLeadDisplayDateLabel, safeFormatDate } from '@/lib/utils';
+import { cn, parseDateString, isManualActivity, getLeadDisplayDateValue, getLeadDisplayDateLabel, safeFormatDate, isTestLeadOrCompany } from '@/lib/utils';
 import { getAllAppointments, getAllActivities } from '@/services/firebase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -503,22 +504,25 @@ export default function AMReportsDashboard() {
                 } as ExtendedInvoice));
                 setInvoices(fetchedInvoices);
                 
-                const rawCompanies = snapCompanies.docs.map(doc => {
-                    const data = doc.data();
-                    return {
-                        id: doc.id,
-                        ...data,
-                        isCompany: true,
-                        customerStatus: data.customerStatus || data.status || 'Signed',
-                        status: data.status || data.customerStatus || 'Signed'
-                    } as unknown as Lead;
-                });
+                const rawCompanies = snapCompanies.docs
+                    .map(doc => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            ...data,
+                            isCompany: true,
+                            customerStatus: data.customerStatus || data.status || 'Signed',
+                            status: data.status || data.customerStatus || 'Signed'
+                        } as unknown as Lead;
+                    })
+                    .filter(c => !isTestLeadOrCompany(c));
 
                 const companyIds = new Set(rawCompanies.map(c => c.id));
 
                 const rawLeads = snapLeads.docs
                     .filter(doc => !companyIds.has(doc.id))
-                    .map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+                    .map(doc => ({ id: doc.id, ...doc.data() } as Lead))
+                    .filter(l => !isTestLeadOrCompany(l));
 
                 const fetchedLeads = [...rawLeads, ...rawCompanies];
 
@@ -570,6 +574,7 @@ export default function AMReportsDashboard() {
                 const amNames = accountManagers.map(am => getAmName(am));
                 
                 const filteredLeads = leadsWithActivities.filter(l => {
+                    if (isTestLeadOrCompany(l)) return false;
                     const isDirectlyAm = l.bucket === 'account_manager' || l.bucket === 'inbound' || l.bucket === 'multisite';
                     const wasInAm = l.bucketHistory?.some(bh => bh.oldBucket === 'account_manager' || bh.oldBucket === 'inbound' || bh.oldBucket === 'multisite');
                     const hasAnyAmActivity = l.activity?.some(act => amNames.includes(act.author || ''));
@@ -698,6 +703,7 @@ export default function AMReportsDashboard() {
 
     const displayedLeads = useMemo(() => {
         return leads.filter(lead => {
+            if (isTestLeadOrCompany(lead)) return false;
             if (appliedFranchisee.length > 0 && lead.franchisee && !appliedFranchisee.includes(lead.franchisee)) return false;
             if (appliedBucket.length > 0 && lead.bucket && !appliedBucket.includes(lead.bucket)) return false;
             if (appliedLeadType.length > 0 && (lead.leadType || 'Unknown') && !appliedLeadType.includes(lead.leadType || 'Unknown')) return false;
@@ -1716,6 +1722,146 @@ export default function AMReportsDashboard() {
         setAppliedAm('all');
     };
 
+    const handleExportAllSectionsCSV = () => {
+        const csvParts: string[] = [];
+        const dateStr = new Date().toISOString().split('T')[0];
+        const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+        const addSection = (title: string, headers: string[], rows: any[][]) => {
+            csvParts.push(`=== ${title.toUpperCase()} ===`);
+            csvParts.push(headers.map(h => escapeCsv(h)).join(','));
+            rows.forEach(row => {
+                csvParts.push(row.map(cell => escapeCsv(cell)).join(','));
+            });
+            csvParts.push('');
+        };
+
+        // 1. Pipeline Leads Overview
+        const leadHeaders = [
+            'Company Name', 'Prospect+ ID', 'Status', 'Account Manager', 
+            'Franchisee', 'Lead Type', 'Bucket', 'Date Entered/Accepted', 
+            'Contact Name', 'Email', 'Phone', 'Monthly Value ($)'
+        ];
+        const leadRows = displayedLeads.map(l => {
+            const primaryContact = l.contacts?.find(c => c.isPrimary) || l.contacts?.[0];
+            return [
+                l.companyName || '',
+                l.prospectPlusId || l.id || '',
+                l.customerStatus || l.status || '',
+                l.accountManagerAssigned || '',
+                l.franchisee || '',
+                l.leadType || '',
+                l.bucket || '',
+                getLeadDisplayDateValue(l) || '',
+                primaryContact?.name || '',
+                primaryContact?.email || '',
+                primaryContact?.phone || l.customerPhone || '',
+                calculateMonthlyValueUtil(l) || 0
+            ];
+        });
+        addSection('1. PIPELINE LEADS OVERVIEW', leadHeaders, leadRows);
+
+        // 2. AM Performance Summary (By AM)
+        const amSummaryHeaders = ['Account Manager', 'Total Leads', 'Total MRR Value ($)', 'Total Activities', 'Total Duration (Mins)'];
+        const amSummaryRows = metrics.summaryByAM.map(g => [
+            g.key,
+            g.totalLeads,
+            g.totalValue.toFixed(2),
+            g.totalActivities,
+            g.totalDurationMinutes.toFixed(1)
+        ]);
+        addSection('2. AM PERFORMANCE SUMMARY (BY AM)', amSummaryHeaders, amSummaryRows);
+
+        // 3. Performance Summary (By Status)
+        const statusSummaryHeaders = ['Status', 'Total Leads', 'Total MRR Value ($)', 'Total Activities', 'Total Duration (Mins)'];
+        const statusSummaryRows = metrics.summaryByStatus.map(g => [
+            g.key,
+            g.totalLeads,
+            g.totalValue.toFixed(2),
+            g.totalActivities,
+            g.totalDurationMinutes.toFixed(1)
+        ]);
+        addSection('3. PERFORMANCE SUMMARY (BY STATUS)', statusSummaryHeaders, statusSummaryRows);
+
+        // 4. Performance Summary (By Franchisee)
+        const franSummaryHeaders = ['Franchisee', 'Total Leads', 'Total MRR Value ($)', 'Total Activities', 'Total Duration (Mins)'];
+        const franSummaryRows = metrics.summaryByFranchisee.map(g => [
+            g.key,
+            g.totalLeads,
+            g.totalValue.toFixed(2),
+            g.totalActivities,
+            g.totalDurationMinutes.toFixed(1)
+        ]);
+        addSection('4. PERFORMANCE SUMMARY (BY FRANCHISEE)', franSummaryHeaders, franSummaryRows);
+
+        // 5. AM Responsiveness & Interaction Timeline
+        const respHeaders = ['AM Name', 'Total Assigned Leads', 'Leads With Activity', 'Leads Without Activity', 'Avg Time to Interact (Hours)'];
+        const respRows = amResponsivenessMetrics.map(m => [
+            m.amName,
+            m.totalLeads,
+            m.leadsWithActivity,
+            m.leadsWithoutActivity,
+            m.avgTimeToInteractHours !== null ? m.avgTimeToInteractHours.toFixed(1) : 'N/A'
+        ]);
+        addSection('5. AM RESPONSIVENESS METRICS', respHeaders, respRows);
+
+        // 6. Appointments Metrics Summary
+        const appHeaders = ['Company Name', 'Contact Name', 'Lead Status', 'Appointment Status', 'Scheduled Date', 'Scheduled Time', 'Assigned AM'];
+        const appRows = appointmentMetrics.relevantAppointments.map(app => {
+            const primaryContact = app.lead?.contacts?.find(c => c.isPrimary) || app.lead?.contacts?.[0];
+            return [
+                app.leadName || app.lead?.companyName || '',
+                primaryContact?.name || '',
+                app.lead?.customerStatus || app.lead?.status || app.leadStatus || '',
+                app.appointmentStatus || '',
+                app.duedate || '',
+                app.starttime || app.duetime || '',
+                app.assignedTo || app.amName || ''
+            ];
+        });
+        addSection('6. APPOINTMENT METRICS', appHeaders, appRows);
+
+        // 7. Lead Stage Durations & Funnel Analytics
+        const stageHeaders = ['AM Name', 'Status / Stage', 'Leads Count', 'Avg Days in Status'];
+        const stageRows: any[][] = [];
+        if (amStageAnalytics?.byAm) {
+            Object.entries(amStageAnalytics.byAm).forEach(([amName, m]: [string, any]) => {
+                if (m?.avgDaysByStatus) {
+                    Object.entries(m.avgDaysByStatus).forEach(([status, avgDays]: [string, any]) => {
+                        const count = m.statusLeadCounts?.[status] || 0;
+                        stageRows.push([amName, status, count, (avgDays || 0).toFixed(1)]);
+                    });
+                }
+            });
+        }
+        addSection('7. LEAD STAGE DURATIONS & FUNNEL ANALYTICS', stageHeaders, stageRows);
+
+        // 8. Out of Territory Summary
+        const ootHeaders = ['Account Manager', 'Total Out of Territory Leads', 'Direct Status Count', 'Lost Status Count'];
+        const ootRows = (outOfTerritoryMetrics?.byAm || []).map(r => [
+            r.am,
+            r.total,
+            r.direct,
+            r.lost
+        ]);
+        addSection('8. OUT OF TERRITORY SUMMARY', ootHeaders, ootRows);
+
+        // Generate download
+        const csvContent = csvParts.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `am_reporting_all_sections_${dateStr}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast({
+            title: 'Export Complete',
+            description: 'All AM reporting sections exported to CSV successfully.'
+        });
+    };
+
     if (loading || isLoadingData) {
         return <div className="flex justify-center items-center h-[calc(100vh-100px)]"><Loader /></div>;
     }
@@ -1727,12 +1873,81 @@ export default function AMReportsDashboard() {
     
     return (
         <div className="p-6 h-full flex flex-col bg-[#d0dfcd] min-h-screen overflow-y-auto">
-            <header className="mb-6">
-                <div className="flex items-center gap-2 mb-1">
-                    <ActivityIcon className="h-6 w-6 text-[#095c7b]" />
-                    <h1 className="text-3xl font-bold tracking-tight text-[#095c7b]">Account Manager Reports</h1>
+            <header className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <ActivityIcon className="h-6 w-6 text-[#095c7b]" />
+                        <h1 className="text-3xl font-bold tracking-tight text-[#095c7b]">Account Manager Reports</h1>
+                    </div>
+                    <p className="text-[#095c7b]/80">Activity and Pipeline Value Metrics</p>
                 </div>
-                <p className="text-[#095c7b]/80">Activity and Pipeline Value Metrics</p>
+                <div className="flex items-center gap-2">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="default" className="bg-[#095c7b] hover:bg-[#095c7b]/90 text-white font-semibold shadow-sm text-xs h-9">
+                                <Download className="mr-2 h-4 w-4" /> Export CSV Reports <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-64 bg-white border border-slate-200 shadow-md">
+                            <DropdownMenuItem onClick={handleExportAllSectionsCSV} className="font-semibold text-[#095c7b] cursor-pointer">
+                                <Download className="mr-2 h-4 w-4 text-[#095c7b]" /> Export All Sections (Combined CSV)
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleExportData(displayedLeads, 'pipeline_leads')} className="cursor-pointer">
+                                Export Pipeline Leads (CSV)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                                const data = summaryTab === 'am' ? metrics.summaryByAM : (summaryTab === 'status' ? metrics.summaryByStatus : metrics.summaryByFranchisee);
+                                const exportRows = data.map(g => ({
+                                    [summaryTab === 'am' ? 'Account Manager' : summaryTab === 'status' ? 'Status' : 'Franchisee']: g.key,
+                                    'Total Leads': g.totalLeads,
+                                    'Total MRR Value ($)': g.totalValue.toFixed(2),
+                                    'Total Activities': g.totalActivities,
+                                    'Duration (Mins)': g.totalDurationMinutes.toFixed(1)
+                                }));
+                                const headers = Object.keys(exportRows[0]);
+                                const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+                                const csvRows = exportRows.map(item => headers.map(h => escapeCsv(item[h as keyof typeof item])).join(','));
+                                const csvContent = [headers.join(','), ...csvRows].join('\n');
+                                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                const link = document.createElement('a');
+                                link.href = URL.createObjectURL(blob);
+                                link.setAttribute('download', `am_performance_summary_${new Date().toISOString().split('T')[0]}.csv`);
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }} className="cursor-pointer">
+                                Export AM Performance Summary (CSV)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                                const exportData = amResponsivenessMetrics.map(m => ({
+                                    'AM Name': m.amName,
+                                    'Total Assigned Leads': m.totalLeads,
+                                    'Leads With Activity': m.leadsWithActivity,
+                                    'Leads Without Activity': m.leadsWithoutActivity,
+                                    'Avg Time to Interact (Hours)': m.avgTimeToInteractHours !== null ? m.avgTimeToInteractHours.toFixed(1) : 'N/A'
+                                }));
+                                if (exportData.length === 0) return;
+                                const headers = Object.keys(exportData[0]);
+                                const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+                                const csvRows = exportData.map(item => headers.map(h => escapeCsv(item[h as keyof typeof item])).join(','));
+                                const csvContent = [headers.join(','), ...csvRows].join('\n');
+                                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                const link = document.createElement('a');
+                                link.href = URL.createObjectURL(blob);
+                                link.setAttribute('download', `am_responsiveness_${new Date().toISOString().split('T')[0]}.csv`);
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }} className="cursor-pointer">
+                                Export AM Responsiveness Data (CSV)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleExportAppointments(appointmentMetrics.relevantAppointments, 'appointment_metrics')} className="cursor-pointer">
+                                Export Appointment Metrics (CSV)
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </header>
             
             <StatusOutcomeBanner className="mb-6" />
@@ -2010,13 +2225,44 @@ export default function AMReportsDashboard() {
                                     </CardTitle>
                                     <CardDescription>Aggregate view of leads and activities.</CardDescription>
                                 </div>
-                                <Tabs value={summaryTab} onValueChange={(val: any) => setSummaryTab(val)} className="w-auto">
-                                    <TabsList className="grid w-full grid-cols-3">
-                                        <TabsTrigger value="am">By AM</TabsTrigger>
-                                        <TabsTrigger value="status">By Status</TabsTrigger>
-                                        <TabsTrigger value="franchisee">By Franchisee</TabsTrigger>
-                                    </TabsList>
-                                </Tabs>
+                                <div className="flex items-center gap-3">
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="h-8 text-xs font-semibold border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/10"
+                                        onClick={() => {
+                                            const data = summaryTab === 'am' ? metrics.summaryByAM : (summaryTab === 'status' ? metrics.summaryByStatus : metrics.summaryByFranchisee);
+                                            const exportRows = data.map(g => ({
+                                                [summaryTab === 'am' ? 'Account Manager' : summaryTab === 'status' ? 'Status' : 'Franchisee']: g.key,
+                                                'Total Leads': g.totalLeads,
+                                                'Total MRR Value ($)': g.totalValue.toFixed(2),
+                                                'Total Activities': g.totalActivities,
+                                                'Duration (Mins)': g.totalDurationMinutes.toFixed(1)
+                                            }));
+                                            if (exportRows.length === 0) return;
+                                            const headers = Object.keys(exportRows[0]);
+                                            const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+                                            const csvRows = exportRows.map(item => headers.map(h => escapeCsv(item[h as keyof typeof item])).join(','));
+                                            const csvContent = [headers.join(','), ...csvRows].join('\n');
+                                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                            const link = document.createElement('a');
+                                            link.href = URL.createObjectURL(blob);
+                                            link.setAttribute('download', `performance_summary_by_${summaryTab}_${new Date().toISOString().split('T')[0]}.csv`);
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                        }}
+                                    >
+                                        <Download className="mr-1.5 h-3.5 w-3.5" /> Export Section CSV
+                                    </Button>
+                                    <Tabs value={summaryTab} onValueChange={(val: any) => setSummaryTab(val)} className="w-auto">
+                                        <TabsList className="grid w-full grid-cols-3">
+                                            <TabsTrigger value="am">By AM</TabsTrigger>
+                                            <TabsTrigger value="status">By Status</TabsTrigger>
+                                            <TabsTrigger value="franchisee">By Franchisee</TabsTrigger>
+                                        </TabsList>
+                                    </Tabs>
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent className="p-0 flex-1 overflow-hidden flex flex-col">
