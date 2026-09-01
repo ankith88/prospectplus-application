@@ -7729,6 +7729,62 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </CardContent>
                     </Card>
                     )}
+                    {Array.isArray((lead as any).serviceHistory) && (lead as any).serviceHistory.length > 0 && (
+                    <Card className="h-full col-span-1 lg:col-span-2">
+                        <CardHeader className="pb-3 border-b">
+                            <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                                <History className="w-5 h-5 text-primary" />
+                                Historical Service &amp; Rate Revisions
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Previous service packages, rates, and pickup frequencies before quote/resell updates
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-6 space-y-4">
+                            {(lead as any).serviceHistory.map((hist: any, index: number) => (
+                                <div key={index} className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                                    <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 dark:text-slate-400 gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+                                        <span className="font-semibold text-slate-900 dark:text-slate-200">
+                                            Revision { (lead as any).serviceHistory.length - index }
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <CalendarIcon className="h-3.5 w-3.5 text-primary" />
+                                            Replaced: {safeFormatDate(hist.replacedAt || hist.effectiveDate, 'PPpp')}
+                                        </span>
+                                        {hist.replacedBy && (
+                                            <span className="flex items-center gap-1">
+                                                <User className="h-3.5 w-3.5 text-primary" />
+                                                By: {hist.replacedBy}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {Array.isArray(hist.services) && hist.services.length > 0 && (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-xs text-left">
+                                                <thead>
+                                                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-semibold">
+                                                        <th className="p-2">Service</th>
+                                                        <th className="p-2">Frequency</th>
+                                                        <th className="p-2 text-right">Rate</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {hist.services.map((s: any, sIdx: number) => (
+                                                        <tr key={sIdx} className="border-b border-slate-100 dark:border-slate-800/50">
+                                                            <td className="p-2 font-medium">{s.name || s.service || 'Service'}</td>
+                                                            <td className="p-2">{Array.isArray(s.frequency) ? s.frequency.join(', ') : (s.frequency || s.freq || 'N/A')}</td>
+                                                            <td className="p-2 text-right font-semibold">${Number(s.rate || s.price || 0).toFixed(2)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+                    )}
                     {hasAmpoService && (
                     <Card className={cn("border-2 h-full flex flex-col", lead.sofDetails?.signatureDataUrl ? "border-green-200 bg-green-50/5" : "border-amber-200 bg-amber-50/5")}>
                         <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
