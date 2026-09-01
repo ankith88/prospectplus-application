@@ -197,7 +197,10 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
   const hasAccepted = success || scfStatus === 'Accepted' || scfStatus === 'Signed' || scfStatus === 'Quote Accepted' || !!scf.acceptedAt || !!scf.signedAt;
 
   const getAcceptedDateFormatted = (): string => {
-    const dateVal = scf.acceptedAt || scf.signedAt || lead.scfAcceptedAt;
+    if (!hasAccepted) {
+      return 'Pending Acceptance';
+    }
+    const dateVal = scf.acceptedAt || scf.signedAt;
     if (dateVal) {
       try {
         const d = new Date(
@@ -218,18 +221,27 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
         console.error('Error formatting accepted date:', e);
       }
     }
-    if (hasAccepted) {
-      if (scf.updatedAt) {
-        try {
-          const d = new Date(scf.updatedAt);
-          if (!isNaN(d.getTime())) {
-            return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
-          }
-        } catch (e) {}
-      }
-      return new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (scf.updatedAt) {
+      try {
+        const d = new Date(scf.updatedAt);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('en-AU', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+        }
+      } catch (e) {}
     }
-    return 'Pending Acceptance';
+    return new Date().toLocaleDateString('en-AU', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   const acceptedDateFormatted = getAcceptedDateFormatted();
