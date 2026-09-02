@@ -76,43 +76,8 @@ export async function processLpoCancellationCascade(options: LpoCancellationCasc
     qLpo3.docs.forEach(d => lpoLeadIdsToUpdate.add(d.id));
 
     let childCount = 0;
+    // Note: Per policy rules, when a parent or child company is marked lost, child leads and child companies should NOT be marked lost or have their status changed.
 
-    // Update child leads
-    for (const childId of Array.from(childLeadIds)) {
-      childCount++;
-      const cRef = adminDb.collection('leads').doc(childId);
-      await cRef.update({
-        status: 'Lost Customer',
-        customerStatus: 'Lost Customer',
-        scfStatus: 'Cancelled',
-        lpoPlusStatus: 'Disabled',
-        updatedAt: nowIso
-      });
-      await cRef.collection('activity').add({
-        type: 'Update',
-        notes: `Child lead marked as Lost Customer automatically (Parent customer "${companyName}" was cancelled).`,
-        author: cancelledBy,
-        date: nowIso
-      });
-    }
-
-    // Update child companies
-    for (const childId of Array.from(childCompIds)) {
-      childCount++;
-      const cRef = adminDb.collection('companies').doc(childId);
-      await cRef.update({
-        status: 'Lost Customer',
-        customerStatus: 'Lost Customer',
-        lpoPlusStatus: 'Disabled',
-        updatedAt: nowIso
-      });
-      await cRef.collection('activity').add({
-        type: 'Update',
-        notes: `Child company marked as Lost Customer automatically (Parent customer "${companyName}" was cancelled).`,
-        author: cancelledBy,
-        date: nowIso
-      });
-    }
 
     let lpoCount = 0;
 

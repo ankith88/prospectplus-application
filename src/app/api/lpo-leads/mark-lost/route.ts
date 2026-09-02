@@ -41,21 +41,10 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString()
     });
 
-    // 2. Identify linked parent and child leads / companies in ProspectPlus CRM
-    const targetParentId = lpoData.createdParentLeadId || lpoData.linkedLeadId || lpoData.parentLeadId;
-    const childLeadIds: string[] = Array.isArray(lpoData.createdChildLeadIds) ? lpoData.createdChildLeadIds : [];
-
+    // 2. Identify primary target lead / company in ProspectPlus CRM
+    const targetLeadId = lpoData.linkedLeadId || lpoData.createdParentLeadId || lpoData.parentLeadId;
     const leadIdsToUpdate = new Set<string>();
-    if (targetParentId) leadIdsToUpdate.add(targetParentId);
-    childLeadIds.forEach(id => leadIdsToUpdate.add(id));
-
-    if (targetParentId) {
-      const qChildLeads = await adminDb.collection('leads').where('parentLeadId', '==', targetParentId).get();
-      qChildLeads.docs.forEach(d => leadIdsToUpdate.add(d.id));
-
-      const qChildComps = await adminDb.collection('companies').where('parentLeadId', '==', targetParentId).get();
-      qChildComps.docs.forEach(d => leadIdsToUpdate.add(d.id));
-    }
+    if (targetLeadId) leadIdsToUpdate.add(targetLeadId);
 
     const qLpoLeadsMatch = await adminDb.collection('leads').where('linkedLpoLeadId', '==', lpoLeadId).get();
     qLpoLeadsMatch.docs.forEach(d => leadIdsToUpdate.add(d.id));
@@ -107,8 +96,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Disable LPO.Plus account in lpoconnect DB
-    if (netSuiteId || targetParentId || contactEmail) {
-      await disableLpoPlusAccount(netSuiteId || targetParentId || lpoLeadId, contactEmail);
+    if (netSuiteId || targetLeadId || contactEmail) {
+      await disableLpoPlusAccount(netSuiteId || targetLeadId || lpoLeadId, contactEmail);
     }
 
     // 4. Send Email Notification to fiona.harrison@mailplus.com.au (CC: michael.mcdaid@mailplus.com.au)

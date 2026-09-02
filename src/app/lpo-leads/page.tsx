@@ -141,11 +141,11 @@ const getPipelineProgress = (statusStr: string): PipelineProgress => {
     currentStep = 10;
   } else if (['LPO.Plus Access Sent'].includes(status)) {
     currentStep = 9;
-  } else if (['Signed'].includes(status)) {
+  } else if (['Signed', 'Won', 'Customer', 'Signed Customer'].includes(status)) {
     currentStep = 8;
-  } else if (['SCF Accepted'].includes(status)) {
+  } else if (['SCF Accepted', 'Quote Accepted'].includes(status)) {
     currentStep = 7;
-  } else if (['SCF Sent'].includes(status)) {
+  } else if (['SCF Sent', 'Quote Sent', 'SOF Sent', 'Quote Out', 'Proposal Sent'].includes(status)) {
     currentStep = 6;
   } else if (['Franchisees Assigned'].includes(status)) {
     currentStep = 5;
@@ -172,15 +172,15 @@ const getPipelineProgress = (statusStr: string): PipelineProgress => {
     badgeClass = 'bg-rose-100 text-rose-800 border-rose-200 font-bold';
   } else if (isNotUsing) {
     badgeClass = 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
-  } else if (status === 'Signed') {
+  } else if (status === 'Signed' || status === 'Won' || status === 'Customer') {
     badgeClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
   } else if (status === 'LPO.Plus Logged In') {
     badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold';
   } else if (status === 'LPO.Plus Access Sent') {
     badgeClass = 'bg-sky-100 text-sky-800 border-sky-300 font-bold';
-  } else if (status === 'SCF Accepted') {
+  } else if (status === 'SCF Accepted' || status === 'Quote Accepted') {
     badgeClass = 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold';
-  } else if (status === 'SCF Sent') {
+  } else if (status === 'SCF Sent' || status === 'Quote Sent' || status === 'Quote Out' || status === 'SOF Sent' || status === 'Proposal Sent') {
     badgeClass = 'bg-blue-100 text-blue-900 border-blue-300 font-semibold';
   } else if (status === 'Franchisees Assigned' || status === 'Operations Setup' || status === 'Induction') {
     badgeClass = 'bg-amber-50 text-amber-800 border-amber-200 font-semibold';
@@ -290,18 +290,99 @@ export default function LpoLeadsListPage() {
     return parseDateValue(lead.createdAt);
   };
 
+  // Helper to find linked CRM lead data from crmLeadsMap
+  const getLinkedCrmLead = (l: LpoLead): any => {
+    if (!l) return null;
+    const candidateIds = [
+      l.createdParentLeadId,
+      l.linkedLeadId,
+      l.linkedCustomerId,
+      ...(Array.isArray(l.createdChildLeadIds) ? l.createdChildLeadIds : []),
+    ].filter(Boolean);
+
+    for (const id of candidateIds) {
+      if (id && crmLeadsMap.has(String(id))) {
+        return crmLeadsMap.get(String(id));
+      }
+    }
+    return null;
+  };
+
   // Helper function to check if lead/company is Signed
   const isLeadOrLinkedSigned = (l: LpoLead): boolean => {
-    if (l.status === 'Signed') return true;
-    const targetLeadId = l.createdParentLeadId || l.linkedLeadId;
-    if (targetLeadId && crmLeadsMap.has(targetLeadId)) {
-      const crmData = crmLeadsMap.get(targetLeadId);
-      const st = (crmData?.status || crmData?.customerStatus || '').toLowerCase();
+    if (l.status === 'Signed' || l.status === 'Won' || l.status === 'Customer') return true;
+    const crmData = getLinkedCrmLead(l);
+    if (crmData) {
+      const st = (crmData.status || crmData.customerStatus || '').toLowerCase();
       if (st === 'signed' || st === 'won' || st === 'customer' || st === 'signed customer') {
         return true;
       }
     }
     return false;
+  };
+
+  // Helper function to check if lead/company is SCF Accepted / Quote Accepted
+  const isLeadOrLinkedScfAccepted = (l: LpoLead): boolean => {
+    if (l.status === 'SCF Accepted' || l.status === 'Quote Accepted') return true;
+    const crmData = getLinkedCrmLead(l);
+    if (crmData) {
+      const st = (crmData.status || crmData.customerStatus || '').toLowerCase();
+      if (st === 'scf accepted' || st === 'quote accepted') {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Helper function to check if lead/company is SCF Sent / Quote Sent
+  const isLeadOrLinkedScfSent = (l: LpoLead): boolean => {
+    if (
+      l.status === 'SCF Sent' ||
+      l.status === 'Quote Sent' ||
+      l.status === 'SOF Sent' ||
+      l.status === 'Quote Out' ||
+      l.status === 'Proposal Sent'
+    ) {
+      return true;
+    }
+    const crmData = getLinkedCrmLead(l);
+    if (crmData) {
+      const st = (crmData.status || crmData.customerStatus || '').toLowerCase();
+      if (
+        [
+          'quote sent',
+          'quotes sent',
+          'scf sent',
+          'sof sent',
+          'quote out',
+          'proposal sent',
+        ].includes(st)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Resolve effective status for display & step calculation
+  const getEffectiveLeadStatus = (l: LpoLead): string => {
+    if (!l) return 'New';
+    if (l.notUsingLpoPlus || l.status === 'Not Using LPO.Plus') return 'Not Using LPO.Plus';
+    if (l.status === 'Lost' || l.status?.toLowerCase().includes('lost')) return 'Lost';
+
+    if (isLeadOrLinkedSigned(l)) return 'Signed';
+    if (
+      l.status === 'LPO.Plus Logged In' ||
+      l.status === 'LPO.PLUS Sign In Email Sent' ||
+      l.status === 'LPO.Plus Sign In Email Sent'
+    ) {
+      return 'LPO.Plus Logged In';
+    }
+    if (l.status === 'LPO.Plus Access Sent') return 'LPO.Plus Access Sent';
+    if (isLeadOrLinkedScfAccepted(l)) return 'SCF Accepted';
+    if (isLeadOrLinkedScfSent(l)) return 'SCF Sent';
+
+    return l.status || 'New';
   };
 
   // Raw lead buckets by tab
@@ -310,8 +391,8 @@ export default function LpoLeadsListPage() {
       l.status !== 'Lost' &&
       !l.status?.toLowerCase().includes('lost') &&
       !l.notUsingLpoPlus &&
-      l.status !== 'SCF Sent' &&
-      l.status !== 'SCF Accepted' &&
+      !isLeadOrLinkedScfSent(l) &&
+      !isLeadOrLinkedScfAccepted(l) &&
       !isLeadOrLinkedSigned(l) &&
       l.status !== 'LPO.Plus Access Sent' &&
       l.status !== 'LPO.Plus Logged In' &&
@@ -319,19 +400,30 @@ export default function LpoLeadsListPage() {
       l.status !== 'LPO.Plus Sign In Email Sent'
   );
   const scfSentLeadsRaw = leads.filter(
-    (l) => l.status === 'SCF Sent' && !l.notUsingLpoPlus
+    (l) =>
+      !l.notUsingLpoPlus &&
+      !isLeadOrLinkedSigned(l) &&
+      !isLeadOrLinkedScfAccepted(l) &&
+      isLeadOrLinkedScfSent(l)
   );
   const scfAcceptedLeadsRaw = leads.filter(
-    (l) => l.status === 'SCF Accepted' && !isLeadOrLinkedSigned(l) && !l.notUsingLpoPlus
+    (l) =>
+      !l.notUsingLpoPlus &&
+      !isLeadOrLinkedSigned(l) &&
+      isLeadOrLinkedScfAccepted(l)
   );
   const signedLeadsRaw = leads.filter(
-    (l) => isLeadOrLinkedSigned(l) && !l.notUsingLpoPlus
+    (l) => !l.notUsingLpoPlus && isLeadOrLinkedSigned(l)
   );
   const accessSentLeadsRaw = leads.filter(
     (l) => l.status === 'LPO.Plus Access Sent' && !l.notUsingLpoPlus
   );
   const loggedInLeadsRaw = leads.filter(
-    (l) => (l.status === 'LPO.Plus Logged In' || l.status === 'LPO.PLUS Sign In Email Sent' || l.status === 'LPO.Plus Sign In Email Sent') && !l.notUsingLpoPlus
+    (l) =>
+      (l.status === 'LPO.Plus Logged In' ||
+        l.status === 'LPO.PLUS Sign In Email Sent' ||
+        l.status === 'LPO.Plus Sign In Email Sent') &&
+      !l.notUsingLpoPlus
   );
   const notUsingLpoPlusLeadsRaw = leads.filter(
     (l) => l.status === 'Not Using LPO.Plus' || l.notUsingLpoPlus === true
@@ -880,7 +972,8 @@ export default function LpoLeadsListPage() {
         </TableHeader>
         <TableBody>
           {leadList.map((lead) => {
-            const progress = getPipelineProgress(lead.status);
+            const effectiveStatus = getEffectiveLeadStatus(lead);
+            const progress = getPipelineProgress(effectiveStatus);
             const isLost = progress.isLost;
             const isLpoLoggedIn = lead.status === 'LPO.Plus Logged In' || lead.status === 'LPO.PLUS Sign In Email Sent' || lead.status === 'LPO.Plus Sign In Email Sent';
             const isLpoAccessSent = lead.status === 'LPO.Plus Access Sent';
@@ -1211,7 +1304,7 @@ export default function LpoLeadsListPage() {
               className="rounded-lg font-bold px-3.5 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-blue-800 data-[state=active]:shadow-xs"
             >
               <Send className="h-4 w-4 mr-1.5 text-blue-600" />
-              SCF Sent ({filteredScfSentLeads.length})
+              SCF / Quote Sent ({filteredScfSentLeads.length})
             </TabsTrigger>
 
             <TabsTrigger 
@@ -1286,17 +1379,17 @@ export default function LpoLeadsListPage() {
             </Card>
           </TabsContent>
 
-          {/* SCF SENT TAB CONTENT */}
+          {/* SCF / QUOTE SENT TAB CONTENT */}
           <TabsContent value="scf_sent">
             <Card className="border-slate-200/80 shadow-sm border-blue-200/60">
               <CardHeader className="bg-blue-50/50 py-3 border-b border-blue-100">
                 <CardTitle className="text-sm font-bold text-blue-900 flex items-center gap-1.5">
                   <Send className="h-4 w-4 text-blue-600" />
-                  SCF Sent LPO Leads ({filteredScfSentLeads.length})
+                  SCF / Quote Sent LPO Leads ({filteredScfSentLeads.length})
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                {renderLeadsTable(filteredScfSentLeads, 'No SCF Sent LPO leads found.')}
+                {renderLeadsTable(filteredScfSentLeads, 'No SCF or Quote Sent LPO leads found.')}
               </CardContent>
             </Card>
           </TabsContent>

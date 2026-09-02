@@ -7,7 +7,7 @@ import { app, firestore } from '@/lib/firebase';
 import { getAuth } from 'firebase/auth';
 import { getSydneyISOString } from '@/lib/utils';
 import type { Lead, LeadStatus, Address, TaggedAddress, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, AppointmentStatus, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead, CompanyInsight } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion, arrayRemove, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion, arrayRemove, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { rekeyLeadToNetSuite } from './rekey-lead';
@@ -1613,7 +1613,16 @@ async function updateLeadStatus(
             leadData?.parentLeadId
         );
 
-        if (isLpoLeadProcess) {
+        const isChildLeadOrCompany = Boolean(
+            leadData?.isChildLead || 
+            (leadData?.parentLeadId && leadData?.parentLeadId !== leadId)
+        );
+        const isLostStatus = isLostLeadStatus(status) || status === 'Lost' || (status as string) === 'Lost Customer';
+
+        // Rules:
+        // 1. When child company is marked lost (or changes status), parent and other child companies should NOT be marked lost or changed status.
+        // 2. When parent company is marked lost, child companies should NOT be marked lost.
+        if (isLpoLeadProcess && !isChildLeadOrCompany && !isLostStatus) {
             try {
                 const syncPayload: any = {
                     status: status,
@@ -1650,6 +1659,46 @@ async function updateLeadStatus(
             } catch (syncErr) {
                 console.warn('Error syncing LPO lead status across hierarchy:', syncErr);
             }
+        }
+
+        // Synchronize status to linked lpo_leads documents if present
+        try {
+            let lpoStatusToSet: string | null = null;
+            const statusStr = String(status);
+            if (statusStr === 'Quote Sent' || statusStr === 'SCF Sent') {
+                lpoStatusToSet = 'SCF Sent';
+            } else if (statusStr === 'Quote Accepted' || statusStr === 'SCF Accepted') {
+                lpoStatusToSet = 'SCF Accepted';
+            } else if (statusStr === 'Signed' || statusStr === 'Won' || statusStr === 'Signed Customer') {
+                lpoStatusToSet = 'Signed';
+            } else if (isLostStatus) {
+                lpoStatusToSet = 'Lost';
+            }
+
+            if (lpoStatusToSet) {
+                const targetParentId = leadData?.createdParentLeadId || leadData?.parentLeadId || leadData?.linkedLeadId || leadId;
+                const qLpo1 = query(collection(firestore, 'lpo_leads'), where('createdParentLeadId', '==', targetParentId));
+                const qLpo2 = query(collection(firestore, 'lpo_leads'), where('linkedLeadId', '==', targetParentId));
+                const qLpo3 = query(collection(firestore, 'lpo_leads'), where('createdChildLeadIds', 'array-contains', leadId));
+                
+                const [snap1, snap2, snap3] = await Promise.all([
+                    getDocs(qLpo1).catch(() => ({ docs: [] as any[] })),
+                    getDocs(qLpo2).catch(() => ({ docs: [] as any[] })),
+                    getDocs(qLpo3).catch(() => ({ docs: [] as any[] })),
+                ]);
+
+                const lpoDocsMap = new Map<string, any>();
+                [...snap1.docs, ...snap2.docs, ...snap3.docs].forEach(d => lpoDocsMap.set(d.id, d.ref));
+
+                for (const lpoRef of lpoDocsMap.values()) {
+                    await updateDoc(lpoRef, {
+                        status: lpoStatusToSet,
+                        updatedAt: serverTimestamp()
+                    }).catch(err => console.warn('Linked lpo_leads status update warning:', err));
+                }
+            }
+        } catch (lpoSyncErr) {
+            console.warn('Error syncing linked lpo_leads status:', lpoSyncErr);
         }
 
         const isDataMgmt = options?.isDataManagement || options?.source === 'data_management' || (reason && reason.toLowerCase().includes('data management'));
