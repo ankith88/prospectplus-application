@@ -218,6 +218,8 @@ export function ServiceSelectionDialog({
     lead?.parentLeadId
   );
 
+  const isLpoNetworkBucket = lead?.bucket === 'lpo_network' || (lead?.bucket as string)?.toLowerCase() === 'lpo_network' || lead?.bucket === 'LPO Network';
+
   const resolveLpoCcEmails = async (baseCc: string) => {
     let ccList = baseCc ? baseCc.split(',').map(s => s.trim()).filter(Boolean) : [];
 
@@ -778,7 +780,7 @@ export function ServiceSelectionDialog({
       const defaultContact = validContacts.find(c => c.isPrimary) || (validContacts.length > 0 ? validContacts[0] : null);
       const defaultContactId = (lead as any)?.bookingContactId || (lead as any)?.serviceCommencementContactId || (defaultContact ? defaultContact.id : undefined);
 
-      const hasExistingLocalMileAccess = lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || (lead as any)?.localmileAccess === true || validContacts.some(c => c?.accessToLocalMile === 'yes');
+      const hasExistingLocalMileAccess = !isLpoNetworkBucket && (lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || (lead as any)?.localmileAccess === true || validContacts.some(c => c?.accessToLocalMile === 'yes'));
 
       form.reset({
           selectedServices: initialSelectedServices,
@@ -787,7 +789,7 @@ export function ServiceSelectionDialog({
           startDate: startDate,
           chosenPremiumPlan: (lead as any)?.chosenPremiumPlan || 'Merchant',
           chosenExpressPlan: (lead as any)?.chosenExpressPlan || 'Merchant',
-          createLocalMileAccount: hasExistingLocalMileAccess,
+          createLocalMileAccount: isLpoNetworkBucket ? false : hasExistingLocalMileAccess,
           createShipMateAccount: false,
           selectedContactId: defaultContactId,
           selectedContactIds: defaultContactId ? [defaultContactId] : [],
@@ -1203,7 +1205,7 @@ export function ServiceSelectionDialog({
   const selectedContactId = form.watch('selectedContactId');
   const primaryContactRender = contacts.find(c => c.id === selectedContactId) || (contacts.length > 0 ? contacts[0] : null);
   const watchCreateLocalMileAccount = form.watch('createLocalMileAccount');
-  const hasLocalMileAccessRender = Boolean(
+  const hasLocalMileAccessRender = !isLpoNetworkBucket && Boolean(
     watchCreateLocalMileAccount ||
     lead?.hasCreatedJob === true ||
     lead?.localMileTrialsRemaining !== undefined ||
@@ -1961,9 +1963,12 @@ export function ServiceSelectionDialog({
            } catch (nsSyncErr) {
              console.error("NetSuite submitServiceQuote failed:", nsSyncErr);
            }
+           
+           const shouldCreateLocalMile = !isLpoNetworkBucket && Boolean(values.createLocalMileAccount);
+           const shouldCreateShipMate = !isLpoNetworkBucket && Boolean(values.createShipMateAccount);
 
-           if (values.createLocalMileAccount || values.createShipMateAccount) {
-             if (values.createLocalMileAccount) {
+           if (shouldCreateLocalMile || shouldCreateShipMate) {
+             if (shouldCreateLocalMile) {
                await updateLeadDetails(lead.id, lead, { localMileTrialsRemaining: 0 });
              }
              try {
@@ -1971,8 +1976,8 @@ export function ServiceSelectionDialog({
                  leadId: lead.id,
                  services: [],
                  startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-                 localmileAccess: values.createLocalMileAccount || undefined,
-                 shipmateAccess: values.createShipMateAccount || undefined,
+                 localmileAccess: shouldCreateLocalMile || undefined,
+                 shipmateAccess: shouldCreateShipMate || undefined,
                  accountManagerName: lead.accountManagerAssigned
                });
              } catch (nsErr) {
@@ -2025,7 +2030,7 @@ export function ServiceSelectionDialog({
             const signupEmailsString = contactEmails.length > 0 ? contactEmails.join(', ') : (lead.customerServiceEmail || '');
 
             // Handle LocalMile schedule creation ONLY for confirmed existing LocalMile customers
-            const hasLocalMileAccess = values.createLocalMileAccount || lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || selectedContacts.some(c => c?.accessToLocalMile === 'yes');
+            const hasLocalMileAccess = !isLpoNetworkBucket && (values.createLocalMileAccount || lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || selectedContacts.some(c => c?.accessToLocalMile === 'yes'));
             if (hasLocalMileAccess) {
               for (const s of serviceSelections) {
                 const isPmpo = s.name.toLowerCase().includes('pmpo') || s.name.toLowerCase().includes('outgoing mail lodgement');
@@ -2929,7 +2934,7 @@ export function ServiceSelectionDialog({
                                   <TableHead>Service</TableHead>
                                   <TableHead>Frequency</TableHead>
                                   {(mode === 'Signup' || mode === 'Quote' || mode === 'Resell') && <TableHead className="w-[120px]">Rate</TableHead>}
-                                  {mode === 'Signup' && <TableHead className="w-[110px]">LocalMile Sync</TableHead>}
+                                  {mode === 'Signup' && !isLpoNetworkBucket && <TableHead className="w-[110px]">LocalMile Sync</TableHead>}
                                   <TableHead className="w-[50px]"></TableHead>
                                 </TableRow>
                               </TableHeader>
@@ -3031,7 +3036,7 @@ export function ServiceSelectionDialog({
                                       </TableCell>
                                     )}
                                     
-                                    {mode === 'Signup' && (
+                                    {mode === 'Signup' && !isLpoNetworkBucket && (
                                       <TableCell className="align-top">
                                         {(serviceName.toLowerCase().includes('ampo') || serviceName.toLowerCase().includes('pmpo')) && hasLocalMileAccessRender ? (
                                           <FormField
@@ -3383,7 +3388,7 @@ export function ServiceSelectionDialog({
                             />
                         )}
 
-                        {mode === 'Signup' && (
+                        {mode === 'Signup' && !isLpoNetworkBucket && (
                             <div className="space-y-4">
                                 <FormField
                                 control={form.control}

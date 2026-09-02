@@ -175,6 +175,8 @@ function SelectServicesContent() {
   const shipmateAccess = form.watch('shipmateAccess');
   const localmileAccess = form.watch('localmileAccess');
 
+  const isLpoNetworkBucket = lead?.bucket === 'lpo_network' || (lead?.bucket as string)?.toLowerCase() === 'lpo_network' || lead?.bucket === 'LPO Network';
+
   useEffect(() => {
     let initialSelectedServices: string[] = [];
     let initialFrequencies: Record<string, any> = {};
@@ -187,7 +189,7 @@ function SelectServicesContent() {
 
     const defaultContactId = (lead as any)?.serviceCommencementContactId || (lead as any)?.bookingContactId || (contacts.find(c => c.isPrimary)?.id) || (contacts[0]?.id);
 
-    const hasExistingLocalMileAccess = lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || (lead as any)?.localmileAccess === true || (contacts || []).some(c => c?.accessToLocalMile === 'yes');
+    const hasExistingLocalMileAccess = !isLpoNetworkBucket && (lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || (lead as any)?.localmileAccess === true || (contacts || []).some(c => c?.accessToLocalMile === 'yes'));
 
     form.reset({
       shipmateAccess: false,
@@ -333,6 +335,9 @@ function SelectServicesContent() {
                               ['Quote Sent', 'Quote Accepted', 'Signed', 'Customer', 'Won'].includes((lead as any).status || '') || 
                               !!(lead as any).scfAcceptedAt;
         const signupServices = hasPriorQuote ? [] : mappedServices;
+        const effectiveShipmateAccess = !isLpoNetworkBucket && Boolean(values.shipmateAccess);
+        const effectiveLocalmileAccess = !isLpoNetworkBucket && Boolean(values.localmileAccess);
+
         nsResponse = await submitServiceQuote({
            operation: 'signCustomer',
            customerId: (lead as any).internalid || lead.entityId || "",
@@ -342,19 +347,19 @@ function SelectServicesContent() {
            services: signupServices,
            commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : format(new Date(), 'dd/MM/yyyy'),
            accountManagerName: lead.accountManagerAssigned,
-           createShipMateAccount: values.shipmateAccess || undefined
+           createShipMateAccount: effectiveShipmateAccess || undefined
         });
         
         if (!nsResponse.success) throw new Error(nsResponse.message);
         
         // Also call initiateSignup for shipmate/localmile if requested
-        if (values.shipmateAccess || values.localmileAccess) {
+        if (effectiveShipmateAccess || effectiveLocalmileAccess) {
            await initiateSignup({
              leadId: lead.id,
              services: [], // Services already handled via submitServiceQuote above
              startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-             shipmateAccess: values.shipmateAccess,
-             localmileAccess: values.localmileAccess,
+             shipmateAccess: effectiveShipmateAccess,
+             localmileAccess: effectiveLocalmileAccess,
              accountManagerName: lead.accountManagerAssigned
            });
         }
@@ -379,7 +384,7 @@ function SelectServicesContent() {
         }));
         await updateLeadServices(lead.id, serviceSelectionsForDb);
 
-        if (mode === 'signup' && (values.localmileAccess || lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined)) {
+        if (mode === 'signup' && !isLpoNetworkBucket && (values.localmileAccess || lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined)) {
           for (const serviceName of values.selectedServices) {
             const isPmpo = serviceName.toLowerCase().includes('pmpo') || serviceName.toLowerCase().includes('outgoing mail lodgement');
             const freq = values.frequencies[serviceName];
@@ -549,36 +554,40 @@ function SelectServicesContent() {
 
                                     {mode === 'signup' && (
                                         <div className="space-y-6">
-                                            <div className="space-y-4 rounded-md border p-4">
-                                                <FormField control={form.control} name="shipmateAccess" render={({ field }) => (
-                                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                                                        <div className="space-y-1 leading-none"><FormLabel>Grant ShipMate Access</FormLabel></div>
-                                                    </FormItem>
-                                                )}/>
-                                                {shipmateAccess && (
-                                                     <FormField control={form.control} name="shipmateContactIds" render={({ field }) => (
-                                                        <FormItem><FormLabel>ShipMate Contacts*</FormLabel>
-                                                            <MultiSelectCombobox options={contactOptions} selected={field.value || []} onSelectedChange={field.onChange} placeholder="Select contacts..." />
-                                                        <FormMessage /></FormItem>
+                                            {!isLpoNetworkBucket && (
+                                                <div className="space-y-4 rounded-md border p-4">
+                                                    <FormField control={form.control} name="shipmateAccess" render={({ field }) => (
+                                                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                                            <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                                            <div className="space-y-1 leading-none"><FormLabel>Grant ShipMate Access</FormLabel></div>
+                                                        </FormItem>
                                                     )}/>
-                                                )}
-                                            </div>
-                                             <div className="space-y-4 rounded-md border p-4">
-                                                 <FormField control={form.control} name="localmileAccess" render={({ field }) => (
-                                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                                                        <div className="space-y-1 leading-none"><FormLabel>Grant LocalMile Access</FormLabel></div>
-                                                    </FormItem>
-                                                )}/>
-                                                 {localmileAccess && (
-                                                     <FormField control={form.control} name="localmileContactIds" render={({ field }) => (
-                                                        <FormItem><FormLabel>LocalMile Contacts*</FormLabel>
-                                                            <MultiSelectCombobox options={contactOptions} selected={field.value || []} onSelectedChange={field.onChange} placeholder="Select contacts..." />
-                                                        <FormMessage /></FormItem>
+                                                    {shipmateAccess && (
+                                                         <FormField control={form.control} name="shipmateContactIds" render={({ field }) => (
+                                                            <FormItem><FormLabel>ShipMate Contacts*</FormLabel>
+                                                                <MultiSelectCombobox options={contactOptions} selected={field.value || []} onSelectedChange={field.onChange} placeholder="Select contacts..." />
+                                                            <FormMessage /></FormItem>
+                                                        )}/>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {!isLpoNetworkBucket && (
+                                                <div className="space-y-4 rounded-md border p-4">
+                                                     <FormField control={form.control} name="localmileAccess" render={({ field }) => (
+                                                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                                            <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                                            <div className="space-y-1 leading-none"><FormLabel>Grant LocalMile Access</FormLabel></div>
+                                                        </FormItem>
                                                     )}/>
-                                                 )}
-                                            </div>
+                                                     {localmileAccess && (
+                                                         <FormField control={form.control} name="localmileContactIds" render={({ field }) => (
+                                                            <FormItem><FormLabel>LocalMile Contacts*</FormLabel>
+                                                                <MultiSelectCombobox options={contactOptions} selected={field.value || []} onSelectedChange={field.onChange} placeholder="Select contacts..." />
+                                                            <FormMessage /></FormItem>
+                                                        )}/>
+                                                     )}
+                                                </div>
+                                            )}
                                             <div className="space-y-4 rounded-md border p-4">
                                                 <FormField control={form.control} name="addServices" render={({ field }) => (
                                                      <FormItem className="flex flex-row items-center space-x-3 space-y-0">
