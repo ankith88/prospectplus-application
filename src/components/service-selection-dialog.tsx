@@ -1774,9 +1774,7 @@ export function ServiceSelectionDialog({
 
             const activeScfs = (existingScfs || []).filter((s: any) => s.status !== 'Cancelled');
 
-            if (mode === 'Resell') {
-                scfId = await createScfRecord(lead.id, scfData);
-            } else if (activeScfs.length > 0) {
+            if (activeScfs.length > 0) {
                 activeScfs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
                 const latestScf = activeScfs[0];
                 const isSignedOrAccepted = latestScf.status === 'Signed' || latestScf.status === 'Accepted' || latestScf.status === 'Quote Accepted' || !!latestScf.acceptedAt || !!latestScf.signedAt;

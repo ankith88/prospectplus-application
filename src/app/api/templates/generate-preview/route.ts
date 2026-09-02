@@ -41,8 +41,14 @@ export async function POST(request: Request) {
     let generalBookingUrlId = '';
 
     // 2. Fetch Lead details if leadId is provided
+    let leadSnap: any = null;
+    let colName: 'companies' | 'leads' = 'companies';
     if (leadId) {
-      const leadSnap = await db.collection('leads').doc(leadId).get();
+      leadSnap = await db.collection('companies').doc(leadId).get();
+      if (!leadSnap.exists) {
+        leadSnap = await db.collection('leads').doc(leadId).get();
+        colName = 'leads';
+      }
       if (leadSnap.exists) {
         const leadData = leadSnap.data() || {};
         companyName = leadData.companyName || leadData.company || companyName;
@@ -116,7 +122,7 @@ export async function POST(request: Request) {
         if (!contactsSnap.empty) {
           let contactDoc = contactsSnap.docs[0];
           if (contactId) {
-            const matched = contactsSnap.docs.find(d => d.id === contactId);
+            const matched = contactsSnap.docs.find((d: any) => d.id === contactId);
             if (matched) contactDoc = matched;
           }
           const cData = contactDoc.data();
@@ -133,7 +139,7 @@ export async function POST(request: Request) {
     const fontFamily = brandData?.designTokens?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     const logoUrl = brandData?.designTokens?.logoUrl || '';
 
-    const leadDataForPreview = leadSnap.exists ? { ...leadSnap.data(), id: leadId } : null;
+    const leadDataForPreview = (leadSnap && leadSnap.exists) ? { ...leadSnap.data(), id: leadId } : null;
     const sofLink = leadDataForPreview?.sofLink || (leadDataForPreview as any)?.standingOrderFormLink || '';
     const localMileLink = leadDataForPreview?.localMileRegistrationLink || '';
     const localMileActivationLink = leadDataForPreview?.localMileActivationLink || '';

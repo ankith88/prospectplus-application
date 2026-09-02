@@ -14,13 +14,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
     }
 
-    // 1. Fetch Contact to get name and email (supports comma-separated contactId)
+    // 1. Fetch Lead or Company details
+    let colName: 'companies' | 'leads' = 'companies';
+    let leadSnap = await db.collection('companies').doc(leadId).get();
+    if (!leadSnap.exists) {
+      leadSnap = await db.collection('leads').doc(leadId).get();
+      colName = 'leads';
+    }
+
+    if (!leadSnap.exists) {
+      return NextResponse.json({ success: false, message: 'Lead or company not found' }, { status: 404 });
+    }
+
+    // 1b. Fetch Contact to get name and email (supports comma-separated contactId)
     const contactIds = contactId.includes(',') ? contactId.split(',') : [contactId];
     const contactsData = [];
     for (const cId of contactIds) {
       const trimmedId = cId.trim();
       if (!trimmedId) continue;
-      const contactSnap = await db.collection('leads').doc(leadId).collection('contacts').doc(trimmedId).get();
+      let contactSnap = await db.collection(colName).doc(leadId).collection('contacts').doc(trimmedId).get();
+      if (!contactSnap.exists) {
+        const altCol = colName === 'companies' ? 'leads' : 'companies';
+        contactSnap = await db.collection(altCol).doc(leadId).collection('contacts').doc(trimmedId).get();
+      }
       if (contactSnap.exists) {
         contactsData.push(contactSnap.data());
       }
@@ -39,11 +55,6 @@ export async function POST(request: Request) {
     }
     const contactEmail = contactEmails.join(', ');
 
-    // 1b. Fetch Lead details
-    const leadSnap = await db.collection('leads').doc(leadId).get();
-    if (!leadSnap.exists) {
-      return NextResponse.json({ success: false, message: 'Lead not found' }, { status: 404 });
-    }
     const leadData = leadSnap.data() || {};
     const companyName = leadData.companyName || '';
     const salesRepName = leadData.accountManagerAssigned || leadData.dialerAssigned || leadData.salesRepAssigned || 'Sales Representative';

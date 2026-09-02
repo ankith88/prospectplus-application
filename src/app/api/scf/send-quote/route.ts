@@ -5,9 +5,9 @@ import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
 const db = getFirestore(adminApp);
 
-async function logEmailToLead(leadId: string, recipient: string, subject: string, html: string, sender: string, isSimulated: boolean) {
+async function logEmailToLead(leadId: string, recipient: string, subject: string, html: string, sender: string, isSimulated: boolean, collectionName: 'leads' | 'companies' = 'leads') {
   try {
-    const leadRef = db.collection('leads').doc(leadId);
+    const leadRef = db.collection(collectionName).doc(leadId);
     await leadRef.collection('emails').add({
       subject,
       bodyHtml: html,
@@ -30,13 +30,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
     }
 
-    // 1. Fetch Contact to get name and email (supports comma-separated contactId)
+    // 1. Fetch Lead or Company document
+    let colName: 'companies' | 'leads' = 'companies';
+    let leadSnap = await db.collection('companies').doc(leadId).get();
+    if (!leadSnap.exists) {
+      leadSnap = await db.collection('leads').doc(leadId).get();
+      colName = 'leads';
+    }
+
+    // Fetch Contact to get name and email (supports comma-separated contactId)
     const contactIds = contactId.includes(',') ? contactId.split(',') : [contactId];
     const contactsData = [];
     for (const cId of contactIds) {
       const trimmedId = cId.trim();
       if (!trimmedId) continue;
-      const contactSnap = await db.collection('leads').doc(leadId).collection('contacts').doc(trimmedId).get();
+      let contactSnap = await db.collection(colName).doc(leadId).collection('contacts').doc(trimmedId).get();
+      if (!contactSnap.exists) {
+        const altCol = colName === 'companies' ? 'leads' : 'companies';
+        contactSnap = await db.collection(altCol).doc(leadId).collection('contacts').doc(trimmedId).get();
+      }
       if (contactSnap.exists) {
         contactsData.push(contactSnap.data());
       }
@@ -227,7 +239,7 @@ export async function POST(request: Request) {
          return NextResponse.json({ success: false, message: dispatchResult.error }, { status: 500 });
       }
 
-      await logEmailToLead(leadId, customTo || contactEmail, customSubject, formattedHtml, customFrom, !!dispatchResult.simulated);
+      await logEmailToLead(leadId, customTo || contactEmail, customSubject, formattedHtml, customFrom, !!dispatchResult.simulated, colName);
 
       return NextResponse.json({ success: true, message: 'Quote email sent successfully' });
     }
@@ -261,7 +273,6 @@ export async function POST(request: Request) {
     }
 
     // 2b. Fetch Lead details
-    const leadSnap = await db.collection('leads').doc(leadId).get();
     const leadData = leadSnap.exists ? leadSnap.data() || {} : {};
     const companyName = leadData.companyName || '';
     const salesRepName = leadData.accountManagerAssigned || leadData.dialerAssigned || leadData.salesRepAssigned || 'Sales Representative';
@@ -348,7 +359,7 @@ export async function POST(request: Request) {
        return NextResponse.json({ success: false, message: dispatchResult.error }, { status: 500 });
     }
 
-    await logEmailToLead(leadId, contactEmail, templateSubject, formattedFallbackHtml, customFrom, !!dispatchResult.simulated);
+    await logEmailToLead(leadId, contactEmail, templateSubject, formattedFallbackHtml, customFrom, !!dispatchResult.simulated, colName);
 
     return NextResponse.json({ success: true, message: 'Quote email sent successfully' });
 
