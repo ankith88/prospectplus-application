@@ -92,6 +92,12 @@ const getBadgeColor = (type: string) => {
   return 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100';
 }
 
+export const isMissingRealTimeStatus = (pkg: PackageRecord) => {
+  if (!pkg.real_time_status || !pkg.real_time_status.status) return true;
+  const statusLower = pkg.real_time_status.status.toLowerCase();
+  return statusLower.includes('shipping information approved by australia post') || statusLower.includes('shipping information approved');
+};
+
 export function ScansClient() {
   const [packages, setPackages] = useState<PackageRecord[]>([])
   const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
@@ -447,8 +453,8 @@ export function ScansClient() {
 
     const isLinked = companyName !== 'Unlinked';
     if (filterUnlinked && isLinked) return false;
-    if (filterMissingStatus && pkg.real_time_status) return false;
-    if (filterNotDelivered && (!pkg.real_time_status || pkg.real_time_status.status.toLowerCase().includes('delivered') || hasExcludedScans(pkg))) return false;
+    if (filterMissingStatus && !isMissingRealTimeStatus(pkg)) return false;
+    if (filterNotDelivered && (isMissingRealTimeStatus(pkg) || pkg.real_time_status?.status.toLowerCase().includes('delivered') || hasExcludedScans(pkg))) return false;
 
     if (filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
     if (filterConnoteNumber) {
@@ -725,7 +731,7 @@ export function ScansClient() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-900">
-              {packages.filter(p => !p.real_time_status).length}
+              {packages.filter(p => isMissingRealTimeStatus(p)).length}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Click to {filterMissingStatus ? 'clear' : 'filter'}
@@ -745,7 +751,7 @@ export function ScansClient() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-900">
-              {packages.filter(p => p.real_time_status && !p.real_time_status.status.toLowerCase().includes('delivered') && !(p.scans?.some(scan => {
+              {packages.filter(p => !isMissingRealTimeStatus(p) && p.real_time_status && !p.real_time_status.status.toLowerCase().includes('delivered') && !(p.scans?.some(scan => {
                 const type = scan.scan_type?.toLowerCase() || '';
                 return type.includes('futile') || type.includes('stockzee') || type.includes('allocate');
               }) || false)).length}
@@ -990,7 +996,7 @@ export function ScansClient() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              {pkg.real_time_status ? (
+                              {!isMissingRealTimeStatus(pkg) && pkg.real_time_status ? (
                                 <div className="flex flex-col">
                                   <span className="text-xs font-medium truncate max-w-[150px]" title={pkg.real_time_status.status}>
                                     {pkg.real_time_status.status}
@@ -1010,7 +1016,16 @@ export function ScansClient() {
                                   </span>
                                 </div>
                               ) : (
-                                <span className="text-xs text-muted-foreground">Not checked</span>
+                                <div className="flex flex-col">
+                                  <span className="text-xs text-amber-600 font-medium truncate max-w-[150px]" title={pkg.real_time_status?.status || 'Not checked'}>
+                                    {pkg.real_time_status?.status ? 'No active scan (Shipping info approved)' : 'Not checked'}
+                                  </span>
+                                  {pkg.real_time_status?.updated_at && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {new Date(pkg.real_time_status.updated_at).toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                               {!latestScan?.scan_type?.toLowerCase().includes('futile') && (
                                 <button 

@@ -520,7 +520,12 @@ export async function GET(request: Request) {
 
       statusCount[rtStatus] = (statusCount[rtStatus] || 0) + 1;
 
-      if (!pkg.real_time_status) {
+      const isMissingRealTime = !pkg.real_time_status || (pkg.real_time_status.status && (
+        pkg.real_time_status.status.toLowerCase().includes('shipping information approved by australia post') ||
+        pkg.real_time_status.status.toLowerCase().includes('shipping information approved')
+      ));
+
+      if (isMissingRealTime) {
         missingRealTimeStatusCount++;
       } else if (!rtStatus.toLowerCase().includes('delivered')) {
         notDeliveredCount++;
