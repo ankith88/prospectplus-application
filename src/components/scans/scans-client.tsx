@@ -115,6 +115,7 @@ export function ScansClient() {
   const [selectedCourier, setSelectedCourier] = useState<string[]>([])
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
   const [selectedProductType, setSelectedProductType] = useState<string[]>([])
+  const [fetchLimit, setFetchLimit] = useState<number>(5000)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 100
 
@@ -131,7 +132,7 @@ export function ScansClient() {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [filterBarcode, filterConnoteNumber, filterCustomer, filterDate, filterDateRange, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked, filterMissingStatus, filterNotDelivered])
+  }, [filterBarcode, filterConnoteNumber, filterCustomer, filterDate, filterDateRange, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked, filterMissingStatus, filterNotDelivered, fetchLimit])
 
   const [debouncedBarcode, setDebouncedBarcode] = useState('')
   const [debouncedConnoteNumber, setDebouncedConnoteNumber] = useState('')
@@ -196,19 +197,20 @@ export function ScansClient() {
               actualStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             }
           } else if (filterDateRange === 'custom' && filterDate) {
-            actualStart = new Date(`${filterDate}T00:00:00.000Z`);
+            const startD = new Date(`${filterDate}T00:00:00.000Z`);
+            startD.setDate(startD.getDate() - 1); // 1-day margin before for AEST/UTC offset
+            actualStart = startD;
             const endD = new Date(`${filterDate}T23:59:59.999Z`);
-            // Add 2-day buffer to account for UTC vs AEST timezone offsets
-            endD.setDate(endD.getDate() + 2);
+            endD.setDate(endD.getDate() + 1); // 1-day margin after for AEST/UTC offset
             actualEnd = endD;
           } else {
             // Default/All: Fetch last 6 months to prevent crashing while showing historical data
             actualStart = new Date(now.getFullYear(), now.getMonth() - 6, 1);
           }
 
-          // Shifting start date back by 30 days buffer to cover packages where latest_scan_at is older than actual scan updated_at
+          // Shifting start date back by 30 days buffer ONLY for preset date ranges
           const queryStart = new Date(actualStart);
-          if (filterDateRange !== 'all') {
+          if (filterDateRange !== 'all' && filterDateRange !== 'custom') {
             queryStart.setDate(queryStart.getDate() - 30);
           }
 
@@ -222,7 +224,7 @@ export function ScansClient() {
           }
           
           // Order by latest_scan_at and limit
-          q = query(q, orderBy('latest_scan_at', 'desc'), limit(1000));
+          q = query(q, orderBy('latest_scan_at', 'desc'), limit(fetchLimit));
           
           const snap = await getDocs(q)
           pkgs = snap.docs.map(doc => doc.data() as PackageRecord)
@@ -269,7 +271,7 @@ export function ScansClient() {
     }
 
     fetchData()
-  }, [debouncedBarcode, debouncedConnoteNumber, filterDateRange, filterDate])
+  }, [debouncedBarcode, debouncedConnoteNumber, filterDateRange, filterDate, fetchLimit])
 
 
 
@@ -393,14 +395,14 @@ export function ScansClient() {
   };
 
   const getPackageCompanyInfo = (pkg: PackageRecord) => {
-    let customerNsId = null;
-    if (pkg.scans && pkg.scans.length > 0) {
+    let customerNsId = (pkg as any).customer_ns_id;
+    if (!customerNsId && pkg.scans && pkg.scans.length > 0) {
       const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
       if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
     }
     const company = customerNsId ? companyMap[String(customerNsId)] : null;
-    const companyName = company?.name || (pkg as any).customer_name || 'Unlinked';
-    const franchisee = company?.franchisee || (pkg as any).franchisee_name || 'Unassigned';
+    const companyName = company?.name || (pkg as any).customer_name || (pkg as any).company_name || 'Unlinked';
+    const franchisee = company?.franchisee || (pkg as any).franchisee_name || (pkg as any).franchisee || 'Unassigned';
     return { companyName, franchisee };
   };
 
@@ -604,9 +606,19 @@ export function ScansClient() {
         const leadPromises = [];
         const operatorPromises = [];
 
+        // Expand nsIdArray to include both string AND numeric types (since Firestore internalid can be string or number)
+        const queryTerms: (string | number)[] = [];
+        nsIdArray.forEach(id => {
+          queryTerms.push(id);
+          const num = Number(id);
+          if (!isNaN(num) && String(num) === id) {
+            queryTerms.push(num);
+          }
+        });
+
         // Batch fetch companies and leads in chunks of 30
-        for (let i = 0; i < nsIdArray.length; i += 30) {
-          const chunk = nsIdArray.slice(i, i + 30);
+        for (let i = 0; i < queryTerms.length; i += 30) {
+          const chunk = queryTerms.slice(i, i + 30);
           companyPromises.push(getDocs(query(collection(firestore, 'companies'), where('internalid', 'in', chunk))));
           leadPromises.push(getDocs(query(collection(firestore, 'leads'), where('internalid', 'in', chunk))));
         }
@@ -627,13 +639,19 @@ export function ScansClient() {
         const processDocs = (snap: any) => {
           snap.docs.forEach((doc: any) => {
             const data = doc.data();
-            if (data.internalid) {
-              newCMap[String(data.internalid)] = {
+            const keys = [
+              data.internalid !== undefined && data.internalid !== null ? String(data.internalid) : null,
+              data.internalId !== undefined && data.internalId !== null ? String(data.internalId) : null,
+              doc.id
+            ].filter(Boolean) as string[];
+
+            keys.forEach(key => {
+              newCMap[key] = {
                 id: doc.id,
-                name: data.companyName || 'Unknown Company',
-                franchisee: data.franchisee || ''
+                name: data.companyName || data.company_name || data.name || 'Unknown Company',
+                franchisee: data.franchisee || data.franchiseeName || ''
               };
-            }
+            });
           });
         };
 
@@ -799,6 +817,19 @@ export function ScansClient() {
                 <Input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
               </div>
             )}
+            <div>
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Max Records</label>
+              <select 
+                value={fetchLimit} 
+                onChange={e => setFetchLimit(Number(e.target.value))}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value={1000}>1,000 Records</option>
+                <option value={2500}>2,500 Records</option>
+                <option value={5000}>5,000 Records</option>
+                <option value={10000}>10,000 Records</option>
+              </select>
+            </div>
             <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Recipient (Suburb, State, Postcode)</label>
               <Input placeholder="E.g. Sydney" value={filterRecipient} onChange={e => setFilterRecipient(e.target.value)} />

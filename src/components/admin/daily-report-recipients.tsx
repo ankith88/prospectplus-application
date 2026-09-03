@@ -76,6 +76,14 @@ const REPORTS: ReportConfig[] = [
     defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
     testEndpoint: '/api/admin/scans/send-test-overdue-hot-leads-report',
   },
+  {
+    id: 'localmile_jobs',
+    title: 'Daily LocalMile Jobs Report',
+    description: 'Daily report of LocalMile jobs created yesterday, completion status breakdown, customer status, and franchisee details.',
+    docId: 'daily_localmile_jobs_report',
+    defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
+    testEndpoint: '/api/admin/scans/send-test-localmile-jobs-report',
+  },
 ];
 
 const FREQUENCY_OPTIONS = [
@@ -379,7 +387,7 @@ export function DailyReportRecipients() {
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 max-w-5xl bg-slate-100 p-1">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 max-w-6xl bg-slate-100 p-1">
           <TabsTrigger value="barcodes" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
             Barcodes Sync
           </TabsTrigger>
@@ -400,6 +408,9 @@ export function DailyReportRecipients() {
           </TabsTrigger>
           <TabsTrigger value="sales_snapshot" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
             Sales Snapshot
+          </TabsTrigger>
+          <TabsTrigger value="localmile_jobs" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
+            LocalMile Jobs
           </TabsTrigger>
         </TabsList>
 
