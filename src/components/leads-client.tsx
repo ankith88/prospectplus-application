@@ -710,6 +710,7 @@ export default function LeadsClientPage({
           sofLink: sofPublicLink,
           acceptUrl: leadData.acceptUrl || '',
           receiverName: leadData.receiverDetails?.name || '',
+          receiverCompanyName: leadData.receiverDetails?.companyName || leadData.receiverDetails?.company || leadData.receiverCompanyName || '',
           receiverAddress: leadData.receiverDetails?.address || '',
           ticketNumber: leadData.ticketNumber || '',
           trackingIdentifier: leadData.trackingIdentifier || ''

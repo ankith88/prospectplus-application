@@ -48,6 +48,7 @@ export const TicketFormSchema = z.object({
 
   // Contact details fields (Receiver)
   receiverName: z.string().min(1, { message: "Receiver name is required" }),
+  receiverCompanyName: z.string().optional().or(z.literal('')),
   receiverAddress: z.string().min(1, { message: "Receiver address is required" }),
   receiverEmail: z.string().email({ message: "Invalid receiver email address" }).optional().or(z.literal('')),
   receiverPhone: z.string().optional().or(z.literal('')),
@@ -55,6 +56,7 @@ export const TicketFormSchema = z.object({
   // Corrected/new receiver details (if package details are incorrect)
   hasNewReceiverDetails: z.boolean().optional().default(false),
   newReceiverName: z.string().optional(),
+  newReceiverCompanyName: z.string().optional().or(z.literal('')),
   newReceiverAddress: z.string().optional(),
   newReceiverEmail: z.string().optional().or(z.literal('')),
   newReceiverPhone: z.string().optional().or(z.literal('')),

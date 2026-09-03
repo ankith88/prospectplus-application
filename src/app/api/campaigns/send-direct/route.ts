@@ -297,9 +297,12 @@ export async function POST(request: Request) {
         const packageCode = leadData.packageCode || leadData.packages?.code || leadData.packageInfo?.code || trackingId;
         const connoteNumber = leadData.connoteNumber || leadData.connote_number || leadData.packages?.connote_number || leadData.packageInfo?.connoteNumber || '';
         const receiverName = leadData.receiverDetails?.name || "";
+        const receiverCompanyName = leadData.receiverDetails?.companyName || leadData.receiverDetails?.company || leadData.receiverCompanyName || "";
         const receiverAddress = leadData.receiverDetails?.address || "";
 
         compiledBody = compiledBody.replace(/\{\{Receiver\.Name\}\}/gi, receiverName);
+        compiledBody = compiledBody.replace(/\{\{Receiver\.CompanyName\}\}/gi, receiverCompanyName);
+        compiledBody = compiledBody.replace(/\{\{Receiver\.Company\}\}/gi, receiverCompanyName);
         compiledBody = compiledBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, receiverAddress);
         compiledBody = compiledBody.replace(/\{\{Ticket\.Number\}\}/gi, ticketNumber);
         compiledBody = compiledBody.replace(/\{\{Tracking\.ID\}\}/gi, trackingId);
@@ -316,6 +319,8 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Ticket\.Id\}\}/gi, leadData.ticketId || leadId || '');
 
         compiledSubject = compiledSubject.replace(/\{\{Receiver\.Name\}\}/gi, receiverName);
+        compiledSubject = compiledSubject.replace(/\{\{Receiver\.CompanyName\}\}/gi, receiverCompanyName);
+        compiledSubject = compiledSubject.replace(/\{\{Receiver\.Company\}\}/gi, receiverCompanyName);
         compiledSubject = compiledSubject.replace(/\{\{Receiver\.FullAddress\}\}/gi, receiverAddress);
         compiledSubject = compiledSubject.replace(/\{\{Ticket\.Number\}\}/gi, ticketNumber);
         compiledSubject = compiledSubject.replace(/\{\{Tracking\.ID\}\}/gi, trackingId);

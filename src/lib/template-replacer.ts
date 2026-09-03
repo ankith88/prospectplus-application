@@ -35,6 +35,7 @@ export interface TemplateReplacementContext {
     packageCode?: string;
     connoteNumber?: string;
     receiverName?: string;
+    receiverCompanyName?: string;
     receiverAddress?: string;
   };
 }
@@ -171,6 +172,7 @@ export function replaceTemplatePlaceholders(
 
   // Receiver & Ticket details
   const receiverName = links.receiverName || lead.receiverDetails?.name || '';
+  const receiverCompanyName = links.receiverCompanyName || lead.receiverDetails?.companyName || lead.receiverDetails?.company || lead.receiverCompanyName || lead.receiverCompany || '';
   const receiverAddress = links.receiverAddress || lead.receiverDetails?.address || '';
   const ticketNumber = links.ticketNumber || lead.ticketNumber || '';
   const trackingId = links.trackingIdentifier || lead.trackingIdentifier || '';
@@ -331,6 +333,8 @@ export function replaceTemplatePlaceholders(
     .replace(/\{\{\s*Prospect\.ProspectPlusID\s*\}\}/gi, prospectPlusId)
     .replace(/\{\{\s*prospect_plus_id\s*\}\}/gi, prospectPlusId)
     .replace(/\{\{\s*Receiver\.Name\s*\}\}/gi, receiverName)
+    .replace(/\{\{\s*Receiver\.CompanyName\s*\}\}/gi, receiverCompanyName)
+    .replace(/\{\{\s*Receiver\.Company\s*\}\}/gi, receiverCompanyName)
     .replace(/\{\{\s*Receiver\.FullAddress\s*\}\}/gi, receiverAddress)
     .replace(/\{\{\s*Ticket\.Number\s*\}\}/gi, ticketNumber)
     .replace(/\{\{\s*Tracking\.ID\s*\}\}/gi, trackingId)

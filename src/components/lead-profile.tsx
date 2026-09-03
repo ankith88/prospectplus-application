@@ -2409,6 +2409,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       });
       
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
+      parsedBody = parsedBody.replace(/\{\{Receiver\.CompanyName\}\}/gi, leadData.receiverDetails?.companyName || leadData.receiverDetails?.company || leadData.receiverCompanyName || '');
+      parsedBody = parsedBody.replace(/\{\{Receiver\.Company\}\}/gi, leadData.receiverDetails?.companyName || leadData.receiverDetails?.company || leadData.receiverCompanyName || '');
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');
       parsedBody = parsedBody.replace(/\{\{Ticket\.Number\}\}/gi, leadData.ticketNumber || '');
       parsedBody = parsedBody.replace(/\{\{Tracking\.ID\}\}/gi, leadData.trackingIdentifier || '');
@@ -10149,6 +10151,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     { label: 'LocalMile Security Code', placeholder: '{{Lead.LocalMileSecurityCode}}' },
                                     { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
                                     { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
+                                    { label: 'Receiver Company Name', placeholder: '{{Receiver.CompanyName}}' },
                                     { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
                                     { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
                                     { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },

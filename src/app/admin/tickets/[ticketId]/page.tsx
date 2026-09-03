@@ -763,6 +763,7 @@ export default function TicketDetailsPage() {
       const representativeName = userProfile?.displayName || userProfile?.firstName || 'Customer Service Rep';
       
       const receiverName = packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "";
+      const receiverCompanyName = packageDetails?.receiverFullDetails?.companyName || packageDetails?.receiverDetails?.companyName || packageDetails?.receiverFullDetails?.company || packageDetails?.receiverDetails?.company || ticket?.newReceiverCompanyName || ticket?.receiverCompanyName || "";
       const receiverAddress = packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "";
       const ticketNumber = ticket?.ticketNumber || ticketId || "";
       const trackingId = ticket?.trackingIdentifier || packageDetails?.packageInfo?.code || "";
@@ -773,6 +774,8 @@ export default function TicketDetailsPage() {
       parsedSubject = parsedSubject.replace(/\{\{SalesRep\.Name\}\}/g, representativeName);
       parsedSubject = parsedSubject.replace(/\{\{Ticket\.Id\}\}/g, ticketId || '');
       parsedSubject = parsedSubject.replace(/\{\{Receiver\.Name\}\}/g, receiverName);
+      parsedSubject = parsedSubject.replace(/\{\{Receiver\.CompanyName\}\}/g, receiverCompanyName);
+      parsedSubject = parsedSubject.replace(/\{\{Receiver\.Company\}\}/g, receiverCompanyName);
       parsedSubject = parsedSubject.replace(/\{\{Receiver\.FullAddress\}\}/g, receiverAddress);
       parsedSubject = parsedSubject.replace(/\{\{Ticket\.Number\}\}/g, ticketNumber);
       parsedSubject = parsedSubject.replace(/\{\{Tracking\.ID\}\}/g, trackingId);
@@ -786,6 +789,8 @@ export default function TicketDetailsPage() {
       parsedBody = parsedBody.replace(/\{\{Ticket\.Id\}\}/g, ticketId || '');
       
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/g, receiverName);
+      parsedBody = parsedBody.replace(/\{\{Receiver\.CompanyName\}\}/g, receiverCompanyName);
+      parsedBody = parsedBody.replace(/\{\{Receiver\.Company\}\}/g, receiverCompanyName);
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/g, receiverAddress);
       parsedBody = parsedBody.replace(/\{\{Ticket\.Number\}\}/g, ticketNumber);
       parsedBody = parsedBody.replace(/\{\{Tracking\.ID\}\}/g, trackingId);
@@ -3924,6 +3929,7 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
                 <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 rounded-xl border border-slate-200">
                   {[
                     { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
+                    { label: 'Receiver Company Name', placeholder: '{{Receiver.CompanyName}}' },
                     { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
                     { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
                     { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },

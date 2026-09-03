@@ -2514,6 +2514,7 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Mobile}}')}>Franchisee Mobile</DropdownMenuItem>
                            <DropdownMenuSeparator />
                            <DropdownMenuItem onClick={() => insertContent('{{Receiver.Name}}')}>Receiver Name</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Receiver.CompanyName}}')}>Receiver Company Name</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Receiver.FullAddress}}')}>Receiver Full Address</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Ticket.Number}}')}>Ticket Number</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Tracking.ID}}')}>Tracking ID</DropdownMenuItem>

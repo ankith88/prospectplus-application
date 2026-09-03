@@ -1814,6 +1814,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                                     { label: 'LocalMile Security Code', placeholder: '{{Lead.LocalMileSecurityCode}}' },
                                     { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
                                     { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
+                                    { label: 'Receiver Company Name', placeholder: '{{Receiver.CompanyName}}' },
                                     { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
                                     { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
                                     { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },

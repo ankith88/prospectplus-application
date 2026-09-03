@@ -13,14 +13,49 @@ function parseDate(dateVal: any): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+export function getSydneyDateRange(dateString: string): { targetStart: Date; targetEnd: Date } {
+  const [day, month, year] = dateString.split("-").map(Number);
+  const d10 = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00.000+10:00`);
+  const sydneyDayStr = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', day: '2-digit' }).format(d10);
+  const offsetStr = (parseInt(sydneyDayStr, 10) === day) ? '+10:00' : '+11:00';
+
+  const targetStart = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00.000${offsetStr}`);
+  const targetEnd = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T23:59:59.999${offsetStr}`);
+  return { targetStart, targetEnd };
+}
+
+export function getYesterdaySydneyDateString(): string {
+  const sydneyNowStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Sydney',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+
+  const [y, m, d] = sydneyNowStr.split('-').map(Number);
+  const sydneyTodayDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const sydneyYesterdayDate = new Date(sydneyTodayDate.getTime() - 24 * 60 * 60 * 1000);
+
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Sydney',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(sydneyYesterdayDate);
+
+  const day = parts.find(p => p.type === 'day')?.value || '';
+  const month = parts.find(p => p.type === 'month')?.value || '';
+  const year = parts.find(p => p.type === 'year')?.value || '';
+
+  return `${day}-${month}-${year}`;
+}
+
 export async function runLocalMileJobsReport(dateString: string, recipients: string[], fromAddress?: string): Promise<any> {
   const db = admin.firestore();
   functions.logger.info(`Generating LocalMile jobs report for date: ${dateString}`);
 
-  // parse target date (DD-MM-YYYY)
-  const [day, month, year] = dateString.split("-").map(Number);
-  const targetStart = new Date(year, month - 1, day, 0, 0, 0, 0);
-  const targetEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
+  // parse target date (DD-MM-YYYY) in Sydney timezone
+  const { targetStart, targetEnd } = getSydneyDateRange(dateString);
 
   // Query all LocalMile jobs across all leads
   const jobsSnap = await db.collectionGroup('localMileJobs').get();
@@ -278,20 +313,7 @@ export const dailyLocalMileJobsReport = functions
       return;
     }
 
-    const sydneyFormatter = new Intl.DateTimeFormat('en-AU', {
-      timeZone: 'Australia/Sydney',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-
-    const now = new Date();
-    now.setDate(now.getDate() - 1);
-    const parts = sydneyFormatter.formatToParts(now);
-    const day = parts.find(p => p.type === 'day')?.value || '';
-    const month = parts.find(p => p.type === 'month')?.value || '';
-    const year = parts.find(p => p.type === 'year')?.value || '';
-    const dateString = `${day}-${month}-${year}`;
+    const dateString = getYesterdaySydneyDateString();
 
     try {
       await runLocalMileJobsReport(dateString, recipients, fromAddress);

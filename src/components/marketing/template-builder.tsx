@@ -899,6 +899,8 @@ export function TemplateBuilder() {
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Lead.LocalMileSecurityCode}}')}>LocalMile Security Code</DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Receiver.Name}}')}>Receiver Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Receiver.CompanyName}}')}>Receiver Company Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Receiver.FullAddress}}')}>Receiver Full Address</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Ticket.Number}}')}>Ticket Number</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Tracking.ID}}')}>Tracking ID</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Packages.Code}}')}>Package Code</DropdownMenuItem>
@@ -1046,6 +1048,7 @@ export function TemplateBuilder() {
                   <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Mobile}}')}>+ Franchisee Mobile</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => insertContent('{{Receiver.Name}}')}>+ Receiver Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Receiver.CompanyName}}')}>+ Receiver Company Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Receiver.FullAddress}}')}>+ Receiver Full Address</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Ticket.Number}}')}>+ Ticket Number</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Tracking.ID}}')}>+ Tracking ID</DropdownMenuItem>

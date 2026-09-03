@@ -381,6 +381,7 @@ export async function GET(request: Request) {
       },
       receiverDetails: {
         name: latestScan?.receiver_name || 'Unknown',
+        companyName: latestScan?.receiver_company || latestScan?.company_name || latestScan?.company || '',
         address: receiverAddress || 'Unknown',
       },
       trackingHistory: pkg.scans?.map((s: any) => `${s.scan_type} - ${new Date(s.updated_at).toLocaleString()}`) || [],
@@ -399,6 +400,7 @@ export async function GET(request: Request) {
       },
       receiverFullDetails: {
         name: latestScan?.receiver_name || 'Unknown',
+        companyName: latestScan?.receiver_company || latestScan?.company_name || latestScan?.company || '',
         address: [latestScan?.address1, latestScan?.address2, latestScan?.receiver_suburb, latestScan?.state, latestScan?.post_code].filter(Boolean).join(', '),
         email: latestScan?.email || '',
         phone: latestScan?.phone || '',
