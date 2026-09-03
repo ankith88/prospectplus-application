@@ -400,7 +400,8 @@ function SelectServicesContent() {
                     parentId: "",
                     startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
                     frequency: freqArr,
-                    service: 'site-to-lpo',
+                    service: 'site-to-australia post',
+                    userRole: 'customer',
                     accountManagerName: lead.accountManagerAssigned || '',
                     customer: {
                       company: lead.companyName || '',
@@ -410,6 +411,23 @@ function SelectServicesContent() {
                       postcode: lead.postalAddress?.zip || lead.address?.zip || '',
                       email: lead.customerServiceEmail || '',
                       phone: lead.customerPhone || ''
+                    },
+                    recipient: {
+                      company: 'Australia Post',
+                      address: lead.postalAddress?.street || lead.address?.street || '',
+                      suburb: lead.postalAddress?.city || lead.address?.city || '',
+                      state: lead.postalAddress?.state || lead.address?.state || 'NSW',
+                      postcode: lead.postalAddress?.zip || lead.address?.zip || '',
+                      firstName: 'Australia',
+                      lastName: 'Post',
+                      phone: '13 13 18',
+                      email: 'no-reply@auspost.com.au'
+                    },
+                    auspostContact: {
+                      firstName: 'Australia',
+                      lastName: 'Post',
+                      phone: '13 13 18',
+                      email: 'no-reply@auspost.com.au'
                     }
                   })
                 });

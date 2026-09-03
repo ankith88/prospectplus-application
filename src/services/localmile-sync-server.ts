@@ -52,9 +52,27 @@ export async function syncPmpoToLocalMileServer(
       startDate: startDateVal,
       date: startDateVal,
       frequency: frequencyArray,
-      service: 'site-to-lpo',
+      service: 'site-to-australia post',
+      userRole: 'customer',
       accountManagerName: leadData?.accountManagerAssigned || leadData?.salesRepAssigned || '',
-      customer: customerObj
+      customer: customerObj,
+      recipient: {
+        company: 'Australia Post',
+        address: customerObj.address || '',
+        suburb: customerObj.suburb || '',
+        state: customerObj.state || 'NSW',
+        postcode: customerObj.postcode || '',
+        firstName: 'Australia',
+        lastName: 'Post',
+        phone: '13 13 18',
+        email: 'no-reply@auspost.com.au'
+      },
+      auspostContact: {
+        firstName: 'Australia',
+        lastName: 'Post',
+        phone: '13 13 18',
+        email: 'no-reply@auspost.com.au'
+      }
     };
 
     console.log(`[LocalMile Sync] Updating PMPO scheduled_job for lead ${leadId} (Date: ${startDateVal}, Freq: ${frequencyArray.join(',')})...`);

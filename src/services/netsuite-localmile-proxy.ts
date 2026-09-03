@@ -334,7 +334,8 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 									parentId: "",
 									startDate: new Date().toISOString().split('T')[0],
 									frequency: frequencyArray,
-									service: 'site-to-lpo',
+									service: 'site-to-australia post',
+									userRole: 'customer',
 									accountManagerName: payload.accountManagerName || lead.accountManagerAssigned || '',
 									customer: {
 										company: lead.companyName || '',
@@ -344,6 +345,23 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 										postcode: (lead as any).zip || (typeof lead.address === 'object' ? lead.address?.zip : '') || '',
 										email: contactEmail || lead.customerServiceEmail || '',
 										phone: contactPhone || lead.customerPhone || ''
+									},
+									recipient: {
+										company: 'Australia Post',
+										address: (lead as any).address1 || (lead as any).street || (typeof lead.address === 'object' ? lead.address?.street : lead.address) || '',
+										suburb: (lead as any).city || (typeof lead.address === 'object' ? lead.address?.city : '') || '',
+										state: (lead as any).state || (typeof lead.address === 'object' ? lead.address?.state : '') || 'NSW',
+										postcode: (lead as any).zip || (typeof lead.address === 'object' ? lead.address?.zip : '') || '',
+										firstName: 'Australia',
+										lastName: 'Post',
+										phone: '13 13 18',
+										email: 'no-reply@auspost.com.au'
+									},
+									auspostContact: {
+										firstName: 'Australia',
+										lastName: 'Post',
+										phone: '13 13 18',
+										email: 'no-reply@auspost.com.au'
 									}
 								};
 
