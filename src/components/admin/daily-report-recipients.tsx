@@ -84,6 +84,14 @@ const REPORTS: ReportConfig[] = [
     defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
     testEndpoint: '/api/admin/scans/send-test-localmile-jobs-report',
   },
+  {
+    id: 'zee_gen_auto_response',
+    title: 'Zee Gen Leads - Auto Response',
+    description: 'Daily auto-response email sent to franchisees for the leads they created on the previous day using the exact "Zee Gen Leads - Auto Response" template.',
+    docId: 'zee_gen_auto_response_report',
+    defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
+    testEndpoint: '/api/admin/scans/send-test-zee-gen-auto-response',
+  },
 ];
 
 const FREQUENCY_OPTIONS = [

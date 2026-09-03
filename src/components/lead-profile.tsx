@@ -4850,9 +4850,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return (
         <div className="flex flex-wrap items-center gap-2">
             {canShowLpoPlus && (() => {
+                const isAmOrSalesMgr = isAccountOrSalesManager(userProfile, isSuperAdmin);
                 const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
                 const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
-                const isPushEligible = lpoConnectActive && !isTrialingLocalMile && !isLost && (lead.hasMyPostBusinessAccount === 'No' && lead.parcelVolumeGreaterThan20 === 'Yes');
+                const hasValidLpoAnswers = (lead.hasMyPostBusinessAccount === 'No' && lead.parcelVolumeGreaterThan20 === 'Yes');
+                const isPushEligible = (lpoConnectActive || isAmOrSalesMgr) && !isTrialingLocalMile && !isLost && (hasValidLpoAnswers || isAmOrSalesMgr);
                 return (
                     <div className="flex flex-col gap-1">
                         <Button
@@ -4872,7 +4874,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     ? "Disabled: Lead is marked as Lost"
                                     : isTrialingLocalMile 
                                         ? "Disabled: Lead is currently on LocalMile trial"
-                                        : !lpoConnectActive 
+                                        : !lpoConnectActive && !isAmOrSalesMgr
                                             ? "Disabled: Linked LPO is Inactive" 
                                             : "Disabled: Requires Existing Account 'No' AND Volume > 20 'Yes'"}
                             </span>

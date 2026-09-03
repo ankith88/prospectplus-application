@@ -1251,6 +1251,239 @@ export const sendDailyFranchiseeLeadsReport = functions
     }
   });
 
+/**
+ * Executes Zee Gen Leads Auto Response for leads created yesterday
+ */
+export async function runZeeGenAutoResponseFunction(dateString?: string, testEmail?: string) {
+  const db = admin.firestore();
+
+  const usersSnap = await db.collection("users").get();
+  const franchiseeUserIds = new Set<string>();
+  const franchiseeUserEmails = new Set<string>();
+  const franchiseeUserNames = new Set<string>();
+  const userMapByEmail = new Map<string, any>();
+  const userMapByUid = new Map<string, any>();
+
+  usersSnap.docs.forEach(doc => {
+    const u = doc.data() || {};
+    userMapByUid.set(doc.id, u);
+    if (u.email) {
+      userMapByEmail.set(String(u.email).toLowerCase().trim(), u);
+    }
+
+    const role = (u.activeRole || u.role || '').toLowerCase().trim();
+    const assignedRoles = (u.assignedRoles || []).map((r: any) => String(r).toLowerCase().trim());
+    const isFranchisee = role === 'franchisee' || assignedRoles.includes('franchisee');
+
+    if (isFranchisee) {
+      franchiseeUserIds.add(doc.id);
+      if (u.email) franchiseeUserEmails.add(String(u.email).toLowerCase().trim());
+      const dName = u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim();
+      if (dName) franchiseeUserNames.add(String(dName).toLowerCase().trim());
+    }
+  });
+
+  const sydneyFormatter = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Sydney",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  let d: number, m: number, y: number;
+
+  if (dateString) {
+    if (dateString.includes('-')) {
+      const parts = dateString.split('-');
+      if (parts[0].length === 4) {
+        y = Number(parts[0]); m = Number(parts[1]); d = Number(parts[2]);
+      } else {
+        d = Number(parts[0]); m = Number(parts[1]); y = Number(parts[2]);
+      }
+    } else if (dateString.includes('/')) {
+      const parts = dateString.split('/');
+      d = Number(parts[0]); m = Number(parts[1]); y = Number(parts[2]);
+    } else {
+      throw new Error(`Invalid date format: ${dateString}`);
+    }
+  } else {
+    const now = new Date();
+    now.setDate(now.getDate() - 1); // Yesterday
+    const parts = sydneyFormatter.formatToParts(now);
+    d = Number(parts.find(p => p.type === 'day')?.value || '01');
+    m = Number(parts.find(p => p.type === 'month')?.value || '01');
+    y = Number(parts.find(p => p.type === 'year')?.value || '2026');
+  }
+
+  const targetStart = new Date(y, m - 1, d, 0, 0, 0, 0);
+  const targetEnd = new Date(y, m - 1, d, 23, 59, 59, 999);
+  const dateCreatedString = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+  const q1 = await db.collection("leads").where("dateCreated", "==", dateCreatedString).get();
+  const q2 = await db.collection("leads").where("createdAt", ">=", threeDaysAgo.toISOString()).get();
+  const q3 = await db.collection("leads").where("createdAt", ">=", admin.firestore.Timestamp.fromDate(threeDaysAgo)).get();
+  const q4 = await db.collection("leads").where("isZeeCreated", "==", true).get();
+
+  const allLeadsMap = new Map<string, any>();
+  q1.docs.forEach(doc => allLeadsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+  q2.docs.forEach(doc => allLeadsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+  q3.docs.forEach(doc => allLeadsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+  q4.docs.forEach(doc => allLeadsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+  const allLeads = Array.from(allLeadsMap.values());
+
+  const filteredLeads = allLeads.filter(lead => {
+    let isDateMatch = false;
+    if (lead.dateCreated === dateCreatedString) {
+      isDateMatch = true;
+    } else if (lead.createdAt) {
+      let createdDate: Date;
+      if (typeof lead.createdAt.toDate === "function") {
+        createdDate = lead.createdAt.toDate();
+      } else {
+        createdDate = new Date(lead.createdAt);
+      }
+      if (createdDate >= targetStart && createdDate <= targetEnd) {
+        isDateMatch = true;
+      }
+    } else if (lead.dateLeadEntered) {
+      if (lead.dateLeadEntered.includes("/")) {
+        const [ld, lm, ly] = lead.dateLeadEntered.split("/");
+        if (ld && lm && ly) {
+          const enteredDate = new Date(Number(ly), Number(lm) - 1, Number(ld));
+          if (enteredDate.getDate() === d && (enteredDate.getMonth() + 1) === m && enteredDate.getFullYear() === y) {
+            isDateMatch = true;
+          }
+        }
+      } else {
+        const enteredDate = new Date(lead.dateLeadEntered);
+        if (!isNaN(enteredDate.getTime()) && enteredDate >= targetStart && enteredDate <= targetEnd) {
+          isDateMatch = true;
+        }
+      }
+    }
+
+    if (!isDateMatch) return false;
+
+    if (lead.isZeeCreated === true) return true;
+
+    const createdByRole = String(lead.createdByRole || lead.creatorRole || '').toLowerCase().trim();
+    if (createdByRole === 'franchisee') return true;
+
+    const sourceVal = String(lead.source || lead.leadSource || lead.customerSource || '').toLowerCase();
+    if (sourceVal.includes('franchisee') || lead.leadSource === '-4') return true;
+
+    const uid = String(lead.createdByUid || '').trim();
+    if (uid && franchiseeUserIds.has(uid)) return true;
+
+    const email = String(lead.createdByEmail || lead.creatorEmail || '').toLowerCase().trim();
+    if (email && franchiseeUserEmails.has(email)) return true;
+
+    const creatorName = String(lead.createdBy || lead.createdByName || lead.author || lead.creator || '').toLowerCase().trim();
+    if (creatorName && (franchiseeUserNames.has(creatorName) || franchiseeUserEmails.has(creatorName))) return true;
+
+    return false;
+  });
+
+  const franchiseeGroups = new Map<string, any[]>();
+  filteredLeads.forEach(lead => {
+    const franName = (lead.franchisee || lead.franchiseeName || "Unassigned Franchisee").trim();
+    if (!franchiseeGroups.has(franName)) {
+      franchiseeGroups.set(franName, []);
+    }
+    franchiseeGroups.get(franName)!.push(lead);
+  });
+
+  const templateSnap = await db.collection('marketing_templates')
+    .where('name', '==', 'Zee Gen Leads - Auto Response')
+    .limit(1)
+    .get();
+
+  let rawSubject = "Thanks for adding your leads to ProspectPlus";
+  let rawBody = "";
+
+  if (!templateSnap.empty) {
+    const templateDoc = templateSnap.docs[0].data();
+    if (templateDoc.subject) rawSubject = templateDoc.subject;
+    if (templateDoc.body) rawBody = templateDoc.body;
+  }
+
+  const franchiseesSnap = await db.collection('franchisees').get();
+  const franchiseeEmailMap = new Map<string, string>();
+  franchiseesSnap.docs.forEach(doc => {
+    const data = doc.data() || {};
+    const nameKey = String(data.name || '').toLowerCase().trim();
+    const email = data.email || data.mainContactEmail || data.contactEmail || '';
+    if (nameKey && email) franchiseeEmailMap.set(nameKey, String(email).trim());
+  });
+
+  for (const [franchiseeName, leads] of franchiseeGroups.entries()) {
+    let recipientEmail = testEmail ? testEmail.trim() : '';
+
+    if (!recipientEmail) {
+      const fNameLower = franchiseeName.toLowerCase().trim();
+      recipientEmail = franchiseeEmailMap.get(fNameLower) || '';
+      if (!recipientEmail && leads.length > 0) {
+        recipientEmail = leads[0].createdByEmail || leads[0].creatorEmail || '';
+      }
+    }
+
+    if (!recipientEmail) continue;
+
+    let finalSubject = rawSubject
+      .replace(/\{\{Franchisee\.Name\}\}/g, franchiseeName)
+      .replace(/\{\{franchisee_name\}\}/gi, franchiseeName)
+      .replace(/\{\{franchisee\}\}/gi, franchiseeName);
+
+    let finalBody = rawBody
+      .replace(/\{\{Franchisee\.Name\}\}/g, franchiseeName)
+      .replace(/\{\{franchisee_name\}\}/gi, franchiseeName)
+      .replace(/\{\{franchisee\}\}/gi, franchiseeName)
+      .replace(/\{\{unsubscribe_link\}\}/g, '#');
+
+    if (testEmail && franchiseeGroups.size > 1) {
+      finalSubject = `${rawSubject} (Test - ${franchiseeName})`;
+    }
+
+    await sendAutomatedEmail({
+      to: recipientEmail,
+      subject: finalSubject,
+      html: finalBody,
+      customFrom: 'ankith.ravindran@mailplus.com.au'
+    });
+  }
+}
+
+/**
+ * Scheduled Cloud Function that runs hourly and sends daily Zee Gen Leads Auto Response.
+ */
+export const sendDailyZeeGenAutoResponse = functions
+  .region("australia-southeast1")
+  .pubsub.schedule("0 * * * *")
+  .timeZone("Australia/Sydney")
+  .onRun(async (context) => {
+    functions.logger.info("Executing scheduled sendDailyZeeGenAutoResponse function...");
+    const sydneyHourStr = new Intl.DateTimeFormat("en-AU", {
+      timeZone: "Australia/Sydney",
+      hour: "numeric",
+      hour12: false
+    }).format(new Date());
+
+    const currentHour = parseInt(sydneyHourStr, 10);
+    if (currentHour !== 7) {
+      functions.logger.info(`Current Sydney hour is ${currentHour}, target hour is 7. Skipping execution.`);
+      return;
+    }
+
+    try {
+      await runZeeGenAutoResponseFunction();
+    } catch (err) {
+      functions.logger.error("Error executing daily Zee Gen Auto Response function:", err);
+    }
+  });
+
 function encryptLeadId(leadId: string): string {
   if (!leadId) return '';
   try {
@@ -1286,5 +1519,6 @@ function checkHasPostalAddress(data: any): boolean {
   const p = data.postalAddress;
   return !!(p.street || p.address1 || p.city || p.zip);
 }
+
 
 
