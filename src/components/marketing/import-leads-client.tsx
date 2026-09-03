@@ -1268,7 +1268,10 @@ export function ImportLeadsClient() {
           }
         } else if (selectedBucket === 'outbound') {
           leadData.campaign = effectiveCampaign || 'Bulk Import';
-          if (dialerAssigned) leadData.dialerAssigned = dialerAssigned;
+          if (dialerAssigned) {
+            leadData.dialerAssigned = dialerAssigned;
+            leadData.assignedToDialerAt = nowStr;
+          }
           if (salesRepAssigned) {
             const effRep = resolveEffectiveSalesRep(salesRepAssigned, rowIdx);
             leadData.salesRepAssigned = effRep;

@@ -184,6 +184,7 @@ export function ScansClient() {
           };
           
           let actualStart: Date;
+          let actualEnd: Date | null = null;
           const now = new Date();
 
           if (filterDateRange !== 'all' && filterDateRange !== 'custom') {
@@ -196,6 +197,10 @@ export function ScansClient() {
             }
           } else if (filterDateRange === 'custom' && filterDate) {
             actualStart = new Date(`${filterDate}T00:00:00.000Z`);
+            const endD = new Date(`${filterDate}T23:59:59.999Z`);
+            // Add 2-day buffer to account for UTC vs AEST timezone offsets
+            endD.setDate(endD.getDate() + 2);
+            actualEnd = endD;
           } else {
             // Default/All: Fetch last 6 months to prevent crashing while showing historical data
             actualStart = new Date(now.getFullYear(), now.getMonth() - 6, 1);
@@ -211,6 +216,10 @@ export function ScansClient() {
             collection(firestore, 'packages'),
             where('latest_scan_at', '>=', queryStart.toISOString())
           );
+
+          if (actualEnd) {
+            q = query(q, where('latest_scan_at', '<=', actualEnd.toISOString()));
+          }
           
           // Order by latest_scan_at and limit
           q = query(q, orderBy('latest_scan_at', 'desc'), limit(1000));
@@ -383,6 +392,34 @@ export function ScansClient() {
     }
   };
 
+  const getPackageCompanyInfo = (pkg: PackageRecord) => {
+    let customerNsId = null;
+    if (pkg.scans && pkg.scans.length > 0) {
+      const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
+      if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
+    }
+    const company = customerNsId ? companyMap[String(customerNsId)] : null;
+    const companyName = company?.name || (pkg as any).customer_name || 'Unlinked';
+    const franchisee = company?.franchisee || (pkg as any).franchisee_name || 'Unassigned';
+    return { companyName, franchisee };
+  };
+
+  const matchesCustomDate = (dateStr: string | null | undefined, targetYYYYMMDD: string) => {
+    if (!dateStr) return false;
+    const d = parseDateString(dateStr);
+    if (isNaN(d.getTime())) return false;
+
+    // Local YYYY-MM-DD
+    const localIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (localIso === targetYYYYMMDD) return true;
+
+    // UTC YYYY-MM-DD
+    const utcIso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    if (utcIso === targetYYYYMMDD) return true;
+
+    return false;
+  };
+
   // Compute unique options for multiselects
   const uniqueScanTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.scan_type)).filter(Boolean)))
     .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
@@ -392,12 +429,12 @@ export function ScansClient() {
     .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueProductTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.product_type)).filter(Boolean)))
     .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
-  const uniqueFranchisees = Array.from(new Set(packages.map(p => (p as any).franchisee_name).filter(Boolean)))
+  const uniqueFranchisees = Array.from(new Set(packages.map(p => getPackageCompanyInfo(p).franchisee).filter(Boolean)))
     .map(f => ({label: f as string, value: f as string})).sort((a, b) => a.label.localeCompare(b.label));
 
   const filteredPackages = packages.filter(pkg => {
-    const companyName = ((pkg as any).customer_name || 'Unlinked').toLowerCase();
-    const franchisee = (pkg as any).franchisee_name || 'Unassigned';
+    const { companyName, franchisee } = getPackageCompanyInfo(pkg);
+    const companyNameLower = companyName.toLowerCase();
 
     const hasExcludedScans = (p: PackageRecord) => {
       return p.scans?.some(scan => {
@@ -406,7 +443,7 @@ export function ScansClient() {
       }) || false;
     };
 
-    const isLinked = (pkg as any).customer_name && (pkg as any).customer_name !== 'Unlinked';
+    const isLinked = companyName !== 'Unlinked';
     if (filterUnlinked && isLinked) return false;
     if (filterMissingStatus && pkg.real_time_status) return false;
     if (filterNotDelivered && (!pkg.real_time_status || pkg.real_time_status.status.toLowerCase().includes('delivered') || hasExcludedScans(pkg))) return false;
@@ -423,7 +460,7 @@ export function ScansClient() {
       }
       if (!hasConnoteMatch) return false;
     }
-    if (!filterUnlinked && filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
+    if (!filterUnlinked && filterCustomer && !companyNameLower.includes(filterCustomer.toLowerCase())) return false;
     
     // Determine the latest scan for the new filters
     let latestScanFilter = pkg.scans?.[pkg.scans.length - 1];
@@ -466,10 +503,9 @@ export function ScansClient() {
 
     if (filterDateRange !== 'all') {
       if (filterDateRange === 'custom' && filterDate) {
-        const [y, m, d] = filterDate.split('-');
-        const formattedSync = `${d}-${m}-${y}`;
-        const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at?.startsWith(filterDate));
-        if (!hasMatchingScan && (!pkg.sync_date || typeof pkg.sync_date !== 'string' || !pkg.sync_date.includes(formattedSync))) return false;
+        const hasMatchingScan = pkg.scans?.some(scan => matchesCustomDate(scan.updated_at, filterDate));
+        const hasMatchingSync = matchesCustomDate(pkg.sync_date, filterDate);
+        if (!hasMatchingScan && !hasMatchingSync) return false;
       } else {
         const hasMatchingScan = pkg.scans?.some(scan => checkDate(scan.updated_at));
         if (!hasMatchingScan) return false;
@@ -501,7 +537,7 @@ export function ScansClient() {
         latest = pkg.scans.reduce((l, c) => new Date(l.updated_at) > new Date(c.updated_at) ? l : c, pkg.scans[0]);
       }
       const scanDate = latest ? new Date(latest.updated_at).getTime() : 0;
-      const customerName = (pkg as any).customer_name || '';
+      const customerName = getPackageCompanyInfo(pkg).companyName;
       const courierSpeed = `${latest?.courier || ''} ${latest?.delivery_speed || ''}`.toLowerCase();
       // Handle weights that might be empty or strings like "1.5 kg"
       const weightStr = typeof pkg.weight === 'string' ? pkg.weight.replace(/[^0-9.]/g, '') : '';
@@ -528,22 +564,22 @@ export function ScansClient() {
   const totalPages = Math.ceil(sortedFilteredPackages.length / itemsPerPage)
   const paginatedPackages = sortedFilteredPackages.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
-  // Lazy-load companies, leads, and operators for the visible paginated packages
+  // Load companies, leads, and operators for all fetched packages
   useEffect(() => {
-    if (paginatedPackages.length === 0) return;
+    if (packages.length === 0) return;
 
     async function loadVisibleMetadata() {
       const uniqueNsIds = new Set<string>();
       const uniqueOpIds = new Set<string>();
 
-      paginatedPackages.forEach(pkg => {
+      packages.forEach(pkg => {
         // Extract customer NS ID
         let customerNsId = null;
         if (pkg.scans && pkg.scans.length > 0) {
           const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
           if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
         }
-        if (customerNsId && !companyMap[customerNsId]) {
+        if (customerNsId && !companyMap[String(customerNsId)]) {
           uniqueNsIds.add(String(customerNsId));
         }
 
@@ -626,7 +662,7 @@ export function ScansClient() {
     }
 
     loadVisibleMetadata();
-  }, [paginatedPackages]);
+  }, [packages]);
 
   if (loading) {
     return (
