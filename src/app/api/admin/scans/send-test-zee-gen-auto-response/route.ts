@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     const { recipients, date } = body;
 
     const testEmail = (recipients && Array.isArray(recipients) && recipients.length > 0)
-      ? recipients[0]
+      ? recipients.join(', ')
       : 'ankith.ravindran@mailplus.com.au';
 
     const result = await processZeeGenAutoResponse({
