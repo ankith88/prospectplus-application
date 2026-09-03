@@ -1557,6 +1557,27 @@ async function updateLeadDialerRep(leadId: string, dialerRep: string | null, isI
   }
 }
 
+async function updateLeadAccountManager(leadId: string, accountManager: string | null): Promise<void> {
+  try {
+    const colName = await getLeadOrCompanyCollection(leadId);
+    const leadRef = doc(firestore, colName, leadId);
+    const updateData: any = {
+      accountManagerAssigned: (!accountManager || accountManager === 'Unassigned' || accountManager === 'none') ? deleteField() : accountManager,
+      updatedAt: new Date().toISOString()
+    };
+    await updateDoc(leadRef, updateData);
+    await logActivity(leadId, { 
+      type: 'Update', 
+      notes: accountManager && accountManager !== 'Unassigned' && accountManager !== 'none' 
+        ? `Account Manager updated to ${accountManager}` 
+        : `Account Manager unassigned` 
+    });
+  } catch (error) {
+    console.error(`Failed to update Account Manager for ${leadId}:`, error);
+    throw new Error('Failed to update Account Manager');
+  }
+}
+
 async function updateLeadAvatar(leadId: string, avatarUrl: string): Promise<void> {
   try {
     await updateDoc(doc(firestore, 'leads', leadId), { avatarUrl });
@@ -3847,6 +3868,7 @@ export {
     addContactToLead,
     updateLeadSalesRep,
     updateLeadDialerRep,
+    updateLeadAccountManager,
     updateLeadStatus,
     updateLeadSingleBucket,
     duplicateLeadToCompanies,

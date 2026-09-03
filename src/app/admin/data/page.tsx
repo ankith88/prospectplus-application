@@ -20,6 +20,7 @@ import { BulkImportServices } from '@/components/admin/bulk-import-services';
 import { BulkImportInvoices } from '@/components/admin/bulk-import-invoices';
 import { LeadStatusUpdater } from '@/components/admin/lead-status-updater';
 import { BulkBucketUpdater } from '@/components/admin/bulk-bucket-updater';
+import { BulkAccountManagerUpdater } from '@/components/admin/bulk-account-manager-updater';
 import { DialerAssignmentDateUpdater } from '@/components/admin/dialer-assignment-date-updater';
 import { DailyReportRecipients } from '@/components/admin/daily-report-recipients';
 
@@ -101,6 +102,13 @@ export default function AdminDataPage() {
         description="Filter leads by status, current bucket, account manager, dialer, franchisee, and date created to update their bucket individually or in bulk."
       >
         <BulkBucketUpdater />
+      </CollapsibleCard>
+
+      <CollapsibleCard
+        title="Bulk Account Manager Reassigner"
+        description="Filter leads by bucket, dialer assigned, customer status, franchisee, and date entered to randomly and equally reassign account managers across multiple selected staff."
+      >
+        <BulkAccountManagerUpdater />
       </CollapsibleCard>
 
       <CollapsibleCard

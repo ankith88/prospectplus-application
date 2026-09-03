@@ -280,16 +280,20 @@ export async function POST(request: Request) {
       console.warn('Failed to load daily_localmile_jobs_report settings:', dbErr);
     }
 
-    for (const recipient of recipients) {
-      await sendPhysicalEmail({
-        to: recipient,
-        subject: `Daily LocalMile Jobs Report - ${dateString}`,
-        html: emailHtml,
-        customFrom: fromAddress
-      });
+    const toStr = recipients.join(', ');
+
+    const result = await sendPhysicalEmail({
+      to: toStr,
+      subject: `Daily LocalMile Jobs Report - ${dateString}`,
+      html: emailHtml,
+      customFrom: fromAddress
+    });
+
+    if (!result.success) {
+      return NextResponse.json({ error: result.error || 'Failed to transmit email' }, { status: 500 });
     }
 
-    return NextResponse.json({ message: `Daily LocalMile jobs report sent successfully for ${dateString} to ${recipients.join(', ')}` });
+    return NextResponse.json({ message: `Daily LocalMile jobs report sent successfully for ${dateString} to ${toStr}` });
   } catch (error: any) {
     console.error('Error sending test LocalMile jobs report:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
