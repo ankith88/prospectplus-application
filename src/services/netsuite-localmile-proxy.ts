@@ -6,6 +6,7 @@ import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 import { logEmailServer, getLeadServer, getFranchiseeEmailServer } from '@/services/firebase-server';
 import { sendSms } from '@/services/sms-service';
 import { getPmpoServiceForLead } from '@/lib/localmile-utils';
+import { checkLocalMileCompanyExists } from '@/lib/localmile-db';
 
 /**
  * @fileoverview Server action to proxy LocalMile free trial requests to NetSuite.
@@ -365,20 +366,27 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 									}
 								};
 
-								console.log(`[LocalMile Proxy] Post-company creation: Creating PMPO scheduled_job for lead ${payload.leadId}...`, schedPayload);
-								const schedRes = await fetch(`https://us-central1-localmile-plus.cloudfunctions.net/api/api/v1/companies/${payload.leadId}/scheduled-jobs`, {
-									method: 'POST',
-									headers: {
-										'Content-Type': 'application/json',
-										'x-api-key': localMileApiKey
-									},
-									body: JSON.stringify(schedPayload)
-								});
-
-								if (schedRes.ok) {
-									console.log(`[LocalMile Proxy] Successfully created PMPO scheduled_job in LocalMile for lead ${payload.leadId}`);
+								// Verify company document exists in LocalMile application database (companies collection) before proceeding
+								// Retry up to 5 times (5s) to allow NetSuite background company creation to complete
+								const companyExists = await checkLocalMileCompanyExists(payload.leadId, 5, 1000);
+								if (!companyExists) {
+									console.warn(`[LocalMile Proxy] Company ${payload.leadId} does not exist in LocalMile application database (companies collection). Skipping scheduled_job creation.`);
 								} else {
-									console.error(`[LocalMile Proxy Error] Scheduled job creation failed: status ${schedRes.status}, error: ${await schedRes.text()}`);
+									console.log(`[LocalMile Proxy] Post-company creation: Creating PMPO scheduled_job for lead ${payload.leadId}...`, schedPayload);
+									const schedRes = await fetch(`https://us-central1-localmile-plus.cloudfunctions.net/api/api/v1/companies/${payload.leadId}/scheduled-jobs`, {
+										method: 'POST',
+										headers: {
+											'Content-Type': 'application/json',
+											'x-api-key': localMileApiKey
+										},
+										body: JSON.stringify(schedPayload)
+									});
+
+									if (schedRes.ok) {
+										console.log(`[LocalMile Proxy] Successfully created PMPO scheduled_job in LocalMile for lead ${payload.leadId}`);
+									} else {
+										console.error(`[LocalMile Proxy Error] Scheduled job creation failed: status ${schedRes.status}, error: ${await schedRes.text()}`);
+									}
 								}
 							}
 						} catch (schedErr: any) {

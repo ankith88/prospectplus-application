@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { checkLocalMileCompanyExists } from '@/lib/localmile-db';
 
 export async function POST(request: Request) {
   try {
@@ -10,6 +11,14 @@ export async function POST(request: Request) {
 
     if (!companyId) {
       return NextResponse.json({ success: false, message: 'companyId is required' }, { status: 400 });
+    }
+
+    // Verify company document exists in LocalMile application database (companies collection) before proceeding
+    // Retry up to 5 times (5s) to allow NetSuite background company creation to complete during signup
+    const companyExists = await checkLocalMileCompanyExists(companyId, 5, 1000);
+    if (!companyExists) {
+      console.warn(`[Scheduled Jobs API] Company ${companyId} does not exist in LocalMile application database (companies collection). Aborting scheduled_job creation.`);
+      return NextResponse.json({ success: false, message: `Company ${companyId} does not exist in LocalMile application database` }, { status: 400 });
     }
 
     const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY || process.env.PROSPECTPLUS_API_KEY || '454e75f843954875ccff72537d7702ba1ab6f65c';

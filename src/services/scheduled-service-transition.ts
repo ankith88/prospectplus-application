@@ -37,6 +37,12 @@ export async function processScheduledServiceChanges(): Promise<{
             // Archive current live services before promoting new services
             const currentServices = data.services || [];
             const currentHistory = data.serviceHistory || [];
+            const updates: any = {
+              services: sched.services,
+              scheduledServiceChange: null,
+              updatedAt: nowStr
+            };
+
             if (currentServices.length > 0) {
               const historyRecord = {
                 services: currentServices,
@@ -48,12 +54,6 @@ export async function processScheduledServiceChanges(): Promise<{
               };
               updates.serviceHistory = [historyRecord, ...currentHistory];
             }
-
-            const updates: any = {
-              services: sched.services,
-              scheduledServiceChange: null,
-              updatedAt: nowStr
-            };
 
             if (sched.products && Array.isArray(sched.products) && sched.products.length > 0) {
               updates.products = sched.products;

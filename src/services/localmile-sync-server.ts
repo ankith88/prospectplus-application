@@ -3,6 +3,8 @@
  * to LocalMile Plus scheduled_jobs collection.
  */
 
+import { checkLocalMileCompanyExists } from '@/lib/localmile-db';
+
 export async function syncPmpoToLocalMileServer(
   leadId: string,
   leadData: any,
@@ -22,6 +24,13 @@ export async function syncPmpoToLocalMileServer(
     if (!pmpoService) {
       console.log(`[LocalMile Sync] No PMPO service found for lead ${leadId}. Skipping scheduled_jobs sync.`);
       return { success: true, message: 'No PMPO service present' };
+    }
+
+    // Verify company document exists in LocalMile application database (companies collection) before proceeding
+    const companyExists = await checkLocalMileCompanyExists(leadId, 3, 1000);
+    if (!companyExists) {
+      console.warn(`[LocalMile Sync] Company ${leadId} does not exist in LocalMile application database (companies collection). Skipping scheduled_jobs creation.`);
+      return { success: false, message: `Company ${leadId} does not exist in LocalMile application database.` };
     }
 
     const freqRaw = pmpoService.frequency;
