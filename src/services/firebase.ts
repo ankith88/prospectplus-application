@@ -3397,8 +3397,8 @@ async function createChildSiteLead(
         console.warn("Could not fetch Account Manager user doc in createChildSiteLead", e);
     }
 
-    const resolvedCustomerPhone = companyPhone || localManager.phone || parentLeadData.customerPhone || '';
-    const resolvedCustomerEmail = companyEmail || localManager.email || parentLeadData.customerServiceEmail || '';
+    const resolvedCustomerPhone = companyPhone || localManager.phone || parentLeadData.customerPhone || '1300656595';
+    const resolvedCustomerEmail = companyEmail || localManager.email || parentLeadData.customerServiceEmail || 'abc@abc.com';
 
     // 3. Push to NetSuite (NetSuite will create the lead and return NetSuite internalId)
     const netSuitePayload = {
@@ -3414,8 +3414,8 @@ async function createChildSiteLead(
             firstName: localManager.name?.split(' ')[0] || '',
             lastName: localManager.name?.split(' ').slice(1).join(' ') || '',
             title: localManager.title || 'Local Site Contact',
-            email: localManager.email || '',
-            phone: localManager.phone || ''
+            email: localManager.email || resolvedCustomerEmail,
+            phone: localManager.phone || resolvedCustomerPhone
         },
         franchiseeName: franchiseeName,
         franchiseeInternalId: franchiseeInternalId,

@@ -915,6 +915,12 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
     const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees, selectedServiceOption, parentLeadId, parentId, parentCustomer, lpoLeadId, linkedLpoLeadId, pageUrl, attribution } = payload;
 
+    const isChildLead = !!(parentId || parentLeadId || parentCustomer || bucket === 'multisite');
+    const effectivePhone = customerPhone || (isChildLead ? '1300656595' : '');
+    const effectiveEmail = customerServiceEmail || (isChildLead ? 'abc@abc.com' : '');
+    const effectiveContactPhone = contact?.phone || effectivePhone;
+    const effectiveContactEmail = contact?.email || effectiveEmail;
+
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
         script: "2194",
@@ -923,8 +929,8 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         "ns-at": "AAEJ7tMQ6MIVXCrzpiLKSEmYLRVtAlRSAOWEC4Dyr1D-_83sS4g",
         companyname: companyName,
         website: websiteUrl || '',
-        phone: customerPhone || '',
-        email: customerServiceEmail || '',
+        phone: effectivePhone,
+        email: effectiveEmail,
         custentity_abn: abn || '',
         category: industryCategory || '',
         custentity_leadsource: attribution?.channel || campaign || '',
@@ -941,8 +947,8 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         firstName: (contact?.firstName || '').trim(),
         lastName: (contact?.lastName || '').trim(),
         custentity_primary_contact_title: contact?.title || '',
-        custentity_primary_contact_email: contact?.email || '',
-        custentity_primary_contact_phone: contact?.phone || '',
+        custentity_primary_contact_email: effectiveContactEmail,
+        custentity_primary_contact_phone: effectiveContactPhone,
     });
 
     if (attribution) {
