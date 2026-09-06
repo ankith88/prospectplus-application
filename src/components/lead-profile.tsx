@@ -520,44 +520,50 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const handleSaveLossReason = async (themeId: string, whyId: string, reasonId: string) => {
         if (!lead.id) return;
-        setIsSavingLossReason(true);
-        try {
-            const activeHierarchy = getMergedCancellationHierarchy(cancellationThemes);
-            const themeObj = activeHierarchy.find((t: any) => String(t.id) === String(themeId));
-            const whyObj = themeObj?.whys?.find((w: any) => String(w.id) === String(whyId));
-            const reasonObj = whyObj?.reasons?.find((r: any) => String(r.id) === String(reasonId));
+        
+        const saveAction = async () => {
+            setIsSavingLossReason(true);
+            try {
+                const activeHierarchy = getMergedCancellationHierarchy(cancellationThemes);
+                const themeObj = activeHierarchy.find((t: any) => String(t.id) === String(themeId));
+                const whyObj = themeObj?.whys?.find((w: any) => String(w.id) === String(whyId));
+                const reasonObj = whyObj?.reasons?.find((r: any) => String(r.id) === String(reasonId));
 
-            const updates: Partial<Lead> = {
-                cancellationThemeId: themeId,
-                cancellationTheme: themeObj?.name || '',
-                cancellationWhyId: whyId,
-                cancellationCategory: whyObj?.name || '',
-                cancellationReasonId: reasonId,
-                cancellationReason: reasonObj?.name || '',
-                statusReason: reasonObj?.name || lead.statusReason || ''
-            };
+                const updates: Partial<Lead> = {
+                    cancellationThemeId: themeId,
+                    cancellationTheme: themeObj?.name || '',
+                    cancellationWhyId: whyId,
+                    cancellationCategory: whyObj?.name || '',
+                    cancellationReasonId: reasonId,
+                    cancellationReason: reasonObj?.name || '',
+                    statusReason: reasonObj?.name || lead.statusReason || ''
+                };
 
-            await updateLeadDetails(lead.id, lead, updates);
-            setLead(prev => ({ ...prev, ...updates }));
-            setIsEditingLossReason(false);
-            toast({ title: 'Updated', description: 'Loss & Cancellation details updated successfully.' });
-        } catch (err) {
-            console.error('Failed to update loss reason:', err);
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update loss reason.' });
-        } finally {
-            setIsSavingLossReason(false);
-        }
+                await updateLeadDetails(lead.id, lead, updates);
+                setLead(prev => ({ ...prev, ...updates }));
+                setIsEditingLossReason(false);
+                toast({ title: 'Updated', description: 'Loss & Cancellation details updated successfully.' });
+            } catch (err) {
+                console.error('Failed to update loss reason:', err);
+                toast({ variant: 'destructive', title: 'Error', description: 'Failed to update loss reason.' });
+            } finally {
+                setIsSavingLossReason(false);
+            }
+        };
+
+        const currentStatus = lead.customerStatus || lead.status || 'Lost';
+        await checkAndPromptPendingItemsForLost(currentStatus, saveAction);
     };
 
     const checkAndPromptPendingItemsForLost = async (targetStatus: string, onProceed: () => Promise<void>) => {
-        if (!isLostLeadStatus(targetStatus)) {
+        if (!isLostLeadStatus(targetStatus) || !isAccountManagerUser(userProfile)) {
             await onProceed();
             return;
         }
 
         try {
             const { pendingAppointments, pendingTasks: tasks } = await getPendingItemsForLead(lead.id, lead);
-            if (pendingAppointments.length > 0 || tasks.length > 0) {
+            if (pendingAppointments.length > 0) {
                 setPendingAppts(pendingAppointments);
                 setPendingTasks(tasks);
                 setPendingLostStatus(targetStatus);
@@ -4950,7 +4956,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         {!isActionable && (
                             <TooltipContent side="bottom" className="max-w-xs text-xs bg-slate-900 text-white p-3 shadow-xl">
                                 <p className="font-bold text-amber-400">Sale Deals Disabled</p>
-                                <p className="mt-1">This lead is assigned to <strong>{lead.accountManagerAssigned || lead.dialerAssigned || 'another rep'}</strong>. Click <strong>Request Lead Assignment</strong> to ask Sales Management to assign this lead to you.</p>
+                                <p className="mt-1">
+                                    {['account manager', 'account managers'].includes((userProfile?.activeRole || '').toLowerCase().trim()) && (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase().trim() === 'outbound' ? (
+                                        'Leads in the Outbound bucket cannot be processed by Account Managers. Switch your active role to Dialer or move the lead to the Account Manager bucket.'
+                                    ) : (
+                                        <>This lead is assigned to <strong>{lead.accountManagerAssigned || lead.dialerAssigned || 'another rep'}</strong>. Click <strong>Request Lead Assignment</strong> to ask Sales Management to assign this lead to you.</>
+                                    )}
+                                </p>
                             </TooltipContent>
                         )}
                     </Tooltip>
@@ -5333,19 +5345,27 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               </AlertTitle>
               <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full text-xs text-amber-900 mt-1">
                   <span>
-                      <strong>Why actions are disabled:</strong> {userProfile?.activeRole === 'user' && (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')) !== 'outbound' ? (
-                          `Users with role 'user' can view this lead but can only log outcomes for leads in the Outbound bucket assigned to them.`
-                      ) : (
-                          `This lead is currently assigned to ${lead.accountManagerAssigned || lead.dialerAssigned || (lead as any).assignedTo || 'another team member'}. Only the assigned representative or an admin can make calls, log outcomes, or manage sales deals for this lead.`
-                      )}
-                      {['Account Managers', 'Account Manager', 'account managers'].includes(userProfile?.activeRole || '') && (
+                      <strong>Why actions are disabled:</strong> {
+                          ['account manager', 'account managers'].includes((userProfile?.activeRole || '').toLowerCase().trim()) && (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase().trim() === 'outbound' ? (
+                              `This lead is in the Outbound bucket. Users in the Account Manager role cannot log outcomes or process leads in the Outbound bucket. Please switch your active role to Dialer (if assigned as dialer), or move the lead into the Account Manager bucket.`
+                          ) : userProfile?.activeRole === 'user' && (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')) !== 'outbound' ? (
+                              `Users with role 'user' can view this lead but can only log outcomes for leads in the Outbound bucket assigned to them.`
+                          ) : (
+                              `This lead is currently assigned to ${lead.accountManagerAssigned || lead.dialerAssigned || (lead as any).assignedTo || 'another team member'}. Only the assigned representative or an admin can make calls, log outcomes, or manage sales deals for this lead.`
+                          )
+                      }
+                      {['account manager', 'account managers'].includes((userProfile?.activeRole || '').toLowerCase().trim()) && (
                           <>
                               <br />
-                              <strong>What needs to be done:</strong> If you need to work on this lead, click <strong>Request Lead Assignment</strong> to ask Sales Management to assign it to you.
+                              <strong>What needs to be done:</strong> {(lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase().trim() === 'outbound' ? (
+                                  `Switch your active role to Dialer using the role switcher in the menu bar, or move the lead into the Account Manager bucket.`
+                              ) : (
+                                  `If you need to work on this lead, click Request Lead Assignment to ask Sales Management to assign it to you.`
+                              )}
                           </>
                       )}
                   </span>
-                  {['Account Managers', 'Account Manager', 'account managers'].includes(userProfile?.activeRole || '') && (
+                  {['account manager', 'account managers'].includes((userProfile?.activeRole || '').toLowerCase().trim()) && (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase().trim() !== 'outbound' && (
                       <Button size="sm" className="bg-[#095c7b] hover:bg-[#053647] text-white border-transparent shrink-0 self-start sm:self-auto shadow-sm" onClick={() => setIsRequestAssignmentOpen(true)}>
                           Request Lead Assignment
                       </Button>
@@ -9191,7 +9211,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 {!isActionable && (
                                     <TooltipContent side="right" className="max-w-xs text-xs bg-slate-900 text-white p-3 shadow-xl">
                                         <p className="font-bold text-amber-400">Log Outcome Disabled</p>
-                                        <p className="mt-1">You can only log call outcomes for leads assigned to you. Click <strong>Request Lead Assignment</strong> to ask Sales Management to assign this lead to you.</p>
+                                        <p className="mt-1">
+                                            {['account manager', 'account managers'].includes((userProfile?.activeRole || '').toLowerCase().trim()) && (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase().trim() === 'outbound' ? (
+                                                'Leads in the Outbound bucket cannot be processed by Account Managers. Switch your active role to Dialer or move the lead to the Account Manager bucket.'
+                                            ) : (
+                                                <>You can only log call outcomes for leads assigned to you. Click <strong>Request Lead Assignment</strong> to ask Sales Management to assign this lead to you.</>
+                                            )}
+                                        </p>
                                     </TooltipContent>
                                 )}
                             </Tooltip>

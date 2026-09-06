@@ -3,7 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import { doc, getDoc, updateDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDocs, where, deleteDoc, deleteField } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { logActivity, getAllFranchisees } from '@/services/firebase';
+import { logActivity, getAllFranchisees, getPendingItemsForLead, resolvePendingItemsForLead } from '@/services/firebase';
+import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal';
+import { isAccountManagerUser } from '@/lib/lead-permissions';
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +50,12 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
   const [activities, setActivities] = useState<any[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [isEditingConversion, setIsEditingConversion] = useState(false);
+
+  // Pending Items Modal State
+  const [pendingItemsModalOpen, setPendingItemsModalOpen] = useState(false);
+  const [pendingAppts, setPendingAppts] = useState<any[]>([]);
+  const [pendingTasks, setPendingTasks] = useState<any[]>([]);
+  const [pendingConfirmed, setPendingConfirmed] = useState(false);
 
   // Service Rate Editing State
   const [isEditRatesOpen, setIsEditRatesOpen] = useState(false);
@@ -297,6 +305,20 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
 
   const handleStatusChange = async (newStatus: string) => {
     if (newStatus === 'Lost') {
+      if (isAccountManagerUser(userProfile) && !pendingConfirmed) {
+        try {
+          const { pendingAppointments, pendingTasks: tasks } = await getPendingItemsForLead(lead.id, lead);
+          if (pendingAppointments.length > 0) {
+            setPendingAppts(pendingAppointments);
+            setPendingTasks(tasks);
+            setPendingItemsModalOpen(true);
+            return;
+          }
+        } catch (e) {
+          console.error('Error checking pending items for LPO lead:', e);
+        }
+      }
+
       const confirmLost = window.confirm(
         'Marking this LPO Lead as Lost will update all linked parent and child leads/companies to Lost, disable LPO.Plus account access, and send an email notification to Fiona Harrison & Michael McDaid.\n\nDo you wish to proceed?'
       );
@@ -1693,6 +1715,23 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ResolvePendingItemsModal
+        isOpen={pendingItemsModalOpen}
+        onClose={() => setPendingItemsModalOpen(false)}
+        leadName={lead?.companyName || lead?.name || 'LPO Lead'}
+        targetStatus="Lost"
+        pendingAppointments={pendingAppts}
+        pendingTasks={pendingTasks}
+        onConfirm={async (apptResolutions, taskResolutions) => {
+          if (!lead?.id) return;
+          const author = userProfile?.displayName || userProfile?.email || 'Account Manager';
+          await resolvePendingItemsForLead(lead.id, apptResolutions, taskResolutions, author);
+          setPendingItemsModalOpen(false);
+          setPendingConfirmed(true);
+          await handleStatusChange('Lost');
+        }}
+      />
     </div>
   );
 }

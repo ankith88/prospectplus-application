@@ -124,20 +124,6 @@ export async function GET(req: NextRequest) {
       const activeRole = (data.activeRole || '').toLowerCase().trim();
       const assignedRoles = (data.assignedRoles || []).map((r: string) => (r || '').toLowerCase().trim());
 
-      const nonDialerRoles = [
-        'account managers', 'account manager', 'sales manager', 
-        'admin', 'super user', 'field sales', 'field sales admin', 
-        'marketing manager', 'customer success', 'customer service', 
-        'operations', 'finance', 'finance manager'
-      ];
-
-      const hasNonDialerRole = 
-        nonDialerRoles.includes(role) || 
-        nonDialerRoles.includes(activeRole) || 
-        assignedRoles.some((r: string) => nonDialerRoles.includes(r));
-
-      if (hasNonDialerRole) return;
-
       const isDialerRole =
         role === 'user' ||
         activeRole === 'user' ||
@@ -150,7 +136,13 @@ export async function GET(req: NextRequest) {
         assignedRoles.includes('dialers') ||
         role === 'lead gen' ||
         activeRole === 'lead gen' ||
-        assignedRoles.includes('lead gen');
+        assignedRoles.includes('lead gen') ||
+        role === 'lead_gen' ||
+        activeRole === 'lead_gen' ||
+        assignedRoles.includes('lead_gen') ||
+        role === 'leadgen' ||
+        activeRole === 'leadgen' ||
+        assignedRoles.includes('leadgen');
 
       if (isDialerRole) {
         userList.push(name);
@@ -209,26 +201,7 @@ export async function GET(req: NextRequest) {
     }
 
     const combinedLeads = Array.from(leadMap.values()).filter(l => {
-      // 1. Exclude all Inbound/Website leads
-      const sourceStr = (l.customerSource || (l as any).source || l.leadSource || '').toLowerCase().trim();
-      const isInboundLead = 
-        sourceStr === 'website' || 
-        sourceStr.includes('inbound') || 
-        l.wasInbound === true || 
-        !!l.inboundDetails || 
-        !!l.inboundPageUrl || 
-        !!l.pageURL;
-
-      const companyNameLower = (l.companyName || '').toLowerCase();
-      const notesLower = (l.notes || '').toLowerCase();
-      const statusLower = (l.status || '').toLowerCase();
-      const isWebsiteText = companyNameLower.includes('website') || notesLower.includes('website') || statusLower.includes('website');
-
-      if (isInboundLead || isWebsiteText) {
-        return false;
-      }
-
-      // 2. Must be in Outbound bucket, have Outbound history, or be assigned to an active dialer
+      // Must be in Outbound bucket, have Outbound history, or be assigned to an active dialer
       const currentBucket = (l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')).toLowerCase();
       const isCurrentlyOutbound = currentBucket === 'outbound';
       const wasOutboundFlag = l.wasOutbound === true;
@@ -237,8 +210,8 @@ export async function GET(req: NextRequest) {
       );
 
       const isAssignedToActiveDialer = !!l.dialerAssigned && userList.some(dialerName => {
-        const dLower = dialerName.toLowerCase().trim();
-        const assignedLower = (l.dialerAssigned || '').toLowerCase().trim();
+        const dLower = dialerName.toLowerCase().trim().replace(/\bleeroy\b/g, 'lee');
+        const assignedLower = (l.dialerAssigned || '').toLowerCase().trim().replace(/\bleeroy\b/g, 'lee');
         return assignedLower === dLower || assignedLower.startsWith(dLower) || dLower.startsWith(assignedLower);
       });
 

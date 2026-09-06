@@ -459,12 +459,22 @@ export default function ReportsClientPage({
     const val = dialerAssignedValue.trim().toLowerCase();
     return currentUserIdentifiers.some(id => id.trim().toLowerCase() === val);
   }, [currentUserIdentifiers]);
+
+  const isDialerNameMatch = useCallback((assigned?: string | null, dialerName?: string | null): boolean => {
+    if (!assigned || !dialerName) return false;
+    const normalize = (str: string) => str.trim().toLowerCase().replace(/\bleeroy\b/g, 'lee');
+    const normA = normalize(assigned);
+    const normB = normalize(dialerName);
+    return normA === normB || normA.startsWith(normB) || normB.startsWith(normA);
+  }, []);
   
   const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
 
   useEffect(() => {
     getLeadCampaigns().then(camps => setAvailableCampaigns(camps.filter(c => c.isActive))).catch(console.error);
   }, []);
+
+  const DEFAULT_DIALERS = ['Alex Mabuda', 'Melody Muriritirwa', 'Sergio Coetzee', 'Warren Mkonto', 'Kerina Helliwell', 'Lee Russell'];
 
   const [filters, setFilters] = useState({
     status: [] as string[],
@@ -473,7 +483,7 @@ export default function ReportsClientPage({
     dialerAssignmentDate: { from: new Date(2026, 7, 1), to: new Date() } as DateRange | undefined,
     leadCreatedDate: undefined as DateRange | undefined,
     duration: 'all',
-    dialerAssigned: [] as string[],
+    dialerAssigned: DEFAULT_DIALERS,
     franchisee: [] as string[],
     appointmentAssignedTo: [] as string[],
     isFieldSourced: 'all' as 'all' | 'yes' | 'no',
@@ -486,7 +496,7 @@ export default function ReportsClientPage({
     dialerAssignmentDate: { from: new Date(2026, 7, 1), to: new Date() } as DateRange | undefined,
     leadCreatedDate: undefined as DateRange | undefined,
     duration: 'all',
-    dialerAssigned: [] as string[],
+    dialerAssigned: DEFAULT_DIALERS,
     franchisee: [] as string[],
     appointmentAssignedTo: [] as string[],
     isFieldSourced: 'all' as 'all' | 'yes' | 'no',
@@ -627,20 +637,6 @@ export default function ReportsClientPage({
                 const activeRole = (data.activeRole || '').toLowerCase().trim();
                 const assignedRoles = (data.assignedRoles || []).map((r: string) => (r || '').toLowerCase().trim());
 
-                const nonDialerRoles = [
-                  'account managers', 'account manager', 'sales manager', 
-                  'admin', 'super user', 'field sales', 'field sales admin', 
-                  'marketing manager', 'customer success', 'customer service', 
-                  'operations', 'finance', 'finance manager'
-                ];
-
-                const hasNonDialerRole = 
-                  nonDialerRoles.includes(role) || 
-                  nonDialerRoles.includes(activeRole) || 
-                  assignedRoles.some((r: string) => nonDialerRoles.includes(r));
-
-                if (hasNonDialerRole) return null;
-
                 const isDialerRole = 
                     role === 'user' || 
                     activeRole === 'user' || 
@@ -653,7 +649,13 @@ export default function ReportsClientPage({
                     assignedRoles.includes('dialers') ||
                     role === 'lead gen' || 
                     activeRole === 'lead gen' || 
-                    assignedRoles.includes('lead gen');
+                    assignedRoles.includes('lead gen') ||
+                    role === 'lead_gen' ||
+                    activeRole === 'lead_gen' ||
+                    assignedRoles.includes('lead_gen') ||
+                    role === 'leadgen' ||
+                    activeRole === 'leadgen' ||
+                    assignedRoles.includes('leadgen');
 
                 if (!isDialerRole) return null;
 
@@ -788,26 +790,7 @@ export default function ReportsClientPage({
                  }
             }
             const combinedLeads = Array.from(leadMap.values()).filter((l: any) => {
-                // 1. Exclude all Inbound/Website leads
-                const sourceStr = (l.customerSource || (l as any).source || l.leadSource || '').toLowerCase().trim();
-                const isInboundLead = 
-                  sourceStr === 'website' || 
-                  sourceStr.includes('inbound') || 
-                  l.wasInbound === true || 
-                  !!l.inboundDetails || 
-                  !!l.inboundPageUrl || 
-                  !!l.pageURL;
-
-                const companyNameLower = (l.companyName || '').toLowerCase();
-                const notesLower = (l.notes || '').toLowerCase();
-                const statusLower = (l.status || '').toLowerCase();
-                const isWebsiteText = companyNameLower.includes('website') || notesLower.includes('website') || statusLower.includes('website');
-
-                if (isInboundLead || isWebsiteText) {
-                  return false;
-                }
-
-                // 2. Must be in Outbound bucket, have Outbound history, or be assigned to an active dialer
+                // Must be in Outbound bucket, have Outbound history, or be assigned to an active dialer
                 const currentBucket = (l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')).toLowerCase();
                 const isCurrentlyOutbound = currentBucket === 'outbound';
                 const wasOutboundFlag = l.wasOutbound === true;
@@ -816,9 +799,7 @@ export default function ReportsClientPage({
                 );
 
                 const isAssignedToActiveDialer = !!l.dialerAssigned && userList.some(dialerName => {
-                  const dLower = dialerName.toLowerCase().trim();
-                  const assignedLower = (l.dialerAssigned || '').toLowerCase().trim();
-                  return assignedLower === dLower || assignedLower.startsWith(dLower) || dLower.startsWith(assignedLower);
+                  return isDialerNameMatch(l.dialerAssigned, dialerName);
                 });
 
                 return isCurrentlyOutbound || wasOutboundFlag || wasInBucketHistory || isAssignedToActiveDialer;
@@ -1004,7 +985,7 @@ export default function ReportsClientPage({
       dialerAssignmentDate: { from: new Date(2026, 7, 1), to: new Date() } as DateRange | undefined,
       leadCreatedDate: undefined,
       duration: 'all',
-      dialerAssigned: [],
+      dialerAssigned: DEFAULT_DIALERS,
       franchisee: [],
       appointmentAssignedTo: [],
       isFieldSourced: 'all' as 'all' | 'yes' | 'no',
@@ -1242,7 +1223,8 @@ export default function ReportsClientPage({
         }
 
         const franchiseeMatch = appliedFilters.franchisee.length === 0 || (l.franchisee && appliedFilters.franchisee.includes(l.franchisee));
-        const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (l.dialerAssigned && appliedFilters.dialerAssigned.includes(l.dialerAssigned));
+        const dialerMatch = appliedFilters.dialerAssigned.length === 0 || 
+          appliedFilters.dialerAssigned.some(d => isDialerNameMatch(l.dialerAssigned, d));
         const sourceMatch = appliedFilters.isFieldSourced === 'all' || 
                            (appliedFilters.isFieldSourced === 'yes' && !!l.visitNoteID) ||
                            (appliedFilters.isFieldSourced === 'no' && !l.visitNoteID);
@@ -1261,13 +1243,18 @@ export default function ReportsClientPage({
         
         let assignmentDateMatch = true;
         if (appliedFilters.dialerAssignmentDate?.from) {
-            const assignDate = parseDateString(l.assignedToDialerAt || l.dateLeadEntered || (l as any).createdAt || (l as any).dateCreated || (l as any).dateLocalmileAccepted || (l as any).localMileAcceptedAt);
-            if (!assignDate) {
+            const hasAssignedDialer = !!l.dialerAssigned;
+            if (hasAssignedDialer) {
                 assignmentDateMatch = true;
             } else {
-                const fromDate = startOfDay(appliedFilters.dialerAssignmentDate.from);
-                const toDate = appliedFilters.dialerAssignmentDate.to ? endOfDay(appliedFilters.dialerAssignmentDate.to) : endOfDay(appliedFilters.dialerAssignmentDate.from);
-                assignmentDateMatch = assignDate >= fromDate && assignDate <= toDate;
+                const assignDate = parseDateString(l.assignedToDialerAt || l.dateLeadEntered || (l as any).createdAt || (l as any).dateCreated || (l as any).dateLocalmileAccepted || (l as any).localMileAcceptedAt);
+                if (!assignDate) {
+                    assignmentDateMatch = true;
+                } else {
+                    const fromDate = startOfDay(appliedFilters.dialerAssignmentDate.from);
+                    const toDate = appliedFilters.dialerAssignmentDate.to ? endOfDay(appliedFilters.dialerAssignmentDate.to) : endOfDay(appliedFilters.dialerAssignmentDate.from);
+                    assignmentDateMatch = assignDate >= fromDate && assignDate <= toDate;
+                }
             }
         }
 
@@ -1283,19 +1270,9 @@ export default function ReportsClientPage({
             }
         }
 
-        const isOutboundLead = (() => {
-            const initBucket = getLeadInitialBucket(l);
-            if (initBucket === 'Inbound') return false;
-            const src = (l.customerSource || (l as any).source || l.leadSource || '').toLowerCase().trim();
-            if (src === 'website' || src.includes('inbound') || l.wasInbound || l.inboundDetails || l.inboundPageUrl) {
-                return false;
-            }
-            return true;
-        })();
-
         const campaignMatch = appliedFilters.campaign === 'all' || (l.campaign || (l as any).customerCampaign) === appliedFilters.campaign;
 
-        return isOutboundLead && franchiseeMatch && dialerMatch && sourceMatch && interactionMatch && assignmentDateMatch && leadCreatedDateMatch && campaignMatch;
+        return franchiseeMatch && dialerMatch && sourceMatch && interactionMatch && assignmentDateMatch && leadCreatedDateMatch && campaignMatch;
     });
 
     const wonLeadsList = leadsWithAppts.filter(l => l.status === 'Won');
@@ -1551,7 +1528,8 @@ export default function ReportsClientPage({
         );
         if (!isUserMatch) return false;
       }
-      const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (call.dialerAssigned && appliedFilters.dialerAssigned.includes(call.dialerAssigned));
+      const dialerMatch = appliedFilters.dialerAssigned.length === 0 || 
+        appliedFilters.dialerAssigned.some(d => isDialerNameMatch(call.dialerAssigned, d) || isDialerNameMatch((call as any).author, d) || isDialerNameMatch(lead.dialerAssigned, d));
       const franchiseeMatch = appliedFilters.franchisee.length === 0 || (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
       const campaignMatch = appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
 
@@ -1563,7 +1541,8 @@ export default function ReportsClientPage({
       if (appointment.leadName === 'Unknown Lead') return false;
       const lead = allLeads.find(l => l.id === appointment.leadId);
       if (!lead) return false;
-      const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (appointment.dialerAssigned && appliedFilters.dialerAssigned.includes(appointment.dialerAssigned));
+      const dialerMatch = appliedFilters.dialerAssigned.length === 0 || 
+        appliedFilters.dialerAssigned.some(d => isDialerNameMatch(appointment.dialerAssigned, d) || isDialerNameMatch((appointment as any).author, d) || isDialerNameMatch((appointment as any).assignedTo, d) || isDialerNameMatch(lead.dialerAssigned, d));
       const franchiseeMatch = appliedFilters.franchisee.length === 0 || (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
       const campaignMatch = appliedFilters.campaign === 'all' || (lead.campaign || (lead as any).customerCampaign) === appliedFilters.campaign;
 
@@ -1658,15 +1637,23 @@ export default function ReportsClientPage({
     const topLevelApptLeads = baseFilteredLeads.filter(l => l.status === 'Appointment Booked' || (l as any).customerStatus === 'Appointment Booked');
 
     const getDialerForLead = (l: any) => {
-      if (l.dialerAssigned && allDialers.includes(l.dialerAssigned)) return l.dialerAssigned;
+      if (l.dialerAssigned) {
+        const matched = allDialers.find(d => isDialerNameMatch(l.dialerAssigned, d));
+        if (matched) return matched;
+      }
       if (l.appointments && Array.isArray(l.appointments)) {
         for (const a of l.appointments) {
           const ad = a.dialerAssigned || a.author || a.assignedTo;
-          if (ad && allDialers.includes(ad)) return ad;
+          if (ad) {
+            const matched = allDialers.find(d => isDialerNameMatch(ad, d));
+            if (matched) return matched;
+          }
         }
       }
-      const call = perfFilteredCalls.find(c => c.leadId === l.id && c.author && allDialers.includes(c.author));
-      if (call && call.author) return call.author;
+      const call = perfFilteredCalls.find(c => c.leadId === l.id && c.author && allDialers.some(d => isDialerNameMatch(c.author, d)));
+      if (call && call.author) {
+        return allDialers.find(d => isDialerNameMatch(call.author, d)) || call.author;
+      }
       return null;
     };
 
@@ -1683,7 +1670,7 @@ export default function ReportsClientPage({
     };
 
     const teamPerformanceData = allDialers.map(dialer => {
-      const dialerCallsList = perfFilteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+      const dialerCallsList = perfFilteredCalls.filter(c => isDialerNameMatch(c.author, dialer) || (isDialerNameMatch(c.dialerAssigned, dialer) && (!c.author || c.author === 'System' || c.author === 'Unknown')));
       const dialerCalls = dialerCallsList.length;
       const dialerLeadsCalled = new Set(dialerCallsList.map(c => c.leadId)).size;
       const avgAttempts = dialerLeadsCalled > 0 ? dialerCalls / dialerLeadsCalled : 0;
@@ -1692,9 +1679,9 @@ export default function ReportsClientPage({
       const connectRate = dialerCalls > 0 ? (dialerConnectedCalls / dialerCalls) * 100 : 0;
 
       const dialerActionedLeadIds = perfActionedLeadIdsMap.get(dialer) || new Set<string>();
-      const dialerBaseLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
+      const dialerBaseLeads = baseFilteredLeads.filter(l => isDialerNameMatch(l.dialerAssigned, dialer));
 
-      const isMatch = (l: any) => getDialerForLead(l) === dialer || (!getDialerForLead(l) && l.dialerAssigned === dialer);
+      const isMatch = (l: any) => getDialerForLead(l) === dialer || (!getDialerForLead(l) && isDialerNameMatch(l.dialerAssigned, dialer));
 
       const isEventInTimeframe = (l: any, ...dateKeys: string[]) => {
         let eventDateVal: any = null;
@@ -1723,7 +1710,7 @@ export default function ReportsClientPage({
       const dialerApptLeads = topLevelApptLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'appointmentDate', 'duedate', 'date'));
       const dialerAppointments = dialerApptLeads.length;
       const dialerQuotes = topLevelQuotesLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'dateQuoted', 'quotedAt'));
-      const dialerShipmateTrialLeads = shipmateTrialLeads.filter(l => l.dialerAssigned === dialer && isEventInTimeframe(l));
+      const dialerShipmateTrialLeads = shipmateTrialLeads.filter(l => isDialerNameMatch(l.dialerAssigned, dialer) && isEventInTimeframe(l));
       const dialerShipmateTrials = dialerShipmateTrialLeads.length;
 
       const dialerWonLeads = topLevelSignedLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'signedUpAt', 'wonAt'));
@@ -1779,7 +1766,12 @@ export default function ReportsClientPage({
         perfShipmateTrialLeadsList: dialerShipmateTrialLeads,
         perfMovedToAmLeadsList: dialerMovedToAmLeads
       };
-    }).filter(d => d['Total Engagement'] > 0 || d['Total Assigned Leads'] > 0 || d['Moved to AM'] > 0 || d.Appointments > 0 || d['Quotes Sent'] > 0 || d['Signed Customers'] > 0 || d['LM Opportunity'] > 0 || d['LM Pending'] > 0 || d['Trialing LocalMile'] > 0);
+    }).filter(d => {
+      if (appliedFilters.dialerAssigned.length > 0) {
+        return appliedFilters.dialerAssigned.some(selected => isDialerNameMatch(d.name, selected));
+      }
+      return d['Total Engagement'] > 0 || d['Total Assigned Leads'] > 0 || d['Moved to AM'] > 0 || d.Appointments > 0 || d['Quotes Sent'] > 0 || d['Signed Customers'] > 0 || d['LM Opportunity'] > 0 || d['LM Pending'] > 0 || d['Trialing LocalMile'] > 0;
+    });
 
     // Unassigned / System row for un-attributed leads
     const isUnassignedLead = (l: any) => !getDialerForLead(l) && !allDialers.includes(l.dialerAssigned);
@@ -1980,9 +1972,9 @@ export default function ReportsClientPage({
     });
 
     const burnRateLeaderboard = allDialers.map(dialer => {
-        const dialerCallsList = burnFilteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+        const dialerCallsList = burnFilteredCalls.filter(c => isDialerNameMatch(c.author, dialer) || (isDialerNameMatch(c.dialerAssigned, dialer) && (!c.author || c.author === 'System' || c.author === 'Unknown')));
         const dialerCallsListLeadIds = new Set(dialerCallsList.map(c => c.leadId));
-        const dialerLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer);
+        const dialerLeads = baseFilteredLeads.filter(l => isDialerNameMatch(l.dialerAssigned, dialer));
         
         // Strictly count leads that have had at least one call / call initiated by this dialer in the timeframe
         const processedLeadsList = dialerLeads.filter(l => dialerCallsListLeadIds.has(l.id));
@@ -2026,7 +2018,12 @@ export default function ReportsClientPage({
             runwayStatus,
             recommendedTopUp
         };
-    }).filter(d => d.totalAssigned > 0 || d.processedInPeriod > 0).sort((a, b) => a.runwayDays - b.runwayDays);
+    }).filter(d => {
+      if (appliedFilters.dialerAssigned.length > 0) {
+        return appliedFilters.dialerAssigned.some(selected => isDialerNameMatch(d.name, selected));
+      }
+      return d.totalAssigned > 0 || d.processedInPeriod > 0;
+    }).sort((a, b) => a.runwayDays - b.runwayDays);
 
     const avgTeamBurnRate = burnRateLeaderboard.length > 0 ? (burnRateLeaderboard.reduce((acc, d) => acc + d.burnRate, 0) / burnRateLeaderboard.length) : 0;
     const criticalRepsCount = burnRateLeaderboard.filter(d => d.runwayStatus === 'critical').length;
@@ -2060,6 +2057,10 @@ export default function ReportsClientPage({
       : undefined;
 
     const incentiveAppointments = filteredAppointments.filter(a => {
+        const dialerMatch = appliedFilters.dialerAssigned.length === 0 || 
+          appliedFilters.dialerAssigned.some(d => isDialerNameMatch(a.dialerAssigned, d) || isDialerNameMatch(a.assignedTo, d) || isDialerNameMatch((a as any).author, d));
+        if (!dialerMatch) return false;
+
         const dateStr = a.date || a.duedate || a.appointmentDate || a.createdAt;
         if (!dateStr) return false;
         const d = parseDateString(dateStr);
@@ -2072,7 +2073,7 @@ export default function ReportsClientPage({
     const incentiveLeadIds = new Set(incentiveAppointments.map(a => a.leadId));
 
     const appointmentIncentiveLeaderboard = allDialers.map(dialer => {
-        const dialerAppts = incentiveAppointments.filter(a => a.dialerAssigned === dialer || a.assignedTo === dialer);
+        const dialerAppts = incentiveAppointments.filter(a => isDialerNameMatch(a.dialerAssigned, dialer) || isDialerNameMatch(a.assignedTo, dialer) || isDialerNameMatch((a as any).author, dialer));
         const booked = dialerAppts.length;
         const completedAppts = dialerAppts.filter(a => a.appointmentStatus === 'Completed');
         const noShowAppts = dialerAppts.filter(a => a.appointmentStatus === 'No Show');
@@ -2080,7 +2081,7 @@ export default function ReportsClientPage({
         const cancelledAppts = dialerAppts.filter(a => a.appointmentStatus === 'Cancelled');
         const pendingAppts = dialerAppts.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending');
 
-        const isMatch = (l: any) => getDialerForLead(l) === dialer || (!getDialerForLead(l) && l.dialerAssigned === dialer);
+        const isMatch = (l: any) => getDialerForLead(l) === dialer || (!getDialerForLead(l) && isDialerNameMatch(l.dialerAssigned, dialer));
 
         const dialerLmPendingLeads = topLevelLmPendingLeads.filter(isMatch);
         const dialerMovedToAmLeads = topLevelMovedToAmLeads.filter(isMatch);
@@ -2140,7 +2141,12 @@ export default function ReportsClientPage({
             totalConverted,
             conversionRate
         };
-    }).filter(d => d.booked > 0 || d.lmPendingCount > 0 || d.movedToAmCount > 0 || d.totalConverted > 0 || d.signed > 0 || d.trial > 0 || d.quote > 0 || d.lost > 0).sort((a, b) => b.totalConverted - a.totalConverted || b.totalIncentivisedCount - a.totalIncentivisedCount);
+    }).filter(d => {
+      if (appliedFilters.dialerAssigned.length > 0) {
+        return appliedFilters.dialerAssigned.some(selected => isDialerNameMatch(d.name, selected));
+      }
+      return d.booked > 0 || d.lmPendingCount > 0 || d.movedToAmCount > 0 || d.totalConverted > 0 || d.signed > 0 || d.trial > 0 || d.quote > 0 || d.lost > 0;
+    }).sort((a, b) => b.totalConverted - a.totalConverted || b.totalIncentivisedCount - a.totalIncentivisedCount);
 
     const totalCompletedAppts = incentiveAppointments.filter(a => a.appointmentStatus === 'Completed');
     const totalNoShowAppts = incentiveAppointments.filter(a => a.appointmentStatus === 'No Show');
@@ -2564,7 +2570,7 @@ export default function ReportsClientPage({
             author = 'Lee Russell';
         }
 
-        const matchedDialer = activeDialersList.find(d => d.toLowerCase() === author.trim().toLowerCase());
+        const matchedDialer = activeDialersList.find(d => isDialerNameMatch(author, d));
         if (!matchedDialer) return;
 
         dayData.totalLeadsSet.add(act.leadId);
@@ -2639,10 +2645,13 @@ export default function ReportsClientPage({
     });
 
     const activeDialersWithActivity = activeDialersList.filter(d => (dialerPeriodTotalsMap.get(d) || 0) > 0);
+    const dialersListForChart = appliedFilters.dialerAssigned.length > 0 
+      ? activeDialersList.filter(d => appliedFilters.dialerAssigned.some(selected => isDialerNameMatch(d, selected)))
+      : (activeDialersWithActivity.length > 0 ? activeDialersWithActivity : activeDialersList);
 
     const dailyActioned = {
         chartData: dailyActionedChartData,
-        dialersList: activeDialersWithActivity,
+        dialersList: dialersListForChart,
         totalActionedLeadsPeriod,
         avgDailyLeadsActioned,
         topDialerName,

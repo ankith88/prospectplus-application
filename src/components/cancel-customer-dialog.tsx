@@ -22,6 +22,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, doc, getDoc, updateDoc, addDoc, getDocs } from 'firebase/firestore';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
 import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal';
+import { isAccountManagerUser } from '@/lib/lead-permissions';
 import type { Lead } from '@/lib/types';
 import { Paperclip, ExternalLink, Trash2, Plus } from 'lucide-react';
 
@@ -181,17 +182,17 @@ export function CancelCustomerDialog({
       return;
     }
 
-    if (isDirectCancel && !pendingConfirmed && lead?.id) {
+    if (isAccountManagerUser(userProfile) && !pendingConfirmed && lead?.id) {
       try {
         const { pendingAppointments, pendingTasks: tasks } = await getPendingItemsForLead(lead.id, lead);
-        if (pendingAppointments.length > 0 || tasks.length > 0) {
+        if (pendingAppointments.length > 0) {
           setPendingAppts(pendingAppointments);
           setPendingTasks(tasks);
           setPendingItemsModalOpen(true);
           return;
         }
       } catch (e) {
-        console.error("Error checking pending items for direct cancellation:", e);
+        console.error("Error checking pending items for customer cancellation:", e);
       }
     }
 

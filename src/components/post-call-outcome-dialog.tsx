@@ -37,6 +37,7 @@ import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail, Building, Lock } from 'lucide-react'
 import { logCallActivity, logActivity, addTaskToLead, updateTaskInLead, updateContactSendEmail, updateContactInLead, updateLeadDetails, logBucketChange, isLostLeadStatus, getPendingItemsForLead, resolvePendingItemsForLead } from '@/services/firebase'
 import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal'
+import { isAccountManagerUser } from '@/lib/lead-permissions'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy'
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore'
@@ -894,10 +895,10 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
     const targetStatus = mappedStatusObj?.status || lead.status;
     const isTargetLost = isLostOutcome || isLostLeadStatus(targetStatus) || isLostLeadStatus(values.outcome);
 
-    if (isTargetLost && !pendingOutcomeValues) {
+    if (isTargetLost && isAccountManagerUser(userProfile) && !pendingOutcomeValues) {
         try {
             const { pendingAppointments, pendingTasks: tasks } = await getPendingItemsForLead(lead.id, lead);
-            if (pendingAppointments.length > 0 || tasks.length > 0) {
+            if (pendingAppointments.length > 0) {
                 setPendingAppts(pendingAppointments);
                 setPendingTasks(tasks);
                 setPendingLostStatus(targetStatus || 'Lost');

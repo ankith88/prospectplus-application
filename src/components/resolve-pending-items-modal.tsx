@@ -137,7 +137,7 @@ export function ResolvePendingItemsModal({
               <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 font-semibold px-2">
                 {targetStatus}
               </Badge>
-              . Please confirm how open appointments and tasks should be handled.
+              . All pending appointments must be marked as Completed, No Show, Cancelled, or Rescheduled before the lead can be marked as Lost.
             </p>
           </div>
         </div>

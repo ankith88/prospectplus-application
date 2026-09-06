@@ -50,11 +50,15 @@ export function isLeadActionableForUser(
     return val === userDisplayName || val === userEmail || val === userUid;
   };
 
-  // Account Managers: Can action ONLY leads assigned to them
+  // Account Managers: Can action ONLY leads assigned to them, and NOT leads in the Outbound bucket
   if (
     roleLower === 'account manager' ||
     roleLower === 'account managers'
   ) {
+    const bucket = (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase().trim();
+    if (bucket === 'outbound') {
+      return false;
+    }
     return (
       isAssignedToUser(lead.accountManagerAssigned) ||
       isAssignedToUser(lead.salesRepAssigned) ||
@@ -93,7 +97,7 @@ export function isAccountManagerUser(userProfile?: UserProfile | null): boolean 
   if (!userProfile) return false;
   const roleLower = (userProfile.activeRole || userProfile.role || '').toLowerCase().trim();
   const assignedRoles = (userProfile.assignedRoles || []).map(r => r.toLowerCase().trim());
-  const amRoles = ['account manager', 'account managers'];
+  const amRoles = ['account manager', 'account managers', 'account_manager', 'accountmanager', 'am'];
   return amRoles.includes(roleLower) || assignedRoles.some(r => amRoles.includes(r));
 }
 
