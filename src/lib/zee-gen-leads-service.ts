@@ -339,6 +339,22 @@ export async function processZeeGenAutoResponse(options: ZeeGenAutoResponseOptio
     if (templateDoc.body) rawBody = templateDoc.body;
   }
 
+  // 4b. Resolve active fromAddress
+  let activeFromAddress = options.fromAddress;
+  if (!activeFromAddress) {
+    try {
+      const configDoc = await db.collection('settings').doc('zee_gen_auto_response_report').get();
+      if (configDoc.exists) {
+        activeFromAddress = configDoc.data()?.fromAddress;
+      }
+    } catch (dbErr) {
+      console.warn('Failed to load zee_gen_auto_response_report settings:', dbErr);
+    }
+  }
+  if (!activeFromAddress) {
+    activeFromAddress = 'aleyna.harnett@mailplus.com.au';
+  }
+
   // 5. Pre-fetch Franchisees collection mapping for recipient emails
   const franchiseesSnap = await db.collection('franchisees').get();
   const franchiseeEmailMap = new Map<string, string>();
@@ -420,7 +436,7 @@ export async function processZeeGenAutoResponse(options: ZeeGenAutoResponseOptio
         to: recipientEmail,
         subject: finalSubject,
         html: finalBody,
-        customFrom: options.fromAddress || 'ankith.ravindran@mailplus.com.au',
+        customFrom: activeFromAddress,
       });
 
       results.push({

@@ -139,15 +139,16 @@ export function DailyReportRecipients() {
           const docRef = doc(firestore, 'settings', report.docId);
           const snap = await getDoc(docRef);
           
+          const defaultFrom = report.id === 'zee_gen_auto_response' ? 'aleyna.harnett@mailplus.com.au' : 'ankith.ravindran@mailplus.com.au';
           if (snap.exists()) {
             const data = snap.data();
             recData[report.id] = Array.isArray(data?.recipients) ? data.recipients : [...report.defaultRecipients];
             freqData[report.id] = data?.frequency || '06:00';
-            fromData[report.id] = data?.fromAddress || 'ankith.ravindran@mailplus.com.au';
+            fromData[report.id] = data?.fromAddress || defaultFrom;
           } else {
             recData[report.id] = [...report.defaultRecipients];
             freqData[report.id] = '06:00';
-            fromData[report.id] = 'ankith.ravindran@mailplus.com.au';
+            fromData[report.id] = defaultFrom;
           }
           dateData[report.id] = yesterdayStr;
         }
@@ -175,7 +176,7 @@ export function DailyReportRecipients() {
     if (fromAddressMap[activeTab]) {
       setFromAddressInput(fromAddressMap[activeTab]);
     } else {
-      setFromAddressInput('ankith.ravindran@mailplus.com.au');
+      setFromAddressInput(activeTab === 'zee_gen_auto_response' ? 'aleyna.harnett@mailplus.com.au' : 'ankith.ravindran@mailplus.com.au');
     }
   }, [activeTab, fromAddressMap]);
 
