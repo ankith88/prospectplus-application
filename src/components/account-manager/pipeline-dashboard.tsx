@@ -73,6 +73,34 @@ const isFranchiseeGeneratedLead = (lead: Lead): boolean => {
     return false;
 };
 
+export function getLeadDaysUntouched(lead: Lead): number {
+    if (!lead) return 0;
+    const now = new Date();
+    const dates: Date[] = [];
+
+    const datesToCheck = [
+        (lead as any).lastStatusChangeDate,
+        lead.lastContactedDate,
+        (lead as any).lastActivityDate,
+        (lead as any).updatedAt,
+        lead.dateLeadEntered,
+        (lead as any).createdAt,
+    ];
+
+    datesToCheck.forEach(raw => {
+        if (!raw) return;
+        const parsed = parseDateString(raw);
+        if (parsed && !isNaN(parsed.getTime())) {
+            dates.push(parsed);
+        }
+    });
+
+    if (dates.length === 0) return 0;
+    const latestTouch = new Date(Math.max(...dates.map(d => d.getTime())));
+    const diffHours = (now.getTime() - latestTouch.getTime()) / (1000 * 60 * 60);
+    return Math.max(0, Math.floor(diffHours / 24));
+};
+
 export function getPrimaryContact(lead: Lead): Contact | null {
     if (lead?.contacts && Array.isArray(lead.contacts) && lead.contacts.length > 0) {
         return lead.contacts.find((c: any) => c.isPrimary) || lead.contacts[0];
@@ -702,6 +730,12 @@ export default function PipelineDashboard() {
             return wipStatuses.includes(currentStatus) || !currentStatus;
         });
     }, [filteredLeads, priorityLeads, newLeads, quotesOut, quotesAccepted, productPending, localMilePending, outOfTerritoryLeads, futureFollowUpLeads]);
+
+    const staleLeads = useMemo(() => {
+        return filteredLeads.filter(lead => {
+            return getLeadDaysUntouched(lead) >= 14;
+        }).sort((a, b) => getLeadDaysUntouched(b) - getLeadDaysUntouched(a));
+    }, [filteredLeads]);
     
     const handleCall = async (leadId: string, phone: string) => {
         window.open(`aircall:${phone}`, '_self');
@@ -1167,6 +1201,17 @@ export default function PipelineDashboard() {
                                     </Badge>
                                 )}
                             </TabsTrigger>
+                            <TabsTrigger 
+                                value="stale" 
+                                className="!bg-orange-500 !text-white hover:!bg-orange-600 data-[state=active]:!bg-orange-600 data-[state=active]:!text-white border border-orange-600 gap-1 font-bold shadow-xs"
+                            >
+                                Stale Leads ⚠️ <Badge variant="secondary" className="ml-1 bg-white text-orange-950 font-extrabold">{staleLeads.length}</Badge>
+                                {getTransferredCount(staleLeads) > 0 && (
+                                    <Badge variant="outline" className="ml-1 bg-orange-700/60 text-white border-orange-300 font-bold text-[10px]">
+                                        {getTransferredCount(staleLeads)} transferred
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
                             <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white gap-1">
                                 Priority <Badge variant="secondary" className="ml-1 bg-slate-200 text-slate-800">{priorityLeads.length}</Badge>
                                 {getTransferredCount(priorityLeads) > 0 && (
@@ -1366,6 +1411,9 @@ export default function PipelineDashboard() {
                         <TabsContent value="future-follow-up" className="m-0 h-full">
                             <LeadGrid leads={futureFollowUpLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} />
                         </TabsContent>
+                        <TabsContent value="stale" className="m-0 h-full">
+                            <LeadGrid leads={staleLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} isStaleSection={true} emptyMessage="No stale leads! All leads have been touched within the last 14 days." />
+                        </TabsContent>
                     </div>
                 </Tabs>
             )}
@@ -1421,6 +1469,7 @@ function LeadGrid({
     isTodayTaskSection = false,
     isFutureTaskSection = false,
     isCompletedTaskSection = false,
+    isStaleSection = false,
     emptyMessage = "No leads in this bucket.",
     statusFilter
 }: { 
@@ -1443,6 +1492,7 @@ function LeadGrid({
     isTodayTaskSection?: boolean,
     isFutureTaskSection?: boolean,
     isCompletedTaskSection?: boolean,
+    isStaleSection?: boolean,
     emptyMessage?: string,
     statusFilter?: string
 }) {
@@ -1501,7 +1551,7 @@ function LeadGrid({
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedLeads.map(lead => (
-                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} isPastSection={isPastSection} isNoShowSection={isNoShowSection} isPastTaskSection={isPastTaskSection} isTodayTaskSection={isTodayTaskSection} isFutureTaskSection={isFutureTaskSection} isCompletedTaskSection={isCompletedTaskSection} />
+                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} isPastSection={isPastSection} isNoShowSection={isNoShowSection} isPastTaskSection={isPastTaskSection} isTodayTaskSection={isTodayTaskSection} isFutureTaskSection={isFutureTaskSection} isCompletedTaskSection={isCompletedTaskSection} isStaleSection={isStaleSection} />
                 ))}
             </div>
         );
@@ -1521,7 +1571,7 @@ function LeadGrid({
                         <AccordionContent className="pt-2 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {groupedLeads[status].map(lead => (
-                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} isPastSection={isPastSection} isNoShowSection={isNoShowSection} isPastTaskSection={isPastTaskSection} isTodayTaskSection={isTodayTaskSection} isFutureTaskSection={isFutureTaskSection} isCompletedTaskSection={isCompletedTaskSection} />
+                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} isPastSection={isPastSection} isNoShowSection={isNoShowSection} isPastTaskSection={isPastTaskSection} isTodayTaskSection={isTodayTaskSection} isFutureTaskSection={isFutureTaskSection} isCompletedTaskSection={isCompletedTaskSection} isStaleSection={isStaleSection} />
                                 ))}
                             </div>
                         </AccordionContent>
@@ -1728,6 +1778,20 @@ function LeadGrid({
                                                     ⚠️ {lead.localMileTrialsRemaining === 0 ? 'Out of Trials' : '1 Trial Left'}
                                                 </Badge>
                                             )}
+                                            {(() => {
+                                                const daysUntouched = getLeadDaysUntouched(lead);
+                                                if (daysUntouched >= 14 || isStaleSection) {
+                                                    return (
+                                                        <Badge 
+                                                            variant="outline" 
+                                                            className="text-[10px] uppercase shrink-0 border bg-orange-100 text-orange-800 border-orange-300 font-bold"
+                                                        >
+                                                            ⚠️ {daysUntouched} Days Untouched
+                                                        </Badge>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                         </div>
                                     </div>
                                 </TableCell>
@@ -1948,7 +2012,8 @@ function LeadCard({
     isPastTaskSection = false,
     isTodayTaskSection = false,
     isFutureTaskSection = false,
-    isCompletedTaskSection = false
+    isCompletedTaskSection = false,
+    isStaleSection = false
 }: { 
     lead: Lead, 
     onCall: (id: string, phone: string) => void, 
@@ -1964,7 +2029,8 @@ function LeadCard({
     isPastTaskSection?: boolean,
     isTodayTaskSection?: boolean,
     isFutureTaskSection?: boolean,
-    isCompletedTaskSection?: boolean
+    isCompletedTaskSection?: boolean,
+    isStaleSection?: boolean
 }) {
     const primaryContact = getPrimaryContact(lead);
     const contactName = getLeadContactName(lead);
@@ -2111,6 +2177,20 @@ function LeadCard({
                                     ⚠️ {lead.localMileTrialsRemaining === 0 ? 'Out of Trials' : '1 Trial Left'}
                                 </Badge>
                             )}
+                            {(() => {
+                                const daysUntouched = getLeadDaysUntouched(lead);
+                                if (daysUntouched >= 14 || isStaleSection) {
+                                    return (
+                                        <Badge 
+                                            variant="outline" 
+                                            className="text-[10px] uppercase shrink-0 border bg-orange-100 text-orange-800 border-orange-300 font-bold"
+                                        >
+                                            ⚠️ {daysUntouched} Days Untouched
+                                        </Badge>
+                                    );
+                                }
+                                return null;
+                            })()}
                             {(lead.weeklyParcels || lead.discoveryData?.weeklyParcels) && (
                                 <Badge 
                                     variant="outline" 
