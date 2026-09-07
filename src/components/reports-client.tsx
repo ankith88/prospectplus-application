@@ -432,7 +432,7 @@ export default function ReportsClientPage({
   const [dailyViewMode, setDailyViewMode] = useState<'chart' | 'table'>('chart');
   const [dailyMetricMode, setDailyMetricMode] = useState<'unique' | 'actions'>('unique');
   const [burnRateTimeframe, setBurnRateTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-  const [teamPerformanceTimeframe, setTeamPerformanceTimeframe] = useState<'yesterday' | 'today' | 'last-week' | 'this-week' | 'monthly'>('this-week');
+  const [teamPerformanceTimeframe, setTeamPerformanceTimeframe] = useState<'yesterday' | 'today' | 'last-week' | 'this-week' | 'monthly'>('today');
   const [staticData, setStaticData] = useState<{ leads: Lead[], dialers: string[], notes: VisitNote[] } | null>(null);
   const staticDataRef = useRef(staticData);
   useEffect(() => {
