@@ -43,6 +43,17 @@ function parseDateString(dateVal: any): Date | null {
   return null;
 }
 
+function sanitizeString(val: any, maxLength?: number): string {
+  if (val === null || val === undefined) return '';
+  let str = typeof val === 'string' ? val : String(val);
+  // Strip ASCII control characters (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F) that cause JSON parse syntax errors
+  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  if (maxLength && str.length > maxLength) {
+    str = str.substring(0, maxLength);
+  }
+  return str;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -162,12 +173,12 @@ export async function GET(req: NextRequest) {
         id: doc.id,
         prospectPlusId: data.prospectPlusId || data.id || doc.id,
         entityId: data.entityId || data.customerEntityId || data.internalid || null,
-        companyName: data.companyName || 'Unknown Company',
-        dialerAssigned: data.dialerAssigned || null,
-        salesRepAssigned: data.salesRepAssigned || null,
+        companyName: sanitizeString(data.companyName || 'Unknown Company', 200),
+        dialerAssigned: sanitizeString(data.dialerAssigned, 100) || null,
+        salesRepAssigned: sanitizeString(data.salesRepAssigned, 100) || null,
         status: safeGetStatus(data.customerStatus || data.status),
         customerStatus: data.customerStatus || null,
-        franchisee: data.franchisee || null,
+        franchisee: sanitizeString(data.franchisee, 100) || null,
         fieldSales: data.fieldSales || false,
         dateLeadEntered: data.dateLeadEntered || data.createdAt || null,
         assignedToDialerAt: data.assignedToDialerAt || null,
@@ -183,14 +194,14 @@ export async function GET(req: NextRequest) {
         localMileAcceptedAt: data.localMileAcceptedAt || null,
         dateRegistrationSent: data.dateRegistrationSent || null,
         registrationSentAt: data.registrationSentAt || null,
-        bucketHistory: data.bucketHistory || [],
+        bucketHistory: Array.isArray(data.bucketHistory) ? data.bucketHistory : [],
         bucket: data.bucket || 'outbound',
         wasOutbound: data.wasOutbound || false,
-        notes: data.notes || '',
+        notes: sanitizeString(data.notes, 1000),
         customerSource: data.customerSource || data.source || data.leadSource || null,
         wasInbound: data.wasInbound || false,
-        inboundDetails: data.inboundDetails || null,
-        inboundPageUrl: data.inboundPageUrl || data.pageURL || null,
+        inboundDetails: typeof data.inboundDetails === 'object' ? data.inboundDetails : sanitizeString(data.inboundDetails, 500),
+        inboundPageUrl: sanitizeString(data.inboundPageUrl || data.pageURL, 500) || null,
       };
     };
 
@@ -322,8 +333,8 @@ export async function GET(req: NextRequest) {
       rawActivities.push({
         id: doc.id,
         leadId,
-        author,
-        notes: data.notes || '',
+        author: sanitizeString(author, 100),
+        notes: sanitizeString(data.notes, 1000),
         date: data.date || '',
         type: data.type || 'Note',
       });
@@ -407,20 +418,20 @@ export async function GET(req: NextRequest) {
       appts.push({
         id: doc.id,
         leadId,
-        leadName: lead.companyName,
-        dialerAssigned: lead.dialerAssigned,
+        leadName: sanitizeString(lead.companyName, 200),
+        dialerAssigned: sanitizeString(lead.dialerAssigned, 100),
         leadStatus: lead.status,
         discoveryData: lead.discoveryData,
         entityId: lead.entityId,
         duedate: data.duedate || data.date || '',
         starttime: data.starttime || data.date || '',
         appointmentDate: data.appointmentDate || data.createdAt || '',
-        assignedTo: data.assignedTo || data.amName || '',
+        assignedTo: sanitizeString(data.assignedTo || data.amName, 100),
         status: data.status || 'Scheduled',
-        title: data.title || '',
-        author: data.author || data.createdBy || '',
-        notes: data.notes || '',
-        franchisee: lead.franchisee || '',
+        title: sanitizeString(data.title, 200),
+        author: sanitizeString(data.author || data.createdBy, 100),
+        notes: sanitizeString(data.notes, 1000),
+        franchisee: sanitizeString(lead.franchisee, 100),
         statusCategory: data.statusCategory || '',
         trialOutcome: data.trialOutcome || '',
       });
