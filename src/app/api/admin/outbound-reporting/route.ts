@@ -233,16 +233,8 @@ export async function GET(req: NextRequest) {
       };
     };
 
-    // Run targeted queries for outbound bucket & dialer assigned leads
+    // Run targeted queries for dialer assigned leads (in chunks of 10 for Firestore 'in' limitation)
     const targetedLeadPromises: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
-    
-    // Outbound bucket queries
-    targetedLeadPromises.push(db.collection('leads').where('bucket', '==', 'outbound').select(...leadFields).get());
-    targetedLeadPromises.push(db.collection('companies').where('bucket', '==', 'outbound').select(...leadFields).get());
-    targetedLeadPromises.push(db.collection('leads').where('wasOutbound', '==', true).select(...leadFields).get());
-    targetedLeadPromises.push(db.collection('companies').where('wasOutbound', '==', true).select(...leadFields).get());
-
-    // Dialer assigned queries in chunks of 10
     const dialerChunks: string[][] = [];
     for (let i = 0; i < targetDialers.length; i += 10) {
       dialerChunks.push(targetDialers.slice(i, i + 10));
