@@ -78,39 +78,27 @@ export async function GET(req: NextRequest) {
 
     // 1. Filter activities by manual types ('Call', 'Email', 'Note', 'Meeting', 'Task')
     // This avoids fetching 180,000+ automated background 'Update' logs that take 60-80s
-    const activityQuery = db.collectionGroup('activity')
+    let activityQuery = db.collectionGroup('activity')
       .where('type', 'in', ['Call', 'Email', 'Note', 'Meeting', 'Task'])
       .where('date', '>=', startISO);
 
-    const apptQuery = db.collectionGroup('appointments');
+    if (endDateParam) {
+      const parsedEnd = new Date(endDateParam);
+      if (!isNaN(parsedEnd.getTime())) {
+        activityQuery = activityQuery.where('date', '<=', parsedEnd.toISOString());
+      }
+    }
 
-    // 2. Use field projections (.select) on leads, companies, and users queries
-    // This avoids downloading heavy unused sub-fields/histories over the network
+    // 2. Fetch Users to identify active Dialers
     const usersQuery = db.collection('users')
       .select('firstName', 'lastName', 'displayName', 'email', 'role', 'activeRole', 'assignedRoles', 'disabled');
 
-    const leadFields = [
-      'companyName', 'status', 'customerStatus', 'dialerAssigned', 'salesRepAssigned',
-      'franchisee', 'fieldSales', 'dateLeadEntered', 'createdAt', 'assignedToDialerAt',
-      'visitNoteID', 'providedShipMateOnboarding', 'firstJobCreatedAt', 'jobCount',
-      'localMileTrialsRemaining', 'localMileTermsAccepted', 'wasOutbound', 'notes',
-      'discoveryData', 'entityId', 'prospectPlusId', 'customerEntityId', 'internalid', 'bucket',
-      'dateLocalmileAccepted', 'localMileAcceptedAt', 'dateRegistrationSent', 'registrationSentAt', 'bucketHistory',
-      'customerSource', 'source', 'leadSource', 'wasInbound', 'inboundDetails', 'inboundPageUrl', 'pageURL'
-    ];
+    const apptQuery = db.collectionGroup('appointments');
 
-    const leadsQuery = db.collection('leads')
-      .select(...leadFields);
-
-    const companiesQuery = db.collection('companies')
-      .select(...leadFields);
-
-    const [activitiesSnap, apptsSnap, usersSnap, leadsSnap, companiesSnap] = await Promise.all([
+    const [activitiesSnap, apptsSnap, usersSnap] = await Promise.all([
       activityQuery.get(),
       apptQuery.get(),
-      usersQuery.get(),
-      leadsQuery.get(),
-      companiesQuery.get()
+      usersQuery.get()
     ]);
 
     // Process User/Dialer List (strictly Outbound Dialers & Lead Gen reps, excluding AMs/Managers)
@@ -149,9 +137,27 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // Process Leads & Companies into Lean Objects
-    const processDoc = (doc: FirebaseFirestore.QueryDocumentSnapshot, isFromCompanies = false) => {
+    const dialersParam = searchParams.get('dialers');
+    const targetDialers = dialersParam 
+      ? dialersParam.split(',').map(s => s.trim()).filter(Boolean)
+      : userList;
+
+    // 3. Process Leads & Companies into Lean Objects with targeted fetching
+    const leadFields = [
+      'companyName', 'status', 'customerStatus', 'dialerAssigned', 'salesRepAssigned',
+      'franchisee', 'fieldSales', 'dateLeadEntered', 'createdAt', 'assignedToDialerAt',
+      'visitNoteID', 'providedShipMateOnboarding', 'firstJobCreatedAt', 'jobCount',
+      'localMileTrialsRemaining', 'localMileTermsAccepted', 'wasOutbound', 'notes',
+      'discoveryData', 'entityId', 'prospectPlusId', 'customerEntityId', 'internalid', 'bucket',
+      'dateLocalmileAccepted', 'localMileAcceptedAt', 'dateRegistrationSent', 'registrationSentAt', 'bucketHistory',
+      'customerSource', 'source', 'leadSource', 'wasInbound', 'inboundDetails', 'inboundPageUrl', 'pageURL'
+    ];
+
+    const leadMap = new Map<string, any>();
+
+    const processDoc = (doc: FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot, isFromCompanies = false) => {
       const data = doc.data();
+      if (!data) return null;
       return {
         id: doc.id,
         prospectPlusId: data.prospectPlusId || data.id || doc.id,
@@ -188,16 +194,81 @@ export async function GET(req: NextRequest) {
       };
     };
 
-    const rawLeads = leadsSnap.docs.map(d => processDoc(d, false)).filter(l => l.fieldSales !== true);
-    const rawCompanies = companiesSnap.docs.map(d => processDoc(d, true)).filter(l => l.fieldSales !== true);
+    // Run targeted queries for outbound bucket & dialer assigned leads
+    const targetedLeadPromises: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
+    
+    // Outbound bucket queries
+    targetedLeadPromises.push(db.collection('leads').where('bucket', '==', 'outbound').select(...leadFields).get());
+    targetedLeadPromises.push(db.collection('companies').where('bucket', '==', 'outbound').select(...leadFields).get());
+    targetedLeadPromises.push(db.collection('leads').where('wasOutbound', '==', true).select(...leadFields).get());
+    targetedLeadPromises.push(db.collection('companies').where('wasOutbound', '==', true).select(...leadFields).get());
 
-    const leadMap = new Map<string, any>();
-    for (const lead of [...rawLeads, ...rawCompanies]) {
-      if (lead.isFromCompaniesCollection) {
-        leadMap.set(lead.id, lead);
-      } else if (!leadMap.has(lead.id)) {
-        leadMap.set(lead.id, lead);
+    // Dialer assigned queries in chunks of 10
+    const dialerChunks: string[][] = [];
+    for (let i = 0; i < targetDialers.length; i += 10) {
+      dialerChunks.push(targetDialers.slice(i, i + 10));
+    }
+    dialerChunks.forEach(chunk => {
+      targetedLeadPromises.push(db.collection('leads').where('dialerAssigned', 'in', chunk).select(...leadFields).get());
+      targetedLeadPromises.push(db.collection('companies').where('dialerAssigned', 'in', chunk).select(...leadFields).get());
+    });
+
+    const targetedSnaps = await Promise.all(targetedLeadPromises);
+    targetedSnaps.forEach((snap, idx) => {
+      const isCompany = idx % 2 === 1;
+      snap.docs.forEach(doc => {
+        const processed = processDoc(doc, isCompany);
+        if (processed && processed.fieldSales !== true) {
+          if (isCompany) {
+            leadMap.set(doc.id, processed);
+          } else if (!leadMap.has(doc.id)) {
+            leadMap.set(doc.id, processed);
+          }
+        }
+      });
+    });
+
+    // Also collect all active lead IDs from activities and appointments that may not have matched the above
+    const activeLeadIds = new Set<string>();
+    activitiesSnap.docs.forEach(doc => {
+      const leadId = doc.ref.parent.parent?.id;
+      if (leadId) activeLeadIds.add(leadId);
+    });
+    apptsSnap.docs.forEach(doc => {
+      const leadId = doc.ref.parent.parent?.id;
+      if (leadId) activeLeadIds.add(leadId);
+    });
+
+    const missingLeadIds = Array.from(activeLeadIds).filter(id => !leadMap.has(id));
+    if (missingLeadIds.length > 0) {
+      const leadRefs = missingLeadIds.map(id => db.collection('leads').doc(id));
+      const companyRefs = missingLeadIds.map(id => db.collection('companies').doc(id));
+      
+      const batchSize = 100;
+      const allBatches: Promise<FirebaseFirestore.DocumentSnapshot[]>[] = [];
+      for (let i = 0; i < leadRefs.length; i += batchSize) {
+        allBatches.push(db.getAll(...leadRefs.slice(i, i + batchSize)));
       }
+      for (let i = 0; i < companyRefs.length; i += batchSize) {
+        allBatches.push(db.getAll(...companyRefs.slice(i, i + batchSize)));
+      }
+
+      const batchResults = await Promise.all(allBatches);
+      batchResults.forEach((docSnaps, bIdx) => {
+        const isCompanyBatch = bIdx >= Math.ceil(leadRefs.length / batchSize);
+        docSnaps.forEach(docSnap => {
+          if (docSnap.exists) {
+            const processed = processDoc(docSnap, isCompanyBatch);
+            if (processed && processed.fieldSales !== true) {
+              if (isCompanyBatch) {
+                leadMap.set(docSnap.id, processed);
+              } else if (!leadMap.has(docSnap.id)) {
+                leadMap.set(docSnap.id, processed);
+              }
+            }
+          }
+        });
+      });
     }
 
     const combinedLeads = Array.from(leadMap.values()).filter(l => {

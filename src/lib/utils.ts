@@ -38,6 +38,20 @@ export function safeFormatDate(dateVal: any, formatStr: string = 'MMM d, yyyy'):
   return '-';
 }
 
+export function getPreviousWorkingDayToTodayRange(): { from: Date; to: Date } {
+  const now = new Date();
+  let fromDate = subDays(now, 1);
+  if (fromDate.getDay() === 0) {
+    fromDate = subDays(fromDate, 2);
+  } else if (fromDate.getDay() === 6) {
+    fromDate = subDays(fromDate, 1);
+  }
+  return {
+    from: startOfDay(fromDate),
+    to: endOfDay(now),
+  };
+}
+
 export function getQuickDateRange(preset: string): { from: Date; to: Date } {
   const now = new Date();
   const normalized = preset.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -50,15 +64,23 @@ export function getQuickDateRange(preset: string): { from: Date; to: Date } {
       return { from: startOfDay(yesterday), to: endOfDay(yesterday) };
     }
     case 'todayandyesterday':
-    case 'todaysandyesterdayscalls': {
-      const yesterday = subDays(now, 1);
-      return { from: startOfDay(yesterday), to: endOfDay(now) };
+    case 'todaysandyesterdayscalls':
+    case 'yesterdayandtoday':
+    case 'yesterdaytoday':
+    case 'yesterdayandtodayworkingdays': {
+      return getPreviousWorkingDayToTodayRange();
     }
     case 'thisweek':
       return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) };
     case 'lastweek': {
       const lastWeek = subWeeks(now, 1);
       return { from: startOfWeek(lastWeek, { weekStartsOn: 1 }), to: endOfWeek(lastWeek, { weekStartsOn: 1 }) };
+    }
+    case 'lastandthisweek':
+    case 'lastweekandthisweek':
+    case 'lastweekthisweek': {
+      const lastWeek = subWeeks(now, 1);
+      return { from: startOfWeek(lastWeek, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) };
     }
     case 'thismonth':
       return { from: startOfMonth(now), to: endOfMonth(now) };

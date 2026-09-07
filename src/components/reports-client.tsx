@@ -56,7 +56,7 @@ import {
   format, startOfDay, endOfDay, isValid, parseISO,
   startOfMonth, endOfMonth, subDays, startOfWeek, endOfWeek,
   subWeeks, subMonths, startOfQuarter, endOfQuarter, startOfYear, endOfYear,
-  subYears, isWeekend 
+  subYears, isWeekend, isSameDay
 } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
@@ -369,12 +369,18 @@ export interface ReportsClientPageProps {
   externalDateRange?: DateRange;
   hideHeaderAndFilters?: boolean;
   visibleSections?: string[];
+  defaultActivityDateRange?: DateRange;
+  defaultDialers?: string[];
+  isDialerPerformanceOnly?: boolean;
 }
 
 export default function ReportsClientPage({
   externalDateRange,
   hideHeaderAndFilters = false,
   visibleSections,
+  defaultActivityDateRange,
+  defaultDialers,
+  isDialerPerformanceOnly = false,
 }: ReportsClientPageProps = {}) {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
   const [allActivities, setAllActivities] = useState<Array<Activity & { leadId: string }>>([]);
@@ -390,8 +396,8 @@ export default function ReportsClientPage({
 
   useEffect(() => {
     setIsCustom(true);
-    setPageName("Outbound Reporting");
-  }, [setIsCustom, setPageName]);
+    setPageName(isDialerPerformanceOnly ? "Outbound Dialer Team Performance Details" : "Outbound Reporting");
+  }, [setIsCustom, setPageName, isDialerPerformanceOnly]);
   const [isApptListOpen, setIsApptListOpen] = useState(false);
   const [isEngagementListOpen, setIsEngagementListOpen] = useState(false);
   const [isWonListOpen, setIsWonListOpen] = useState(false);
@@ -426,7 +432,7 @@ export default function ReportsClientPage({
   const [dailyViewMode, setDailyViewMode] = useState<'chart' | 'table'>('chart');
   const [dailyMetricMode, setDailyMetricMode] = useState<'unique' | 'actions'>('unique');
   const [burnRateTimeframe, setBurnRateTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-  const [teamPerformanceTimeframe, setTeamPerformanceTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [teamPerformanceTimeframe, setTeamPerformanceTimeframe] = useState<'yesterday' | 'today' | 'last-week' | 'this-week' | 'monthly'>('this-week');
   const [staticData, setStaticData] = useState<{ leads: Lead[], dialers: string[], notes: VisitNote[] } | null>(null);
   const staticDataRef = useRef(staticData);
   useEffect(() => {
@@ -435,7 +441,12 @@ export default function ReportsClientPage({
   const lastFetchedStartISORef = useRef<string | null>(null);
   
   const router = useRouter();
-  const { userProfile, user, loading: authLoading } = useAuth();
+  const { userProfile, user, loading: authLoading, isSuperAdmin } = useAuth();
+  const isSuperAdminUser = Boolean(
+    isSuperAdmin || 
+    userProfile?.activeRole?.toLowerCase() === 'superadmin' || 
+    userProfile?.role?.toLowerCase() === 'superadmin'
+  );
   const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee' || userProfile?.role?.toLowerCase() === 'franchisee';
   const { toast } = useToast();
 
@@ -474,11 +485,11 @@ export default function ReportsClientPage({
     getLeadCampaigns().then(camps => setAvailableCampaigns(camps.filter(c => c.isActive))).catch(console.error);
   }, []);
 
-  const DEFAULT_DIALERS = ['Alex Mabuda', 'Melody Muriritirwa', 'Sergio Coetzee', 'Warren Mkonto', 'Kerina Helliwell', 'Lee Russell'];
+  const DEFAULT_DIALERS = defaultDialers || ['Alex Mabuda', 'Melody Muriritirwa', 'Sergio Coetzee', 'Warren Mkonto', 'Kerina Helliwell', 'Lee Russell'];
 
   const [filters, setFilters] = useState({
     status: [] as string[],
-    activityDate: undefined as DateRange | undefined,
+    activityDate: defaultActivityDateRange as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     dialerAssignmentDate: { from: new Date(2026, 7, 1), to: new Date() } as DateRange | undefined,
     leadCreatedDate: undefined as DateRange | undefined,
@@ -491,7 +502,7 @@ export default function ReportsClientPage({
   });
   const [appliedFilters, setAppliedFilters] = useState({
     status: [] as string[],
-    activityDate: undefined as DateRange | undefined,
+    activityDate: defaultActivityDateRange as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     dialerAssignmentDate: { from: new Date(2026, 7, 1), to: new Date() } as DateRange | undefined,
     leadCreatedDate: undefined as DateRange | undefined,
@@ -502,6 +513,19 @@ export default function ReportsClientPage({
     isFieldSourced: 'all' as 'all' | 'yes' | 'no',
     campaign: 'all',
   });
+
+  useEffect(() => {
+    if (defaultActivityDateRange !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        activityDate: defaultActivityDateRange,
+      }));
+      setAppliedFilters(prev => ({
+        ...prev,
+        activityDate: defaultActivityDateRange,
+      }));
+    }
+  }, [defaultActivityDateRange]);
 
   useEffect(() => {
     if (externalDateRange !== undefined) {
@@ -575,11 +599,18 @@ export default function ReportsClientPage({
             if (appliedFilters.activityDate?.to) {
                 queryParams.set('endDate', endOfDay(appliedFilters.activityDate.to).toISOString());
             }
+            if (appliedFilters.dialerAssigned && appliedFilters.dialerAssigned.length > 0) {
+                queryParams.set('dialers', appliedFilters.dialerAssigned.join(','));
+            }
+            if (isDialerPerformanceOnly) {
+                queryParams.set('isDialerPerformanceOnly', 'true');
+            }
             if (isRefreshing) {
                 queryParams.set('refresh', 'true');
             }
             const apiRes = await fetch(`/api/admin/outbound-reporting?${queryParams.toString()}`);
-            if (apiRes.ok) {
+            const contentType = apiRes.headers.get('content-type');
+            if (apiRes.ok && contentType && contentType.includes('application/json')) {
                 const json = await apiRes.json();
                 if (json && json.success && json.data) {
                     setFetchProgress(80);
@@ -597,14 +628,22 @@ export default function ReportsClientPage({
                     setLoadTime(Math.round(performance.now() - startTimePerf));
                     return;
                 }
+            } else if (apiRes.ok) {
+                console.warn("Outbound Reporting API returned non-JSON HTML response, falling back to client queries.");
             }
         } catch (apiErr) {
             console.warn("Outbound Reporting API fetch failed, falling back to client queries:", apiErr);
         }
 
+        const activityQueryConstraints: any[] = [where('date', '>=', startISO)];
+        if (appliedFilters.activityDate?.to) {
+          const endISO = endOfDay(appliedFilters.activityDate.to).toISOString();
+          activityQueryConstraints.push(where('date', '<=', endISO));
+        }
+
         const activityQuery = query(
             collectionGroup(firestore, 'activity'),
-            where('date', '>=', startISO)
+            ...activityQueryConstraints
         );
 
         const apptQuery = query(
@@ -622,6 +661,7 @@ export default function ReportsClientPage({
 
         const results = await Promise.all(fetches);
         setFetchProgress(40);
+        await new Promise(resolve => setTimeout(resolve, 0));
         const activitiesSnap = results[0];
         const apptsSnap = results[1];
 
@@ -650,11 +690,11 @@ export default function ReportsClientPage({
                     role === 'lead gen' || 
                     activeRole === 'lead gen' || 
                     assignedRoles.includes('lead gen') ||
-                    role === 'lead_gen' ||
-                    activeRole === 'lead_gen' ||
+                    role === 'lead_gen' || 
+                    activeRole === 'lead_gen' || 
                     assignedRoles.includes('lead_gen') ||
-                    role === 'leadgen' ||
-                    activeRole === 'leadgen' ||
+                    role === 'leadgen' || 
+                    activeRole === 'leadgen' || 
                     assignedRoles.includes('leadgen');
 
                 if (!isDialerRole) return null;
@@ -698,7 +738,7 @@ export default function ReportsClientPage({
                 if (leadId) activeLeadIds.add(leadId);
             });
 
-            // activeLeadIds now strictly contains leads with human activities or appointments after July 1 2026
+            // activeLeadIds now strictly contains leads with human activities or appointments after startISO
 
             let leadsDocs: any[] = [];
             let companiesDocs: any[] = [];
@@ -721,7 +761,14 @@ export default function ReportsClientPage({
                 return resultsSnap;
             };
 
-            if (appliedFilters.dialerAssignmentDate?.from || appliedFilters.leadCreatedDate?.from) {
+            if (activeLeadIds.size > 0) {
+                const [leadsBatch, companiesBatch] = await Promise.all([
+                    fetchInBatches(Array.from(activeLeadIds), false),
+                    fetchInBatches(Array.from(activeLeadIds), true)
+                ]);
+                leadsDocs = leadsBatch;
+                companiesDocs = companiesBatch;
+            } else if (appliedFilters.dialerAssignmentDate?.from || appliedFilters.leadCreatedDate?.from) {
                 // Fetch leads assigned within or matching the assignment criteria directly
                 const qLeads = query(collection(firestore, 'leads'));
                 const qCompanies = query(collection(firestore, 'companies'));
@@ -731,13 +778,6 @@ export default function ReportsClientPage({
                 ]);
                 leadsDocs = lSnap.docs;
                 companiesDocs = cSnap.docs;
-            } else if (activeLeadIds.size > 0) {
-                const [leadsBatch, companiesBatch] = await Promise.all([
-                    fetchInBatches(Array.from(activeLeadIds), false),
-                    fetchInBatches(Array.from(activeLeadIds), true)
-                ]);
-                leadsDocs = leadsBatch;
-                companiesDocs = companiesBatch;
             } else if (!appliedFilters.activityDate?.from) {
                 // Fallback if there are no date bounds at all
                 const qLeads = query(collection(firestore, 'leads'));
@@ -750,6 +790,7 @@ export default function ReportsClientPage({
                 companiesDocs = cSnap.docs;
             }
             setFetchProgress(75);
+            await new Promise(resolve => setTimeout(resolve, 0));
 
             const processRecords = (docs: any[], isFromCompanies = false) => {
                 return docs.map((doc: any) => {
@@ -1495,17 +1536,30 @@ export default function ReportsClientPage({
         }
     });
 
-    // Outbound Dialer Team Performance Details Timeframe Filtering (Daily, Weekly, Monthly)
+    // Outbound Dialer Team Performance Details Timeframe Filtering (Yesterday, Today, Last Week, This Week, Monthly)
     const perfNow = appliedFilters.activityDate?.to || appliedFilters.activityDate?.from || new Date();
     let perfFromDate: Date;
     let perfToDate: Date;
-    if (teamPerformanceTimeframe === 'daily') {
+    if (teamPerformanceTimeframe === 'yesterday') {
+      let yesterdayTarget = subDays(perfNow, 1);
+      if (yesterdayTarget.getDay() === 0) {
+        yesterdayTarget = subDays(yesterdayTarget, 2);
+      } else if (yesterdayTarget.getDay() === 6) {
+        yesterdayTarget = subDays(yesterdayTarget, 1);
+      }
+      perfFromDate = startOfDay(yesterdayTarget);
+      perfToDate = endOfDay(yesterdayTarget);
+    } else if (teamPerformanceTimeframe === 'today') {
       perfFromDate = startOfDay(perfNow);
       perfToDate = endOfDay(perfNow);
-    } else if (teamPerformanceTimeframe === 'weekly') {
+    } else if (teamPerformanceTimeframe === 'last-week') {
+      const lastWeekTarget = subWeeks(perfNow, 1);
+      perfFromDate = startOfWeek(lastWeekTarget, { weekStartsOn: 1 });
+      perfToDate = endOfWeek(lastWeekTarget, { weekStartsOn: 1 });
+    } else if (teamPerformanceTimeframe === 'this-week') {
       perfFromDate = startOfWeek(perfNow, { weekStartsOn: 1 });
       perfToDate = endOfWeek(perfNow, { weekStartsOn: 1 });
-    } else { // monthly
+    } else { // 'monthly'
       perfFromDate = startOfMonth(perfNow);
       perfToDate = endOfMonth(perfNow);
     }
@@ -2784,6 +2838,7 @@ export default function ReportsClientPage({
       inProgressStatusDist,
       teamPerformanceData,
       teamPerformanceTotals,
+      teamPerformanceDateRange: { from: perfFromDate, to: perfToDate },
       perfFilteredCalls,
       callOutcomesData,
       appointmentOutcomeData,
@@ -2920,7 +2975,14 @@ export default function ReportsClientPage({
     <div className="flex flex-col gap-6">
       {!hideHeaderAndFilters && (
         <>
-          <header><h1 className="text-3xl font-bold tracking-tight">Outbound Reporting</h1><p className="text-muted-foreground">Performance dashboard for outbound engagement.</p></header>
+          <header>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {isDialerPerformanceOnly ? "Outbound Dialer Team Performance Details" : "Outbound Reporting"}
+            </h1>
+            <p className="text-muted-foreground">
+              {isDialerPerformanceOnly ? "Detailed cold calling and team performance metrics." : "Performance dashboard for outbound engagement."}
+            </p>
+          </header>
           
           <StatusOutcomeBanner />
 
@@ -2983,8 +3045,10 @@ export default function ReportsClientPage({
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="yesterday">Yesterday</SelectItem>
+                                <SelectItem value="yesterdayandtoday">Yesterday & Today (Working Days)</SelectItem>
                                 <SelectItem value="this-week">This Week</SelectItem>
                                 <SelectItem value="last-week">Last Week</SelectItem>
+                                <SelectItem value="last-and-this-week">Last Week & This Week</SelectItem>
                                 <SelectItem value="this-month">This Month</SelectItem>
                                 <SelectItem value="last-month">Last Month</SelectItem>
                                 <SelectItem value="this-quarter">This Quarter</SelectItem>
@@ -3580,27 +3644,51 @@ export default function ReportsClientPage({
                             <div className="inline-flex items-center bg-[#eee8df] dark:bg-slate-800 p-1 rounded-full border border-[#e2d8ca] dark:border-slate-700 shadow-inner">
                                 <button
                                     type="button"
-                                    onClick={() => setTeamPerformanceTimeframe('daily')}
+                                    onClick={() => setTeamPerformanceTimeframe('yesterday')}
                                     className={cn(
                                         "px-4 py-1 text-xs font-semibold rounded-full transition-all duration-150",
-                                        teamPerformanceTimeframe === 'daily'
+                                        teamPerformanceTimeframe === 'yesterday'
                                             ? "bg-[#aa6c38] text-white shadow-sm"
                                             : "text-[#23423b] dark:text-slate-300 hover:text-black hover:bg-black/5"
                                     )}
                                 >
-                                    Daily
+                                    Yesterday
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setTeamPerformanceTimeframe('weekly')}
+                                    onClick={() => setTeamPerformanceTimeframe('today')}
                                     className={cn(
                                         "px-4 py-1 text-xs font-semibold rounded-full transition-all duration-150",
-                                        teamPerformanceTimeframe === 'weekly'
+                                        teamPerformanceTimeframe === 'today'
                                             ? "bg-[#aa6c38] text-white shadow-sm"
                                             : "text-[#23423b] dark:text-slate-300 hover:text-black hover:bg-black/5"
                                     )}
                                 >
-                                    Weekly
+                                    Today
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTeamPerformanceTimeframe('last-week')}
+                                    className={cn(
+                                        "px-4 py-1 text-xs font-semibold rounded-full transition-all duration-150",
+                                        teamPerformanceTimeframe === 'last-week'
+                                            ? "bg-[#aa6c38] text-white shadow-sm"
+                                            : "text-[#23423b] dark:text-slate-300 hover:text-black hover:bg-black/5"
+                                    )}
+                                >
+                                    Last Week
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTeamPerformanceTimeframe('this-week')}
+                                    className={cn(
+                                        "px-4 py-1 text-xs font-semibold rounded-full transition-all duration-150",
+                                        teamPerformanceTimeframe === 'this-week'
+                                            ? "bg-[#aa6c38] text-white shadow-sm"
+                                            : "text-[#23423b] dark:text-slate-300 hover:text-black hover:bg-black/5"
+                                    )}
+                                >
+                                    This Week
                                 </button>
                                 <button
                                     type="button"
@@ -3620,7 +3708,30 @@ export default function ReportsClientPage({
                             </Button>
                         </div>
                     </div>
-                    <CardDescription>Comprehensive metrics breakdown for BDR and Dialer cold calling activity.</CardDescription>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-1">
+                        <CardDescription>Comprehensive metrics breakdown for BDR and Dialer cold calling activity.</CardDescription>
+                        {stats.teamPerformanceDateRange && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className="bg-[#23423b]/5 dark:bg-emerald-950/20 text-[#23423b] dark:text-emerald-300 border-[#23423b]/20 dark:border-emerald-800/40 text-xs px-2.5 py-1 flex items-center gap-1.5 font-semibold shadow-xs">
+                                    <CalendarIcon className="h-3.5 w-3.5 text-[#aa6c38]" />
+                                    <span>
+                                        {teamPerformanceTimeframe === 'yesterday' ? 'Yesterday' 
+                                          : teamPerformanceTimeframe === 'today' ? 'Today' 
+                                          : teamPerformanceTimeframe === 'last-week' ? 'Last Week' 
+                                          : teamPerformanceTimeframe === 'this-week' ? 'This Week' 
+                                          : 'Monthly'}: <span className="text-[#aa6c38] font-bold">{
+                                            isSameDay(stats.teamPerformanceDateRange.from, stats.teamPerformanceDateRange.to)
+                                              ? format(stats.teamPerformanceDateRange.from, "EEE, dd MMM yyyy")
+                                              : `${format(stats.teamPerformanceDateRange.from, "dd MMM yyyy")} – ${format(stats.teamPerformanceDateRange.to, "dd MMM yyyy")}`
+                                          }</span>
+                                    </span>
+                                </Badge>
+                                <Badge variant="secondary" className="text-[11px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 font-normal">
+                                    Filtered based on: <strong className="ml-1 text-slate-800 dark:text-slate-200">Activity (Calls & Engagement)</strong>
+                                </Badge>
+                            </div>
+                        )}
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {/* Top Level Summary Cards (Calculated from Overall Filtered Range) */}
@@ -4099,7 +4210,7 @@ export default function ReportsClientPage({
 
 
             {/* Appointments Booked & Downstream Conversions Leaderboard */}
-            {(!visibleSections || visibleSections.includes('appointment-incentives')) && (
+            {isSuperAdminUser && (!visibleSections || visibleSections.includes('appointment-incentives')) && (
             <Card className="mt-6 border shadow-sm">
                 <CardHeader className="pb-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -4292,7 +4403,7 @@ export default function ReportsClientPage({
             </Card>
             )}
 
-            {!visibleSections && (
+            {isSuperAdminUser && !visibleSections && (
               <>
             {/* Outbound Lead Bucket Progression Report */}
             <Card id="step-report-bucket-progression" className="mt-6 border shadow-sm">
