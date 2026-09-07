@@ -570,7 +570,6 @@ export default function ReportsClientPage({
     setLoading(true);
     setFetchProgress(15);
     setError(null);
-    console.time("Outbound Reporting - Load Time");
     const startTimePerf = performance.now();
     try {
         let startISO = '';
@@ -624,7 +623,6 @@ export default function ReportsClientPage({
                     setLoading(false);
                     setIsRefreshing(false);
                     setFetchProgress(100);
-                    console.timeEnd("Outbound Reporting - Load Time");
                     setLoadTime(Math.round(performance.now() - startTimePerf));
                     return;
                 }
@@ -997,7 +995,6 @@ export default function ReportsClientPage({
     } finally {
         setLoading(false);
         setIsRefreshing(false);
-        console.timeEnd("Outbound Reporting - Load Time");
         setLoadTime(Math.round(performance.now() - startTimePerf));
     }
   }, [userProfile, toast, appliedFilters.activityDate, appliedFilters.dialerAssignmentDate, appliedFilters.leadCreatedDate]);
