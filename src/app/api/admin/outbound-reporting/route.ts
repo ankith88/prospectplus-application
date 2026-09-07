@@ -46,17 +46,41 @@ function parseDateString(dateVal: any): Date | null {
 function sanitizeString(val: any, maxLength?: number): string {
   if (val === null || val === undefined) return '';
   let str = typeof val === 'string' ? val : String(val);
-  // Replace tabs with space, and normalize newlines
-  str = str.replace(/\t/g, ' ').replace(/\r\n|\r/g, '\n');
-  // Strip non-printable ASCII control characters (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F)
-  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  // Replace control whitespace (tabs, carriage returns, vertical tabs, form feeds) with spaces
+  str = str.replace(/[\t\r\v\f]/g, ' ').replace(/\n+/g, ' ');
+  // Strip non-printable ASCII control characters (0x00-0x1F, 0x7F)
+  str = str.replace(/[\x00-\x1F\x7F]/g, '');
+  // Strip zero-width formatting characters
+  str = str.replace(/[\u200B-\u200D\uFEFF]/g, '');
   // Clean dangling unicode surrogates that break JSON serialization
   str = str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
   // Unicode-safe substring
   if (maxLength && str.length > maxLength) {
     str = Array.from(str).slice(0, maxLength).join('');
   }
-  return str;
+  return str.trim();
+}
+
+function deepSanitize(val: any): any {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'string') return sanitizeString(val, 500);
+  if (typeof val === 'number' || typeof val === 'boolean') return val;
+  if (val instanceof Date) return val.toISOString();
+  if (typeof val === 'object' && typeof val.toDate === 'function') {
+    return val.toDate().toISOString();
+  }
+  if (Array.isArray(val)) {
+    return val.map(item => deepSanitize(item));
+  }
+  if (typeof val === 'object') {
+    const cleaned: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val)) {
+      const cleanKey = sanitizeString(k, 100);
+      cleaned[cleanKey] = deepSanitize(v);
+    }
+    return cleaned;
+  }
+  return String(val);
 }
 
 export async function GET(req: NextRequest) {
@@ -163,7 +187,7 @@ export async function GET(req: NextRequest) {
       'companyName', 'status', 'customerStatus', 'dialerAssigned', 'salesRepAssigned',
       'franchisee', 'fieldSales', 'dateLeadEntered', 'createdAt', 'assignedToDialerAt',
       'visitNoteID', 'providedShipMateOnboarding', 'firstJobCreatedAt', 'jobCount',
-      'localMileTrialsRemaining', 'localMileTermsAccepted', 'wasOutbound', 'notes',
+      'localMileTrialsRemaining', 'localMileTermsAccepted', 'wasOutbound',
       'discoveryData', 'entityId', 'prospectPlusId', 'customerEntityId', 'internalid', 'bucket',
       'dateLocalmileAccepted', 'localMileAcceptedAt', 'dateRegistrationSent', 'registrationSentAt', 'bucketHistory',
       'customerSource', 'source', 'leadSource', 'wasInbound', 'inboundDetails', 'inboundPageUrl', 'pageURL'
@@ -187,7 +211,7 @@ export async function GET(req: NextRequest) {
         fieldSales: data.fieldSales || false,
         dateLeadEntered: data.dateLeadEntered || data.createdAt || null,
         assignedToDialerAt: data.assignedToDialerAt || null,
-        discoveryData: data.discoveryData || null,
+        discoveryData: deepSanitize(data.discoveryData),
         visitNoteID: data.visitNoteID || null,
         isFromCompaniesCollection: isFromCompanies,
         providedShipMateOnboarding: data.providedShipMateOnboarding || false,
@@ -199,14 +223,13 @@ export async function GET(req: NextRequest) {
         localMileAcceptedAt: data.localMileAcceptedAt || null,
         dateRegistrationSent: data.dateRegistrationSent || null,
         registrationSentAt: data.registrationSentAt || null,
-        bucketHistory: Array.isArray(data.bucketHistory) ? data.bucketHistory : [],
+        bucketHistory: Array.isArray(data.bucketHistory) ? deepSanitize(data.bucketHistory) : [],
         bucket: data.bucket || 'outbound',
         wasOutbound: data.wasOutbound || false,
-        notes: sanitizeString(data.notes, 1000),
         customerSource: data.customerSource || data.source || data.leadSource || null,
         wasInbound: data.wasInbound || false,
-        inboundDetails: typeof data.inboundDetails === 'object' ? data.inboundDetails : sanitizeString(data.inboundDetails, 500),
-        inboundPageUrl: sanitizeString(data.inboundPageUrl || data.pageURL, 500) || null,
+        inboundDetails: typeof data.inboundDetails === 'object' ? deepSanitize(data.inboundDetails) : sanitizeString(data.inboundDetails, 200),
+        inboundPageUrl: sanitizeString(data.inboundPageUrl || data.pageURL, 200) || null,
       };
     };
 
