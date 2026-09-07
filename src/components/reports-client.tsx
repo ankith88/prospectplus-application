@@ -608,24 +608,8 @@ export default function ReportsClientPage({
                 queryParams.set('refresh', 'true');
             }
             const apiRes = await fetch(`/api/admin/outbound-reporting?${queryParams.toString()}`);
-            const contentType = apiRes.headers.get('content-type');
-            if (apiRes.ok && contentType && contentType.includes('application/json')) {
-                const text = await apiRes.text();
-                // Clean unescaped tabs, ASCII control characters, and broken unicode surrogates
-                const cleanText = text
-                    .replace(/\t/g, ' ')
-                    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-                    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
-                
-                let json: any;
-                try {
-                    json = JSON.parse(cleanText);
-                } catch (firstParseErr) {
-                    // Fallback parse: replace any remaining raw control characters with space
-                    const superClean = cleanText.replace(/[\x00-\x1F]/g, ' ');
-                    json = JSON.parse(superClean);
-                }
-
+            if (apiRes.ok) {
+                const json = await apiRes.json();
                 if (json && json.success && json.data) {
                     setFetchProgress(80);
                     const { leads, activities, calls, appointments, dialers } = json.data;
@@ -641,8 +625,6 @@ export default function ReportsClientPage({
                     setLoadTime(Math.round(performance.now() - startTimePerf));
                     return;
                 }
-            } else if (apiRes.ok) {
-                console.warn("Outbound Reporting API returned non-JSON HTML response, falling back to client queries.");
             }
         } catch (apiErr) {
             console.warn("Outbound Reporting API fetch failed, falling back to client queries:", apiErr);
