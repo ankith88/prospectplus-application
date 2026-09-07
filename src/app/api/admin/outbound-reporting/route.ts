@@ -46,10 +46,15 @@ function parseDateString(dateVal: any): Date | null {
 function sanitizeString(val: any, maxLength?: number): string {
   if (val === null || val === undefined) return '';
   let str = typeof val === 'string' ? val : String(val);
-  // Strip ASCII control characters (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F) that cause JSON parse syntax errors
+  // Replace tabs with space, and normalize newlines
+  str = str.replace(/\t/g, ' ').replace(/\r\n|\r/g, '\n');
+  // Strip non-printable ASCII control characters (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F)
   str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  // Clean dangling unicode surrogates that break JSON serialization
+  str = str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
+  // Unicode-safe substring
   if (maxLength && str.length > maxLength) {
-    str = str.substring(0, maxLength);
+    str = Array.from(str).slice(0, maxLength).join('');
   }
   return str;
 }

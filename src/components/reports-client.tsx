@@ -611,8 +611,21 @@ export default function ReportsClientPage({
             const contentType = apiRes.headers.get('content-type');
             if (apiRes.ok && contentType && contentType.includes('application/json')) {
                 const text = await apiRes.text();
-                const cleanText = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-                const json = JSON.parse(cleanText);
+                // Clean unescaped tabs, ASCII control characters, and broken unicode surrogates
+                const cleanText = text
+                    .replace(/\t/g, ' ')
+                    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
+                
+                let json: any;
+                try {
+                    json = JSON.parse(cleanText);
+                } catch (firstParseErr) {
+                    // Fallback parse: replace any remaining raw control characters with space
+                    const superClean = cleanText.replace(/[\x00-\x1F]/g, ' ');
+                    json = JSON.parse(superClean);
+                }
+
                 if (json && json.success && json.data) {
                     setFetchProgress(80);
                     const { leads, activities, calls, appointments, dialers } = json.data;
