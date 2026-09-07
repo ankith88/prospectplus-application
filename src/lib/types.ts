@@ -103,7 +103,7 @@ export interface EmailRecord {
 export interface Activity {
   id: string
   leadId?: string
-  type: 'Call' | 'Email' | 'Meeting' | 'Update'
+  type: 'Call' | 'Email' | 'Meeting' | 'Update' | 'CS Call'
   date: string
   duration?: string // e.g., "5m 32s"
   notes: string

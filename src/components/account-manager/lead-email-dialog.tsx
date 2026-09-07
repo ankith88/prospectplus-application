@@ -30,6 +30,7 @@ interface LeadEmailDialogProps {
   isOpen: boolean;
   onClose: () => void;
   lead: Lead | null;
+  onEmailSent?: (leadId: string, timestamp: string) => void;
 }
 
 interface Template {
@@ -39,7 +40,7 @@ interface Template {
   body: string;
 }
 
-export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps) {
+export function LeadEmailDialog({ isOpen, onClose, lead, onEmailSent }: LeadEmailDialogProps) {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [notifyOnOpen, setNotifyOnOpen] = useState(true);
@@ -162,6 +163,7 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
       const result = await response.json();
       if (result.success) {
         toast({ title: 'Email Sent', description: 'Your message has been dispatched successfully.' });
+        onEmailSent?.(lead.id, new Date().toISOString());
         onClose();
       } else {
         toast({ variant: 'destructive', title: 'Email Failed', description: result.message || 'Failed to send email.' });

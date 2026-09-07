@@ -25,6 +25,7 @@ interface LeadNotesDialogProps {
   isOpen: boolean;
   onClose: () => void;
   lead: Lead | null;
+  onNoteAdded?: (leadId: string, timestamp: string) => void;
 }
 
 interface ActivityItem {
@@ -36,7 +37,7 @@ interface ActivityItem {
   outcome?: string;
 }
 
-export function LeadNotesDialog({ isOpen, onClose, lead }: LeadNotesDialogProps) {
+export function LeadNotesDialog({ isOpen, onClose, lead, onNoteAdded }: LeadNotesDialogProps) {
   const { userProfile } = useAuth();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -231,6 +232,7 @@ export function LeadNotesDialog({ isOpen, onClose, lead }: LeadNotesDialogProps)
 
       setActivities((prev) => [addedItem, ...prev]);
       setNewNote('');
+      onNoteAdded?.(lead.id, nowStr);
     } catch (error) {
       console.error('Failed to add note:', error);
     } finally {

@@ -739,11 +739,14 @@ export default function PipelineDashboard() {
     
     const handleCall = async (leadId: string, phone: string) => {
         window.open(`aircall:${phone}`, '_self');
+        const nowStr = new Date().toISOString();
         await logActivity(leadId, {
             type: 'Call',
             notes: `Initiated call to ${phone} via AirCall from AM Pipeline.`,
-            author: loggedInAmName || 'System'
+            author: loggedInAmName || 'System',
+            date: nowStr
         });
+        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, lastActivityDate: nowStr, lastContactedDate: nowStr, updatedAt: nowStr } : l));
     };
 
     const openLead = (leadId: string) => {
@@ -1431,8 +1434,22 @@ export default function PipelineDashboard() {
                 </Tabs>
             )}
 
-            <LeadEmailDialog isOpen={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} lead={activeLead} />
-            <LeadNotesDialog isOpen={notesDialogOpen} onClose={() => setNotesDialogOpen(false)} lead={activeLead} />
+            <LeadEmailDialog 
+                isOpen={emailDialogOpen} 
+                onClose={() => setEmailDialogOpen(false)} 
+                lead={activeLead} 
+                onEmailSent={(leadId, timestamp) => {
+                    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, lastActivityDate: timestamp, lastContactedDate: timestamp, updatedAt: timestamp } : l));
+                }}
+            />
+            <LeadNotesDialog 
+                isOpen={notesDialogOpen} 
+                onClose={() => setNotesDialogOpen(false)} 
+                lead={activeLead} 
+                onNoteAdded={(leadId, timestamp) => {
+                    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, lastActivityDate: timestamp, updatedAt: timestamp } : l));
+                }}
+            />
         </div>
     );
 }

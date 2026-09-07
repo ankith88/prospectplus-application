@@ -124,18 +124,33 @@ async function logActivity(
         const auth = getAuth(app);
         const currentUser = auth.currentUser;
         const author = activity.author || currentUser?.displayName || currentUser?.email || 'System';
-
         const email = activity.email || currentUser?.email || undefined;
+        const activityDate = activity.date || getSydneyISOString();
 
         const activityLog: Partial<Activity> = {
             ...activity,
-            date: activity.date || getSydneyISOString(),
+            date: activityDate,
             author,
             ...(email ? { email } : {}),
             syncedWithNetSuite: false,
         };
 
         const docRef = await addDoc(activityRef, prepareForFirestore(activityLog));
+
+        // Also update lastActivityDate and updatedAt on the parent document
+        if (colName === 'leads' || colName === 'companies') {
+            const updatePayload: Record<string, any> = {
+                lastActivityDate: activityDate,
+                updatedAt: activityDate,
+            };
+            if (activity.type === 'Call' || activity.type === 'Email' || activity.type === 'CS Call') {
+                updatePayload.lastContactedDate = activityDate;
+            }
+            updateDoc(doc(firestore, colName, leadId), updatePayload).catch(err => {
+                console.warn(`Could not update lastActivityDate on ${colName}/${leadId}:`, err);
+            });
+        }
+
         return docRef.id;
     } catch (error) {
         console.error(`Failed to log activity for ${leadId}:`, error);
@@ -1881,8 +1896,14 @@ async function logCallActivity(
 
     const isLocalMileOpp = currentStatus === 'LocalMile Opportunity' && isDialer;
 
+    const normalizedCurrentStatus = (currentStatus || '').trim().toLowerCase();
+    const protectedStatuses = ['quote sent', 'quote accepted', 'won', 'signed', ...(isDialer ? ['localmile opportunity'] : [])];
+    const isCurrentStatusProtected = protectedStatuses.includes(normalizedCurrentStatus);
+
+    const isLostStatus = status === 'Lost' || status === 'Lost Customer' || (status && status.toLowerCase().includes('lost')) || (callData.outcome && callData.outcome.toLowerCase().includes('lost'));
+
     // Special logic for "Prospect - No Access/No Contact" processing
-    if (callData.outcome === 'Prospect - No Access/No Contact' && !isLocalMileOpp) {
+    if (callData.outcome === 'Prospect - No Access/No Contact' && !isLocalMileOpp && !isCurrentStatusProtected) {
         try {
             if (leadData?.visitNoteID) {
                 const noteRef = doc(firestore, 'visitnotes', leadData.visitNoteID);
@@ -1924,7 +1945,7 @@ async function logCallActivity(
     }
 
     // Special logic for "Unqualified Opportunity" processing
-    if (callData.outcome === 'Unqualified Opportunity' && !isLocalMileOpp) {
+    if (callData.outcome === 'Unqualified Opportunity' && !isLocalMileOpp && !isCurrentStatusProtected) {
         try {
             if (leadData?.visitNoteID) {
                 const noteRef = doc(firestore, 'visitnotes', leadData.visitNoteID);
@@ -1961,11 +1982,8 @@ async function logCallActivity(
         }
     }
 
-    // Prevent changing status if lead is in a protected state ('Won', 'Signed', or 'LocalMile Opportunity' for dialers), unless outcome is Lost
-    const protectedStatuses = ['Won', 'Signed', ...(isDialer ? ['LocalMile Opportunity'] : [])];
-    
-    const isLostStatus = status === 'Lost' || status === 'Lost Customer' || (status && status.toLowerCase().includes('lost')) || (callData.outcome && callData.outcome.toLowerCase().includes('lost'));
-    const shouldUpdateStatus = status && (!currentStatus || !protectedStatuses.includes(currentStatus) || isLostStatus);
+    // Prevent changing status if lead is in a protected state ('Quote Sent', 'Quote Accepted', 'Won', 'Signed', or 'LocalMile Opportunity' for dialers), unless outcome is Lost
+    const shouldUpdateStatus = status && (!currentStatus || !isCurrentStatusProtected || isLostStatus);
 
     // Special handling for Appointment Booked outcome: transition bucket to account_manager
     if (callData.outcome === 'Appointment Booked') {
