@@ -1203,7 +1203,8 @@ export default function PipelineDashboard() {
                             </TabsTrigger>
                             <TabsTrigger 
                                 value="stale" 
-                                className="!bg-orange-500 !text-white hover:!bg-orange-600 data-[state=active]:!bg-orange-600 data-[state=active]:!text-white border border-orange-600 gap-1 font-bold shadow-xs"
+                                title="Leads untouched for 14 or more days (no status update, contact, notes, or activity)"
+                                className="!bg-orange-500 !text-white hover:!bg-orange-600 data-[state=active]:!bg-orange-600 data-[state=active]:!text-white border border-orange-600 gap-1 font-bold shadow-xs cursor-pointer"
                             >
                                 Stale Leads ⚠️ <Badge variant="secondary" className="ml-1 bg-white text-orange-950 font-extrabold">{staleLeads.length}</Badge>
                                 {getTransferredCount(staleLeads) > 0 && (
@@ -1411,7 +1412,19 @@ export default function PipelineDashboard() {
                         <TabsContent value="future-follow-up" className="m-0 h-full">
                             <LeadGrid leads={futureFollowUpLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} />
                         </TabsContent>
-                        <TabsContent value="stale" className="m-0 h-full">
+                        <TabsContent value="stale" className="m-0 h-full space-y-4">
+                            <div className="bg-orange-50/90 border border-orange-200/80 rounded-xl p-3.5 text-xs text-orange-950 flex items-start gap-3 shadow-xs">
+                                <AlertCircle className="h-4 w-4 text-orange-600 shrink-0 mt-0.5" />
+                                <div className="space-y-0.5">
+                                    <p className="font-bold text-orange-900">
+                                        When does a lead fall into Stale Leads?
+                                    </p>
+                                    <p className="text-orange-800/90 leading-relaxed">
+                                        A lead appears in this tab when it has not had any activity, note, call, email, status update, or edit for <strong className="font-semibold text-orange-950">14 or more consecutive days</strong>.
+                                        Actioning the lead (e.g. logging a call, adding a note, sending an email, or updating its status) will immediately reset the timer and return it to its active pipeline stage.
+                                    </p>
+                                </div>
+                            </div>
                             <LeadGrid leads={staleLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin} canUnassign={isAdmin} isStaleSection={true} emptyMessage="No stale leads! All leads have been touched within the last 14 days." />
                         </TabsContent>
                     </div>
@@ -1784,7 +1797,8 @@ function LeadGrid({
                                                     return (
                                                         <Badge 
                                                             variant="outline" 
-                                                            className="text-[10px] uppercase shrink-0 border bg-orange-100 text-orange-800 border-orange-300 font-bold"
+                                                            title={`Untouched for ${daysUntouched} days (exceeds 14-day threshold). Log a note, call, email, or status update to refresh.`}
+                                                            className="text-[10px] uppercase shrink-0 border bg-orange-100 text-orange-800 border-orange-300 font-bold cursor-help"
                                                         >
                                                             ⚠️ {daysUntouched} Days Untouched
                                                         </Badge>
@@ -2183,7 +2197,8 @@ function LeadCard({
                                     return (
                                         <Badge 
                                             variant="outline" 
-                                            className="text-[10px] uppercase shrink-0 border bg-orange-100 text-orange-800 border-orange-300 font-bold"
+                                            title={`Untouched for ${daysUntouched} days (exceeds 14-day threshold). Log a note, call, email, or status update to refresh.`}
+                                            className="text-[10px] uppercase shrink-0 border bg-orange-100 text-orange-800 border-orange-300 font-bold cursor-help"
                                         >
                                             ⚠️ {daysUntouched} Days Untouched
                                         </Badge>
