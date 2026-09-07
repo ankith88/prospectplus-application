@@ -768,20 +768,10 @@ export default function ReportsClientPage({
                 ]);
                 leadsDocs = leadsBatch;
                 companiesDocs = companiesBatch;
-            } else if (appliedFilters.dialerAssignmentDate?.from || appliedFilters.leadCreatedDate?.from) {
-                // Fetch leads assigned within or matching the assignment criteria directly
-                const qLeads = query(collection(firestore, 'leads'));
-                const qCompanies = query(collection(firestore, 'companies'));
-                const [lSnap, cSnap] = await Promise.all([
-                    getDocs(qLeads),
-                    getDocs(qCompanies)
-                ]);
-                leadsDocs = lSnap.docs;
-                companiesDocs = cSnap.docs;
-            } else if (!appliedFilters.activityDate?.from) {
-                // Fallback if there are no date bounds at all
-                const qLeads = query(collection(firestore, 'leads'));
-                const qCompanies = query(collection(firestore, 'companies'));
+            } else {
+                // Targeted fallback: fetch only outbound leads or dialer-assigned leads up to 500 records max
+                const qLeads = query(collection(firestore, 'leads'), where('bucket', '==', 'outbound'), limit(500));
+                const qCompanies = query(collection(firestore, 'companies'), where('bucket', '==', 'outbound'), limit(500));
                 const [lSnap, cSnap] = await Promise.all([
                     getDocs(qLeads),
                     getDocs(qCompanies)
