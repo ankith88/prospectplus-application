@@ -39,11 +39,12 @@ interface EditNoteDialogProps {
   onNoteUpdated: (updatedNote: Note) => void
   isOpen: boolean
   onOpenChange: (open: boolean) => void
+  collectionName?: 'leads' | 'companies'
 }
 
 type SubmissionStatus = 'idle' | 'saving_firebase' | 'complete' | 'error';
 
-export function EditNoteDialog({ lead, note, onNoteUpdated, isOpen, onOpenChange }: EditNoteDialogProps) {
+export function EditNoteDialog({ lead, note, onNoteUpdated, isOpen, onOpenChange, collectionName }: EditNoteDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
   const [isListening, setIsListening] = useState(false);
@@ -181,7 +182,8 @@ export function EditNoteDialog({ lead, note, onNoteUpdated, isOpen, onOpenChange
     setSubmissionState('saving_firebase');
     
     try {
-        await updateNoteActivity(lead.id, note.id, values.content, (lead as any).type || 'leads');
+        const targetCollection = collectionName || (lead.isFromCompaniesCollection ? 'companies' : ((lead as any).type === 'companies' ? 'companies' : ((lead as any).type === 'leads' ? 'leads' : undefined)));
+        await updateNoteActivity(lead.id, note.id, values.content, targetCollection);
         
         const updatedNote: Note = {
             ...note,

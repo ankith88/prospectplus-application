@@ -26,6 +26,7 @@ interface LeadNotesDialogProps {
   onClose: () => void;
   lead: Lead | null;
   onNoteAdded?: (leadId: string, timestamp: string) => void;
+  collectionName?: 'leads' | 'companies';
 }
 
 interface ActivityItem {
@@ -37,7 +38,7 @@ interface ActivityItem {
   outcome?: string;
 }
 
-export function LeadNotesDialog({ isOpen, onClose, lead, onNoteAdded }: LeadNotesDialogProps) {
+export function LeadNotesDialog({ isOpen, onClose, lead, onNoteAdded, collectionName }: LeadNotesDialogProps) {
   const { userProfile } = useAuth();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -200,21 +201,27 @@ export function LeadNotesDialog({ isOpen, onClose, lead, onNoteAdded }: LeadNote
     }
   }, [lead]);
 
+  const resolveCollection = useCallback(() => {
+    if (collectionName) return collectionName;
+    if (lead?.isFromCompaniesCollection || (lead as any)?.type === 'companies' || lead?.status === 'Won') return 'companies';
+    return 'leads';
+  }, [collectionName, lead]);
+
   useEffect(() => {
     if (isOpen && lead?.id) {
-      const colType = (lead as any).type === 'companies' ? 'companies' : 'leads';
+      const colType = resolveCollection();
       fetchNotesAndActivities(lead.id, colType);
     } else {
       setActivities([]);
       setNewNote('');
     }
-  }, [isOpen, lead, fetchNotesAndActivities]);
+  }, [isOpen, lead, fetchNotesAndActivities, resolveCollection]);
 
   const handleAddNote = async () => {
     if (!newNote.trim() || !lead?.id) return;
     setIsSubmitting(true);
     const nowStr = new Date().toISOString();
-    const colType = (lead as any).type === 'companies' ? 'companies' : 'leads';
+    const colType = resolveCollection();
     try {
       await logNoteActivity(lead.id, {
         content: newNote.trim(),

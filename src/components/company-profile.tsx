@@ -1266,6 +1266,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
 
   const handleNoteLoggedAndClose = (newNote: Note) => {
+    setCompany(prev => ({ ...prev, notes: [newNote, ...(prev.notes || [])] }));
     onNoteLogged(newNote);
     setIsLogNoteOpen(false);
   };
@@ -2459,7 +2460,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     />
 
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
-    <LogNoteDialog lead={company} onNoteLogged={handleNoteLoggedAndClose} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} />
+    <LogNoteDialog lead={company} onNoteLogged={handleNoteLoggedAndClose} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} collectionName="companies" />
     <EditAddressDialog lead={company} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setCompany(prev => ({ ...prev, ...updates }))} />
     <RequestAddressChangeDialog company={company} isOpen={isReqAddressDialogOpen} onOpenChange={setIsReqAddressDialogOpen} />
     <NotifyUpsellDialog company={company} isOpen={isNotifyUpsellDialogOpen} onOpenChange={setIsNotifyUpsellDialogOpen} />

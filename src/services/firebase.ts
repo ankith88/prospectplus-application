@@ -2058,12 +2058,16 @@ async function logCsCallActivity(
     ]);
 }
 
-async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string }, collectionName: 'leads' | 'companies' = 'leads'): Promise<void> {
-    await addDoc(collection(firestore, collectionName, leadId, 'notes'), { ...noteData, syncedWithNetSuite: false });
-    await logActivity(leadId, { type: 'Update', notes: `Note added: ${noteData.content.substring(0, 100)}...`, date: noteData.date }, collectionName);
+async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string }, collectionName?: 'leads' | 'companies' | string): Promise<void> {
+    const colName = (collectionName === 'companies' || collectionName === 'leads')
+        ? collectionName
+        : await getLeadOrCompanyCollection(leadId);
+
+    await addDoc(collection(firestore, colName, leadId, 'notes'), { ...noteData, syncedWithNetSuite: false });
+    await logActivity(leadId, { type: 'Update', notes: `Note added: ${noteData.content.substring(0, 100)}...`, date: noteData.date }, colName);
 
     try {
-        const leadRef = doc(firestore, collectionName, leadId);
+        const leadRef = doc(firestore, colName, leadId);
         const leadSnap = await getDoc(leadRef);
         if (leadSnap.exists()) {
             const lData = leadSnap.data() || {};
@@ -2101,10 +2105,14 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
     }
 }
 
-async function updateNoteActivity(leadId: string, noteId: string, content: string, collectionName: 'leads' | 'companies' = 'leads'): Promise<void> {
-    const noteRef = doc(firestore, collectionName, leadId, 'notes', noteId);
+async function updateNoteActivity(leadId: string, noteId: string, content: string, collectionName?: 'leads' | 'companies' | string): Promise<void> {
+    const colName = (collectionName === 'companies' || collectionName === 'leads')
+        ? collectionName
+        : await getLeadOrCompanyCollection(leadId);
+
+    const noteRef = doc(firestore, colName, leadId, 'notes', noteId);
     await updateDoc(noteRef, { content, syncedWithNetSuite: false });
-    await logActivity(leadId, { type: 'Update', notes: `Note edited: ${content.substring(0, 100)}...` }, collectionName);
+    await logActivity(leadId, { type: 'Update', notes: `Note edited: ${content.substring(0, 100)}...` }, colName);
 }
 
 

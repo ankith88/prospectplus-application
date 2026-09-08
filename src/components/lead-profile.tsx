@@ -9683,8 +9683,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </Dialog>
 
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
-    <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
-    <EditNoteDialog lead={lead} note={noteToEdit} onNoteUpdated={handleNoteUpdated} isOpen={isEditNoteOpen} onOpenChange={setIsEditNoteOpen} />
+    <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} collectionName={isCompanyProfile ? 'companies' : 'leads'} />
+    <EditNoteDialog lead={lead} note={noteToEdit} onNoteUpdated={handleNoteUpdated} isOpen={isEditNoteOpen} onOpenChange={setIsEditNoteOpen} collectionName={isCompanyProfile ? 'companies' : 'leads'} />
     <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} onSuccess={refreshLeadData} scfId={resendScfId} />
     <ManageServicesDialog isOpen={isManageServicesOpen} onOpenChange={setIsManageServicesOpen} lead={lead} onSuccess={refreshLeadData} />
 

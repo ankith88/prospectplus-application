@@ -38,12 +38,13 @@ interface LogNoteDialogProps {
   onNoteLogged: (newNote: Note) => void;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  collectionName?: 'leads' | 'companies';
 }
 
 type SubmissionStatus = 'idle' | 'saving_firebase' | 'complete' | 'error';
 
 
-export function LogNoteDialog({ lead, onNoteLogged, isOpen, onOpenChange }: LogNoteDialogProps) {
+export function LogNoteDialog({ lead, onNoteLogged, isOpen, onOpenChange, collectionName }: LogNoteDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
   const [isListening, setIsListening] = useState(false);
@@ -174,7 +175,8 @@ export function LogNoteDialog({ lead, onNoteLogged, isOpen, onOpenChange }: LogN
             id: 'temp-' + Date.now() + Math.random(), // Temporary unique ID for optimistic update
         };
         
-        await logNoteActivity(lead.id, newNote, (lead as any).type || 'leads');
+        const targetCollection = collectionName || (lead.isFromCompaniesCollection ? 'companies' : ((lead as any).type === 'companies' ? 'companies' : ((lead as any).type === 'leads' ? 'leads' : undefined)));
+        await logNoteActivity(lead.id, newNote, targetCollection);
         onNoteLogged(newNote);
         
         const endTime = performance.now();
