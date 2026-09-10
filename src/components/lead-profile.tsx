@@ -6825,16 +6825,33 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </Badge>
                               </div>
 
-                              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
-                                <div>
+                              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex flex-col justify-between min-w-0">
+                                <div className="flex items-center justify-between gap-2">
                                   <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">AP Relationship</p>
-                                  <p className="text-sm font-bold text-[#095c7b] dark:text-[#38bdf8] mt-0.5 truncate max-w-[140px]">
-                                    {apRelationship ? (apRelationship.split('-')[0] || apRelationship) : 'Unknown'}
-                                  </p>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {apRelationship && (
+                                      <CopyButton textToCopy={apRelationship} className="h-5 w-5" iconClassName="h-3 w-3" />
+                                    )}
+                                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 text-xs font-semibold px-2 py-0.5">
+                                      AP Signal
+                                    </Badge>
+                                  </div>
                                 </div>
-                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 text-xs font-semibold px-2 py-0.5">
-                                  AP Signal
-                                </Badge>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="text-sm font-bold text-[#095c7b] dark:text-[#38bdf8] mt-1.5 break-words max-h-24 overflow-y-auto pr-1 leading-snug cursor-text">
+                                        {apRelationship || 'Unknown'}
+                                      </div>
+                                    </TooltipTrigger>
+                                    {apRelationship && (
+                                      <TooltipContent side="top" className="max-w-md text-xs bg-slate-900 text-white p-3 shadow-xl break-words">
+                                        <p className="font-semibold text-[10px] text-amber-300 uppercase tracking-wider mb-1">Full AP Relationship</p>
+                                        <p className="leading-relaxed whitespace-pre-wrap">{apRelationship}</p>
+                                      </TooltipContent>
+                                    )}
+                                  </Tooltip>
+                                </TooltipProvider>
                               </div>
                             </div>
 
@@ -6847,7 +6864,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                   </span>
                                   <CopyButton textToCopy={prospectSummary} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
                                 </div>
-                                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed break-words max-h-80 overflow-y-auto pr-1">
                                   {prospectSummary}
                                 </p>
                               </div>
@@ -6860,7 +6877,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                   <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
                                     <Package className="w-4 h-4" /> Suggested Product
                                   </span>
-                                  <p className="text-base font-bold text-emerald-900 dark:text-emerald-200">
+                                  <p className="text-base font-bold text-emerald-900 dark:text-emerald-200 break-words">
                                     {suggestedProduct}
                                   </p>
                                 </div>
@@ -6874,7 +6891,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </span>
                                     <CopyButton textToCopy={suggestedOpener} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
                                   </div>
-                                  <p className="text-xs font-medium text-slate-800 dark:text-slate-200 italic bg-white/80 dark:bg-slate-800/80 p-2.5 rounded-lg border border-amber-200/50 dark:border-amber-800/50">
+                                  <p className="text-xs font-medium text-slate-800 dark:text-slate-200 italic bg-white/80 dark:bg-slate-800/80 p-2.5 rounded-lg border border-amber-200/50 dark:border-amber-800/50 break-words max-h-60 overflow-y-auto">
                                     "{suggestedOpener}"
                                   </p>
                                 </div>
@@ -6890,7 +6907,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                   </span>
                                   <CopyButton textToCopy={suggestedPersonalisation} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
                                 </div>
-                                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed break-words max-h-60 overflow-y-auto pr-1">
                                   {suggestedPersonalisation}
                                 </p>
                               </div>
@@ -6906,7 +6923,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </span>
                                     <CopyButton textToCopy={shipperEvidence} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
                                   </div>
-                                  <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto pr-1">
+                                  <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap break-words max-h-80 overflow-y-auto pr-2">
                                     {shipperEvidence}
                                   </div>
                                 </div>
@@ -6920,7 +6937,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </span>
                                     <CopyButton textToCopy={lodgementEvidence} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
                                   </div>
-                                  <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto pr-1">
+                                  <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap break-words max-h-80 overflow-y-auto pr-2">
                                     {lodgementEvidence}
                                   </div>
                                 </div>
