@@ -287,428 +287,375 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
       <div className="max-w-6xl mx-auto px-4 mt-8 space-y-8" ref={printAreaRef}>
         
         {/* ==================== PAGE 1 ==================== */}
-        <div ref={page1Ref} className="bg-white/60 backdrop-blur-sm p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-8">
-          {/* Top Header Banner for Page 1 */}
-          <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        {/* ==================== PAGE 1 (Unified Proposal Sheet) ==================== */}
+        <div ref={page1Ref} className="bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden space-y-0">
+          
+          {/* 1. Integrated Document Header */}
+          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-[#095C7B] text-white p-6 sm:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div className="flex items-center gap-4">
               <img 
                 src="/og-image.jpg" 
                 alt="MailPlus Logo" 
-                className="h-14 w-auto object-contain rounded-lg border border-slate-100 shadow-sm"
+                className="h-14 w-auto object-contain rounded-xl bg-white p-1 shadow-md"
               />
               <div>
-                <h1 className="text-2xl font-bold text-[#095C7B] tracking-tight">Service Commencement Form</h1>
-                <p className="text-xs text-slate-500 font-medium">MailPlus Business Logistics &amp; Service Agreement</p>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Service Commencement Form</h1>
+                <p className="text-xs text-slate-300 font-medium mt-0.5">MailPlus Business Logistics &amp; Service Agreement</p>
               </div>
             </div>
             
-            <div className="flex flex-col items-start md:items-end gap-1.5 bg-slate-50 p-3 rounded-xl border border-slate-200/80 min-w-[220px]">
+            <div className="flex flex-col sm:flex-row md:flex-col items-start md:items-end gap-2 bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20 min-w-[210px]">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-500">Status:</span>
-                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                <span className="text-xs font-medium text-slate-300">Status:</span>
+                <span className={`text-xs font-bold px-3 py-0.5 rounded-full ${
                   hasAccepted 
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                    : 'bg-amber-100 text-amber-800 border border-amber-300'
+                    ? 'bg-emerald-500 text-white shadow-sm' 
+                    : 'bg-amber-400 text-slate-900 shadow-sm'
                 }`}>
                   {hasAccepted ? 'ACCEPTED' : 'PENDING ACCEPTANCE'}
                 </span>
               </div>
-              
-              <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-                <Calendar className="h-3.5 w-3.5 text-[#095C7B]" />
+              <div className="flex items-center gap-1.5 text-xs text-slate-200 font-medium">
+                <Calendar className="h-3.5 w-3.5 text-[#EAF044]" />
                 <span>Accepted Date: </span>
-                <span className="font-bold text-slate-900">
+                <span className="font-bold text-white">
                   {acceptedDateFormatted}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
-            {/* Left Column (Details, Contacts, Addresses) */}
-            <div className="lg:col-span-7 space-y-8">
+          {/* 2. Structured Metadata Grid (Client • Contacts • Locations) */}
+          <div className="p-6 sm:p-8 bg-slate-50/80 border-b border-slate-200/80">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
               
-              {/* Details Card */}
-              <div className="bg-card/70 backdrop-blur-md rounded-2xl shadow-lg shadow-primary/5 border border-white/40 p-6 transition-all duration-300 hover:shadow-xl">
-                <div className="flex items-center gap-2 mb-6">
-                   <h2 className="text-primary text-xl font-bold tracking-tight">Details</h2>
-                   {!isEditingDetails && !hasAccepted && (
-                     <button onClick={() => setIsEditingDetails(true)} className="bg-primary/10 p-2 rounded-full hover:bg-primary/20 transition-colors ml-auto text-primary">
-                       <Pencil className="h-4 w-4" />
-                     </button>
-                   )}
+              {/* Column 1: Client Profile */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                    <Building2 className="h-4 w-4 text-primary" /> Client Profile
+                  </span>
+                  {!isEditingDetails && !hasAccepted && (
+                    <button 
+                      onClick={() => setIsEditingDetails(true)} 
+                      className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+                    >
+                      <Pencil className="h-3 w-3" /> Edit
+                    </button>
+                  )}
                 </div>
-                
-                <div className={`grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-12 transition-all ${isEditingDetails ? 'bg-primary/5 p-4 rounded-xl border border-primary/10' : ''}`}>
+
+                <div className="space-y-2 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm h-[calc(100%-28px)] flex flex-col justify-between">
                   <div>
-                     <p className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wider">Customer ID</p>
-                     <p className="text-foreground border-b border-dashed border-slate-300 pb-1 font-medium">{lead.entityId || lead.salesRecordInternalId || lead.id.substring(0,8)}</p>
+                    <span className="text-[11px] text-slate-400 font-medium block">Company Name</span>
+                    <span className="font-bold text-slate-800 text-base leading-tight block">{lead.companyName}</span>
                   </div>
-                  <div>
-                     <p className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wider">Company Name</p>
-                     <p className="text-foreground border-b border-dashed border-slate-300 pb-1 font-medium">{lead.companyName}</p>
+                  <div className="flex justify-between items-baseline pt-1.5 border-t border-slate-100">
+                    <span className="text-xs text-slate-500 font-medium">Customer ID:</span>
+                    <span className="font-mono font-bold text-slate-700">{lead.entityId || lead.salesRecordInternalId || lead.id.substring(0,8)}</span>
                   </div>
-                  <div>
-                     <p className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wider">ABN</p>
-                     {isEditingDetails ? (
-                        <Input 
-                          value={formData.abn} 
-                          onChange={e => setFormData({...formData, abn: e.target.value})}
-                          placeholder="Enter ABN"
-                          className="h-9 text-sm bg-background"
-                        />
-                     ) : (
-                       lead.abn ? (
-                         <p className="text-foreground border-b border-dashed border-slate-300 pb-1 font-medium">{lead.abn}</p>
-                       ) : (
-                         <div className="border border-dashed border-slate-300 rounded-md p-2 flex items-center justify-center text-muted-foreground bg-slate-50/50 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => !hasAccepted && setIsEditingDetails(true)}>
-                           <Plus className="h-4 w-4 mr-1"/> <span className="text-xs font-medium">Add ABN</span>
-                         </div>
-                       )
-                     )}
+                  <div className="flex justify-between items-baseline pt-1.5 border-t border-slate-100">
+                    <span className="text-xs text-slate-500 font-medium">ABN:</span>
+                    {isEditingDetails ? (
+                      <Input 
+                        value={formData.abn} 
+                        onChange={e => setFormData({...formData, abn: e.target.value})}
+                        placeholder="Enter ABN"
+                        className="h-7 text-xs w-32 bg-background"
+                      />
+                    ) : (
+                      <span className="font-semibold text-slate-700">{lead.abn || 'Not provided'}</span>
+                    )}
                   </div>
-                  <div>
-                     <p className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wider">Territory</p>
-                     <p className="text-foreground border-b border-dashed border-slate-300 pb-1 font-medium">{lead.franchisee || '(Not assigned)'}</p>
-                  </div>
-                  <div>
-                     <p className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wider">Date Accepted</p>
-                     <p className="text-foreground border-b border-dashed border-slate-300 pb-1 font-medium">{acceptedDateFormatted}</p>
+                  <div className="flex justify-between items-baseline pt-1.5 border-t border-slate-100">
+                    <span className="text-xs text-slate-500 font-medium">Territory:</span>
+                    <span className="font-semibold text-slate-700">{lead.franchisee || '(Unassigned)'}</span>
                   </div>
                 </div>
-                
+
                 {isEditingDetails && (
-                  <div className="mt-4 flex justify-end gap-2 animate-in fade-in slide-in-from-top-2">
-                     <Button variant="outline" size="sm" onClick={() => { setIsEditingDetails(false); setFormData({...formData, abn: lead.abn || ''}); }} disabled={savingDetails} className="rounded-lg">
-                       <X className="h-4 w-4 mr-1"/> Cancel
-                     </Button>
-                     <Button size="sm" onClick={handleSaveDetails} disabled={savingDetails} className="rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-md">
-                       {savingDetails ? <Loader2 className="h-4 w-4 animate-spin mr-1"/> : <Check className="h-4 w-4 mr-1"/>} Save
-                     </Button>
+                  <div className="flex justify-end gap-2 pt-1 animate-in fade-in slide-in-from-top-1">
+                    <Button variant="outline" size="sm" onClick={() => { setIsEditingDetails(false); setFormData({...formData, abn: lead.abn || ''}); }} disabled={savingDetails} className="h-7 text-xs">
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSaveDetails} disabled={savingDetails} className="h-7 text-xs bg-primary text-white">
+                      Save
+                    </Button>
                   </div>
                 )}
               </div>
 
-              {/* Contacts Card */}
-              <div className="bg-card/70 backdrop-blur-md rounded-2xl shadow-lg shadow-primary/5 border border-white/40 p-6 transition-all duration-300 hover:shadow-xl">
-                <div className="flex items-center gap-2 mb-6">
-                   <h2 className="text-primary text-xl font-bold tracking-tight">Contacts</h2>
-                   {!isEditingContacts && !hasAccepted && (
-                     <button onClick={() => setIsEditingContacts(true)} className="bg-primary/10 p-2 rounded-full hover:bg-primary/20 transition-colors ml-auto text-primary">
-                       <Pencil className="h-4 w-4" />
-                     </button>
-                   )}
+              {/* Column 2: Key Contacts */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                    <User className="h-4 w-4 text-primary" /> Key Contacts
+                  </span>
+                  {!isEditingContacts && !hasAccepted && (
+                    <button 
+                      onClick={() => setIsEditingContacts(true)} 
+                      className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+                    >
+                      <Pencil className="h-3 w-3" /> Edit
+                    </button>
+                  )}
                 </div>
-                
-                <div className="grid grid-cols-1 gap-6">
-                  <div className={`border border-slate-200 rounded-xl p-5 shadow-sm transition-all ${isEditingContacts ? 'bg-primary/5 border-primary/20' : 'bg-white/50'}`}>
-                     <h3 className="text-primary font-semibold mb-4 flex items-center gap-2 text-base"><User className="h-4 w-4 text-secondary"/> Service Contact</h3>
-                     {isEditingContacts ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                           <div className="sm:col-span-2">
-                             <label className="text-xs text-slate-500 font-medium mb-1 block">Name</label>
-                             <Input value={formData.contactName} onChange={e => setFormData({...formData, contactName: e.target.value})} className="h-9 bg-background" />
-                           </div>
-                           <div>
-                             <label className="text-xs text-slate-500 font-medium mb-1 block">Email</label>
-                             <Input value={formData.contactEmail} onChange={e => setFormData({...formData, contactEmail: e.target.value})} className="h-9 bg-background" type="email" />
-                           </div>
-                           <div>
-                             <label className="text-xs text-slate-500 font-medium mb-1 block">Phone</label>
-                             <Input value={formData.contactPhone} onChange={e => setFormData({...formData, contactPhone: e.target.value})} className="h-9 bg-background" type="tel" />
-                           </div>
-                        </div>
-                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-700">
-                           <div className="flex items-center gap-3 sm:col-span-2">
-                              <div className="bg-primary/10 p-2 rounded-full shrink-0"><User className="h-4 w-4 text-primary" /></div> 
-                              <span className="font-semibold text-base break-words">{contact?.name || 'N/A'}</span>
-                           </div>
-                           <div className="flex items-center gap-3 min-w-0">
-                              <div className="bg-primary/10 p-2 rounded-full shrink-0"><Mail className="h-4 w-4 text-primary" /></div> 
-                              {contact?.email ? (
-                                <a href={`mailto:${contact.email}`} className="font-medium hover:text-primary transition-colors break-all flex-1 min-w-0 text-slate-700">{contact.email}</a>
-                              ) : (
-                                <span className="text-muted-foreground italic">N/A</span>
-                              )}
-                           </div>
-                           <div className="flex items-center gap-3 min-w-0">
-                              <div className="bg-primary/10 p-2 rounded-full shrink-0"><Phone className="h-4 w-4 text-primary" /></div> 
-                              {contact?.phone || lead.customerPhone ? (
-                                <a href={`tel:${contact?.phone || lead.customerPhone}`} className="font-medium hover:text-primary transition-colors break-all flex-1 min-w-0 text-slate-700">{contact?.phone || lead.customerPhone}</a>
-                              ) : (
-                                <span className="text-muted-foreground italic">N/A</span>
-                              )}
-                           </div>
-                        </div>
-                     )}
+
+                <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm h-[calc(100%-28px)] flex flex-col justify-between">
+                  {/* Service Contact */}
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Service Contact</span>
+                    {isEditingContacts ? (
+                      <div className="space-y-1.5">
+                        <Input value={formData.contactName} onChange={e => setFormData({...formData, contactName: e.target.value})} placeholder="Name" className="h-7 text-xs" />
+                        <Input value={formData.contactEmail} onChange={e => setFormData({...formData, contactEmail: e.target.value})} placeholder="Email" className="h-7 text-xs" />
+                        <Input value={formData.contactPhone} onChange={e => setFormData({...formData, contactPhone: e.target.value})} placeholder="Phone" className="h-7 text-xs" />
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-slate-800 text-sm">{contact?.name || 'N/A'}</p>
+                        <p className="text-xs text-slate-600 truncate">{contact?.email || 'No email'}</p>
+                        <p className="text-xs text-slate-600">{contact?.phone || lead.customerPhone || 'No phone'}</p>
+                      </div>
+                    )}
                   </div>
 
-                  <div className={`border border-slate-200 rounded-xl p-5 shadow-sm transition-all ${isEditingContacts ? 'bg-primary/5 border-primary/20' : 'bg-white/50'}`}>
-                     <h3 className="text-primary font-semibold mb-4 flex items-center gap-2 text-base"><Building2 className="h-4 w-4 text-secondary"/> Account Payable</h3>
-                     {isEditingContacts ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                           <div>
-                             <label className="text-xs text-slate-500 font-medium mb-1 block">Email</label>
-                             <Input value={formData.customerServiceEmail} onChange={e => setFormData({...formData, customerServiceEmail: e.target.value})} className="h-9 bg-background" type="email" />
-                           </div>
-                           <div>
-                             <label className="text-xs text-slate-500 font-medium mb-1 block">Phone</label>
-                             <Input value={formData.customerPhone} onChange={e => setFormData({...formData, customerPhone: e.target.value})} className="h-9 bg-background" type="tel" />
-                           </div>
-                         </div>
-                     ) : lead.customerServiceEmail?.trim() || lead.customerPhone?.trim() ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-700">
-                           {lead.customerServiceEmail && (
-                             <div className="flex items-center gap-3 min-w-0">
-                                <div className="bg-primary/10 p-2 rounded-full shrink-0"><Mail className="h-4 w-4 text-primary" /></div> 
-                                <a href={`mailto:${lead.customerServiceEmail}`} className="font-medium hover:text-primary transition-colors break-all flex-1 min-w-0 text-slate-700">{lead.customerServiceEmail}</a>
-                             </div>
-                           )}
-                           {lead.customerPhone && (
-                             <div className="flex items-center gap-3 min-w-0">
-                                <div className="bg-primary/10 p-2 rounded-full shrink-0"><Phone className="h-4 w-4 text-primary" /></div> 
-                                <a href={`tel:${lead.customerPhone}`} className="font-medium hover:text-primary transition-colors break-all flex-1 min-w-0 text-slate-700">{lead.customerPhone}</a>
-                             </div>
-                           )}
-                        </div>
-                     ) : (
-                        <div className="border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-muted-foreground bg-slate-50/50 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => !hasAccepted && setIsEditingContacts(true)}>
-                           <Plus className="h-6 w-6 mb-2 text-slate-400"/>
-                           <span className="text-sm font-medium">Add Account Payable Details</span>
-                        </div>
-                     )}
+                  {/* Account Payable */}
+                  <div className="pt-2 border-t border-slate-100">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Accounts Payable</span>
+                    {isEditingContacts ? (
+                      <div className="space-y-1.5">
+                        <Input value={formData.customerServiceEmail} onChange={e => setFormData({...formData, customerServiceEmail: e.target.value})} placeholder="AP Email" className="h-7 text-xs" />
+                        <Input value={formData.customerPhone} onChange={e => setFormData({...formData, customerPhone: e.target.value})} placeholder="AP Phone" className="h-7 text-xs" />
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-semibold text-slate-700 truncate">{lead.customerServiceEmail || 'Same as service contact'}</p>
+                        <p className="text-xs text-slate-500">{lead.customerPhone || '-'}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-                
+
                 {isEditingContacts && (
-                  <div className="mt-4 flex justify-end gap-2 animate-in fade-in slide-in-from-top-2">
-                     <Button variant="outline" size="sm" onClick={() => { setIsEditingContacts(false); setFormData({...formData, contactName: contact?.name || '', contactEmail: contact?.email || '', contactPhone: contact?.phone || '', customerServiceEmail: lead.customerServiceEmail || '', customerPhone: lead.customerPhone || ''}); }} disabled={savingContacts} className="rounded-lg">
-                       <X className="h-4 w-4 mr-1"/> Cancel
-                     </Button>
-                     <Button size="sm" onClick={handleSaveContacts} disabled={savingContacts} className="rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-md">
-                       {savingContacts ? <Loader2 className="h-4 w-4 animate-spin mr-1"/> : <Check className="h-4 w-4 mr-1"/>} Save
-                     </Button>
+                  <div className="flex justify-end gap-2 pt-1 animate-in fade-in slide-in-from-top-1">
+                    <Button variant="outline" size="sm" onClick={() => { setIsEditingContacts(false); setFormData({...formData, contactName: contact?.name || '', contactEmail: contact?.email || '', contactPhone: contact?.phone || '', customerServiceEmail: lead.customerServiceEmail || '', customerPhone: lead.customerPhone || ''}); }} disabled={savingContacts} className="h-7 text-xs">
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSaveContacts} disabled={savingContacts} className="h-7 text-xs bg-primary text-white">
+                      Save
+                    </Button>
                   </div>
                 )}
               </div>
 
-              {/* Addresses Card */}
-              <div className="bg-card/70 backdrop-blur-md rounded-2xl shadow-lg shadow-primary/5 border border-white/40 p-6 transition-all duration-300 hover:shadow-xl">
-                <h2 className="text-primary text-xl font-bold tracking-tight mb-6">Addresses</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  <div className="border border-slate-200 rounded-xl p-5 shadow-sm h-full bg-white/50 relative overflow-hidden">
-                     <div className="absolute top-0 left-0 w-1 h-full bg-primary/40"></div>
-                     <p className="text-xs text-slate-500 font-semibold mb-3 uppercase tracking-wider flex items-center gap-1.5"><MapPin className="h-4 w-4 text-primary" /> Site Address</p>
-                     {(() => {
-                       const l = lead as any;
-                       const address1 = typeof lead.address === 'object' ? lead.address?.address1 : l.address1;
-                       const street = typeof lead.address === 'object' ? lead.address?.street : l.street;
-                       const city = typeof lead.address === 'object' ? lead.address?.city : l.city;
-                       const state = typeof lead.address === 'object' ? lead.address?.state : l.state;
-                       const zip = typeof lead.address === 'object' ? lead.address?.zip : l.zip;
-                       
-                       const hasStructuredAddress = street || city || state || zip;
-                       const isStringAddress = typeof l.address === 'string' && (l.address as string).trim().length > 0;
+              {/* Column 3: Site & Billing Addresses */}
+              <div className="space-y-3">
+                <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                  <MapPin className="h-4 w-4 text-primary" /> Service Locations
+                </span>
 
-                       if (hasStructuredAddress) {
-                         const showAddress1 = address1 && String(address1).trim() !== '' && String(address1).toLowerCase() !== 'undefined';
-                         return (
-                           <div className="text-sm text-slate-700 leading-relaxed font-medium">
-                             {showAddress1 && <div>{address1 as string}</div>}
-                             {street && <div>{street as string}</div>}
-                             {(city || state || zip) && (
-                               <div>{[city, state, zip].filter(Boolean).join(', ')}</div>
-                             )}
-                           </div>
-                         );
-                       } else if (isStringAddress) {
-                         return (
-                           <div className="text-sm text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">
-                             {l.address as string}
-                           </div>
-                         );
-                       } else {
-                         return (
-                           <div className="border border-dashed border-slate-300 rounded-md p-4 flex items-center justify-center text-muted-foreground bg-slate-50/50">
-                             <span className="text-xs font-medium">Address missing</span>
-                           </div>
-                         );
-                       }
-                     })()}
+                <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm h-[calc(100%-28px)] flex flex-col justify-between">
+                  {/* Site Address */}
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Site / Pickup Address</span>
+                    {(() => {
+                      const l = lead as any;
+                      const address1 = typeof lead.address === 'object' ? lead.address?.address1 : l.address1;
+                      const street = typeof lead.address === 'object' ? lead.address?.street : l.street;
+                      const city = typeof lead.address === 'object' ? lead.address?.city : l.city;
+                      const state = typeof lead.address === 'object' ? lead.address?.state : l.state;
+                      const zip = typeof lead.address === 'object' ? lead.address?.zip : l.zip;
+                      
+                      const hasStructuredAddress = street || city || state || zip;
+                      const isStringAddress = typeof l.address === 'string' && (l.address as string).trim().length > 0;
+
+                      if (hasStructuredAddress) {
+                        const showAddress1 = address1 && String(address1).trim() !== '' && String(address1).toLowerCase() !== 'undefined';
+                        return (
+                          <div className="text-xs text-slate-700 leading-snug font-medium">
+                            {showAddress1 && <div>{address1 as string}</div>}
+                            {street && <div>{street as string}</div>}
+                            {(city || state || zip) && (
+                              <div>{[city, state, zip].filter(Boolean).join(', ')}</div>
+                            )}
+                          </div>
+                        );
+                      } else if (isStringAddress) {
+                        return (
+                          <div className="text-xs text-slate-700 leading-snug font-medium whitespace-pre-wrap">
+                            {l.address as string}
+                          </div>
+                        );
+                      } else {
+                        return <span className="text-xs text-slate-400 italic">Address missing</span>;
+                      }
+                    })()}
                   </div>
 
-                  <div className="border border-slate-200 rounded-xl p-5 shadow-sm h-full bg-white/50 relative overflow-hidden">
-                     <div className="absolute top-0 left-0 w-1 h-full bg-secondary/40"></div>
-                     <p className="text-xs text-slate-500 font-semibold mb-3 uppercase tracking-wider flex items-center gap-1.5"><MapPin className="h-4 w-4 text-secondary" /> Billing Address</p>
-                     {(() => {
-                       const bType = lead.billingAddressType || 'site';
-                       let targetAddr: any = null;
-                       let labelText = 'Same as Site Address';
+                  {/* Billing Address */}
+                  <div className="pt-2 border-t border-slate-100">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Billing Address</span>
+                    {(() => {
+                      const bType = lead.billingAddressType || 'site';
+                      let targetAddr: any = null;
 
-                       if (bType === 'postal' && lead.postalAddress && (lead.postalAddress.street || lead.postalAddress.address1 || lead.postalAddress.city)) {
-                         targetAddr = lead.postalAddress;
-                         labelText = 'Postal Address';
-                       } else if (bType === 'custom' && lead.billingAddress && (lead.billingAddress.street || lead.billingAddress.address1 || lead.billingAddress.city)) {
-                         targetAddr = lead.billingAddress;
-                         labelText = 'Custom Billing Address';
-                       } else if (bType !== 'site' && lead.additionalAddresses && Array.isArray(lead.additionalAddresses)) {
-                         const match = lead.additionalAddresses.find(a => a.id === bType);
-                         if (match) {
-                           targetAddr = match;
-                           labelText = match.tag || 'Tagged Address';
-                         } else {
-                           targetAddr = lead.address;
-                           labelText = 'Same as Site Address';
-                         }
-                       } else {
-                         targetAddr = lead.address;
-                         labelText = 'Same as Site Address';
-                       }
+                      if (bType === 'postal' && lead.postalAddress && (lead.postalAddress.street || lead.postalAddress.address1 || lead.postalAddress.city)) {
+                        targetAddr = lead.postalAddress;
+                      } else if (bType === 'custom' && lead.billingAddress && (lead.billingAddress.street || lead.billingAddress.address1 || lead.billingAddress.city)) {
+                        targetAddr = lead.billingAddress;
+                      } else if (bType !== 'site' && lead.additionalAddresses && Array.isArray(lead.additionalAddresses)) {
+                        const match = lead.additionalAddresses.find(a => a.id === bType);
+                        targetAddr = match || lead.address;
+                      } else {
+                        targetAddr = lead.address;
+                      }
 
-                       const l = lead as any;
-                       const addr1 = typeof targetAddr === 'object' ? targetAddr?.address1 : '';
-                       const street = typeof targetAddr === 'object' ? targetAddr?.street : (typeof targetAddr === 'string' ? targetAddr : l.street);
-                       const city = typeof targetAddr === 'object' ? targetAddr?.city : l.city;
-                       const state = typeof targetAddr === 'object' ? targetAddr?.state : l.state;
-                       const zip = typeof targetAddr === 'object' ? targetAddr?.zip : l.zip;
+                      const l = lead as any;
+                      const addr1 = typeof targetAddr === 'object' ? targetAddr?.address1 : '';
+                      const street = typeof targetAddr === 'object' ? targetAddr?.street : (typeof targetAddr === 'string' ? targetAddr : l.street);
+                      const city = typeof targetAddr === 'object' ? targetAddr?.city : l.city;
+                      const state = typeof targetAddr === 'object' ? targetAddr?.state : l.state;
+                      const zip = typeof targetAddr === 'object' ? targetAddr?.zip : l.zip;
 
-                       const hasStructured = street || city || state || zip;
+                      const hasStructured = street || city || state || zip;
 
-                       return (
-                         <div className="space-y-2">
-                           <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded inline-block mb-1">
-                             {labelText}
-                           </span>
-                           {hasStructured ? (
-                             <div className="text-sm text-slate-700 leading-relaxed font-medium">
-                               {addr1 && String(addr1).trim() !== '' && String(addr1).toLowerCase() !== 'undefined' && <div>{addr1 as string}</div>}
-                               {street && <div>{street as string}</div>}
-                               {(city || state || zip) && (
-                                 <div>{[city, state, zip].filter(Boolean).join(', ')}</div>
-                               )}
-                             </div>
-                           ) : (
-                             <p className="text-sm text-slate-600 font-medium italic bg-slate-100 p-2 rounded inline-block">
-                               Same as Site Address
-                             </p>
-                           )}
-                         </div>
-                       );
-                     })()}
+                      return hasStructured ? (
+                        <div className="text-xs text-slate-700 leading-snug font-medium">
+                          {addr1 && String(addr1).trim() !== '' && String(addr1).toLowerCase() !== 'undefined' && <div>{addr1 as string}</div>}
+                          {street && <div>{street as string}</div>}
+                          {(city || state || zip) && (
+                            <div>{[city, state, zip].filter(Boolean).join(', ')}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500 italic">Same as Site Address</p>
+                      );
+                    })()}
                   </div>
-                  
                 </div>
               </div>
-
-            </div>
-
-            {/* Right Column (Services & Products Tables) */}
-            <div className="lg:col-span-5 space-y-8">
-              
-              {/* Services Card */}
-              <div className="bg-card/70 backdrop-blur-md rounded-2xl shadow-lg shadow-primary/5 border border-white/40 p-6 transition-all duration-300 hover:shadow-xl">
-                <div className="flex items-baseline justify-between gap-3 mb-6">
-                   <h2 className="text-primary text-xl font-bold tracking-tight">Services</h2>
-                   {scf.startDate && (
-                     <span className="text-primary/70 font-medium text-sm bg-primary/5 px-3 py-1 rounded-full border border-primary/10">
-                       Starts: {
-                         new Date(
-                           typeof scf.startDate === 'object' && '_seconds' in scf.startDate
-                             ? (scf.startDate as any)._seconds * 1000
-                             : scf.startDate
-                         ).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
-                       }
-                     </span>
-                   )}
-                </div>
-
-                <div className="overflow-hidden border border-slate-200 rounded-xl shadow-sm">
-                   <table className="w-full text-sm text-left">
-                      <thead className="bg-slate-100 text-slate-600 uppercase text-xs tracking-wider border-b border-slate-200">
-                         <tr>
-                            <th className="px-5 py-3 font-bold">Service</th>
-                            <th className="px-5 py-3 font-bold">Freq</th>
-                            <th className="px-5 py-3 font-bold text-right">Price</th>
-                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 bg-white">
-                         {(scf.services || []).map((service, idx) => {
-                            const freqStr = Array.isArray(service.frequency) 
-                               ? service.frequency.join(', ') 
-                               : service.frequency;
-                            return (
-                               <tr key={idx} className="hover:bg-primary/5 transition-colors group">
-                                  <td className="px-5 py-4 font-semibold text-slate-800">{service.name}</td>
-                                  <td className="px-5 py-4 text-slate-600">{freqStr}</td>
-                                  <td className="px-5 py-4 font-bold text-primary text-right whitespace-nowrap">
-                                    <span className="bg-primary/10 text-primary px-2 py-1 rounded-md">
-                                      A${(Number(service.rate) || 0).toFixed(2)}
-                                    </span>
-                                  </td>
-                               </tr>
-                            );
-                         })}
-                         {(!scf.services || scf.services.length === 0) && (
-                           <tr>
-                             <td colSpan={3} className="px-5 py-8 text-center text-slate-500 italic">No services listed</td>
-                           </tr>
-                         )}
-                      </tbody>
-                   </table>
-                </div>
-              </div>
-
-              {/* Products Card */}
-              {scf.products && scf.products.length > 0 && (
-                <div className="bg-card/70 backdrop-blur-md rounded-2xl shadow-lg shadow-primary/5 border border-white/40 p-6 transition-all duration-300 hover:shadow-xl mt-6">
-                  <div className="flex items-baseline justify-between gap-3 mb-6">
-                     <h2 className="text-primary text-xl font-bold tracking-tight">Product Pricing</h2>
-                  </div>
-
-                  <div className="overflow-hidden border border-slate-200 rounded-xl shadow-sm">
-                     <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-100 text-slate-600 uppercase text-xs tracking-wider border-b border-slate-200">
-                           <tr>
-                              <th className="px-5 py-3 font-bold">Product</th>
-                              <th className="px-5 py-3 font-bold">Weight</th>
-                              <th className="px-5 py-3 font-bold text-right">Base Price</th>
-                              <th className="px-5 py-3 font-bold text-right">Fuel Surcharge</th>
-                              <th className="px-5 py-3 font-bold text-right">Total</th>
-                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                           {scf.products.map((product: any, idx: number) => {
-                              const basePrice = Number(product.salesPriceExcGst || 0);
-                              const surchargePerc = product.surchargePerc ?? 12.5;
-                              const surchargeAmt = product.surchargeAmt ?? (basePrice * (surchargePerc / 100));
-                              const total = product.totalVal ?? (basePrice + surchargeAmt);
-                              return (
-                                 <tr key={idx} className="hover:bg-primary/5 transition-colors group">
-                                    <td className="px-5 py-4 font-semibold text-slate-800">{product.name || product.id}</td>
-                                    <td className="px-5 py-4 text-slate-600">{product.productWeight || '-'}</td>
-                                    <td className="px-5 py-4 text-slate-600 text-right">A${basePrice.toFixed(2)}</td>
-                                    <td className="px-5 py-4 text-slate-600 text-right">
-                                      {surchargePerc > 0 ? `A$${surchargeAmt.toFixed(2)} (${surchargePerc}%)` : '-'}
-                                    </td>
-                                    <td className="px-5 py-4 font-bold text-primary text-right whitespace-nowrap">
-                                      <span className="bg-primary/10 text-primary px-2 py-1 rounded-md">
-                                        A${total.toFixed(2)}
-                                      </span>
-                                    </td>
-                                 </tr>
-                              );
-                           })}
-                        </tbody>
-                     </table>
-                  </div>
-                </div>
-              )}
 
             </div>
           </div>
+
+          {/* 3. Commercial Rate Schedule (The Unified Ledger) */}
+          <div className="p-6 sm:p-8 space-y-8 bg-white">
+            
+            {/* Section A: Services Line Items */}
+            <div>
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <Truck className="h-5 w-5 text-primary" />
+                  <h2 className="text-primary text-lg font-bold tracking-tight">Requested Services Schedule</h2>
+                </div>
+                {scf.startDate && (
+                  <span className="text-primary font-bold text-xs bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
+                    Service Starts: {
+                      new Date(
+                        typeof scf.startDate === 'object' && '_seconds' in scf.startDate
+                          ? (scf.startDate as any)._seconds * 1000
+                          : scf.startDate
+                      ).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+                    }
+                  </span>
+                )}
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-sm">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-100/90 text-slate-700 uppercase text-xs tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="px-6 py-4 font-bold">Service Description</th>
+                      <th className="px-6 py-4 font-bold whitespace-nowrap">Schedule / Freq</th>
+                      <th className="px-6 py-4 font-bold text-right whitespace-nowrap">Agreed Rate (Exc GST)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {(scf.services || []).map((service, idx) => {
+                      const freqStr = Array.isArray(service.frequency) 
+                        ? service.frequency.join(', ') 
+                        : service.frequency;
+                      return (
+                        <tr key={idx} className="hover:bg-primary/5 transition-colors group">
+                          <td className="px-6 py-4 font-semibold text-slate-800">{service.name}</td>
+                          <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{freqStr}</td>
+                          <td className="px-6 py-4 font-bold text-primary text-right whitespace-nowrap">
+                            <span className="bg-primary/10 text-primary px-2.5 py-1 rounded-md font-mono">
+                              A${(Number(service.rate) || 0).toFixed(2)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {(!scf.services || scf.services.length === 0) && (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-8 text-center text-slate-500 italic">No services listed</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Section B: Product Pricing Line Items (if present) */}
+            {scf.products && scf.products.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <h2 className="text-primary text-lg font-bold tracking-tight">Product &amp; Parcel Rate Card</h2>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-sm">
+                  <table className="w-full text-sm text-left min-w-[560px]">
+                    <thead className="bg-slate-100/90 text-slate-700 uppercase text-xs tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th className="px-6 py-4 font-bold">Product / Satchel Tier</th>
+                        <th className="px-6 py-4 font-bold whitespace-nowrap">Weight Limit</th>
+                        <th className="px-6 py-4 font-bold text-right whitespace-nowrap">Base Price</th>
+                        <th className="px-6 py-4 font-bold text-right whitespace-nowrap">Fuel Levy</th>
+                        <th className="px-6 py-4 font-bold text-right whitespace-nowrap">Total Rate (Exc GST)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {scf.products.map((product: any, idx: number) => {
+                        const basePrice = Number(product.salesPriceExcGst || 0);
+                        const surchargePerc = product.surchargePerc ?? 12.5;
+                        const surchargeAmt = product.surchargeAmt ?? (basePrice * (surchargePerc / 100));
+                        const total = product.totalVal ?? (basePrice + surchargeAmt);
+                        return (
+                          <tr key={idx} className="hover:bg-primary/5 transition-colors group">
+                            <td className="px-6 py-4 font-semibold text-slate-800">{product.name || product.id}</td>
+                            <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{product.productWeight || '-'}</td>
+                            <td className="px-6 py-4 text-slate-600 text-right whitespace-nowrap">A${basePrice.toFixed(2)}</td>
+                            <td className="px-6 py-4 text-slate-600 text-right whitespace-nowrap">
+                              {surchargePerc > 0 ? `A$${surchargeAmt.toFixed(2)} (${surchargePerc}%)` : '-'}
+                            </td>
+                            <td className="px-6 py-4 font-bold text-primary text-right whitespace-nowrap">
+                              <span className="bg-primary/10 text-primary px-2.5 py-1 rounded-md font-mono">
+                                A${total.toFixed(2)}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Commercial Schedule Notes */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-slate-600">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary shrink-0" />
+                <span><strong>Billing Cycle:</strong> Services invoiced monthly. Products &amp; parcel dispatches invoiced weekly.</span>
+              </div>
+              <span className="text-slate-400 italic">All prices quoted in AUD, excluding GST.</span>
+            </div>
+
+          </div>
+
         </div>
 
         {/* ==================== PAGE 2 ==================== */}
