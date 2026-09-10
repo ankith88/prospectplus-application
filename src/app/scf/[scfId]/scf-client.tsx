@@ -156,6 +156,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
         allowTaint: true,
         logging: false,
         backgroundColor: '#ffffff',
+        windowWidth: 1280,
       };
 
       if (page1El && page2El) {
@@ -327,10 +328,10 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
 
           {/* 2. Structured Metadata Grid (Client • Contacts • Locations) */}
           <div className="p-6 sm:p-8 bg-slate-50/80 border-b border-slate-200/80">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm items-stretch">
               
               {/* Column 1: Client Profile */}
-              <div className="space-y-3">
+              <div className="flex flex-col space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                     <Building2 className="h-4 w-4 text-primary" /> Client Profile
@@ -345,7 +346,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                   )}
                 </div>
 
-                <div className="space-y-2 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm h-[calc(100%-28px)] flex flex-col justify-between">
+                <div className="space-y-2 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex-1 flex flex-col justify-between">
                   <div>
                     <span className="text-[11px] text-slate-400 font-medium block">Company Name</span>
                     <span className="font-bold text-slate-800 text-base leading-tight block">{lead.companyName}</span>
@@ -386,7 +387,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
               </div>
 
               {/* Column 2: Key Contacts */}
-              <div className="space-y-3">
+              <div className="flex flex-col space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                     <User className="h-4 w-4 text-primary" /> Key Contacts
@@ -401,7 +402,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                   )}
                 </div>
 
-                <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm h-[calc(100%-28px)] flex flex-col justify-between">
+                <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex-1 flex flex-col justify-between">
                   {/* Service Contact */}
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Service Contact</span>
@@ -412,10 +413,10 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                         <Input value={formData.contactPhone} onChange={e => setFormData({...formData, contactPhone: e.target.value})} placeholder="Phone" className="h-7 text-xs" />
                       </div>
                     ) : (
-                      <div className="space-y-0.5">
-                        <p className="font-bold text-slate-800 text-sm">{contact?.name || 'N/A'}</p>
-                        <p className="text-xs text-slate-600 truncate">{contact?.email || 'No email'}</p>
-                        <p className="text-xs text-slate-600">{contact?.phone || lead.customerPhone || 'No phone'}</p>
+                      <div className="space-y-1">
+                        <p className="font-bold text-slate-800 text-sm leading-snug">{contact?.name || 'N/A'}</p>
+                        <p className="text-xs text-slate-600 break-all leading-normal">{contact?.email || 'No email'}</p>
+                        <p className="text-xs text-slate-600 leading-normal">{contact?.phone || lead.customerPhone || 'No phone'}</p>
                       </div>
                     )}
                   </div>
@@ -429,9 +430,9 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                         <Input value={formData.customerPhone} onChange={e => setFormData({...formData, customerPhone: e.target.value})} placeholder="AP Phone" className="h-7 text-xs" />
                       </div>
                     ) : (
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-semibold text-slate-700 truncate">{lead.customerServiceEmail || 'Same as service contact'}</p>
-                        <p className="text-xs text-slate-500">{lead.customerPhone || '-'}</p>
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-slate-700 break-all leading-normal">{lead.customerServiceEmail || 'Same as service contact'}</p>
+                        <p className="text-xs text-slate-500 leading-normal">{lead.customerPhone || '-'}</p>
                       </div>
                     )}
                   </div>
@@ -450,12 +451,12 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
               </div>
 
               {/* Column 3: Site & Billing Addresses */}
-              <div className="space-y-3">
+              <div className="flex flex-col space-y-3">
                 <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                   <MapPin className="h-4 w-4 text-primary" /> Service Locations
                 </span>
 
-                <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm h-[calc(100%-28px)] flex flex-col justify-between">
+                <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex-1 flex flex-col justify-between">
                   {/* Site Address */}
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Site / Pickup Address</span>
@@ -473,7 +474,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                       if (hasStructuredAddress) {
                         const showAddress1 = address1 && String(address1).trim() !== '' && String(address1).toLowerCase() !== 'undefined';
                         return (
-                          <div className="text-xs text-slate-700 leading-snug font-medium">
+                          <div className="text-xs text-slate-700 leading-normal font-medium">
                             {showAddress1 && <div>{address1 as string}</div>}
                             {street && <div>{street as string}</div>}
                             {(city || state || zip) && (
@@ -483,7 +484,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                         );
                       } else if (isStringAddress) {
                         return (
-                          <div className="text-xs text-slate-700 leading-snug font-medium whitespace-pre-wrap">
+                          <div className="text-xs text-slate-700 leading-normal font-medium whitespace-pre-wrap">
                             {l.address as string}
                           </div>
                         );
@@ -521,7 +522,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                       const hasStructured = street || city || state || zip;
 
                       return hasStructured ? (
-                        <div className="text-xs text-slate-700 leading-snug font-medium">
+                        <div className="text-xs text-slate-700 leading-normal font-medium">
                           {addr1 && String(addr1).trim() !== '' && String(addr1).toLowerCase() !== 'undefined' && <div>{addr1 as string}</div>}
                           {street && <div>{street as string}</div>}
                           {(city || state || zip) && (
