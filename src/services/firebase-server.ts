@@ -277,8 +277,10 @@ export async function duplicateLeadToCompaniesServer(leadId: string): Promise<vo
         }
 
         const leadData = leadSnap.data();
+        const { generateSearchKeywords } = await import('@/lib/search/search-utils');
+        const keywords = generateSearchKeywords({ ...(leadData || {}), id: leadId });
         const companyRef = db.collection('companies').doc(leadId);
-        await companyRef.set(leadData || {});
+        await companyRef.set({ ...(leadData || {}), searchKeywords: keywords });
 
         const collections = await leadRef.listCollections();
 

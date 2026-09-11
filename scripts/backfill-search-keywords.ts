@@ -6,35 +6,48 @@ async function backfillCollection(collectionName: string) {
   const db = getFirestore(adminApp);
   console.log(`Starting backfill for collection: ${collectionName}...`);
 
-  const snapshot = await db.collection(collectionName).get();
-  console.log(`Found ${snapshot.docs.length} documents in ${collectionName}`);
-
-  let batch = db.batch();
-  let count = 0;
+  const PAGE_SIZE = 500;
+  let lastDoc: any = null;
+  let totalProcessed = 0;
   let updatedTotal = 0;
 
-  for (const doc of snapshot.docs) {
-    const data = doc.data();
-    const keywords = generateSearchKeywords({ ...data, id: doc.id });
+  while (true) {
+    let q = db.collection(collectionName).orderBy('__name__').limit(PAGE_SIZE);
+    if (lastDoc) {
+      q = q.startAfter(lastDoc);
+    }
 
-    batch.update(doc.ref, { searchKeywords: keywords });
-    count++;
-    updatedTotal++;
+    const snapshot = await q.get();
+    if (snapshot.empty) {
+      break;
+    }
 
-    if (count >= 400) {
+    const batch = db.batch();
+    let batchCount = 0;
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const keywords = generateSearchKeywords({ ...data, id: doc.id });
+
+      batch.update(doc.ref, { searchKeywords: keywords });
+      batchCount++;
+      updatedTotal++;
+    }
+
+    if (batchCount > 0) {
       await batch.commit();
-      console.log(`Committed batch of ${count} for ${collectionName}. Total updated: ${updatedTotal}`);
-      batch = db.batch();
-      count = 0;
+    }
+
+    totalProcessed += snapshot.docs.length;
+    lastDoc = snapshot.docs[snapshot.docs.length - 1];
+    console.log(`[${collectionName}] Processed ${totalProcessed} documents (Updated: ${updatedTotal})...`);
+
+    if (snapshot.docs.length < PAGE_SIZE) {
+      break;
     }
   }
 
-  if (count > 0) {
-    await batch.commit();
-    console.log(`Committed final batch of ${count} for ${collectionName}. Total updated: ${updatedTotal}`);
-  }
-
-  console.log(`Finished backfill for ${collectionName}! Total: ${updatedTotal}\n`);
+  console.log(`\nFinished backfill for ${collectionName}! Total processed: ${totalProcessed}, Total updated: ${updatedTotal}\n`);
 }
 
 async function main() {

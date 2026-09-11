@@ -142,6 +142,28 @@ export async function GET(req: NextRequest) {
     const companyPromises: Promise<any>[] = [];
     const contactPromises: Promise<any>[] = [];
 
+    // Query candidates using searchKeywords
+    const queryWords = q.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+    const arrayQueryWords = Array.from(new Set([
+      ...queryWords,
+      q.toLowerCase(),
+    ])).filter(w => w.length >= 2).slice(0, 10);
+
+    if (arrayQueryWords.length > 0) {
+      leadPromises.push(
+        db.collection('leads')
+          .where('searchKeywords', 'array-contains-any', arrayQueryWords)
+          .limit(20)
+          .get()
+      );
+      companyPromises.push(
+        db.collection('companies')
+          .where('searchKeywords', 'array-contains-any', arrayQueryWords)
+          .limit(20)
+          .get()
+      );
+    }
+
     for (const searchStr of searchStrings) {
       // 1. Search leads by companyName
       leadPromises.push(

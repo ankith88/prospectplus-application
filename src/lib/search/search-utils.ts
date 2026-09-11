@@ -19,26 +19,65 @@ export function generateSearchKeywords(data: any): string[] {
     }
 
     // Split words
-    const words = str.split(/[\s,./\\_\-+()@]+/).filter(Boolean);
+    const words = str.split(/[\s,./\\_\-+()@&]+/).filter(Boolean);
+    const cleanWords: string[] = [];
     for (const w of words) {
       const cleanWord = w.toLowerCase().replace(/[^a-z0-9]/g, '');
       if (cleanWord.length >= 2) {
         keywords.add(cleanWord);
+        cleanWords.push(cleanWord);
       }
+    }
+
+    // Add 2-word bigrams for multi-word phrases (e.g. "subway yarrabilba")
+    for (let i = 0; i < cleanWords.length - 1; i++) {
+      keywords.add(`${cleanWords[i]} ${cleanWords[i + 1]}`);
     }
   };
 
-  // 1. Company Name & IDs
-  addText(data.companyName);
+  // 1. Company Name & Trading Name Patterns
+  if (data.companyName) {
+    const raw = String(data.companyName).trim();
+    addText(raw);
+
+    // Extract Australian trading name patterns: "t/as ...", "t/a ...", "trading as ..."
+    const tasMatch = raw.match(/(?:t\/as|t\/a|trading\s+as)\s+(.+)$/i);
+    if (tasMatch && tasMatch[1]) {
+      addText(tasMatch[1].trim());
+    }
+
+    // Extract parentheses e.g. "(Subway - Marsden)"
+    const parenMatch = raw.match(/\(([^)]+)\)/);
+    if (parenMatch && parenMatch[1]) {
+      addText(parenMatch[1].trim());
+    }
+
+    // Extract dash separated branches e.g. "Company - Branch"
+    const dashParts = raw.split(/\s+-\s+/);
+    if (dashParts.length > 1) {
+      dashParts.forEach(p => addText(p.trim()));
+    }
+  }
+
+  addText(data.tradingName);
+  addText(data.businessName);
+  addText(data.legalName);
   addText(data.prospectPlusId);
   addText(data.internalid);
   addText(data.internalId);
   addText(data.entityId);
   addText(data.customerEntityId);
+  addText(data.abn);
+  addText(data.acn);
+  addText(data.lastInvoiceNumber);
 
-  // 2. Email & Phone
+  // 2. Email & Phone & Contacts
   if (data.customerServiceEmail) addText(data.customerServiceEmail);
   if (data.email) addText(data.email);
+  if (data.contactPerson) addText(data.contactPerson);
+  if (data.contactName) addText(data.contactName);
+  if (data.primaryContact) addText(data.primaryContact);
+
   if (data.customerPhone || data.phone) {
     const rawPhone = String(data.customerPhone || data.phone);
     addText(rawPhone);
@@ -61,11 +100,14 @@ export function generateSearchKeywords(data: any): string[] {
   }
   addText(data.street);
   addText(data.city);
+  addText(data.suburb);
   addText(data.state);
   addText(data.zip);
+  addText(data.postcode);
 
   // 4. Franchisee & Team
   addText(data.franchisee);
+  addText(data.franchiseeName);
   addText(data.accountManagerAssigned);
   addText(data.salesRepAssigned);
 

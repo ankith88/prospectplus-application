@@ -202,8 +202,13 @@ export async function GET(req: NextRequest) {
     const isEmail = q.includes('@');
     const phoneVariations = getPhoneVariations(q);
 
-    // Extract individual non-empty words (min length 1)
-    const queryWords = q.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+    // Stop words for corporate and common particles (pty, ltd, as, tas, etc.)
+    const STOP_WORDS = new Set(['pty', 'ltd', 'proprietary', 'limited', 'as', 'tas', 'ta', 'atf', 'the', 'and', 'for', 'of', 'in', 'on', 'to', 'a', 'an']);
+
+    // Extract individual non-empty words, splitting on punctuation & whitespace
+    const rawWords = q.toLowerCase().split(/[\s,./\\_\-+()@&]+/).filter(w => w.length > 0);
+    const queryWords = rawWords.map(w => w.replace(/[^a-z0-9]/g, '')).filter(w => w.length > 0);
+    const significantQueryWords = queryWords.filter(w => !STOP_WORDS.has(w) && w.length >= 2);
 
     // Extract potential ID or path segment if q is a URL or contains path segments
     let extractedId = q;
@@ -274,7 +279,28 @@ export async function GET(req: NextRequest) {
     }
 
     // searchKeywords array indexing lookup (Fast candidate retrieval)
-    const arrayQueryWords = queryWords.slice(0, 10);
+    const rawLowerQuery = q.toLowerCase().trim();
+    const queryBigrams: string[] = [];
+    for (let i = 0; i < queryWords.length - 1; i++) {
+      const w1 = queryWords[i];
+      const w2 = queryWords[i + 1];
+      if (!STOP_WORDS.has(w1) || !STOP_WORDS.has(w2)) {
+        queryBigrams.push(`${w1} ${w2}`);
+      }
+    }
+
+    const nonStopWords = queryWords.filter(w => !STOP_WORDS.has(w) && w.length >= 2).sort((a, b) => b.length - a.length);
+
+    let arrayQueryWords = Array.from(new Set([
+      ...queryBigrams,
+      ...nonStopWords,
+      rawLowerQuery,
+    ])).filter(w => w.length >= 2).slice(0, 10);
+
+    if (arrayQueryWords.length === 0) {
+      arrayQueryWords = queryWords.filter(w => w.length >= 2).slice(0, 10);
+    }
+
     if (arrayQueryWords.length > 0) {
       leadPromises.push(
         db.collection('leads')
@@ -683,9 +709,11 @@ export async function GET(req: NextRequest) {
 
       const fullCombinedStr = `${companyNameStr} ${prospectPlusIdStr} ${entityIdStr} ${emailFieldStr} ${addressStr} ${phoneFieldStr} ${phoneDigits} ${matchedInvoiceStr} ${lastInvoiceNumberStr}`.toLowerCase();
 
+      const checkWords = significantQueryWords.length > 0 ? significantQueryWords : queryWords;
+
       // Check match based on selected searchType tab
       if (type === 'company') {
-        const matches = queryWords.every(w => companyNameStr.includes(w));
+        const matches = checkWords.every(w => companyNameStr.includes(w));
         if (!matches) continue;
       } else if (type === 'id') {
         const matches = queryWords.every(w => {
@@ -717,8 +745,8 @@ export async function GET(req: NextRequest) {
           if (!matches) continue;
         }
       } else {
-        // 'all' type: every query word must appear somewhere in the combined document text
-        const matches = queryWords.every(w => {
+        // 'all' type: every significant query word must appear somewhere in the combined document text
+        const matches = checkWords.every(w => {
           const cleanW = w.replace(/^inv/i, '');
           return fullCombinedStr.includes(w) || (cleanW.length >= 2 && fullCombinedStr.includes(cleanW)) || (digitsOnly.length >= 3 && phoneDigits.includes(w));
         });
