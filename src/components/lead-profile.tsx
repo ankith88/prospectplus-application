@@ -337,6 +337,8 @@ const getLocalTimeDetails = (zone: string) => {
 };
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
+    const pathname = usePathname() || '';
+    const isCompanyProfile = pathname.startsWith('/companies/');
     const [lead, setLead] = useState<Lead>(initialLead);
     const [isEditingAbn, setIsEditingAbn] = useState(false);
     const [abnValue, setAbnValue] = useState(initialLead.abn || '');
@@ -1097,7 +1099,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     useEffect(() => {
         if (!lead.id) return;
-        const q = query(collection(firestore, 'leads', lead.id, 'localMileJobs'));
+        const parentCol = isCompanyProfile ? 'companies' : 'leads';
+        const q = query(collection(firestore, parentCol, lead.id, 'localMileJobs'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const jobsList = snapshot.docs.map(doc => ({ ...(doc.data() as any), id: doc.id }));
             jobsList.sort((a: any, b: any) => {
@@ -1109,11 +1112,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
             if (jobsList.length > 0) {
                 const validJobsCount = jobsList.filter(j => j.status !== 'recredited' && j.status !== 'cancelled').length;
-                const computedTrials = Math.max(0, 5 - validJobsCount);
+                const isTrialCancelled = Boolean(lead.localMileTrialStopped || lead.localMileTrialCancelled || lead.status === 'LocalMile Trial Stopped' || lead.customerStatus === 'LocalMile Trial Stopped');
+                const computedTrials = isTrialCancelled ? 0 : Math.max(0, 5 - validJobsCount);
                 const computedJobCount = jobsList.length;
 
-                if (lead.jobCount !== computedJobCount || lead.localMileTrialsRemaining !== computedTrials || !lead.hasCreatedJob) {
-                    updateDoc(doc(firestore, 'leads', lead.id), {
+                if (!isTrialCancelled && (lead.jobCount !== computedJobCount || lead.localMileTrialsRemaining !== computedTrials || !lead.hasCreatedJob)) {
+                    updateDoc(doc(firestore, parentCol, lead.id), {
                         jobCount: computedJobCount,
                         hasCreatedJob: true,
                         localMileTrialsRemaining: computedTrials,
@@ -1129,7 +1133,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             }
         });
         return () => unsubscribe();
-    }, [lead.id, lead.jobCount, lead.localMileTrialsRemaining, lead.hasCreatedJob]);
+    }, [lead.id, lead.jobCount, lead.localMileTrialsRemaining, lead.hasCreatedJob, lead.localMileTrialStopped, lead.localMileTrialCancelled, isCompanyProfile]);
 
     const handleRecredit = async (jobId: string) => {
         setIsRecreditingId(jobId);
@@ -2234,7 +2238,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const router = useRouter();
-  const pathname = usePathname();
   const { toast } = useToast();
   const { user, userProfile, isSuperAdmin } = useAuth();
 
@@ -2519,7 +2522,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setPricePlan('Premium Merchant');
   };
   
-  const isCompanyProfile = pathname.startsWith('/companies/');
   const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [] } = lead;
 
   useEffect(() => {
@@ -4152,32 +4154,51 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!stopTrialType) return;
     setIsStoppingTrial(true);
     try {
-        const newStatus: LeadStatus = stopTrialType === 'LocalMile' ? 'LocalMile Trial Stopped' : 'ShipMate Trial Stopped';
+        const isSigned = isCompanyProfile || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed' || lead.status === 'Won' || lead.customerStatus === 'Won';
+        const newStatus: LeadStatus = isSigned 
+            ? ((lead.status as LeadStatus) || 'Signed') 
+            : (stopTrialType === 'LocalMile' ? 'LocalMile Trial Stopped' : 'ShipMate Trial Stopped');
         const author = user?.displayName || user?.email || 'System';
         const reasonText = stopTrialReason.trim() ? ` Reason: ${stopTrialReason.trim()}` : '';
 
-        const updateData: Partial<Lead> = {
-            status: newStatus,
-            customerStatus: newStatus,
-        };
+        const updateData: Partial<Lead> = isSigned
+            ? {
+                localMileTrialStopped: true,
+                localMileTrialCancelled: true,
+                localMileTrialsRemaining: 0,
+                trialCancelledAt: new Date().toISOString(),
+              }
+            : {
+                status: newStatus,
+                customerStatus: newStatus,
+                localMileTrialStopped: true,
+                localMileTrialCancelled: true,
+                localMileTrialsRemaining: 0,
+                trialCancelledAt: new Date().toISOString(),
+              };
 
         await updateLeadDetails(lead.id, lead, updateData);
 
+        const activityNote = isSigned
+            ? `${stopTrialType} Free Trial cancelled for Signed Customer by ${author}.${reasonText}`
+            : `${stopTrialType} Free Trial stopped by ${author}.${reasonText} Status changed to ${newStatus}.`;
+
         await logActivity(lead.id, {
             type: 'Update',
-            notes: `${stopTrialType} Free Trial stopped by ${author}.${reasonText} Status changed to ${newStatus}.`,
+            notes: activityNote,
             author
-        });
+        }, isCompanyProfile ? 'companies' : 'leads');
 
         setLead(prev => ({
             ...prev,
-            status: newStatus,
-            customerStatus: newStatus,
+            ...updateData,
         }));
 
         toast({
             title: 'Free Trial Stopped',
-            description: `${stopTrialType} free trial stopped. Status updated to ${newStatus}.`
+            description: isSigned
+                ? `${stopTrialType} free trial cancelled for signed customer.`
+                : `${stopTrialType} free trial stopped. Status updated to ${newStatus}.`
         });
 
         setStopTrialType(null);
@@ -4693,46 +4714,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const renderActionButtons = () => {
     if (isCompanyProfile) {
-      if (['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '')) {
-        return (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsNotifyUpsellDialogOpen(true)}
-              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold shadow-sm"
-            >
-              <TrendingUp className="mr-2 h-4 w-4 text-emerald-600" />
-              Notify AM for Upsell / Resell
-            </Button>
-          </div>
-        );
-      }
-
-      return (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => setIsOnboardingDialogOpen(true)}
-            className="bg-emerald-700 text-white hover:bg-emerald-800 font-semibold shadow-sm"
-          >
-            <CalendarCheck className="mr-2 h-4 w-4" />
-            Organise Onboarding Request
-          </Button>
-          {!isLpoNetworkBucket && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}
-              className="bg-[#095c7b] text-white hover:bg-[#095c7b]/90 font-semibold shadow-sm"
-            >
-              <Briefcase className="mr-2 h-4 w-4" />
-              Resell / Send New Quote
-            </Button>
-          )}
-        </div>
-      );
+      return null;
     }
 
     if (!showSales) return null;
@@ -5507,14 +5489,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 {(() => {
                     const actualJobCount = localMileJobs.length > 0 ? localMileJobs.length : (lead.jobCount || 0);
                     const validJobsCount = localMileJobs.filter(j => j.status !== 'recredited' && j.status !== 'cancelled').length;
-                    const actualTrialsRemaining = localMileJobs.length > 0 ? Math.max(0, 5 - validJobsCount) : (lead.localMileTrialsRemaining ?? 5);
+                    const isTrialStoppedOrCancelled = Boolean(lead.localMileTrialStopped || lead.localMileTrialCancelled || lead.status === 'LocalMile Trial Stopped' || lead.customerStatus === 'LocalMile Trial Stopped');
+                    const actualTrialsRemaining = isTrialStoppedOrCancelled ? 0 : (localMileJobs.length > 0 ? Math.max(0, 5 - validJobsCount) : (lead.localMileTrialsRemaining ?? 5));
                     const hasJobs = lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' || actualJobCount > 0;
 
-                    if (!hasJobs && lead.localMileTrialsRemaining === undefined && !lead.status?.includes('LocalMile') && !lead.customerStatus?.includes('LocalMile') && lead.jobCount === undefined && !lead.lastLocalMileJobCreatedAt) {
+                    if (!hasJobs && (isTrialStoppedOrCancelled || (lead.localMileTrialsRemaining === undefined && !lead.status?.includes('LocalMile') && !lead.customerStatus?.includes('LocalMile') && lead.jobCount === undefined && !lead.lastLocalMileJobCreatedAt))) {
                         return null;
                     }
 
-                    const regLink = userProfile?.activeRole?.toLowerCase() !== 'user'
+                    const regLink = !isTrialStoppedOrCancelled && userProfile?.activeRole?.toLowerCase() !== 'user'
                         ? (lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : ''))
                         : '';
 
@@ -5531,9 +5514,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </Badge>
                                 )
                             )}
-                            <Badge variant="outline" className="bg-sky-50 text-sky-900 border-sky-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
-                                Free Trials Remaining: {actualTrialsRemaining}
-                            </Badge>
+                            {!isTrialStoppedOrCancelled && (
+                                <Badge variant="outline" className="bg-sky-50 text-sky-900 border-sky-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
+                                    Free Trials Remaining: {actualTrialsRemaining}
+                                </Badge>
+                            )}
+                            {isTrialStoppedOrCancelled && hasJobs && (
+                                <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
+                                    Trial Stopped
+                                </Badge>
+                            )}
                             {lead.lastLocalMileJobCreatedAt && (
                                 <Badge variant="outline" className="bg-indigo-50 text-indigo-900 border-indigo-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
                                     Last Job Created: {safeFormatDate(lead.lastLocalMileJobCreatedAt, 'MMM d, yyyy')}
@@ -5545,7 +5535,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         navigator.clipboard.writeText(regLink);
                                         toast({ title: "Copied!", description: "LocalMile registration link copied to clipboard." });
                                     }}
-                                    className="inline-flex items-center gap-1.5 text-xs text-sky-800 hover:text-sky-950 bg-sky-50 hover:bg-sky-100 border border-sky-300 px-2.5 py-0.5 rounded-full transition-all font-semibold shadow-2xs"
+                                    className="inline-flex items-center gap-1.5 text-xs text-sky-800 hover:text-sky-950 bg-sky-50 hover:bg-sky-100 border border-sky-300 px-2.5 py-0.5 rounded-full transition-all font-semibold shadow-2xs cursor-pointer"
                                     title="Copy public registration link"
                                     type="button"
                                 >
@@ -5553,7 +5543,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     Reg Link
                                 </button>
                             )}
-
+                            {!isTrialStoppedOrCancelled && userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                                <button
+                                    onClick={() => setStopTrialType('LocalMile')}
+                                    className="inline-flex items-center gap-1.5 text-xs text-amber-800 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full transition-all font-semibold shadow-2xs cursor-pointer"
+                                    title="Stop / Cancel Free Trial"
+                                    type="button"
+                                >
+                                    <AlertTriangle className="h-3 w-3 text-amber-600" />
+                                    Stop Free Trial
+                                </button>
+                            )}
                         </div>
                     );
                 })()}
@@ -9715,7 +9715,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     Stop {stopTrialType} Free Trial
                 </DialogTitle>
                 <DialogDescription className="text-slate-600 pt-1">
-                    Are you sure you want to stop the <strong>{stopTrialType}</strong> free trial for <strong>{lead.companyName || 'this customer'}</strong>? This will change the status to <strong>{stopTrialType === 'LocalMile' ? 'LocalMile Trial Stopped' : 'ShipMate Trial Stopped'}</strong>.
+                    {isCompanyProfile || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed' || lead.status === 'Won' || lead.customerStatus === 'Won' ? (
+                        <>Are you sure you want to stop the <strong>{stopTrialType}</strong> free trial for signed customer <strong>{lead.companyName || 'this customer'}</strong>? This will cancel their remaining free trials without affecting their <strong>Signed</strong> status.</>
+                    ) : (
+                        <>Are you sure you want to stop the <strong>{stopTrialType}</strong> free trial for <strong>{lead.companyName || 'this customer'}</strong>? This will change the status to <strong>{stopTrialType === 'LocalMile' ? 'LocalMile Trial Stopped' : 'ShipMate Trial Stopped'}</strong>.</>
+                    )}
                 </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-3">

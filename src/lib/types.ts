@@ -695,6 +695,9 @@ export interface Lead {
   nextBestAction?: string;
   marketingLists?: string[];
   localMileTrialsRemaining?: number;
+  localMileTrialStopped?: boolean;
+  localMileTrialCancelled?: boolean;
+  trialCancelledAt?: string;
   lastLocalMileJobCreatedAt?: string;
   localMileNudgeCount?: number;
   lastLocalMileNudgeSentAt?: string;

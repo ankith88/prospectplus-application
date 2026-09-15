@@ -83,18 +83,39 @@ export async function POST(request: Request) {
     let totalBounced = 0;
     const nowStr = new Date().toISOString();
 
-    // 4. Process each lead
+    // 4. Process each lead or signed customer
     for (const leadId of leadIds) {
-      const leadDoc = await db.collection('leads').doc(leadId).get();
-      if (!leadDoc.exists) continue;
+      const leadSnap = await db.collection('leads').doc(leadId).get();
+      const companySnap = await db.collection('companies').doc(leadId).get();
+      const isLead = leadSnap.exists;
+      const isCompany = companySnap.exists;
 
-      const leadData = leadDoc.data() || {};
+      if (!isLead && !isCompany) {
+        console.warn(`[Direct Mail] Target entity ID ${leadId} not found in leads or companies collections.`);
+        continue;
+      }
+
+      const entityDoc = isLead ? leadSnap : companySnap;
+      const leadData = entityDoc.data() || {};
       const companyName = leadData.companyName || 'Unknown Company';
-      const salesRepAssigned = leadData.salesRepAssigned || 'Sales Representative';
+      const salesRepAssigned = leadData.salesRepAssigned || leadData.accountManagerAssigned || 'Sales Representative';
       let franchiseeName = leadData.franchisee || 'MailPlus';
 
-      // Fetch contacts
-      const contactsSnap = await leadDoc.ref.collection('contacts').get();
+      // Fetch contacts from available collections
+      const contactsDocs: any[] = [];
+      if (isLead) {
+        const snap = await leadSnap.ref.collection('contacts').get();
+        contactsDocs.push(...snap.docs);
+      }
+      if (isCompany) {
+        const snap = await companySnap.ref.collection('contacts').get();
+        snap.docs.forEach(d => {
+          if (!contactsDocs.some(existing => existing.id === d.id)) {
+            contactsDocs.push(d);
+          }
+        });
+      }
+
       const recipients: { email: string; name: string; contactId?: string; localMilePlusAuthLink?: string; securityCode?: string }[] = [];
 
       if (targetEmail) {
@@ -105,9 +126,9 @@ export async function POST(request: Request) {
         let contactId = null;
 
         // Try to match the first email in the contacts list to extract contact name and auth link
-        if (emails.length > 0 && !contactsSnap.empty) {
+        if (emails.length > 0 && contactsDocs.length > 0) {
           const firstEmail = emails[0];
-          contactsSnap.forEach((contactDoc: any) => {
+          contactsDocs.forEach((contactDoc: any) => {
             const cData = contactDoc.data();
             const email = cData.email;
             if (email && email.toLowerCase().trim() === firstEmail) {
@@ -120,8 +141,8 @@ export async function POST(request: Request) {
         }
 
         // If no match was found for the first email, look for a primary contact to populate name/link
-        if (primaryContactName === companyName && !contactsSnap.empty) {
-          contactsSnap.forEach((contactDoc: any) => {
+        if (primaryContactName === companyName && contactsDocs.length > 0) {
+          contactsDocs.forEach((contactDoc: any) => {
             const cData = contactDoc.data();
             if (cData.isPrimary) {
               primaryContactName = cData.name || primaryContactName;
@@ -140,8 +161,8 @@ export async function POST(request: Request) {
           securityCode: primaryContactSecurityCode
         });
       } else {
-        if (!contactsSnap.empty) {
-          contactsSnap.forEach((contactDoc: any) => {
+        if (contactsDocs.length > 0) {
+          contactsDocs.forEach((contactDoc: any) => {
             const cData = contactDoc.data();
             const email = cData.email;
             const name = overrideContactName !== undefined ? overrideContactName : (cData.name || 'Valued Customer');
@@ -492,21 +513,49 @@ export async function POST(request: Request) {
           if (bcc) parts.push(`BCC: ${bcc}`);
           activityNotes += ` (${parts.join(', ')})`;
         }
-        await leadDoc.ref.collection('activity').add({
-          type: 'Email',
-          date: nowStr,
-          notes: activityNotes,
-          author: salesRepAssigned
-        });
+        // Log activity and email to leads collection if exists
+        if (isLead) {
+          try {
+            await leadSnap.ref.collection('activity').add({
+              type: 'Email',
+              date: nowStr,
+              notes: activityNotes,
+              author: salesRepAssigned
+            });
+            await logEmailServer(leadId, {
+              subject: subjectLine,
+              bodyHtml: finalHtml,
+              sentAt: nowStr,
+              sender: customSenderEmail || senderEmail,
+              recipient: rec.email,
+              status: status
+            }, 'leads');
+          } catch (logErr) {
+            console.error(`[Direct Mail] Failed to log email/activity for lead ${leadId}:`, logErr);
+          }
+        }
 
-        await logEmailServer(leadId, {
-          subject: subjectLine,
-          bodyHtml: finalHtml,
-          sentAt: nowStr,
-          sender: customSenderEmail || senderEmail,
-          recipient: rec.email,
-          status: status
-        }, 'leads');
+        // Log activity and email to companies collection if exists
+        if (isCompany) {
+          try {
+            await companySnap.ref.collection('activity').add({
+              type: 'Email',
+              date: nowStr,
+              notes: activityNotes,
+              author: salesRepAssigned
+            });
+            await logEmailServer(leadId, {
+              subject: subjectLine,
+              bodyHtml: finalHtml,
+              sentAt: nowStr,
+              sender: customSenderEmail || senderEmail,
+              recipient: rec.email,
+              status: status
+            }, 'companies');
+          } catch (logErr) {
+            console.error(`[Direct Mail] Failed to log email/activity for company ${leadId}:`, logErr);
+          }
+        }
 
         totalSent++;
         if (isBounced) {
