@@ -1,151 +1,174 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useId } from "react";
 import Papa from "papaparse";
 import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Download, ExternalLink, HelpCircle, ChevronDown, ChevronRight, 
-  RefreshCw, Copy, Truck, Package, Clock, PlusCircle 
+import {
+  Download, ExternalLink, HelpCircle, ChevronDown, ChevronRight,
+  RefreshCw, Copy, Truck, Package, Clock, PlusCircle, CheckCircle2,
+  FileText, Share2, Sparkles, Lightbulb, BarChart3, Table as TableIcon, Eye
 } from "lucide-react";
 import { getStatusColor } from "@/lib/status-colors";
 import { toast } from "sonner";
+import { AskChartView } from "@/components/ask/ask-chart-view";
+import { generateExecutiveReportPdf } from "@/components/ask/report-pdf-generator";
+import { QuickTaskDialog } from "@/components/ask/quick-task-dialog";
+import { RecordPreviewDrawer } from "@/components/ask/record-preview-drawer";
 
 interface ResultsViewProps {
-  collection: "leads" | "companies" | "users" | "franchisees" | "tickets" | "packages" | "appointments" | "activity" | "tasks" | "visitnotes";
+  collection: string;
   intent: "list" | "count" | "aggregate";
-  rows: any[];
-  columns: string[];
+  rows?: any[];
+  columns?: string[];
   value?: any;
+  chartType?: "bar" | "pie" | "line" | "table" | "none";
   humanSummary: string;
+  insights?: string;
   spec?: any;
+  suggestedFollowUps?: string[];
+  onFollowUpClick?: (query: string) => void;
+  onTeachAiClick?: (question: string) => void;
+  userName?: string;
 }
 
-const getBadgeColor = (type: string) => {
-  const t = type.toLowerCase();
-  if (t.includes('futile')) return 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100';
-  if (t.includes('lodgement')) return 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100';
-  if (t.includes('pickup')) return 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100';
-  return 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100';
-}
+export function ResultsView({
+  collection,
+  intent,
+  rows = [],
+  columns = [],
+  value,
+  chartType = "table",
+  humanSummary,
+  insights,
+  spec,
+  suggestedFollowUps = [],
+  onFollowUpClick,
+  onTeachAiClick,
+  userName = "Prospect+ User",
+}: ResultsViewProps) {
+  const [viewMode, setViewMode] = useState<"chart" | "table">(
+    intent === "aggregate" && chartType !== "table" ? "chart" : "table"
+  );
+  const [selectedRecord, setSelectedRecord] = useState<any>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskDefaultData, setTaskDefaultData] = useState<{ leadId?: string; companyName?: string; defaultTitle?: string }>({});
+  const [pdfExporting, setPdfExporting] = useState(false);
 
-export function ResultsView({ collection, intent, rows, columns, value, humanSummary, spec }: ResultsViewProps) {
-  const [localRows, setLocalRows] = useState<any[]>(rows);
-  const [statusLoading, setStatusLoading] = useState<Record<string, boolean>>({});
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const containerUniqueId = useId().replace(/:/g, "_");
+  const chartCaptureId = `chart_capture_${containerUniqueId}`;
 
-  useEffect(() => {
-    setLocalRows(rows);
-  }, [rows]);
-  
   const handleExportCSV = () => {
-    if (!localRows || localRows.length === 0) return;
-    const dataToExport = localRows.map(({ id, ...rest }) => rest);
+    if (!rows || rows.length === 0) {
+      toast.error("No data available to export");
+      return;
+    }
+    const dataToExport = rows.map(({ id, ...rest }) => rest);
     const csv = Papa.unparse(dataToExport);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `${collection}_export_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", `${collection}_export_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    toast.success("CSV export downloaded!");
   };
 
-  const getRecordLink = (row: any) => {
-    if (collection === "leads") {
-      return `/leads/${row.id}`;
-    }
-    if (collection === "companies") {
-      return `/companies/${row.id}`;
-    }
-    if (collection === "tickets") {
-      return `/admin/tickets/${row.id}`;
-    }
-    return null;
+  const handleCopyExcelTsv = () => {
+    if (!rows || rows.length === 0) return;
+    const cols = columns.length > 0 ? columns : Object.keys(rows[0]).filter(k => k !== "id");
+    const headerRow = cols.join("\t");
+    const dataRows = rows.map(r => cols.map(c => String(r[c] ?? "")).join("\t"));
+    const tsv = [headerRow, ...dataRows].join("\n");
+    navigator.clipboard.writeText(tsv);
+    toast.success("Copied table to clipboard for Excel / Google Sheets!");
   };
 
-  const toggleRow = (code: string) => {
-    const next = new Set(expandedRows);
-    if (next.has(code)) {
-      next.delete(code);
-    } else {
-      next.add(code);
-    }
-    setExpandedRows(next);
+  const handleCopySlackEmail = () => {
+    const lines = [
+      `*${spec?.humanSummary || humanSummary}*`,
+      insights ? `💡 _Takeaway:_ ${insights}` : "",
+      "",
+      intent === "count" ? `*Total Count:* ${value}` : "",
+      intent === "aggregate" && typeof value === "object"
+        ? Object.entries(value).map(([k, v]) => `• *${k}:* ${v}`).join("\n")
+        : "",
+      intent === "list"
+        ? `*Top Records (${Math.min(rows.length, 5)} of ${rows.length}):*\n` +
+          rows.slice(0, 5).map(r => `• ${r.companyName || r.name || r.id} (${r.customerStatus || r.status || "Active"})`).join("\n")
+        : "",
+      "",
+      `_Generated via Prospect+ AI on ${new Date().toLocaleDateString("en-AU")}_`
+    ].filter(Boolean).join("\n");
+
+    navigator.clipboard.writeText(lines);
+    toast.success("Formatted summary copied for Slack / Email!");
   };
 
-  const handleCheckStatus = async (pkg: any) => {
-    const code = pkg.code || pkg.id;
-    if (!code) return;
-    setStatusLoading(prev => ({ ...prev, [code]: true }));
+  const handleExportPdf = async () => {
+    setPdfExporting(true);
     try {
-      const res = await fetch(`/api/tracking?identifier=${code}&packageId=${code}`);
-      if (!res.ok) throw new Error('Failed to fetch status');
-      const data = await res.json();
-      
-      setLocalRows(prev => prev.map(r => {
-        const itemCode = r.code || r.id;
-        return itemCode === code 
-          ? { 
-              ...r, 
-              real_time_status: { 
-                status: data.status, 
-                updated_at: data.updated_at || new Date().toISOString(), 
-                delivered: data.delivered,
-                estimated_delivery_date: data.estimated_delivery_date,
-                last_location: data.last_location
-              } 
-            }
-          : r;
-      }));
-      toast.success('Real-time status updated!');
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to update status');
+      await generateExecutiveReportPdf({
+        title: spec?.humanSummary || humanSummary,
+        humanSummary,
+        insights,
+        spec,
+        elementIdToCapture: viewMode === "chart" ? chartCaptureId : undefined,
+        rows,
+        columns,
+        userName,
+      });
+      toast.success("Branded PDF Report downloaded!");
+    } catch {
+      toast.error("Failed to generate PDF");
     } finally {
-      setStatusLoading(prev => ({ ...prev, [code]: false }));
+      setPdfExporting(false);
     }
+  };
+
+  const openRecordPreview = (row: any) => {
+    setSelectedRecord(row);
+    setPreviewOpen(true);
+  };
+
+  const openTaskDialog = (row?: any) => {
+    const target = row || (rows && rows.length > 0 ? rows[0] : null);
+    setTaskDefaultData({
+      leadId: target?.id,
+      companyName: target?.companyName || target?.name,
+      defaultTitle: target ? `Follow up with ${target.companyName || target.name || "contact"}` : "Follow up on query results",
+    });
+    setTaskModalOpen(true);
   };
 
   const renderBreakdown = () => {
     if (!spec) return null;
     const items: React.ReactNode[] = [];
 
-    // Filters
     if (spec.filters && spec.filters.length > 0) {
       spec.filters.forEach((f: any, idx: number) => {
         items.push(
-          <div key={`filter-${idx}`} className="inline-flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/20 px-2 py-0.5 rounded text-xs font-medium text-slate-700">
+          <div key={`filter-${idx}`} className="inline-flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/20 px-2 py-0.5 rounded text-[11px] font-medium text-slate-700">
             <span className="font-mono text-[#095c7b]">{f.field}</span>
-            <span className="text-slate-400 font-mono text-[10px]">{f.op}</span>
-            <span className="font-semibold text-slate-800">"{f.value}"</span>
+            <span className="text-slate-400 font-mono text-[9px]">{f.op}</span>
+            <span className="font-semibold text-slate-800">"{String(f.value)}"</span>
           </div>
         );
       });
     }
 
-    // Date Range
     if (spec.dateRange) {
       items.push(
-        <div key="daterange" className="inline-flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/20 px-2 py-0.5 rounded text-xs font-medium text-slate-700">
+        <div key="daterange" className="inline-flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/20 px-2 py-0.5 rounded text-[11px] font-medium text-slate-700">
           <span className="font-mono text-[#095c7b]">{spec.dateRange.field}</span>
-          <span className="text-slate-400 font-mono text-[10px]">range</span>
+          <span className="text-slate-400 font-mono text-[9px]">range</span>
           <span className="font-semibold text-slate-800">"{spec.dateRange.from || spec.dateRange.to}"</span>
-        </div>
-      );
-    }
-
-    // Sort
-    if (spec.sort) {
-      items.push(
-        <div key="sort" className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded text-xs font-medium text-slate-500">
-          <span className="text-[10px] text-slate-400">Order by:</span>
-          <span className="font-mono text-slate-700">{spec.sort.field}</span>
-          <span className="text-[10px] text-slate-400 uppercase">{spec.sort.direction}</span>
         </div>
       );
     }
@@ -153,409 +176,285 @@ export function ResultsView({ collection, intent, rows, columns, value, humanSum
     if (items.length === 0) return null;
 
     return (
-      <div className="flex flex-wrap items-center gap-2 bg-[#FFFDF6] border border-border/80 rounded-lg p-3 text-xs">
-        <span className="text-[#1A3D33] font-semibold flex items-center gap-1">
-          🔍 Query Breakdown:
+      <div className="flex flex-wrap items-center gap-1.5 bg-[#FFFDF6] border border-border/80 rounded-lg p-2.5 text-xs">
+        <span className="text-[#1A3D33] font-semibold flex items-center gap-1 text-[11px]">
+          🔍 Query Scope:
         </span>
-        <div className="flex flex-wrap gap-1.5">{items}</div>
+        <div className="flex flex-wrap gap-1">{items}</div>
       </div>
     );
-  };
-
-  // Render Count View
-  if (intent === "count" && typeof value === "number") {
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="text-sm font-medium text-muted-foreground">{humanSummary}</div>
-        {renderBreakdown()}
-        <Card className="max-w-xs bg-white border-border text-foreground">
-          <CardHeader className="pb-2 border-b border-border/40">
-            <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">Total Count</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="text-5xl font-bold text-[#095c7b]">{value}</div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Render Aggregate Grouped View
-  if (intent === "aggregate" && typeof value === "object" && value !== null) {
-    const aggRows = Object.entries(value).map(([group, count]) => ({
-      Group: group,
-      Count: count
-    }));
-
-    const handleExportAggCSV = () => {
-      const csv = Papa.unparse(aggRows);
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `${collection}_aggregate_report_${new Date().toISOString().slice(0,10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    };
-
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="text-sm font-medium text-muted-foreground">{humanSummary}</div>
-          <Button
-            onClick={handleExportAggCSV}
-            size="sm"
-            className="bg-[#095c7b] hover:bg-[#07475f] text-white flex items-center gap-2 self-start"
-          >
-            <Download className="h-4 w-4" />
-            Export Report CSV
-          </Button>
-        </div>
-        {renderBreakdown()}
-        
-        {/* Stat Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Object.entries(value).map(([key, val]: [string, any]) => (
-            <Card key={key} className="bg-white border-border text-foreground">
-              <CardHeader className="pb-2 border-b border-border/40">
-                <CardTitle className="text-xs text-muted-foreground truncate uppercase tracking-wider">{key}</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="text-3xl font-semibold text-[#095c7b]">{val}</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Aggregated Table */}
-        <div className="border border-border rounded-lg overflow-hidden bg-white mt-2">
-          <div className="bg-slate-50 px-4 py-2.5 border-b border-border font-semibold text-xs text-slate-700 uppercase tracking-wider">
-            Report Data Table
-          </div>
-          <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow>
-                <TableHead className="text-slate-700 font-semibold capitalize">{spec?.groupBy || 'Category'}</TableHead>
-                <TableHead className="text-slate-700 font-semibold text-right">Count / Volume</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {aggRows.map((row, idx) => (
-                <TableRow key={idx} className="border-border hover:bg-slate-50/50">
-                  <TableCell className="font-medium text-slate-800">{String(row.Group)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold text-[#095c7b]">{String(row.Count)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    );
-  }
-
-  // Render List View (Table)
-  if (localRows.length === 0) {
-    return (
-      <div className="text-center py-12 text-muted-foreground flex flex-col items-center justify-center gap-2">
-        <HelpCircle className="h-10 w-10 text-muted-foreground/30" />
-        <p className="font-semibold text-slate-700">No results found matching your query.</p>
-        <p className="text-xs text-muted-foreground">Try rephrasing your search or using the Terminology panel.</p>
-      </div>
-    );
-  }
-
-  // Rich Package rendering block
-  if (collection === "packages") {
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="text-sm font-medium text-muted-foreground">{humanSummary}</div>
-          <Button
-            onClick={handleExportCSV}
-            size="sm"
-            className="bg-[#095c7b] hover:bg-[#07475f] text-white flex items-center gap-2 self-start"
-          >
-            <Download className="h-4 w-4" />
-            Export to CSV
-          </Button>
-        </div>
-        {renderBreakdown()}
-
-        <div className="border border-border rounded-lg overflow-hidden bg-white">
-          <Table>
-            <TableHeader className="bg-slate-50 border-border">
-              <TableRow>
-                <TableHead className="w-10"></TableHead>
-                <TableHead className="text-slate-700 font-semibold">Barcode</TableHead>
-                <TableHead className="text-slate-700 font-semibold">Connote</TableHead>
-                <TableHead className="text-slate-700 font-semibold">Status</TableHead>
-                <TableHead className="text-slate-700 font-semibold text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {localRows.map((pkg, i) => {
-                const code = pkg.code || pkg.id;
-                const isExpanded = expandedRows.has(code);
-                let latestScan = pkg.scans?.[pkg.scans.length - 1];
-                if (pkg.scans && pkg.scans.length > 0) {
-                  latestScan = pkg.scans.reduce((latest: any, current: any) => {
-                    return new Date(latest.updated_at) > new Date(current.updated_at) ? latest : current;
-                  }, pkg.scans[0]);
-                }
-
-                return (
-                  <React.Fragment key={code || i}>
-                    <TableRow 
-                      onClick={() => toggleRow(code)} 
-                      className="border-border hover:bg-slate-50/50 cursor-pointer transition-colors"
-                    >
-                      <TableCell className="pl-4">
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-slate-500" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-slate-500" />
-                        )}
-                      </TableCell>
-                      <TableCell className="font-mono font-medium text-slate-800">{code}</TableCell>
-                      <TableCell className="font-mono text-slate-500">
-                        {pkg.connote_number || (pkg.scans && pkg.scans.length > 0 ? pkg.scans[pkg.scans.length - 1].connote_number : null) || '-'}
-                      </TableCell>
-                      <TableCell>
-                        {pkg.real_time_status ? (
-                          <div className="flex flex-col">
-                            <span className="text-xs font-semibold text-[#095c7b]">{pkg.real_time_status.status}</span>
-                            {pkg.real_time_status.last_location && (
-                              <span className="text-[9px] text-slate-500">Loc: {pkg.real_time_status.last_location}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Not Checked</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleCheckStatus(pkg)}
-                            disabled={statusLoading[code]}
-                            className="p-1.5 rounded border border-border bg-slate-50 hover:bg-slate-100 disabled:opacity-50 text-slate-600 transition"
-                            title="Check Real-time Status"
-                          >
-                            <RefreshCw className={`h-3.5 w-3.5 ${statusLoading[code] ? 'animate-spin text-[#095c7b]' : ''}`} />
-                          </button>
-                          <Link href={`/admin/tickets/create?identifier=${code}`} target="_blank">
-                            <button className="p-1.5 rounded border border-[#095c7b]/20 bg-[#095c7b]/5 hover:bg-[#095c7b]/10 text-[#095c7b] transition" title="Create Ticket">
-                              <PlusCircle className="h-3.5 w-3.5" />
-                            </button>
-                          </Link>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-
-                    {/* Expanded Detail Panel */}
-                    {isExpanded && (
-                      <TableRow className="bg-slate-50/50">
-                        <TableCell colSpan={5} className="p-4 border-t-0">
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div className="bg-white p-3 rounded border border-border shadow-sm">
-                                <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Package Information</h5>
-                                <div className="space-y-1 text-xs text-slate-600">
-                                  <p><span className="font-semibold">Manifested At:</span> {pkg.manifested_at ? new Date(pkg.manifested_at).toLocaleString() : '-'}</p>
-                                  <p><span className="font-semibold">Weight:</span> {pkg.weight || '-'}</p>
-                                  <p><span className="font-semibold">Client Company:</span> {pkg.customer_name || '-'}</p>
-                                  <p><span className="font-semibold">Franchisee Owner:</span> {pkg.franchisee_name || '-'}</p>
-                                </div>
-                              </div>
-                              <div className="bg-white p-3 rounded border border-border shadow-sm">
-                                <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Delivery Details</h5>
-                                <div className="space-y-1 text-xs text-slate-600">
-                                  <p><span className="font-semibold">Speed:</span> {latestScan?.delivery_speed || '-'}</p>
-                                  <p><span className="font-semibold">Zone:</span> {latestScan?.delivery_zone || '-'}</p>
-                                  <p><span className="font-semibold">Depot ID:</span> {latestScan?.depot_id || '-'}</p>
-                                </div>
-                              </div>
-                              <div className="bg-white p-3 rounded border border-border shadow-sm">
-                                <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Recipient Details</h5>
-                                <div className="space-y-1 text-xs text-slate-600 font-sans">
-                                  <p className="font-semibold text-slate-800">{latestScan?.receiver_name || '-'}</p>
-                                  <p>{latestScan?.email || '-'}</p>
-                                  <p>{latestScan?.phone || '-'}</p>
-                                  <p className="text-[10px] text-slate-500">
-                                    {[latestScan?.address1, latestScan?.address2, latestScan?.receiver_suburb, latestScan?.state, latestScan?.post_code].filter(Boolean).join(', ')}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <Truck className="h-4 w-4 text-slate-600" />
-                              <h4 className="text-sm font-semibold text-slate-800">Scan Event History</h4>
-                            </div>
-
-                            {pkg.scans && pkg.scans.length > 0 ? (
-                              <div className="rounded border bg-white shadow-sm overflow-hidden">
-                                <Table>
-                                  <TableHeader className="bg-slate-50">
-                                    <TableRow>
-                                      <TableHead className="h-8 text-xs font-semibold">Date</TableHead>
-                                      <TableHead className="h-8 text-xs font-semibold">Type</TableHead>
-                                      <TableHead className="h-8 text-xs font-semibold">Courier</TableHead>
-                                      <TableHead className="h-8 text-xs font-semibold">Receiver</TableHead>
-                                      <TableHead className="h-8 text-xs font-semibold">Details</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {pkg.scans.map((scan: any, idx: number) => (
-                                      <TableRow key={scan.id || idx}>
-                                        <TableCell className="text-xs text-slate-500">{new Date(scan.updated_at).toLocaleString()}</TableCell>
-                                        <TableCell>
-                                          <Badge variant="outline" className={getBadgeColor(scan.scan_type) + " text-[9px] px-1 py-0 h-4"}>
-                                            {scan.scan_type}
-                                          </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-xs capitalize text-slate-500">{scan.courier?.replace('_', ' ')}</TableCell>
-                                        <TableCell className="text-xs text-slate-500">{scan.receiver_name || '-'}</TableCell>
-                                        <TableCell className="text-xs text-slate-400 max-w-xs truncate" title={scan.futile_reason}>{scan.futile_reason || '-'}</TableCell>
-                                      </TableRow>
-                                    ))}
-                                  </TableBody>
-                                </Table>
-                              </div>
-                            ) : (
-                              <div className="text-xs text-muted-foreground italic pl-6">No scan events recorded.</div>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    );
-  }
-
-  const priorityCols = [
-    // Leads & Companies
-    "companyName", "name", "status", "customerStatus", "bucket", "franchisee", "email", "activeRole", "displayName", "dateLeadEntered",
-    // Tickets & Packages
-    "ticketNumber", "trackingIdentifier", "connoteNumber", "customerCompany", "enquiryType", "priority", "assignee",
-    // Invoices
-    "invoiceDate", "invoiceTotal", "invoiceType", "invoiceStatus", "documentId", "invoiceDocumentID",
-    // Services & Products
-    "code", "pricePlan", "deliverySpeed", "isActive", "rate", "category", "description", "type",
-    // Activities & Tasks & Cancellations & Bucket History
-    "oldBucket", "newBucket", "date", "author", "reason", "dueDate", "requestedDate", "cancellationDate", "cancellationReason", "totalDistance", "totalDuration", "scheduledDate"
-  ];
-  
-  let displayCols = columns.filter(c => priorityCols.includes(c)).slice(0, 8);
-  if (displayCols.length === 0) {
-    displayCols = columns.filter(c => c !== "id").slice(0, 8);
-  }
-
-  const formatCellValue = (col: string, val: any) => {
-    if (val === undefined || val === null || val === "") return "-";
-    
-    // Currency formatting for totals and rates
-    if (col === "invoiceTotal" || (col === "rate" && typeof val === "number")) {
-      const num = Number(val);
-      if (!isNaN(num)) {
-        return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(num);
-      }
-    }
-
-    // Date formatting
-    if (col.toLowerCase().includes("date") || col.toLowerCase().includes("at")) {
-      if (typeof val === "string" && (val.includes("T") || val.includes("-"))) {
-        const d = new Date(val);
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
-        }
-      }
-    }
-
-    if (typeof val === "boolean") {
-      return val ? "Yes" : "No";
-    }
-
-    return String(val);
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="text-sm font-medium text-muted-foreground">{humanSummary}</div>
-        <Button
-          onClick={handleExportCSV}
-          size="sm"
-          className="bg-[#095c7b] hover:bg-[#07475f] text-white flex items-center gap-2 self-start"
-        >
-          <Download className="h-4 w-4" />
-          Export to CSV
-        </Button>
-      </div>
+    <div className="flex flex-col gap-3.5 w-full">
+      {/* 1. Executive Insight Takeaway */}
+      {insights && (
+        <div className="flex items-start gap-2.5 bg-gradient-to-r from-[#095c7b]/10 via-teal-500/5 to-transparent border border-[#095c7b]/20 rounded-xl p-3 text-xs text-slate-800">
+          <div className="p-1 rounded-md bg-[#095c7b] text-white shrink-0 mt-0.5">
+            <Sparkles className="h-3.5 w-3.5" />
+          </div>
+          <div className="flex-1 leading-relaxed">
+            <strong className="text-[#095c7b] font-semibold">AI Executive Insight:</strong> {insights}
+          </div>
+        </div>
+      )}
+
+      {/* 2. Query Scope Breakdown */}
       {renderBreakdown()}
 
-      <div className="border border-border rounded-lg overflow-hidden bg-white">
-        <Table>
-          <TableHeader className="bg-slate-50 border-border">
-            <TableRow>
-              {displayCols.map((col) => (
-                <TableHead key={col} className="text-slate-700 font-semibold capitalize">
-                  {col.replace(/([A-Z])/g, " $1")}
-                </TableHead>
-              ))}
-              <TableHead className="text-slate-700 font-semibold text-right">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {localRows.map((row, i) => {
-              const link = getRecordLink(row);
-              return (
-                <TableRow key={row.id || i} className="border-border hover:bg-slate-50/50">
-                  {displayCols.map((col) => {
-                    const val = row[col];
-                    if (col === "status" || col === "customerStatus" || col === "invoiceStatus") {
-                      return (
-                        <TableCell key={col}>
-                          <span
-                            className="px-2 py-0.5 rounded text-xs font-semibold text-white"
-                            style={{ backgroundColor: getStatusColor(val) }}
-                          >
-                            {val || "Standard"}
-                          </span>
-                        </TableCell>
-                      );
-                    }
-                    return (
-                      <TableCell key={col} className="text-slate-600 max-w-[220px] truncate">
-                        {formatCellValue(col, val)}
-                      </TableCell>
-                    );
-                  })}
-                  <TableCell className="text-right">
-                    {link ? (
-                      <Link
-                        href={link}
-                        className="inline-flex items-center gap-1.5 text-xs text-[#095c7b] hover:text-[#0b7095] font-semibold transition"
-                      >
-                        View Profile
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Link>
-                    ) : (
-                      <span className="text-muted-foreground text-xs font-medium">Read-Only</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+      {/* 3. Action Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
+        {/* Left: View Mode Toggle (for aggregate results) */}
+        {intent === "aggregate" && (
+          <div className="flex items-center gap-1 bg-white border border-slate-200 p-0.5 rounded-lg shadow-2xs">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode("chart")}
+              className={`h-7 px-2.5 text-xs rounded-md font-medium transition ${
+                viewMode === "chart"
+                  ? "bg-[#095c7b] text-white font-semibold shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <BarChart3 className="h-3.5 w-3.5 mr-1" />
+              Chart
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode("table")}
+              className={`h-7 px-2.5 text-xs rounded-md font-medium transition ${
+                viewMode === "table"
+                  ? "bg-[#095c7b] text-white font-semibold shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <TableIcon className="h-3.5 w-3.5 mr-1" />
+              Table
+            </Button>
+          </div>
+        )}
+
+        {/* Right: Export & CRM Actions */}
+        <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportCSV}
+            className="h-7 px-2.5 text-xs bg-white hover:bg-slate-100 text-slate-700 border-slate-200 gap-1 font-medium shadow-2xs"
+            title="Download full CSV"
+          >
+            <Download className="h-3.5 w-3.5 text-slate-500" />
+            CSV
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCopyExcelTsv}
+            className="h-7 px-2.5 text-xs bg-white hover:bg-slate-100 text-slate-700 border-slate-200 gap-1 font-medium shadow-2xs"
+            title="Copy as Excel table to clipboard"
+          >
+            <Copy className="h-3.5 w-3.5 text-slate-500" />
+            Excel Copy
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCopySlackEmail}
+            className="h-7 px-2.5 text-xs bg-white hover:bg-slate-100 text-slate-700 border-slate-200 gap-1 font-medium shadow-2xs"
+            title="Copy formatted summary for Slack or Email"
+          >
+            <Share2 className="h-3.5 w-3.5 text-slate-500" />
+            Email/Slack
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportPdf}
+            disabled={pdfExporting}
+            className="h-7 px-2.5 text-xs bg-white hover:bg-slate-100 text-slate-700 border-slate-200 gap-1 font-medium shadow-2xs"
+            title="Generate branded executive PDF report"
+          >
+            <FileText className="h-3.5 w-3.5 text-[#095c7b]" />
+            {pdfExporting ? "PDF..." : "PDF Report"}
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => openTaskDialog()}
+            className="h-7 px-2.5 text-xs bg-[#095c7b] hover:bg-[#07475f] text-white gap-1 font-medium shadow-2xs"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            New Task
+          </Button>
+
+          {onTeachAiClick && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onTeachAiClick(spec?.humanSummary || humanSummary)}
+              className="h-7 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50 gap-1 font-medium"
+              title="Teach AI / Correct this interpretation"
+            >
+              <Lightbulb className="h-3.5 w-3.5" />
+              Correct AI
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* 4. Main Data Rendering (Count, Chart, or Table) */}
+      {intent === "count" ? (
+        <Card className="max-w-xs bg-white border-border shadow-xs">
+          <CardHeader className="pb-1 pt-3 px-4 border-b border-border/40">
+            <CardTitle className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+              Total Count
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-3 px-4 pb-4">
+            <div className="text-4xl font-bold text-[#095c7b] font-sans">{value}</div>
+          </CardContent>
+        </Card>
+      ) : intent === "aggregate" && viewMode === "chart" ? (
+        <div id={chartCaptureId}>
+          <AskChartView
+            data={rows}
+            title={spec?.groupBy ? `Grouped by ${spec.groupBy}` : "Data Breakdown"}
+            defaultChartType={chartType === "pie" ? "pie" : "bar"}
+            onCategoryClick={(category) => {
+              if (onFollowUpClick) {
+                onFollowUpClick(`Show records where ${spec?.groupBy || "status"} is "${category}"`);
+              }
+            }}
+          />
+        </div>
+      ) : (
+        /* Data Table View */
+        <div className="border border-border/80 rounded-xl overflow-hidden bg-white shadow-2xs">
+          <div className="overflow-x-auto max-h-96">
+            <Table>
+              <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                <TableRow>
+                  {columns.slice(0, 6).map((col) => (
+                    <TableHead key={col} className="text-slate-700 font-semibold text-xs capitalize py-2.5">
+                      {col}
+                    </TableHead>
+                  ))}
+                  <TableHead className="text-right text-xs font-semibold text-slate-700 py-2.5">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row, rIdx) => {
+                  const statusVal = row.customerStatus || row.status;
+                  const isHot = row.totalScore && row.totalScore >= 80;
+
+                  return (
+                    <TableRow
+                      key={rIdx}
+                      onClick={() => openRecordPreview(row)}
+                      className="cursor-pointer hover:bg-slate-50/80 transition border-border/60 text-xs"
+                    >
+                      {columns.slice(0, 6).map((col) => {
+                        const val = row[col];
+                        const isStatusCol = col === "customerStatus" || col === "status";
+
+                        return (
+                          <TableCell key={col} className="py-2.5 font-medium text-slate-800">
+                            {isStatusCol && val ? (
+                              <Badge className={`${getStatusColor(val)} border px-2 py-0.2 text-[11px] font-semibold`}>
+                                {val}
+                              </Badge>
+                            ) : typeof val === "boolean" ? (
+                              val ? "Yes" : "No"
+                            ) : typeof val === "number" ? (
+                              <span className="font-mono">{val}</span>
+                            ) : (
+                              String(val ?? "-")
+                            )}
+                          </TableCell>
+                        );
+                      })}
+
+                      <TableCell className="py-2.5 text-right font-medium" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openRecordPreview(row)}
+                            className="h-6 w-6 p-0 text-slate-400 hover:text-[#095c7b]"
+                            title="Quick Preview"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openTaskDialog(row)}
+                            className="h-6 w-6 p-0 text-slate-400 hover:text-[#095c7b]"
+                            title="Create Task"
+                          >
+                            <PlusCircle className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Suggested Follow-Up Chips */}
+      {suggestedFollowUps && suggestedFollowUps.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          <span className="text-[11px] font-semibold text-slate-400 mr-1 flex items-center gap-1">
+            <Sparkles className="h-3 w-3 text-[#095c7b]" /> Next Actions:
+          </span>
+          {suggestedFollowUps.map((prompt, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onFollowUpClick && onFollowUpClick(prompt)}
+              className="text-xs bg-white hover:bg-[#095c7b]/10 text-slate-700 hover:text-[#095c7b] border border-slate-200/80 px-2.5 py-1 rounded-full font-medium transition flex items-center gap-1 shadow-2xs"
+            >
+              {prompt} &rarr;
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog Modals */}
+      <QuickTaskDialog
+        isOpen={taskModalOpen}
+        onClose={() => setTaskModalOpen(false)}
+        leadId={taskDefaultData.leadId}
+        companyName={taskDefaultData.companyName}
+        defaultTitle={taskDefaultData.defaultTitle}
+      />
+
+      <RecordPreviewDrawer
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        record={selectedRecord}
+        collection={collection}
+        onOpenTaskModal={(rec) => openTaskDialog(rec)}
+      />
     </div>
   );
 }

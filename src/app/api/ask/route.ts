@@ -3,7 +3,7 @@ import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { askQueryFlow } from '@/ai/flows/ask-query-flow';
-import { validateQuerySpec, isQuerySpecSafe, getSydneyDateBoundaries, QuerySpec } from '@/lib/ask/query-spec';
+import { validateQuerySpec, isQuerySpecSafe, getSydneyDateBoundaries, QuerySpec, UserAiTrainingConfig } from '@/lib/ask/query-spec';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,17 +50,12 @@ const parseDateString = (dateVal: any): Date | null => {
  * Helper to resolve franchisee name(s) for a user profile from all possible fields or Firestore lookup
  */
 async function resolveUserFranchisee(userProfile: any, db: FirebaseFirestore.Firestore): Promise<string | string[] | null> {
-  // 1. Direct string property 'franchisee'
   if (typeof userProfile.franchisee === 'string' && userProfile.franchisee.trim()) {
     return userProfile.franchisee.trim();
   }
-
-  // 2. Direct string property 'franchiseeName'
   if (typeof userProfile.franchiseeName === 'string' && userProfile.franchiseeName.trim()) {
     return userProfile.franchiseeName.trim();
   }
-
-  // 3. Array of linkedFranchisees objects or strings
   if (Array.isArray(userProfile.linkedFranchisees) && userProfile.linkedFranchisees.length > 0) {
     const names = userProfile.linkedFranchisees
       .map((f: any) => (typeof f === 'string' ? f : (f?.franchiseeName || f?.name)))
@@ -69,7 +64,6 @@ async function resolveUserFranchisee(userProfile: any, db: FirebaseFirestore.Fir
     if (names.length > 1) return Array.from(new Set(names.map((n: string) => n.trim())));
   }
 
-  // 4. Collect all possible franchisee IDs
   const possibleIds: string[] = [];
   if (userProfile.franchiseeId) possibleIds.push(String(userProfile.franchiseeId));
   if (userProfile.franchiseeInternalId) possibleIds.push(String(userProfile.franchiseeInternalId));
@@ -84,7 +78,6 @@ async function resolveUserFranchisee(userProfile: any, db: FirebaseFirestore.Fir
 
   for (const franId of uniqueIds) {
     try {
-      // Try direct doc ID
       const franDoc = await db.collection('franchisees').doc(franId).get();
       if (franDoc.exists) {
         const name = franDoc.data()?.name || franDoc.data()?.franchiseeName || franDoc.data()?.territory;
@@ -94,25 +87,12 @@ async function resolveUserFranchisee(userProfile: any, db: FirebaseFirestore.Fir
         }
       }
 
-      // Try query by internalId (string or number)
       const qSnap = await db.collection('franchisees').where('internalId', '==', franId).limit(1).get();
       if (!qSnap.empty) {
         const name = qSnap.docs[0].data()?.name || qSnap.docs[0].data()?.franchiseeName || qSnap.docs[0].data()?.territory;
         if (name && typeof name === 'string' && name.trim()) {
           names.push(name.trim());
           continue;
-        }
-      }
-
-      const numId = Number(franId);
-      if (!isNaN(numId)) {
-        const qSnapNum = await db.collection('franchisees').where('internalId', '==', numId).limit(1).get();
-        if (!qSnapNum.empty) {
-          const name = qSnapNum.docs[0].data()?.name || qSnapNum.docs[0].data()?.franchiseeName || qSnapNum.docs[0].data()?.territory;
-          if (name && typeof name === 'string' && name.trim()) {
-            names.push(name.trim());
-            continue;
-          }
         }
       }
     } catch (err) {
@@ -123,7 +103,6 @@ async function resolveUserFranchisee(userProfile: any, db: FirebaseFirestore.Fir
   if (names.length === 1) return names[0];
   if (names.length > 1) return Array.from(new Set(names));
 
-  // 5. Try matching by email
   const userEmail = userProfile.email || userProfile.personalEmail;
   if (userEmail && typeof userEmail === 'string') {
     try {
@@ -161,12 +140,17 @@ export async function POST(request: NextRequest) {
 
     const uid = decodedToken.uid;
 
-    // 2. Fetch User Profile
-    const userDoc = await db.collection('users').doc(uid).get();
+    // 2. Fetch User Profile & User Training Configuration
+    const [userDoc, trainingDoc] = await Promise.all([
+      db.collection('users').doc(uid).get(),
+      db.collection('users').doc(uid).collection('ai_training').doc('preferences').get()
+    ]);
+
     if (!userDoc.exists) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 403 });
     }
     const userProfile = userDoc.data() || {};
+    const trainingConfig: UserAiTrainingConfig = trainingDoc.exists ? (trainingDoc.data() as UserAiTrainingConfig) : {};
 
     const role = (
       userProfile.activeRole ||
@@ -189,7 +173,6 @@ export async function POST(request: NextRequest) {
 
     const resolvedFranchisee = await resolveUserFranchisee(userProfile, db);
 
-    // If franchisee was resolved but not set as top-level 'franchisee' on Firestore user doc, backfill it
     if (resolvedFranchisee && !userProfile.franchisee) {
       const primaryFranName = Array.isArray(resolvedFranchisee) ? resolvedFranchisee[0] : resolvedFranchisee;
       db.collection('users').doc(uid).update({ franchisee: primaryFranName }).catch(err => {
@@ -201,9 +184,9 @@ export async function POST(request: NextRequest) {
       ? resolvedFranchisee.join(', ')
       : (resolvedFranchisee || '');
 
-    // 3. Run AI flow
+    // 3. Parse Request Body
     const body = await request.json();
-    const { question } = body;
+    const { question, conversationHistory, previousSpec } = body;
     if (!question || typeof question !== 'string') {
       return NextResponse.json({ error: 'Question is required' }, { status: 400 });
     }
@@ -218,6 +201,14 @@ export async function POST(request: NextRequest) {
           displayName: userProfile.displayName || userProfile.name || '',
           activeRole: role,
           franchisee: franchiseeStr,
+        },
+        conversationHistory: Array.isArray(conversationHistory) ? conversationHistory : [],
+        previousSpec: previousSpec || null,
+        userTrainingConfig: {
+          customInstructions: trainingConfig.customInstructions || '',
+          defaultChartType: trainingConfig.defaultChartType || 'bar',
+          customVocabulary: trainingConfig.customVocabulary || [],
+          corrections: trainingConfig.corrections || []
         }
       });
     } catch (flowErr: any) {
@@ -258,7 +249,6 @@ export async function POST(request: NextRequest) {
     // 5. Inject role-based scope restrictions
     const isFranchisee = role.toLowerCase() === 'franchisee' && !isPrivileged;
 
-    // Franchisee scoping: Must restrict all collections to their specific franchisee territory
     if (isFranchisee) {
       if (!resolvedFranchisee) {
         return NextResponse.json({
@@ -293,9 +283,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Non-privileged users query restrictions on 'users' collection
     if (spec.collection === 'users' && !isPrivileged && !isFranchisee) {
-      // Non-privileged users can only query their own user record
       spec.filters = [{ field: 'email', op: '==', value: userProfile.email }];
     }
 
@@ -309,24 +297,22 @@ export async function POST(request: NextRequest) {
       query = db.collection(spec.collection);
     }
 
-    // Apply filters
     for (const filter of spec.filters) {
       query = query.where(filter.field, filter.op, filter.value);
     }
 
+    const defaultChart = spec.chartType || (spec.intent === 'aggregate' ? (trainingConfig.defaultChartType || 'bar') : (spec.intent === 'list' ? 'table' : 'none'));
+
     if (spec.dateRange) {
-      // Set query size safety constraints (retrieve more for in-memory date filtering)
       if (spec.intent === 'list') {
         query = query.limit(1000);
       } else {
         query = query.limit(5000);
       }
 
-      // Execute Firestore query
       const snap = await query.get();
       let rows = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 
-      // Parse and filter dates in-memory
       const boundaries = getSydneyDateBoundaries(spec.dateRange.from || '');
       const fromDate = boundaries.from ? new Date(boundaries.from) : null;
       const toDate = boundaries.to ? new Date(boundaries.to) : null;
@@ -340,7 +326,6 @@ export async function POST(request: NextRequest) {
         return true;
       });
 
-      // Sort
       if (spec.sort) {
         const { field, direction } = spec.sort;
         rows.sort((a: any, b: any) => {
@@ -359,6 +344,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           spec,
           humanSummary: `${spec.humanSummary} — Total count: ${count}`,
+          insights: spec.insights || `Found ${count} total records matching the criteria.`,
+          chartType: 'none',
+          suggestedFollowUps: spec.suggestedFollowUps || ['Show me the detailed list', 'Break down by status', 'Export report to CSV'],
           value: count,
           columns: ['Count'],
           rows: [{ count }]
@@ -376,13 +364,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           spec,
           humanSummary: `${spec.humanSummary} — Grouped by ${spec.groupBy}`,
+          insights: spec.insights || `Grouped ${rows.length} records into ${aggRows.length} categories by ${spec.groupBy}.`,
+          chartType: defaultChart,
+          suggestedFollowUps: spec.suggestedFollowUps || [`Show records in top ${spec.groupBy}`, 'Export as PDF Report', 'Compare with previous period'],
           value: counts,
           columns: [spec.groupBy, 'Count'],
           rows: aggRows
         });
       }
 
-      // Slice list view to the target limit
       const limitVal = spec.limit ? Math.min(spec.limit, 1000) : 25;
       const sliced = rows.slice(0, limitVal);
       const columns = sliced.length > 0 ? Object.keys(sliced[0]).filter(k => k !== 'id') : [];
@@ -390,12 +380,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         spec,
         humanSummary: `${spec.humanSummary} — Showing ${sliced.length} result(s)`,
+        insights: spec.insights || `Retrieved ${sliced.length} records. Click any row for instant details.`,
+        chartType: 'table',
+        suggestedFollowUps: spec.suggestedFollowUps || ['Group these results by status', 'Export to CSV', 'Create follow-up task'],
         rows: sliced,
         columns
       });
 
     } else {
-      // Standard database-side execution for queries without date ranges
       if (spec.sort) {
         query = query.orderBy(spec.sort.field, spec.sort.direction);
       }
@@ -406,6 +398,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           spec,
           humanSummary: `${spec.humanSummary} — Total count: ${count}`,
+          insights: spec.insights || `Found ${count} total records matching the criteria.`,
+          chartType: 'none',
+          suggestedFollowUps: spec.suggestedFollowUps || ['Show me the detailed list', 'Break down by status', 'Export to CSV'],
           value: count,
           columns: ['Count'],
           rows: [{ count }]
@@ -433,6 +428,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           spec,
           humanSummary: `${spec.humanSummary} — Grouped by ${spec.groupBy}`,
+          insights: spec.insights || `Grouped ${rows.length} records into ${aggRows.length} categories by ${spec.groupBy}.`,
+          chartType: defaultChart,
+          suggestedFollowUps: spec.suggestedFollowUps || [`Show records in top ${spec.groupBy}`, 'Export as PDF Report', 'Compare with previous period'],
           value: counts,
           columns: [spec.groupBy, 'Count'],
           rows: aggRows
@@ -444,6 +442,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         spec,
         humanSummary: `${spec.humanSummary} — Showing ${rows.length} result(s)`,
+        insights: spec.insights || `Retrieved ${rows.length} records. Click any row for instant details.`,
+        chartType: 'table',
+        suggestedFollowUps: spec.suggestedFollowUps || ['Group these results by status', 'Export to CSV', 'Create follow-up task'],
         rows,
         columns
       });

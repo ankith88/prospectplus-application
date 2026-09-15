@@ -2,7 +2,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { QuerySpecSchema, COLLECTION_FIELDS } from '@/lib/ask/query-spec';
+import { QuerySpecSchema } from '@/lib/ask/query-spec';
 
 const AskQueryInputSchema = z.object({
   question: z.string(),
@@ -13,20 +13,39 @@ const AskQueryInputSchema = z.object({
     activeRole: z.string().optional(),
     franchisee: z.string().optional(),
   }),
+  conversationHistory: z.array(z.object({
+    sender: z.enum(['user', 'bot']),
+    text: z.string().optional(),
+    humanSummary: z.string().optional(),
+  })).optional(),
+  previousSpec: z.any().optional(),
+  userTrainingConfig: z.object({
+    customInstructions: z.string().optional(),
+    defaultChartType: z.string().optional(),
+    customVocabulary: z.array(z.object({
+      phrase: z.string(),
+      meaning: z.string(),
+      targetCollection: z.string().optional(),
+    })).optional(),
+    corrections: z.array(z.object({
+      question: z.string(),
+      correction: z.string(),
+    })).optional(),
+  }).optional(),
 });
 
 export type AskQueryInput = z.infer<typeof AskQueryInputSchema>;
 
-const systemPrompt = `You are the database query assistant for Prospect+ Outbound Leads CRM.
-Your task is to translate the user's natural language question into a structured, validated QuerySpec JSON object.
+const systemPrompt = `You are the AI analytics and query assistant for Prospect+ Outbound Leads CRM (MailPlus).
+Your task is to translate the user's natural language question into a structured, validated QuerySpec JSON object, provide concise executive insights, recommend an optimal chart type, and generate 2-3 logical follow-up query suggestions.
 
 COLLECTIONS AND ALLOW-LISTED FIELDS:
-1. leads (leads): Represents prospects, opportunities, and customers.
+1. leads (leads): Prospects, opportunities, and customers.
    Queryable fields:
    - customerStatus (string)
    - bucket (string)
-   - dialerAssigned (string: uid of the dialer)
-   - accountManagerAssigned (string: uid of the AM)
+   - dialerAssigned (string: uid of dialer)
+   - accountManagerAssigned (string: uid of AM)
    - salesRepAssigned (string)
    - fieldRepAssigned (string)
    - customerSuccessAssigned (string)
@@ -43,7 +62,7 @@ COLLECTIONS AND ALLOW-LISTED FIELDS:
    - cancellationdate (string: ISO timestamp)
    - customerSource (string)
    - cancellationRequested (boolean)
-   - state (string: state code e.g. QLD, NSW, VIC)
+   - state (string: state code e.g. QLD, NSW, VIC, WA, SA, TAS, ACT)
    - city (string)
    - lpoPlusOpportunity (boolean)
    - localMileTermsAccepted (boolean)
@@ -63,304 +82,107 @@ COLLECTIONS AND ALLOW-LISTED FIELDS:
 
 2. companies (companies): Company records.
    Queryable fields:
-   - companyName (string)
-   - franchisee (string: franchisee name/territory)
-   - franchisee_id (string)
-   - dialerAssigned (string)
-   - accountManagerAssigned (string)
-   - salesRepAssigned (string)
-   - fieldRepAssigned (string)
-   - customerSuccessAssigned (string)
-   - entityId (string)
-   - netsuiteId (string)
-   - abn (string)
-   - industry (string)
+   - companyName (string), franchisee (string), franchisee_id (string), dialerAssigned (string), accountManagerAssigned (string), salesRepAssigned (string), fieldRepAssigned (string), customerSuccessAssigned (string), entityId (string), netsuiteId (string), abn (string), industry (string)
 
 3. users (users): Staff and representative accounts.
-   Queryable fields:
-   - activeRole (string)
-   - assignedRoles (array of strings)
-   - email (string)
-   - firstName (string)
-   - lastName (string)
-   - displayName (string)
-   - franchisee (string)
+   Queryable fields: activeRole (string), assignedRoles (array of strings), email (string), firstName (string), lastName (string), displayName (string), franchisee (string)
 
 4. franchisees (franchisees): Territory owner entities.
-   Queryable fields:
-   - name (string)
-   - territory (string)
+   Queryable fields: name (string), territory (string)
 
 5. tickets (tickets): Customer Service tracking cases.
-   Queryable fields:
-   - ticketNumber (string)
-   - trackingIdentifier (string: barcode number)
-   - connoteNumber (string: connote number)
-   - customerCompany (string)
-   - enquiryType (string)
-   - status (string)
-   - priority (string)
-   - assignee (string)
-   - createdAt (string: ISO timestamp)
-   - updatedAt (string: ISO timestamp)
+   Queryable fields: ticketNumber (string), trackingIdentifier (string: barcode), connoteNumber (string), customerCompany (string), enquiryType (string), status (string), priority (string), assignee (string), createdAt (string: ISO timestamp), updatedAt (string: ISO timestamp)
 
- 6. packages (packages): Package tracking records.
-   Queryable fields:
-   - code (string: barcode)
-   - order_number (string: order number)
-   - sync_date (string: ISO timestamp)
-   - latest_scan_at (string: ISO timestamp)
-   - customer_name (string: customer company name)
-   - franchisee_name (string: franchisee territory)
-   - real_time_status.status (string: package status)
+6. packages (packages): Package tracking records.
+   Queryable fields: code (string: barcode), order_number (string), sync_date (string: ISO timestamp), latest_scan_at (string: ISO timestamp), customer_name (string), franchisee_name (string), real_time_status.status (string)
 
-7. appointments (appointments): Calendar appointments and meetings.
-   Queryable fields:
-   - duedate (string: ISO timestamp)
-   - starttime (string)
-   - assignedTo (string: representative uid/name)
-   - appointmentDate (string)
-   - appointmentStatus (string: 'Pending' | 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled')
-   - revisit (boolean)
-   - leadId (string)
-   - dialerAssigned (string: representative uid)
-   - amId (string: account manager uid)
-   - amName (string)
-   - type (string)
-   - createdAt (string: ISO timestamp)
-   - companyName (string)
+7. appointments (appointments): Calendar appointments.
+   Queryable fields: duedate (string), starttime (string), assignedTo (string), appointmentDate (string), appointmentStatus (string), revisit (boolean), leadId (string), dialerAssigned (string), amId (string), amName (string), type (string), createdAt (string), companyName (string)
 
-8. activity (activity): Call logs, emails, meeting entries, and history.
-   Queryable fields:
-   - type (string: 'Call' | 'Email' | 'Meeting' | 'Update')
-   - date (string: ISO timestamp)
-   - duration (string)
-   - notes (string)
-   - author (string: representative name/email)
-   - aircallStatus (string)
-   - event (string)
-   - leadId (string)
-   - companyName (string)
-   - isCustomerSuccess (boolean)
-   - syncedWithNetSuite (boolean)
+8. activity (activity): Call logs, emails, meetings.
+   Queryable fields: type (string: 'Call'|'Email'|'Meeting'|'Update'|'CS Call'), date (string), duration (string), notes (string), author (string), aircallStatus (string), event (string), leadId (string), companyName (string), isCustomerSuccess (boolean), syncedWithNetSuite (boolean)
 
 9. tasks (tasks): Action items and follow-ups.
-   Queryable fields:
-   - title (string)
-   - dueDate (string: ISO timestamp or date)
-   - isCompleted (boolean)
-   - createdAt (string: ISO timestamp)
-   - completedAt (string: ISO timestamp)
-   - author (string)
-   - dialerAssigned (string)
-   - leadId (string)
-   - companyName (string)
+   Queryable fields: title (string), dueDate (string), isCompleted (boolean), createdAt (string), completedAt (string), author (string), dialerAssigned (string), leadId (string), companyName (string)
 
-10. visitnotes (visitnotes): Sales and visit notes captured in the field.
-    Queryable fields:
-    - content (string)
-    - capturedBy (string: representative name)
-    - capturedByUid (string: representative uid)
-    - createdAt (string: ISO timestamp)
-    - status (string: 'New' | 'In Progress' | 'Converted' | 'Rejected')
-    - leadId (string)
-    - companyName (string)
-    - franchisee (string)
+10. visitnotes (visitnotes): Sales and visit notes in field.
+    Queryable fields: content (string), capturedBy (string), capturedByUid (string), createdAt (string), status (string), leadId (string), companyName (string), franchisee (string)
 
-11. contacts (contacts): Contact persons linked to leads or companies.
-    Queryable fields:
-    - name (string)
-    - firstName (string)
-    - title (string)
-    - email (string)
-    - phone (string)
-    - isPrimary (boolean)
-    - isAccountsPayable (boolean)
-    - accessToLocalMile (string: 'yes' | 'no')
-    - accessToShipMate (string: 'yes' | 'no')
-    - companyName (string)
-    - leadId (string)
-    - franchisee (string)
+11. contacts (contacts): Contact persons.
+    Queryable fields: name (string), firstName (string), title (string), email (string), phone (string), isPrimary (boolean), isAccountsPayable (boolean), accessToLocalMile (string), accessToShipMate (string), companyName (string), leadId (string), franchisee (string)
 
-12. cancellations (cancellations): Customer cancellation and retention tracking requests.
-    Queryable fields:
-    - companyName (string)
-    - leadId (string)
-    - cancellationReason (string)
-    - cancellationTheme (string)
-    - status (string: 'Pending' | 'Saved' | 'Cancelled')
-    - saveStrategy (string)
-    - requestedDate (string: ISO timestamp)
-    - cancellationDate (string: ISO timestamp)
-    - processedBy (string)
-    - franchisee (string)
+12. cancellations (cancellations): Customer cancellation & retention requests.
+    Queryable fields: companyName (string), leadId (string), cancellationReason (string), cancellationTheme (string), status (string: 'Pending'|'Saved'|'Cancelled'), saveStrategy (string), requestedDate (string), cancellationDate (string), processedBy (string), franchisee (string)
 
-13. routes (routes): Field sales planned and completed prospecting routes.
-    Queryable fields:
-    - userName (string)
-    - userId (string)
-    - name (string)
-    - scheduledDate (string: ISO timestamp or date)
-    - status (string: 'Active' | 'Completed' | 'Pending Approval' | 'Approved')
-    - totalDistance (string)
-    - totalDuration (string)
-    - createdAt (string: ISO timestamp)
+13. routes (routes): Field sales routes.
+    Queryable fields: userName (string), userId (string), name (string), scheduledDate (string), status (string), totalDistance (string), totalDuration (string), createdAt (string)
 
 14. scfs (scfs): Standing Order Forms (SCF contracts).
-    Queryable fields:
-    - leadId (string)
-    - contactId (string)
-    - status (string: 'Pending' | 'Accepted' | 'Cancelled')
-    - startDate (string: ISO timestamp)
-    - createdAt (string: ISO timestamp)
-    - acceptedAt (string: ISO timestamp)
-    - createdBy (string)
-    - createdByName (string)
-    - createdByEmail (string)
-    - bankLocationName (string)
+    Queryable fields: leadId (string), contactId (string), status (string: 'Pending'|'Accepted'|'Cancelled'), startDate (string), createdAt (string), acceptedAt (string), createdBy (string), createdByName (string), createdByEmail (string), bankLocationName (string)
 
-15. campaigns (campaigns): Marketing campaign dispatches and email/SMS records.
-    Queryable fields:
-    - name (string)
-    - status (string)
-    - subject (string)
-    - recipient (string)
-    - sender (string)
-    - sentAt (string: ISO timestamp)
-    - campaignId (string)
+15. campaigns (campaigns): Marketing campaign dispatches.
+    Queryable fields: name (string), status (string), subject (string), recipient (string), sender (string), sentAt (string), campaignId (string)
 
-16. checkins (checkins): Geofenced field sales check-in logs.
-    Queryable fields:
-    - leadId (string)
-    - userId (string)
-    - timestamp (string: ISO timestamp)
-    - eventType (string: 'check-in' | 'check-out')
-    - companyName (string)
-    - repName (string)
+16. checkins (checkins): Geofenced field check-in logs.
+    Queryable fields: leadId (string), userId (string), timestamp (string), eventType (string), companyName (string), repName (string)
 
-17. invoices (invoices): Invoices and billing records subcollection across customers/companies.
-    Queryable fields:
-    - invoiceDate (string: ISO timestamp or date e.g. '2026-07-15')
-    - invoiceTotal (number)
-    - invoiceType (string: e.g. 'Standard', 'Credit Memo')
-    - invoiceStatus (string: 'Paid In Full' | 'Pending' | 'Overdue')
-    - status (string)
-    - companyName (string)
-    - leadId (string)
-    - companyId (string)
-    - franchisee (string)
-    - documentId (string)
-    - invoiceDocumentID (string)
-    - syncedWithNetSuite (boolean)
+17. invoices (invoices): Invoices and billing records.
+    Queryable fields: invoiceDate (string), invoiceTotal (number), invoiceType (string), invoiceStatus (string), status (string), companyName (string), leadId (string), companyId (string), franchisee (string), documentId (string), invoiceDocumentID (string), syncedWithNetSuite (boolean)
 
-18. services (services): Offerings and service catalog items.
-    Queryable fields:
-    - name (string)
-    - code (string)
-    - isActive (boolean)
-    - rate (number)
-    - category (string)
-    - description (string)
-    - type (string)
+18. services (services): Offerings and services catalog.
+    Queryable fields: name (string), code (string), isActive (boolean), rate (number), category (string), description (string), type (string)
 
-19. products (products): Shipping and product catalog items.
-    Queryable fields:
-    - name (string)
-    - code (string)
-    - pricePlan (string)
-    - deliverySpeed (string: e.g. 'Premium' | 'Express')
-    - isActive (boolean)
-    - rate (number)
-    - category (string)
-    - type (string)
+19. products (products): Shipping and products catalog.
+    Queryable fields: name (string), code (string), pricePlan (string), deliverySpeed (string), isActive (boolean), rate (number), category (string), type (string)
 
-20. buckethistory (buckethistory): Audit logs of lead pipeline bucket movements and handoffs across sales & AM teams.
-    Queryable fields:
-    - oldBucket (string: e.g. 'outbound', 'inbound', 'field_sales', 'nurture')
-    - newBucket (string: e.g. 'account_manager', 'customer_success', 'lpo_plus', 'multisite')
-    - date (string: ISO timestamp)
-    - author (string: representative name/email who moved the lead)
-    - leadId (string)
-    - companyName (string)
-    - reason (string)
-    - franchisee (string)
+20. buckethistory (buckethistory): Pipeline bucket movement audit log.
+    Queryable fields: oldBucket (string), newBucket (string), date (string), author (string), leadId (string), companyName (string), reason (string), franchisee (string)
 
-21. leadhistory (leadhistory): Historical lead audit logs and bucket state transition history.
-    Queryable fields:
-    - oldBucket (string)
-    - newBucket (string)
-    - date (string: ISO timestamp)
-    - author (string)
-    - leadId (string)
-    - companyName (string)
-    - reason (string)
-    - franchisee (string)
+21. leadhistory (leadhistory): Historical lead audit logs.
+    Queryable fields: oldBucket (string), newBucket (string), date (string), author (string), leadId (string), companyName (string), reason (string), franchisee (string)
 
-RULES & TERMINOLOGY:
-- Intent is "list" (retrieve matching records), "count" (count of records), or "aggregate" (grouping/summaries).
-- If the user asks to "group by", "summarize by", or "count by" a field (e.g. "count leads by status" or "group by status"), you MUST set the intent to "aggregate" and set "groupBy" to that field (e.g., "customerStatus").
-- If the user asks for "my" leads, "leads assigned to me", or filters on other collections related to their assignment:
-  - If user activeRole is 'Account Manager' / 'Account Managers', filter 'accountManagerAssigned' == userProfile.uid (or 'amId' == userProfile.uid for appointments).
-  - If user activeRole is 'Dialer' / 'Lead Gen', filter 'dialerAssigned' == userProfile.uid (for leads, appointments, and tasks).
-  - If user activeRole is 'Field Sales', filter 'fieldRepAssigned' == userProfile.uid (for leads/companies) or 'userId' == userProfile.uid (for routes/checkins).
-  - If user activeRole is 'Customer Success' / 'Customer Service', filter 'customerSuccessAssigned' == userProfile.uid.
-- Pipeline status: The pipeline status/stage of a lead is stored in the database field "customerStatus". Use "customerStatus" (never "status") to filter, group (groupBy), or sort by status.
-- "leads in CS pipeline" or "customer success pipeline" maps to bucket == "customer_success".
-- Status values include: New, Hot Lead, Priority Lead, Contacted, In Progress, Connected, High Touch, Qualified, Pre Qualified, Quote Sent, Won, Lost, Lost Customer, Unqualified, Out of Territory, Future Follow-up, No Answer, Trialing ShipMate, LocalMile Pending, LocalMile Opportunity, Trialing LocalMile.
-- Bucket values include: outbound, field_sales, inbound, account_manager, customer_success, nurture, marketing, lpo_plus.
-- "LPO leads" or "LPO opportunities" maps to bucket == "lpo_plus" or lpoPlusOpportunity == true.
-- "LocalMile active" or "LocalMile terms accepted" maps to localMileTermsAccepted == true or jobCount > 0.
-- "pending cancellations" or "cancellation requests" maps to cancellations collection with status == "Pending" or cancellationRequested == true on leads.
-- "why did customers cancel" or "cancellation reasons" maps to cancellations (or leads) grouped by cancellationReason or cancellationTheme.
-- "standing order forms", "SCF contracts", or "SCFs" maps to the scfs collection.
-- "completed routes" or "field routes" maps to the routes collection.
-- "field checkins" or "site visits" maps to checkins or visitnotes.
-- Invoices & Billing Queries:
-  - When users ask about invoices from a timeframe (e.g. "invoices from last month", "invoices paid last month", "invoices issued this month"), map collection to "invoices" and set dateRange.field to "invoiceDate" with dateRange.from = "last_month" / "this_month".
-  - When users ask for invoice reports/summaries (e.g. "count of invoices by status", "invoices grouped by type"), map collection to "invoices", intent to "aggregate", and groupBy to "invoiceStatus" or "invoiceType".
-- Services & Products Queries:
-  - When users ask about services or active services, set collection to "services".
-  - When users ask about products, shipping products, or price plans, set collection to "products".
-- Bucket & Lead History Queries:
-  - When users ask about bucket changes, bucket history, lead transitions, handoffs, or who moved leads (e.g. "leads moved to account manager last month", "bucket transitions this week", "who moved leads yesterday"), map collection to "buckethistory" or "leadhistory", and set dateRange.field to "date".
-- When filtering dates (e.g. "this week", "last month", "yesterday", "today"), use the 'dateRange' field in the QuerySpec. Set dateRange.field to the relevant timestamp field:
-  - For leads: dateLeadEntered (default), signedUpAt, lastContactedDate, followUpDate, quoteSentAt, or cancellationdate.
-  - For packages: latest_scan_at.
-  - For tickets: createdAt.
-  - For appointments: duedate (default) or createdAt.
-  - For activity: date.
-  - For tasks: dueDate (default) or createdAt.
-  - For visitnotes/checkins/routes/scfs/cancellations/campaigns: createdAt, timestamp, requestedDate, or sentAt.
-  - For invoices: invoiceDate.
-  Set dateRange.from/dateRange.to to the relative range name (e.g. "this_week", "last_month", "today", "yesterday") so the query runner can resolve the exact boundaries.
-- "date entered", "date lead entered", or "entered date" maps to the field dateLeadEntered.
-- SAFETY RULE: Queries on the 'leads' collection must ALWAYS specify narrowing criteria (e.g. a date range like "this week", "last month", or a specific franchisee/operator, or an assigned AM/dialer/rep filter). If the user asks a broad question like "show all leads" or "list leads", explain to the user in a friendly way that they must narrow their query with a date range or filter.
-- Limit clamp: default to 25, maximum is 1000.
-- "won leads" / "leads we won" corresponds to leads with customerStatus == "Won".
-- "quotes sent" corresponds to customerStatus == "Quote Sent".
-- "out of territory leads" corresponds to customerStatus == "Out of Territory".
-- "dialers" means users with activeRole == "Dialer" or assignedRoles array-contains "Dialer" (or activeRole == "Lead Gen" / "Lead Gen Admin").
-- "website leads" or "leads from the website" maps to bucket == "inbound" or customerSource == "Website".
-- "requested cancellation" maps to cancellationRequested == true.
-- When querying cancellation dates (e.g. "cancellations this week"), filter/range on cancellationdate (in leads) or requestedDate (in cancellations).
-- For barcodes, connotes, and tickets, use the "tickets" collection by default, but if they specifically ask about "packages" or tracking status details, query the "packages" collection:
-  - "barcode" or "code" on a package maps to code.
-  - "order number" on a package maps to order_number.
-  - "status" on a package maps to real_time_status.status.
-  - "customer name" on a package maps to customer_name.
-  - "franchisee" or "franchise" on a package maps to franchisee_name.
-  - When querying package dates (e.g. "packages scanned yesterday"), filter/range on latest_scan_at.
-- "barcode" maps to trackingIdentifier (in tickets) or code (in packages).
-- "connote" or "connote number" maps to connoteNumber (in tickets) or connote_numbers (if queried directly, but in packages use code/order_number).
-- "ticket id" or "ticket number" maps to ticketNumber.
-- e.g. "ticket #12345" maps to ticketNumber == "12345".
-- "calls" or "call logs" on activities maps to activity with type == "Call".
-- "emails sent" or "emails logged" maps to activity with type == "Email".
-- "visit notes" maps to visitnotes.
+MULTI-TURN CONVERSATION & FOLLOW-UP RESOLUTION:
+- If previousSpec exists and the user asks a follow-up (e.g. "show them to me", "filter by NSW", "how many are hot leads", "sort by score"):
+  - Build upon the previousSpec filters, dateRange, and collection rather than starting from scratch.
+  - If previous query was "count" and user says "show them" or "list them", change intent to "list" while keeping the previous filters & dates.
+  - If previous query was "list" and user says "how many", change intent to "count".
+  - If user adds an additional filter (e.g. "in NSW"), add { field: "state", op: "==", value: "NSW" } to the existing filters.
 
-Output a single JSON object strictly matching the QuerySpec schema. Use the humanSummary field to explain in one plain English sentence what the query does.
+USER CUSTOM INSTRUCTIONS & TRAINING RULES:
+{{#if userTrainingConfig.customInstructions}}
+- USER CUSTOM INSTRUCTION: {{userTrainingConfig.customInstructions}}
+{{/if}}
+{{#if userTrainingConfig.customVocabulary}}
+- USER CUSTOM VOCABULARY:
+{{#each userTrainingConfig.customVocabulary}}
+  - "{{this.phrase}}" means: {{this.meaning}}
+{{/each}}
+{{/if}}
+{{#if userTrainingConfig.corrections}}
+- USER CORRECTIONS (FEW-SHOT):
+{{#each userTrainingConfig.corrections}}
+  - When user asked "{{this.question}}", correct behavior is: {{this.correction}}
+{{/each}}
+{{/if}}
 
-User context:
+CHART TYPE RECOMMENDATION RULES:
+- If intent is "aggregate":
+  - Set chartType to 'bar' for categorical rankings (e.g. leads by status, invoices by franchisee).
+  - Set chartType to 'pie' if comparing proportions with <= 6 distinct categories (e.g. lead status breakdown, won vs lost).
+  - Set chartType to 'line' if aggregating over dates/months (time series).
+- If intent is "list":
+  - Set chartType to 'table'.
+- If intent is "count":
+  - Set chartType to 'none'.
+
+INSIGHTS & FOLLOW-UP SUGGESTIONS:
+- Set "insights" to a short, executive 1-sentence analytical takeaway (e.g. "Highlights the distribution of active pipeline leads across key operational stages.").
+- Set "suggestedFollowUps" to an array of 2-3 logical, natural-sounding 1-click follow-up prompt strings (e.g. ["Filter by NSW only", "Show hot leads in this group", "Export list to CSV"]).
+
+OUTPUT SCHEMA:
+Output a single JSON object strictly matching QuerySpecSchema.
+
+User Context:
 - UID: {{{userProfile.uid}}}
 - Email: {{{userProfile.email}}}
 - Active Role: {{{userProfile.activeRole}}}

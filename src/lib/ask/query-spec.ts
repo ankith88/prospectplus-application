@@ -116,10 +116,76 @@ export const QuerySpecSchema = z.object({
     to: z.string().optional()
   }).optional(),
   groupBy: z.string().optional(),
-  humanSummary: z.string()
+  chartType: z.enum(['bar', 'pie', 'line', 'table', 'none']).optional(),
+  humanSummary: z.string(),
+  insights: z.string().optional(),
+  suggestedFollowUps: z.array(z.string()).optional()
 });
 
 export type QuerySpec = z.infer<typeof QuerySpecSchema>;
+
+export interface UserAiTrainingConfig {
+  userId?: string;
+  customInstructions?: string;
+  defaultChartType?: 'bar' | 'pie' | 'table';
+  bookmarkedQueries?: {
+    id: string;
+    label: string;
+    queryText: string;
+    icon?: string;
+    createdAt?: string;
+  }[];
+  customVocabulary?: {
+    phrase: string;
+    meaning: string;
+    targetCollection?: string;
+  }[];
+  corrections?: {
+    id: string;
+    question: string;
+    correction: string;
+    createdAt: string;
+  }[];
+}
+
+export interface AskChatMessage {
+  id: string;
+  sender: 'user' | 'bot';
+  timestamp: string;
+  text?: string;
+  result?: {
+    spec: QuerySpec;
+    rows?: any[];
+    columns?: string[];
+    value?: any;
+    chartType?: 'bar' | 'pie' | 'line' | 'table' | 'none';
+    humanSummary: string;
+    insights?: string;
+    suggestedFollowUps?: string[];
+    comparison?: {
+      currentLabel: string;
+      previousLabel: string;
+      currentValue: number;
+      previousValue: number;
+      deltaPercentage: number;
+      isPositive: boolean;
+    };
+  };
+  error?: string;
+  suggestions?: string[];
+}
+
+export interface AskChatSession {
+  id: string;
+  userId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  lastMessageSnippet?: string;
+  messages: AskChatMessage[];
+}
+
 
 /**
  * Validates the spec against the allow-listed fields in code.
