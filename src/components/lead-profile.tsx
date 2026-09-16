@@ -8097,12 +8097,43 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         if (allAppointments.length === 0) return <p className="text-sm text-muted-foreground text-center">No appointments.</p>;
 
                         return allAppointments.map(a => {
-                            const dateStr = a.date || a.duedate;
-                            const person = a.amName || a.assignedTo;
+                            const tz = a.timezone || 'Australia/Sydney';
+                            const dateStr = a.date || a.duedate || a.appointmentDate;
+                            const person = a.amName || a.assignedTo || 'Unassigned';
+                            
+                            const rawTime = a.starttime || a.startTime;
+                            let timeStr = '';
+                            if (rawTime) {
+                                if (typeof rawTime === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(rawTime.trim())) {
+                                    const parts = rawTime.trim().split(':');
+                                    let hour = parseInt(parts[0], 10);
+                                    const minute = parts[1];
+                                    const ampm = hour >= 12 ? 'pm' : 'am';
+                                    hour = hour % 12 || 12;
+                                    timeStr = `${hour}:${minute} ${ampm}`;
+                                } else {
+                                    const parsedTime = new Date(rawTime);
+                                    if (!isNaN(parsedTime.getTime())) {
+                                        timeStr = formatInTimezone(rawTime, tz, { hour: 'numeric', minute: '2-digit', hour12: true });
+                                    } else {
+                                        timeStr = String(rawTime);
+                                    }
+                                }
+                            } else if (dateStr) {
+                                const parsedDate = new Date(dateStr);
+                                if (!isNaN(parsedDate.getTime())) {
+                                    if (typeof dateStr === 'string' && (dateStr.includes('T') || dateStr.includes(':'))) {
+                                        timeStr = formatInTimezone(dateStr, tz, { hour: 'numeric', minute: '2-digit', hour12: true });
+                                    }
+                                }
+                            }
+
+                            const formattedDate = dateStr ? formatInTimezone(dateStr, tz, 'PP') : 'Unknown';
+
                             return (
                                 <div key={a.id} className="text-sm p-3 bg-muted rounded-md shadow-sm border border-border/40 relative flex flex-col gap-1.5">
                                     <div className="flex justify-between items-start">
-                                        <div className="font-semibold text-foreground">Appt with {person} on {dateStr ? formatInTimezone(dateStr, a.timezone || 'Australia/Sydney', 'PP') : 'Unknown'}</div>
+                                        <div className="font-semibold text-foreground">Appt with {person} on {formattedDate}{timeStr ? ` at ${timeStr}` : ''}</div>
                                         <div className="flex items-center gap-2">
                                             {a.appointmentStatus && (
                                                 <Badge 
