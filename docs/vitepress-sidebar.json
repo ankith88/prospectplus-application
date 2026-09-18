@@ -1,0 +1,3770 @@
+[
+  {
+    "text": "Overview",
+    "items": [
+      {
+        "text": "Executive Summary",
+        "link": "/executive-summary"
+      },
+      {
+        "text": "Documentation Index",
+        "link": "/index"
+      },
+      {
+        "text": "Architecture Map",
+        "link": "/architecture"
+      }
+    ]
+  },
+  {
+    "text": "Specifications & Reference",
+    "items": [
+      {
+        "text": "REST API Routes",
+        "link": "/api/routes"
+      },
+      {
+        "text": "UI Components",
+        "link": "/components/ui"
+      }
+    ]
+  },
+  {
+    "text": "Modules",
+    "collapsed": true,
+    "items": [
+      {
+        "text": ".DS_Store",
+        "link": "/modules/.DS_Store"
+      },
+      {
+        "text": ".env.local",
+        "link": "/modules/.env.local"
+      },
+      {
+        "text": ".firebaserc",
+        "link": "/modules/.firebaserc"
+      },
+      {
+        "text": ".gitignore",
+        "link": "/modules/.gitignore"
+      },
+      {
+        "text": ".idx/dev.nix",
+        "link": "/modules/.idx_dev.nix"
+      },
+      {
+        "text": ".storybook/main.ts",
+        "link": "/modules/.storybook_main.ts"
+      },
+      {
+        "text": ".storybook/preview.tsx",
+        "link": "/modules/.storybook_preview.tsx"
+      },
+      {
+        "text": "Zee sales process/CONTRACT OF SALE OF BUSINESS - SAMPLE.docx",
+        "link": "/modules/Zee sales process_CONTRACT OF SALE OF BUSINESS - SAMPLE.docx"
+      },
+      {
+        "text": "Zee sales process/Confidentiality Deed_Mail  Plus -.docx",
+        "link": "/modules/Zee sales process_Confidentiality Deed_Mail  Plus -.docx"
+      },
+      {
+        "text": "Zee sales process/Deed of variation Exit Program Assistance Offer 18 November 2021_AU_Active01_909812951_Trinh_MMCD.docx",
+        "link": "/modules/Zee sales process_Deed of variation Exit Program Assistance Offer 18 November 2021_AU_Active01_909812951_Trinh_MMCD.docx"
+      },
+      {
+        "text": "Zee sales process/EOI -.docx",
+        "link": "/modules/Zee sales process_EOI -.docx"
+      },
+      {
+        "text": "Zee sales process/Franchise Sale Options for Franchisees.docx",
+        "link": "/modules/Zee sales process_Franchise Sale Options for Franchisees.docx"
+      },
+      {
+        "text": "Zee sales process/Franchisee IM Waterloo Alexandria.docx",
+        "link": "/modules/Zee sales process_Franchisee IM Waterloo Alexandria.docx"
+      },
+      {
+        "text": "Zee sales process/Mail Plus Key Fact Sheet for new Buyers.docx",
+        "link": "/modules/Zee sales process_Mail Plus Key Fact Sheet for new Buyers.docx"
+      },
+      {
+        "text": "Zee sales process/Request for Docs - New Template Legal Instructions_Arncliffe_MMCD_16062026.docx",
+        "link": "/modules/Zee sales process_Request for Docs - New Template Legal Instructions_Arncliffe_MMCD_16062026.docx"
+      },
+      {
+        "text": "apphosting.yaml",
+        "link": "/modules/apphosting.yaml"
+      },
+      {
+        "text": "check-franchisees.ts",
+        "link": "/modules/check-franchisees.ts"
+      },
+      {
+        "text": "check-leads.ts",
+        "link": "/modules/check-leads.ts"
+      },
+      {
+        "text": "check_date.js",
+        "link": "/modules/check_date.js"
+      },
+      {
+        "text": "check_lead.js",
+        "link": "/modules/check_lead.js"
+      },
+      {
+        "text": "components.json",
+        "link": "/modules/components.json"
+      },
+      {
+        "text": "docupulse.config.json",
+        "link": "/modules/docupulse.config.json"
+      },
+      {
+        "text": "firebase.json",
+        "link": "/modules/firebase.json"
+      },
+      {
+        "text": "firestore.indexes.json",
+        "link": "/modules/firestore.indexes.json"
+      },
+      {
+        "text": "firestore.rules",
+        "link": "/modules/firestore.rules"
+      },
+      {
+        "text": "fix_permissions.py",
+        "link": "/modules/fix_permissions.py"
+      },
+      {
+        "text": "functions/.DS_Store",
+        "link": "/modules/functions_.DS_Store"
+      },
+      {
+        "text": "functions/.env",
+        "link": "/modules/functions_.env"
+      },
+      {
+        "text": "functions/.eslintrc.js",
+        "link": "/modules/functions_.eslintrc.js"
+      },
+      {
+        "text": "functions/lib/backfillStatuses.js",
+        "link": "/modules/functions_lib_backfillStatuses.js"
+      },
+      {
+        "text": "functions/lib/backfillStatuses.js.map",
+        "link": "/modules/functions_lib_backfillStatuses.js.map"
+      },
+      {
+        "text": "functions/lib/callsReport.js",
+        "link": "/modules/functions_lib_callsReport.js"
+      },
+      {
+        "text": "functions/lib/callsReport.js.map",
+        "link": "/modules/functions_lib_callsReport.js.map"
+      },
+      {
+        "text": "functions/lib/franchiseeSync.js",
+        "link": "/modules/functions_lib_franchiseeSync.js"
+      },
+      {
+        "text": "functions/lib/franchiseeSync.js.map",
+        "link": "/modules/functions_lib_franchiseeSync.js.map"
+      },
+      {
+        "text": "functions/lib/index.js",
+        "link": "/modules/functions_lib_index.js"
+      },
+      {
+        "text": "functions/lib/index.js.map",
+        "link": "/modules/functions_lib_index.js.map"
+      },
+      {
+        "text": "functions/lib/invoices.js",
+        "link": "/modules/functions_lib_invoices.js"
+      },
+      {
+        "text": "functions/lib/invoices.js.map",
+        "link": "/modules/functions_lib_invoices.js.map"
+      },
+      {
+        "text": "functions/lib/journeyDispatcher.js",
+        "link": "/modules/functions_lib_journeyDispatcher.js"
+      },
+      {
+        "text": "functions/lib/journeyDispatcher.js.map",
+        "link": "/modules/functions_lib_journeyDispatcher.js.map"
+      },
+      {
+        "text": "functions/lib/leads.js",
+        "link": "/modules/functions_lib_leads.js"
+      },
+      {
+        "text": "functions/lib/leads.js.map",
+        "link": "/modules/functions_lib_leads.js.map"
+      },
+      {
+        "text": "functions/lib/localmileJobsReport.js",
+        "link": "/modules/functions_lib_localmileJobsReport.js"
+      },
+      {
+        "text": "functions/lib/localmileJobsReport.js.map",
+        "link": "/modules/functions_lib_localmileJobsReport.js.map"
+      },
+      {
+        "text": "functions/lib/mergeLeads.js",
+        "link": "/modules/functions_lib_mergeLeads.js"
+      },
+      {
+        "text": "functions/lib/mergeLeads.js.map",
+        "link": "/modules/functions_lib_mergeLeads.js.map"
+      },
+      {
+        "text": "functions/lib/overdueHotLeadsReport.js",
+        "link": "/modules/functions_lib_overdueHotLeadsReport.js"
+      },
+      {
+        "text": "functions/lib/overdueHotLeadsReport.js.map",
+        "link": "/modules/functions_lib_overdueHotLeadsReport.js.map"
+      },
+      {
+        "text": "functions/lib/packageHooks.js",
+        "link": "/modules/functions_lib_packageHooks.js"
+      },
+      {
+        "text": "functions/lib/packageHooks.js.map",
+        "link": "/modules/functions_lib_packageHooks.js.map"
+      },
+      {
+        "text": "functions/lib/products.js",
+        "link": "/modules/functions_lib_products.js"
+      },
+      {
+        "text": "functions/lib/products.js.map",
+        "link": "/modules/functions_lib_products.js.map"
+      },
+      {
+        "text": "functions/lib/reportsAggregation.js",
+        "link": "/modules/functions_lib_reportsAggregation.js"
+      },
+      {
+        "text": "functions/lib/reportsAggregation.js.map",
+        "link": "/modules/functions_lib_reportsAggregation.js.map"
+      },
+      {
+        "text": "functions/lib/salesSnapshotAggregator.js",
+        "link": "/modules/functions_lib_salesSnapshotAggregator.js"
+      },
+      {
+        "text": "functions/lib/salesSnapshotAggregator.js.map",
+        "link": "/modules/functions_lib_salesSnapshotAggregator.js.map"
+      },
+      {
+        "text": "functions/lib/salesSnapshotReport.js",
+        "link": "/modules/functions_lib_salesSnapshotReport.js"
+      },
+      {
+        "text": "functions/lib/salesSnapshotReport.js.map",
+        "link": "/modules/functions_lib_salesSnapshotReport.js.map"
+      },
+      {
+        "text": "functions/lib/scans.js",
+        "link": "/modules/functions_lib_scans.js"
+      },
+      {
+        "text": "functions/lib/scans.js.map",
+        "link": "/modules/functions_lib_scans.js.map"
+      },
+      {
+        "text": "functions/lib/scoringEngine.js",
+        "link": "/modules/functions_lib_scoringEngine.js"
+      },
+      {
+        "text": "functions/lib/scoringEngine.js.map",
+        "link": "/modules/functions_lib_scoringEngine.js.map"
+      },
+      {
+        "text": "functions/lib/services/PipelineEngine.js",
+        "link": "/modules/functions_lib_services_PipelineEngine.js"
+      },
+      {
+        "text": "functions/lib/services/PipelineEngine.js.map",
+        "link": "/modules/functions_lib_services_PipelineEngine.js.map"
+      },
+      {
+        "text": "functions/lib/services/emailDispatcher.js",
+        "link": "/modules/functions_lib_services_emailDispatcher.js"
+      },
+      {
+        "text": "functions/lib/services/emailDispatcher.js.map",
+        "link": "/modules/functions_lib_services_emailDispatcher.js.map"
+      },
+      {
+        "text": "functions/lib/services.js",
+        "link": "/modules/functions_lib_services.js"
+      },
+      {
+        "text": "functions/lib/services.js.map",
+        "link": "/modules/functions_lib_services.js.map"
+      },
+      {
+        "text": "functions/lib/syncJobs.js",
+        "link": "/modules/functions_lib_syncJobs.js"
+      },
+      {
+        "text": "functions/lib/syncJobs.js.map",
+        "link": "/modules/functions_lib_syncJobs.js.map"
+      },
+      {
+        "text": "functions/lib/tickets.js",
+        "link": "/modules/functions_lib_tickets.js"
+      },
+      {
+        "text": "functions/lib/tickets.js.map",
+        "link": "/modules/functions_lib_tickets.js.map"
+      },
+      {
+        "text": "functions/lib/webhooks/aircall.js",
+        "link": "/modules/functions_lib_webhooks_aircall.js"
+      },
+      {
+        "text": "functions/lib/webhooks/aircall.js.map",
+        "link": "/modules/functions_lib_webhooks_aircall.js.map"
+      },
+      {
+        "text": "functions/lib/webhooks/netsuite.js",
+        "link": "/modules/functions_lib_webhooks_netsuite.js"
+      },
+      {
+        "text": "functions/lib/webhooks/netsuite.js.map",
+        "link": "/modules/functions_lib_webhooks_netsuite.js.map"
+      },
+      {
+        "text": "functions/lib/webhooks/packages.js",
+        "link": "/modules/functions_lib_webhooks_packages.js"
+      },
+      {
+        "text": "functions/lib/webhooks/packages.js.map",
+        "link": "/modules/functions_lib_webhooks_packages.js.map"
+      },
+      {
+        "text": "functions/package.json",
+        "link": "/modules/functions_package.json"
+      },
+      {
+        "text": "functions/src/backfillStatuses.ts",
+        "link": "/modules/functions_src_backfillStatuses.ts"
+      },
+      {
+        "text": "functions/src/callsReport.ts",
+        "link": "/modules/functions_src_callsReport.ts"
+      },
+      {
+        "text": "functions/src/franchiseeSync.ts",
+        "link": "/modules/functions_src_franchiseeSync.ts"
+      },
+      {
+        "text": "functions/src/index.ts",
+        "link": "/modules/functions_src_index.ts"
+      },
+      {
+        "text": "functions/src/invoices.ts",
+        "link": "/modules/functions_src_invoices.ts"
+      },
+      {
+        "text": "functions/src/journeyDispatcher.ts",
+        "link": "/modules/functions_src_journeyDispatcher.ts"
+      },
+      {
+        "text": "functions/src/leads.ts",
+        "link": "/modules/functions_src_leads.ts"
+      },
+      {
+        "text": "functions/src/localmileJobsReport.ts",
+        "link": "/modules/functions_src_localmileJobsReport.ts"
+      },
+      {
+        "text": "functions/src/mergeLeads.ts",
+        "link": "/modules/functions_src_mergeLeads.ts"
+      },
+      {
+        "text": "functions/src/overdueHotLeadsReport.ts",
+        "link": "/modules/functions_src_overdueHotLeadsReport.ts"
+      },
+      {
+        "text": "functions/src/packageHooks.ts",
+        "link": "/modules/functions_src_packageHooks.ts"
+      },
+      {
+        "text": "functions/src/products.ts",
+        "link": "/modules/functions_src_products.ts"
+      },
+      {
+        "text": "functions/src/reportsAggregation.ts",
+        "link": "/modules/functions_src_reportsAggregation.ts"
+      },
+      {
+        "text": "functions/src/salesSnapshotAggregator.ts",
+        "link": "/modules/functions_src_salesSnapshotAggregator.ts"
+      },
+      {
+        "text": "functions/src/salesSnapshotReport.ts",
+        "link": "/modules/functions_src_salesSnapshotReport.ts"
+      },
+      {
+        "text": "functions/src/scans.ts",
+        "link": "/modules/functions_src_scans.ts"
+      },
+      {
+        "text": "functions/src/scoringEngine.ts",
+        "link": "/modules/functions_src_scoringEngine.ts"
+      },
+      {
+        "text": "functions/src/services/PipelineEngine.ts",
+        "link": "/modules/functions_src_services_PipelineEngine.ts"
+      },
+      {
+        "text": "functions/src/services/emailDispatcher.ts",
+        "link": "/modules/functions_src_services_emailDispatcher.ts"
+      },
+      {
+        "text": "functions/src/services.ts",
+        "link": "/modules/functions_src_services.ts"
+      },
+      {
+        "text": "functions/src/syncJobs.ts",
+        "link": "/modules/functions_src_syncJobs.ts"
+      },
+      {
+        "text": "functions/src/tickets.ts",
+        "link": "/modules/functions_src_tickets.ts"
+      },
+      {
+        "text": "functions/src/webhooks/aircall.ts",
+        "link": "/modules/functions_src_webhooks_aircall.ts"
+      },
+      {
+        "text": "functions/src/webhooks/netsuite.ts",
+        "link": "/modules/functions_src_webhooks_netsuite.ts"
+      },
+      {
+        "text": "functions/src/webhooks/packages.ts",
+        "link": "/modules/functions_src_webhooks_packages.ts"
+      },
+      {
+        "text": "functions/tsconfig.json",
+        "link": "/modules/functions_tsconfig.json"
+      },
+      {
+        "text": "lpo_leads/LPOLeadProfilesListResults671.csv",
+        "link": "/modules/lpo_leads_LPOLeadProfilesListResults671.csv"
+      },
+      {
+        "text": "mockups/.DS_Store",
+        "link": "/modules/mockups_.DS_Store"
+      },
+      {
+        "text": "mockups/Batch 2 - J2 Enriched - Alex List.csv",
+        "link": "/modules/mockups_Batch 2 - J2 Enriched - Alex List.csv"
+      },
+      {
+        "text": "mockups/Import Leads - Sample Data.csv",
+        "link": "/modules/mockups_Import Leads - Sample Data.csv"
+      },
+      {
+        "text": "mockups/OneDrive_1_22-07-2026/Activated - No First Job [Replace all].html",
+        "link": "/modules/mockups_OneDrive_1_22-07-2026_Activated - No First Job [Replace all].html"
+      },
+      {
+        "text": "mockups/OneDrive_1_22-07-2026/LocalMile Not Activated - [Replace all].html",
+        "link": "/modules/mockups_OneDrive_1_22-07-2026_LocalMile Not Activated - [Replace all].html"
+      },
+      {
+        "text": "mockups/OneDrive_1_22-07-2026/Trial Complete.html",
+        "link": "/modules/mockups_OneDrive_1_22-07-2026_Trial Complete.html"
+      },
+      {
+        "text": "mockups/OneDrive_1_22-07-2026/Trial Nudge - Job 1 - Reminder 1 & 2.html",
+        "link": "/modules/mockups_OneDrive_1_22-07-2026_Trial Nudge - Job 1 - Reminder 1 & 2.html"
+      },
+      {
+        "text": "mockups/OneDrive_1_22-07-2026/Trial Nudge - Job 2 - Reminder 1 & 2.html",
+        "link": "/modules/mockups_OneDrive_1_22-07-2026_Trial Nudge - Job 2 - Reminder 1 & 2.html"
+      },
+      {
+        "text": "mockups/OneDrive_1_22-07-2026/Trial Nudge - Job 3 - Reminder 1 & 2.html",
+        "link": "/modules/mockups_OneDrive_1_22-07-2026_Trial Nudge - Job 3 - Reminder 1 & 2.html"
+      },
+      {
+        "text": "mockups/OneDrive_1_22-07-2026/Trial Nudge - Job 4 - Reminder 1 & 2.html",
+        "link": "/modules/mockups_OneDrive_1_22-07-2026_Trial Nudge - Job 4 - Reminder 1 & 2.html"
+      },
+      {
+        "text": "mockups/Prospect-Plus-Ticketing-Mockup-v5 1.html",
+        "link": "/modules/mockups_Prospect-Plus-Ticketing-Mockup-v5 1.html"
+      },
+      {
+        "text": "mockups/ProspectPlus Homepage Copy Revisions.docx",
+        "link": "/modules/mockups_ProspectPlus Homepage Copy Revisions.docx"
+      },
+      {
+        "text": "mockups/Service Upload V2.csv",
+        "link": "/modules/mockups_Service Upload V2.csv"
+      },
+      {
+        "text": "mockups/Service Upload.csv",
+        "link": "/modules/mockups_Service Upload.csv"
+      },
+      {
+        "text": "mockups/email templates/5-free-collections-info-outbound-v2-2026-07-22.html",
+        "link": "/modules/mockups_email templates_5-free-collections-info-outbound-v2-2026-07-22.html"
+      },
+      {
+        "text": "mockups/email templates/No Answer - ShipMate Info.html",
+        "link": "/modules/mockups_email templates_No Answer - ShipMate Info.html"
+      },
+      {
+        "text": "mockups/email templates/PUD - Thank You & Next Steps.html",
+        "link": "/modules/mockups_email templates_PUD - Thank You & Next Steps.html"
+      },
+      {
+        "text": "mockups/email templates/Send Quote - Product.html",
+        "link": "/modules/mockups_email templates_Send Quote - Product.html"
+      },
+      {
+        "text": "mockups/email templates/Send Quote - Service & Product.html",
+        "link": "/modules/mockups_email templates_Send Quote - Service & Product.html"
+      },
+      {
+        "text": "mockups/email templates/Send Quote - Service.html",
+        "link": "/modules/mockups_email templates_Send Quote - Service.html"
+      },
+      {
+        "text": "mockups/email templates/ShipMate Demo Confirmed.html",
+        "link": "/modules/mockups_email templates_ShipMate Demo Confirmed.html"
+      },
+      {
+        "text": "mockups/email templates/Shipping - Thank You & Next Steps.html",
+        "link": "/modules/mockups_email templates_Shipping - Thank You & Next Steps.html"
+      },
+      {
+        "text": "mockups/email templates/V2 - Send Quote - Service & Product.html",
+        "link": "/modules/mockups_email templates_V2 - Send Quote - Service & Product.html"
+      },
+      {
+        "text": "mockups/email templates/localmile-access-outbound-v2-2026-07-22.html",
+        "link": "/modules/mockups_email templates_localmile-access-outbound-v2-2026-07-22.html"
+      },
+      {
+        "text": "mockups/email templates/lost_no_response.html",
+        "link": "/modules/mockups_email templates_lost_no_response.html"
+      },
+      {
+        "text": "mockups/email templates/out_of_territory.html",
+        "link": "/modules/mockups_email templates_out_of_territory.html"
+      },
+      {
+        "text": "mockups/pp_email_base_template.html",
+        "link": "/modules/mockups_pp_email_base_template.html"
+      },
+      {
+        "text": "mockups/pp_email_template.html",
+        "link": "/modules/mockups_pp_email_template.html"
+      },
+      {
+        "text": "mockups/prospectplus-account-lookup-mockup.html",
+        "link": "/modules/mockups_prospectplus-account-lookup-mockup.html"
+      },
+      {
+        "text": "mockups/prospectplus-credentials-email.html",
+        "link": "/modules/mockups_prospectplus-credentials-email.html"
+      },
+      {
+        "text": "mockups/prospectplus-homepage-mockup.html",
+        "link": "/modules/mockups_prospectplus-homepage-mockup.html"
+      },
+      {
+        "text": "mockups/send_quote_prod.html",
+        "link": "/modules/mockups_send_quote_prod.html"
+      },
+      {
+        "text": "mockups/send_quote_serv_prod.html",
+        "link": "/modules/mockups_send_quote_serv_prod.html"
+      },
+      {
+        "text": "mockups/send_quote_service.html",
+        "link": "/modules/mockups_send_quote_service.html"
+      },
+      {
+        "text": "next-env.d.ts",
+        "link": "/modules/next-env.d.ts"
+      },
+      {
+        "text": "next.config.js",
+        "link": "/modules/next.config.js"
+      },
+      {
+        "text": "package.json",
+        "link": "/modules/package.json"
+      },
+      {
+        "text": "postcss.config.mjs",
+        "link": "/modules/postcss.config.mjs"
+      },
+      {
+        "text": "public/manifest.json",
+        "link": "/modules/public_manifest.json"
+      },
+      {
+        "text": "public/mockServiceWorker.js",
+        "link": "/modules/public_mockServiceWorker.js"
+      },
+      {
+        "text": "query_leads.js",
+        "link": "/modules/query_leads.js"
+      },
+      {
+        "text": "replace_kpi.js",
+        "link": "/modules/replace_kpi.js"
+      },
+      {
+        "text": "replace_render.js",
+        "link": "/modules/replace_render.js"
+      },
+      {
+        "text": "scratch/am-assignment-log.json",
+        "link": "/modules/scratch_am-assignment-log.json"
+      },
+      {
+        "text": "scratch/assign-account-managers.js",
+        "link": "/modules/scratch_assign-account-managers.js"
+      },
+      {
+        "text": "scratch/booking-url-log.json",
+        "link": "/modules/scratch_booking-url-log.json"
+      },
+      {
+        "text": "scratch/check-2008259.js",
+        "link": "/modules/scratch_check-2008259.js"
+      },
+      {
+        "text": "scratch/check-2010443-phone.js",
+        "link": "/modules/scratch_check-2010443-phone.js"
+      },
+      {
+        "text": "scratch/check-2010443.ts",
+        "link": "/modules/scratch_check-2010443.ts"
+      },
+      {
+        "text": "scratch/check-initiated.js",
+        "link": "/modules/scratch_check-initiated.js"
+      },
+      {
+        "text": "scratch/check-lead-2037339.ts",
+        "link": "/modules/scratch_check-lead-2037339.ts"
+      },
+      {
+        "text": "scratch/check-lpo-db-prod.js",
+        "link": "/modules/scratch_check-lpo-db-prod.js"
+      },
+      {
+        "text": "scratch/check-lpo-db.js",
+        "link": "/modules/scratch_check-lpo-db.js"
+      },
+      {
+        "text": "scratch/check-outbound-field-sales.ts",
+        "link": "/modules/scratch_check-outbound-field-sales.ts"
+      },
+      {
+        "text": "scratch/check-phone-db.js",
+        "link": "/modules/scratch_check-phone-db.js"
+      },
+      {
+        "text": "scratch/check-phone.ts",
+        "link": "/modules/scratch_check-phone.ts"
+      },
+      {
+        "text": "scratch/check_packages_live.js",
+        "link": "/modules/scratch_check_packages_live.js"
+      },
+      {
+        "text": "scratch/check_packages_sync.js",
+        "link": "/modules/scratch_check_packages_sync.js"
+      },
+      {
+        "text": "scratch/count-unassigned-leads.js",
+        "link": "/modules/scratch_count-unassigned-leads.js"
+      },
+      {
+        "text": "scratch/count_docs.js",
+        "link": "/modules/scratch_count_docs.js"
+      },
+      {
+        "text": "scratch/find-initiated-all.js",
+        "link": "/modules/scratch_find-initiated-all.js"
+      },
+      {
+        "text": "scratch/find-website-leads-missing-history.ts",
+        "link": "/modules/scratch_find-website-leads-missing-history.ts"
+      },
+      {
+        "text": "scratch/generate-general-booking-links.js",
+        "link": "/modules/scratch_generate-general-booking-links.js"
+      },
+      {
+        "text": "scratch/get_lead_details.js",
+        "link": "/modules/scratch_get_lead_details.js"
+      },
+      {
+        "text": "scratch/inspect-lead.js",
+        "link": "/modules/scratch_inspect-lead.js"
+      },
+      {
+        "text": "scratch/inspect_activities.js",
+        "link": "/modules/scratch_inspect_activities.js"
+      },
+      {
+        "text": "scratch/inspect_customer_packages.js",
+        "link": "/modules/scratch_inspect_customer_packages.js"
+      },
+      {
+        "text": "scratch/inspect_lead_1931805.js",
+        "link": "/modules/scratch_inspect_lead_1931805.js"
+      },
+      {
+        "text": "scratch/inspect_leads.js",
+        "link": "/modules/scratch_inspect_leads.js"
+      },
+      {
+        "text": "scratch/inspect_services.js",
+        "link": "/modules/scratch_inspect_services.js"
+      },
+      {
+        "text": "scratch/inspect_this_month_cache.js",
+        "link": "/modules/scratch_inspect_this_month_cache.js"
+      },
+      {
+        "text": "scratch/lead_output.json",
+        "link": "/modules/scratch_lead_output.json"
+      },
+      {
+        "text": "scratch/recalculate_all_ranges.js",
+        "link": "/modules/scratch_recalculate_all_ranges.js"
+      },
+      {
+        "text": "scratch/report_invoices.ts",
+        "link": "/modules/scratch_report_invoices.ts"
+      },
+      {
+        "text": "scratch/report_invoices_admin.js",
+        "link": "/modules/scratch_report_invoices_admin.js"
+      },
+      {
+        "text": "scratch/report_invoices_client.ts",
+        "link": "/modules/scratch_report_invoices_client.ts"
+      },
+      {
+        "text": "scratch/report_invoices_gcloud.js",
+        "link": "/modules/scratch_report_invoices_gcloud.js"
+      },
+      {
+        "text": "scratch/revert-account-managers.js",
+        "link": "/modules/scratch_revert-account-managers.js"
+      },
+      {
+        "text": "scratch/revert-booking-urls.js",
+        "link": "/modules/scratch_revert-booking-urls.js"
+      },
+      {
+        "text": "scratch/revert-general-booking-links.js",
+        "link": "/modules/scratch_revert-general-booking-links.js"
+      },
+      {
+        "text": "scratch/run-assign-lpo-am.ts",
+        "link": "/modules/scratch_run-assign-lpo-am.ts"
+      },
+      {
+        "text": "scratch/send-all-test-reports.js",
+        "link": "/modules/scratch_send-all-test-reports.js"
+      },
+      {
+        "text": "scratch/test-lead-1985895-reporting.ts",
+        "link": "/modules/scratch_test-lead-1985895-reporting.ts"
+      },
+      {
+        "text": "scratch/test-leads-fix.js",
+        "link": "/modules/scratch_test-leads-fix.js"
+      },
+      {
+        "text": "scratch/test-send-localmile-report.js",
+        "link": "/modules/scratch_test-send-localmile-report.js"
+      },
+      {
+        "text": "scratch/test_calc_top_users.js",
+        "link": "/modules/scratch_test_calc_top_users.js"
+      },
+      {
+        "text": "scratch/test_db.mjs",
+        "link": "/modules/scratch_test_db.mjs"
+      },
+      {
+        "text": "scratch/test_packages_query.js",
+        "link": "/modules/scratch_test_packages_query.js"
+      },
+      {
+        "text": "scratch/test_rest_query.js",
+        "link": "/modules/scratch_test_rest_query.js"
+      },
+      {
+        "text": "scratch/test_subcollection.js",
+        "link": "/modules/scratch_test_subcollection.js"
+      },
+      {
+        "text": "scratch/test_token_connection.js",
+        "link": "/modules/scratch_test_token_connection.js"
+      },
+      {
+        "text": "scratch/trigger-all-reports.js",
+        "link": "/modules/scratch_trigger-all-reports.js"
+      },
+      {
+        "text": "scratch/trigger-sales-snapshot-test-report.js",
+        "link": "/modules/scratch_trigger-sales-snapshot-test-report.js"
+      },
+      {
+        "text": "scratch/trigger-test-report.js",
+        "link": "/modules/scratch_trigger-test-report.js"
+      },
+      {
+        "text": "scratch/update-booking-urls.js",
+        "link": "/modules/scratch_update-booking-urls.js"
+      },
+      {
+        "text": "scratch/verify_2006779.ts",
+        "link": "/modules/scratch_verify_2006779.ts"
+      },
+      {
+        "text": "scratch-test.js",
+        "link": "/modules/scratch-test.js"
+      },
+      {
+        "text": "scratch.js",
+        "link": "/modules/scratch.js"
+      },
+      {
+        "text": "scratch.py",
+        "link": "/modules/scratch.py"
+      },
+      {
+        "text": "scripts/analyze-outbound-am.ts",
+        "link": "/modules/scripts_analyze-outbound-am.ts"
+      },
+      {
+        "text": "scripts/assign-blank-am-leads.ts",
+        "link": "/modules/scripts_assign-blank-am-leads.ts"
+      },
+      {
+        "text": "scripts/backfill-account-manager.ts",
+        "link": "/modules/scripts_backfill-account-manager.ts"
+      },
+      {
+        "text": "scripts/backfill-delivered-status.ts",
+        "link": "/modules/scripts_backfill-delivered-status.ts"
+      },
+      {
+        "text": "scripts/backfill-latest-scan-date.ts",
+        "link": "/modules/scripts_backfill-latest-scan-date.ts"
+      },
+      {
+        "text": "scripts/backfill-localmile-links.ts",
+        "link": "/modules/scripts_backfill-localmile-links.ts"
+      },
+      {
+        "text": "scripts/backfill-packages-denorm.ts",
+        "link": "/modules/scripts_backfill-packages-denorm.ts"
+      },
+      {
+        "text": "scripts/backfill-prospect-plus-id.ts",
+        "link": "/modules/scripts_backfill-prospect-plus-id.ts"
+      },
+      {
+        "text": "scripts/backfill-search-keywords.ts",
+        "link": "/modules/scripts_backfill-search-keywords.ts"
+      },
+      {
+        "text": "scripts/backfill-sof-links.ts",
+        "link": "/modules/scripts_backfill-sof-links.ts"
+      },
+      {
+        "text": "scripts/backfill-website-lead-bucket-history.ts",
+        "link": "/modules/scripts_backfill-website-lead-bucket-history.ts"
+      },
+      {
+        "text": "scripts/check-2003924.ts",
+        "link": "/modules/scripts_check-2003924.ts"
+      },
+      {
+        "text": "scripts/check-alexandria.ts",
+        "link": "/modules/scripts_check-alexandria.ts"
+      },
+      {
+        "text": "scripts/check-backfill-progress.ts",
+        "link": "/modules/scripts_check-backfill-progress.ts"
+      },
+      {
+        "text": "scripts/check-blank-am-leads.ts",
+        "link": "/modules/scripts_check-blank-am-leads.ts"
+      },
+      {
+        "text": "scripts/check-lead-company.ts",
+        "link": "/modules/scripts_check-lead-company.ts"
+      },
+      {
+        "text": "scripts/check-leads.ts",
+        "link": "/modules/scripts_check-leads.ts"
+      },
+      {
+        "text": "scripts/check-package.js",
+        "link": "/modules/scripts_check-package.js"
+      },
+      {
+        "text": "scripts/check-primary-contacts.ts",
+        "link": "/modules/scripts_check-primary-contacts.ts"
+      },
+      {
+        "text": "scripts/check-shipmate-portal-status.ts",
+        "link": "/modules/scripts_check-shipmate-portal-status.ts"
+      },
+      {
+        "text": "scripts/check-won-leads.ts",
+        "link": "/modules/scripts_check-won-leads.ts"
+      },
+      {
+        "text": "scripts/copy-company-to-lead.ts",
+        "link": "/modules/scripts_copy-company-to-lead.ts"
+      },
+      {
+        "text": "scripts/copy-main-territory-to-tge.ts",
+        "link": "/modules/scripts_copy-main-territory-to-tge.ts"
+      },
+      {
+        "text": "scripts/duplicate-won-leads.ts",
+        "link": "/modules/scripts_duplicate-won-leads.ts"
+      },
+      {
+        "text": "scripts/fetch-barcodes-2026.ts",
+        "link": "/modules/scripts_fetch-barcodes-2026.ts"
+      },
+      {
+        "text": "scripts/fetch-historical-barcodes.ts",
+        "link": "/modules/scripts_fetch-historical-barcodes.ts"
+      },
+      {
+        "text": "scripts/find-uncalled-leads.ts",
+        "link": "/modules/scripts_find-uncalled-leads.ts"
+      },
+      {
+        "text": "scripts/import-participating-lpos.ts",
+        "link": "/modules/scripts_import-participating-lpos.ts"
+      },
+      {
+        "text": "scripts/link-franchisee-user.ts",
+        "link": "/modules/scripts_link-franchisee-user.ts"
+      },
+      {
+        "text": "scripts/merge-leads-to-companies.ts",
+        "link": "/modules/scripts_merge-leads-to-companies.ts"
+      },
+      {
+        "text": "scripts/migrate-user-roles.ts",
+        "link": "/modules/scripts_migrate-user-roles.ts"
+      },
+      {
+        "text": "scripts/refactor_roles.js",
+        "link": "/modules/scripts_refactor_roles.js"
+      },
+      {
+        "text": "scripts/reset-sync-jobs.js",
+        "link": "/modules/scripts_reset-sync-jobs.js"
+      },
+      {
+        "text": "scripts/reset-sync-jobs.ts",
+        "link": "/modules/scripts_reset-sync-jobs.ts"
+      },
+      {
+        "text": "scripts/seed-cancellation-reasons.ts",
+        "link": "/modules/scripts_seed-cancellation-reasons.ts"
+      },
+      {
+        "text": "scripts/seed-territory-coordinates.ts",
+        "link": "/modules/scripts_seed-territory-coordinates.ts"
+      },
+      {
+        "text": "scripts/sync-leads-to-mailplus-v2.ts",
+        "link": "/modules/scripts_sync-leads-to-mailplus-v2.ts"
+      },
+      {
+        "text": "scripts/sync-real-tracking.ts",
+        "link": "/modules/scripts_sync-real-tracking.ts"
+      },
+      {
+        "text": "scripts/sync-uncalled-leads.ts",
+        "link": "/modules/scripts_sync-uncalled-leads.ts"
+      },
+      {
+        "text": "scripts/transfer-franchisee-ownership.ts",
+        "link": "/modules/scripts_transfer-franchisee-ownership.ts"
+      },
+      {
+        "text": "scripts/trigger-backfill.ts",
+        "link": "/modules/scripts_trigger-backfill.ts"
+      },
+      {
+        "text": "scripts/update-call-activities.ts",
+        "link": "/modules/scripts_update-call-activities.ts"
+      },
+      {
+        "text": "scripts/update-customer-status.ts",
+        "link": "/modules/scripts_update-customer-status.ts"
+      },
+      {
+        "text": "scripts/update-outbound-field-sales-false.ts",
+        "link": "/modules/scripts_update-outbound-field-sales-false.ts"
+      },
+      {
+        "text": "scripts/update-primary-contacts.ts",
+        "link": "/modules/scripts_update-primary-contacts.ts"
+      },
+      {
+        "text": "scripts/verify-email-fix.js",
+        "link": "/modules/scripts_verify-email-fix.js"
+      },
+      {
+        "text": "src/.DS_Store",
+        "link": "/modules/src_.DS_Store"
+      },
+      {
+        "text": "src/ai/dev.ts",
+        "link": "/modules/src_ai_dev.ts"
+      },
+      {
+        "text": "src/ai/flows/ai-lead-scoring.ts",
+        "link": "/modules/src_ai_flows_ai-lead-scoring.ts"
+      },
+      {
+        "text": "src/ai/flows/analyze-business-card.ts",
+        "link": "/modules/src_ai_flows_analyze-business-card.ts"
+      },
+      {
+        "text": "src/ai/flows/analyze-checkin-flow.ts",
+        "link": "/modules/src_ai_flows_analyze-checkin-flow.ts"
+      },
+      {
+        "text": "src/ai/flows/analyze-transcript-flow.ts",
+        "link": "/modules/src_ai_flows_analyze-transcript-flow.ts"
+      },
+      {
+        "text": "src/ai/flows/analyze-visit-note.ts",
+        "link": "/modules/src_ai_flows_analyze-visit-note.ts"
+      },
+      {
+        "text": "src/ai/flows/ask-query-flow.ts",
+        "link": "/modules/src_ai_flows_ask-query-flow.ts"
+      },
+      {
+        "text": "src/ai/flows/classify-email-intent.ts",
+        "link": "/modules/src_ai_flows_classify-email-intent.ts"
+      },
+      {
+        "text": "src/ai/flows/discover-multisite-branches-flow.ts",
+        "link": "/modules/src_ai_flows_discover-multisite-branches-flow.ts"
+      },
+      {
+        "text": "src/ai/flows/extract-franchisee-agreement.ts",
+        "link": "/modules/src_ai_flows_extract-franchisee-agreement.ts"
+      },
+      {
+        "text": "src/ai/flows/gather-company-insights.ts",
+        "link": "/modules/src_ai_flows_gather-company-insights.ts"
+      },
+      {
+        "text": "src/ai/flows/generate-email-draft.ts",
+        "link": "/modules/src_ai_flows_generate-email-draft.ts"
+      },
+      {
+        "text": "src/ai/flows/generate-marketing-asset.ts",
+        "link": "/modules/src_ai_flows_generate-marketing-asset.ts"
+      },
+      {
+        "text": "src/ai/flows/get-call-transcript-flow.ts",
+        "link": "/modules/src_ai_flows_get-call-transcript-flow.ts"
+      },
+      {
+        "text": "src/ai/flows/get-leads-tool.ts",
+        "link": "/modules/src_ai_flows_get-leads-tool.ts"
+      },
+      {
+        "text": "src/ai/flows/get-user-call-transcripts-flow.ts",
+        "link": "/modules/src_ai_flows_get-user-call-transcripts-flow.ts"
+      },
+      {
+        "text": "src/ai/flows/improve-script.ts",
+        "link": "/modules/src_ai_flows_improve-script.ts"
+      },
+      {
+        "text": "src/ai/flows/initiate-call-flow.ts",
+        "link": "/modules/src_ai_flows_initiate-call-flow.ts"
+      },
+      {
+        "text": "src/ai/flows/next-best-action.ts",
+        "link": "/modules/src_ai_flows_next-best-action.ts"
+      },
+      {
+        "text": "src/ai/flows/prospect-website-tool.ts",
+        "link": "/modules/src_ai_flows_prospect-website-tool.ts"
+      },
+      {
+        "text": "src/ai/flows/score-cold-call.ts",
+        "link": "/modules/src_ai_flows_score-cold-call.ts"
+      },
+      {
+        "text": "src/ai/flows/talking-point-suggestions.ts",
+        "link": "/modules/src_ai_flows_talking-point-suggestions.ts"
+      },
+      {
+        "text": "src/ai/genkit.ts",
+        "link": "/modules/src_ai_genkit.ts"
+      },
+      {
+        "text": "src/app/__/auth/action/page.tsx",
+        "link": "/modules/src_app____auth_action_page.tsx"
+      },
+      {
+        "text": "src/app/account-lookup/page.tsx",
+        "link": "/modules/src_app_account-lookup_page.tsx"
+      },
+      {
+        "text": "src/app/account-manager/multisites/page.tsx",
+        "link": "/modules/src_app_account-manager_multisites_page.tsx"
+      },
+      {
+        "text": "src/app/account-manager/pipeline/page.tsx",
+        "link": "/modules/src_app_account-manager_pipeline_page.tsx"
+      },
+      {
+        "text": "src/app/account-manager/reports/page.tsx",
+        "link": "/modules/src_app_account-manager_reports_page.tsx"
+      },
+      {
+        "text": "src/app/account-manager/settings/page.tsx",
+        "link": "/modules/src_app_account-manager_settings_page.tsx"
+      },
+      {
+        "text": "src/app/admin/all-leads/master-all-leads-client.tsx",
+        "link": "/modules/src_app_admin_all-leads_master-all-leads-client.tsx"
+      },
+      {
+        "text": "src/app/admin/all-leads/page.tsx",
+        "link": "/modules/src_app_admin_all-leads_page.tsx"
+      },
+      {
+        "text": "src/app/admin/app-tickets/page.tsx",
+        "link": "/modules/src_app_admin_app-tickets_page.tsx"
+      },
+      {
+        "text": "src/app/admin/brand-bot/page.tsx",
+        "link": "/modules/src_app_admin_brand-bot_page.tsx"
+      },
+      {
+        "text": "src/app/admin/dashboard/page.tsx",
+        "link": "/modules/src_app_admin_dashboard_page.tsx"
+      },
+      {
+        "text": "src/app/admin/data/page.tsx",
+        "link": "/modules/src_app_admin_data_page.tsx"
+      },
+      {
+        "text": "src/app/admin/deployments/page.tsx",
+        "link": "/modules/src_app_admin_deployments_page.tsx"
+      },
+      {
+        "text": "src/app/admin/financial-dashboard/page.tsx",
+        "link": "/modules/src_app_admin_financial-dashboard_page.tsx"
+      },
+      {
+        "text": "src/app/admin/franchisee-invoicing/page.tsx",
+        "link": "/modules/src_app_admin_franchisee-invoicing_page.tsx"
+      },
+      {
+        "text": "src/app/admin/franchisees/directory/page.tsx",
+        "link": "/modules/src_app_admin_franchisees_directory_page.tsx"
+      },
+      {
+        "text": "src/app/admin/franchisees/operators/page.tsx",
+        "link": "/modules/src_app_admin_franchisees_operators_page.tsx"
+      },
+      {
+        "text": "src/app/admin/franchisees/presales/[franchiseeId]/page.tsx",
+        "link": "/modules/src_app_admin_franchisees_presales_[franchiseeId]_page.tsx"
+      },
+      {
+        "text": "src/app/admin/franchisees/presales/page.tsx",
+        "link": "/modules/src_app_admin_franchisees_presales_page.tsx"
+      },
+      {
+        "text": "src/app/admin/franchisees/suburb-mapping/page.tsx",
+        "link": "/modules/src_app_admin_franchisees_suburb-mapping_page.tsx"
+      },
+      {
+        "text": "src/app/admin/franchisees/territory-map/page.tsx",
+        "link": "/modules/src_app_admin_franchisees_territory-map_page.tsx"
+      },
+      {
+        "text": "src/app/admin/import-lpos/page.tsx",
+        "link": "/modules/src_app_admin_import-lpos_page.tsx"
+      },
+      {
+        "text": "src/app/admin/in-review-leads/in-review-leads-client.tsx",
+        "link": "/modules/src_app_admin_in-review-leads_in-review-leads-client.tsx"
+      },
+      {
+        "text": "src/app/admin/in-review-leads/page.tsx",
+        "link": "/modules/src_app_admin_in-review-leads_page.tsx"
+      },
+      {
+        "text": "src/app/admin/lifecycle-dashboard/page.tsx",
+        "link": "/modules/src_app_admin_lifecycle-dashboard_page.tsx"
+      },
+      {
+        "text": "src/app/admin/locations/import/page.tsx",
+        "link": "/modules/src_app_admin_locations_import_page.tsx"
+      },
+      {
+        "text": "src/app/admin/login-report/page.tsx",
+        "link": "/modules/src_app_admin_login-report_page.tsx"
+      },
+      {
+        "text": "src/app/admin/mailbox/page.tsx",
+        "link": "/modules/src_app_admin_mailbox_page.tsx"
+      },
+      {
+        "text": "src/app/admin/marketing/campaigns/page.tsx",
+        "link": "/modules/src_app_admin_marketing_campaigns_page.tsx"
+      },
+      {
+        "text": "src/app/admin/marketing/import-leads/page.tsx",
+        "link": "/modules/src_app_admin_marketing_import-leads_page.tsx"
+      },
+      {
+        "text": "src/app/admin/marketing/lead-campaigns/page.tsx",
+        "link": "/modules/src_app_admin_marketing_lead-campaigns_page.tsx"
+      },
+      {
+        "text": "src/app/admin/marketing/lists/page.tsx",
+        "link": "/modules/src_app_admin_marketing_lists_page.tsx"
+      },
+      {
+        "text": "src/app/admin/marketing/nurture-journeys/[id]/enroll/page.tsx",
+        "link": "/modules/src_app_admin_marketing_nurture-journeys_[id]_enroll_page.tsx"
+      },
+      {
+        "text": "src/app/admin/marketing/nurture-journeys/page.tsx",
+        "link": "/modules/src_app_admin_marketing_nurture-journeys_page.tsx"
+      },
+      {
+        "text": "src/app/admin/marketing/nurture-report/page.tsx",
+        "link": "/modules/src_app_admin_marketing_nurture-report_page.tsx"
+      },
+      {
+        "text": "src/app/admin/marketing/page 2.tsx",
+        "link": "/modules/src_app_admin_marketing_page 2.tsx"
+      },
+      {
+        "text": "src/app/admin/marketing/page.tsx",
+        "link": "/modules/src_app_admin_marketing_page.tsx"
+      },
+      {
+        "text": "src/app/admin/mass-link-customers/mass-link-customers-client.tsx",
+        "link": "/modules/src_app_admin_mass-link-customers_mass-link-customers-client.tsx"
+      },
+      {
+        "text": "src/app/admin/mass-link-customers/page.tsx",
+        "link": "/modules/src_app_admin_mass-link-customers_page.tsx"
+      },
+      {
+        "text": "src/app/admin/partner-locations/page.tsx",
+        "link": "/modules/src_app_admin_partner-locations_page.tsx"
+      },
+      {
+        "text": "src/app/admin/settings/am-calendar/[amId]/page.tsx",
+        "link": "/modules/src_app_admin_settings_am-calendar_[amId]_page.tsx"
+      },
+      {
+        "text": "src/app/admin/settings/am-calendar/page.tsx",
+        "link": "/modules/src_app_admin_settings_am-calendar_page.tsx"
+      },
+      {
+        "text": "src/app/admin/settings/am-leave/page.tsx",
+        "link": "/modules/src_app_admin_settings_am-leave_page.tsx"
+      },
+      {
+        "text": "src/app/admin/settings/cancellation-reasons/page.tsx",
+        "link": "/modules/src_app_admin_settings_cancellation-reasons_page.tsx"
+      },
+      {
+        "text": "src/app/admin/settings/page.tsx",
+        "link": "/modules/src_app_admin_settings_page.tsx"
+      },
+      {
+        "text": "src/app/admin/settings/roles/page.tsx",
+        "link": "/modules/src_app_admin_settings_roles_page.tsx"
+      },
+      {
+        "text": "src/app/admin/tickets/[ticketId]/page.tsx",
+        "link": "/modules/src_app_admin_tickets_[ticketId]_page.tsx"
+      },
+      {
+        "text": "src/app/admin/tickets/archived/page.tsx",
+        "link": "/modules/src_app_admin_tickets_archived_page.tsx"
+      },
+      {
+        "text": "src/app/admin/tickets/components/bulk-upload-dialog.tsx",
+        "link": "/modules/src_app_admin_tickets_components_bulk-upload-dialog.tsx"
+      },
+      {
+        "text": "src/app/admin/tickets/create/components/ticket-form.tsx",
+        "link": "/modules/src_app_admin_tickets_create_components_ticket-form.tsx"
+      },
+      {
+        "text": "src/app/admin/tickets/create/page.tsx",
+        "link": "/modules/src_app_admin_tickets_create_page.tsx"
+      },
+      {
+        "text": "src/app/admin/tickets/it/page.tsx",
+        "link": "/modules/src_app_admin_tickets_it_page.tsx"
+      },
+      {
+        "text": "src/app/admin/tickets/operations/page.tsx",
+        "link": "/modules/src_app_admin_tickets_operations_page.tsx"
+      },
+      {
+        "text": "src/app/admin/tickets/page.tsx",
+        "link": "/modules/src_app_admin_tickets_page.tsx"
+      },
+      {
+        "text": "src/app/admin/tickets/reporting/page.tsx",
+        "link": "/modules/src_app_admin_tickets_reporting_page.tsx"
+      },
+      {
+        "text": "src/app/admin/unassigned-leads/page.tsx",
+        "link": "/modules/src_app_admin_unassigned-leads_page.tsx"
+      },
+      {
+        "text": "src/app/admin/unassigned-leads/unassigned-leads-client.tsx",
+        "link": "/modules/src_app_admin_unassigned-leads_unassigned-leads-client.tsx"
+      },
+      {
+        "text": "src/app/api/abn-lookup/route.ts",
+        "link": "/modules/src_app_api_abn-lookup_route.ts"
+      },
+      {
+        "text": "src/app/api/account-lookup/route.ts",
+        "link": "/modules/src_app_api_account-lookup_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/admin-approval/route.ts",
+        "link": "/modules/src_app_api_admin_admin-approval_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/assign-lpo-account-manager/route.ts",
+        "link": "/modules/src_app_api_admin_assign-lpo-account-manager_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/outbound-reporting/route.ts",
+        "link": "/modules/src_app_api_admin_outbound-reporting_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/scans/send-test-calls-report/route.ts",
+        "link": "/modules/src_app_api_admin_scans_send-test-calls-report_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/scans/send-test-franchisee-leads-report/route.ts",
+        "link": "/modules/src_app_api_admin_scans_send-test-franchisee-leads-report_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/scans/send-test-leads-report/route.ts",
+        "link": "/modules/src_app_api_admin_scans_send-test-leads-report_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/scans/send-test-localmile-jobs-report/route.ts",
+        "link": "/modules/src_app_api_admin_scans_send-test-localmile-jobs-report_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/scans/send-test-overdue-hot-leads-report/route.ts",
+        "link": "/modules/src_app_api_admin_scans_send-test-overdue-hot-leads-report_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/scans/send-test-report/route.ts",
+        "link": "/modules/src_app_api_admin_scans_send-test-report_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/scans/send-test-sales-snapshot-report/route.ts",
+        "link": "/modules/src_app_api_admin_scans_send-test-sales-snapshot-report_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/scans/send-test-tickets-report/route.ts",
+        "link": "/modules/src_app_api_admin_scans_send-test-tickets-report_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/scans/send-test-zee-gen-auto-response/route.ts",
+        "link": "/modules/src_app_api_admin_scans_send-test-zee-gen-auto-response_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/services/bulk-import/route.ts",
+        "link": "/modules/src_app_api_admin_services_bulk-import_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/transfer-franchisee-ownership/route.ts",
+        "link": "/modules/src_app_api_admin_transfer-franchisee-ownership_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/users/delete/route.ts",
+        "link": "/modules/src_app_api_admin_users_delete_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/users/reset-password-direct/route.ts",
+        "link": "/modules/src_app_api_admin_users_reset-password-direct_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/users/send-password-reset/route.ts",
+        "link": "/modules/src_app_api_admin_users_send-password-reset_route.ts"
+      },
+      {
+        "text": "src/app/api/admin/users/unlink-franchisee/route.ts",
+        "link": "/modules/src_app_api_admin_users_unlink-franchisee_route.ts"
+      },
+      {
+        "text": "src/app/api/aircall/webhook/[secret]/route.ts",
+        "link": "/modules/src_app_api_aircall_webhook_[secret]_route.ts"
+      },
+      {
+        "text": "src/app/api/aircall/webhook/route.ts",
+        "link": "/modules/src_app_api_aircall_webhook_route.ts"
+      },
+      {
+        "text": "src/app/api/ask/chats/route.ts",
+        "link": "/modules/src_app_api_ask_chats_route.ts"
+      },
+      {
+        "text": "src/app/api/ask/quick-task/route.ts",
+        "link": "/modules/src_app_api_ask_quick-task_route.ts"
+      },
+      {
+        "text": "src/app/api/ask/route.ts",
+        "link": "/modules/src_app_api_ask_route.ts"
+      },
+      {
+        "text": "src/app/api/ask/training/route.ts",
+        "link": "/modules/src_app_api_ask_training_route.ts"
+      },
+      {
+        "text": "src/app/api/calendar/availability/route.ts",
+        "link": "/modules/src_app_api_calendar_availability_route.ts"
+      },
+      {
+        "text": "src/app/api/calendar/book/route.ts",
+        "link": "/modules/src_app_api_calendar_book_route.ts"
+      },
+      {
+        "text": "src/app/api/calendar/book-training/route.ts",
+        "link": "/modules/src_app_api_calendar_book-training_route.ts"
+      },
+      {
+        "text": "src/app/api/calendar/booking-link/route.ts",
+        "link": "/modules/src_app_api_calendar_booking-link_route.ts"
+      },
+      {
+        "text": "src/app/api/calendar/cancel/route.ts",
+        "link": "/modules/src_app_api_calendar_cancel_route.ts"
+      },
+      {
+        "text": "src/app/api/calendar/cancel-appointment/route.ts",
+        "link": "/modules/src_app_api_calendar_cancel-appointment_route.ts"
+      },
+      {
+        "text": "src/app/api/calendar/training-reminders/route.ts",
+        "link": "/modules/src_app_api_calendar_training-reminders_route.ts"
+      },
+      {
+        "text": "src/app/api/calendar/update-training-status/route.ts",
+        "link": "/modules/src_app_api_calendar_update-training-status_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/send/route.ts",
+        "link": "/modules/src_app_api_campaigns_send_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/send 2/route.ts",
+        "link": "/modules/src_app_api_campaigns_send 2_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/send-custom-email/route.ts",
+        "link": "/modules/src_app_api_campaigns_send-custom-email_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/send-custom-sms/route.ts",
+        "link": "/modules/src_app_api_campaigns_send-custom-sms_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/send-direct/route.ts",
+        "link": "/modules/src_app_api_campaigns_send-direct_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/send-sms/route.ts",
+        "link": "/modules/src_app_api_campaigns_send-sms_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/test-connection/route.ts",
+        "link": "/modules/src_app_api_campaigns_test-connection_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/test-connection 2/route.ts",
+        "link": "/modules/src_app_api_campaigns_test-connection 2_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/track/click/route.ts",
+        "link": "/modules/src_app_api_campaigns_track_click_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/track/open/route.ts",
+        "link": "/modules/src_app_api_campaigns_track_open_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/track/unsubscribe/route.ts",
+        "link": "/modules/src_app_api_campaigns_track_unsubscribe_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/track 2/click/route.ts",
+        "link": "/modules/src_app_api_campaigns_track 2_click_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/track 2/open/route.ts",
+        "link": "/modules/src_app_api_campaigns_track 2_open_route.ts"
+      },
+      {
+        "text": "src/app/api/campaigns/track 2/unsubscribe/route.ts",
+        "link": "/modules/src_app_api_campaigns_track 2_unsubscribe_route.ts"
+      },
+      {
+        "text": "src/app/api/cancellations/ai-summary/route.ts",
+        "link": "/modules/src_app_api_cancellations_ai-summary_route.ts"
+      },
+      {
+        "text": "src/app/api/cancellations/route.ts",
+        "link": "/modules/src_app_api_cancellations_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/[id]/addresses/route.ts",
+        "link": "/modules/src_app_api_companies_[id]_addresses_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/[id]/exists/route.ts",
+        "link": "/modules/src_app_api_companies_[id]_exists_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/[id]/invoices/[invoiceId]/exists/route.ts",
+        "link": "/modules/src_app_api_companies_[id]_invoices_[invoiceId]_exists_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/[id]/invoices/[invoiceId]/route.ts",
+        "link": "/modules/src_app_api_companies_[id]_invoices_[invoiceId]_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/[id]/invoices/exists/route.ts",
+        "link": "/modules/src_app_api_companies_[id]_invoices_exists_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/[id]/invoices/route.ts",
+        "link": "/modules/src_app_api_companies_[id]_invoices_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/[id]/lost/route.ts",
+        "link": "/modules/src_app_api_companies_[id]_lost_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/[id]/packages/route.ts",
+        "link": "/modules/src_app_api_companies_[id]_packages_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/[id]/services/route.ts",
+        "link": "/modules/src_app_api_companies_[id]_services_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/cancel-cascade/route.ts",
+        "link": "/modules/src_app_api_companies_cancel-cascade_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/check/route.ts",
+        "link": "/modules/src_app_api_companies_check_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/exists/route.ts",
+        "link": "/modules/src_app_api_companies_exists_route.ts"
+      },
+      {
+        "text": "src/app/api/companies/services/route.ts",
+        "link": "/modules/src_app_api_companies_services_route.ts"
+      },
+      {
+        "text": "src/app/api/confidentiality-deed/sign/route.ts",
+        "link": "/modules/src_app_api_confidentiality-deed_sign_route.ts"
+      },
+      {
+        "text": "src/app/api/contacts/[id]/route.ts",
+        "link": "/modules/src_app_api_contacts_[id]_route.ts"
+      },
+      {
+        "text": "src/app/api/contacts/check-shipmate-access/route.ts",
+        "link": "/modules/src_app_api_contacts_check-shipmate-access_route.ts"
+      },
+      {
+        "text": "src/app/api/contacts/route.ts",
+        "link": "/modules/src_app_api_contacts_route.ts"
+      },
+      {
+        "text": "src/app/api/copilot/draft/route.ts",
+        "link": "/modules/src_app_api_copilot_draft_route.ts"
+      },
+      {
+        "text": "src/app/api/copilot/summary/route.ts",
+        "link": "/modules/src_app_api_copilot_summary_route.ts"
+      },
+      {
+        "text": "src/app/api/cron/process-scheduled-service-changes/route.ts",
+        "link": "/modules/src_app_api_cron_process-scheduled-service-changes_route.ts"
+      },
+      {
+        "text": "src/app/api/cs-requests/route.ts",
+        "link": "/modules/src_app_api_cs-requests_route.ts"
+      },
+      {
+        "text": "src/app/api/deed-of-variation/sign/route.ts",
+        "link": "/modules/src_app_api_deed-of-variation_sign_route.ts"
+      },
+      {
+        "text": "src/app/api/email/contact-am/route.ts",
+        "link": "/modules/src_app_api_email_contact-am_route.ts"
+      },
+      {
+        "text": "src/app/api/email/verify/route.ts",
+        "link": "/modules/src_app_api_email_verify_route.ts"
+      },
+      {
+        "text": "src/app/api/eoi/sign/route.ts",
+        "link": "/modules/src_app_api_eoi_sign_route.ts"
+      },
+      {
+        "text": "src/app/api/franchise-prospects/backdate-receipt/route.ts",
+        "link": "/modules/src_app_api_franchise-prospects_backdate-receipt_route.ts"
+      },
+      {
+        "text": "src/app/api/franchise-prospects/create/route.ts",
+        "link": "/modules/src_app_api_franchise-prospects_create_route.ts"
+      },
+      {
+        "text": "src/app/api/franchise-prospects/deposit/route.ts",
+        "link": "/modules/src_app_api_franchise-prospects_deposit_route.ts"
+      },
+      {
+        "text": "src/app/api/franchise-prospects/fact-sheet/route.ts",
+        "link": "/modules/src_app_api_franchise-prospects_fact-sheet_route.ts"
+      },
+      {
+        "text": "src/app/api/franchise-prospects/nab-confirm/route.ts",
+        "link": "/modules/src_app_api_franchise-prospects_nab-confirm_route.ts"
+      },
+      {
+        "text": "src/app/api/franchise-prospects/send-email/route.ts",
+        "link": "/modules/src_app_api_franchise-prospects_send-email_route.ts"
+      },
+      {
+        "text": "src/app/api/franchise-prospects/send-step-email/route.ts",
+        "link": "/modules/src_app_api_franchise-prospects_send-step-email_route.ts"
+      },
+      {
+        "text": "src/app/api/franchise-prospects/training/route.ts",
+        "link": "/modules/src_app_api_franchise-prospects_training_route.ts"
+      },
+      {
+        "text": "src/app/api/franchisee-im/sign/route.ts",
+        "link": "/modules/src_app_api_franchisee-im_sign_route.ts"
+      },
+      {
+        "text": "src/app/api/franchisees/[internalId]/route.ts",
+        "link": "/modules/src_app_api_franchisees_[internalId]_route.ts"
+      },
+      {
+        "text": "src/app/api/franchisees/[internalId]/upload-agreement/route.ts",
+        "link": "/modules/src_app_api_franchisees_[internalId]_upload-agreement_route.ts"
+      },
+      {
+        "text": "src/app/api/franchisees/ingest/route.ts",
+        "link": "/modules/src_app_api_franchisees_ingest_route.ts"
+      },
+      {
+        "text": "src/app/api/franchisees/presales/route.ts",
+        "link": "/modules/src_app_api_franchisees_presales_route.ts"
+      },
+      {
+        "text": "src/app/api/franchisees/presales/send-deed-email/route.ts",
+        "link": "/modules/src_app_api_franchisees_presales_send-deed-email_route.ts"
+      },
+      {
+        "text": "src/app/api/franchisees/presales/send-im-email/route.ts",
+        "link": "/modules/src_app_api_franchisees_presales_send-im-email_route.ts"
+      },
+      {
+        "text": "src/app/api/franchisees/route.ts",
+        "link": "/modules/src_app_api_franchisees_route.ts"
+      },
+      {
+        "text": "src/app/api/franchisees/sync/route.ts",
+        "link": "/modules/src_app_api_franchisees_sync_route.ts"
+      },
+      {
+        "text": "src/app/api/integrations/microsoft/auth/route.ts",
+        "link": "/modules/src_app_api_integrations_microsoft_auth_route.ts"
+      },
+      {
+        "text": "src/app/api/integrations/microsoft/callback/route.ts",
+        "link": "/modules/src_app_api_integrations_microsoft_callback_route.ts"
+      },
+      {
+        "text": "src/app/api/integrations/microsoft/webhook/route.ts",
+        "link": "/modules/src_app_api_integrations_microsoft_webhook_route.ts"
+      },
+      {
+        "text": "src/app/api/integrations/netsuite/send-email/route.ts",
+        "link": "/modules/src_app_api_integrations_netsuite_send-email_route.ts"
+      },
+      {
+        "text": "src/app/api/leads/[id]/addresses/route.ts",
+        "link": "/modules/src_app_api_leads_[id]_addresses_route.ts"
+      },
+      {
+        "text": "src/app/api/leads/[id]/route.ts",
+        "link": "/modules/src_app_api_leads_[id]_route.ts"
+      },
+      {
+        "text": "src/app/api/leads/check/route.ts",
+        "link": "/modules/src_app_api_leads_check_route.ts"
+      },
+      {
+        "text": "src/app/api/leads/child/route.ts",
+        "link": "/modules/src_app_api_leads_child_route.ts"
+      },
+      {
+        "text": "src/app/api/leads/parent/route.ts",
+        "link": "/modules/src_app_api_leads_parent_route.ts"
+      },
+      {
+        "text": "src/app/api/leads/route.ts",
+        "link": "/modules/src_app_api_leads_route.ts"
+      },
+      {
+        "text": "src/app/api/localmile/deactivate-account/route.ts",
+        "link": "/modules/src_app_api_localmile_deactivate-account_route.ts"
+      },
+      {
+        "text": "src/app/api/localmile/jobs/route.ts",
+        "link": "/modules/src_app_api_localmile_jobs_route.ts"
+      },
+      {
+        "text": "src/app/api/localmile/message-operator/route.ts",
+        "link": "/modules/src_app_api_localmile_message-operator_route.ts"
+      },
+      {
+        "text": "src/app/api/localmile/resend-auth/route.ts",
+        "link": "/modules/src_app_api_localmile_resend-auth_route.ts"
+      },
+      {
+        "text": "src/app/api/localmile/scheduled-jobs/depot-lodgements/route.ts",
+        "link": "/modules/src_app_api_localmile_scheduled-jobs_depot-lodgements_route.ts"
+      },
+      {
+        "text": "src/app/api/localmile/scheduled-jobs/route.ts",
+        "link": "/modules/src_app_api_localmile_scheduled-jobs_route.ts"
+      },
+      {
+        "text": "src/app/api/localmile/trial-nudge/process/route.ts",
+        "link": "/modules/src_app_api_localmile_trial-nudge_process_route.ts"
+      },
+      {
+        "text": "src/app/api/localmile-registration/[token]/route.ts",
+        "link": "/modules/src_app_api_localmile-registration_[token]_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo/[id]/route.ts",
+        "link": "/modules/src_app_api_lpo_[id]_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo-leads/bulk-import/route.ts",
+        "link": "/modules/src_app_api_lpo-leads_bulk-import_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo-leads/mark-lost/route.ts",
+        "link": "/modules/src_app_api_lpo-leads_mark-lost_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo-leads/route.ts",
+        "link": "/modules/src_app_api_lpo-leads_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo-leads/sync-portal-status/route.ts",
+        "link": "/modules/src_app_api_lpo-leads_sync-portal-status_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo-opportunities/share-email/route.ts",
+        "link": "/modules/src_app_api_lpo-opportunities_share-email_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo-opportunity/[id]/action/route.ts",
+        "link": "/modules/src_app_api_lpo-opportunity_[id]_action_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo-plus/provision/route.ts",
+        "link": "/modules/src_app_api_lpo-plus_provision_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo-plus/reset-password/route.ts",
+        "link": "/modules/src_app_api_lpo-plus_reset-password_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo-plus/sync-territory/route.ts",
+        "link": "/modules/src_app_api_lpo-plus_sync-territory_route.ts"
+      },
+      {
+        "text": "src/app/api/lpo-reporting/route.ts",
+        "link": "/modules/src_app_api_lpo-reporting_route.ts"
+      },
+      {
+        "text": "src/app/api/notifications/email/route.ts",
+        "link": "/modules/src_app_api_notifications_email_route.ts"
+      },
+      {
+        "text": "src/app/api/nurture/action-trigger/route.ts",
+        "link": "/modules/src_app_api_nurture_action-trigger_route.ts"
+      },
+      {
+        "text": "src/app/api/nurture/process/route.ts",
+        "link": "/modules/src_app_api_nurture_process_route.ts"
+      },
+      {
+        "text": "src/app/api/nurture/report/route.ts",
+        "link": "/modules/src_app_api_nurture_report_route.ts"
+      },
+      {
+        "text": "src/app/api/onboarding-requests/notify-email/route.ts",
+        "link": "/modules/src_app_api_onboarding-requests_notify-email_route.ts"
+      },
+      {
+        "text": "src/app/api/operators/[internalId]/route.ts",
+        "link": "/modules/src_app_api_operators_[internalId]_route.ts"
+      },
+      {
+        "text": "src/app/api/operators/ingest/route.ts",
+        "link": "/modules/src_app_api_operators_ingest_route.ts"
+      },
+      {
+        "text": "src/app/api/operators/route.ts",
+        "link": "/modules/src_app_api_operators_route.ts"
+      },
+      {
+        "text": "src/app/api/packages/lookup/route.ts",
+        "link": "/modules/src_app_api_packages_lookup_route.ts"
+      },
+      {
+        "text": "src/app/api/public/become-a-franchisee/route.ts",
+        "link": "/modules/src_app_api_public_become-a-franchisee_route.ts"
+      },
+      {
+        "text": "src/app/api/public/company/[id]/route.ts",
+        "link": "/modules/src_app_api_public_company_[id]_route.ts"
+      },
+      {
+        "text": "src/app/api/scans/report/route.ts",
+        "link": "/modules/src_app_api_scans_report_route.ts"
+      },
+      {
+        "text": "src/app/api/scans/top-users/route.ts",
+        "link": "/modules/src_app_api_scans_top-users_route.ts"
+      },
+      {
+        "text": "src/app/api/scf/generate-quote-preview/route.ts",
+        "link": "/modules/src_app_api_scf_generate-quote-preview_route.ts"
+      },
+      {
+        "text": "src/app/api/scf/send-quote/route.ts",
+        "link": "/modules/src_app_api_scf_send-quote_route.ts"
+      },
+      {
+        "text": "src/app/api/search/route.ts",
+        "link": "/modules/src_app_api_search_route.ts"
+      },
+      {
+        "text": "src/app/api/shipmate/jobs/route.ts",
+        "link": "/modules/src_app_api_shipmate_jobs_route.ts"
+      },
+      {
+        "text": "src/app/api/sign/disclosure/route.ts",
+        "link": "/modules/src_app_api_sign_disclosure_route.ts"
+      },
+      {
+        "text": "src/app/api/sign/franchise-agreement/route.ts",
+        "link": "/modules/src_app_api_sign_franchise-agreement_route.ts"
+      },
+      {
+        "text": "src/app/api/sign/request-for-docs/route.ts",
+        "link": "/modules/src_app_api_sign_request-for-docs_route.ts"
+      },
+      {
+        "text": "src/app/api/sof/sign/route.ts",
+        "link": "/modules/src_app_api_sof_sign_route.ts"
+      },
+      {
+        "text": "src/app/api/surcharge/route.ts",
+        "link": "/modules/src_app_api_surcharge_route.ts"
+      },
+      {
+        "text": "src/app/api/tasks/outlook-sync/route.ts",
+        "link": "/modules/src_app_api_tasks_outlook-sync_route.ts"
+      },
+      {
+        "text": "src/app/api/templates/generate-preview/route.ts",
+        "link": "/modules/src_app_api_templates_generate-preview_route.ts"
+      },
+      {
+        "text": "src/app/api/territory/boundary/route.ts",
+        "link": "/modules/src_app_api_territory_boundary_route.ts"
+      },
+      {
+        "text": "src/app/api/territory/check/route.ts",
+        "link": "/modules/src_app_api_territory_check_route.ts"
+      },
+      {
+        "text": "src/app/api/tickets/missed-sweep/route.ts",
+        "link": "/modules/src_app_api_tickets_missed-sweep_route.ts"
+      },
+      {
+        "text": "src/app/api/tickets/route.ts",
+        "link": "/modules/src_app_api_tickets_route.ts"
+      },
+      {
+        "text": "src/app/api/tracking/email-click/route.ts",
+        "link": "/modules/src_app_api_tracking_email-click_route.ts"
+      },
+      {
+        "text": "src/app/api/tracking/email-open/route.ts",
+        "link": "/modules/src_app_api_tracking_email-open_route.ts"
+      },
+      {
+        "text": "src/app/api/tracking/route.ts",
+        "link": "/modules/src_app_api_tracking_route.ts"
+      },
+      {
+        "text": "src/app/api/users/check/route.ts",
+        "link": "/modules/src_app_api_users_check_route.ts"
+      },
+      {
+        "text": "src/app/api/v1/companies/[id]/exists/route.ts",
+        "link": "/modules/src_app_api_v1_companies_[id]_exists_route.ts"
+      },
+      {
+        "text": "src/app/api/v1/companies/[id]/invoices/[invoiceId]/exists/route.ts",
+        "link": "/modules/src_app_api_v1_companies_[id]_invoices_[invoiceId]_exists_route.ts"
+      },
+      {
+        "text": "src/app/api/v1/companies/[id]/invoices/[invoiceId]/route.ts",
+        "link": "/modules/src_app_api_v1_companies_[id]_invoices_[invoiceId]_route.ts"
+      },
+      {
+        "text": "src/app/api/v1/companies/[id]/invoices/exists/route.ts",
+        "link": "/modules/src_app_api_v1_companies_[id]_invoices_exists_route.ts"
+      },
+      {
+        "text": "src/app/api/v1/companies/[id]/invoices/route.ts",
+        "link": "/modules/src_app_api_v1_companies_[id]_invoices_route.ts"
+      },
+      {
+        "text": "src/app/api/v1/companies/[id]/services/route.ts",
+        "link": "/modules/src_app_api_v1_companies_[id]_services_route.ts"
+      },
+      {
+        "text": "src/app/api/v1/companies/exists/route.ts",
+        "link": "/modules/src_app_api_v1_companies_exists_route.ts"
+      },
+      {
+        "text": "src/app/api/v1/companies/services/route.ts",
+        "link": "/modules/src_app_api_v1_companies_services_route.ts"
+      },
+      {
+        "text": "src/app/app-layout.tsx",
+        "link": "/modules/src_app_app-layout.tsx"
+      },
+      {
+        "text": "src/app/app-tickets/create/page.tsx",
+        "link": "/modules/src_app_app-tickets_create_page.tsx"
+      },
+      {
+        "text": "src/app/app-tickets/page.tsx",
+        "link": "/modules/src_app_app-tickets_page.tsx"
+      },
+      {
+        "text": "src/app/appointments/page.tsx",
+        "link": "/modules/src_app_appointments_page.tsx"
+      },
+      {
+        "text": "src/app/ask/ask-client.tsx",
+        "link": "/modules/src_app_ask_ask-client.tsx"
+      },
+      {
+        "text": "src/app/ask/page.tsx",
+        "link": "/modules/src_app_ask_page.tsx"
+      },
+      {
+        "text": "src/app/auth/action/page.tsx",
+        "link": "/modules/src_app_auth_action_page.tsx"
+      },
+      {
+        "text": "src/app/book/[bookingUrlId]/page.tsx",
+        "link": "/modules/src_app_book_[bookingUrlId]_page.tsx"
+      },
+      {
+        "text": "src/app/calls/page.tsx",
+        "link": "/modules/src_app_calls_page.tsx"
+      },
+      {
+        "text": "src/app/capture-visit/page.tsx",
+        "link": "/modules/src_app_capture-visit_page.tsx"
+      },
+      {
+        "text": "src/app/check-in/[leadId]/manual/page.tsx",
+        "link": "/modules/src_app_check-in_[leadId]_manual_page.tsx"
+      },
+      {
+        "text": "src/app/check-in/[leadId]/page.tsx",
+        "link": "/modules/src_app_check-in_[leadId]_page.tsx"
+      },
+      {
+        "text": "src/app/check-in/[leadId]/select-services/page.tsx",
+        "link": "/modules/src_app_check-in_[leadId]_select-services_page.tsx"
+      },
+      {
+        "text": "src/app/check-in/[leadId]/voice/page.tsx",
+        "link": "/modules/src_app_check-in_[leadId]_voice_page.tsx"
+      },
+      {
+        "text": "src/app/check-in/printable/page.tsx",
+        "link": "/modules/src_app_check-in_printable_page.tsx"
+      },
+      {
+        "text": "src/app/check-ins/page.tsx",
+        "link": "/modules/src_app_check-ins_page.tsx"
+      },
+      {
+        "text": "src/app/companies/[id]/page.tsx",
+        "link": "/modules/src_app_companies_[id]_page.tsx"
+      },
+      {
+        "text": "src/app/completed-routes/page.tsx",
+        "link": "/modules/src_app_completed-routes_page.tsx"
+      },
+      {
+        "text": "src/app/confidentiality-deed/[token]/page.tsx",
+        "link": "/modules/src_app_confidentiality-deed_[token]_page.tsx"
+      },
+      {
+        "text": "src/app/customer-request/[companyId]/customer-request-client.tsx",
+        "link": "/modules/src_app_customer-request_[companyId]_customer-request-client.tsx"
+      },
+      {
+        "text": "src/app/customer-request/[companyId]/page.tsx",
+        "link": "/modules/src_app_customer-request_[companyId]_page.tsx"
+      },
+      {
+        "text": "src/app/customer-success/cancellation-reporting/page.tsx",
+        "link": "/modules/src_app_customer-success_cancellation-reporting_page.tsx"
+      },
+      {
+        "text": "src/app/customer-success/cancellations/page.tsx",
+        "link": "/modules/src_app_customer-success_cancellations_page.tsx"
+      },
+      {
+        "text": "src/app/customer-success/cs-requests/page.tsx",
+        "link": "/modules/src_app_customer-success_cs-requests_page.tsx"
+      },
+      {
+        "text": "src/app/customer-success/onboarding/page.tsx",
+        "link": "/modules/src_app_customer-success_onboarding_page.tsx"
+      },
+      {
+        "text": "src/app/customer-success/pipeline/page.tsx",
+        "link": "/modules/src_app_customer-success_pipeline_page.tsx"
+      },
+      {
+        "text": "src/app/customer-success/reporting/page.tsx",
+        "link": "/modules/src_app_customer-success_reporting_page.tsx"
+      },
+      {
+        "text": "src/app/deed-of-variation/[presaleId]/page.tsx",
+        "link": "/modules/src_app_deed-of-variation_[presaleId]_page.tsx"
+      },
+      {
+        "text": "src/app/door-to-door-reporting/page.tsx",
+        "link": "/modules/src_app_door-to-door-reporting_page.tsx"
+      },
+      {
+        "text": "src/app/eoi/[token]/page.tsx",
+        "link": "/modules/src_app_eoi_[token]_page.tsx"
+      },
+      {
+        "text": "src/app/fact-sheet/[token]/page.tsx",
+        "link": "/modules/src_app_fact-sheet_[token]_page.tsx"
+      },
+      {
+        "text": "src/app/field-activity-report/page.tsx",
+        "link": "/modules/src_app_field-activity-report_page.tsx"
+      },
+      {
+        "text": "src/app/field-sales/page.tsx",
+        "link": "/modules/src_app_field-sales_page.tsx"
+      },
+      {
+        "text": "src/app/field-sales/schedules/page.tsx",
+        "link": "/modules/src_app_field-sales_schedules_page.tsx"
+      },
+      {
+        "text": "src/app/franchisee-home/page.tsx",
+        "link": "/modules/src_app_franchisee-home_page.tsx"
+      },
+      {
+        "text": "src/app/franchisee-im/[token]/page.tsx",
+        "link": "/modules/src_app_franchisee-im_[token]_page.tsx"
+      },
+      {
+        "text": "src/app/franchisee-lead-verification/page.tsx",
+        "link": "/modules/src_app_franchisee-lead-verification_page.tsx"
+      },
+      {
+        "text": "src/app/franchisee-leads/page.tsx",
+        "link": "/modules/src_app_franchisee-leads_page.tsx"
+      },
+      {
+        "text": "src/app/globals.css",
+        "link": "/modules/src_app_globals.css"
+      },
+      {
+        "text": "src/app/hotel-leads/page.tsx",
+        "link": "/modules/src_app_hotel-leads_page.tsx"
+      },
+      {
+        "text": "src/app/inbound-leads/page.tsx",
+        "link": "/modules/src_app_inbound-leads_page.tsx"
+      },
+      {
+        "text": "src/app/inbound-reporting/page.tsx",
+        "link": "/modules/src_app_inbound-reporting_page.tsx"
+      },
+      {
+        "text": "src/app/layout.tsx",
+        "link": "/modules/src_app_layout.tsx"
+      },
+      {
+        "text": "src/app/leads/[id]/page.tsx",
+        "link": "/modules/src_app_leads_[id]_page.tsx"
+      },
+      {
+        "text": "src/app/leads/archive/page.tsx",
+        "link": "/modules/src_app_leads_archive_page.tsx"
+      },
+      {
+        "text": "src/app/leads/map/page.tsx",
+        "link": "/modules/src_app_leads_map_page.tsx"
+      },
+      {
+        "text": "src/app/leads/new/page.tsx",
+        "link": "/modules/src_app_leads_new_page.tsx"
+      },
+      {
+        "text": "src/app/leads/page.tsx",
+        "link": "/modules/src_app_leads_page.tsx"
+      },
+      {
+        "text": "src/app/leads/suppressions/page.tsx",
+        "link": "/modules/src_app_leads_suppressions_page.tsx"
+      },
+      {
+        "text": "src/app/localmile-registration/[token]/page.tsx",
+        "link": "/modules/src_app_localmile-registration_[token]_page.tsx"
+      },
+      {
+        "text": "src/app/lost-customers/page.tsx",
+        "link": "/modules/src_app_lost-customers_page.tsx"
+      },
+      {
+        "text": "src/app/lpo-leads/[id]/page.tsx",
+        "link": "/modules/src_app_lpo-leads_[id]_page.tsx"
+      },
+      {
+        "text": "src/app/lpo-leads/page.tsx",
+        "link": "/modules/src_app_lpo-leads_page.tsx"
+      },
+      {
+        "text": "src/app/lpo-opportunities/page.tsx",
+        "link": "/modules/src_app_lpo-opportunities_page.tsx"
+      },
+      {
+        "text": "src/app/lpo-opportunity/[id]/page.tsx",
+        "link": "/modules/src_app_lpo-opportunity_[id]_page.tsx"
+      },
+      {
+        "text": "src/app/lpo-opportunity/lpo-opportunity-client.tsx",
+        "link": "/modules/src_app_lpo-opportunity_lpo-opportunity-client.tsx"
+      },
+      {
+        "text": "src/app/lpo-reporting/page.tsx",
+        "link": "/modules/src_app_lpo-reporting_page.tsx"
+      },
+      {
+        "text": "src/app/marketing-analytics/page.tsx",
+        "link": "/modules/src_app_marketing-analytics_page.tsx"
+      },
+      {
+        "text": "src/app/multisite-reporting/page.tsx",
+        "link": "/modules/src_app_multisite-reporting_page.tsx"
+      },
+      {
+        "text": "src/app/multisites/page.tsx",
+        "link": "/modules/src_app_multisites_page.tsx"
+      },
+      {
+        "text": "src/app/my-franchise/page.tsx",
+        "link": "/modules/src_app_my-franchise_page.tsx"
+      },
+      {
+        "text": "src/app/operations/franchise-prospects/[id]/page.tsx",
+        "link": "/modules/src_app_operations_franchise-prospects_[id]_page.tsx"
+      },
+      {
+        "text": "src/app/operations/franchise-prospects/page.tsx",
+        "link": "/modules/src_app_operations_franchise-prospects_page.tsx"
+      },
+      {
+        "text": "src/app/operations/training-appointments/page.tsx",
+        "link": "/modules/src_app_operations_training-appointments_page.tsx"
+      },
+      {
+        "text": "src/app/outbound-dialer-performance/page.tsx",
+        "link": "/modules/src_app_outbound-dialer-performance_page.tsx"
+      },
+      {
+        "text": "src/app/page.tsx",
+        "link": "/modules/src_app_page.tsx"
+      },
+      {
+        "text": "src/app/prospecting-areas/page.tsx",
+        "link": "/modules/src_app_prospecting-areas_page.tsx"
+      },
+      {
+        "text": "src/app/reports/page.tsx",
+        "link": "/modules/src_app_reports_page.tsx"
+      },
+      {
+        "text": "src/app/reset-password/page.tsx",
+        "link": "/modules/src_app_reset-password_page.tsx"
+      },
+      {
+        "text": "src/app/sales-snapshot/page.tsx",
+        "link": "/modules/src_app_sales-snapshot_page.tsx"
+      },
+      {
+        "text": "src/app/saved-routes/page.tsx",
+        "link": "/modules/src_app_saved-routes_page.tsx"
+      },
+      {
+        "text": "src/app/scans/page.tsx",
+        "link": "/modules/src_app_scans_page.tsx"
+      },
+      {
+        "text": "src/app/scans/report/page.tsx",
+        "link": "/modules/src_app_scans_report_page.tsx"
+      },
+      {
+        "text": "src/app/scans/top-users/contact-report/page.tsx",
+        "link": "/modules/src_app_scans_top-users_contact-report_page.tsx"
+      },
+      {
+        "text": "src/app/scans/top-users/page.tsx",
+        "link": "/modules/src_app_scans_top-users_page.tsx"
+      },
+      {
+        "text": "src/app/scf/[scfId]/actions.ts",
+        "link": "/modules/src_app_scf_[scfId]_actions.ts"
+      },
+      {
+        "text": "src/app/scf/[scfId]/page.tsx",
+        "link": "/modules/src_app_scf_[scfId]_page.tsx"
+      },
+      {
+        "text": "src/app/scf/[scfId]/scf-client.tsx",
+        "link": "/modules/src_app_scf_[scfId]_scf-client.tsx"
+      },
+      {
+        "text": "src/app/sign/disclosure/[token]/page.tsx",
+        "link": "/modules/src_app_sign_disclosure_[token]_page.tsx"
+      },
+      {
+        "text": "src/app/sign/franchise-agreement/[token]/page.tsx",
+        "link": "/modules/src_app_sign_franchise-agreement_[token]_page.tsx"
+      },
+      {
+        "text": "src/app/sign/request-for-docs/[token]/page.tsx",
+        "link": "/modules/src_app_sign_request-for-docs_[token]_page.tsx"
+      },
+      {
+        "text": "src/app/signed-customers/page.tsx",
+        "link": "/modules/src_app_signed-customers_page.tsx"
+      },
+      {
+        "text": "src/app/signin/page.tsx",
+        "link": "/modules/src_app_signin_page.tsx"
+      },
+      {
+        "text": "src/app/sof/[id]/page.tsx",
+        "link": "/modules/src_app_sof_[id]_page.tsx"
+      },
+      {
+        "text": "src/app/sof/[id]/sof-client.tsx",
+        "link": "/modules/src_app_sof_[id]_sof-client.tsx"
+      },
+      {
+        "text": "src/app/tasks/page.tsx",
+        "link": "/modules/src_app_tasks_page.tsx"
+      },
+      {
+        "text": "src/app/transcripts/page.tsx",
+        "link": "/modules/src_app_transcripts_page.tsx"
+      },
+      {
+        "text": "src/app/unassigned-calls/page.tsx",
+        "link": "/modules/src_app_unassigned-calls_page.tsx"
+      },
+      {
+        "text": "src/app/unassigned_calls/page.tsx",
+        "link": "/modules/src_app_unassigned_calls_page.tsx"
+      },
+      {
+        "text": "src/app/unmatched-activities/page.tsx",
+        "link": "/modules/src_app_unmatched-activities_page.tsx"
+      },
+      {
+        "text": "src/app/visit-notes/page.tsx",
+        "link": "/modules/src_app_visit-notes_page.tsx"
+      },
+      {
+        "text": "src/components/access-denied.tsx",
+        "link": "/modules/src_components_access-denied.tsx"
+      },
+      {
+        "text": "src/components/account-manager/am-queue-view.tsx",
+        "link": "/modules/src_components_account-manager_am-queue-view.tsx"
+      },
+      {
+        "text": "src/components/account-manager/am-reports-dashboard.tsx",
+        "link": "/modules/src_components_account-manager_am-reports-dashboard.tsx"
+      },
+      {
+        "text": "src/components/account-manager/am-settings-dashboard.tsx",
+        "link": "/modules/src_components_account-manager_am-settings-dashboard.tsx"
+      },
+      {
+        "text": "src/components/account-manager/calendar-settings-config.tsx",
+        "link": "/modules/src_components_account-manager_calendar-settings-config.tsx"
+      },
+      {
+        "text": "src/components/account-manager/lead-email-dialog.tsx",
+        "link": "/modules/src_components_account-manager_lead-email-dialog.tsx"
+      },
+      {
+        "text": "src/components/account-manager/lead-notes-dialog.tsx",
+        "link": "/modules/src_components_account-manager_lead-notes-dialog.tsx"
+      },
+      {
+        "text": "src/components/account-manager/multisites-dashboard.tsx",
+        "link": "/modules/src_components_account-manager_multisites-dashboard.tsx"
+      },
+      {
+        "text": "src/components/account-manager/pipeline-dashboard.tsx",
+        "link": "/modules/src_components_account-manager_pipeline-dashboard.tsx"
+      },
+      {
+        "text": "src/components/add-contact-form.tsx",
+        "link": "/modules/src_components_add-contact-form.tsx"
+      },
+      {
+        "text": "src/components/address-autocomplete.tsx",
+        "link": "/modules/src_components_address-autocomplete.tsx"
+      },
+      {
+        "text": "src/components/admin/activity-search-deletion.tsx",
+        "link": "/modules/src_components_admin_activity-search-deletion.tsx"
+      },
+      {
+        "text": "src/components/admin/am-leave-management.tsx",
+        "link": "/modules/src_components_admin_am-leave-management.tsx"
+      },
+      {
+        "text": "src/components/admin/bulk-account-manager-updater.tsx",
+        "link": "/modules/src_components_admin_bulk-account-manager-updater.tsx"
+      },
+      {
+        "text": "src/components/admin/bulk-bucket-updater.tsx",
+        "link": "/modules/src_components_admin_bulk-bucket-updater.tsx"
+      },
+      {
+        "text": "src/components/admin/bulk-export-invoices.tsx",
+        "link": "/modules/src_components_admin_bulk-export-invoices.tsx"
+      },
+      {
+        "text": "src/components/admin/bulk-export-leads.tsx",
+        "link": "/modules/src_components_admin_bulk-export-leads.tsx"
+      },
+      {
+        "text": "src/components/admin/bulk-import-invoices.tsx",
+        "link": "/modules/src_components_admin_bulk-import-invoices.tsx"
+      },
+      {
+        "text": "src/components/admin/bulk-import-operators.tsx",
+        "link": "/modules/src_components_admin_bulk-import-operators.tsx"
+      },
+      {
+        "text": "src/components/admin/bulk-import-products.tsx",
+        "link": "/modules/src_components_admin_bulk-import-products.tsx"
+      },
+      {
+        "text": "src/components/admin/bulk-import-services.tsx",
+        "link": "/modules/src_components_admin_bulk-import-services.tsx"
+      },
+      {
+        "text": "src/components/admin/campaign-deletion.tsx",
+        "link": "/modules/src_components_admin_campaign-deletion.tsx"
+      },
+      {
+        "text": "src/components/admin/cancellation-reasons-manager.tsx",
+        "link": "/modules/src_components_admin_cancellation-reasons-manager.tsx"
+      },
+      {
+        "text": "src/components/admin/create-user-dialog.tsx",
+        "link": "/modules/src_components_admin_create-user-dialog.tsx"
+      },
+      {
+        "text": "src/components/admin/daily-report-recipients.tsx",
+        "link": "/modules/src_components_admin_daily-report-recipients.tsx"
+      },
+      {
+        "text": "src/components/admin/data-deletion-table.tsx",
+        "link": "/modules/src_components_admin_data-deletion-table.tsx"
+      },
+      {
+        "text": "src/components/admin/deed-of-variation-dialog.tsx",
+        "link": "/modules/src_components_admin_deed-of-variation-dialog.tsx"
+      },
+      {
+        "text": "src/components/admin/dialer-assignment-date-updater.tsx",
+        "link": "/modules/src_components_admin_dialer-assignment-date-updater.tsx"
+      },
+      {
+        "text": "src/components/admin/financial-dashboard-client.tsx",
+        "link": "/modules/src_components_admin_financial-dashboard-client.tsx"
+      },
+      {
+        "text": "src/components/admin/franchisee-directory-client.tsx",
+        "link": "/modules/src_components_admin_franchisee-directory-client.tsx"
+      },
+      {
+        "text": "src/components/admin/franchisee-invoicing-client.tsx",
+        "link": "/modules/src_components_admin_franchisee-invoicing-client.tsx"
+      },
+      {
+        "text": "src/components/admin/granular-deletion.tsx",
+        "link": "/modules/src_components_admin_granular-deletion.tsx"
+      },
+      {
+        "text": "src/components/admin/import-locations-client.tsx",
+        "link": "/modules/src_components_admin_import-locations-client.tsx"
+      },
+      {
+        "text": "src/components/admin/import-lpos-client.tsx",
+        "link": "/modules/src_components_admin_import-lpos-client.tsx"
+      },
+      {
+        "text": "src/components/admin/lead-status-updater.tsx",
+        "link": "/modules/src_components_admin_lead-status-updater.tsx"
+      },
+      {
+        "text": "src/components/admin/lifecycle-dashboard.tsx",
+        "link": "/modules/src_components_admin_lifecycle-dashboard.tsx"
+      },
+      {
+        "text": "src/components/admin/login-report.tsx",
+        "link": "/modules/src_components_admin_login-report.tsx"
+      },
+      {
+        "text": "src/components/admin/lpo-lead-deletion.tsx",
+        "link": "/modules/src_components_admin_lpo-lead-deletion.tsx"
+      },
+      {
+        "text": "src/components/admin/operators-directory-client.tsx",
+        "link": "/modules/src_components_admin_operators-directory-client.tsx"
+      },
+      {
+        "text": "src/components/admin/partner-locations-client.tsx",
+        "link": "/modules/src_components_admin_partner-locations-client.tsx"
+      },
+      {
+        "text": "src/components/admin/send-notification-dialog.tsx",
+        "link": "/modules/src_components_admin_send-notification-dialog.tsx"
+      },
+      {
+        "text": "src/components/admin/suburb-mapping-client.tsx",
+        "link": "/modules/src_components_admin_suburb-mapping-client.tsx"
+      },
+      {
+        "text": "src/components/admin/territory-map-client.tsx",
+        "link": "/modules/src_components_admin_territory-map-client.tsx"
+      },
+      {
+        "text": "src/components/admin/territory-presale-wizard.tsx",
+        "link": "/modules/src_components_admin_territory-presale-wizard.tsx"
+      },
+      {
+        "text": "src/components/admin/ticket-deletion.tsx",
+        "link": "/modules/src_components_admin_ticket-deletion.tsx"
+      },
+      {
+        "text": "src/components/admin/upload-agreement-dialog.tsx",
+        "link": "/modules/src_components_admin_upload-agreement-dialog.tsx"
+      },
+      {
+        "text": "src/components/admin/user-management-table.tsx",
+        "link": "/modules/src_components_admin_user-management-table.tsx"
+      },
+      {
+        "text": "src/components/ai-email-copilot.tsx",
+        "link": "/modules/src_components_ai-email-copilot.tsx"
+      },
+      {
+        "text": "src/components/ai-thinking-wave.tsx",
+        "link": "/modules/src_components_ai-thinking-wave.tsx"
+      },
+      {
+        "text": "src/components/appointment-status-badge.tsx",
+        "link": "/modules/src_components_appointment-status-badge.tsx"
+      },
+      {
+        "text": "src/components/appointments/page.tsx",
+        "link": "/modules/src_components_appointments_page.tsx"
+      },
+      {
+        "text": "src/components/archived-leads-client.tsx",
+        "link": "/modules/src_components_archived-leads-client.tsx"
+      },
+      {
+        "text": "src/components/ask/ask-chart-view.tsx",
+        "link": "/modules/src_components_ask_ask-chart-view.tsx"
+      },
+      {
+        "text": "src/components/ask/ask-chatbot.tsx",
+        "link": "/modules/src_components_ask_ask-chatbot.tsx"
+      },
+      {
+        "text": "src/components/ask/ask-sidebar.tsx",
+        "link": "/modules/src_components_ask_ask-sidebar.tsx"
+      },
+      {
+        "text": "src/components/ask/ask-training-dialog.tsx",
+        "link": "/modules/src_components_ask_ask-training-dialog.tsx"
+      },
+      {
+        "text": "src/components/ask/quick-task-dialog.tsx",
+        "link": "/modules/src_components_ask_quick-task-dialog.tsx"
+      },
+      {
+        "text": "src/components/ask/record-preview-drawer.tsx",
+        "link": "/modules/src_components_ask_record-preview-drawer.tsx"
+      },
+      {
+        "text": "src/components/ask/report-pdf-generator.ts",
+        "link": "/modules/src_components_ask_report-pdf-generator.ts"
+      },
+      {
+        "text": "src/components/ask/results-view.tsx",
+        "link": "/modules/src_components_ask_results-view.tsx"
+      },
+      {
+        "text": "src/components/ask/terminology-panel.tsx",
+        "link": "/modules/src_components_ask_terminology-panel.tsx"
+      },
+      {
+        "text": "src/components/bucket-breakdown-bar.tsx",
+        "link": "/modules/src_components_bucket-breakdown-bar.tsx"
+      },
+      {
+        "text": "src/components/call-attempt-badge.tsx",
+        "link": "/modules/src_components_call-attempt-badge.tsx"
+      },
+      {
+        "text": "src/components/call-notification-listener.tsx",
+        "link": "/modules/src_components_call-notification-listener.tsx"
+      },
+      {
+        "text": "src/components/calls-client.tsx",
+        "link": "/modules/src_components_calls-client.tsx"
+      },
+      {
+        "text": "src/components/cancel-customer-dialog.tsx",
+        "link": "/modules/src_components_cancel-customer-dialog.tsx"
+      },
+      {
+        "text": "src/components/capture-visit/field-discovery-step.tsx",
+        "link": "/modules/src_components_capture-visit_field-discovery-step.tsx"
+      },
+      {
+        "text": "src/components/capture-visit/summary-step.tsx",
+        "link": "/modules/src_components_capture-visit_summary-step.tsx"
+      },
+      {
+        "text": "src/components/check-in/[leadId]/page.tsx",
+        "link": "/modules/src_components_check-in_[leadId]_page.tsx"
+      },
+      {
+        "text": "src/components/check-ins-client.tsx",
+        "link": "/modules/src_components_check-ins-client.tsx"
+      },
+      {
+        "text": "src/components/closest-auspost-banner.tsx",
+        "link": "/modules/src_components_closest-auspost-banner.tsx"
+      },
+      {
+        "text": "src/components/cold-call-scorecard.tsx",
+        "link": "/modules/src_components_cold-call-scorecard.tsx"
+      },
+      {
+        "text": "src/components/command-palette.tsx",
+        "link": "/modules/src_components_command-palette.tsx"
+      },
+      {
+        "text": "src/components/company-profile.tsx",
+        "link": "/modules/src_components_company-profile.tsx"
+      },
+      {
+        "text": "src/components/company-scan-metrics.tsx",
+        "link": "/modules/src_components_company-scan-metrics.tsx"
+      },
+      {
+        "text": "src/components/customer-success/book-onboarding-appointment-dialog.tsx",
+        "link": "/modules/src_components_customer-success_book-onboarding-appointment-dialog.tsx"
+      },
+      {
+        "text": "src/components/customer-success/cancellation-dashboard.tsx",
+        "link": "/modules/src_components_customer-success_cancellation-dashboard.tsx"
+      },
+      {
+        "text": "src/components/customer-success/cancellation-reporting-client.tsx",
+        "link": "/modules/src_components_customer-success_cancellation-reporting-client.tsx"
+      },
+      {
+        "text": "src/components/customer-success/cs-requests-dashboard.tsx",
+        "link": "/modules/src_components_customer-success_cs-requests-dashboard.tsx"
+      },
+      {
+        "text": "src/components/customer-success/onboarding-requests-client.tsx",
+        "link": "/modules/src_components_customer-success_onboarding-requests-client.tsx"
+      },
+      {
+        "text": "src/components/customer-success/organise-onboarding-dialog.tsx",
+        "link": "/modules/src_components_customer-success_organise-onboarding-dialog.tsx"
+      },
+      {
+        "text": "src/components/customer-success/pipeline-dashboard.tsx",
+        "link": "/modules/src_components_customer-success_pipeline-dashboard.tsx"
+      },
+      {
+        "text": "src/components/customer-success/reporting-client.tsx",
+        "link": "/modules/src_components_customer-success_reporting-client.tsx"
+      },
+      {
+        "text": "src/components/daily-area-log-dialog.tsx",
+        "link": "/modules/src_components_daily-area-log-dialog.tsx"
+      },
+      {
+        "text": "src/components/dashback-email-dialog.tsx",
+        "link": "/modules/src_components_dashback-email-dialog.tsx"
+      },
+      {
+        "text": "src/components/dialer-insights-dialog.tsx",
+        "link": "/modules/src_components_dialer-insights-dialog.tsx"
+      },
+      {
+        "text": "src/components/discover-multisites-dialog.tsx",
+        "link": "/modules/src_components_discover-multisites-dialog.tsx"
+      },
+      {
+        "text": "src/components/discovery-questions-form.tsx",
+        "link": "/modules/src_components_discovery-questions-form.tsx"
+      },
+      {
+        "text": "src/components/discovery-radar-chart.tsx",
+        "link": "/modules/src_components_discovery-radar-chart.tsx"
+      },
+      {
+        "text": "src/components/edit-address-dialog.tsx",
+        "link": "/modules/src_components_edit-address-dialog.tsx"
+      },
+      {
+        "text": "src/components/edit-contact-form.tsx",
+        "link": "/modules/src_components_edit-contact-form.tsx"
+      },
+      {
+        "text": "src/components/edit-lead-form.tsx",
+        "link": "/modules/src_components_edit-lead-form.tsx"
+      },
+      {
+        "text": "src/components/edit-note-dialog.tsx",
+        "link": "/modules/src_components_edit-note-dialog.tsx"
+      },
+      {
+        "text": "src/components/edit-postal-address-dialog.tsx",
+        "link": "/modules/src_components_edit-postal-address-dialog.tsx"
+      },
+      {
+        "text": "src/components/edit-task-dialog.tsx",
+        "link": "/modules/src_components_edit-task-dialog.tsx"
+      },
+      {
+        "text": "src/components/email-dialog.tsx",
+        "link": "/modules/src_components_email-dialog.tsx"
+      },
+      {
+        "text": "src/components/enter-multisite-lead-dialog.tsx",
+        "link": "/modules/src_components_enter-multisite-lead-dialog.tsx"
+      },
+      {
+        "text": "src/components/executive-dashboard-client.tsx",
+        "link": "/modules/src_components_executive-dashboard-client.tsx"
+      },
+      {
+        "text": "src/components/field-sales/page.tsx",
+        "link": "/modules/src_components_field-sales_page.tsx"
+      },
+      {
+        "text": "src/components/franchisee/my-franchise-client.tsx",
+        "link": "/modules/src_components_franchisee_my-franchise-client.tsx"
+      },
+      {
+        "text": "src/components/franchisee-home-client.tsx",
+        "link": "/modules/src_components_franchisee-home-client.tsx"
+      },
+      {
+        "text": "src/components/franchisee-lead-verification-client.tsx",
+        "link": "/modules/src_components_franchisee-lead-verification-client.tsx"
+      },
+      {
+        "text": "src/components/franchisee-leads-client.tsx",
+        "link": "/modules/src_components_franchisee-leads-client.tsx"
+      },
+      {
+        "text": "src/components/franchisee-switcher.tsx",
+        "link": "/modules/src_components_franchisee-switcher.tsx"
+      },
+      {
+        "text": "src/components/google-address-input.tsx",
+        "link": "/modules/src_components_google-address-input.tsx"
+      },
+      {
+        "text": "src/components/inbound-reports-client.tsx",
+        "link": "/modules/src_components_inbound-reports-client.tsx"
+      },
+      {
+        "text": "src/components/invoice-details-dialog.tsx",
+        "link": "/modules/src_components_invoice-details-dialog.tsx"
+      },
+      {
+        "text": "src/components/journey-builder/JourneyCanvas.tsx",
+        "link": "/modules/src_components_journey-builder_JourneyCanvas.tsx"
+      },
+      {
+        "text": "src/components/lead-products.tsx",
+        "link": "/modules/src_components_lead-products.tsx"
+      },
+      {
+        "text": "src/components/lead-profile.tsx",
+        "link": "/modules/src_components_lead-profile.tsx"
+      },
+      {
+        "text": "src/components/lead-status-badge.tsx",
+        "link": "/modules/src_components_lead-status-badge.tsx"
+      },
+      {
+        "text": "src/components/leads-client.tsx",
+        "link": "/modules/src_components_leads-client.tsx"
+      },
+      {
+        "text": "src/components/leads-map-client.tsx",
+        "link": "/modules/src_components_leads-map-client.tsx"
+      },
+      {
+        "text": "src/components/localmile-access-dialog.tsx",
+        "link": "/modules/src_components_localmile-access-dialog.tsx"
+      },
+      {
+        "text": "src/components/log-note-dialog.tsx",
+        "link": "/modules/src_components_log-note-dialog.tsx"
+      },
+      {
+        "text": "src/components/loss-reason-picker.tsx",
+        "link": "/modules/src_components_loss-reason-picker.tsx"
+      },
+      {
+        "text": "src/components/lost-customers/page.tsx",
+        "link": "/modules/src_components_lost-customers_page.tsx"
+      },
+      {
+        "text": "src/components/lpo-conversion-wizard.tsx",
+        "link": "/modules/src_components_lpo-conversion-wizard.tsx"
+      },
+      {
+        "text": "src/components/lpo-lead-profile.tsx",
+        "link": "/modules/src_components_lpo-lead-profile.tsx"
+      },
+      {
+        "text": "src/components/lpo-reporting-client.tsx",
+        "link": "/modules/src_components_lpo-reporting-client.tsx"
+      },
+      {
+        "text": "src/components/manage-additional-addresses-dialog.tsx",
+        "link": "/modules/src_components_manage-additional-addresses-dialog.tsx"
+      },
+      {
+        "text": "src/components/manage-services-dialog.tsx",
+        "link": "/modules/src_components_manage-services-dialog.tsx"
+      },
+      {
+        "text": "src/components/map-modal.tsx",
+        "link": "/modules/src_components_map-modal.tsx"
+      },
+      {
+        "text": "src/components/marketing/allocate-bucket-dialog.tsx",
+        "link": "/modules/src_components_marketing_allocate-bucket-dialog.tsx"
+      },
+      {
+        "text": "src/components/marketing/asset-library.tsx",
+        "link": "/modules/src_components_marketing_asset-library.tsx"
+      },
+      {
+        "text": "src/components/marketing/campaign-analytics 2.tsx",
+        "link": "/modules/src_components_marketing_campaign-analytics 2.tsx"
+      },
+      {
+        "text": "src/components/marketing/campaign-analytics.tsx",
+        "link": "/modules/src_components_marketing_campaign-analytics.tsx"
+      },
+      {
+        "text": "src/components/marketing/campaign-scheduler 2.tsx",
+        "link": "/modules/src_components_marketing_campaign-scheduler 2.tsx"
+      },
+      {
+        "text": "src/components/marketing/campaign-scheduler.tsx",
+        "link": "/modules/src_components_marketing_campaign-scheduler.tsx"
+      },
+      {
+        "text": "src/components/marketing/import-leads-client.tsx",
+        "link": "/modules/src_components_marketing_import-leads-client.tsx"
+      },
+      {
+        "text": "src/components/marketing/lead-campaigns-client.tsx",
+        "link": "/modules/src_components_marketing_lead-campaigns-client.tsx"
+      },
+      {
+        "text": "src/components/marketing/lead-nurture-card.tsx",
+        "link": "/modules/src_components_marketing_lead-nurture-card.tsx"
+      },
+      {
+        "text": "src/components/marketing/marketing-lists-client.tsx",
+        "link": "/modules/src_components_marketing_marketing-lists-client.tsx"
+      },
+      {
+        "text": "src/components/marketing/move-to-nurture-dialog.tsx",
+        "link": "/modules/src_components_marketing_move-to-nurture-dialog.tsx"
+      },
+      {
+        "text": "src/components/marketing/nurture-journeys.tsx",
+        "link": "/modules/src_components_marketing_nurture-journeys.tsx"
+      },
+      {
+        "text": "src/components/marketing/outlook-settings 2.tsx",
+        "link": "/modules/src_components_marketing_outlook-settings 2.tsx"
+      },
+      {
+        "text": "src/components/marketing/outlook-settings.tsx",
+        "link": "/modules/src_components_marketing_outlook-settings.tsx"
+      },
+      {
+        "text": "src/components/marketing/sms-template-builder.tsx",
+        "link": "/modules/src_components_marketing_sms-template-builder.tsx"
+      },
+      {
+        "text": "src/components/marketing/snippet-builder.tsx",
+        "link": "/modules/src_components_marketing_snippet-builder.tsx"
+      },
+      {
+        "text": "src/components/marketing/suppression-list.tsx",
+        "link": "/modules/src_components_marketing_suppression-list.tsx"
+      },
+      {
+        "text": "src/components/marketing/template-builder 2.tsx",
+        "link": "/modules/src_components_marketing_template-builder 2.tsx"
+      },
+      {
+        "text": "src/components/marketing/template-builder.tsx",
+        "link": "/modules/src_components_marketing_template-builder.tsx"
+      },
+      {
+        "text": "src/components/move-lead-dialog.tsx",
+        "link": "/modules/src_components_move-lead-dialog.tsx"
+      },
+      {
+        "text": "src/components/multi-site-manager.tsx",
+        "link": "/modules/src_components_multi-site-manager.tsx"
+      },
+      {
+        "text": "src/components/multisite-reporting-client.tsx",
+        "link": "/modules/src_components_multisite-reporting-client.tsx"
+      },
+      {
+        "text": "src/components/new-lead-form.tsx",
+        "link": "/modules/src_components_new-lead-form.tsx"
+      },
+      {
+        "text": "src/components/notification-center.tsx",
+        "link": "/modules/src_components_notification-center.tsx"
+      },
+      {
+        "text": "src/components/notify-upsell-dialog.tsx",
+        "link": "/modules/src_components_notify-upsell-dialog.tsx"
+      },
+      {
+        "text": "src/components/onboarding/onboarding-provider.tsx",
+        "link": "/modules/src_components_onboarding_onboarding-provider.tsx"
+      },
+      {
+        "text": "src/components/operations/franchise-prospect-detail-client.tsx",
+        "link": "/modules/src_components_operations_franchise-prospect-detail-client.tsx"
+      },
+      {
+        "text": "src/components/operations/franchise-prospects-client.tsx",
+        "link": "/modules/src_components_operations_franchise-prospects-client.tsx"
+      },
+      {
+        "text": "src/components/outlook-settings.tsx",
+        "link": "/modules/src_components_outlook-settings.tsx"
+      },
+      {
+        "text": "src/components/performance-timer.tsx",
+        "link": "/modules/src_components_performance-timer.tsx"
+      },
+      {
+        "text": "src/components/post-call-outcome-dialog.tsx",
+        "link": "/modules/src_components_post-call-outcome-dialog.tsx"
+      },
+      {
+        "text": "src/components/posthog-reporting-client.tsx",
+        "link": "/modules/src_components_posthog-reporting-client.tsx"
+      },
+      {
+        "text": "src/components/prev-month-cohort-widget.tsx",
+        "link": "/modules/src_components_prev-month-cohort-widget.tsx"
+      },
+      {
+        "text": "src/components/product-quote-dialog.tsx",
+        "link": "/modules/src_components_product-quote-dialog.tsx"
+      },
+      {
+        "text": "src/components/quick-add-lead-dialog.tsx",
+        "link": "/modules/src_components_quick-add-lead-dialog.tsx"
+      },
+      {
+        "text": "src/components/reports-client.tsx",
+        "link": "/modules/src_components_reports-client.tsx"
+      },
+      {
+        "text": "src/components/request-address-change-dialog.tsx",
+        "link": "/modules/src_components_request-address-change-dialog.tsx"
+      },
+      {
+        "text": "src/components/request-assignment-dialog.tsx",
+        "link": "/modules/src_components_request-assignment-dialog.tsx"
+      },
+      {
+        "text": "src/components/resolve-pending-items-modal.tsx",
+        "link": "/modules/src_components_resolve-pending-items-modal.tsx"
+      },
+      {
+        "text": "src/components/revisit-dialog.tsx",
+        "link": "/modules/src_components_revisit-dialog.tsx"
+      },
+      {
+        "text": "src/components/sales-snapshot-client.tsx",
+        "link": "/modules/src_components_sales-snapshot-client.tsx"
+      },
+      {
+        "text": "src/components/scans/contact-report-client.tsx",
+        "link": "/modules/src_components_scans_contact-report-client.tsx"
+      },
+      {
+        "text": "src/components/scans/scans-client.tsx",
+        "link": "/modules/src_components_scans_scans-client.tsx"
+      },
+      {
+        "text": "src/components/scans/scans-reporting-client.tsx",
+        "link": "/modules/src_components_scans_scans-reporting-client.tsx"
+      },
+      {
+        "text": "src/components/scans/top-users-client.tsx",
+        "link": "/modules/src_components_scans_top-users-client.tsx"
+      },
+      {
+        "text": "src/components/schedule-appointment-dialog.tsx",
+        "link": "/modules/src_components_schedule-appointment-dialog.tsx"
+      },
+      {
+        "text": "src/components/score-indicator.tsx",
+        "link": "/modules/src_components_score-indicator.tsx"
+      },
+      {
+        "text": "src/components/service-selection-dialog.tsx",
+        "link": "/modules/src_components_service-selection-dialog.tsx"
+      },
+      {
+        "text": "src/components/share-opportunity-dialog.tsx",
+        "link": "/modules/src_components_share-opportunity-dialog.tsx"
+      },
+      {
+        "text": "src/components/shipmate-access-dialog.tsx",
+        "link": "/modules/src_components_shipmate-access-dialog.tsx"
+      },
+      {
+        "text": "src/components/signed-customers/page.tsx",
+        "link": "/modules/src_components_signed-customers_page.tsx"
+      },
+      {
+        "text": "src/components/sms-dialog.tsx",
+        "link": "/modules/src_components_sms-dialog.tsx"
+      },
+      {
+        "text": "src/components/standing-order-form.tsx",
+        "link": "/modules/src_components_standing-order-form.tsx"
+      },
+      {
+        "text": "src/components/status-breakdown-bar.tsx",
+        "link": "/modules/src_components_status-breakdown-bar.tsx"
+      },
+      {
+        "text": "src/components/status-outcome-guide.tsx",
+        "link": "/modules/src_components_status-outcome-guide.tsx"
+      },
+      {
+        "text": "src/components/status-outcome-info.tsx",
+        "link": "/modules/src_components_status-outcome-info.tsx"
+      },
+      {
+        "text": "src/components/sync/sync-progress-widget.tsx",
+        "link": "/modules/src_components_sync_sync-progress-widget.tsx"
+      },
+      {
+        "text": "src/components/task-reminder-bell.tsx",
+        "link": "/modules/src_components_task-reminder-bell.tsx"
+      },
+      {
+        "text": "src/components/tasks-client.tsx",
+        "link": "/modules/src_components_tasks-client.tsx"
+      },
+      {
+        "text": "src/components/training-appointments-client.tsx",
+        "link": "/modules/src_components_training-appointments-client.tsx"
+      },
+      {
+        "text": "src/components/transcript-viewer.tsx",
+        "link": "/modules/src_components_transcript-viewer.tsx"
+      },
+      {
+        "text": "src/components/ui/accordion.tsx",
+        "link": "/modules/src_components_ui_accordion.tsx"
+      },
+      {
+        "text": "src/components/ui/alert-dialog.tsx",
+        "link": "/modules/src_components_ui_alert-dialog.tsx"
+      },
+      {
+        "text": "src/components/ui/alert.tsx",
+        "link": "/modules/src_components_ui_alert.tsx"
+      },
+      {
+        "text": "src/components/ui/animated-number.tsx",
+        "link": "/modules/src_components_ui_animated-number.tsx"
+      },
+      {
+        "text": "src/components/ui/animated-stat-card.tsx",
+        "link": "/modules/src_components_ui_animated-stat-card.tsx"
+      },
+      {
+        "text": "src/components/ui/avatar.tsx",
+        "link": "/modules/src_components_ui_avatar.tsx"
+      },
+      {
+        "text": "src/components/ui/badge.tsx",
+        "link": "/modules/src_components_ui_badge.tsx"
+      },
+      {
+        "text": "src/components/ui/button.tsx",
+        "link": "/modules/src_components_ui_button.tsx"
+      },
+      {
+        "text": "src/components/ui/calendar.tsx",
+        "link": "/modules/src_components_ui_calendar.tsx"
+      },
+      {
+        "text": "src/components/ui/card.tsx",
+        "link": "/modules/src_components_ui_card.tsx"
+      },
+      {
+        "text": "src/components/ui/carousel.tsx",
+        "link": "/modules/src_components_ui_carousel.tsx"
+      },
+      {
+        "text": "src/components/ui/chart.tsx",
+        "link": "/modules/src_components_ui_chart.tsx"
+      },
+      {
+        "text": "src/components/ui/checkbox.tsx",
+        "link": "/modules/src_components_ui_checkbox.tsx"
+      },
+      {
+        "text": "src/components/ui/collapsible.tsx",
+        "link": "/modules/src_components_ui_collapsible.tsx"
+      },
+      {
+        "text": "src/components/ui/command.tsx",
+        "link": "/modules/src_components_ui_command.tsx"
+      },
+      {
+        "text": "src/components/ui/copy-button.tsx",
+        "link": "/modules/src_components_ui_copy-button.tsx"
+      },
+      {
+        "text": "src/components/ui/custom-bulk-select-control.tsx",
+        "link": "/modules/src_components_ui_custom-bulk-select-control.tsx"
+      },
+      {
+        "text": "src/components/ui/dialog.tsx",
+        "link": "/modules/src_components_ui_dialog.tsx"
+      },
+      {
+        "text": "src/components/ui/dropdown-menu.tsx",
+        "link": "/modules/src_components_ui_dropdown-menu.tsx"
+      },
+      {
+        "text": "src/components/ui/email-verification-badge.tsx",
+        "link": "/modules/src_components_ui_email-verification-badge.tsx"
+      },
+      {
+        "text": "src/components/ui/form.tsx",
+        "link": "/modules/src_components_ui_form.tsx"
+      },
+      {
+        "text": "src/components/ui/input.tsx",
+        "link": "/modules/src_components_ui_input.tsx"
+      },
+      {
+        "text": "src/components/ui/label.tsx",
+        "link": "/modules/src_components_ui_label.tsx"
+      },
+      {
+        "text": "src/components/ui/loader.tsx",
+        "link": "/modules/src_components_ui_loader.tsx"
+      },
+      {
+        "text": "src/components/ui/menubar.tsx",
+        "link": "/modules/src_components_ui_menubar.tsx"
+      },
+      {
+        "text": "src/components/ui/multi-select-combobox.tsx",
+        "link": "/modules/src_components_ui_multi-select-combobox.tsx"
+      },
+      {
+        "text": "src/components/ui/open-tracking-tips.tsx",
+        "link": "/modules/src_components_ui_open-tracking-tips.tsx"
+      },
+      {
+        "text": "src/components/ui/percentage-loader.tsx",
+        "link": "/modules/src_components_ui_percentage-loader.tsx"
+      },
+      {
+        "text": "src/components/ui/popover.tsx",
+        "link": "/modules/src_components_ui_popover.tsx"
+      },
+      {
+        "text": "src/components/ui/progress.tsx",
+        "link": "/modules/src_components_ui_progress.tsx"
+      },
+      {
+        "text": "src/components/ui/pulse-badge.tsx",
+        "link": "/modules/src_components_ui_pulse-badge.tsx"
+      },
+      {
+        "text": "src/components/ui/radio-group.tsx",
+        "link": "/modules/src_components_ui_radio-group.tsx"
+      },
+      {
+        "text": "src/components/ui/rich-text-editor.tsx",
+        "link": "/modules/src_components_ui_rich-text-editor.tsx"
+      },
+      {
+        "text": "src/components/ui/scroll-area.tsx",
+        "link": "/modules/src_components_ui_scroll-area.tsx"
+      },
+      {
+        "text": "src/components/ui/select.tsx",
+        "link": "/modules/src_components_ui_select.tsx"
+      },
+      {
+        "text": "src/components/ui/separator.tsx",
+        "link": "/modules/src_components_ui_separator.tsx"
+      },
+      {
+        "text": "src/components/ui/sheet.tsx",
+        "link": "/modules/src_components_ui_sheet.tsx"
+      },
+      {
+        "text": "src/components/ui/sidebar.tsx",
+        "link": "/modules/src_components_ui_sidebar.tsx"
+      },
+      {
+        "text": "src/components/ui/skeleton.tsx",
+        "link": "/modules/src_components_ui_skeleton.tsx"
+      },
+      {
+        "text": "src/components/ui/slider.tsx",
+        "link": "/modules/src_components_ui_slider.tsx"
+      },
+      {
+        "text": "src/components/ui/switch.tsx",
+        "link": "/modules/src_components_ui_switch.tsx"
+      },
+      {
+        "text": "src/components/ui/table.tsx",
+        "link": "/modules/src_components_ui_table.tsx"
+      },
+      {
+        "text": "src/components/ui/tabs.tsx",
+        "link": "/modules/src_components_ui_tabs.tsx"
+      },
+      {
+        "text": "src/components/ui/textarea.tsx",
+        "link": "/modules/src_components_ui_textarea.tsx"
+      },
+      {
+        "text": "src/components/ui/toast.tsx",
+        "link": "/modules/src_components_ui_toast.tsx"
+      },
+      {
+        "text": "src/components/ui/toaster.tsx",
+        "link": "/modules/src_components_ui_toaster.tsx"
+      },
+      {
+        "text": "src/components/ui/tooltip.tsx",
+        "link": "/modules/src_components_ui_tooltip.tsx"
+      },
+      {
+        "text": "src/components/ui/visual-iframe-editor.tsx",
+        "link": "/modules/src_components_ui_visual-iframe-editor.tsx"
+      },
+      {
+        "text": "src/components/ui/visually-hidden.tsx",
+        "link": "/modules/src_components_ui_visually-hidden.tsx"
+      },
+      {
+        "text": "src/components/unassigned-call-dialog.tsx",
+        "link": "/modules/src_components_unassigned-call-dialog.tsx"
+      },
+      {
+        "text": "src/components/universal-search.tsx",
+        "link": "/modules/src_components_universal-search.tsx"
+      },
+      {
+        "text": "src/components/visit-note-processor-dialog.tsx",
+        "link": "/modules/src_components_visit-note-processor-dialog.tsx"
+      },
+      {
+        "text": "src/components/visit-notes-client.tsx",
+        "link": "/modules/src_components_visit-notes-client.tsx"
+      },
+      {
+        "text": "src/hooks/use-auth.tsx",
+        "link": "/modules/src_hooks_use-auth.tsx"
+      },
+      {
+        "text": "src/hooks/use-debounce.ts",
+        "link": "/modules/src_hooks_use-debounce.ts"
+      },
+      {
+        "text": "src/hooks/use-dialing-session.tsx",
+        "link": "/modules/src_hooks_use-dialing-session.tsx"
+      },
+      {
+        "text": "src/hooks/use-google-maps.ts",
+        "link": "/modules/src_hooks_use-google-maps.ts"
+      },
+      {
+        "text": "src/hooks/use-loading.tsx",
+        "link": "/modules/src_hooks_use-loading.tsx"
+      },
+      {
+        "text": "src/hooks/use-mobile.tsx",
+        "link": "/modules/src_hooks_use-mobile.tsx"
+      },
+      {
+        "text": "src/hooks/use-performance.tsx",
+        "link": "/modules/src_hooks_use-performance.tsx"
+      },
+      {
+        "text": "src/hooks/use-permissions.tsx",
+        "link": "/modules/src_hooks_use-permissions.tsx"
+      },
+      {
+        "text": "src/hooks/use-speech-input.ts",
+        "link": "/modules/src_hooks_use-speech-input.ts"
+      },
+      {
+        "text": "src/hooks/use-toast.ts",
+        "link": "/modules/src_hooks_use-toast.ts"
+      },
+      {
+        "text": "src/hooks/useDynamicRouting.ts",
+        "link": "/modules/src_hooks_useDynamicRouting.ts"
+      },
+      {
+        "text": "src/lib/account-manager/compute-am-priority.test.ts",
+        "link": "/modules/src_lib_account-manager_compute-am-priority.test.ts"
+      },
+      {
+        "text": "src/lib/account-manager/compute-am-priority.ts",
+        "link": "/modules/src_lib_account-manager_compute-am-priority.ts"
+      },
+      {
+        "text": "src/lib/ask/query-spec.ts",
+        "link": "/modules/src_lib_ask_query-spec.ts"
+      },
+      {
+        "text": "src/lib/australian-holidays.ts",
+        "link": "/modules/src_lib_australian-holidays.ts"
+      },
+      {
+        "text": "src/lib/bank-utils.ts",
+        "link": "/modules/src_lib_bank-utils.ts"
+      },
+      {
+        "text": "src/lib/cancellation-email.ts",
+        "link": "/modules/src_lib_cancellation-email.ts"
+      },
+      {
+        "text": "src/lib/cancellation-invoice-helper.ts",
+        "link": "/modules/src_lib_cancellation-invoice-helper.ts"
+      },
+      {
+        "text": "src/lib/cancellation-reasons-mapper.ts",
+        "link": "/modules/src_lib_cancellation-reasons-mapper.ts"
+      },
+      {
+        "text": "src/lib/checkin-scoring.ts",
+        "link": "/modules/src_lib_checkin-scoring.ts"
+      },
+      {
+        "text": "src/lib/confetti.ts",
+        "link": "/modules/src_lib_confetti.ts"
+      },
+      {
+        "text": "src/lib/constants.ts",
+        "link": "/modules/src_lib_constants.ts"
+      },
+      {
+        "text": "src/lib/contact-utils.ts",
+        "link": "/modules/src_lib_contact-utils.ts"
+      },
+      {
+        "text": "src/lib/discovery-constants.ts",
+        "link": "/modules/src_lib_discovery-constants.ts"
+      },
+      {
+        "text": "src/lib/discovery-scoring.ts",
+        "link": "/modules/src_lib_discovery-scoring.ts"
+      },
+      {
+        "text": "src/lib/duplicate-detector.test.ts",
+        "link": "/modules/src_lib_duplicate-detector.test.ts"
+      },
+      {
+        "text": "src/lib/duplicate-detector.ts",
+        "link": "/modules/src_lib_duplicate-detector.ts"
+      },
+      {
+        "text": "src/lib/email-dispatcher.ts",
+        "link": "/modules/src_lib_email-dispatcher.ts"
+      },
+      {
+        "text": "src/lib/firebase-admin.ts",
+        "link": "/modules/src_lib_firebase-admin.ts"
+      },
+      {
+        "text": "src/lib/firebase.ts",
+        "link": "/modules/src_lib_firebase.ts"
+      },
+      {
+        "text": "src/lib/franchisee-schema.ts",
+        "link": "/modules/src_lib_franchisee-schema.ts"
+      },
+      {
+        "text": "src/lib/franchisee-user-service.ts",
+        "link": "/modules/src_lib_franchisee-user-service.ts"
+      },
+      {
+        "text": "src/lib/lead-lookup.ts",
+        "link": "/modules/src_lib_lead-lookup.ts"
+      },
+      {
+        "text": "src/lib/lead-permissions.ts",
+        "link": "/modules/src_lib_lead-permissions.ts"
+      },
+      {
+        "text": "src/lib/lead-stage-analytics.ts",
+        "link": "/modules/src_lib_lead-stage-analytics.ts"
+      },
+      {
+        "text": "src/lib/leave-utils.ts",
+        "link": "/modules/src_lib_leave-utils.ts"
+      },
+      {
+        "text": "src/lib/localmile-db.ts",
+        "link": "/modules/src_lib_localmile-db.ts"
+      },
+      {
+        "text": "src/lib/localmile-security.ts",
+        "link": "/modules/src_lib_localmile-security.ts"
+      },
+      {
+        "text": "src/lib/localmile-utils.ts",
+        "link": "/modules/src_lib_localmile-utils.ts"
+      },
+      {
+        "text": "src/lib/lodgement-helpers.ts",
+        "link": "/modules/src_lib_lodgement-helpers.ts"
+      },
+      {
+        "text": "src/lib/lpo-connect-db.ts",
+        "link": "/modules/src_lib_lpo-connect-db.ts"
+      },
+      {
+        "text": "src/lib/mrr-realization.ts",
+        "link": "/modules/src_lib_mrr-realization.ts"
+      },
+      {
+        "text": "src/lib/mrr.ts",
+        "link": "/modules/src_lib_mrr.ts"
+      },
+      {
+        "text": "src/lib/onboarding-scripts.ts",
+        "link": "/modules/src_lib_onboarding-scripts.ts"
+      },
+      {
+        "text": "src/lib/presale-token.ts",
+        "link": "/modules/src_lib_presale-token.ts"
+      },
+      {
+        "text": "src/lib/presale-types.ts",
+        "link": "/modules/src_lib_presale-types.ts"
+      },
+      {
+        "text": "src/lib/pricing-helpers.ts",
+        "link": "/modules/src_lib_pricing-helpers.ts"
+      },
+      {
+        "text": "src/lib/prospect-plus-id.ts",
+        "link": "/modules/src_lib_prospect-plus-id.ts"
+      },
+      {
+        "text": "src/lib/search/search-service.ts",
+        "link": "/modules/src_lib_search_search-service.ts"
+      },
+      {
+        "text": "src/lib/search/search-utils.ts",
+        "link": "/modules/src_lib_search_search-utils.ts"
+      },
+      {
+        "text": "src/lib/status-colors.ts",
+        "link": "/modules/src_lib_status-colors.ts"
+      },
+      {
+        "text": "src/lib/status-outcome-mapping.ts",
+        "link": "/modules/src_lib_status-outcome-mapping.ts"
+      },
+      {
+        "text": "src/lib/template-replacer.ts",
+        "link": "/modules/src_lib_template-replacer.ts"
+      },
+      {
+        "text": "src/lib/territory-export.ts",
+        "link": "/modules/src_lib_territory-export.ts"
+      },
+      {
+        "text": "src/lib/ticket-schema.ts",
+        "link": "/modules/src_lib_ticket-schema.ts"
+      },
+      {
+        "text": "src/lib/types.ts",
+        "link": "/modules/src_lib_types.ts"
+      },
+      {
+        "text": "src/lib/utils.test.ts",
+        "link": "/modules/src_lib_utils.test.ts"
+      },
+      {
+        "text": "src/lib/utils.ts",
+        "link": "/modules/src_lib_utils.ts"
+      },
+      {
+        "text": "src/lib/verify-email-client.ts",
+        "link": "/modules/src_lib_verify-email-client.ts"
+      },
+      {
+        "text": "src/lib/welcome-email-template.ts",
+        "link": "/modules/src_lib_welcome-email-template.ts"
+      },
+      {
+        "text": "src/lib/zee-gen-leads-service.ts",
+        "link": "/modules/src_lib_zee-gen-leads-service.ts"
+      },
+      {
+        "text": "src/services/LocationService.ts",
+        "link": "/modules/src_services_LocationService.ts"
+      },
+      {
+        "text": "src/services/admin-approval.ts",
+        "link": "/modules/src_services_admin-approval.ts"
+      },
+      {
+        "text": "src/services/firebase-server.ts",
+        "link": "/modules/src_services_firebase-server.ts"
+      },
+      {
+        "text": "src/services/firebase.ts",
+        "link": "/modules/src_services_firebase.ts"
+      },
+      {
+        "text": "src/services/lead-campaigns.ts",
+        "link": "/modules/src_services_lead-campaigns.ts"
+      },
+      {
+        "text": "src/services/localmile-deactivation.ts",
+        "link": "/modules/src_services_localmile-deactivation.ts"
+      },
+      {
+        "text": "src/services/localmile-recredit-action.ts",
+        "link": "/modules/src_services_localmile-recredit-action.ts"
+      },
+      {
+        "text": "src/services/localmile-sync-server.ts",
+        "link": "/modules/src_services_localmile-sync-server.ts"
+      },
+      {
+        "text": "src/services/lpo-account-manager-service.ts",
+        "link": "/modules/src_services_lpo-account-manager-service.ts"
+      },
+      {
+        "text": "src/services/lpo-cancellation-cascade-server.ts",
+        "link": "/modules/src_services_lpo-cancellation-cascade-server.ts"
+      },
+      {
+        "text": "src/services/lpo-plus-service.ts",
+        "link": "/modules/src_services_lpo-plus-service.ts"
+      },
+      {
+        "text": "src/services/marketing-brain.ts",
+        "link": "/modules/src_services_marketing-brain.ts"
+      },
+      {
+        "text": "src/services/mass-link-service.ts",
+        "link": "/modules/src_services_mass-link-service.ts"
+      },
+      {
+        "text": "src/services/microsoft-graph.ts",
+        "link": "/modules/src_services_microsoft-graph.ts"
+      },
+      {
+        "text": "src/services/netsuite-deployment-proxy.ts",
+        "link": "/modules/src_services_netsuite-deployment-proxy.ts"
+      },
+      {
+        "text": "src/services/netsuite-field-sales-proxy.ts",
+        "link": "/modules/src_services_netsuite-field-sales-proxy.ts"
+      },
+      {
+        "text": "src/services/netsuite-localmile-proxy.ts",
+        "link": "/modules/src_services_netsuite-localmile-proxy.ts"
+      },
+      {
+        "text": "src/services/netsuite-mpproducts-proxy.ts",
+        "link": "/modules/src_services_netsuite-mpproducts-proxy.ts"
+      },
+      {
+        "text": "src/services/netsuite-schedule-proxy.ts",
+        "link": "/modules/src_services_netsuite-schedule-proxy.ts"
+      },
+      {
+        "text": "src/services/netsuite-services-proxy.ts",
+        "link": "/modules/src_services_netsuite-services-proxy.ts"
+      },
+      {
+        "text": "src/services/netsuite-signup-proxy.ts",
+        "link": "/modules/src_services_netsuite-signup-proxy.ts"
+      },
+      {
+        "text": "src/services/netsuite-upsell-proxy.ts",
+        "link": "/modules/src_services_netsuite-upsell-proxy.ts"
+      },
+      {
+        "text": "src/services/netsuite-visit-note-proxy.ts",
+        "link": "/modules/src_services_netsuite-visit-note-proxy.ts"
+      },
+      {
+        "text": "src/services/netsuite.ts",
+        "link": "/modules/src_services_netsuite.ts"
+      },
+      {
+        "text": "src/services/onboarding-service.ts",
+        "link": "/modules/src_services_onboarding-service.ts"
+      },
+      {
+        "text": "src/services/parent-lead-conversion.ts",
+        "link": "/modules/src_services_parent-lead-conversion.ts"
+      },
+      {
+        "text": "src/services/rekey-lead.ts",
+        "link": "/modules/src_services_rekey-lead.ts"
+      },
+      {
+        "text": "src/services/scheduled-service-transition.ts",
+        "link": "/modules/src_services_scheduled-service-transition.ts"
+      },
+      {
+        "text": "src/services/sms-service.ts",
+        "link": "/modules/src_services_sms-service.ts"
+      },
+      {
+        "text": "src/stories/Button.stories.ts",
+        "link": "/modules/src_stories_Button.stories.ts"
+      },
+      {
+        "text": "src/stories/Button.tsx",
+        "link": "/modules/src_stories_Button.tsx"
+      },
+      {
+        "text": "src/stories/Configure.mdx",
+        "link": "/modules/src_stories_Configure.mdx"
+      },
+      {
+        "text": "src/stories/Header.stories.ts",
+        "link": "/modules/src_stories_Header.stories.ts"
+      },
+      {
+        "text": "src/stories/Header.tsx",
+        "link": "/modules/src_stories_Header.tsx"
+      },
+      {
+        "text": "src/stories/Page.stories.ts",
+        "link": "/modules/src_stories_Page.stories.ts"
+      },
+      {
+        "text": "src/stories/Page.tsx",
+        "link": "/modules/src_stories_Page.tsx"
+      },
+      {
+        "text": "src/stories/assets/avif-test-image.avif",
+        "link": "/modules/src_stories_assets_avif-test-image.avif"
+      },
+      {
+        "text": "src/stories/button.css",
+        "link": "/modules/src_stories_button.css"
+      },
+      {
+        "text": "src/stories/header.css",
+        "link": "/modules/src_stories_header.css"
+      },
+      {
+        "text": "src/stories/page.css",
+        "link": "/modules/src_stories_page.css"
+      },
+      {
+        "text": "tailwind.config.ts",
+        "link": "/modules/tailwind.config.ts"
+      },
+      {
+        "text": "test-admin.js",
+        "link": "/modules/test-admin.js"
+      },
+      {
+        "text": "test-franchisee.ts",
+        "link": "/modules/test-franchisee.ts"
+      },
+      {
+        "text": "test-lead.ts",
+        "link": "/modules/test-lead.ts"
+      },
+      {
+        "text": "test-leads.ts",
+        "link": "/modules/test-leads.ts"
+      },
+      {
+        "text": "test-user.ts",
+        "link": "/modules/test-user.ts"
+      },
+      {
+        "text": "tsconfig.json",
+        "link": "/modules/tsconfig.json"
+      },
+      {
+        "text": "tsconfig.tsbuildinfo",
+        "link": "/modules/tsconfig.tsbuildinfo"
+      },
+      {
+        "text": "vitest.config.ts",
+        "link": "/modules/vitest.config.ts"
+      },
+      {
+        "text": "vitest.shims.d.ts",
+        "link": "/modules/vitest.shims.d.ts"
+      }
+    ]
+  }
+]

@@ -1,16 +1,16 @@
 {
   "$schema": "https://docupulse.dev/schemas/manifest-v1.json",
   "generator": "DocuPulse v1.0.0",
-  "generatedAt": "2026-09-16T15:19:27.658Z",
+  "generatedAt": "2026-09-17T14:04:25.382Z",
   "project": {
-    "name": "nextn",
+    "name": "ProspectPlus",
     "type": "fullstack",
     "primaryLanguage": "TypeScript (React)",
     "languages": [
       {
         "language": "TypeScript (React)",
         "fileCount": 392,
-        "totalBytes": 10409896,
+        "totalBytes": 10411857,
         "percentage": 31.5
       },
       {
@@ -22,7 +22,7 @@
       {
         "language": "JSON",
         "fileCount": 12,
-        "totalBytes": 4793010,
+        "totalBytes": 4793055,
         "percentage": 14.5
       },
       {
@@ -176,6 +176,10 @@
       {
         "name": "Tailwind CSS",
         "category": "utility"
+      },
+      {
+        "name": "Firebase",
+        "category": "backend"
       }
     ],
     "monorepo": {
@@ -8316,7 +8320,7 @@
         "useEffect"
       ],
       "isDefaultExport": false,
-      "lineNumber": 10863,
+      "lineNumber": 10894,
       "description": "React UI Component `<MergeDuplicatesDialog />`"
     },
     {
@@ -11841,7 +11845,7 @@
     {
       "relativePath": "docupulse.config.json",
       "language": "Generic",
-      "rawLinesCount": 57,
+      "rawLinesCount": 56,
       "imports": [],
       "exports": [],
       "symbolsCount": 0,
@@ -157225,7 +157229,7 @@
     {
       "relativePath": "src/components/lead-profile.tsx",
       "language": "TypeScript",
-      "rawLinesCount": 11222,
+      "rawLinesCount": 11253,
       "imports": [
         "react",
         "@/components/ui/copy-button",
@@ -157325,7 +157329,7 @@
       "exports": [
         "LeadProfile"
       ],
-      "symbolsCount": 779,
+      "symbolsCount": 789,
       "symbols": [
         {
           "name": "LeadProfileProps",
@@ -162144,256 +162148,316 @@
           "lineNumber": 8095
         },
         {
-          "name": "dateStr",
+          "name": "tz",
           "kind": "variable",
           "isExported": false,
           "lineNumber": 8100
         },
         {
-          "name": "person",
+          "name": "dateStr",
           "kind": "variable",
           "isExported": false,
           "lineNumber": 8101
         },
         {
-          "name": "notes",
+          "name": "person",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8125
+          "lineNumber": 8102
+        },
+        {
+          "name": "rawTime",
+          "kind": "variable",
+          "isExported": false,
+          "lineNumber": 8104
+        },
+        {
+          "name": "timeStr",
+          "kind": "variable",
+          "isExported": false,
+          "lineNumber": 8105
+        },
+        {
+          "name": "parts",
+          "kind": "variable",
+          "isExported": false,
+          "lineNumber": 8108
+        },
+        {
+          "name": "hour",
+          "kind": "variable",
+          "isExported": false,
+          "lineNumber": 8109
+        },
+        {
+          "name": "minute",
+          "kind": "variable",
+          "isExported": false,
+          "lineNumber": 8110
+        },
+        {
+          "name": "ampm",
+          "kind": "variable",
+          "isExported": false,
+          "lineNumber": 8111
+        },
+        {
+          "name": "parsedTime",
+          "kind": "variable",
+          "isExported": false,
+          "lineNumber": 8115
+        },
+        {
+          "name": "parsedDate",
+          "kind": "variable",
+          "isExported": false,
+          "lineNumber": 8123
+        },
+        {
+          "name": "formattedDate",
+          "kind": "variable",
+          "isExported": false,
+          "lineNumber": 8131
         },
         {
           "name": "notes",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8129
+          "lineNumber": 8156
         },
         {
           "name": "notes",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8133
+          "lineNumber": 8160
+        },
+        {
+          "name": "notes",
+          "kind": "variable",
+          "isExported": false,
+          "lineNumber": 8164
         },
         {
           "name": "url",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8141
+          "lineNumber": 8172
         },
         {
           "name": "isOverdue",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8194
+          "lineNumber": 8225
         },
         {
           "name": "recordingAssetUrl",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8508
+          "lineNumber": 8539
         },
         {
           "name": "callTranscript",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8552
+          "lineNumber": 8583
         },
         {
           "name": "isCall",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8595
+          "lineNumber": 8626
         },
         {
           "name": "recordingAssetUrl",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8596
+          "lineNumber": 8627
         },
         {
           "name": "data",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8747
+          "lineNumber": 8778
         },
         {
           "name": "isExpanded",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8860
+          "lineNumber": 8891
         },
         {
           "name": "itemsCount",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8861
+          "lineNumber": 8892
         },
         {
           "name": "statusStr",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8862
+          "lineNumber": 8893
         },
         {
           "name": "badgeClass",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8864
+          "lineNumber": 8895
         },
         {
           "name": "lowerStatus",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 8865
+          "lineNumber": 8896
         },
         {
           "name": "statusLower",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 9124
+          "lineNumber": 9155
         },
         {
           "name": "statusBadgeStyle",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 9125
+          "lineNumber": 9156
         },
         {
           "name": "regLink",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 9307
+          "lineNumber": 9338
         },
         {
           "name": "updatedTranscripts",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 9782
+          "lineNumber": 9813
         },
         {
           "name": "jsonField",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 9884
+          "lineNumber": 9915
         },
         {
           "name": "list",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 9888
+          "lineNumber": 9919
         },
         {
           "name": "ops",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 9917
+          "lineNumber": 9948
         },
         {
           "name": "sec",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 9925
+          "lineNumber": 9956
         },
         {
           "name": "updatedContacts",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 9964
+          "lineNumber": 9995
         },
         {
           "name": "updatedContacts",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 9979
+          "lineNumber": 10010
         },
         {
           "name": "updatedContacts",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10000
+          "lineNumber": 10031
         },
         {
           "name": "targetContact",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10033
+          "lineNumber": 10064
         },
         {
           "name": "role",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10090
+          "lineNumber": 10121
         },
         {
           "name": "isMatchedRole",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10091
+          "lineNumber": 10122
         },
         {
           "name": "userEmail",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10097
+          "lineNumber": 10128
         },
         {
           "name": "defaultEmail",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10098
+          "lineNumber": 10129
         },
         {
           "name": "subjectInput",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10215
+          "lineNumber": 10246
         },
         {
           "name": "start",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10217
+          "lineNumber": 10248
         },
         {
           "name": "end",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10218
+          "lineNumber": 10249
         },
         {
           "name": "text",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10219
+          "lineNumber": 10250
         },
         {
           "name": "before",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10220
+          "lineNumber": 10251
         },
         {
           "name": "after",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10221
+          "lineNumber": 10252
         },
         {
           "name": "planProds",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10251
+          "lineNumber": 10282
         },
         {
           "name": "filtered",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10282
+          "lineNumber": 10313
         },
         {
           "name": "sorted",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10283
+          "lineNumber": 10314
         },
         {
           "name": "parseWeight",
@@ -162407,121 +162471,121 @@
           ],
           "isExported": false,
           "isAsync": false,
-          "lineNumber": 10284
+          "lineNumber": 10315
         },
         {
           "name": "weightStr",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10285
+          "lineNumber": 10316
         },
         {
           "name": "match",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10286
+          "lineNumber": 10317
         },
         {
           "name": "isChecked",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10292
+          "lineNumber": 10323
         },
         {
           "name": "basePrice",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10293
+          "lineNumber": 10324
         },
         {
           "name": "surchargePerc",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10294
+          "lineNumber": 10325
         },
         {
           "name": "surchargeAmt",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10295
+          "lineNumber": 10326
         },
         {
           "name": "totalVal",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10296
+          "lineNumber": 10327
         },
         {
           "name": "current",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10373
+          "lineNumber": 10404
         },
         {
           "name": "current",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10387
+          "lineNumber": 10418
         },
         {
           "name": "current",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10401
+          "lineNumber": 10432
         },
         {
           "name": "current",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10428
+          "lineNumber": 10459
         },
         {
           "name": "current",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10442
+          "lineNumber": 10473
         },
         {
           "name": "current",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10456
+          "lineNumber": 10487
         },
         {
           "name": "query",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10607
+          "lineNumber": 10638
         },
         {
           "name": "query",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10614
+          "lineNumber": 10645
         },
         {
           "name": "isSelected",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10676
+          "lineNumber": 10707
         },
         {
           "name": "fId",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10677
+          "lineNumber": 10708
         },
         {
           "name": "author",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10735
+          "lineNumber": 10766
         },
         {
           "name": "cb",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10739
+          "lineNumber": 10770
         },
         {
           "name": "MergeDuplicatesDialog",
@@ -162536,7 +162600,7 @@
           ],
           "isExported": false,
           "isAsync": false,
-          "lineNumber": 10863
+          "lineNumber": 10894
         },
         {
           "name": "handleSearchAddLead",
@@ -162544,85 +162608,85 @@
           "params": [],
           "isExported": false,
           "isAsync": true,
-          "lineNumber": 10887
+          "lineNumber": 10918
         },
         {
           "name": "trimmed",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10888
+          "lineNumber": 10919
         },
         {
           "name": "foundLead",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10892
+          "lineNumber": 10923
         },
         {
           "name": "qPid",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10894
+          "lineNumber": 10925
         },
         {
           "name": "snap",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10895
+          "lineNumber": 10926
         },
         {
           "name": "qComp",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10901
+          "lineNumber": 10932
         },
         {
           "name": "snap",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10902
+          "lineNumber": 10933
         },
         {
           "name": "allCandidates",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10932
+          "lineNumber": 10963
         },
         {
           "name": "combined",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10933
+          "lineNumber": 10964
         },
         {
           "name": "uniqueMap",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10934
+          "lineNumber": 10965
         },
         {
           "name": "nonMasterIds",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10945
+          "lineNumber": 10976
         },
         {
           "name": "filteredPrev",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10948
+          "lineNumber": 10979
         },
         {
           "name": "mergedSet",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10949
+          "lineNumber": 10980
         },
         {
           "name": "selectedLead",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10960
+          "lineNumber": 10991
         },
         {
           "name": "toggleCandidateForMerge",
@@ -162641,7 +162705,7 @@
           ],
           "isExported": false,
           "isAsync": false,
-          "lineNumber": 10962
+          "lineNumber": 10993
         },
         {
           "name": "handleSelectMaster",
@@ -162660,7 +162724,7 @@
           ],
           "isExported": false,
           "isAsync": false,
-          "lineNumber": 10970
+          "lineNumber": 11001
         },
         {
           "name": "handleMerge",
@@ -162668,13 +162732,13 @@
           "params": [],
           "isExported": false,
           "isAsync": true,
-          "lineNumber": 10975
+          "lineNumber": 11006
         },
         {
           "name": "validSourceIds",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 10978
+          "lineNumber": 11009
         },
         {
           "name": "handleDismiss",
@@ -162682,43 +162746,43 @@
           "params": [],
           "isExported": false,
           "isAsync": true,
-          "lineNumber": 11010
+          "lineNumber": 11041
         },
         {
           "name": "selectedSourcesList",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 11027
+          "lineNumber": 11058
         },
         {
           "name": "excludedSourcesList",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 11031
+          "lineNumber": 11062
         },
         {
           "name": "isMaster",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 11081
+          "lineNumber": 11112
         },
         {
           "name": "isSourceSelected",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 11082
+          "lineNumber": 11113
         },
         {
           "name": "isCurrent",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 11083
+          "lineNumber": 11114
         },
         {
           "name": "addr",
           "kind": "variable",
           "isExported": false,
-          "lineNumber": 11084
+          "lineNumber": 11115
         }
       ]
     },

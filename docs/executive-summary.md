@@ -1,10 +1,10 @@
-# nextn - Executive & Product Overview
+# ProspectPlus - Executive & Product Overview
 
 > **Audience:** Non-Technical Stakeholders, Product Managers, Executive Leadership & Operations Teams.
 
 ## 1. Executive Summary
 
-**nextn** is a modern **FULLSTACK** business application designed to deliver streamlined digital workflows, automated customer interactions, and scalable operations. It consolidates key business functions into an intuitive, responsive interface.
+**ProspectPlus** is a modern **FULLSTACK** business application designed to deliver streamlined digital workflows, automated customer interactions, and scalable operations. It consolidates key business functions into an intuitive, responsive interface.
 
 ### Primary Business Objectives & Value
 - **Automate Operational Workflows:** Eliminate manual friction in core customer and business processes.

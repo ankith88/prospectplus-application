@@ -1,10 +1,10 @@
 # System Architecture & Workspace Map
 
 ## Project Profile
-- **Project Name:** `nextn`
+- **Project Name:** `ProspectPlus`
 - **Architecture Style:** FULLSTACK
 - **Primary Language:** `TypeScript (React)`
-- **Detected Frameworks:** `Next.js` *(fullstack)*, `React` *(frontend)*, `Tailwind CSS` *(utility)*
+- **Detected Frameworks:** `Next.js` *(fullstack)*, `React` *(frontend)*, `Tailwind CSS` *(utility)*, `Firebase` *(backend)*
 - **Monorepo Structure:** Single Project
 - **Docker Enabled:** No
 - **CI Workflows:** No

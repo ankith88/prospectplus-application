@@ -1,10 +1,12 @@
-# nextn Documentation
+# ProspectPlus Documentation
+
+![PulseScore](./pulse-score.svg)
 
 ## Quick Overview
 
 - **Project Type:** FULLSTACK
 - **Primary Language:** TypeScript (React)
-- **Frameworks:** Next.js, React, Tailwind CSS
+- **Frameworks:** Next.js, React, Tailwind CSS, Firebase
 - **Documented Files:** 933
 - **API Routes:** 195
 - **UI Components:** 450
@@ -14,8 +16,11 @@
 1. [Executive & Product Overview (Non-Technical)](./executive-summary.md)
 2. [Architecture & Workspace Map (Technical)](./architecture.md)
 3. [REST API & Routes](./api/routes.md)
+   - 📄 [OpenAPI 3.1.0 Specification (JSON)](./api/openapi.json)
+   - 🚀 [Postman Collection v2.1.0 (JSON)](./api/postman_collection.json)
 4. [UI Components Reference](./components/ui.md)
-5. [Machine-Readable Manifest (JSON)](./manifest.json)
+5. [Database & ER Schema Reference](./database/schema.md)
+6. [Machine-Readable Manifest (JSON)](./manifest.json)
 
 ## Modules & Source Files
 
@@ -715,7 +720,7 @@
 | [src/components/invoice-details-dialog.tsx](./modules/src_components_invoice-details-dialog.tsx.md) | TypeScript | 9 | 0 | 1 |
 | [src/components/journey-builder/JourneyCanvas.tsx](./modules/src_components_journey-builder_JourneyCanvas.tsx.md) | TypeScript | 3 | 0 | 1 |
 | [src/components/lead-products.tsx](./modules/src_components_lead-products.tsx.md) | TypeScript | 40 | 0 | 1 |
-| [src/components/lead-profile.tsx](./modules/src_components_lead-profile.tsx.md) | TypeScript | 779 | 0 | 2 |
+| [src/components/lead-profile.tsx](./modules/src_components_lead-profile.tsx.md) | TypeScript | 789 | 0 | 2 |
 | [src/components/lead-status-badge.tsx](./modules/src_components_lead-status-badge.tsx.md) | TypeScript | 6 | 0 | 1 |
 | [src/components/leads-client.tsx](./modules/src_components_leads-client.tsx.md) | TypeScript | 287 | 0 | 4 |
 | [src/components/leads-map-client.tsx](./modules/src_components_leads-map-client.tsx.md) | TypeScript | 124 | 0 | 1 |

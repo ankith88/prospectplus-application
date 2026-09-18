@@ -1,0 +1,60 @@
+{
+  "name": "nextn",
+  "navigation": [
+    {
+      "group": "Overview",
+      "pages": [
+        "executive-summary",
+        "index",
+        "architecture"
+      ]
+    },
+    {
+      "group": "API & Schemas",
+      "pages": [
+        "api/routes",
+        "components/ui"
+      ]
+    },
+    {
+      "group": "Modules",
+      "pages": [
+        "modules/.DS_Store",
+        "modules/.env.local",
+        "modules/.firebaserc",
+        "modules/.gitignore",
+        "modules/.idx_dev.nix",
+        "modules/.storybook_main.ts",
+        "modules/.storybook_preview.tsx",
+        "modules/Zee sales process_CONTRACT OF SALE OF BUSINESS - SAMPLE.docx",
+        "modules/Zee sales process_Confidentiality Deed_Mail  Plus -.docx",
+        "modules/Zee sales process_Deed of variation Exit Program Assistance Offer 18 November 2021_AU_Active01_909812951_Trinh_MMCD.docx",
+        "modules/Zee sales process_EOI -.docx",
+        "modules/Zee sales process_Franchise Sale Options for Franchisees.docx",
+        "modules/Zee sales process_Franchisee IM Waterloo Alexandria.docx",
+        "modules/Zee sales process_Mail Plus Key Fact Sheet for new Buyers.docx",
+        "modules/Zee sales process_Request for Docs - New Template Legal Instructions_Arncliffe_MMCD_16062026.docx",
+        "modules/apphosting.yaml",
+        "modules/check-franchisees.ts",
+        "modules/check-leads.ts",
+        "modules/check_date.js",
+        "modules/check_lead.js",
+        "modules/components.json",
+        "modules/docupulse.config.json",
+        "modules/firebase.json",
+        "modules/firestore.indexes.json",
+        "modules/firestore.rules",
+        "modules/fix_permissions.py",
+        "modules/functions_.DS_Store",
+        "modules/functions_.env",
+        "modules/functions_.eslintrc.js",
+        "modules/functions_lib_backfillStatuses.js"
+      ]
+    }
+  ],
+  "colors": {
+    "primary": "#1f6feb",
+    "light": "#58a6ff",
+    "dark": "#0d1117"
+  }
+}
