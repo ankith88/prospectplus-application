@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FileText, ExternalLink, Calendar, DollarSign, Tag, Hash, Building2 } from 'lucide-react';
 import type { Invoice } from '@/lib/types';
-import { safeFormatDate } from '@/lib/utils';
+import { safeFormatDate, getInvoiceLineItems } from '@/lib/utils';
 
 interface InvoiceDetailsDialogProps {
   isOpen: boolean;
@@ -112,43 +112,44 @@ export function InvoiceDetailsDialog({
           </div>
 
           {/* Line Items Section */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Invoice Line Items
-            </h4>
-            {invoice.items && invoice.items.length > 0 ? (
-              <div className="rounded-lg border border-slate-200 overflow-hidden bg-background">
-                <Table>
-                  <TableHeader className="bg-muted/50">
-                    <TableRow>
-                      <TableHead className="text-xs font-semibold">Service Description</TableHead>
-                      <TableHead className="text-xs font-semibold text-right">Rate</TableHead>
-                      <TableHead className="text-xs font-semibold text-center">Qty</TableHead>
-                      <TableHead className="text-xs font-semibold text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoice.items.map((item, idx) => {
-                      const rateNum = Number(item.rate || 0);
-                      const totalNum = Number(item.totalAmount || (rateNum * Number(item.qty || 1)));
-                      return (
-                        <TableRow key={idx} className="text-xs">
-                          <TableCell className="font-medium">{item.service || 'Service'}</TableCell>
-                          <TableCell className="text-right">${rateNum.toFixed(2)}</TableCell>
-                          <TableCell className="text-center">{item.qty || 1}</TableCell>
-                          <TableCell className="text-right font-semibold">${totalNum.toFixed(2)}</TableCell>
+          {(() => {
+            const lineItems = getInvoiceLineItems(invoice);
+            return (
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Invoice Line Items {lineItems.length > 0 ? `(${lineItems.length})` : ''}
+                </h4>
+                {lineItems.length > 0 ? (
+                  <div className="rounded-lg border border-slate-200 overflow-hidden bg-background">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead className="text-xs font-semibold">Service / Item</TableHead>
+                          <TableHead className="text-xs font-semibold text-right">Rate</TableHead>
+                          <TableHead className="text-xs font-semibold text-center">Qty</TableHead>
+                          <TableHead className="text-xs font-semibold text-right">Amount</TableHead>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {lineItems.map((item, idx) => (
+                          <TableRow key={idx} className="text-xs">
+                            <TableCell className="font-medium">{item.service}</TableCell>
+                            <TableCell className="text-right">${item.rate.toFixed(2)}</TableCell>
+                            <TableCell className="text-center">{item.qty}</TableCell>
+                            <TableCell className="text-right font-semibold">${item.totalAmount.toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-xs text-center py-6 border border-dashed rounded-lg text-muted-foreground">
+                    No individual line items recorded for this invoice.
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="text-xs text-center py-6 border border-dashed rounded-lg text-muted-foreground">
-                No individual line items recorded for this invoice.
-              </div>
-            )}
-          </div>
+            );
+          })()}
         </div>
 
         <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-2 border-t pt-4">

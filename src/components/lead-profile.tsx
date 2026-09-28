@@ -141,7 +141,7 @@ import { Calendar as CalendarPicker } from './ui/calendar'
 import { format, isValid } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { cn, formatInTimezone, parseDateString, safeFormatDate, validateABN, getLeadDisplayDateValue, getLeadDisplayDateLabel, isScfAcceptedForLead } from '@/lib/utils'
+import { cn, formatInTimezone, parseDateString, safeFormatDate, validateABN, getLeadDisplayDateValue, getLeadDisplayDateLabel, isScfAcceptedForLead, getInvoiceLineItems } from '@/lib/utils'
 import { getMergedCancellationHierarchy, autoMapLostOutcome, getCancellationTypeInfo } from '@/lib/cancellation-reasons-mapper'
 import { sendLeadUpdateToNetSuite, sendCompanyCustomerUpdateToNetSuite } from '@/services/netsuite'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
@@ -8932,7 +8932,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <TableBody>
                               {displayedInvoices.map((inv) => {
                                 const isExpanded = expandedInvoiceIds.has(inv.id || inv.documentId || '');
-                                const itemsCount = inv.items?.length || 0;
+                                const lineItems = getInvoiceLineItems(inv);
+                                const itemsCount = lineItems.length;
                                 const statusStr = inv.invoiceStatus || inv.status || 'N/A';
                                 
                                 let badgeClass = "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800";
@@ -9021,12 +9022,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                   </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
-                                                  {inv.items!.map((item: any, idx: number) => (
+                                                  {lineItems.map((item, idx: number) => (
                                                     <TableRow key={idx} className="h-8 border-b last:border-0">
-                                                      <TableCell className="font-medium">{item.service || 'N/A'}</TableCell>
-                                                      <TableCell className="text-right">${Number(item.rate || 0).toFixed(2)}</TableCell>
-                                                      <TableCell className="text-center">{item.qty || 1}</TableCell>
-                                                      <TableCell className="text-right font-semibold">${Number(item.totalAmount || 0).toFixed(2)}</TableCell>
+                                                      <TableCell className="font-medium">{item.service}</TableCell>
+                                                      <TableCell className="text-right">${item.rate.toFixed(2)}</TableCell>
+                                                      <TableCell className="text-center">{item.qty}</TableCell>
+                                                      <TableCell className="text-right font-semibold">${item.totalAmount.toFixed(2)}</TableCell>
                                                     </TableRow>
                                                   ))}
                                                 </TableBody>

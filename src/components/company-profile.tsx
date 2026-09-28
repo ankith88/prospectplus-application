@@ -82,7 +82,7 @@ import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { logActivity, getAllUsers, getCompanyFromFirebase, deleteAdditionalAddress, getOperatorsForFranchisee, getAllFranchisees } from '@/services/firebase'
-import { formatInTimezone, parseDateString, safeFormatDate, getLeadDisplayDateValue, getLeadDisplayDateLabel } from '@/lib/utils'
+import { formatInTimezone, parseDateString, safeFormatDate, getLeadDisplayDateValue, getLeadDisplayDateLabel, getInvoiceLineItems } from '@/lib/utils'
 import { getMergedCancellationHierarchy, autoMapLostOutcome, getCancellationTypeInfo } from '@/lib/cancellation-reasons-mapper'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
 import { Label } from './ui/label'
@@ -2287,35 +2287,39 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                                     )}
                                                 </TableCell>
                                             </TableRow>
-                                            {inv.items && inv.items.length > 0 && (
-                                                <TableRow key={`${inv.id}-items`} className="bg-slate-50/50 hover:bg-slate-50/50">
-                                                    <TableCell colSpan={5} className="py-2 pl-8 pr-4">
-                                                        <div className="text-xs font-semibold text-slate-700 mb-1">Line Items:</div>
-                                                        <div className="rounded-md border border-slate-200 overflow-hidden bg-white">
-                                                            <Table className="text-xs">
-                                                                <TableHeader className="bg-slate-100/70">
-                                                                    <TableRow>
-                                                                        <TableHead className="h-7 text-xs font-semibold text-slate-600">Service</TableHead>
-                                                                        <TableHead className="h-7 text-xs font-semibold text-slate-600 text-right">Rate</TableHead>
-                                                                        <TableHead className="h-7 text-xs font-semibold text-slate-600 text-center">Qty</TableHead>
-                                                                        <TableHead className="h-7 text-xs font-semibold text-slate-600 text-right">Amount</TableHead>
-                                                                    </TableRow>
-                                                                </TableHeader>
-                                                                <TableBody>
-                                                                    {inv.items.map((item, idx) => (
-                                                                        <TableRow key={idx} className="h-7 border-slate-100">
-                                                                            <TableCell className="py-1 font-medium">{item.service}</TableCell>
-                                                                            <TableCell className="py-1 text-right">${Number(item.rate).toFixed(2)}</TableCell>
-                                                                            <TableCell className="py-1 text-center">{item.qty}</TableCell>
-                                                                            <TableCell className="py-1 text-right font-medium">${Number(item.totalAmount).toFixed(2)}</TableCell>
+                                            {(() => {
+                                                const lineItems = getInvoiceLineItems(inv);
+                                                if (lineItems.length === 0) return null;
+                                                return (
+                                                    <TableRow key={`${inv.id}-items`} className="bg-slate-50/50 hover:bg-slate-50/50">
+                                                        <TableCell colSpan={5} className="py-2 pl-8 pr-4">
+                                                            <div className="text-xs font-semibold text-slate-700 mb-1">Line Items ({lineItems.length}):</div>
+                                                            <div className="rounded-md border border-slate-200 overflow-hidden bg-white">
+                                                                <Table className="text-xs">
+                                                                    <TableHeader className="bg-slate-100/70">
+                                                                        <TableRow>
+                                                                            <TableHead className="h-7 text-xs font-semibold text-slate-600">Service / Item</TableHead>
+                                                                            <TableHead className="h-7 text-xs font-semibold text-slate-600 text-right">Rate</TableHead>
+                                                                            <TableHead className="h-7 text-xs font-semibold text-slate-600 text-center">Qty</TableHead>
+                                                                            <TableHead className="h-7 text-xs font-semibold text-slate-600 text-right">Amount</TableHead>
                                                                         </TableRow>
-                                                                    ))}
-                                                                </TableBody>
-                                                            </Table>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            )}
+                                                                    </TableHeader>
+                                                                    <TableBody>
+                                                                        {lineItems.map((item, idx) => (
+                                                                            <TableRow key={idx} className="h-7 border-slate-100">
+                                                                                <TableCell className="py-1 font-medium">{item.service}</TableCell>
+                                                                                <TableCell className="py-1 text-right">${item.rate.toFixed(2)}</TableCell>
+                                                                                <TableCell className="py-1 text-center">{item.qty}</TableCell>
+                                                                                <TableCell className="py-1 text-right font-medium">${item.totalAmount.toFixed(2)}</TableCell>
+                                                                            </TableRow>
+                                                                        ))}
+                                                                    </TableBody>
+                                                                </Table>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })()}
                                         </React.Fragment>
                                     ))}
                                 </TableBody>

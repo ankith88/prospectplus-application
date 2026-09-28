@@ -649,4 +649,105 @@ export function isTestLeadOrCompany(lead?: any): boolean {
   return name.toLowerCase().includes('test');
 }
 
+/**
+ * Normalized representation of an individual invoice line item.
+ */
+export interface NormalizedInvoiceLineItem {
+  service: string;
+  rate: number;
+  qty: number;
+  totalAmount: number;
+}
+
+/**
+ * Robustly parses and normalizes line items from an invoice document.
+ * Handles arrays, JSON strings, object dictionaries/maps, and varied key naming conventions
+ * (e.g. NetSuite imports with item/quantity/amount or standard service/rate/qty/totalAmount).
+ */
+export function getInvoiceLineItems(invoice: any): NormalizedInvoiceLineItem[] {
+  if (!invoice || typeof invoice !== 'object') return [];
+
+  // Check possible field names where items might be stored
+  let rawItems = invoice.items ?? invoice.lineItems ?? invoice.invoiceItems ?? invoice.lines ?? invoice.itemLines ?? invoice.products ?? invoice.services;
+
+  if (!rawItems) return [];
+
+  // Handle JSON stringified items
+  if (typeof rawItems === 'string') {
+    const trimmed = rawItems.trim();
+    if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed) || (typeof parsed === 'object' && parsed !== null)) {
+          rawItems = parsed;
+        } else {
+          return [];
+        }
+      } catch {
+        return [];
+      }
+    } else {
+      return [];
+    }
+  }
+
+  // Handle object dictionary / map (e.g. { "0": {...}, "1": {...} })
+  if (typeof rawItems === 'object' && !Array.isArray(rawItems) && rawItems !== null) {
+    rawItems = Object.values(rawItems);
+  }
+
+  if (!Array.isArray(rawItems)) return [];
+
+  return rawItems
+    .filter((item: any) => item !== null && item !== undefined && typeof item === 'object')
+    .map((item: any) => {
+      // 1. Service / Description / Item name
+      const service = String(
+        item.service ||
+        item.item ||
+        item.description ||
+        item.name ||
+        item.memo ||
+        item.serviceName ||
+        item.product ||
+        item.lineItem ||
+        item.title ||
+        item['Item'] ||
+        item['Description'] ||
+        item['Service'] ||
+        'Service'
+      ).trim();
+
+      // 2. Quantity
+      const rawQty = item.qty ?? item.quantity ?? item.count ?? item['Quantity'] ?? item['Qty'];
+      const qtyNum = typeof rawQty === 'number' ? rawQty : parseFloat(String(rawQty || '1'));
+      const qty = isNaN(qtyNum) || qtyNum <= 0 ? 1 : qtyNum;
+
+      // 3. Rate / Unit Price & Total Amount
+      const rawRate = item.rate ?? item.unitPrice ?? item.price ?? item.rateAmount ?? item['Rate'] ?? item['Price'];
+      const rawAmount = item.totalAmount ?? item.amount ?? item.total ?? item.grossAmount ?? item.netAmount ?? item['Amount'] ?? item['Total'];
+
+      let rate = typeof rawRate === 'number' ? rawRate : parseFloat(String(rawRate ?? ''));
+      let totalAmount = typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount ?? ''));
+
+      if (isNaN(rate) && !isNaN(totalAmount)) {
+        rate = qty > 0 ? totalAmount / qty : totalAmount;
+      } else if (isNaN(rate)) {
+        rate = 0;
+      }
+
+      if (isNaN(totalAmount)) {
+        totalAmount = rate * qty;
+      }
+
+      return {
+        service,
+        rate,
+        qty,
+        totalAmount,
+      };
+    });
+}
+
+
 
