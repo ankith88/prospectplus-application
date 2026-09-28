@@ -256,7 +256,7 @@ export function CommandPalette() {
             ref={inputRef}
             type="text"
             className="flex-1 text-base text-slate-800 placeholder-slate-400 bg-transparent outline-none border-none focus:outline-none focus:ring-0"
-            placeholder="Search company, ID, address, phone, ticket..."
+            placeholder="Search company, ID, email (@domain.com), address, ticket..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

@@ -203,4 +203,4 @@ export * from './reportsAggregation';
 export * from './franchiseeSync';
 export * from './overdueHotLeadsReport';
 export * from './localmileJobsReport';
-
+export * from './dailyCallAuditReport';

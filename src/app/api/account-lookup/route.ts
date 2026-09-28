@@ -198,6 +198,10 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get('type')?.trim() || 'all';
 
     // Parse query words and variations
+    const isEmailDomain = q.trim().startsWith('@');
+    const domainQuery = isEmailDomain
+      ? q.trim().replace(/^@+/, '').toLowerCase().trim()
+      : (q.includes('@') ? q.split('@').pop()?.toLowerCase().trim() || '' : '');
     const digitsOnly = q.replace(/\D/g, '');
     const isEmail = q.includes('@');
     const phoneVariations = getPhoneVariations(q);
@@ -297,7 +301,18 @@ export async function GET(req: NextRequest) {
       rawLowerQuery,
     ])).filter(w => w.length >= 2).slice(0, 10);
 
-    if (arrayQueryWords.length === 0) {
+    if (isEmailDomain && domainQuery) {
+      const domainParts = domainQuery.split('.').filter(Boolean);
+      const domainRoot = domainParts[0] || domainQuery;
+      arrayQueryWords = Array.from(new Set([
+        `@${domainQuery}`,
+        domainQuery,
+        domainRoot,
+        `@${domainRoot}`,
+        ...domainParts.filter(p => p.length >= 2 && !STOP_WORDS.has(p)),
+        ...arrayQueryWords,
+      ])).filter(w => w.length >= 2).slice(0, 10);
+    } else if (arrayQueryWords.length === 0) {
       arrayQueryWords = queryWords.filter(w => w.length >= 2).slice(0, 10);
     }
 
@@ -314,6 +329,15 @@ export async function GET(req: NextRequest) {
           .limit(60)
           .get()
       );
+
+      if (isEmailDomain || type === 'email') {
+        contactPromises.push(
+          db.collectionGroup('contacts')
+            .where('searchKeywords', 'array-contains-any', arrayQueryWords)
+            .limit(40)
+            .get()
+        );
+      }
     }
 
     // 1. Account / Search Strings Queries
@@ -609,17 +633,23 @@ export async function GET(req: NextRequest) {
     }
 
     // Fetch parents for matched contacts and invoices with explicit item mapping
-    const parentFetchItems: { ref: any; type: 'lead' | 'company'; matchedInvoice?: string }[] = [];
+    const parentFetchItems: { ref: any; type: 'lead' | 'company'; matchedInvoice?: string; matchedContactEmail?: string }[] = [];
 
     for (const snap of contactSnaps) {
       if (snap.docs) {
         for (const doc of snap.docs) {
+          const cData = doc.data() || {};
           const parentRef = doc.ref.parent.parent;
           if (parentRef) {
             const type = parentRef.path.startsWith('leads') ? 'lead' : 'company';
             const key = `${type}-${parentRef.id}`;
             if (!rawMatchedDocs.has(key)) {
-              parentFetchItems.push({ ref: parentRef, type });
+              parentFetchItems.push({ ref: parentRef, type, matchedContactEmail: cData.email });
+            } else {
+              const existing = rawMatchedDocs.get(key);
+              if (existing && existing.data && cData.email) {
+                existing.data._matchedContactEmail = cData.email;
+              }
             }
           }
         }
@@ -665,6 +695,9 @@ export async function GET(req: NextRequest) {
           if (item.matchedInvoice) {
             data._matchedInvoiceNumber = item.matchedInvoice;
           }
+          if (item.matchedContactEmail) {
+            data._matchedContactEmail = item.matchedContactEmail;
+          }
           rawMatchedDocs.set(`${item.type}-${snap.id}`, { type: item.type, id: snap.id, data });
         }
       });
@@ -702,17 +735,42 @@ export async function GET(req: NextRequest) {
       const matchedInvoiceStr = (data._matchedInvoiceNumber || '').toLowerCase();
       const lastInvoiceNumberStr = (data.lastInvoiceNumber || '').toLowerCase();
 
+      // Collect all possible emails attached to this record
+      const docEmails: string[] = [
+        data.customerServiceEmail,
+        data.email,
+        data.contactEmail,
+        data.billingEmail,
+        data.accountsEmail,
+        data._matchedContactEmail,
+      ].filter(Boolean).map(e => String(e).toLowerCase().trim());
+
+      if (Array.isArray(data.contacts)) {
+        data.contacts.forEach((c: any) => {
+          if (c && c.email) docEmails.push(String(c.email).toLowerCase().trim());
+        });
+      }
+
       const resolvedAddr = resolveAddress(data);
       const addressStr = resolvedAddr
         ? `${resolvedAddr.address1} ${resolvedAddr.street} ${resolvedAddr.city} ${resolvedAddr.state} ${resolvedAddr.zip}`.toLowerCase()
         : '';
 
-      const fullCombinedStr = `${companyNameStr} ${prospectPlusIdStr} ${entityIdStr} ${emailFieldStr} ${addressStr} ${phoneFieldStr} ${phoneDigits} ${matchedInvoiceStr} ${lastInvoiceNumberStr}`.toLowerCase();
+      const fullCombinedStr = `${companyNameStr} ${prospectPlusIdStr} ${entityIdStr} ${emailFieldStr} ${docEmails.join(' ')} ${addressStr} ${phoneFieldStr} ${phoneDigits} ${matchedInvoiceStr} ${lastInvoiceNumberStr}`.toLowerCase();
 
       const checkWords = significantQueryWords.length > 0 ? significantQueryWords : queryWords;
 
-      // Check match based on selected searchType tab
-      if (type === 'company') {
+      // Handle Email Domain search (@domain.com.au or @domain)
+      if (isEmailDomain) {
+        const matchesDomain = docEmails.some(e => {
+          if (e.endsWith(`@${domainQuery}`) || e === domainQuery || e === `@${domainQuery}`) return true;
+          if (e.includes(`@${domainQuery}`) || (domainQuery.includes('.') && e.endsWith(domainQuery))) return true;
+          const root = domainQuery.split('.')[0];
+          if (root && root.length >= 3 && (e.includes(`@${root}.`) || e.includes(`@${root}`))) return true;
+          return false;
+        });
+        if (!matchesDomain) continue;
+      } else if (type === 'company') {
         const matches = checkWords.every(w => companyNameStr.includes(w));
         if (!matches) continue;
       } else if (type === 'id') {
@@ -731,7 +789,12 @@ export async function GET(req: NextRequest) {
         const matches = queryWords.every(w => addressStr.includes(w));
         if (!matches) continue;
       } else if (type === 'email') {
-        const matches = queryWords.every(w => emailFieldStr.includes(w));
+        const matches = docEmails.some(e => {
+          if (domainQuery) {
+            if (e.endsWith(`@${domainQuery}`) || e.includes(`@${domainQuery}`)) return true;
+          }
+          return queryWords.every(w => e.includes(w));
+        }) || queryWords.every(w => emailFieldStr.includes(w));
         if (!matches) continue;
       } else if (type === 'phone') {
         if (digitsOnly.length >= 3) {

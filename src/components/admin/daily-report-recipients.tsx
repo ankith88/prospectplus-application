@@ -92,6 +92,14 @@ const REPORTS: ReportConfig[] = [
     defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
     testEndpoint: '/api/admin/scans/send-test-zee-gen-auto-response',
   },
+  {
+    id: 'call_audit',
+    title: 'Daily Call Audit & Transcripts Report',
+    description: 'Autonomous end-of-day AI audit of all SDR/AM dials, pre-fetched call transcripts, coaching drill adherence, 5-free offer triggers, wording compliance, and leak detection with executive PDF & Word attachments.',
+    docId: 'daily_call_audit_report',
+    defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
+    testEndpoint: '/api/admin/scans/send-test-daily-call-audit',
+  },
 ];
 
 const FREQUENCY_OPTIONS = [
@@ -100,7 +108,11 @@ const FREQUENCY_OPTIONS = [
   { value: '08:00', label: 'Daily at 8:00 AM Sydney Time' },
   { value: '09:00', label: 'Daily at 9:00 AM Sydney Time' },
   { value: '10:00', label: 'Daily at 10:00 AM Sydney Time' },
-  { value: '17:00', label: 'Daily at 5:00 PM Sydney Time' },
+  { value: '17:00', label: 'Daily at 5:00 PM Sydney Time (End of Day)' },
+  { value: '17:30', label: 'Daily at 5:30 PM Sydney Time (End of Day)' },
+  { value: '18:00', label: 'Daily at 6:00 PM Sydney Time (End of Day)' },
+  { value: '18:30', label: 'Daily at 6:30 PM Sydney Time (End of Day)' },
+  { value: '19:00', label: 'Daily at 7:00 PM Sydney Time (End of Day)' },
   { value: 'disabled', label: 'Disabled (Do not send automatically)' },
 ];
 
@@ -140,14 +152,15 @@ export function DailyReportRecipients() {
           const snap = await getDoc(docRef);
           
           const defaultFrom = report.id === 'zee_gen_auto_response' ? 'aleyna.harnett@mailplus.com.au' : 'ankith.ravindran@mailplus.com.au';
+          const defaultFreq = report.id === 'call_audit' ? '17:30' : '06:00';
           if (snap.exists()) {
             const data = snap.data();
             recData[report.id] = Array.isArray(data?.recipients) ? data.recipients : [...report.defaultRecipients];
-            freqData[report.id] = data?.frequency || '06:00';
+            freqData[report.id] = data?.frequency || defaultFreq;
             fromData[report.id] = data?.fromAddress || defaultFrom;
           } else {
             recData[report.id] = [...report.defaultRecipients];
-            freqData[report.id] = '06:00';
+            freqData[report.id] = defaultFreq;
             fromData[report.id] = defaultFrom;
           }
           dateData[report.id] = yesterdayStr;

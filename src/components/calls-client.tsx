@@ -65,7 +65,7 @@ import {
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string; accountManagerAssigned?: string; leadBucket?: string; movedFromBucket?: string; movedToBucket?: string; movedFromStatus?: LeadStatus; movedToStatus?: LeadStatus };
 const reviewCategories: ReviewCategory[] = ['Good Example', 'Coaching Opportunity', 'Needs Improvement'];
 
-type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'leadBucket' | 'date' | 'duration';
+type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'accountManagerAssigned' | 'leadStatus' | 'leadBucket' | 'date' | 'duration';
 
 const CALLS_PER_PAGE = 50;
 const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'];
@@ -536,11 +536,12 @@ export default function CallsClientPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'Prospect+ ID', 'User', 'Status', 'Bucket', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
+    const headers = ['Lead Name', 'Prospect+ ID', 'User', 'Account Manager', 'Status', 'Bucket', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
     const rows = sortedCalls.map(call => [
         escapeCsvCell(call.leadName),
         escapeCsvCell((call as any).prospectPlusId || call.leadId || ''),
         escapeCsvCell(call.author || call.dialerAssigned || 'Unassigned'),
+        escapeCsvCell(call.accountManagerAssigned || 'Unassigned'),
         escapeCsvCell(call.leadStatus),
         escapeCsvCell(bucketNames[call.leadBucket || ''] || call.leadBucket || 'N/A'),
         escapeCsvCell(call.callId),
@@ -702,6 +703,12 @@ export default function CallsClientPage() {
                 <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-muted-foreground" />
                 {call.author || call.dialerAssigned || 'Unassigned'}
+                </div>
+            </TableCell>
+            <TableCell>
+                <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                {call.accountManagerAssigned || 'Unassigned'}
                 </div>
             </TableCell>
             <TableCell>
@@ -1134,6 +1141,7 @@ export default function CallsClientPage() {
                   <TableHead className="text-left w-[80px]">Actions</TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadName')} className="group -ml-4">Lead{getSortIndicator('leadName')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">User{getSortIndicator('dialerAssigned')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('accountManagerAssigned')} className="group -ml-4">Account Manager{getSortIndicator('accountManagerAssigned')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadStatus')} className="group -ml-4">Status{getSortIndicator('leadStatus')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadBucket')} className="group -ml-4">Bucket{getSortIndicator('leadBucket')}</Button></TableHead>
                   <TableHead>Call ID</TableHead>
@@ -1146,13 +1154,13 @@ export default function CallsClientPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={11} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedCalls.length > 0 ? (
                   paginatedCalls.map(renderCallRow)
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
                           No calls found.
                       </TableCell>
                   </TableRow>

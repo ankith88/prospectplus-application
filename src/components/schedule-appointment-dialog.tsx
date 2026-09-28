@@ -32,6 +32,12 @@ interface ScheduleAppointmentDialogProps {
   onContactAdded?: (contact: Contact) => void;
 }
 
+const ALLOWED_ACCOUNT_MANAGERS = [
+  'Kerina Helliwell',
+  'Lee Russell',
+  'Luke Forbes'
+];
+
 export function ScheduleAppointmentDialog({
   isOpen,
   onOpenChange,
@@ -43,7 +49,18 @@ export function ScheduleAppointmentDialog({
   onContactAdded
 }: ScheduleAppointmentDialogProps) {
   const { toast } = useToast();
-  const [selectedAm, setSelectedAm] = useState<string | null>(lead.accountManagerAssigned || null);
+
+  const amList = accountManagers && accountManagers.length > 0
+    ? ALLOWED_ACCOUNT_MANAGERS.filter(allowed =>
+        accountManagers.some(am => am.trim().toLowerCase() === allowed.toLowerCase())
+      )
+    : ALLOWED_ACCOUNT_MANAGERS;
+
+  const [selectedAm, setSelectedAm] = useState<string | null>(() => {
+    const currentAssigned = lead.accountManagerAssigned?.trim();
+    if (!currentAssigned) return null;
+    return amList.find(am => am.toLowerCase() === currentAssigned.toLowerCase()) || currentAssigned;
+  });
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [linkType, setLinkType] = useState<'contact' | 'lead'>('contact');
   const [isAssigning, setIsAssigning] = useState(false);
@@ -51,15 +68,17 @@ export function ScheduleAppointmentDialog({
   const [localContacts, setLocalContacts] = useState<Contact[]>(lead.contacts || []);
   const [isAddingContact, setIsAddingContact] = useState(false);
 
-  const amList = accountManagers || ['Lee Russell', 'Kerina Helliwell', 'Luke Forbes', 'Ankith Ravindran'];
-
   // Sync selected AM and contacts with lead assignment on open or when lead.contacts change
   useEffect(() => {
     if (isOpen) {
-      setSelectedAm(lead.accountManagerAssigned || null);
+      const currentAssigned = lead.accountManagerAssigned?.trim();
+      const matchingAm = currentAssigned
+        ? amList.find(am => am.toLowerCase() === currentAssigned.toLowerCase()) || currentAssigned
+        : null;
+      setSelectedAm(matchingAm);
       setLocalContacts(lead.contacts || []);
     }
-  }, [isOpen, lead.accountManagerAssigned, lead.contacts]);
+  }, [isOpen, lead.accountManagerAssigned, lead.contacts, amList]);
 
   const handleCreateContact = () => {
     if (onCreateContact) {
@@ -143,7 +162,11 @@ export function ScheduleAppointmentDialog({
     if (!open) {
       setTimeout(() => {
         setGeneratedUrl(null);
-        setSelectedAm(lead.accountManagerAssigned || null);
+        const currentAssigned = lead.accountManagerAssigned?.trim();
+        const matchingAm = currentAssigned
+          ? amList.find(am => am.toLowerCase() === currentAssigned.toLowerCase()) || currentAssigned
+          : null;
+        setSelectedAm(matchingAm);
         setSelectedContact(null);
         setIsAddingContact(false);
       }, 300);

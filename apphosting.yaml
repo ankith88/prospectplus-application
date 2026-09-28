@@ -18,9 +18,9 @@ env:
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     value: AIzaSyA92XGDo8rx11izPYT7z2L-YPMMJ6Ih1s0
   - variable: NEXT_PUBLIC_AIRCALL_API_TOKEN
-    value: f91a42e6c7ae88088e58859f0a6e2596
+    value: f1fa3d2057264085560ae9af350009ad
   - variable: NEXT_PUBLIC_AIRCALL_API_ID
-    value: fefb739312ef752526263326eb1a412e
+    value: 494cbe8bcfe6e809016f74019fdff1bb
   - variable: WEBHOOK_SECRET
     secret: WEBHOOK_SECRET
   - variable: AIRCALL_API_KEY

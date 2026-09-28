@@ -210,7 +210,7 @@ export default function AccountLookupPage() {
           <input
             type="text"
             className="flex-1 text-lg font-medium text-[#15251d] placeholder-[#4a5a50]/55 bg-transparent border-none outline-none focus:ring-0 focus:outline-none"
-            placeholder="Search by company name, Prospect+ ID, address, phone, email, package or ticket..."
+            placeholder="Search by name, ID, address, phone, email (@domain.com.au), ticket..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -292,7 +292,7 @@ export default function AccountLookupPage() {
                 : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
             }`}
           >
-            Email
+            Email / Domain
           </button>
 
           <button

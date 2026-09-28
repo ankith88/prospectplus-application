@@ -697,7 +697,7 @@ export default function PipelineDashboard() {
         return filteredLeads.filter(lead => {
             if (priorityLeads.includes(lead)) return false;
             const currentStatus = lead.customerStatus || lead.status;
-            return ['LocalMile Opportunity', 'LocalMile Pending'].includes(currentStatus);
+            return ['LocalMile Opportunity', 'LocalMile Pending', 'Trialing LocalMile'].includes(currentStatus);
         });
     }, [filteredLeads, priorityLeads]);
 
@@ -978,6 +978,8 @@ export default function PipelineDashboard() {
                                         <SelectItem value="ShipMate Pending">ShipMate Pending</SelectItem>
                                         <SelectItem value="Trialing ShipMate">Trialing ShipMate</SelectItem>
                                         <SelectItem value="LocalMile Opportunity">LocalMile Opportunity</SelectItem>
+                                        <SelectItem value="LocalMile Pending">LocalMile Pending</SelectItem>
+                                        <SelectItem value="Trialing LocalMile">Trialing LocalMile</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1473,6 +1475,7 @@ const STATUS_ORDER: { [status: string]: number } = {
     'Trialing ShipMate': 51,
     'LocalMile Opportunity': 60,
     'LocalMile Pending': 61,
+    'Trialing LocalMile': 62,
 };
 
 const getStatusOrder = (status: string) => {
@@ -1738,6 +1741,8 @@ function LeadGrid({
                             rowBgClass = "bg-purple-50/60 hover:bg-purple-100/60 transition-colors";
                         } else if (currentStatus === "LocalMile Pending") {
                             rowBgClass = "bg-amber-50/60 hover:bg-amber-100/60 transition-colors";
+                        } else if (currentStatus === "Trialing LocalMile") {
+                            rowBgClass = "bg-emerald-50/60 hover:bg-emerald-100/60 transition-colors";
                         }
                         
                         return (

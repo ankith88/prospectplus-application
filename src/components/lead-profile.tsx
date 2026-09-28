@@ -82,7 +82,7 @@ import {
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
-import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isFranchiseeRole, isAccountOrSalesManager } from '@/lib/lead-permissions'
+import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isFranchiseeRole, isAccountOrSalesManager, isDialerRole, isOutboundLead } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
 import { Pencil } from 'lucide-react'
 import { EditTaskDialog } from '@/components/edit-task-dialog'
@@ -5280,7 +5280,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Alert>
       )}
 
-      {duplicateLeads.length > 0 && !isDismissed && lead.bucket !== 'lpo_network' && (
+      {duplicateLeads.length > 0 && !isDismissed && lead.bucket !== 'lpo_network' && !(isOutboundLead(lead) && isDialerRole(userProfile, isSuperAdmin)) && (
           <Alert className="bg-amber-50 border-amber-200 text-amber-900 shadow-sm">
               <AlertCircle className="h-4 w-4 !text-amber-800" />
               <AlertTitle className="font-bold">Duplicate Leads Detected</AlertTitle>
@@ -5439,11 +5439,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 return `Customer Success • CS: ${lead.customerSuccessAssigned || 'Unassigned'}`;
                             }
 
-                            if (b === 'field_sales' || (!b && lead.fieldSales)) return 'Field Sales';
-                            if (b === 'account_manager') return 'Account Manager';
-                            if (b === 'nurture') return 'Nurture';
-                            if (b === 'marketing') return 'Marketing';
-                            if (b === 'lpo_plus') return 'LPO.Plus';
+                            if (b === 'account_manager') {
+                                return `Account Manager • AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
+                            }
+                            if (b === 'field_sales' || (!b && lead.fieldSales)) {
+                                return `Field Sales • Rep: ${lead.salesRepAssigned || lead.fieldRepAssigned || 'Unassigned'}`;
+                            }
+                            if (b === 'nurture') {
+                                return `Nurture • AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
+                            }
+                            if (b === 'marketing') {
+                                return `Marketing • AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
+                            }
+                            if (b === 'lpo_plus') {
+                                return `LPO.Plus • AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
+                            }
 
                             return lead.bucket || 'Unassigned';
                         })()}

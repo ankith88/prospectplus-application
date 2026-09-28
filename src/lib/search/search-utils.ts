@@ -71,9 +71,43 @@ export function generateSearchKeywords(data: any): string[] {
   addText(data.acn);
   addText(data.lastInvoiceNumber);
 
-  // 2. Email & Phone & Contacts
-  if (data.customerServiceEmail) addText(data.customerServiceEmail);
-  if (data.email) addText(data.email);
+  // 2. Email & Domain & Phone & Contacts
+  const addEmail = (emailVal: any) => {
+    if (!emailVal) return;
+    const str = String(emailVal).toLowerCase().trim();
+    if (!str || str === '- none -' || str === 'undefined' || str === 'null') return;
+    addText(str);
+    const atIdx = str.lastIndexOf('@');
+    if (atIdx !== -1 && atIdx < str.length - 1) {
+      const domain = str.substring(atIdx + 1).trim();
+      if (domain.length >= 2) {
+        keywords.add(`@${domain}`);
+        keywords.add(domain);
+        const domainParts = domain.split('.').filter(Boolean);
+        domainParts.forEach(part => {
+          if (part.length >= 2) keywords.add(part);
+        });
+        if (domainParts.length > 2) {
+          keywords.add(domainParts.slice(1).join('.'));
+          keywords.add(`@${domainParts.slice(1).join('.')}`);
+        }
+      }
+    }
+  };
+
+  if (data.customerServiceEmail) addEmail(data.customerServiceEmail);
+  if (data.email) addEmail(data.email);
+  if (data.contactEmail) addEmail(data.contactEmail);
+  if (data.billingEmail) addEmail(data.billingEmail);
+  if (data.accountsEmail) addEmail(data.accountsEmail);
+  if (Array.isArray(data.contacts)) {
+    data.contacts.forEach((c: any) => {
+      if (c && c.email) addEmail(c.email);
+      if (c && c.name) addText(c.name);
+      if (c && c.phone) addText(c.phone);
+    });
+  }
+
   if (data.contactPerson) addText(data.contactPerson);
   if (data.contactName) addText(data.contactName);
   if (data.primaryContact) addText(data.primaryContact);
@@ -218,7 +252,35 @@ export function scoreSearchResult(item: { id: string; type: string; data: any },
     }
   }
 
-  // 7. Serviced / Active status boost (+5)
+  // 7. Email domain match boost (when query starts with '@' or is an email/domain)
+  if (rawLower.startsWith('@') || rawLower.includes('@')) {
+    const domainQuery = rawLower.startsWith('@') ? rawLower.substring(1).trim() : rawLower;
+    const emailsToCheck: string[] = [
+      data.customerServiceEmail,
+      data.email,
+      data.contactEmail,
+      data.billingEmail,
+      data.accountsEmail,
+      data._matchedContactEmail,
+    ].filter(Boolean).map(e => String(e).toLowerCase().trim());
+
+    if (Array.isArray(data.contacts)) {
+      data.contacts.forEach((c: any) => {
+        if (c && c.email) emailsToCheck.push(String(c.email).toLowerCase().trim());
+      });
+    }
+
+    const hasExactDomain = emailsToCheck.some(e => e.endsWith(`@${domainQuery}`) || e === domainQuery || e === `@${domainQuery}`);
+    const hasSubDomain = emailsToCheck.some(e => e.includes(`@${domainQuery}`) || (domainQuery.length >= 3 && e.includes(domainQuery)));
+
+    if (hasExactDomain) {
+      score = Math.max(score, 90);
+    } else if (hasSubDomain) {
+      score = Math.max(score, 80);
+    }
+  }
+
+  // 8. Serviced / Active status boost (+5)
   if (item.type === 'company' || data.status === 'Won' || data.customerStatus === 'Signed') {
     score += 5;
   }

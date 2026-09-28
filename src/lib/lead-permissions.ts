@@ -384,4 +384,23 @@ export function canChangeFranchisee(
   return true;
 }
 
+export function isDialerRole(
+  userProfile?: UserProfile | null,
+  isSuperAdmin: boolean = false
+): boolean {
+  if (isSuperAdmin) return false;
+  if (!userProfile) return false;
+  if ((userProfile as any)?.superAdmin || (userProfile as any)?.isSuperAdmin) return false;
+
+  const roleLower = (userProfile.activeRole || userProfile.role || '').toLowerCase().trim();
+  const dialerRoles = ['user', 'dialer', 'dialers', 'lead gen', 'lead_gen', 'leadgen', 'outbound rep'];
+  return dialerRoles.includes(roleLower);
+}
+
+export function isOutboundLead(lead?: Partial<Lead> | null): boolean {
+  if (!lead) return false;
+  const bucket = (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase().trim();
+  return bucket === 'outbound';
+}
+
 

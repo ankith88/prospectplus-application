@@ -143,11 +143,29 @@ export async function GET(req: NextRequest) {
     const contactPromises: Promise<any>[] = [];
 
     // Query candidates using searchKeywords
-    const queryWords = q.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
-    const arrayQueryWords = Array.from(new Set([
+    const isEmailDomain = q.trim().startsWith('@');
+    const domainQuery = isEmailDomain
+      ? q.trim().replace(/^@+/, '').toLowerCase().trim()
+      : (q.includes('@') ? q.split('@').pop()?.toLowerCase().trim() || '' : '');
+
+    const queryWords = q.toLowerCase().split(/[\s,./\\_\-+()@&]+/).filter(w => w.length >= 2);
+    let arrayQueryWords = Array.from(new Set([
       ...queryWords,
       q.toLowerCase(),
     ])).filter(w => w.length >= 2).slice(0, 10);
+
+    if (isEmailDomain && domainQuery) {
+      const domainParts = domainQuery.split('.').filter(Boolean);
+      const domainRoot = domainParts[0] || domainQuery;
+      arrayQueryWords = Array.from(new Set([
+        `@${domainQuery}`,
+        domainQuery,
+        domainRoot,
+        `@${domainRoot}`,
+        ...domainParts.filter(p => p.length >= 2),
+        ...arrayQueryWords,
+      ])).filter(w => w.length >= 2).slice(0, 10);
+    }
 
     if (arrayQueryWords.length > 0) {
       leadPromises.push(
@@ -162,6 +180,15 @@ export async function GET(req: NextRequest) {
           .limit(20)
           .get()
       );
+
+      if (isEmailDomain) {
+        contactPromises.push(
+          db.collectionGroup('contacts')
+            .where('searchKeywords', 'array-contains-any', arrayQueryWords)
+            .limit(20)
+            .get()
+        );
+      }
     }
 
     for (const searchStr of searchStrings) {
