@@ -1099,10 +1099,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     useEffect(() => {
         if (!lead.id) return;
-        const parentCol = isCompanyProfile ? 'companies' : 'leads';
-        const q = query(collection(firestore, parentCol, lead.id, 'localMileJobs'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const jobsList = snapshot.docs.map(doc => ({ ...(doc.data() as any), id: doc.id }));
+
+        let leadsJobs: any[] = [];
+        let companiesJobs: any[] = [];
+
+        const updateCombinedJobs = () => {
+            const jobMap = new Map<string, any>();
+            leadsJobs.forEach(job => {
+                const key = String(job.jobId || job.id);
+                jobMap.set(key, { ...job, id: key });
+            });
+            companiesJobs.forEach(job => {
+                const key = String(job.jobId || job.id);
+                const existing = jobMap.get(key);
+                jobMap.set(key, { ...(existing || {}), ...job, id: key });
+            });
+
+            const jobsList = Array.from(jobMap.values());
             jobsList.sort((a: any, b: any) => {
                 const aTime = a.updatedAt?.seconds ? a.updatedAt.seconds * 1000 : new Date(a.updatedAt || a.createdAt || 0).getTime();
                 const bTime = b.updatedAt?.seconds ? b.updatedAt.seconds * 1000 : new Date(b.updatedAt || b.createdAt || 0).getTime();
@@ -1117,11 +1130,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 const computedJobCount = jobsList.length;
 
                 if (!isTrialCancelled && (lead.jobCount !== computedJobCount || lead.localMileTrialsRemaining !== computedTrials || !lead.hasCreatedJob)) {
-                    updateDoc(doc(firestore, parentCol, lead.id), {
+                    const statsUpdate = {
                         jobCount: computedJobCount,
                         hasCreatedJob: true,
                         localMileTrialsRemaining: computedTrials,
-                    }).catch(err => console.warn('Failed auto-syncing lead job stats:', err));
+                    };
+
+                    updateDoc(doc(firestore, 'leads', lead.id), statsUpdate).catch(() => {});
+                    updateDoc(doc(firestore, 'companies', lead.id), statsUpdate).catch(() => {});
 
                     setLead(prev => ({
                         ...prev,
@@ -1131,9 +1147,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     }));
                 }
             }
-        });
-        return () => unsubscribe();
-    }, [lead.id, lead.jobCount, lead.localMileTrialsRemaining, lead.hasCreatedJob, lead.localMileTrialStopped, lead.localMileTrialCancelled, isCompanyProfile]);
+        };
+
+        const qLeads = query(collection(firestore, 'leads', lead.id, 'localMileJobs'));
+        const qCompanies = query(collection(firestore, 'companies', lead.id, 'localMileJobs'));
+
+        const unsubLeads = onSnapshot(qLeads, (snapshot) => {
+            leadsJobs = snapshot.docs.map(doc => ({ ...(doc.data() as any), id: doc.id }));
+            updateCombinedJobs();
+        }, (err) => console.warn('Error listening to leads localMileJobs:', err));
+
+        const unsubCompanies = onSnapshot(qCompanies, (snapshot) => {
+            companiesJobs = snapshot.docs.map(doc => ({ ...(doc.data() as any), id: doc.id }));
+            updateCombinedJobs();
+        }, (err) => console.warn('Error listening to companies localMileJobs:', err));
+
+        return () => {
+            unsubLeads();
+            unsubCompanies();
+        };
+    }, [lead.id, lead.jobCount, lead.localMileTrialsRemaining, lead.hasCreatedJob, lead.localMileTrialStopped, lead.localMileTrialCancelled]);
 
     const handleRecredit = async (jobId: string) => {
         setIsRecreditingId(jobId);

@@ -281,9 +281,28 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
   useEffect(() => {
     if (!company?.id) return;
-    const q = query(collection(firestore, 'leads', company.id, 'localMileJobs'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const jobsList = snapshot.docs.map(doc => ({ ...(doc.data() as any), id: doc.id }));
+
+    let leadsJobs: any[] = [];
+    let companiesJobs: any[] = [];
+
+    const updateCombinedJobs = () => {
+      const jobMap = new Map<string, any>();
+      leadsJobs.forEach(job => {
+        const key = String(job.jobId || job.id);
+        jobMap.set(key, { ...job, id: key });
+      });
+      companiesJobs.forEach(job => {
+        const key = String(job.jobId || job.id);
+        const existing = jobMap.get(key);
+        jobMap.set(key, { ...(existing || {}), ...job, id: key });
+      });
+
+      const jobsList = Array.from(jobMap.values());
+      jobsList.sort((a: any, b: any) => {
+        const aTime = a.updatedAt?.seconds ? a.updatedAt.seconds * 1000 : new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const bTime = b.updatedAt?.seconds ? b.updatedAt.seconds * 1000 : new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
       setLocalMileJobs(jobsList);
 
       if (jobsList.length > 0) {
@@ -292,11 +311,14 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         const computedJobCount = jobsList.length;
 
         if (company.jobCount !== computedJobCount || company.localMileTrialsRemaining !== computedTrials || !company.hasCreatedJob) {
-          updateDoc(doc(firestore, 'leads', company.id), {
+          const statsUpdate = {
             jobCount: computedJobCount,
             hasCreatedJob: true,
             localMileTrialsRemaining: computedTrials,
-          }).catch(err => console.warn('Failed auto-syncing company job stats:', err));
+          };
+
+          updateDoc(doc(firestore, 'leads', company.id), statsUpdate).catch(() => {});
+          updateDoc(doc(firestore, 'companies', company.id), statsUpdate).catch(() => {});
 
           setCompany(prev => prev ? {
             ...prev,
@@ -306,8 +328,25 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
           } : prev);
         }
       }
-    });
-    return () => unsubscribe();
+    };
+
+    const qLeads = query(collection(firestore, 'leads', company.id, 'localMileJobs'));
+    const qCompanies = query(collection(firestore, 'companies', company.id, 'localMileJobs'));
+
+    const unsubLeads = onSnapshot(qLeads, (snapshot) => {
+      leadsJobs = snapshot.docs.map(doc => ({ ...(doc.data() as any), id: doc.id }));
+      updateCombinedJobs();
+    }, (err) => console.warn('Error listening to leads localMileJobs:', err));
+
+    const unsubCompanies = onSnapshot(qCompanies, (snapshot) => {
+      companiesJobs = snapshot.docs.map(doc => ({ ...(doc.data() as any), id: doc.id }));
+      updateCombinedJobs();
+    }, (err) => console.warn('Error listening to companies localMileJobs:', err));
+
+    return () => {
+      unsubLeads();
+      unsubCompanies();
+    };
   }, [company?.id, company?.jobCount, company?.localMileTrialsRemaining, company?.hasCreatedJob]);
 
   useEffect(() => {

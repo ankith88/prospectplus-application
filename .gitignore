@@ -58,4 +58,6 @@ storybook-static
 # temporary files
 tmp/
 /tmp/
+scratch/
+/scratch/
 

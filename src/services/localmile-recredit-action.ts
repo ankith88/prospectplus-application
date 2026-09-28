@@ -15,44 +15,83 @@ export async function recreditLocalMileTrial(leadId: string, jobId: string): Pro
 
   try {
     const leadRef = adminDb.collection('leads').doc(leadId);
-    const leadSnap = await leadRef.get();
+    const companyRef = adminDb.collection('companies').doc(leadId);
 
-    if (!leadSnap.exists) {
-      return { success: false, message: 'Lead not found.' };
+    const [leadSnap, companySnap] = await Promise.all([
+      leadRef.get(),
+      companyRef.get()
+    ]);
+
+    if (!leadSnap.exists && !companySnap.exists) {
+      return { success: false, message: 'Record not found in leads or companies.' };
     }
 
-    // 1. Update job status in the localMileJobs subcollection
-    const jobDocRef = leadRef.collection('localMileJobs').doc(String(jobId));
-    await jobDocRef.set({
-      status: 'recredited',
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    // 1. Update job status in the localMileJobs subcollection across both leads and companies
+    const updatePromises: Promise<any>[] = [];
+    if (leadSnap.exists) {
+      updatePromises.push(leadRef.collection('localMileJobs').doc(String(jobId)).set({
+        status: 'recredited',
+        updatedAt: new Date().toISOString()
+      }, { merge: true }));
+    }
+    if (companySnap.exists) {
+      updatePromises.push(companyRef.collection('localMileJobs').doc(String(jobId)).set({
+        status: 'recredited',
+        updatedAt: new Date().toISOString()
+      }, { merge: true }));
+    }
+    await Promise.all(updatePromises);
 
-    // 2. Query all jobs in localMileJobs to calculate exact active trial count
-    const jobsSnap = await leadRef.collection('localMileJobs').get();
-    const totalJobCount = jobsSnap.docs.length;
-    const activeTrialJobsCount = jobsSnap.docs.filter(d => {
-      const st = d.data()?.status;
+    // 2. Query all jobs in localMileJobs from both subcollections to calculate exact active trial count
+    const [leadsJobsSnap, companiesJobsSnap] = await Promise.all([
+      leadSnap.exists ? leadRef.collection('localMileJobs').get() : { docs: [] },
+      companySnap.exists ? companyRef.collection('localMileJobs').get() : { docs: [] }
+    ]);
+
+    const jobMap = new Map<string, any>();
+    leadsJobsSnap.docs.forEach((d: any) => jobMap.set(d.id, d.data()));
+    companiesJobsSnap.docs.forEach((d: any) => jobMap.set(d.id, { ...(jobMap.get(d.id) || {}), ...d.data() }));
+
+    const allJobs = Array.from(jobMap.values());
+    const totalJobCount = allJobs.length;
+    const activeTrialJobsCount = allJobs.filter(d => {
+      const st = d?.status;
       return st !== 'recredited' && st !== 'cancelled';
     }).length;
 
     const newTrials = Math.max(0, 5 - activeTrialJobsCount);
 
-    // 3. Update trials count & job count in ProspectPlus Lead document
-    await leadRef.update({
+    // 3. Update trials count & job count in ProspectPlus document(s)
+    const docUpdates = {
       jobCount: totalJobCount,
       localMileTrialsRemaining: newTrials,
       updatedAt: new Date().toISOString()
-    });
+    };
+
+    const parentUpdates: Promise<any>[] = [];
+    if (leadSnap.exists) {
+      parentUpdates.push(leadRef.update(docUpdates));
+    }
+    if (companySnap.exists) {
+      parentUpdates.push(companyRef.update(docUpdates));
+    }
+    await Promise.all(parentUpdates);
 
     // 4. Log activity in CRM
-    const activityRef = leadRef.collection('activity');
-    await activityRef.add({
+    const actPromises: Promise<any>[] = [];
+    const actData = {
       type: 'Update',
       date: new Date().toISOString(),
       notes: `LocalMile Trial recredited for job ${jobId}. Remaining trials: ${newTrials}`,
       author: 'ProspectPlus System'
-    });
+    };
+    if (leadSnap.exists) {
+      actPromises.push(leadRef.collection('activity').add(actData));
+    }
+    if (companySnap.exists) {
+      actPromises.push(companyRef.collection('activity').add(actData));
+    }
+    await Promise.all(actPromises);
 
     // 5. Sync the new count to localmile-plus backend
     const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY || process.env.PROSPECTPLUS_API_KEY || process.env.EXTERNAL_API_KEY || '454e75f843954875ccff72537d7702ba1ab6f65c';

@@ -98,6 +98,7 @@ export async function POST(request: Request) {
     }
 
     const matchingJobs: LocalMileJobReportItem[] = [];
+    const seenJobKeys = new Set<string>();
 
     for (const doc of jobsSnap.docs) {
       const data = doc.data();
@@ -108,6 +109,11 @@ export async function POST(request: Request) {
 
       const parentLeadRef = doc.ref.parent.parent;
       const leadId = parentLeadRef ? parentLeadRef.id : 'Unknown';
+      const jobIdStr = String(data.jobId || doc.id);
+      const uniqueJobKey = `${leadId}_${jobIdStr}`;
+
+      if (seenJobKeys.has(uniqueJobKey)) continue;
+      seenJobKeys.add(uniqueJobKey);
 
       let leadData = leadCache.get(leadId);
       if (!leadData && parentLeadRef) {
@@ -131,7 +137,7 @@ export async function POST(request: Request) {
       const isCompleted = ['completed', 'complete', 'delivered', 'done', 'finished'].includes(statusLower);
 
       matchingJobs.push({
-        jobId: data.jobId || doc.id,
+        jobId: jobIdStr,
         status: statusRaw,
         createdAtStr: createdAtDate.toLocaleTimeString('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit' }),
         leadId,

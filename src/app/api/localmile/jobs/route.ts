@@ -25,32 +25,66 @@ export async function POST(req: NextRequest) {
     }
 
     const leadRef = db.collection('leads').doc(String(leadId));
-    const leadSnap = await leadRef.get();
+    const compRef = db.collection('companies').doc(String(leadId));
 
-    if (!leadSnap.exists) {
-      return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+    const [leadSnap, compSnap] = await Promise.all([
+      leadRef.get(),
+      compRef.get()
+    ]);
+
+    if (!leadSnap.exists && !compSnap.exists) {
+      return NextResponse.json({ error: 'Lead or company not found' }, { status: 404 });
     }
 
-    const leadData = leadSnap.data()!;
+    const leadData = leadSnap.exists ? leadSnap.data()! : compSnap.data()!;
 
-    // 1. Save/Update job details in localMileJobs subcollection
-    const jobDocRef = leadRef.collection('localMileJobs').doc(String(jobId));
-    const jobSnap = await jobDocRef.get();
-    const existingJobData = jobSnap.exists ? jobSnap.data() : null;
-
-    await jobDocRef.set({
+    // 1. Save/Update job details in localMileJobs subcollection across leads and companies
+    const jobPayload = {
       jobId: String(jobId),
       status: status || 'created',
       ...jobDetails,
       updatedAt: FieldValue.serverTimestamp(),
-      ...(existingJobData ? {} : { createdAt: FieldValue.serverTimestamp() })
-    }, { merge: true });
+    };
 
-    // 2. Fetch all jobs for this lead to calculate accurate jobCount and localMileTrialsRemaining
-    const jobsSnap = await leadRef.collection('localMileJobs').get();
-    const totalJobCount = jobsSnap.docs.length;
-    const activeTrialJobsCount = jobsSnap.docs.filter(d => {
-      const st = d.data()?.status;
+    let existingJobData = null;
+    const savePromises: Promise<any>[] = [];
+
+    if (leadSnap.exists) {
+      const jobDocRef = leadRef.collection('localMileJobs').doc(String(jobId));
+      const jobSnap = await jobDocRef.get();
+      if (jobSnap.exists) existingJobData = jobSnap.data();
+      savePromises.push(jobDocRef.set({
+        ...jobPayload,
+        ...(existingJobData ? {} : { createdAt: FieldValue.serverTimestamp() })
+      }, { merge: true }));
+    }
+
+    if (compSnap.exists) {
+      const compJobDocRef = compRef.collection('localMileJobs').doc(String(jobId));
+      const compJobSnap = await compJobDocRef.get();
+      if (compJobSnap.exists && !existingJobData) existingJobData = compJobSnap.data();
+      savePromises.push(compJobDocRef.set({
+        ...jobPayload,
+        ...(existingJobData ? {} : { createdAt: FieldValue.serverTimestamp() })
+      }, { merge: true }));
+    }
+
+    await Promise.all(savePromises);
+
+    // 2. Fetch all jobs across both subcollections to calculate accurate jobCount and localMileTrialsRemaining
+    const [leadJobsSnap, compJobsSnap] = await Promise.all([
+      leadSnap.exists ? leadRef.collection('localMileJobs').get() : { docs: [] },
+      compSnap.exists ? compRef.collection('localMileJobs').get() : { docs: [] }
+    ]);
+
+    const jobsMap = new Map<string, any>();
+    leadJobsSnap.docs.forEach((d: any) => jobsMap.set(d.id, d.data()));
+    compJobsSnap.docs.forEach((d: any) => jobsMap.set(d.id, { ...(jobsMap.get(d.id) || {}), ...d.data() }));
+
+    const allJobsList = Array.from(jobsMap.values());
+    const totalJobCount = allJobsList.length;
+    const activeTrialJobsCount = allJobsList.filter(d => {
+      const st = d?.status;
       return st !== 'recredited' && st !== 'cancelled';
     }).length;
 
@@ -91,27 +125,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await leadRef.update(leadUpdates);
+    const docUpdatesPromises: Promise<any>[] = [];
+    if (leadSnap.exists) {
+      docUpdatesPromises.push(leadRef.update(leadUpdates));
+    }
+    if (compSnap.exists) {
+      docUpdatesPromises.push(compRef.update(leadUpdates));
+    }
+    await Promise.all(docUpdatesPromises);
 
     // 3. Log activity in CRM
-    const activityRef = leadRef.collection('activity');
+    const actPromises: Promise<any>[] = [];
     if (!existingJobData) {
-      if (isFirstJob) {
-        await activityRef.add({
-          type: 'Update',
-          date: new Date().toISOString(),
-          notes: `First LocalMile Job created (Ref: ${jobId}). Status transitioned to Trialing LocalMile. Trials remaining: ${computedTrialsRemaining}.`,
-          author: 'LocalMile.Plus Webhook'
-        });
-      } else {
-        await activityRef.add({
-          type: 'Update',
-          date: new Date().toISOString(),
-          notes: `LocalMile Job created (Ref: ${jobId}). Total jobs: ${totalJobCount}. Trials remaining: ${computedTrialsRemaining}.`,
-          author: 'LocalMile.Plus Webhook'
-        });
+      const actNote = isFirstJob
+        ? `First LocalMile Job created (Ref: ${jobId}). Status transitioned to Trialing LocalMile. Trials remaining: ${computedTrialsRemaining}.`
+        : `LocalMile Job created (Ref: ${jobId}). Total jobs: ${totalJobCount}. Trials remaining: ${computedTrialsRemaining}.`;
+
+      const actData = {
+        type: 'Update',
+        date: new Date().toISOString(),
+        notes: actNote,
+        author: 'LocalMile.Plus Webhook'
+      };
+
+      if (leadSnap.exists) {
+        actPromises.push(leadRef.collection('activity').add(actData));
+      }
+      if (compSnap.exists) {
+        actPromises.push(compRef.collection('activity').add(actData));
       }
     }
+    await Promise.all(actPromises);
 
     // 4. Synchronize updated trial count to localmile-plus backend
     const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY || process.env.PROSPECTPLUS_API_KEY;
