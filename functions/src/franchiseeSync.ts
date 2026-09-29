@@ -35,14 +35,14 @@ export const dailyFranchiseeSync = functions
         };
       });
 
-      const apiKey = process.env.RTA_GENERAL_API_KEY || "708aa067-d67d-73e6-8967-66786247f5d7";
+      const apiKey = process.env.GENERAL_API_KEY || process.env.RTA_GENERAL_API_KEY || "708aa067-d67d-73e6-8967-66786247f5d7";
 
       functions.logger.info(`Sending ${syncedData.length} franchisee document(s) to MailPlus API...`);
 
       const response = await fetch("https://app.mailplus.com.au/api/v2/franchisees", {
         method: "POST",
         headers: {
-          "RTA_GENERAL_API_KEY": apiKey,
+          "GENERAL-API-KEY": apiKey,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(syncedData),

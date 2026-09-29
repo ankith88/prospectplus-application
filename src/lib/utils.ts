@@ -720,8 +720,8 @@ export function getInvoiceLineItems(invoice: any): NormalizedInvoiceLineItem[] {
 
       // 2. Quantity
       const rawQty = item.qty ?? item.quantity ?? item.count ?? item['Quantity'] ?? item['Qty'];
-      const qtyNum = typeof rawQty === 'number' ? rawQty : parseFloat(String(rawQty || '1'));
-      const qty = isNaN(qtyNum) || qtyNum <= 0 ? 1 : qtyNum;
+      const qtyNum = typeof rawQty === 'number' ? rawQty : parseFloat(String(rawQty ?? '1'));
+      const qty = isNaN(qtyNum) || qtyNum < 0 ? 1 : qtyNum;
 
       // 3. Rate / Unit Price & Total Amount
       const rawRate = item.rate ?? item.unitPrice ?? item.price ?? item.rateAmount ?? item['Rate'] ?? item['Price'];
@@ -746,7 +746,8 @@ export function getInvoiceLineItems(invoice: any): NormalizedInvoiceLineItem[] {
         qty,
         totalAmount,
       };
-    });
+    })
+    .sort((a, b) => (b.totalAmount || 0) - (a.totalAmount || 0));
 }
 
 

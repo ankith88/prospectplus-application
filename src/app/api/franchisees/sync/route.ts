@@ -38,11 +38,11 @@ export async function POST(request: Request) {
     }
 
     // Call the MailPlus API
-    const apiKey = process.env.RTA_GENERAL_API_KEY || process.env.MAILPLUS_GENERAL_API_KEY || '708aa067-d67d-73e6-8967-66786247f5d7';
+    const apiKey = process.env.GENERAL_API_KEY || process.env.RTA_GENERAL_API_KEY || process.env.MAILPLUS_GENERAL_API_KEY || '708aa067-d67d-73e6-8967-66786247f5d7';
     const response = await fetch('https://app.mailplus.com.au/api/v2/franchisees', {
       method: 'POST',
       headers: {
-        'RTA_GENERAL_API_KEY': apiKey,
+        'GENERAL-API-KEY': apiKey,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(syncedData)
