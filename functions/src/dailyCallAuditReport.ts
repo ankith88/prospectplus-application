@@ -86,30 +86,46 @@ export const sendDailyCallAuditReport = functions
     const year = parts.find(p => p.type === 'year')?.value || '';
     const dateString = `${day}-${month}-${year}`;
 
-    // App hosting internal URL or custom webhook
-    const appUrl = process.env.APP_HOSTING_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://mailplus-outbound-leads-crm.web.app';
+    // App hosting production URL with fallback
+    const candidateUrls = [
+      process.env.APP_HOSTING_URL,
+      process.env.NEXT_PUBLIC_APP_URL,
+      'https://prospectplus.com.au',
+      'https://studio--mailplus-outbound-leads-crm.us-central1.hosted.app'
+    ].filter(Boolean) as string[];
 
-    try {
-      const response = await fetch(`${appUrl}/api/admin/daily-call-audit/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          date: dateString,
-          recipients,
-          fromAddress
-        })
-      });
+    let success = false;
+    for (const appUrl of candidateUrls) {
+      try {
+        functions.logger.info(`Attempting daily call audit trigger at: ${appUrl}/api/admin/daily-call-audit/run`);
+        const response = await fetch(`${appUrl}/api/admin/daily-call-audit/run`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            date: dateString,
+            recipients,
+            fromAddress
+          })
+        });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        functions.logger.error(`Failed to trigger daily call audit API: ${response.status} - ${errText}`);
-      } else {
+        if (!response.ok) {
+          const errText = await response.text();
+          functions.logger.warn(`Failed to trigger at ${appUrl}: ${response.status} - ${errText.substring(0, 200)}`);
+          continue;
+        }
+
         const respJson = await response.json();
-        functions.logger.info('Daily call audit triggered and finished successfully:', respJson);
+        functions.logger.info('Daily call audit triggered and completed successfully:', respJson);
+        success = true;
+        break;
+      } catch (apiErr: any) {
+        functions.logger.warn(`Error contacting endpoint ${appUrl}:`, apiErr.message);
       }
-    } catch (apiErr: any) {
-      functions.logger.error('Error contacting daily call audit runner API:', apiErr.message);
+    }
+
+    if (!success) {
+      functions.logger.error('Failed to trigger daily call audit on all candidate URLs.');
     }
   });

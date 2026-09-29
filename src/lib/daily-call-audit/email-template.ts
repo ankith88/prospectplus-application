@@ -376,7 +376,7 @@ export function generateDailyAuditEmailHTML(report: DailyAuditReportData, downlo
               <!-- Leadership Synthesis Playbook Box -->
               <div style="background-color: #eff6ff; border-left: 4px solid #095c7b; border-radius: 0 6px 6px 0; padding: 12px 14px; font-size: 11px; line-height: 1.5; color: #1e3a8a;">
                 <strong style="color: #095c7b; font-size: 11.5px; display: block; margin-bottom: 4px;">💡 Leadership Actionable Insight (The Floor Playbook):</strong>
-                ${report.narrative.actionableInsightForLeadership || 'Every behaviour on this floor rises the morning it is drilled and decays within two days when the drill moves on — except the opener, which was repeated every day for two weeks and is now permanent. Sean’s 9am session runs the SAME full card every morning until behaviours hold above target without prompting.'}
+                ${report.narrative?.actionableInsightForLeadership || 'Every behaviour on this floor rises the morning it is drilled and decays within two days when the drill moves on — except the opener, which was repeated every day for two weeks and is now permanent. Sean’s 9am session runs the SAME full card every morning until behaviours hold above target without prompting.'}
               </div>
             </td>
           </tr>

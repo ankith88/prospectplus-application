@@ -10324,157 +10324,161 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
                 {selectedTemplateId && (
                     <div className="bg-slate-50 border rounded-lg p-3 space-y-4 animate-in fade-in duration-200">
-                        {/* Dynamic Placeholders Insertion */}
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Dynamic Placeholders</span>
-                            <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-lg border">
-                                {[
-                                    { label: 'Contact Name', placeholder: '{{Contact.Name}}' },
-                                    { label: 'First Name', placeholder: '{{Contact.FirstName}}' },
-                                    { label: 'Company Name', placeholder: '{{Company.Name}}' },
-                                    { label: 'Sales Rep', placeholder: '{{SalesRep.Name}}' },
-                                    { label: 'Franchisee', placeholder: '{{Franchisee.Name}}' },
-                                    { label: 'Franchisee Contact Name', placeholder: '{{Franchisee.MainContact}}' },
-                                    { label: 'Franchisee Email', placeholder: '{{Franchisee.Email}}' },
-                                    { label: 'Franchisee Mobile', placeholder: '{{Franchisee.Mobile}}' },
-                                    { label: 'Scheduled Service Date', placeholder: '{{Schedule.ServiceDate}}' },
-                                    { label: 'Remaining Trials', placeholder: '{{Trials.Remaining}}' },
-                                    { label: 'Prospect ID', placeholder: '{{Prospect.ProspectPlusID}}' },
-                                    { label: 'AM Name', placeholder: '{{AccountManager.Name}}' },
-                                    { label: 'AM Mobile', placeholder: '{{AccountManager.Mobile}}' },
-                                    { label: 'AM Calendly', placeholder: '{{AccountManager.Calendly}}' },
-                                    { label: 'Contact Booking Link', placeholder: '{{Lead.ContactBookingLink}}' },
-                                    { label: 'General Booking Link', placeholder: '{{Lead.GeneralBookingLink}}' },
-                                    { label: 'City', placeholder: '{{Lead.City}}' },
-                                    { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
-                                    { label: 'Standing Order Form Link', placeholder: '{{Lead.StandingOrderFormLink}}' },
-                                    { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
-                                    { label: 'LocalMile Activation Link', placeholder: '{{Lead.LocalMileActivationLink}}' },
-                                    { label: 'LocalMile Security Code', placeholder: '{{Lead.LocalMileSecurityCode}}' },
-                                    { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
-                                    { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
-                                    { label: 'Receiver Company Name', placeholder: '{{Receiver.CompanyName}}' },
-                                    { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
-                                    { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
-                                    { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
-                                    { label: 'Package Code', placeholder: '{{Packages.Code}}' },
-                                    { label: 'Connote Number', placeholder: '{{Packages.ConnoteNumber}}' },
-                                    { label: 'Unsubscribe Link', placeholder: '{{unsubscribe_link}}' },
-                                    { label: 'Service Table', placeholder: '{{Service.Table}}' },
-                                    { label: 'Product Table', placeholder: '{{Product.Table}}' },
-                                ].map((ph) => (
-                                    <button
-                                        key={ph.placeholder}
-                                        type="button"
-                                        onClick={() => {
-                                            const subjectInput = document.getElementById('email-subject-input') as HTMLInputElement;
-                                            if (document.activeElement === subjectInput) {
-                                                const start = subjectInput.selectionStart || 0;
-                                                const end = subjectInput.selectionEnd || 0;
-                                                const text = subjectInput.value;
-                                                const before = text.substring(0, start);
-                                                const after = text.substring(end, text.length);
-                                                setEmailSubject(before + ph.placeholder + after);
-                                                setTimeout(() => {
-                                                    subjectInput.focus();
-                                                    subjectInput.setSelectionRange(start + ph.placeholder.length, start + ph.placeholder.length);
-                                                }, 0);
-                                            } else if (typeof window !== 'undefined' && (window as any).__iframeEditorInsert) {
-                                                if (ph.placeholder === '{{Service.Table}}') {
-                                                    (window as any).__iframeEditorInsert(serviceTableHtml);
-                                                } else if (ph.placeholder === '{{Product.Table}}') {
-                                                    (window as any).__iframeEditorInsert(productTableHtml);
-                                                } else {
-                                                    (window as any).__iframeEditorInsert(ph.placeholder);
+                        {/* Dynamic Placeholders Insertion (Hidden for Dialers) */}
+                        {!isDialerUser && (
+                            <div className="space-y-1.5">
+                                <span className="text-[10px] font-bold uppercase text-slate-400 block">Dynamic Placeholders</span>
+                                <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-lg border">
+                                    {[
+                                        { label: 'Contact Name', placeholder: '{{Contact.Name}}' },
+                                        { label: 'First Name', placeholder: '{{Contact.FirstName}}' },
+                                        { label: 'Company Name', placeholder: '{{Company.Name}}' },
+                                        { label: 'Sales Rep', placeholder: '{{SalesRep.Name}}' },
+                                        { label: 'Franchisee', placeholder: '{{Franchisee.Name}}' },
+                                        { label: 'Franchisee Contact Name', placeholder: '{{Franchisee.MainContact}}' },
+                                        { label: 'Franchisee Email', placeholder: '{{Franchisee.Email}}' },
+                                        { label: 'Franchisee Mobile', placeholder: '{{Franchisee.Mobile}}' },
+                                        { label: 'Scheduled Service Date', placeholder: '{{Schedule.ServiceDate}}' },
+                                        { label: 'Remaining Trials', placeholder: '{{Trials.Remaining}}' },
+                                        { label: 'Prospect ID', placeholder: '{{Prospect.ProspectPlusID}}' },
+                                        { label: 'AM Name', placeholder: '{{AccountManager.Name}}' },
+                                        { label: 'AM Mobile', placeholder: '{{AccountManager.Mobile}}' },
+                                        { label: 'AM Calendly', placeholder: '{{AccountManager.Calendly}}' },
+                                        { label: 'Contact Booking Link', placeholder: '{{Lead.ContactBookingLink}}' },
+                                        { label: 'General Booking Link', placeholder: '{{Lead.GeneralBookingLink}}' },
+                                        { label: 'City', placeholder: '{{Lead.City}}' },
+                                        { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
+                                        { label: 'Standing Order Form Link', placeholder: '{{Lead.StandingOrderFormLink}}' },
+                                        { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
+                                        { label: 'LocalMile Activation Link', placeholder: '{{Lead.LocalMileActivationLink}}' },
+                                        { label: 'LocalMile Security Code', placeholder: '{{Lead.LocalMileSecurityCode}}' },
+                                        { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
+                                        { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
+                                        { label: 'Receiver Company Name', placeholder: '{{Receiver.CompanyName}}' },
+                                        { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
+                                        { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
+                                        { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
+                                        { label: 'Package Code', placeholder: '{{Packages.Code}}' },
+                                        { label: 'Connote Number', placeholder: '{{Packages.ConnoteNumber}}' },
+                                        { label: 'Unsubscribe Link', placeholder: '{{unsubscribe_link}}' },
+                                        { label: 'Service Table', placeholder: '{{Service.Table}}' },
+                                        { label: 'Product Table', placeholder: '{{Product.Table}}' },
+                                    ].map((ph) => (
+                                        <button
+                                            key={ph.placeholder}
+                                            type="button"
+                                            onClick={() => {
+                                                const subjectInput = document.getElementById('email-subject-input') as HTMLInputElement;
+                                                if (document.activeElement === subjectInput) {
+                                                    const start = subjectInput.selectionStart || 0;
+                                                    const end = subjectInput.selectionEnd || 0;
+                                                    const text = subjectInput.value;
+                                                    const before = text.substring(0, start);
+                                                    const after = text.substring(end, text.length);
+                                                    setEmailSubject(before + ph.placeholder + after);
+                                                    setTimeout(() => {
+                                                        subjectInput.focus();
+                                                        subjectInput.setSelectionRange(start + ph.placeholder.length, start + ph.placeholder.length);
+                                                    }, 0);
+                                                } else if (typeof window !== 'undefined' && (window as any).__iframeEditorInsert) {
+                                                    if (ph.placeholder === '{{Service.Table}}') {
+                                                        (window as any).__iframeEditorInsert(serviceTableHtml);
+                                                    } else if (ph.placeholder === '{{Product.Table}}') {
+                                                        (window as any).__iframeEditorInsert(productTableHtml);
+                                                    } else {
+                                                        (window as any).__iframeEditorInsert(ph.placeholder);
+                                                    }
                                                 }
-                                            }
-                                        }}
-                                        className="text-[10px] font-medium bg-slate-50 text-slate-700 px-2 py-1 rounded border hover:bg-slate-100 transition-colors shadow-sm"
-                                    >
-                                        + {ph.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Product Table Selection settings */}
-                        <div className="space-y-2 border rounded-lg p-3 bg-white">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <span className="text-[10px] font-bold uppercase text-slate-400 block">Product Table Settings</span>
-                                <Select value={pricePlan} onValueChange={(val) => {
-                                    setPricePlan(val);
-                                    const planProds = products.filter(p => p.pricePlan === val);
-                                    setSelectedProducts(planProds.map(p => p.id));
-                                }}>
-                                    <SelectTrigger className="w-[160px] h-8 text-xs bg-slate-50">
-                                        <SelectValue placeholder="Price Plan" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {availablePricePlans.map(plan => (
-                                            <SelectItem key={plan} value={plan}>{plan}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            {productsLoading ? (
-                                <div className="flex justify-center py-2"><Loader className="h-4 w-4" /></div>
-                            ) : products.filter(p => p.pricePlan === pricePlan).length === 0 ? (
-                                <p className="text-[11px] text-muted-foreground">No products found for this plan.</p>
-                            ) : (
-                                <div className="max-h-48 overflow-y-auto rounded-md border text-xs">
-                                    <Table>
-                                        <TableHeader className="bg-slate-50">
-                                            <TableRow>
-                                                <TableHead className="w-[40px] p-2 text-center">Include</TableHead>
-                                                <TableHead className="p-2">Product</TableHead>
-                                                <TableHead className="p-2">Weight</TableHead>
-                                                <TableHead className="p-2 text-right">Base Price</TableHead>
-                                                <TableHead className="p-2 text-right">Total</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {(() => {
-                                                const filtered = products.filter(p => p.pricePlan === pricePlan);
-                                                const sorted = [...filtered].sort((a, b) => {
-                                                    const parseWeight = (p: any) => {
-                                                        const weightStr = String(p.productWeight || p.weightRange || p.weight || '');
-                                                        const match = weightStr.match(/(\d+(?:\.\d+)?)\s*kg/i);
-                                                        return match ? parseFloat(match[1]) : 999;
-                                                    };
-                                                    return parseWeight(a) - parseWeight(b);
-                                                });
-                                                return sorted.map(product => {
-                                                    const isChecked = selectedProducts.includes(product.id);
-                                                    const basePrice = Number(product.salesPriceIncGst || Number(product.salesPriceExcGst || 0) * 1.1);
-                                                    const surchargePerc = surchargeRates ? (product.deliverySpeed?.toLowerCase() === 'premium' ? surchargeRates.premium : (product.deliverySpeed?.toLowerCase() === 'express' ? surchargeRates.express : 0)) : 12.5;
-                                                    const surchargeAmt = basePrice * (surchargePerc / 100);
-                                                    const totalVal = basePrice + surchargeAmt;
-                                                    return (
-                                                        <TableRow key={product.id}>
-                                                            <TableCell className="p-2 text-center">
-                                                                <Checkbox
-                                                                    id={`prod-${product.id}`}
-                                                                    checked={isChecked}
-                                                                    onCheckedChange={() => {
-                                                                        setSelectedProducts(prev =>
-                                                                            isChecked ? prev.filter(id => id !== product.id) : [...prev, product.id]
-                                                                        );
-                                                                    }}
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell className="p-2 font-medium">{product.name || product.id}</TableCell>
-                                                            <TableCell className="p-2">{product.productWeight || '-'}</TableCell>
-                                                            <TableCell className="p-2 text-right">${basePrice.toFixed(2)}</TableCell>
-                                                            <TableCell className="p-2 text-right font-bold">${totalVal.toFixed(2)}</TableCell>
-                                                        </TableRow>
-                                                    );
-                                                });
-                                            })()}
-                                        </TableBody>
-                                    </Table>
+                                            }}
+                                            className="text-[10px] font-medium bg-slate-50 text-slate-700 px-2 py-1 rounded border hover:bg-slate-100 transition-colors shadow-sm"
+                                        >
+                                            + {ph.label}
+                                        </button>
+                                    ))}
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
+
+                        {/* Product Table Selection settings (Hidden for Dialers) */}
+                        {!isDialerUser && (
+                            <div className="space-y-2 border rounded-lg p-3 bg-white">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Product Table Settings</span>
+                                    <Select value={pricePlan} onValueChange={(val) => {
+                                        setPricePlan(val);
+                                        const planProds = products.filter(p => p.pricePlan === val);
+                                        setSelectedProducts(planProds.map(p => p.id));
+                                    }}>
+                                        <SelectTrigger className="w-[160px] h-8 text-xs bg-slate-50">
+                                            <SelectValue placeholder="Price Plan" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {availablePricePlans.map(plan => (
+                                                <SelectItem key={plan} value={plan}>{plan}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {productsLoading ? (
+                                    <div className="flex justify-center py-2"><Loader className="h-4 w-4" /></div>
+                                ) : products.filter(p => p.pricePlan === pricePlan).length === 0 ? (
+                                    <p className="text-[11px] text-muted-foreground">No products found for this plan.</p>
+                                ) : (
+                                    <div className="max-h-48 overflow-y-auto rounded-md border text-xs">
+                                        <Table>
+                                            <TableHeader className="bg-slate-50">
+                                                <TableRow>
+                                                    <TableHead className="w-[40px] p-2 text-center">Include</TableHead>
+                                                    <TableHead className="p-2">Product</TableHead>
+                                                    <TableHead className="p-2">Weight</TableHead>
+                                                    <TableHead className="p-2 text-right">Base Price</TableHead>
+                                                    <TableHead className="p-2 text-right">Total</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {(() => {
+                                                    const filtered = products.filter(p => p.pricePlan === pricePlan);
+                                                    const sorted = [...filtered].sort((a, b) => {
+                                                        const parseWeight = (p: any) => {
+                                                            const weightStr = String(p.productWeight || p.weightRange || p.weight || '');
+                                                            const match = weightStr.match(/(\d+(?:\.\d+)?)\s*kg/i);
+                                                            return match ? parseFloat(match[1]) : 999;
+                                                        };
+                                                        return parseWeight(a) - parseWeight(b);
+                                                    });
+                                                    return sorted.map(product => {
+                                                        const isChecked = selectedProducts.includes(product.id);
+                                                        const basePrice = Number(product.salesPriceIncGst || Number(product.salesPriceExcGst || 0) * 1.1);
+                                                        const surchargePerc = surchargeRates ? (product.deliverySpeed?.toLowerCase() === 'premium' ? surchargeRates.premium : (product.deliverySpeed?.toLowerCase() === 'express' ? surchargeRates.express : 0)) : 12.5;
+                                                        const surchargeAmt = basePrice * (surchargePerc / 100);
+                                                        const totalVal = basePrice + surchargeAmt;
+                                                        return (
+                                                            <TableRow key={product.id}>
+                                                                <TableCell className="p-2 text-center">
+                                                                    <Checkbox
+                                                                        id={`prod-${product.id}`}
+                                                                        checked={isChecked}
+                                                                        onCheckedChange={() => {
+                                                                            setSelectedProducts(prev =>
+                                                                                isChecked ? prev.filter(id => id !== product.id) : [...prev, product.id]
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                </TableCell>
+                                                                <TableCell className="p-2 font-medium">{product.name || product.id}</TableCell>
+                                                                <TableCell className="p-2">{product.productWeight || '-'}</TableCell>
+                                                                <TableCell className="p-2 text-right">${basePrice.toFixed(2)}</TableCell>
+                                                                <TableCell className="p-2 text-right font-bold">${totalVal.toFixed(2)}</TableCell>
+                                                            </TableRow>
+                                                        );
+                                                    });
+                                                })()}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <div>
                             <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Email Editor</span>
