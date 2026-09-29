@@ -24,7 +24,7 @@ import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info, CheckCircle, AlertTriangle, MapPin, Store } from 'lucide-react';
+import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info, CheckCircle, AlertTriangle, MapPin, Store, Network } from 'lucide-react';
 import { MultiSelectCombobox, type Option } from '../ui/multi-select-combobox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -45,6 +45,34 @@ import { PrevMonthCohortWidget } from '@/components/prev-month-cohort-widget';
 import { getLeadInitialBucket, calculateAmStageMetrics, calculateLeadStageDurations, type AmStageMetrics } from '@/lib/lead-stage-analytics';
 
 import { AnimatedNumber } from '@/components/ui/animated-number';
+
+export function getLeadAccountType(lead: Lead): 'BAU' | 'J2' | 'Corporate' | 'Multisite' {
+  if (lead.accountType === 'Corporate' || lead.selectedServiceOption === 'corporate') {
+    return 'Corporate';
+  }
+  if (lead.accountType === 'Multisite' || lead.bucket === 'multisite' || lead.isParentLead || lead.isChildLead || !!lead.parentLeadId) {
+    return 'Multisite';
+  }
+  if (lead.accountType === 'J2') {
+    return 'J2';
+  }
+  if (lead.accountType === 'BAU' || lead.accountType === 'Standard') {
+    return 'BAU';
+  }
+
+  const isOutbound = 
+    lead.wasOutbound === true || 
+    lead.originalBucket?.toLowerCase() === 'outbound' || 
+    lead.bucket?.toLowerCase() === 'outbound' || 
+    !!lead.dialerAssigned || 
+    getLeadInitialBucket(lead) === 'Outbound';
+
+  if (isOutbound) {
+    return 'J2';
+  }
+
+  return 'BAU';
+}
 
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (
   <Popover>
@@ -159,7 +187,8 @@ export default function AMReportsDashboard() {
     const [invoices, setInvoices] = useState<ExtendedInvoice[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
-    const [selectedAm, setSelectedAm] = useState<string>('all');
+    const [selectedAm, setSelectedAm] = useState<string[]>([]);
+    const [selectedCompanyName, setSelectedCompanyName] = useState<string>('');
     const [allAppointments, setAllAppointments] = useState<ExtendedAppointment[]>([]);
 
     const { toast } = useToast();
@@ -242,6 +271,7 @@ export default function AMReportsDashboard() {
                 'Prospect+ ID': l.prospectPlusId || l.id || '',
                 'Status': l.customerStatus || l.status || '',
                 'Account Manager': l.accountManagerAssigned || '',
+                'Account Type': getLeadAccountType(l),
                 'Franchisee': l.franchisee || '',
                 'Lead Type': l.leadType || '',
                 'Bucket': l.bucket || '',
@@ -308,6 +338,7 @@ export default function AMReportsDashboard() {
     const [selectedFranchisee, setSelectedFranchisee] = useState<string[]>([]);
     const [selectedBucket, setSelectedBucket] = useState<string[]>([]);
     const [selectedLeadType, setSelectedLeadType] = useState<string[]>([]);
+    const [selectedAccountType, setSelectedAccountType] = useState<string[]>([]);
     const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
     const [selectedCampaign, setSelectedCampaign] = useState<string>('all');
     const [availableCampaigns, setAvailableCampaigns] = useState<LeadCampaign[]>([]);
@@ -323,10 +354,12 @@ export default function AMReportsDashboard() {
     const [leadEnteredDateRange, setLeadEnteredDateRange] = useState<DateRange | undefined>(undefined);
 
     // Applied Filters (Used for calculations and queries)
-    const [appliedAm, setAppliedAm] = useState<string>('all');
+    const [appliedAm, setAppliedAm] = useState<string[]>([]);
+    const [appliedCompanyName, setAppliedCompanyName] = useState<string>('');
     const [appliedFranchisee, setAppliedFranchisee] = useState<string[]>([]);
     const [appliedBucket, setAppliedBucket] = useState<string[]>([]);
     const [appliedLeadType, setAppliedLeadType] = useState<string[]>([]);
+    const [appliedAccountType, setAppliedAccountType] = useState<string[]>([]);
     const [appliedStatus, setAppliedStatus] = useState<string[]>([]);
     const [appliedCampaign, setAppliedCampaign] = useState<string>('all');
     const [appliedActivityDateRange, setAppliedActivityDateRange] = useState<DateRange | undefined>({
@@ -336,10 +369,12 @@ export default function AMReportsDashboard() {
     const [appliedLeadEnteredDateRange, setAppliedLeadEnteredDateRange] = useState<DateRange | undefined>(undefined);
 
     const hasUnappliedFilters = useMemo(() => {
-        return selectedAm !== appliedAm ||
+        return selectedCompanyName !== appliedCompanyName ||
+            JSON.stringify(selectedAm) !== JSON.stringify(appliedAm) ||
             JSON.stringify(selectedFranchisee) !== JSON.stringify(appliedFranchisee) ||
             JSON.stringify(selectedBucket) !== JSON.stringify(appliedBucket) ||
             JSON.stringify(selectedLeadType) !== JSON.stringify(appliedLeadType) ||
+            JSON.stringify(selectedAccountType) !== JSON.stringify(appliedAccountType) ||
             JSON.stringify(selectedStatus) !== JSON.stringify(appliedStatus) ||
             selectedCampaign !== appliedCampaign ||
             activityDateRange?.from?.getTime() !== appliedActivityDateRange?.from?.getTime() ||
@@ -347,10 +382,12 @@ export default function AMReportsDashboard() {
             leadEnteredDateRange?.from?.getTime() !== appliedLeadEnteredDateRange?.from?.getTime() ||
             leadEnteredDateRange?.to?.getTime() !== appliedLeadEnteredDateRange?.to?.getTime();
     }, [
+        selectedCompanyName, appliedCompanyName,
         selectedAm, appliedAm,
         selectedFranchisee, appliedFranchisee,
         selectedBucket, appliedBucket,
         selectedLeadType, appliedLeadType,
+        selectedAccountType, appliedAccountType,
         selectedStatus, appliedStatus,
         selectedCampaign, appliedCampaign,
         activityDateRange, appliedActivityDateRange,
@@ -358,10 +395,12 @@ export default function AMReportsDashboard() {
     ]);
 
     const applyFilters = () => {
+        setAppliedCompanyName(selectedCompanyName);
         setAppliedAm(selectedAm);
         setAppliedFranchisee(selectedFranchisee);
         setAppliedBucket(selectedBucket);
         setAppliedLeadType(selectedLeadType);
+        setAppliedAccountType(selectedAccountType);
         setAppliedStatus(selectedStatus);
         setAppliedCampaign(selectedCampaign);
         setAppliedActivityDateRange(activityDateRange);
@@ -580,17 +619,7 @@ export default function AMReportsDashboard() {
                     const hasAnyAmActivity = l.activity?.some(act => amNames.includes(act.author || ''));
                     
                     const qualifiesForAmReport = isDirectlyAm || wasInAm || hasAnyAmActivity;
-                    
-                    if (!qualifiesForAmReport) return false;
-                    
-                    const targetAm = appliedAm !== 'all' ? appliedAm : null;
-                    if (targetAm) {
-                        const isAssignedToTargetAm = l.accountManagerAssigned === targetAm;
-                        const hasTargetAmActivity = l.activity?.some(act => act.author === targetAm);
-                        return isAssignedToTargetAm || hasTargetAmActivity;
-                    }
-                    
-                    return true;
+                    return qualifiesForAmReport;
                 });
                 
                 setLeads(filteredLeads);
@@ -605,7 +634,7 @@ export default function AMReportsDashboard() {
         }
         
         fetchPipeline();
-    }, [loading, isAm, isAdmin, appliedAm, accountManagers, appliedActivityDateRange]);
+    }, [loading, isAm, isAdmin, accountManagers, appliedActivityDateRange]);
 
     const isSignedStatus = (status?: string): boolean => {
         if (!status) return false;
@@ -702,11 +731,30 @@ export default function AMReportsDashboard() {
     const uniqueStatuses = useMemo(() => Array.from(new Set(leads.map(l => l.customerStatus || l.status).filter(Boolean))), [leads]);
 
     const displayedLeads = useMemo(() => {
+        const query = appliedCompanyName.trim().toLowerCase();
         return leads.filter(lead => {
             if (isTestLeadOrCompany(lead)) return false;
+
+            if (query) {
+                const compName = (lead.companyName || '').toLowerCase();
+                const pId = (lead.prospectPlusId || '').toLowerCase();
+                const leadId = (lead.id || '').toLowerCase();
+                if (!compName.includes(query) && !pId.includes(query) && !leadId.includes(query)) {
+                    return false;
+                }
+            }
+
+            if (appliedAm.length > 0) {
+                const rep = (lead as any).assignedUser || lead.accountManagerAssigned || (lead as any).amAssigned || (lead as any).userInCharge || lead.dialerAssigned || '';
+                const matchRep = appliedAm.some(target => target.toLowerCase() === rep.toLowerCase());
+                const matchAct = lead.activity?.some(act => appliedAm.some(target => target.toLowerCase() === (act.author || '').toLowerCase()));
+                if (!matchRep && !matchAct) return false;
+            }
+
             if (appliedFranchisee.length > 0 && lead.franchisee && !appliedFranchisee.includes(lead.franchisee)) return false;
             if (appliedBucket.length > 0 && lead.bucket && !appliedBucket.includes(lead.bucket)) return false;
             if (appliedLeadType.length > 0 && (lead.leadType || 'Unknown') && !appliedLeadType.includes(lead.leadType || 'Unknown')) return false;
+            if (appliedAccountType.length > 0 && !appliedAccountType.includes(getLeadAccountType(lead))) return false;
             
             if (appliedCampaign !== 'all' && (lead.campaign || (lead as any).customerCampaign) !== appliedCampaign) return false;
             
@@ -725,11 +773,10 @@ export default function AMReportsDashboard() {
 
             if (appliedActivityDateRange?.from) {
                 const amNames = accountManagers.map(am => getAmName(am));
-                const targetAm = appliedAm !== 'all' ? appliedAm : null;
                 const hasActivityInRange = lead.activity?.some(act => {
                     const author = act.author || '';
                     if (!amNames.includes(author)) return false;
-                    if (targetAm && author !== targetAm) return false;
+                    if (appliedAm.length > 0 && !appliedAm.some(target => target.toLowerCase() === author.toLowerCase())) return false;
                     return isActivityDateInRange(act.date);
                 });
                 if (!hasActivityInRange) return false;
@@ -737,43 +784,65 @@ export default function AMReportsDashboard() {
 
             return true;
         });
-    }, [leads, appliedFranchisee, appliedBucket, appliedLeadType, appliedStatus, appliedLeadEnteredDateRange, appliedActivityDateRange, appliedAm, accountManagers]);
+    }, [leads, appliedCompanyName, appliedAm, appliedFranchisee, appliedBucket, appliedLeadType, appliedAccountType, appliedStatus, appliedLeadEnteredDateRange, appliedActivityDateRange, accountManagers]);
 
     const amStageAnalytics = useMemo(() => {
-        return calculateAmStageMetrics(displayedLeads, accountManagers, appliedAm);
+        const amFilter = appliedAm.length === 1 ? appliedAm[0] : 'all';
+        return calculateAmStageMetrics(displayedLeads, accountManagers, amFilter);
     }, [displayedLeads, accountManagers, appliedAm]);
 
     const amFilteredLeads = useMemo(() => {
+        const query = appliedCompanyName.trim().toLowerCase();
         return leads.filter(lead => {
+            if (query) {
+                const compName = (lead.companyName || '').toLowerCase();
+                const pId = (lead.prospectPlusId || '').toLowerCase();
+                const leadId = (lead.id || '').toLowerCase();
+                if (!compName.includes(query) && !pId.includes(query) && !leadId.includes(query)) {
+                    return false;
+                }
+            }
+
             if (appliedFranchisee.length > 0 && lead.franchisee && !appliedFranchisee.includes(lead.franchisee)) return false;
             if (appliedBucket.length > 0 && lead.bucket && !appliedBucket.includes(lead.bucket)) return false;
             if (appliedLeadType.length > 0 && (lead.leadType || 'Unknown') && !appliedLeadType.includes(lead.leadType || 'Unknown')) return false;
+            if (appliedAccountType.length > 0 && !appliedAccountType.includes(getLeadAccountType(lead))) return false;
             if (appliedCampaign !== 'all' && (lead.campaign || (lead as any).customerCampaign) !== appliedCampaign) return false;
             
             const status = isSignedLead(lead) ? 'Signed' : (lead.customerStatus || lead.status);
             if (appliedStatus.length > 0 && status && !appliedStatus.includes(status)) return false;
 
-            if (appliedAm !== 'all') {
+            if (appliedAm.length > 0) {
                 const rep = (lead as any).assignedUser || lead.accountManagerAssigned || (lead as any).amAssigned || (lead as any).userInCharge || lead.dialerAssigned || '';
-                const matchRep = rep.toLowerCase() === appliedAm.toLowerCase();
-                const matchAct = lead.activity?.some(act => (act.author || '').toLowerCase() === appliedAm.toLowerCase());
+                const matchRep = appliedAm.some(target => target.toLowerCase() === rep.toLowerCase());
+                const matchAct = lead.activity?.some(act => appliedAm.some(target => target.toLowerCase() === (act.author || '').toLowerCase()));
                 if (!matchRep && !matchAct) return false;
             }
 
             return true;
         });
-    }, [leads, appliedFranchisee, appliedBucket, appliedLeadType, appliedCampaign, appliedStatus, appliedAm]);
+    }, [leads, appliedCompanyName, appliedFranchisee, appliedBucket, appliedLeadType, appliedAccountType, appliedCampaign, appliedStatus, appliedAm]);
 
     const prevMonthSummary = useMemo(() => {
         return calculatePrevMonthRealizationCohort(amFilteredLeads, invoices, appliedActivityDateRange || appliedLeadEnteredDateRange);
     }, [amFilteredLeads, invoices, appliedActivityDateRange, appliedLeadEnteredDateRange]);
 
     const appointmentMetrics = useMemo(() => {
+        const query = appliedCompanyName.trim().toLowerCase();
         const baseFilteredLeadIds = new Set(
             leads.filter(lead => {
+                if (query) {
+                    const compName = (lead.companyName || '').toLowerCase();
+                    const pId = (lead.prospectPlusId || '').toLowerCase();
+                    const leadId = (lead.id || '').toLowerCase();
+                    if (!compName.includes(query) && !pId.includes(query) && !leadId.includes(query)) {
+                        return false;
+                    }
+                }
                 if (appliedFranchisee.length > 0 && lead.franchisee && !appliedFranchisee.includes(lead.franchisee)) return false;
                 if (appliedBucket.length > 0 && lead.bucket && !appliedBucket.includes(lead.bucket)) return false;
                 if (appliedLeadType.length > 0 && (lead.leadType || 'Unknown') && !appliedLeadType.includes(lead.leadType || 'Unknown')) return false;
+                if (appliedAccountType.length > 0 && !appliedAccountType.includes(getLeadAccountType(lead))) return false;
                 
                 const status = isSignedLead(lead) ? 'Signed' : (lead.customerStatus || lead.status);
                 if (appliedStatus.length > 0 && status && !appliedStatus.includes(status)) return false;
@@ -792,12 +861,13 @@ export default function AMReportsDashboard() {
         const relevantAppointments = allAppointments.filter(app => {
             if (!baseFilteredLeadIds.has(app.leadId)) return false;
 
-            const targetAm = appliedAm !== 'all' ? appliedAm : null;
-            if (targetAm) {
+            if (appliedAm.length > 0) {
                 const appAm = app.assignedTo || app.dialerAssigned || app.amName;
                 const lead = leads.find(l => l.id === app.leadId);
                 const leadAm = lead?.accountManagerAssigned;
-                if (appAm !== targetAm && leadAm !== targetAm) {
+                const matchesAppAm = appAm && appliedAm.some(target => target.toLowerCase() === appAm.toLowerCase());
+                const matchesLeadAm = leadAm && appliedAm.some(target => target.toLowerCase() === leadAm.toLowerCase());
+                if (!matchesAppAm && !matchesLeadAm) {
                     return false;
                 }
             }
@@ -889,7 +959,7 @@ export default function AMReportsDashboard() {
             byDateScheduled: Object.entries(byDateScheduled).map(([date, count]) => ({ date, count })).sort((a,b) => a.date.localeCompare(b.date)),
             byDateCreated: Object.entries(byDateCreated).map(([date, count]) => ({ date, count })).sort((a,b) => a.date.localeCompare(b.date)),
         };
-    }, [allAppointments, leads, appliedFranchisee, appliedBucket, appliedLeadType, appliedStatus, appliedLeadEnteredDateRange, appliedActivityDateRange, appliedAm, accountManagers]);
+    }, [allAppointments, leads, appliedCompanyName, appliedFranchisee, appliedBucket, appliedLeadType, appliedStatus, appliedLeadEnteredDateRange, appliedActivityDateRange, appliedAm, accountManagers]);
 
     const normalizeAuthorName = (authorName: string, amNames: string[]) => {
         if (!authorName) return 'System';
@@ -907,7 +977,6 @@ export default function AMReportsDashboard() {
     const allActivities = useMemo(() => {
         const activities: FlatActivity[] = [];
         const amNames = accountManagers.map(am => getAmName(am));
-        const targetAm = appliedAm !== 'all' ? appliedAm : null;
         
         displayedLeads.forEach(lead => {
             if (lead.activity) {
@@ -918,8 +987,8 @@ export default function AMReportsDashboard() {
                     // Ensure the activity is authored by an AM
                     if (!amNames.includes(author)) return;
                     
-                    // If a specific AM is selected, only include their activities
-                    if (targetAm && author !== targetAm) return;
+                    // If AM filter is applied, only include their activities
+                    if (appliedAm.length > 0 && !appliedAm.some(target => target.toLowerCase() === author.toLowerCase())) return;
                     
                     if (isActivityDateInRange(act.date)) {
                         activities.push({
@@ -1345,8 +1414,8 @@ export default function AMReportsDashboard() {
         });
         
         const list = Object.values(metricsMap).sort((a, b) => b.totalLeads - a.totalLeads);
-        if (appliedAm !== 'all') {
-            return list.filter(m => m.amName === appliedAm);
+        if (appliedAm.length > 0) {
+            return list.filter(m => appliedAm.some(target => target.toLowerCase() === m.amName.toLowerCase()));
         }
         return list;
     }, [displayedLeads, accountManagers, appliedAm, appliedActivityDateRange]);
@@ -1695,31 +1764,54 @@ export default function AMReportsDashboard() {
     }, [metrics.valueByLead]);
 
     
+    const amOptions: Option[] = useMemo(() => {
+        const names = new Set<string>();
+        accountManagers.forEach(am => {
+            const n = getAmName(am);
+            if (n) names.add(n);
+        });
+        leads.forEach(l => {
+            if (l.accountManagerAssigned) names.add(l.accountManagerAssigned);
+            if ((l as any).assignedUser) names.add((l as any).assignedUser);
+        });
+        return Array.from(names).filter(Boolean).sort().map(name => ({ value: name, label: name }));
+    }, [accountManagers, leads]);
+
     const franchiseeOptions: Option[] = useMemo(() => uniqueFranchisees.map(f => ({ value: f as string, label: f as string })), [uniqueFranchisees]);
     const bucketOptions: Option[] = useMemo(() => uniqueBuckets.map(b => ({
         value: b as string,
         label: b === 'multisite' ? 'Multisite' : String(b).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     })), [uniqueBuckets]);
     const leadTypeOptions: Option[] = useMemo(() => uniqueLeadTypes.map(t => ({ value: t as string, label: t as string })), [uniqueLeadTypes]);
+    const accountTypeOptions: Option[] = useMemo(() => [
+        { value: 'BAU', label: 'BAU' },
+        { value: 'J2', label: 'J2' },
+        { value: 'Corporate', label: 'Corporate' },
+        { value: 'Multisite', label: 'Multisite' },
+    ], []);
     const statusOptions: Option[] = useMemo(() => uniqueStatuses.map(s => ({ value: s as string, label: s as string })), [uniqueStatuses]);
     const clearFilters = () => {
+        setSelectedCompanyName('');
+        setSelectedAm([]);
         setSelectedFranchisee([]);
         setSelectedBucket([]);
         setSelectedLeadType([]);
+        setSelectedAccountType([]);
         setSelectedStatus([]);
         setSelectedCampaign('all');
         setActivityDateRange(undefined);
         setLeadEnteredDateRange(undefined);
-        setSelectedAm('all');
 
+        setAppliedCompanyName('');
+        setAppliedAm([]);
         setAppliedFranchisee([]);
         setAppliedBucket([]);
         setAppliedLeadType([]);
+        setAppliedAccountType([]);
         setAppliedStatus([]);
         setAppliedCampaign('all');
         setAppliedActivityDateRange(undefined);
         setAppliedLeadEnteredDateRange(undefined);
-        setAppliedAm('all');
     };
 
     const handleExportAllSectionsCSV = () => {
@@ -1738,7 +1830,7 @@ export default function AMReportsDashboard() {
 
         // 1. Pipeline Leads Overview
         const leadHeaders = [
-            'Company Name', 'Prospect+ ID', 'Status', 'Account Manager', 
+            'Company Name', 'Prospect+ ID', 'Status', 'Account Manager', 'Account Type',
             'Franchisee', 'Lead Type', 'Bucket', 'Date Entered/Accepted', 
             'Contact Name', 'Email', 'Phone', 'Monthly Value ($)'
         ];
@@ -1749,6 +1841,7 @@ export default function AMReportsDashboard() {
                 l.prospectPlusId || l.id || '',
                 l.customerStatus || l.status || '',
                 l.accountManagerAssigned || '',
+                getLeadAccountType(l),
                 l.franchisee || '',
                 l.leadType || '',
                 l.bucket || '',
@@ -2012,23 +2105,45 @@ export default function AMReportsDashboard() {
             <Card id="step-am-filters" className="mb-6 border-[#095c7b]/10 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                     <div className="flex items-center gap-2 text-[#095c7b]"><Filter className="h-5 w-5" /><CardTitle>Filters</CardTitle></div>
-                    {(isAdmin || isAm) && (
-                        <Select value={selectedAm} onValueChange={setSelectedAm}>
-                            <SelectTrigger className="w-[200px] bg-white border-[#095c7b]/20 text-xs">
-                                <SelectValue placeholder="All Account Managers" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Account Managers</SelectItem>
-                                {accountManagers.map(am => {
-                                    const name = getAmName(am);
-                                    return <SelectItem key={am.uid || am.email || name} value={name}>{name}</SelectItem>
-                                })}
-                            </SelectContent>
-                        </Select>
-                    )}
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500">Company Name</Label>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                <Input 
+                                    placeholder="Search company or ID..." 
+                                    value={selectedCompanyName}
+                                    onChange={(e) => setSelectedCompanyName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            applyFilters();
+                                        }
+                                    }}
+                                    className="h-9 pl-8 pr-8 text-xs bg-white"
+                                />
+                                {selectedCompanyName && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedCompanyName('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-slate-100"
+                                        title="Clear company name"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500">AM User</Label>
+                            <MultiSelectCombobox 
+                                options={amOptions} 
+                                selected={selectedAm} 
+                                onSelectedChange={setSelectedAm} 
+                                placeholder="All Account Managers..." 
+                            />
+                        </div>
                         <div className="space-y-2">
                             <Label className="text-xs text-slate-500">Activity Date</Label>
                             <div className="relative w-full">
@@ -2128,6 +2243,15 @@ export default function AMReportsDashboard() {
                                 selected={selectedStatus} 
                                 onSelectedChange={setSelectedStatus} 
                                 placeholder="All Statuses..." 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500">Account Type</Label>
+                            <MultiSelectCombobox 
+                                options={accountTypeOptions} 
+                                selected={selectedAccountType} 
+                                onSelectedChange={setSelectedAccountType} 
+                                placeholder="All Account Types..." 
                             />
                         </div>
                         {!isFranchiseeRole && (
@@ -4496,6 +4620,7 @@ export default function AMReportsDashboard() {
                                 <TableRow>
                                     <TableHead>Company</TableHead>
                                     <TableHead>Status</TableHead>
+                                    <TableHead>Account Type</TableHead>
                                     <TableHead>Account Manager</TableHead>
                                     <TableHead>Franchisee</TableHead>
                                     <TableHead>Lead Type</TableHead>
@@ -4508,11 +4633,31 @@ export default function AMReportsDashboard() {
                                 {filteredDrillDownLeads.map((lead) => {
                                     const mrrVal = calculateRawLeadValue(lead);
                                     const isComp = (lead as any).isCompany;
+                                    const aType = getLeadAccountType(lead);
                                     return (
                                         <TableRow key={lead.id}>
                                             <TableCell className="font-medium">{lead.companyName}</TableCell>
                                             <TableCell>
                                                 <LeadStatusBadge status={(lead.customerStatus || lead.status) as LeadStatus} />
+                                            </TableCell>
+                                            <TableCell className="text-sm">
+                                                {aType === 'Corporate' ? (
+                                                    <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                                                        <Building className="w-2.5 h-2.5" /> Corporate
+                                                    </Badge>
+                                                ) : aType === 'Multisite' ? (
+                                                    <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                                                        <Network className="w-2.5 h-2.5" /> Multisite
+                                                    </Badge>
+                                                ) : aType === 'J2' ? (
+                                                    <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                                                        <Phone className="w-2.5 h-2.5" /> J2
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-slate-600 border-slate-200 text-[10px] flex items-center gap-1 w-fit">
+                                                        <Store className="w-2.5 h-2.5" /> BAU
+                                                    </Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
                                             <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
@@ -4537,7 +4682,7 @@ export default function AMReportsDashboard() {
                                 })}
                                 {filteredDrillDownLeads.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="text-center py-10 text-muted-foreground italic">
+                                        <TableCell colSpan={9} className="text-center py-10 text-muted-foreground italic">
                                             No leads found matching your filters.
                                         </TableCell>
                                     </TableRow>

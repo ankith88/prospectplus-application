@@ -168,6 +168,24 @@ export async function acceptScfAction(leadId: string, scfId: string) {
         statusUpdates.customerStatus = 'Quote Accepted';
       }
 
+      let resolvedAccountType = acceptedScfData?.accountType;
+      if (resolvedAccountType === 'Standard') resolvedAccountType = 'BAU';
+      if (!resolvedAccountType) {
+        const isOutbound = leadData?.wasOutbound === true || leadData?.originalBucket?.toLowerCase() === 'outbound' || leadData?.bucket?.toLowerCase() === 'outbound' || !!leadData?.dialerAssigned;
+        if (isOutbound) {
+          resolvedAccountType = 'J2';
+        }
+      }
+
+      if (resolvedAccountType) {
+        statusUpdates.accountType = resolvedAccountType;
+        if (resolvedAccountType === 'Corporate') {
+          statusUpdates.selectedServiceOption = 'corporate';
+        } else if (resolvedAccountType === 'Multisite' && leadData?.bucket !== 'multisite') {
+          statusUpdates.bucket = 'multisite';
+        }
+      }
+
       // Archive current live services into serviceHistory before applying changes
       const currentServices = leadData?.services || [];
       const currentHistory = leadData?.serviceHistory || [];

@@ -364,6 +364,7 @@ export interface ScfRecord {
     uploadedPdfBy?: string;
     bankLocationId?: string;
     bankLocationName?: string;
+    accountType?: 'BAU' | 'J2' | 'Corporate' | 'Multisite' | 'Standard' | string;
 }
 
 export interface VisitNoteAnalysis {
@@ -633,6 +634,7 @@ export interface Lead {
   fieldSales?: boolean;
   serviceType?: string;
   selectedServiceOption?: string;
+  accountType?: 'BAU' | 'J2' | 'Corporate' | 'Multisite' | 'Standard' | string;
   rate?: number;
   initialNotes?: string;
   lastProspected?: string;

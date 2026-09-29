@@ -39,7 +39,8 @@ import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-s
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { CalendarIcon, UserPlus, Package, MousePointerClick, CheckCircle2, Circle, Layers, Truck, Building2, Loader2, Sparkles, Search } from 'lucide-react';
+import { CalendarIcon, UserPlus, Package, MousePointerClick, CheckCircle2, Circle, Layers, Truck, Building2, Building, Store, Network, Phone, Loader2, Sparkles, Search } from 'lucide-react';
+import { getLeadInitialBucket } from '@/lib/lead-stage-analytics';
 import { Progress } from '@/components/ui/progress';
 import { isBankingServiceSelected, isH2hServiceSelected, getNearbyBanks, saveOrUpdateTaggedAddress, normalizeState, type BankLocationOption } from '@/lib/bank-utils';
 import { GoogleAddressInput } from './google-address-input';
@@ -99,6 +100,7 @@ const formSchema = z.object({
   createShipMateAccount: z.boolean().optional(),
   chosenPremiumPlan: z.string().default('Merchant'),
   chosenExpressPlan: z.string().default('Merchant'),
+  accountType: z.enum(['BAU', 'J2', 'Corporate', 'Multisite', 'Standard']).default('BAU'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -782,11 +784,32 @@ export function ServiceSelectionDialog({
 
       const hasExistingLocalMileAccess = !isLpoNetworkBucket && (lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || (lead as any)?.localmileAccess === true || validContacts.some(c => c?.accessToLocalMile === 'yes'));
 
+      const isOutboundLead = 
+        lead?.wasOutbound === true ||
+        lead?.originalBucket?.toLowerCase() === 'outbound' ||
+        lead?.bucket?.toLowerCase() === 'outbound' ||
+        !!lead?.dialerAssigned ||
+        (lead ? getLeadInitialBucket(lead) === 'Outbound' : false);
+
+      let defaultAccountType: 'BAU' | 'J2' | 'Corporate' | 'Multisite' = 'BAU';
+      if (lead?.accountType === 'Corporate' || lead?.accountType === 'Multisite' || lead?.accountType === 'J2' || lead?.accountType === 'BAU') {
+          defaultAccountType = lead.accountType as any;
+      } else if (lead?.accountType === 'Standard') {
+          defaultAccountType = 'BAU';
+      } else if (lead?.selectedServiceOption === 'corporate') {
+          defaultAccountType = 'Corporate';
+      } else if (lead?.bucket === 'multisite' || lead?.isParentLead || lead?.isChildLead || lead?.parentLeadId) {
+          defaultAccountType = 'Multisite';
+      } else if (isOutboundLead) {
+          defaultAccountType = 'J2';
+      }
+
       form.reset({
           selectedServices: initialSelectedServices,
           frequencies: initialFrequencies,
           rates: initialRates,
           startDate: startDate,
+          accountType: defaultAccountType,
           chosenPremiumPlan: (lead as any)?.chosenPremiumPlan || 'Merchant',
           chosenExpressPlan: (lead as any)?.chosenExpressPlan || 'Merchant',
           createLocalMileAccount: isLpoNetworkBucket ? false : hasExistingLocalMileAccess,
@@ -1516,6 +1539,9 @@ export function ServiceSelectionDialog({
           chosenExpressPlan: expressPlan,
           pricing_table: pricingTable,
           suburb_mapping: suburbMapping,
+          accountType: values.accountType === 'Standard' ? 'BAU' : (values.accountType || 'BAU'),
+          ...(values.accountType === 'Corporate' ? { selectedServiceOption: 'corporate' } : {}),
+          ...(values.accountType === 'Multisite' && lead.bucket !== 'multisite' ? { bucket: 'multisite' } : {}),
           updatedAt: new Date()
         });
 
@@ -1765,6 +1791,7 @@ export function ServiceSelectionDialog({
                 services: serviceSelections,
                 products: scfProducts,
                 startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
+                accountType: values.accountType === 'Standard' ? 'BAU' : (values.accountType || 'BAU'),
                 status: 'Pending' as const,
                 createdBy: createdByString,
                 createdByName: currentUserName,
@@ -1898,6 +1925,7 @@ export function ServiceSelectionDialog({
                     services: serviceSelections,
                     products: scfProducts,
                     startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
+                    accountType: values.accountType === 'Standard' ? 'BAU' : (values.accountType || 'BAU'),
                     status: 'Pending',
                     createdBy: createdByString,
                     createdByName: currentUserName,
@@ -2179,6 +2207,12 @@ export function ServiceSelectionDialog({
           ...h2hAddress
         });
       }
+
+      await updateLeadDetails(lead.id, lead, {
+        accountType: values.accountType === 'Standard' ? 'BAU' : (values.accountType || 'BAU'),
+        ...(values.accountType === 'Corporate' ? { selectedServiceOption: 'corporate' } : {}),
+        ...(values.accountType === 'Multisite' && lead.bucket !== 'multisite' ? { bucket: 'multisite' } : {})
+      });
 
       const actionDesc = selectionType === 'both' 
         ? `both services (${values.selectedServices.join(', ')}) and products`
@@ -3363,48 +3397,105 @@ export function ServiceSelectionDialog({
                             />
                         )}
                         
-                        {(mode === 'Signup' || mode === 'Quote' || mode === 'Resell') && (
+                        {(mode === 'Signup' || mode === 'Quote' || mode === 'Resell' || mode === 'Free Trial' || mode === 'Confirm Signup') && (
                             <FormField
                             control={form.control}
-                            name="startDate"
+                            name="accountType"
                             render={({ field }) => (
-                                <FormItem className="flex flex-col">
-                                <FormLabel>Service Start Date</FormLabel>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                    <FormControl>
-                                        <Button
-                                        variant={"outline"}
-                                        className={cn(
-                                            "w-[240px] pl-3 text-left font-normal bg-card hover:bg-card/90",
-                                            !field.value && "text-muted-foreground"
-                                        )}
+                                <FormItem className="space-y-2">
+                                <FormLabel className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                    <Building className="w-3.5 h-3.5 text-[#095c7b]" />
+                                    Account Classification
+                                </FormLabel>
+                                <FormControl>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                    {[
+                                        { id: 'BAU', label: 'BAU', desc: 'Standard single site account', icon: Store },
+                                        { id: 'J2', label: 'J2', desc: 'Outbound campaign lead', icon: Phone },
+                                        { id: 'Corporate', label: 'Corporate', desc: 'Head office / corporate billing', icon: Building },
+                                        { id: 'Multisite', label: 'Multisite', desc: 'Multi-branch network account', icon: Network },
+                                    ].map((item) => {
+                                        const isSelected = (field.value === 'Standard' ? 'BAU' : (field.value || 'BAU')) === item.id;
+                                        const Icon = item.icon;
+                                        return (
+                                        <div
+                                            key={item.id}
+                                            onClick={() => field.onChange(item.id)}
+                                            className={cn(
+                                            "cursor-pointer rounded-lg border-2 p-2.5 transition-all flex flex-col justify-between select-none",
+                                            isSelected
+                                                ? "border-[#095c7b] bg-[#095c7b]/5 shadow-xs"
+                                                : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80"
+                                            )}
                                         >
-                                        {field.value ? (
-                                            format(field.value, "PPP")
-                                        ) : (
-                                            <span>Pick a date</span>
-                                        )}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                        </Button>
-                                    </FormControl>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                        mode="single"
-                                        selected={field.value}
-                                        onSelect={field.onChange}
-                                        disabled={(date) =>
-                                        date < new Date() || isWeekend(date)
-                                        }
-                                        initialFocus
-                                    />
-                                    </PopoverContent>
-                                </Popover>
+                                            <div className="flex items-center justify-between mb-1">
+                                            <div className="flex items-center gap-1.5 font-semibold text-xs text-slate-800">
+                                                <Icon className={cn("w-3.5 h-3.5", isSelected ? "text-[#095c7b]" : "text-slate-500")} />
+                                                {item.label}
+                                            </div>
+                                            {isSelected ? (
+                                                <span className="h-2 w-2 rounded-full bg-[#095c7b]" />
+                                            ) : (
+                                                <span className="h-2 w-2 rounded-full border border-slate-300" />
+                                            )}
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground leading-tight">
+                                            {item.desc}
+                                            </p>
+                                        </div>
+                                        );
+                                    })}
+                                    </div>
+                                </FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}
                             />
+                        )}
+
+                        {(mode === 'Signup' || mode === 'Quote' || mode === 'Resell') && (
+
+                                <FormField
+                                control={form.control}
+                                name="startDate"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                    <FormLabel>Service Start Date</FormLabel>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                        <FormControl>
+                                            <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-[240px] pl-3 text-left font-normal bg-card hover:bg-card/90",
+                                                !field.value && "text-muted-foreground"
+                                            )}
+                                            >
+                                            {field.value ? (
+                                                format(field.value, "PPP")
+                                            ) : (
+                                                <span>Pick a date</span>
+                                            )}
+                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                            </Button>
+                                        </FormControl>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            mode="single"
+                                            selected={field.value}
+                                            onSelect={field.onChange}
+                                            disabled={(date) =>
+                                            date < new Date() || isWeekend(date)
+                                            }
+                                            initialFocus
+                                        />
+                                        </PopoverContent>
+                                    </Popover>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
                         )}
 
                         {mode === 'Signup' && !isLpoNetworkBucket && (

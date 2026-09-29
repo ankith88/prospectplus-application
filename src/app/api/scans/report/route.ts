@@ -232,12 +232,13 @@ export async function GET(request: Request) {
 
     // Pre-fetch partner locations, companies, and leads concurrently
     const partnerLocationMap: Record<string, { id: string, name: string }> = {};
-    const companyLookupMap = new Map<string, { id: string, name: string, franchisee?: string }>();
+    const companyLookupMap = new Map<string, { id: string, name: string, franchisee?: string, dateEntered?: string | null, createdAt?: string | null }>();
+    const companyByNameMap = new Map<string, { id: string, name: string, franchisee?: string, dateEntered?: string | null, createdAt?: string | null }>();
 
     const [pLocSnap, compSnap, leadSnap] = await Promise.all([
       db.collection('partner_locations').get(),
-      db.collection('companies').select('internalid', 'companyName', 'franchisee').get(),
-      db.collection('leads').select('internalid', 'companyName', 'franchisee').get()
+      db.collection('companies').select('internalid', 'companyName', 'franchisee', 'dateLeadEntered', 'createdAt', 'customerSince').get(),
+      db.collection('leads').select('internalid', 'companyName', 'franchisee', 'dateLeadEntered', 'createdAt', 'customerSince').get()
     ]);
 
     pLocSnap.docs.forEach((doc: any) => {
@@ -250,28 +251,42 @@ export async function GET(request: Request) {
 
     compSnap.docs.forEach((doc: any) => {
       const data = doc.data();
+      const info = {
+        id: doc.id,
+        name: data.companyName || 'Unknown Company',
+        franchisee: data.franchisee || 'Unassigned',
+        dateEntered: data.dateLeadEntered || data.customerSince || null,
+        createdAt: data.createdAt || null
+      };
       if (data.internalid !== undefined && data.internalid !== null && data.internalid !== '') {
-        const info = {
-          id: doc.id,
-          name: data.companyName || 'Unknown Company',
-          franchisee: data.franchisee || 'Unassigned'
-        };
         companyLookupMap.set(String(data.internalid), info);
+      }
+      companyLookupMap.set(doc.id, info);
+      if (data.companyName) {
+        companyByNameMap.set(data.companyName.toLowerCase().trim(), info);
       }
     });
 
     leadSnap.docs.forEach((doc: any) => {
       const data = doc.data();
+      const info = {
+        id: doc.id,
+        name: data.companyName || 'Unknown Company',
+        franchisee: data.franchisee || 'Unassigned',
+        dateEntered: data.dateLeadEntered || data.customerSince || null,
+        createdAt: data.createdAt || null
+      };
       if (data.internalid !== undefined && data.internalid !== null && data.internalid !== '') {
         const key = String(data.internalid);
         if (!companyLookupMap.has(key)) {
-          const info = {
-            id: doc.id,
-            name: data.companyName || 'Unknown Company',
-            franchisee: data.franchisee || 'Unassigned'
-          };
           companyLookupMap.set(key, info);
         }
+      }
+      if (!companyLookupMap.has(doc.id)) {
+        companyLookupMap.set(doc.id, info);
+      }
+      if (data.companyName && !companyByNameMap.has(data.companyName.toLowerCase().trim())) {
+        companyByNameMap.set(data.companyName.toLowerCase().trim(), info);
       }
     });
 
@@ -634,6 +649,74 @@ export async function GET(request: Request) {
     const droppedCustomers: any[] = [];
     const atRiskCustomers: any[] = [];
 
+    // Verify candidate new customers against historical package data and account registration date
+    const candidateNewCustomers = Object.values(customerUsage).filter(cu =>
+      cu.name !== 'Unlinked' &&
+      cu.currentPeriodScans > 0 &&
+      cu.firstScanDate &&
+      cu.firstScanDate >= currentStart &&
+      cu.firstScanDate <= currentEnd
+    );
+
+    const verifiedNewCustomers = new Set<string>();
+
+    if (candidateNewCustomers.length > 0) {
+      const BATCH_SIZE = 25;
+      for (let i = 0; i < candidateNewCustomers.length; i += BATCH_SIZE) {
+        const batch = candidateNewCustomers.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async (cu) => {
+          const compInfo = (cu.companyId ? companyLookupMap.get(cu.companyId) : null) || companyByNameMap.get(cu.name.toLowerCase().trim());
+          
+          let hasPriorScan = false;
+          
+          // Check 1: Query Firestore packages collection for any prior package before currentStart
+          try {
+            const snap = await db.collection('packages')
+              .where('customer_name', '==', cu.name)
+              .where('latest_scan_at', '<', currentStart.toISOString())
+              .limit(1)
+              .get();
+            if (!snap.empty) {
+              hasPriorScan = true;
+            }
+          } catch (err) {
+            // Fallback query if composite index is not defined
+            try {
+              const snap = await db.collection('packages')
+                .where('customer_name', '==', cu.name)
+                .limit(10)
+                .get();
+              for (const doc of snap.docs) {
+                const d = doc.data();
+                const scanTime = d.latest_scan_at ? new Date(d.latest_scan_at) : (d.sync_date ? parseDateString(d.sync_date) : null);
+                if (scanTime && !isNaN(scanTime.getTime()) && scanTime < currentStart) {
+                  hasPriorScan = true;
+                  break;
+                }
+              }
+            } catch (fallbackErr) {
+              // Ignore
+            }
+          }
+
+          // Check 2: If company record exists with registration/entry date well before currentStart (e.g. > 14 days before currentStart)
+          if (!hasPriorScan && compInfo) {
+            const dateVal = compInfo.dateEntered || compInfo.createdAt;
+            if (dateVal) {
+              const dObj = parseDateString(dateVal);
+              if (!isNaN(dObj.getTime()) && dObj.getTime() < (currentStart.getTime() - (14 * 24 * 60 * 60 * 1000))) {
+                hasPriorScan = true;
+              }
+            }
+          }
+
+          if (!hasPriorScan) {
+            verifiedNewCustomers.add(cu.name);
+          }
+        }));
+      }
+    }
+
     // Rolling 12-week metrics
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
@@ -664,7 +747,7 @@ export async function GET(request: Request) {
       if (cu.name === 'Unlinked') return;
 
       // 12 Weeks Logic
-      if (cu.firstScanDate) {
+      if (cu.firstScanDate && (verifiedNewCustomers.has(cu.name) || filterDateRange === 'all')) {
         const weekNew = twelveWeeksData.find(w => cu.firstScanDate! >= w.startDate && cu.firstScanDate! <= w.endDate);
         if (weekNew) {
            weekNew.newCount++;
@@ -702,7 +785,7 @@ export async function GET(request: Request) {
         totalActiveCurrentUniquePackages += cu.currentPeriodUniquePackages.size;
 
         // New customer check
-        if (cu.firstScanDate && cu.firstScanDate >= currentStart && cu.firstScanDate <= currentEnd) {
+        if (verifiedNewCustomers.has(cu.name) && cu.firstScanDate && cu.firstScanDate >= currentStart && cu.firstScanDate <= currentEnd) {
           newCustomers.push({
             name: cu.name,
             companyId: cu.companyId,

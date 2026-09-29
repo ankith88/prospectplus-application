@@ -46,9 +46,13 @@ export async function POST(
       const phoneNumber = callData.contact?.phone_number || callData.raw_digits;
       const duration = callData.duration || 0;
       const direction = callData.direction || 'outbound';
-      const status = callData.status || 'answered';
+      const isMissed = callData.status === 'missed' || !callData.answered_at || !!callData.missed_call_reason;
+      const status = isMissed ? 'missed' : (callData.status || 'answered');
       const author = callData.user?.name || 'Aircall';
       const recording = callData.recording || '';
+      const missedCallReason = callData.missed_call_reason || (isMissed ? 'unanswered' : null);
+      const aircallNumberName = callData.number?.name || null;
+      const aircallNumberDigits = callData.number?.digits || null;
       
       const timestampSeconds = callData.ended_at || callData.started_at || Math.floor(Date.now() / 1000);
       const date = new Date(timestampSeconds * 1000).toISOString();
@@ -103,7 +107,7 @@ export async function POST(
         }
       }
 
-      let notes = `${direction === 'inbound' ? 'Inbound' : 'Outbound'} call.`;
+      let notes = isMissed ? `Missed Inbound Call on line: ${aircallNumberName || 'Aircall'}.` : `${direction === 'inbound' ? 'Inbound' : 'Outbound'} call.`;
       if (callData.note) {
         notes += ` Note: ${callData.note}`;
       }
@@ -116,6 +120,9 @@ export async function POST(
         callId,
         author,
         aircallStatus: status,
+        missedCallReason,
+        aircallNumberName,
+        aircallNumberDigits,
         recordingUrl: recording,
         recordingAssetUrl: `https://assets.aircall.io/calls/${callId}/recording/info`,
         event: event.event || 'call.ended',

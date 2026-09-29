@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown, Store, Home, KeyRound } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, PhoneMissed, PhoneIncoming, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown, Store, Home, KeyRound } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
 import { usePermissions } from "@/hooks/use-permissions"
@@ -357,6 +357,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/scans/top-users/contact-report': { label: 'Top Users Contact Report', category: 'Operations & History', icon: Phone, href: '/scans/top-users/contact-report' },
     '/appointments': { label: 'All Appointments', category: 'Operations & History', icon: Calendar, href: '/appointments' },
     '/operations/training-appointments': { label: 'Franchisee Training', category: 'Operations & History', icon: CalendarCheck, href: '/operations/training-appointments' },
+    '/my-inbound-calls': { label: 'My Inbound Calls', category: 'Operations & History', icon: PhoneIncoming, href: '/my-inbound-calls' },
     '/calls': { label: 'All Calls', category: 'Operations & History', icon: Phone, href: '/calls' },
     '/unassigned_calls': { label: 'Unassigned Calls', category: 'Operations & History', icon: HelpCircle, href: '/unassigned_calls' },
     '/transcripts': { label: 'All Transcripts', category: 'Operations & History', icon: FileText, href: '/transcripts' },
@@ -367,6 +368,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/reports': { label: 'Outbound Reporting', category: 'Analytics & Reports', icon: BarChart2, href: '/reports' },
     '/outbound-dialer-performance': { label: 'Outbound Dialer Performance', category: 'Analytics & Reports', icon: Users, href: '/outbound-dialer-performance' },
     '/inbound-reporting': { label: 'Inbound Reporting', category: 'Analytics & Reports', icon: Inbox, href: '/inbound-reporting' },
+    '/reports/missed-calls': { label: 'Aircall Missed Calls', category: 'Analytics & Reports', icon: PhoneMissed, href: '/reports/missed-calls' },
     '/multisite-reporting': { label: 'MultiSite Reporting', category: 'Analytics & Reports', icon: Network, href: '/multisite-reporting' },
     '/admin/lifecycle-dashboard': { label: 'Lifecycle Dashboard', category: 'Analytics & Reports', icon: Activity, href: '/admin/lifecycle-dashboard' },
     '/account-manager/reports': { label: 'AM Reporting', category: 'Analytics & Reports', icon: BarChart3, href: '/account-manager/reports' },
@@ -731,6 +733,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewScans = canView('scans');
   const canViewCancellationReporting = canView('cancellationReporting') || isSuperAdmin || ['admin', 'superadmin', 'marketing manager', 'customer success', 'customer service'].includes(activeRoleLower);
   const canViewPostHogReporting = canView('posthogReporting') || isSuperAdmin || ['admin', 'superadmin', 'marketing manager', 'marketing_manager'].includes(activeRoleLower);
+  const allowedMissedCallsRoles = ['admin', 'data admin', 'super user', 'sales manager', 'outbound admin'];
+  const canViewMissedCallsReport =
+    isSuperAdmin ||
+    Boolean((userProfile as any)?.isSuperAdmin) ||
+    Boolean((userProfile as any)?.superAdmin) ||
+    allowedMissedCallsRoles.includes(activeRoleLower) ||
+    (userProfile?.assignedRoles || []).some((r: any) => allowedMissedCallsRoles.includes(String(r).trim().toLowerCase()));
+  const hasLinkedAircallNumber = !isFranchiseeRole && Boolean(
+    (userProfile?.aircallPhoneNumber && userProfile.aircallPhoneNumber.trim().length > 0) ||
+    userProfile?.aircallUserId
+  );
   const canViewTickets = canView('tickets');
   const canViewLpoLeads = canView('lpoLeads');
   const canAccessAsk = !!userProfile?.uid && ALLOWED_ASK_UIDS.includes(userProfile.uid);
@@ -1356,6 +1369,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                 </SidebarMenuButton>
                               </SidebarMenuItem>
                             )}
+                            {hasLinkedAircallNumber && (
+                              <SidebarMenuItem>
+                                <SidebarMenuButton asChild isActive={isActive("/my-inbound-calls") || isActive("/my-calls")} tooltip="My Inbound Calls">
+                                  <Link href="/my-inbound-calls">
+                                    <PhoneIncoming className="text-[#095c7b] dark:text-[#38bdf8]" />
+                                    <span>My Inbound Calls</span>
+                                  </Link>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            )}
                           </>
                         )}
                         {canImportLeads && (
@@ -1927,6 +1950,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             )}
                             {canViewHistoryCallsTranscripts && (
                               <>
+                                {hasLinkedAircallNumber && (
+                                  <SidebarMenuItem>
+                                    <SidebarMenuButton asChild isActive={isActive("/my-inbound-calls") || isActive("/my-calls")} tooltip="My Inbound Calls">
+                                      <Link href="/my-inbound-calls">
+                                        <PhoneIncoming className="text-[#095c7b] dark:text-[#38bdf8]" />
+                                        <span>My Inbound Calls</span>
+                                      </Link>
+                                    </SidebarMenuButton>
+                                  </SidebarMenuItem>
+                                )}
                                 <SidebarMenuItem>
                                   <SidebarMenuButton asChild isActive={isActive("/calls")} tooltip="All Calls">
                                     <Link href="/calls">
@@ -2029,6 +2062,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                               <Link href="/inbound-reporting">
                                 <Inbox />
                                 <span>Inbound Reporting</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
+                        {canViewMissedCallsReport && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/reports/missed-calls")} tooltip="Missed Calls (Aircall)">
+                              <Link href="/reports/missed-calls">
+                                <PhoneMissed className="text-red-500" />
+                                <span>Missed Calls Report</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
@@ -2707,6 +2750,9 @@ const isBlockedForUserRole = (path: string, role?: string) => {
 
 const CUSTOM_TIMER_PATHS = [
   '/reports',
+  '/reports/missed-calls',
+  '/my-inbound-calls',
+  '/my-calls',
   '/outbound-dialer-performance',
   '/inbound-reporting',
   '/leads',
@@ -2724,6 +2770,7 @@ const isCustomPath = (path: string) => {
 };
 
 const getPageNameFromPath = (path: string) => {
+  if (path === '/my-inbound-calls' || path === '/my-calls') return 'My Inbound Calls';
   if (path === '/franchisee-leads') return 'All Leads';
   if (path === '/admin/mass-link-customers') return 'Mass Link Customers';
   if (path === '/admin/in-review-leads') return 'In Review Leads';
