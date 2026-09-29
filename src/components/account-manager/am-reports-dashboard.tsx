@@ -42,7 +42,7 @@ import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
 import { calculatePrevMonthRealizationCohort, type ExtendedInvoice } from '@/lib/mrr-realization';
 import { PrevMonthCohortWidget } from '@/components/prev-month-cohort-widget';
-import { getLeadInitialBucket, calculateAmStageMetrics, calculateLeadStageDurations, type AmStageMetrics } from '@/lib/lead-stage-analytics';
+import { getLeadInitialBucket, calculateAmStageMetrics, calculateLeadStageDurations, normalizeStatusLabel, type AmStageMetrics } from '@/lib/lead-stage-analytics';
 
 import { AnimatedNumber } from '@/components/ui/animated-number';
 
@@ -1137,7 +1137,7 @@ export default function AMReportsDashboard() {
         const valueByLeadType: Record<string, { value: number; leadCount: number }> = {};
         const valueByBucket: Record<string, { value: number; leadCount: number }> = {};
         const valueByAM: Record<string, { value: number; leadCount: number }> = {};
-        const valueByLead: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; durationMinutes: number; lastContacted: string | null }[] = [];
+        const valueByLead: { id: string; name: string; am: string; value: number; status: string; leadType: string; activityCount: number; durationMinutes: number; lastContacted: string | null }[] = [];
 
         const dateRangeFilter = appliedActivityDateRange || appliedLeadEnteredDateRange;
 
@@ -1195,6 +1195,7 @@ export default function AMReportsDashboard() {
                  valueByLead.push({
                      id: lead.id,
                      name: lead.companyName,
+                     am: lead.accountManagerAssigned || 'Unassigned',
                      value: rawVal,
                      status: status,
                      leadType: leadType,
@@ -2014,6 +2015,301 @@ export default function AMReportsDashboard() {
         });
     };
 
+    const exportCustomDataToCsv = (data: Record<string, any>[], filename: string) => {
+        if (!data || data.length === 0) {
+            toast({ title: 'No Data', description: 'The dataset is empty.' });
+            return;
+        }
+        const headers = Object.keys(data[0]);
+        const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+        const csvRows = data.map(item => headers.map(h => escapeCsv(item[h])).join(','));
+        const csvContent = [headers.join(','), ...csvRows].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast({ title: 'Export Complete', description: `${filename}.csv exported successfully.` });
+    };
+
+    const handleExportOriginBreakdownCSV = () => {
+        const rows = Object.values(amStageAnalytics.byAm)
+            .filter(a => a.totalLeads > 0 && a.amName !== 'All Account Managers')
+            .map(am => {
+                const ob = am.originBreakdown;
+                const outboundCount = ob['Outbound']?.total || 0;
+                const inboundCount = ob['Inbound']?.total || 0;
+                const fieldSalesCount = ob['Field Sales']?.total || 0;
+                const marketingCount = (ob['Marketing']?.total || 0) + (ob['Nurture']?.total || 0);
+                const lpoCount = (ob['LPO']?.total || 0) + (ob['Customer Success']?.total || 0);
+                return {
+                    'Account Manager': am.amName,
+                    'Total Booked': am.totalLeads,
+                    'Outbound': outboundCount,
+                    'Inbound': inboundCount,
+                    'Field Sales': fieldSalesCount,
+                    'Marketing / Nurture': marketingCount,
+                    'LPO / Other': lpoCount,
+                    'Overall Origin Win Rate (%)': am.overallConversionRate
+                };
+            });
+        exportCustomDataToCsv(rows, 'am_appointment_initial_bucket_origin_breakdown');
+    };
+
+    const handleExportOutOfTerritoryCSV = () => {
+        const rows = outOfTerritoryMetrics.byAm.map(row => ({
+            'Account Manager': row.am,
+            'Direct Out of Territory Count': row.direct,
+            'Lost (Out of Territory Reason) Count': row.lost,
+            'Total Out of Territory Leads': row.total
+        }));
+        exportCustomDataToCsv(rows, 'out_of_territory_summary');
+    };
+
+    const handleExportActivityLeaderboardCSV = () => {
+        const rows = activityLeaderboardData.map(item => ({
+            'Account Manager': item.name,
+            'Calls': item.Calls,
+            'Emails': item.Emails,
+            'Meetings': item.Meetings,
+            'Updates': item.Updates,
+            'Total Activities': item.Total
+        }));
+        exportCustomDataToCsv(rows, 'am_activity_leaderboard');
+    };
+
+    const handleExportActivityTrendCSV = () => {
+        const rows = activityTrendData.map(item => ({
+            'Date': item.date,
+            'Total Activities': item.Total,
+            'Calls': item.Calls,
+            'Emails': item.Emails,
+            'Meetings': item.Meetings
+        }));
+        exportCustomDataToCsv(rows, 'activity_trend_over_time');
+    };
+
+    const handleExportAircallPerformanceCSV = () => {
+        const rows = Object.entries(metrics.amCallStats).map(([amName, stats]) => {
+            const avgMins = stats.callCount > 0 ? stats.totalDurationMinutes / stats.callCount : 0;
+            return {
+                'Account Manager': amName,
+                'Completed Calls': stats.callCount,
+                'Total Duration (Mins)': stats.totalDurationMinutes.toFixed(1),
+                'Avg Call Duration (Mins)': avgMins.toFixed(1)
+            };
+        });
+        exportCustomDataToCsv(rows, 'aircall_call_performance');
+    };
+
+    const handleExportGroupedActivitiesCSV = () => {
+        const rows: Record<string, any>[] = [];
+        groupedActivities.forEach(group => {
+            group.leads.forEach(leadItem => {
+                leadItem.activities.forEach(act => {
+                    rows.push({
+                        'Account Manager': group.authorName,
+                        'Lead Company': leadItem.leadName,
+                        'Date': act.date,
+                        'Activity Type': act.type,
+                        'Duration (Mins)': act.durationMinutes || 0,
+                        'Notes': (act.notes || '').replace(/<[^>]*>?/gm, '')
+                    });
+                });
+            });
+        });
+        exportCustomDataToCsv(rows, 'grouped_activity_logs');
+    };
+
+    const handleExportResponsivenessCSV = () => {
+        const rows = amResponsivenessMetrics.map(m => {
+            const coveragePct = m.totalLeads > 0 
+                ? Math.round((m.leadsWithActivity / m.totalLeads) * 100)
+                : 0;
+            return {
+                'Account Manager': m.amName,
+                'Leads Assigned': m.totalLeads,
+                'Leads with Activity': m.leadsWithActivity,
+                'Leads without Activity': m.leadsWithoutActivity,
+                'Coverage (%)': `${coveragePct}%`,
+                'Avg Time to Interact (Hours)': m.avgTimeToInteractHours !== null ? m.avgTimeToInteractHours.toFixed(1) : 'N/A'
+            };
+        });
+        exportCustomDataToCsv(rows, 'am_responsiveness_summary');
+    };
+
+    const handleExportSignedRevenueCSV = () => {
+        const rows = signedLeadsData.signedList.map(item => ({
+            'Company Name': item.companyName,
+            'Account Manager': item.accountManager,
+            'Bucket': item.bucket,
+            'Lead Type': item.leadType,
+            'Status': item.status,
+            'Signed MRR ($)': item.signedMrr.toFixed(2),
+            'Date Entered': item.dateEntered
+        }));
+        exportCustomDataToCsv(rows, 'signed_revenue_and_customers');
+    };
+
+    const handleExportLostRevenueCSV = () => {
+        const rows = lostLeadsData.lostList.map(item => ({
+            'Company Name': item.companyName,
+            'Account Manager': item.accountManager,
+            'Bucket': item.bucket,
+            'Lead Type': item.leadType,
+            'Status': item.status,
+            'Lost MRR ($)': item.lostMrr.toFixed(2),
+            'Date Entered': item.dateEntered
+        }));
+        exportCustomDataToCsv(rows, 'lost_revenue_and_churned_leads');
+    };
+
+    const handleExportEffortMatrixCSV = () => {
+        const rows = scatterData.map(d => ({
+            'Lead Name': d.name,
+            'Status': d.status,
+            'Total Activities': d.activities,
+            'Duration (Mins)': d.duration,
+            'Pipeline MRR ($)': d.value.toFixed(2)
+        }));
+        exportCustomDataToCsv(rows, 'effort_vs_outcome_matrix');
+    };
+
+    const handleExportActivityBreakdownCSV = () => {
+        const rows = activityBreakdownData.map(d => {
+            const total = d.Calls + d.Emails + d.Meetings + d.Updates;
+            return {
+                'Lead Name': d.name,
+                'Calls': d.Calls,
+                'Emails': d.Emails,
+                'Meetings': d.Meetings,
+                'Updates': d.Updates,
+                'Total Activities': total,
+                'Duration (Mins)': Math.round(d.durationMinutes)
+            };
+        });
+        exportCustomDataToCsv(rows, 'activity_breakdown_per_lead');
+    };
+
+    const handleExportOutcomesCSV = () => {
+        const rows = outcomeChartData.map(d => ({
+            'Lead Status': d.status,
+            'Total Activities': d.activities,
+            'Total Duration (Mins)': Math.round(d.duration),
+            'Pipeline MRR ($)': d.value.toFixed(2)
+        }));
+        exportCustomDataToCsv(rows, 'activity_outcomes');
+    };
+
+    const handleExportStageDurationsComparisonCSV = () => {
+        const activeAmList = Object.values(amStageAnalytics.byAm)
+            .filter(a => a.totalLeads > 0 && a.amName !== 'All Account Managers');
+        const rows = activeAmList.map(a => {
+            const row: Record<string, any> = { 'Account Manager': a.amName, 'Active Leads': a.activeLeads };
+            Object.entries(a.avgDaysByStatus || {}).forEach(([st, days]) => {
+                row[`Avg ${st} (Days)`] = days !== undefined ? days : '-';
+            });
+            row['Stale Leads (>14d)'] = a.staleLeads.length;
+            return row;
+        });
+        exportCustomDataToCsv(rows, 'stage_durations_comparison');
+    };
+
+    const handleExportStaleLeadsCSV = () => {
+        const rows = amStageAnalytics.summary.staleLeads.map(item => ({
+            'Company Name': item.lead.companyName || '',
+            'Prospect+ ID': item.lead.prospectPlusId || item.lead.id || '',
+            'Account Manager': item.lead.accountManagerAssigned || 'Unassigned',
+            'Status': item.status,
+            'Days Waiting': item.daysInStatus,
+            'Bucket': item.lead.bucket || '',
+            'Lead Type': item.lead.leadType || ''
+        }));
+        exportCustomDataToCsv(rows, 'stale_leads_exceeding_14_days');
+    };
+
+    const handleExportAppointmentsPerAmCSV = () => {
+        const rows = appointmentMetrics.perAm.map(item => ({
+            'Account Manager': item.name,
+            'Appointments Count': item.count
+        }));
+        exportCustomDataToCsv(rows, 'appointments_per_am');
+    };
+
+    const handleExportAppointmentsByWeekCSV = () => {
+        const rows = appointmentMetrics.byWeekCreated.map(item => ({
+            'Week / Date': item.date,
+            'Appointments Created': item.count
+        }));
+        exportCustomDataToCsv(rows, 'appointments_created_by_week');
+    };
+
+    const handleExportAppointmentsByDateScheduledCSV = () => {
+        const rows = appointmentMetrics.byDateScheduled.map(item => ({
+            'Scheduled Date': item.date,
+            'Appointments Count': item.count
+        }));
+        exportCustomDataToCsv(rows, 'appointments_by_date_scheduled');
+    };
+
+    const handleExportAppointmentsPerLeadCSV = () => {
+        const rows = appointmentMetrics.perLead.map(item => ({
+            'Lead Company': item.name,
+            'Appointments Count': item.count
+        }));
+        exportCustomDataToCsv(rows, 'appointments_per_lead');
+    };
+
+    const handleExportPipelineValueByStatusCSV = () => {
+        const rows = statusChartData.map(item => ({
+            'Status': item.status,
+            'Total MRR ($)': item.value.toFixed(2),
+            'Lead Count': item.leadCount
+        }));
+        exportCustomDataToCsv(rows, 'pipeline_value_by_status');
+    };
+
+    const handleExportPipelineValueByLeadTypeCSV = () => {
+        const rows = leadTypeChartData.map(item => ({
+            'Lead Type': item.type,
+            'Total MRR ($)': item.value.toFixed(2),
+            'Lead Count': item.leadCount
+        }));
+        exportCustomDataToCsv(rows, 'pipeline_value_by_lead_type');
+    };
+
+    const handleExportPipelineValueByBucketCSV = () => {
+        const rows = bucketChartData.map(item => ({
+            'Bucket': item.bucket,
+            'Total MRR ($)': item.value.toFixed(2),
+            'Lead Count': item.leadCount
+        }));
+        exportCustomDataToCsv(rows, 'pipeline_value_by_bucket');
+    };
+
+    const handleExportPipelineValueByAmCSV = () => {
+        const rows = amChartData.map(item => ({
+            'Account Manager': item.am,
+            'Total MRR ($)': item.value.toFixed(2),
+            'Lead Count': item.leadCount
+        }));
+        exportCustomDataToCsv(rows, 'pipeline_value_by_am');
+    };
+
+    const handleExportHighValueLeadsCSV = () => {
+        const rows = metrics.valueByLead.filter(l => l.value > 0).map((lead, idx) => ({
+            'Rank': idx + 1,
+            'Company Name': lead.name,
+            'Account Manager': lead.am,
+            'Status': lead.status,
+            'Activities Count': lead.activityCount,
+            'Pipeline MRR ($)': lead.value.toFixed(2)
+        }));
+        exportCustomDataToCsv(rows, 'high_value_opportunities');
+    };
+
     if (loading || isLoadingData) {
         return <div className="flex justify-center items-center h-[calc(100vh-100px)]"><Loader /></div>;
     }
@@ -2569,14 +2865,24 @@ export default function AMReportsDashboard() {
                                 <div>
                                     <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
                                         <MapPin className="h-5 w-5 text-amber-600" />
-                                        <span>Out of Territory & Lost (Out of Territory) Leads</span>
+                                        <span>Out of Territory &amp; Lost (Out of Territory) Leads</span>
                                         <SectionHelp content="Overview of leads assigned to AMs that are designated as Out of Territory by status or lost reason." />
                                     </CardTitle>
                                     <CardDescription>Breakdown of Out of Territory status leads and leads marked Lost with reason Out of Territory.</CardDescription>
                                 </div>
-                                <Badge variant="secondary" className="text-xs font-semibold">
-                                    Total: {outOfTerritoryMetrics.totalLeads.length}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="text-xs font-semibold">
+                                        Total: {outOfTerritoryMetrics.totalLeads.length}
+                                    </Badge>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                        onClick={handleExportOutOfTerritoryCSV}
+                                    >
+                                        <Download className="mr-1.5 h-3.5 w-3.5" /> Export Section CSV
+                                    </Button>
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent className="p-6 space-y-6">
@@ -2671,12 +2977,22 @@ export default function AMReportsDashboard() {
                     {/* Management Charts */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                         <Card className="border-[#095c7b]/10 shadow-sm bg-white">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-base font-semibold text-[#095c7b] flex items-center gap-1.5">
-                                    <span>AM Activity Leaderboard</span>
-                                    <SectionHelp content="Ranks Account Managers by their total activity volume (calls, emails, meetings, updates) logged during the period." />
-                                </CardTitle>
-                                <CardDescription>Total activities logged by each Account Manager in this period</CardDescription>
+                            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-base font-semibold text-[#095c7b] flex items-center gap-1.5">
+                                        <span>AM Activity Leaderboard</span>
+                                        <SectionHelp content="Ranks Account Managers by their total activity volume (calls, emails, meetings, updates) logged during the period." />
+                                    </CardTitle>
+                                    <CardDescription>Total activities logged by each Account Manager in this period</CardDescription>
+                                </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportActivityLeaderboardCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="h-[250px]">
                                 {activityLeaderboardData.length > 0 ? (
@@ -2752,12 +3068,22 @@ export default function AMReportsDashboard() {
                         </Card>
 
                         <Card className="border-[#095c7b]/10 shadow-sm bg-white">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-base font-semibold text-[#095c7b] flex items-center gap-1.5">
-                                    <span>Activity Trend Over Time</span>
-                                    <SectionHelp content="Daily volume of logged activities (calls, emails, meetings, and updates) to show AM engagement trends over the period." />
-                                </CardTitle>
-                                <CardDescription>Daily volume of interactions logged by AMs</CardDescription>
+                            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-base font-semibold text-[#095c7b] flex items-center gap-1.5">
+                                        <span>Activity Trend Over Time</span>
+                                        <SectionHelp content="Daily volume of logged activities (calls, emails, meetings, and updates) to show AM engagement trends over the period." />
+                                    </CardTitle>
+                                    <CardDescription>Daily volume of interactions logged by AMs</CardDescription>
+                                </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportActivityTrendCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="h-[250px]">
                                 {activityTrendData.length > 0 ? (
@@ -2788,14 +3114,24 @@ export default function AMReportsDashboard() {
                     </div>
 
                     <Card className="border-[#095c7b]/10 shadow-sm flex flex-col bg-white mb-6">
-                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
-                            <CardTitle className="text-lg text-[#095c7b] flex items-center gap-2">
-                                <Phone className="h-5 w-5 text-sky-600" />
-                                <span>AM Aircall Call Performance</span>
-                            </CardTitle>
-                            <CardDescription>
-                                Analysis of completed calls (synced via Aircall with a valid Call ID) and their average duration.
-                            </CardDescription>
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg text-[#095c7b] flex items-center gap-2">
+                                    <Phone className="h-5 w-5 text-sky-600" />
+                                    <span>AM Aircall Call Performance</span>
+                                </CardTitle>
+                                <CardDescription>
+                                    Analysis of completed calls (synced via Aircall with a valid Call ID) and their average duration.
+                                </CardDescription>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                onClick={handleExportAircallPerformanceCSV}
+                            >
+                                <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                            </Button>
                         </CardHeader>
                         <CardContent className="p-4 flex-1">
                             {Object.keys(metrics.amCallStats).length === 0 ? (
@@ -2844,9 +3180,19 @@ export default function AMReportsDashboard() {
                     </Card>
 
                     <Card className="border-[#095c7b]/10 shadow-sm flex flex-col bg-white">
-                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
-                            <CardTitle className="text-lg text-[#095c7b]">Grouped Activity Logs</CardTitle>
-                            <CardDescription>Activities grouped by Account Manager and Lead for accountability tracking.</CardDescription>
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg text-[#095c7b]">Grouped Activity Logs</CardTitle>
+                                <CardDescription>Activities grouped by Account Manager and Lead for accountability tracking.</CardDescription>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                onClick={handleExportGroupedActivitiesCSV}
+                            >
+                                <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                            </Button>
                         </CardHeader>
                         <CardContent className="p-4 flex-1">
                             {groupedActivities.length === 0 ? (
@@ -2960,12 +3306,22 @@ export default function AMReportsDashboard() {
                     </Card>
 
                     <Card className="border-[#095c7b]/10 shadow-sm flex flex-col bg-white mt-6">
-                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
-                            <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
-                                <span>AM Responsiveness &amp; Coverage Summary</span>
-                                <SectionHelp content="Measures how quickly an Account Manager makes their first contact (activity) on a lead after the lead is assigned to them, and counts leads that haven't been contacted." />
-                            </CardTitle>
-                            <CardDescription>Number of leads assigned, activity coverage, and average time taken to start interacting.</CardDescription>
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
+                                    <span>AM Responsiveness &amp; Coverage Summary</span>
+                                    <SectionHelp content="Measures how quickly an Account Manager makes their first contact (activity) on a lead after the lead is assigned to them, and counts leads that haven't been contacted." />
+                                </CardTitle>
+                                <CardDescription>Number of leads assigned, activity coverage, and average time taken to start interacting.</CardDescription>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                onClick={handleExportResponsivenessCSV}
+                            >
+                                <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                            </Button>
                         </CardHeader>
                         <CardContent className="p-4 flex-1">
                             {amResponsivenessMetrics.length === 0 ? (
@@ -3040,12 +3396,22 @@ export default function AMReportsDashboard() {
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
                         <Card className="border-[#095c7b]/10 shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
-                                    <span>Pipeline Value by Status</span>
-                                    <SectionHelp content="Sum of potential monthly recurring revenue (MRR) grouped by their current lifecycle status." />
-                                </CardTitle>
-                                <CardDescription>Distribution of potential MRR across lead statuses.</CardDescription>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <div>
+                                    <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
+                                        <span>Pipeline Value by Status</span>
+                                        <SectionHelp content="Sum of potential monthly recurring revenue (MRR) grouped by their current lifecycle status." />
+                                    </CardTitle>
+                                    <CardDescription>Distribution of potential MRR across lead statuses.</CardDescription>
+                                </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportPipelineValueByStatusCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="h-[400px]">
                                 {statusChartData.length > 0 ? (
@@ -3100,9 +3466,19 @@ export default function AMReportsDashboard() {
                         </Card>
                         
                         <Card className="border-[#095c7b]/10 shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Lead Type</CardTitle>
-                                <CardDescription>Distribution of potential MRR across lead types (e.g., B2B, B2C).</CardDescription>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <div>
+                                    <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Lead Type</CardTitle>
+                                    <CardDescription>Distribution of potential MRR across lead types (e.g., B2B, B2C).</CardDescription>
+                                </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportPipelineValueByLeadTypeCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="h-[400px]">
                                 {leadTypeChartData.length > 0 ? (
@@ -3158,9 +3534,19 @@ export default function AMReportsDashboard() {
                         </Card>
  
                         <Card className="border-[#095c7b]/10 shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Lead Bucket</CardTitle>
-                                <CardDescription>Distribution of potential MRR across lead buckets.</CardDescription>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <div>
+                                    <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Lead Bucket</CardTitle>
+                                    <CardDescription>Distribution of potential MRR across lead buckets.</CardDescription>
+                                </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportPipelineValueByBucketCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="h-[400px]">
                                 {bucketChartData.length > 0 ? (
@@ -3220,9 +3606,19 @@ export default function AMReportsDashboard() {
                         </Card>
  
                         <Card className="border-[#095c7b]/10 shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Account Manager</CardTitle>
-                                <CardDescription>Distribution of potential MRR across assigned Account Managers.</CardDescription>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <div>
+                                    <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Account Manager</CardTitle>
+                                    <CardDescription>Distribution of potential MRR across assigned Account Managers.</CardDescription>
+                                </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportPipelineValueByAmCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="h-[400px]">
                                 {amChartData.length > 0 ? (
@@ -3278,9 +3674,19 @@ export default function AMReportsDashboard() {
                         </Card>
                         
                         <Card className="border-[#095c7b]/10 shadow-sm lg:col-span-2">
-                            <CardHeader>
-                                <CardTitle className="text-lg text-[#095c7b]">High Value Opportunities</CardTitle>
-                                <CardDescription>Top leads by Monthly Recurring Revenue.</CardDescription>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <div>
+                                    <CardTitle className="text-lg text-[#095c7b]">High Value Opportunities</CardTitle>
+                                    <CardDescription>Top leads by Monthly Recurring Revenue.</CardDescription>
+                                </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportHighValueLeadsCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="p-0">
                                 <div className="max-h-[400px] overflow-y-auto px-6 pb-6">
@@ -3326,6 +3732,14 @@ export default function AMReportsDashboard() {
                                         </CardDescription>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="text-xs text-emerald-800 border-emerald-300 hover:bg-emerald-100/50"
+                                            onClick={handleExportSignedRevenueCSV}
+                                        >
+                                            <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                        </Button>
                                         <div className="bg-emerald-100/80 px-3 py-1.5 rounded-lg border border-emerald-200 text-right">
                                             <div className="text-[10px] uppercase font-bold text-emerald-800 tracking-wider">Signed Customers</div>
                                             <div className="text-base font-extrabold text-emerald-950">{signedLeadsData.totalSignedCount}</div>
@@ -3554,6 +3968,14 @@ export default function AMReportsDashboard() {
                                         </CardDescription>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="text-xs text-rose-800 border-rose-300 hover:bg-rose-100/50"
+                                            onClick={handleExportLostRevenueCSV}
+                                        >
+                                            <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                        </Button>
                                         <div className="bg-rose-100/80 px-3 py-1.5 rounded-lg border border-rose-200 text-right">
                                             <div className="text-[10px] uppercase font-bold text-rose-800 tracking-wider">Total Lost Leads</div>
                                             <div className="text-base font-extrabold text-rose-950">{lostLeadsData.totalLostCount}</div>
@@ -3772,12 +4194,22 @@ export default function AMReportsDashboard() {
 
                 <TabsContent value="effort" className="flex-1 mt-0">
                     <Card className="border-[#095c7b]/10 shadow-sm h-[600px] flex flex-col">
-                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
-                            <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
-                                <span>Effort vs Outcome Matrix</span>
-                                <SectionHelp content="Scatter chart plotting AM effort (total duration of activities in minutes) on the X-axis against outcomes (total lead value) on the Y-axis." />
-                            </CardTitle>
-                            <CardDescription>Correlation between AM effort (activities) and resulting Deal Value (MRR).</CardDescription>
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
+                                    <span>Effort vs Outcome Matrix</span>
+                                    <SectionHelp content="Scatter chart plotting AM effort (total duration of activities in minutes) on the X-axis against outcomes (total lead value) on the Y-axis." />
+                                </CardTitle>
+                                <CardDescription>Correlation between AM effort (activities) and resulting Deal Value (MRR).</CardDescription>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                onClick={handleExportEffortMatrixCSV}
+                            >
+                                <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                            </Button>
                         </CardHeader>
                         <CardContent className="flex-1 p-6">
                             {scatterData.length > 0 ? (
@@ -3817,9 +4249,19 @@ export default function AMReportsDashboard() {
 
                 <TabsContent value="breakdown" className="flex-1 mt-0">
                     <Card className="border-[#095c7b]/10 shadow-sm h-[600px] flex flex-col">
-                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
-                            <CardTitle className="text-lg text-[#095c7b]">Activity Breakdown per Lead</CardTitle>
-                            <CardDescription>Top 20 Leads by Activity Volume broken down by interaction type.</CardDescription>
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg text-[#095c7b]">Activity Breakdown per Lead</CardTitle>
+                                <CardDescription>Top 20 Leads by Activity Volume broken down by interaction type.</CardDescription>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                onClick={handleExportActivityBreakdownCSV}
+                            >
+                                <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                            </Button>
                         </CardHeader>
                         <CardContent className="flex-1 p-6">
                             {activityBreakdownData.length > 0 ? (
@@ -3915,9 +4357,19 @@ export default function AMReportsDashboard() {
 
                 <TabsContent value="outcomes" className="flex-1 mt-0">
                     <Card className="border-[#095c7b]/10 shadow-sm h-[600px] flex flex-col">
-                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
-                            <CardTitle className="text-lg text-[#095c7b]">Activity Outcomes (Customer Status)</CardTitle>
-                            <CardDescription>How much effort (activities & duration) is spent in each lead status bucket.</CardDescription>
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg text-[#095c7b]">Activity Outcomes (Customer Status)</CardTitle>
+                                <CardDescription>How much effort (activities & duration) is spent in each lead status bucket.</CardDescription>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                onClick={handleExportOutcomesCSV}
+                            >
+                                <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                            </Button>
                         </CardHeader>
                         <CardContent className="flex-1 p-6">
                             {outcomeChartData.length > 0 ? (
@@ -4015,15 +4467,10 @@ export default function AMReportsDashboard() {
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
-                                        className="text-xs text-[#095c7b] border-[#095c7b]/20"
-                                        onClick={() => {
-                                            handleExportData(
-                                                displayedLeads, 
-                                                "am_stage_durations"
-                                            );
-                                        }}
+                                        className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                        onClick={handleExportStageDurationsComparisonCSV}
                                     >
-                                        <Download className="h-3.5 w-3.5 mr-1" /> Export Stage Data
+                                        <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
                                     </Button>
                                 </CardHeader>
                                 <CardContent className="p-0 overflow-x-auto">
@@ -4126,9 +4573,19 @@ export default function AMReportsDashboard() {
 
                             return (
                                 <Card className="border-[#095c7b]/10 shadow-sm">
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-base text-[#095c7b]">Stage Duration Comparison (Days)</CardTitle>
-                                        <CardDescription>Average days spent in ALL active pipeline statuses per AM (excluding Won & Lost)</CardDescription>
+                                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                                        <div>
+                                            <CardTitle className="text-base text-[#095c7b]">Stage Duration Comparison (Days)</CardTitle>
+                                            <CardDescription>Average days spent in ALL active pipeline statuses per AM (excluding Won & Lost)</CardDescription>
+                                        </div>
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                            onClick={handleExportStageDurationsComparisonCSV}
+                                        >
+                                            <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                        </Button>
                                     </CardHeader>
                                     <CardContent className="h-[300px] pt-4">
                                         {activeStatusKeys.length > 0 && chartData.length > 0 ? (
@@ -4176,9 +4633,19 @@ export default function AMReportsDashboard() {
                                     </CardTitle>
                                     <CardDescription>Leads waiting in their current status longer than expected</CardDescription>
                                 </div>
-                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 font-bold">
-                                    {amStageAnalytics.summary.staleLeads.length} Total Stale
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 font-bold">
+                                        {amStageAnalytics.summary.staleLeads.length} Total Stale
+                                    </Badge>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                        onClick={handleExportStaleLeadsCSV}
+                                    >
+                                        <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                    </Button>
+                                </div>
                             </CardHeader>
                             <CardContent className="p-0 flex-1 overflow-y-auto max-h-[300px]">
                                 {amStageAnalytics.summary.staleLeads.length > 0 ? (
@@ -4371,8 +4838,16 @@ export default function AMReportsDashboard() {
                     
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[400px] mb-6">
                         <Card className="border-[#095c7b]/10 shadow-sm h-full flex flex-col">
-                            <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                            <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
                                 <CardTitle className="text-lg text-[#095c7b]">Appointments per Account Manager</CardTitle>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportAppointmentsPerAmCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="flex-1 p-6">
                                 {appointmentMetrics.perAm.length > 0 ? (
@@ -4406,8 +4881,16 @@ export default function AMReportsDashboard() {
                         </Card>
                         
                         <Card className="border-[#095c7b]/10 shadow-sm h-full flex flex-col">
-                            <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                            <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
                                 <CardTitle className="text-lg text-[#095c7b]">Appointments Created by Week</CardTitle>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportAppointmentsByWeekCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="flex-1 p-6">
                                 {appointmentMetrics.byWeekCreated.length > 0 ? (
@@ -4429,8 +4912,16 @@ export default function AMReportsDashboard() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[400px] mb-6">
                         <Card className="border-[#095c7b]/10 shadow-sm h-full flex flex-col">
-                            <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                            <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
                                 <CardTitle className="text-lg text-[#095c7b]">Appointments by Date Scheduled</CardTitle>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportAppointmentsByDateScheduledCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="flex-1 p-6">
                                 {appointmentMetrics.byDateScheduled.length > 0 ? (
@@ -4450,8 +4941,16 @@ export default function AMReportsDashboard() {
                         </Card>
 
                         <Card className="border-[#095c7b]/10 shadow-sm h-full flex flex-col">
-                            <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                            <CardHeader className="pb-3 border-b border-[#095c7b]/10 flex flex-row items-center justify-between">
                                 <CardTitle className="text-lg text-[#095c7b]">Appointments per Lead (Top 20)</CardTitle>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                    onClick={handleExportAppointmentsPerLeadCSV}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                                </Button>
                             </CardHeader>
                             <CardContent className="p-0">
                                 <div className="max-h-[300px] overflow-y-auto">
@@ -4492,6 +4991,14 @@ export default function AMReportsDashboard() {
                                 </CardTitle>
                                 <CardDescription>Initial pre-appointment bucket breakdown per Account Manager</CardDescription>
                             </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                onClick={handleExportOriginBreakdownCSV}
+                            >
+                                <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+                            </Button>
                         </CardHeader>
                         <CardContent className="p-0 overflow-x-auto">
                             <Table>
@@ -4519,33 +5026,73 @@ export default function AMReportsDashboard() {
                                         return (
                                             <TableRow key={am.amName} className="hover:bg-slate-50">
                                                 <TableCell className="font-bold text-[#095c7b]">{am.amName}</TableCell>
-                                                <TableCell className="text-center font-bold">{am.totalLeads}</TableCell>
+                                                <TableCell 
+                                                    className="text-center font-bold text-[#095c7b] cursor-pointer hover:underline hover:bg-[#095c7b]/10 transition-colors"
+                                                    onClick={() => setDrillDownData({ title: `${am.amName} - Total Booked Leads`, leads: am.leads || [] })}
+                                                >
+                                                    {am.totalLeads}
+                                                </TableCell>
                                                 <TableCell className="text-center">
-                                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-semibold">
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className="bg-blue-50 text-blue-700 border-blue-200 font-semibold cursor-pointer hover:bg-blue-100 transition-colors"
+                                                        onClick={() => setDrillDownData({ title: `${am.amName} - Outbound Origin Leads`, leads: ob['Outbound']?.leads || [] })}
+                                                    >
                                                         {outboundCount}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-center">
-                                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold">
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold cursor-pointer hover:bg-emerald-100 transition-colors"
+                                                        onClick={() => setDrillDownData({ title: `${am.amName} - Inbound Origin Leads`, leads: ob['Inbound']?.leads || [] })}
+                                                    >
                                                         {inboundCount}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-center">
-                                                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold">
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className="bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold cursor-pointer hover:bg-indigo-100 transition-colors"
+                                                        onClick={() => setDrillDownData({ title: `${am.amName} - Field Sales Origin Leads`, leads: ob['Field Sales']?.leads || [] })}
+                                                    >
                                                         {fieldSalesCount}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-center">
-                                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 font-semibold">
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className="bg-purple-50 text-purple-700 border-purple-200 font-semibold cursor-pointer hover:bg-purple-100 transition-colors"
+                                                        onClick={() => setDrillDownData({ 
+                                                            title: `${am.amName} - Marketing / Nurture Origin Leads`, 
+                                                            leads: [...(ob['Marketing']?.leads || []), ...(ob['Nurture']?.leads || [])] 
+                                                        })}
+                                                    >
                                                         {marketingCount}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-center">
-                                                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-semibold">
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className="bg-amber-50 text-amber-700 border-amber-200 font-semibold cursor-pointer hover:bg-amber-100 transition-colors"
+                                                        onClick={() => setDrillDownData({ 
+                                                            title: `${am.amName} - LPO / Other Origin Leads`, 
+                                                            leads: Object.entries(ob).filter(([k]) => !['Outbound', 'Inbound', 'Field Sales', 'Marketing', 'Nurture'].includes(k)).flatMap(([_, v]) => v.leads || [])
+                                                        })}
+                                                    >
                                                         {lpoCount}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell className="text-center font-bold text-emerald-600">
+                                                <TableCell 
+                                                    className="text-center font-bold text-emerald-600 cursor-pointer hover:underline hover:bg-emerald-50 transition-colors"
+                                                    onClick={() => {
+                                                        const wonLeads = (am.leads || []).filter(l => {
+                                                            const s = normalizeStatusLabel(l.customerStatus || l.status);
+                                                            return s === 'Won' || s === 'Signed' || s === 'Quote Accepted' || s === 'Closed Won';
+                                                        });
+                                                        setDrillDownData({ title: `${am.amName} - Won / Signed Origin Leads`, leads: wonLeads });
+                                                    }}
+                                                >
                                                     {am.overallConversionRate}%
                                                 </TableCell>
                                             </TableRow>

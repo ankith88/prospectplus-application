@@ -18,11 +18,13 @@ export interface OriginMetric {
   quoteSent: number;
   won: number;
   conversionRate: number;
+  leads: Lead[];
 }
 
 export interface AmStageMetrics {
   amName: string;
   totalLeads: number;
+  leads: Lead[];
   activeLeads: number;
   appointmentBookedCount: number;
   quoteSentCount: number;
@@ -427,6 +429,7 @@ export function calculateAmStageMetrics(
   const createEmptyAmMetrics = (name: string): AmStageMetrics => ({
     amName: name,
     totalLeads: 0,
+    leads: [],
     activeLeads: 0,
     appointmentBookedCount: 0,
     quoteSentCount: 0,
@@ -480,21 +483,25 @@ export function calculateAmStageMetrics(
     const origin = getLeadInitialBucket(lead);
 
     if (!originTotals[origin]) {
-      originTotals[origin] = { origin, total: 0, quoteSent: 0, won: 0, conversionRate: 0 };
+      originTotals[origin] = { origin, total: 0, quoteSent: 0, won: 0, conversionRate: 0, leads: [] };
     }
     originTotals[origin].total += 1;
+    originTotals[origin].leads.push(lead);
     if (isQuoteSent) originTotals[origin].quoteSent += 1;
     if (isWon) originTotals[origin].won += 1;
 
     if (!amMetrics.originBreakdown[origin]) {
-      amMetrics.originBreakdown[origin] = { origin, total: 0, quoteSent: 0, won: 0, conversionRate: 0 };
+      amMetrics.originBreakdown[origin] = { origin, total: 0, quoteSent: 0, won: 0, conversionRate: 0, leads: [] };
     }
     amMetrics.originBreakdown[origin].total += 1;
+    amMetrics.originBreakdown[origin].leads.push(lead);
     if (isQuoteSent) amMetrics.originBreakdown[origin].quoteSent += 1;
     if (isWon) amMetrics.originBreakdown[origin].won += 1;
 
     amMetrics.totalLeads += 1;
+    amMetrics.leads.push(lead);
     summary.totalLeads += 1;
+    summary.leads.push(lead);
 
     if (!isLost) {
       amMetrics.activeLeads += 1;

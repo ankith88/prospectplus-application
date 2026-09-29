@@ -3984,7 +3984,7 @@ export default function ReportsClientPage({
                                     className="text-right font-bold text-blue-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All Appointments Set Leads (Status: Appointment Booked)", 
-                                        leads: stats.topLevelPerformanceMetrics.appointmentsSetLeads 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfAppointmentsList || []) 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals.Appointments}
@@ -3993,7 +3993,7 @@ export default function ReportsClientPage({
                                     className="text-right font-bold text-amber-700 dark:text-amber-300 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All Outbound → AM Handover Leads", 
-                                        leads: stats.topLevelPerformanceMetrics.movedToAmLeads 
+                                        leads: stats.teamPerformanceData.flatMap(d => d.perfMovedToAmLeadsList || []) 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['Moved to AM']}
