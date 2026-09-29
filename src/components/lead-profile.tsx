@@ -8208,13 +8208,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                         if (notes !== null) handleUpdateAppointment(a, { appointmentStatus: 'No Show', notes });
                                                     }}>Mark No Show</DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => {
+                                                        const notes = window.prompt("Add reschedule reason/notes (optional):");
+                                                        if (notes !== null) handleUpdateAppointment(a, { appointmentStatus: 'Rescheduled', notes });
+                                                    }}>Mark Rescheduled</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => {
                                                         if (!lead.bookingUrlId) {
                                                             toast({ variant: 'destructive', title: "Lead does not have a booking URL ID" });
                                                             return;
                                                         }
                                                         const url = `/book/${lead.bookingUrlId}?reschedule=${a.id}`;
                                                         window.open(url, '_blank');
-                                                    }}>Reschedule</DropdownMenuItem>
+                                                    }}>Reschedule Online</DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </div>

@@ -409,31 +409,16 @@ export function DailyReportRecipients() {
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 max-w-6xl bg-slate-100 p-1">
-          <TabsTrigger value="barcodes" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
-            Barcodes Sync
-          </TabsTrigger>
-          <TabsTrigger value="leads" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
-            Website Leads
-          </TabsTrigger>
-          <TabsTrigger value="franchisee_leads" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
-            Franchisee Leads
-          </TabsTrigger>
-          <TabsTrigger value="overdue_hot_leads" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
-            Overdue Hot Leads
-          </TabsTrigger>
-          <TabsTrigger value="tickets" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
-            Tickets by Source
-          </TabsTrigger>
-          <TabsTrigger value="calls" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
-            Call Report
-          </TabsTrigger>
-          <TabsTrigger value="sales_snapshot" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
-            Sales Snapshot
-          </TabsTrigger>
-          <TabsTrigger value="localmile_jobs" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
-            LocalMile Jobs
-          </TabsTrigger>
+        <TabsList className="flex flex-wrap h-auto gap-1 bg-slate-100 p-1 rounded-xl max-w-6xl">
+          {REPORTS.map((report) => (
+            <TabsTrigger
+              key={report.id}
+              value={report.id}
+              className="text-xs font-semibold px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:text-[#095c7b] data-[state=active]:shadow-sm rounded-lg"
+            >
+              {report.title.replace('Daily ', '').replace(' Report', '')}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         {REPORTS.map((report) => (

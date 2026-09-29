@@ -111,12 +111,17 @@ export async function runDailyCallAudit(options: RunDailyCallAuditOptions = {}) 
   if (!options.skipEmail) {
     let recipients = options.recipients || [];
     if (recipients.length === 0) {
-      // Lookup configured recipients from report_configs
-      const configSnap = await db.collection('report_configs').doc('daily_call_audit_report').get();
-      if (configSnap.exists && configSnap.data()?.recipients?.length) {
-        recipients = configSnap.data()!.recipients;
+      // Lookup configured recipients from settings (or fallback to report_configs)
+      const settingsSnap = await db.collection('settings').doc('daily_call_audit_report').get();
+      if (settingsSnap.exists && settingsSnap.data()?.recipients?.length) {
+        recipients = settingsSnap.data()!.recipients;
       } else {
-        recipients = ['ankith.ravindran@mailplus.com.au'];
+        const configSnap = await db.collection('report_configs').doc('daily_call_audit_report').get();
+        if (configSnap.exists && configSnap.data()?.recipients?.length) {
+          recipients = configSnap.data()!.recipients;
+        } else {
+          recipients = ['ankith.ravindran@mailplus.com.au'];
+        }
       }
     }
 

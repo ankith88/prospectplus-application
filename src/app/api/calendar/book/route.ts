@@ -267,10 +267,22 @@ export async function POST(req: NextRequest) {
       userDisplayName: 'ProspectPlus Booking',
     };
 
+    // Prepare updated appointments array on parent lead document
+    const existingAppts: any[] = Array.isArray(lead.appointments) ? lead.appointments : [];
+    let updatedAppointments = [...existingAppts];
+    if (rescheduleAppointmentId) {
+      updatedAppointments = updatedAppointments.map((a: any) =>
+        a.id === rescheduleAppointmentId
+          ? { ...a, appointmentStatus: 'Rescheduled', updatedAt: new Date().toISOString() }
+          : a
+      );
+    }
+    updatedAppointments.push(appointmentData);
+
     const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
     const oldStatus = lead.customerStatus || lead.status || 'New';
     const updates: any = {
-      appointments: FieldValue.arrayUnion(appointmentData),
+      appointments: updatedAppointments,
       outcome: rescheduleAppointmentId ? 'Appointment Rescheduled' : 'Appointment Booked',
       status: 'Appointment Booked',
       customerStatus: 'Appointment Booked',

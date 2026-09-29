@@ -330,12 +330,17 @@ export default function PipelineDashboard() {
 
                             const appts = appointmentsByLead[l.id] || [];
                             const existingAppts = l.appointments || [];
-                            const combinedAppts = [...existingAppts];
-                            appts.forEach(appt => {
-                                if (!combinedAppts.some(ex => ex.id === appt.id)) {
-                                    combinedAppts.push(appt);
+                            const combinedApptsMap = new Map();
+                            existingAppts.forEach((a: any) => {
+                                if (a?.id) combinedApptsMap.set(a.id, a);
+                            });
+                            appts.forEach((a: any) => {
+                                if (a?.id) {
+                                    const existing = combinedApptsMap.get(a.id);
+                                    combinedApptsMap.set(a.id, existing ? { ...existing, ...a } : a);
                                 }
                             });
+                            const combinedAppts = Array.from(combinedApptsMap.values());
 
                             const tsks = tasksByLead[l.id] || [];
                             const existingTsks = l.tasks || [];

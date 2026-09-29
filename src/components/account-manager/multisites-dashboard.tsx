@@ -415,13 +415,17 @@ export function MultiSitesDashboard() {
                 .map(l => {
                     const appts = apptsByLead[l.id] || [];
                     const existingAppts = l.appointments || [];
-                    const combinedAppts = [...existingAppts];
-                    appts.forEach(a => {
-                        if (!combinedAppts.some(ex => ex.id === a.id)) {
-                            combinedAppts.push(a);
+                    const combinedApptsMap = new Map();
+                    existingAppts.forEach((a: any) => {
+                        if (a?.id) combinedApptsMap.set(a.id, a);
+                    });
+                    appts.forEach((a: any) => {
+                        if (a?.id) {
+                            const existing = combinedApptsMap.get(a.id);
+                            combinedApptsMap.set(a.id, existing ? { ...existing, ...a } : a);
                         }
                     });
-                    return { ...l, appointments: combinedAppts };
+                    return { ...l, appointments: Array.from(combinedApptsMap.values()) };
                 });
 
             setLeads(multisiteLeads);
