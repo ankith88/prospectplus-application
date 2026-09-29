@@ -164,11 +164,14 @@ export function canChangeBucket(
 }
 
 export function isSaleDealsVisible(
-  userProfile: UserProfile | null | undefined
+  userProfile: UserProfile | null | undefined,
+  isSuperAdmin: boolean = false
 ): boolean {
+  if (isSuperAdmin) return true;
   if (!userProfile) return false;
 
   const roleLower = (userProfile.activeRole || userProfile.role || '').toLowerCase().trim();
+  if (roleLower === 'superadmin' || roleLower === 'admin') return true;
   return ![
     'user',
     'customer success',

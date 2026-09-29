@@ -4607,10 +4607,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
   };
 
-  const isAdmin = userProfile?.activeRole === 'admin';
-  const isAdminUser = isAdmin || (userProfile?.activeRole as string) === 'super user' || (userProfile?.activeRole as string) === 'Admin' || userProfile?.assignedRoles?.some((r: string) => ['admin', 'super user', 'account manager admin'].includes(r.toLowerCase()));
-  const isSalesManager = userProfile?.activeRole === 'Sales Manager';
-  const isLeadGenAdmin = userProfile?.activeRole === 'Lead Gen Admin';
+  const isAdmin = userProfile?.activeRole === 'admin' || (userProfile?.activeRole as string)?.toLowerCase() === 'superadmin' || (userProfile?.role as string)?.toLowerCase() === 'superadmin' || isSuperAdmin;
+  const isAdminUser = isAdmin || (userProfile?.activeRole as string) === 'super user' || (userProfile?.activeRole as string) === 'Admin' || userProfile?.assignedRoles?.some((r: string) => ['admin', 'super user', 'account manager admin', 'superadmin'].includes(r.toLowerCase()));
+  const isSalesManager = userProfile?.activeRole === 'Sales Manager' || (userProfile?.activeRole as string)?.toLowerCase() === 'sales manager';
+  const isLeadGenAdmin = userProfile?.activeRole === 'Lead Gen Admin' || (userProfile?.activeRole as string)?.toLowerCase() === 'lead gen admin';
   const isFieldSales = userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Field Sales Admin';
   const isDialer = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers' || userProfile?.activeRole === 'Customer Service';
   const isOperationsRole = Boolean(
@@ -4640,7 +4640,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   let showCheckIn = false;
   let showSales = false;
 
-  if (isAdmin || isSalesManager) {
+  if (isAdmin || isSuperAdmin || isSalesManager) {
       showSales = true;
       showSchedule = true;
       showProcessLead = true;

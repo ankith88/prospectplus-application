@@ -18,6 +18,7 @@ import { BulkExportInvoices } from '@/components/admin/bulk-export-invoices';
 import { BulkImportProducts } from '@/components/admin/bulk-import-products';
 import { BulkImportServices } from '@/components/admin/bulk-import-services';
 import { BulkImportInvoices } from '@/components/admin/bulk-import-invoices';
+import { LeadTagManager } from '@/components/admin/lead-tag-manager';
 import { LeadStatusUpdater } from '@/components/admin/lead-status-updater';
 import { BulkBucketUpdater } from '@/components/admin/bulk-bucket-updater';
 import { BulkAccountManagerUpdater } from '@/components/admin/bulk-account-manager-updater';
@@ -66,13 +67,23 @@ export default function AdminDataPage() {
   const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
   const router = useRouter();
 
+  const hasAdminAccess = isSuperAdmin || 
+    userProfile?.role === 'admin' || 
+    userProfile?.role === 'Data Admin' ||
+    userProfile?.role === 'Outbound Admin' ||
+    (Array.isArray(userProfile?.assignedRoles) && (
+      userProfile.assignedRoles.includes('admin') || 
+      userProfile.assignedRoles.includes('Data Admin') ||
+      userProfile.assignedRoles.includes('Outbound Admin')
+    ));
+
   useEffect(() => {
-    if (!authLoading && !isSuperAdmin) {
+    if (!authLoading && !hasAdminAccess) {
       router.replace('/leads');
     }
-  }, [userProfile, authLoading, router, isSuperAdmin]);
+  }, [userProfile, authLoading, router, hasAdminAccess]);
 
-  if (authLoading || !isSuperAdmin) {
+  if (authLoading || !hasAdminAccess) {
     return <div className="flex h-full items-center justify-center"><Loader /></div>;
   }
 
@@ -82,6 +93,13 @@ export default function AdminDataPage() {
         <h1 className="text-3xl font-bold tracking-tight">Data Management</h1>
         <p className="text-muted-foreground">Manage, export, and permanently delete records from the system.</p>
       </header>
+
+      <CollapsibleCard
+        title="Lead Classification & Tag Management"
+        description="Add, edit, or customize account tags (BAU, J2, Corporate / Multisite, and custom tags), and filter/bulk update tags on leads across the CRM."
+      >
+        <LeadTagManager />
+      </CollapsibleCard>
 
       <CollapsibleCard
         title="Daily Report Email Management"

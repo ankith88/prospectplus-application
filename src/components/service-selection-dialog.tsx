@@ -99,8 +99,8 @@ const formSchema = z.object({
   createLocalMileAccount: z.boolean().optional(),
   createShipMateAccount: z.boolean().optional(),
   chosenPremiumPlan: z.string().default('Merchant'),
-  chosenExpressPlan: z.string().default('Merchant'),
-  accountType: z.enum(['BAU', 'J2', 'Corporate', 'Multisite', 'Standard']).default('BAU'),
+  chosenExpressPlan: z.string().optional().default('None'),
+  accountType: z.enum(['BAU', 'J2', 'Corporate / Multisite', 'Corporate', 'Multisite', 'Standard']).default('BAU'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -583,7 +583,7 @@ export function ServiceSelectionDialog({
       createLocalMileAccount: false,
       createShipMateAccount: false,
       chosenPremiumPlan: 'Merchant',
-      chosenExpressPlan: 'Merchant',
+      chosenExpressPlan: 'None',
     },
   });
 
@@ -791,15 +791,15 @@ export function ServiceSelectionDialog({
         !!lead?.dialerAssigned ||
         (lead ? getLeadInitialBucket(lead) === 'Outbound' : false);
 
-      let defaultAccountType: 'BAU' | 'J2' | 'Corporate' | 'Multisite' = 'BAU';
-      if (lead?.accountType === 'Corporate' || lead?.accountType === 'Multisite' || lead?.accountType === 'J2' || lead?.accountType === 'BAU') {
-          defaultAccountType = lead.accountType as any;
-      } else if (lead?.accountType === 'Standard') {
+      let defaultAccountType: 'BAU' | 'J2' | 'Corporate / Multisite' = 'BAU';
+      if (lead?.accountType === 'Corporate / Multisite' || lead?.accountType === 'Corporate' || lead?.accountType === 'Multisite') {
+          defaultAccountType = 'Corporate / Multisite';
+      } else if (lead?.accountType === 'J2') {
+          defaultAccountType = 'J2';
+      } else if (lead?.accountType === 'BAU' || lead?.accountType === 'Standard') {
           defaultAccountType = 'BAU';
-      } else if (lead?.selectedServiceOption === 'corporate') {
-          defaultAccountType = 'Corporate';
-      } else if (lead?.bucket === 'multisite' || lead?.isParentLead || lead?.isChildLead || lead?.parentLeadId) {
-          defaultAccountType = 'Multisite';
+      } else if (lead?.selectedServiceOption === 'corporate' || lead?.bucket === 'multisite' || lead?.isParentLead || lead?.isChildLead || lead?.parentLeadId) {
+          defaultAccountType = 'Corporate / Multisite';
       } else if (isOutboundLead) {
           defaultAccountType = 'J2';
       }
@@ -811,7 +811,7 @@ export function ServiceSelectionDialog({
           startDate: startDate,
           accountType: defaultAccountType,
           chosenPremiumPlan: (lead as any)?.chosenPremiumPlan || 'Merchant',
-          chosenExpressPlan: (lead as any)?.chosenExpressPlan || 'Merchant',
+          chosenExpressPlan: (lead as any)?.chosenExpressPlan || 'None',
           createLocalMileAccount: isLpoNetworkBucket ? false : hasExistingLocalMileAccess,
           createShipMateAccount: false,
           selectedContactId: defaultContactId,
@@ -1529,19 +1529,20 @@ export function ServiceSelectionDialog({
         setSubmittingStep('Syncing account details & services with NetSuite...');
 
         const premiumPlan = (selectionType !== 'services' && isPremiumEligible) ? (values.chosenPremiumPlan || 'Merchant') : 'None';
-        const expressPlan = (selectionType !== 'services') ? (values.chosenExpressPlan || 'Merchant') : 'None';
+        const expressPlan = (selectionType !== 'services') ? (values.chosenExpressPlan || 'None') : 'None';
         const pricingTable = selectionType === 'services' ? [] : generatePricingTable(premiumPlan, expressPlan);
         const suburbMapping = generateSuburbMapping(lead, franchisee);
 
         const collectionName = await getLeadOrCompanyCollection(lead.id, lead);
+        const rawAccountType = values.accountType;
+        const finalAccountType = (rawAccountType === 'Standard' ? 'BAU' : (rawAccountType === 'Corporate' || rawAccountType === 'Multisite' ? 'Corporate / Multisite' : (rawAccountType || 'BAU')));
         await updateDoc(doc(firestore, collectionName, lead.id), {
           chosenPremiumPlan: premiumPlan,
           chosenExpressPlan: expressPlan,
           pricing_table: pricingTable,
           suburb_mapping: suburbMapping,
-          accountType: values.accountType === 'Standard' ? 'BAU' : (values.accountType || 'BAU'),
-          ...(values.accountType === 'Corporate' ? { selectedServiceOption: 'corporate' } : {}),
-          ...(values.accountType === 'Multisite' && lead.bucket !== 'multisite' ? { bucket: 'multisite' } : {}),
+          accountType: finalAccountType,
+          ...(finalAccountType === 'Corporate / Multisite' ? { selectedServiceOption: 'corporate' } : {}),
           updatedAt: new Date()
         });
 
@@ -1791,7 +1792,7 @@ export function ServiceSelectionDialog({
                 services: serviceSelections,
                 products: scfProducts,
                 startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
-                accountType: values.accountType === 'Standard' ? 'BAU' : (values.accountType || 'BAU'),
+                accountType: values.accountType === 'Standard' ? 'BAU' : (values.accountType === 'Corporate' || values.accountType === 'Multisite' ? 'Corporate / Multisite' : (values.accountType || 'BAU')),
                 status: 'Pending' as const,
                 createdBy: createdByString,
                 createdByName: currentUserName,
@@ -1925,7 +1926,7 @@ export function ServiceSelectionDialog({
                     services: serviceSelections,
                     products: scfProducts,
                     startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
-                    accountType: values.accountType === 'Standard' ? 'BAU' : (values.accountType || 'BAU'),
+                    accountType: values.accountType === 'Standard' ? 'BAU' : (values.accountType === 'Corporate' || values.accountType === 'Multisite' ? 'Corporate / Multisite' : (values.accountType || 'BAU')),
                     status: 'Pending',
                     createdBy: createdByString,
                     createdByName: currentUserName,
@@ -2208,10 +2209,11 @@ export function ServiceSelectionDialog({
         });
       }
 
+      const rawTrialAccountType = values.accountType;
+      const finalTrialAccountType = (rawTrialAccountType === 'Standard' ? 'BAU' : (rawTrialAccountType === 'Corporate' || rawTrialAccountType === 'Multisite' ? 'Corporate / Multisite' : (rawTrialAccountType || 'BAU')));
       await updateLeadDetails(lead.id, lead, {
-        accountType: values.accountType === 'Standard' ? 'BAU' : (values.accountType || 'BAU'),
-        ...(values.accountType === 'Corporate' ? { selectedServiceOption: 'corporate' } : {}),
-        ...(values.accountType === 'Multisite' && lead.bucket !== 'multisite' ? { bucket: 'multisite' } : {})
+        accountType: finalTrialAccountType,
+        ...(finalTrialAccountType === 'Corporate / Multisite' ? { selectedServiceOption: 'corporate' } : {})
       });
 
       const actionDesc = selectionType === 'both' 
@@ -2864,9 +2866,9 @@ export function ServiceSelectionDialog({
 
                         {(mode === 'Quote' || mode === 'Signup' || mode === 'Resell') && selectionType !== 'services' && (
                           <div className="space-y-4 border-t pt-4">
-                            <h3 className="font-semibold text-sm">Chosen Pricing Plans</h3>
+                            <h3 className="font-semibold text-sm">Chosen Pricing Plan</h3>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="max-w-md">
                               <FormField
                                 control={form.control}
                                 name="chosenPremiumPlan"
@@ -2875,7 +2877,7 @@ export function ServiceSelectionDialog({
                                     <FormLabel>Premium Price Plan</FormLabel>
                                     <Select 
                                       disabled={!isPremiumEligible}
-                                      value={isPremiumEligible ? field.value : 'None'} 
+                                      value={isPremiumEligible ? (field.value || 'Merchant') : 'None'} 
                                       onValueChange={field.onChange}
                                     >
                                       <FormControl>
@@ -2898,34 +2900,6 @@ export function ServiceSelectionDialog({
                                         Eligible: Address mapped in franchisee's territory.
                                       </p>
                                     )}
-                                  </FormItem>
-                                )}
-                              />
-
-                              <FormField
-                                control={form.control}
-                                name="chosenExpressPlan"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Express Price Plan</FormLabel>
-                                    <Select 
-                                      value={field.value} 
-                                      onValueChange={field.onChange}
-                                    >
-                                      <FormControl>
-                                        <SelectTrigger className="bg-card">
-                                          <SelectValue placeholder="Select plan" />
-                                        </SelectTrigger>
-                                      </FormControl>
-                                      <SelectContent>
-                                        <SelectItem value="Merchant">Merchant Selected</SelectItem>
-                                        <SelectItem value="Standard">Standard</SelectItem>
-                                        <SelectItem value="Enterprise">Enterprise</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <p className="text-xs text-muted-foreground">
-                                      Select price plan for Express speed.
-                                    </p>
                                   </FormItem>
                                 )}
                               />
@@ -3408,14 +3382,14 @@ export function ServiceSelectionDialog({
                                     Account Classification
                                 </FormLabel>
                                 <FormControl>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                     {[
                                         { id: 'BAU', label: 'BAU', desc: 'Standard single site account', icon: Store },
                                         { id: 'J2', label: 'J2', desc: 'Outbound campaign lead', icon: Phone },
-                                        { id: 'Corporate', label: 'Corporate', desc: 'Head office / corporate billing', icon: Building },
-                                        { id: 'Multisite', label: 'Multisite', desc: 'Multi-branch network account', icon: Network },
+                                        { id: 'Corporate / Multisite', label: 'Corporate / Multisite', desc: 'Head office or multi-site branch account', icon: Building },
                                     ].map((item) => {
-                                        const isSelected = (field.value === 'Standard' ? 'BAU' : (field.value || 'BAU')) === item.id;
+                                        const currentValue = field.value === 'Standard' ? 'BAU' : (field.value === 'Corporate' || field.value === 'Multisite' ? 'Corporate / Multisite' : (field.value || 'BAU'));
+                                        const isSelected = currentValue === item.id;
                                         const Icon = item.icon;
                                         return (
                                         <div

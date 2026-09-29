@@ -170,6 +170,7 @@ export async function acceptScfAction(leadId: string, scfId: string) {
 
       let resolvedAccountType = acceptedScfData?.accountType;
       if (resolvedAccountType === 'Standard') resolvedAccountType = 'BAU';
+      if (resolvedAccountType === 'Corporate' || resolvedAccountType === 'Multisite') resolvedAccountType = 'Corporate / Multisite';
       if (!resolvedAccountType) {
         const isOutbound = leadData?.wasOutbound === true || leadData?.originalBucket?.toLowerCase() === 'outbound' || leadData?.bucket?.toLowerCase() === 'outbound' || !!leadData?.dialerAssigned;
         if (isOutbound) {
@@ -179,10 +180,8 @@ export async function acceptScfAction(leadId: string, scfId: string) {
 
       if (resolvedAccountType) {
         statusUpdates.accountType = resolvedAccountType;
-        if (resolvedAccountType === 'Corporate') {
+        if (resolvedAccountType === 'Corporate / Multisite') {
           statusUpdates.selectedServiceOption = 'corporate';
-        } else if (resolvedAccountType === 'Multisite' && leadData?.bucket !== 'multisite') {
-          statusUpdates.bucket = 'multisite';
         }
       }
 

@@ -46,12 +46,18 @@ import { getLeadInitialBucket, calculateAmStageMetrics, calculateLeadStageDurati
 
 import { AnimatedNumber } from '@/components/ui/animated-number';
 
-export function getLeadAccountType(lead: Lead): 'BAU' | 'J2' | 'Corporate' | 'Multisite' {
-  if (lead.accountType === 'Corporate' || lead.selectedServiceOption === 'corporate') {
-    return 'Corporate';
-  }
-  if (lead.accountType === 'Multisite' || lead.bucket === 'multisite' || lead.isParentLead || lead.isChildLead || !!lead.parentLeadId) {
-    return 'Multisite';
+export function getLeadAccountType(lead: Lead): 'BAU' | 'J2' | 'Corporate / Multisite' {
+  if (
+    lead.accountType === 'Corporate / Multisite' ||
+    lead.accountType === 'Corporate' ||
+    lead.accountType === 'Multisite' ||
+    lead.selectedServiceOption === 'corporate' ||
+    lead.bucket === 'multisite' ||
+    lead.isParentLead ||
+    lead.isChildLead ||
+    !!lead.parentLeadId
+  ) {
+    return 'Corporate / Multisite';
   }
   if (lead.accountType === 'J2') {
     return 'J2';
@@ -1786,8 +1792,7 @@ export default function AMReportsDashboard() {
     const accountTypeOptions: Option[] = useMemo(() => [
         { value: 'BAU', label: 'BAU' },
         { value: 'J2', label: 'J2' },
-        { value: 'Corporate', label: 'Corporate' },
-        { value: 'Multisite', label: 'Multisite' },
+        { value: 'Corporate / Multisite', label: 'Corporate / Multisite' },
     ], []);
     const statusOptions: Option[] = useMemo(() => uniqueStatuses.map(s => ({ value: s as string, label: s as string })), [uniqueStatuses]);
     const clearFilters = () => {
@@ -4641,13 +4646,9 @@ export default function AMReportsDashboard() {
                                                 <LeadStatusBadge status={(lead.customerStatus || lead.status) as LeadStatus} />
                                             </TableCell>
                                             <TableCell className="text-sm">
-                                                {aType === 'Corporate' ? (
+                                                {aType === 'Corporate / Multisite' ? (
                                                     <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-[10px] font-semibold flex items-center gap-1 w-fit">
-                                                        <Building className="w-2.5 h-2.5" /> Corporate
-                                                    </Badge>
-                                                ) : aType === 'Multisite' ? (
-                                                    <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[10px] font-semibold flex items-center gap-1 w-fit">
-                                                        <Network className="w-2.5 h-2.5" /> Multisite
+                                                        <Building className="w-2.5 h-2.5" /> Corporate / Multisite
                                                     </Badge>
                                                 ) : aType === 'J2' ? (
                                                     <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] font-semibold flex items-center gap-1 w-fit">
