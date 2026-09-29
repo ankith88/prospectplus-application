@@ -337,6 +337,9 @@ const getLocalTimeDetails = (zone: string) => {
 };
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
+    const router = useRouter();
+    const { toast } = useToast();
+    const { user, userProfile, isSuperAdmin } = useAuth();
     const pathname = usePathname() || '';
     const isCompanyProfile = pathname.startsWith('/companies/');
     const [lead, setLead] = useState<Lead>(initialLead);
@@ -2146,11 +2149,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           customHtml: editableEmailBody,
           attachments: emailAttachments,
           customSubject: emailSubject,
-          bcc: emailBccAddress,
-          customSenderEmail: finalSenderEmail,
-          customHtml: editableEmailBody,
-          attachments: emailAttachments,
-          customSubject: emailSubject,
           notifyOnOpen: emailNotifyOnOpen,
           notifyUserEmail: finalSenderEmail,
           trackingCategory: 'marketing'
@@ -2326,10 +2324,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           toast({ variant: 'destructive', title: 'Update Error', description: 'Failed to update lead franchisee.' });
       }
   };
-
-  const router = useRouter();
-  const { toast } = useToast();
-  const { user, userProfile, isSuperAdmin } = useAuth();
 
   if (userProfile && lead && !canFranchiseeAccessLead(lead, userProfile)) {
     return <AccessDenied customPageName={lead.companyName ? `Lead: ${lead.companyName}` : 'Lead Details'} />;
