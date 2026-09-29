@@ -1980,13 +1980,68 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [isEmailDialogOpen, products.length]);
 
+  const isDialerUser = isDialerRole(userProfile, isSuperAdmin) || userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Dialer' || userProfile?.activeRole === 'dialers' || userProfile?.role === 'user';
+
   const groupedTemplates = useMemo(() => {
     const groups: { campaignId: string; campaignName: string; templates: any[] }[] = [];
+
+    // For dialers, restrict selectable templates strictly to Outbound Outcome Templates
+    if (isDialerUser) {
+      const outboundCampaigns = campaigns.filter(c => {
+        const cName = (c.name || '').toLowerCase();
+        return cName.includes('outbound') || cName.includes('dialer') || cName.includes('outcome');
+      });
+
+      const linkedOutboundTemplateIds = new Set<string>();
+      outboundCampaigns.forEach(c => {
+        if (c.templateId) linkedOutboundTemplateIds.add(c.templateId);
+        if (Array.isArray(c.emailTemplateIds)) {
+          c.emailTemplateIds.forEach((id: string) => linkedOutboundTemplateIds.add(id));
+        }
+      });
+
+      const outboundTemplates = templates.filter(t => {
+        const tName = (t.name || '').toLowerCase();
+        return (
+          linkedOutboundTemplateIds.has(t.id) ||
+          tName.startsWith('outbound') ||
+          tName.includes('outbound -') ||
+          tName.includes('outbound outcome') ||
+          tName.includes('intro via email') ||
+          tName.includes('express shipping + pud') ||
+          tName.includes('shipping only')
+        );
+      });
+
+      if (outboundTemplates.length > 0) {
+        groups.push({
+          campaignId: 'outbound_outcome_templates',
+          campaignName: 'Outbound Outcome Templates',
+          templates: outboundTemplates,
+        });
+      } else if (templates.length > 0) {
+        groups.push({
+          campaignId: 'outbound_outcome_templates',
+          campaignName: 'Outbound Outcome Templates',
+          templates: templates,
+        });
+      }
+      return groups;
+    }
     
     campaigns.forEach(camp => {
       const campName = (camp.name || '').toLowerCase();
       if (campName.includes('sales quotes') || campName.includes('quotes & sign up')) {
         return;
+      }
+
+      const isAmOrSalesManager = isAccountOrSalesManager(userProfile, isSuperAdmin);
+      const isAmOnly = isAmOrSalesManager && !isSuperAdmin && !['admin', 'superadmin', 'sales manager', 'marketing manager'].includes((userProfile?.activeRole || userProfile?.role || '').toLowerCase().trim());
+      
+      if (isAmOnly) {
+        if (!campName.includes('account manager') && !campName.includes('am')) {
+          return;
+        }
       }
 
       const campTemplates = templates.filter(t => camp.templateId === t.id || camp.emailTemplateIds?.includes(t.id));
@@ -2013,18 +2068,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
     
     return groups;
-  }, [templates, campaigns]);
+  }, [templates, campaigns, isDialerUser, userProfile, isSuperAdmin]);
 
-
+  useEffect(() => {
+    if (isEmailDialogOpen && isDialerUser && !selectedTemplateId && groupedTemplates.length > 0 && groupedTemplates[0].templates?.length > 0) {
+      setSelectedTemplateId(groupedTemplates[0].templates[0].id);
+    }
+  }, [isEmailDialogOpen, isDialerUser, selectedTemplateId, groupedTemplates]);
 
   const handleSendSingleEmail = async () => {
     if (!targetEmailAddress || !selectedTemplateId) {
-      toast({ variant: 'destructive', title: 'Selection Error', description: 'Please select a template.' });
+      toast({ variant: 'destructive', title: 'Selection Error', description: 'Please enter a recipient email and select a template.' });
       return;
     }
 
     let finalSenderEmail: string | undefined = undefined;
-    if (senderType === 'default') {
+    if (isDialerUser) {
+      // Sender must strictly be the Account Manager assigned to this lead
+      if (accountManagerEmail && accountManagerEmail.endsWith('@mailplus.com.au')) {
+        finalSenderEmail = accountManagerEmail;
+      } else if (lead.accountManagerAssigned && lead.accountManagerAssigned.includes('@mailplus.com.au')) {
+        finalSenderEmail = lead.accountManagerAssigned;
+      } else {
+        finalSenderEmail = accountManagerEmail || 'sales@mailplus.com.au';
+      }
+    } else if (senderType === 'default') {
       const role = userProfile?.activeRole ? userProfile.activeRole.toLowerCase() : '';
       const isMatchedRole = 
         role.includes('account manager') ||
@@ -2072,7 +2140,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           leadIds: [lead.id],
           templateId: selectedTemplateId,
           targetEmail: targetEmailAddress,
-          cc: emailCcAddress,
+          cc: emailCcAddress || undefined,
+          bcc: emailBccAddress || undefined,
+          customSenderEmail: finalSenderEmail,
+          customHtml: editableEmailBody,
+          attachments: emailAttachments,
+          customSubject: emailSubject,
           bcc: emailBccAddress,
           customSenderEmail: finalSenderEmail,
           customHtml: editableEmailBody,
@@ -2160,22 +2233,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleEmailClick = (email: string) => {
     if (!email) return;
-    if (userProfile?.activeRole === 'user') {
-      toast({
-        variant: 'destructive',
-        title: 'Action Restricted',
-        description: 'Users with role "user" can only send emails from the post-call outcome popup when Email Interested or Email Brush-Off is selected.'
-      });
-      return;
-    }
-    if (!lead.contacts?.some(c => c.isPrimary)) {
-      toast({
-        variant: 'destructive',
-        title: 'Primary Contact Required',
-        description: 'You must set a Primary Contact in the Contacts tab before sending emails.'
-      });
-      return;
-    }
     setTargetEmailAddress(email);
     setIsEmailDialogOpen(true);
   };
@@ -2407,9 +2464,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     let parsedBody = rawBody;
     if (lead) {
       const leadData = lead as any;
-      const primaryContact = lead.contacts?.find((c: any) => c.isPrimary) || (lead.contacts?.[0] || null);
-      const contactName = primaryContact?.name || 'Customer';
-      const contactFirstName = contactName.split(' ')[0];
+      const targetEmailFirst = (targetEmailAddress || '').split(',')[0].trim().toLowerCase();
+      const matchedContact = lead.contacts?.find((c: any) => c.email && c.email.toLowerCase().trim() === targetEmailFirst);
+      const primaryContact = matchedContact || lead.contacts?.find((c: any) => c.isPrimary) || (lead.contacts?.[0] || null);
+      const contactName = matchedContact?.name || primaryContact?.name || leadData.contactPersonName || leadData.contactName || leadData.displayName || 'Valued Customer';
+      const contactFirstName = contactName.split(' ')[0] || 'Valued Customer';
       const localMilePlusAuthLink = primaryContact?.localMilePlusAuthLink || '';
 
       const franName = franchiseeDetails?.name || franchiseeDetails?.mainContact || leadData.franchisee || 'MailPlus';
@@ -2430,10 +2489,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         contact: { ...primaryContact, name: contactName, firstName: contactFirstName, localMilePlusAuthLink },
         accountManager: {
           name: amName,
+          email: accountManagerEmail,
           mobile: accountManagerMobile,
           calendly: accountManagerCalendly
         },
-        salesRep: leadData.salesRepAssigned || userProfile?.displayName || userProfile?.firstName || 'Representative',
+        salesRep: leadData.salesRepAssigned || amName || userProfile?.displayName || userProfile?.firstName || 'Representative',
         franchisee: {
           name: franName,
           mainContact: franContact,
@@ -2474,7 +2534,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{products_details_html\}\}/gi, productTableHtml);
     }
     return parsedBody;
-  }, [selectedTemplateId, templates, lead, userProfile, accountManagerMobile, accountManagerCalendly, serviceTableHtml, productTableHtml, franchiseeDetails]);
+  }, [selectedTemplateId, templates, lead, userProfile, accountManagerMobile, accountManagerCalendly, accountManagerEmail, serviceTableHtml, productTableHtml, franchiseeDetails, targetEmailAddress]);
 
   useEffect(() => {
     setEditableEmailBody(bulkEmailPreviewBody);
@@ -2485,19 +2545,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
       if (selectedTemplate?.subject) {
         let subject = selectedTemplate.subject;
+        const targetEmailFirst = (targetEmailAddress || '').split(',')[0].trim().toLowerCase();
+        const matchedContact = lead?.contacts?.find((c: any) => c.email && c.email.toLowerCase().trim() === targetEmailFirst);
+        const primaryContact = matchedContact || lead?.contacts?.find((c: any) => c.isPrimary) || (lead?.contacts?.[0] || null);
+        const contactName = matchedContact?.name || primaryContact?.name || (lead as any)?.contactPersonName || (lead as any)?.contactName || 'Valued Customer';
+        const contactFirstName = contactName.split(' ')[0] || 'Valued Customer';
+
         const franName = franchiseeDetails?.name || franchiseeDetails?.mainContact || (lead as any)?.franchisee || 'MailPlus';
         const franContact = franchiseeDetails?.mainContact || franchiseeDetails?.name || (lead as any)?.franchisee || 'MailPlus';
         const franEmail = franchiseeDetails?.email || '';
         const franMobile = franchiseeDetails?.mobile || franchiseeDetails?.phone || '';
 
-        const primaryContact = lead?.contacts?.find((c: any) => c.isPrimary) || (lead?.contacts?.[0] || null);
-        const contactName = primaryContact?.name || 'Customer';
-        const contactFirstName = contactName.split(' ')[0];
+        const amName = (lead as any)?.accountManagerAssigned || (lead as any)?.salesRepAssigned || '';
 
         subject = subject.replace(/\{\{Contact\.Name\}\}/gi, contactName);
         subject = subject.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+        subject = subject.replace(/\{\{contact_name\}\}/gi, contactName);
+        subject = subject.replace(/\{\{contact_first_name\}\}/gi, contactFirstName);
         subject = subject.replace(/\{\{Company\.Name\}\}/gi, (lead as any)?.companyName || '');
-        subject = subject.replace(/\{\{SalesRep\.Name\}\}/gi, (lead as any)?.salesRepAssigned || userProfile?.displayName || 'Representative');
+        subject = subject.replace(/\{\{company_name\}\}/gi, (lead as any)?.companyName || '');
+        subject = subject.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
+        subject = subject.replace(/\{\{account_manager_name\}\}/gi, amName);
+        subject = subject.replace(/\{\{AccountManager\.Email\}\}/gi, accountManagerEmail);
+        subject = subject.replace(/\{\{account_manager_email\}\}/gi, accountManagerEmail);
+        subject = subject.replace(/\{\{SalesRep\.Name\}\}/gi, (lead as any)?.salesRepAssigned || amName || userProfile?.displayName || 'Representative');
+        subject = subject.replace(/\{\{sales_rep_name\}\}/gi, (lead as any)?.salesRepAssigned || amName || userProfile?.displayName || 'Representative');
         subject = subject.replace(/\{\{Franchisee\.Name\}\}/gi, franName);
         subject = subject.replace(/\{\{franchisee_name\}\}/gi, franName);
         subject = subject.replace(/\{\{Franchisee\.MainContact\}\}/gi, franContact);
@@ -2514,7 +2586,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     } else {
       setEmailSubject('');
     }
-  }, [selectedTemplateId, templates, lead, franchiseeDetails, userProfile]);
+  }, [selectedTemplateId, templates, lead, franchiseeDetails, userProfile, targetEmailAddress, accountManagerEmail]);
 
   const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -4452,16 +4524,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     ) : <span className="text-sm text-muted-foreground">-</span>
                 ) : emailClickable && value ? (
                     <div className="flex items-center gap-2 flex-wrap">
-                        {userProfile?.activeRole === 'user' ? (
-                            <span className="text-sm font-semibold text-foreground text-left">{value}</span>
-                        ) : (
-                            <button 
-                                onClick={() => handleEmailClick(value)} 
-                                className="text-sm font-semibold text-primary hover:underline text-left"
-                            >
-                                {value}
-                            </button>
-                        )}
+                        <button 
+                            onClick={() => handleEmailClick(value)} 
+                            className="text-sm font-semibold text-primary hover:underline text-left"
+                        >
+                            {value}
+                        </button>
                         {(() => {
                             const norm = value.toLowerCase().trim();
                             const matchingContact = (lead.contacts || []).find(c => c.email && c.email.toLowerCase().trim() === norm);
@@ -7563,16 +7631,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <Mail className="w-3 h-3 text-muted-foreground" />
                                         {contact.email ? (
-                                            userProfile?.activeRole === 'user' ? (
-                                                <span className="font-semibold text-xs text-foreground">{contact.email}</span>
-                                            ) : (
-                                                <button 
-                                                    onClick={() => handleEmailClick(contact.email)} 
-                                                    className="text-primary hover:underline font-semibold text-left"
-                                                >
-                                                    {contact.email}
-                                                </button>
-                                            )
+                                            <button 
+                                                onClick={() => handleEmailClick(contact.email)} 
+                                                className="text-primary hover:underline font-semibold text-left"
+                                            >
+                                                {contact.email}
+                                            </button>
                                         ) : (
                                             <span className="text-muted-foreground">-</span>
                                         )}
@@ -10124,85 +10188,103 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4 border-y my-2">
-                <div className="space-y-2">
-                    <Label className="text-xs font-semibold text-slate-700">Send From</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setSenderType('default')}
-                            className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-all text-center ${
-                                senderType === 'default'
-                                    ? 'bg-primary border-primary text-white shadow-sm'
-                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                            }`}
-                        >
-                            Default
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setSenderType('me')}
-                            disabled={!user?.email || !user.email.endsWith('@mailplus.com.au')}
-                            className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-all text-center ${
-                                !user?.email || !user.email.endsWith('@mailplus.com.au')
-                                    ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400'
-                                    : senderType === 'me'
-                                    ? 'bg-primary border-primary text-white shadow-sm'
-                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                            }`}
-                            title={user?.email ? `Send as ${user.email}` : 'Log in using @mailplus.com.au to enable'}
-                        >
-                            My Account
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setSenderType('custom')}
-                            className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-all text-center ${
-                                senderType === 'custom'
-                                    ? 'bg-primary border-primary text-white shadow-sm'
-                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                            }`}
-                        >
-                            Custom
-                        </button>
-                    </div>
-                    {senderType === 'default' && (() => {
-                        const role = userProfile?.activeRole ? userProfile.activeRole.toLowerCase() : '';
-                        const isMatchedRole = 
-                            role.includes('account manager') ||
-                            role.includes('sales manager') ||
-                            role.includes('customer success') ||
-                            role.includes('customer service') ||
-                            role.includes('marketing manager');
-                        const userEmail = user?.email || userProfile?.email;
-                        const defaultEmail = (isMatchedRole && userEmail && userEmail.endsWith('@mailplus.com.au'))
-                            ? userEmail
-                            : 'customerservice@mailplus.com.au';
-                        return (
-                            <p className="text-[10px] text-slate-500 italic mt-1">
-                                Email will be dispatched from: <strong className="text-slate-600">{defaultEmail}</strong>
-                            </p>
-                        );
-                    })()}
-                    {senderType === 'me' && user?.email && (
-                        <p className="text-[10px] text-slate-500 italic mt-1">
-                            Email will be dispatched from your account: <strong className="text-slate-600">{user.email}</strong>
-                        </p>
-                    )}
-                    {senderType === 'custom' && (
-                        <div className="space-y-1.5 mt-2 animate-in fade-in duration-200">
-                            <Input
-                                type="email"
-                                placeholder="e.g., info@mailplus.com.au"
-                                value={customSenderEmail}
-                                onChange={(e) => setCustomSenderEmail(e.target.value)}
-                                className="bg-slate-50 text-xs h-8 border-slate-200 focus-visible:ring-primary focus-visible:ring-offset-0"
-                            />
-                            <p className="text-[9px] text-slate-400">
-                                Address must end with <strong className="text-slate-500">@mailplus.com.au</strong>.
-                            </p>
+                {isDialerUser ? (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1.5">
+                        <Label className="text-xs font-semibold text-slate-700 block">Sender (Account Manager)</Label>
+                        <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-[#095c7b] shrink-0" />
+                            <span className="font-semibold text-slate-900">
+                                {lead.accountManagerAssigned || lead.salesRepAssigned || 'Account Manager'}
+                            </span>
+                            <span className="text-slate-500 font-mono text-[11px]">
+                                &lt;{accountManagerEmail || 'sales@mailplus.com.au'}&gt;
+                            </span>
                         </div>
-                    )}
-                </div>
+                        <p className="text-[10px] text-slate-500 italic">
+                            Emails sent by dialers are dispatched on behalf of the lead&apos;s assigned Account Manager.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        <Label className="text-xs font-semibold text-slate-700">Send From</Label>
+                        <div className="grid grid-cols-3 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setSenderType('default')}
+                                className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-all text-center ${
+                                    senderType === 'default'
+                                        ? 'bg-primary border-primary text-white shadow-sm'
+                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                }`}
+                            >
+                                Default
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSenderType('me')}
+                                disabled={!user?.email || !user.email.endsWith('@mailplus.com.au')}
+                                className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-all text-center ${
+                                    !user?.email || !user.email.endsWith('@mailplus.com.au')
+                                        ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400'
+                                        : senderType === 'me'
+                                        ? 'bg-primary border-primary text-white shadow-sm'
+                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                }`}
+                                title={user?.email ? `Send as ${user.email}` : 'Log in using @mailplus.com.au to enable'}
+                            >
+                                My Account
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSenderType('custom')}
+                                className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-all text-center ${
+                                    senderType === 'custom'
+                                        ? 'bg-primary border-primary text-white shadow-sm'
+                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                }`}
+                            >
+                                Custom
+                            </button>
+                        </div>
+                        {senderType === 'default' && (() => {
+                            const role = userProfile?.activeRole ? userProfile.activeRole.toLowerCase() : '';
+                            const isMatchedRole = 
+                                role.includes('account manager') ||
+                                role.includes('sales manager') ||
+                                role.includes('customer success') ||
+                                role.includes('customer service') ||
+                                role.includes('marketing manager');
+                            const userEmail = user?.email || userProfile?.email;
+                            const defaultEmail = (isMatchedRole && userEmail && userEmail.endsWith('@mailplus.com.au'))
+                                ? userEmail
+                                : 'customerservice@mailplus.com.au';
+                            return (
+                                <p className="text-[10px] text-slate-500 italic mt-1">
+                                    Email will be dispatched from: <strong className="text-slate-600">{defaultEmail}</strong>
+                                </p>
+                            );
+                        })()}
+                        {senderType === 'me' && user?.email && (
+                            <p className="text-[10px] text-slate-500 italic mt-1">
+                                Email will be dispatched from your account: <strong className="text-slate-600">{user.email}</strong>
+                            </p>
+                        )}
+                        {senderType === 'custom' && (
+                            <div className="space-y-1.5 mt-2 animate-in fade-in duration-200">
+                                <Input
+                                    type="email"
+                                    placeholder="e.g., info@mailplus.com.au"
+                                    value={customSenderEmail}
+                                    onChange={(e) => setCustomSenderEmail(e.target.value)}
+                                    className="bg-slate-50 text-xs h-8 border-slate-200 focus-visible:ring-primary focus-visible:ring-offset-0"
+                                />
+                                <p className="text-[9px] text-slate-400">
+                                    Address must end with <strong className="text-slate-500">@mailplus.com.au</strong>.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Email Template</Label>
@@ -10405,7 +10487,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <div className="bg-white rounded-lg shadow-md border overflow-hidden flex flex-col w-full">
                                {/* Interactive Email Header */}
                                <div className="border-b bg-slate-50 px-6 py-4 text-xs text-muted-foreground shrink-0 space-y-2.5 text-left">
-                                  <div className="flex items-center"><span className="font-semibold text-slate-700 w-16 inline-block">From:</span> outbound@mailplus.com.au</div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-slate-700 w-16 inline-block">From:</span>
+                                    <span className="text-slate-800 font-medium">
+                                      {isDialerUser ? (
+                                        accountManagerEmail ? `${lead.accountManagerAssigned || lead.salesRepAssigned || 'Account Manager'} <${accountManagerEmail}>` : 'sales@mailplus.com.au'
+                                      ) : (
+                                        senderType === 'me' && user?.email ? user.email : senderType === 'custom' && customSenderEmail ? customSenderEmail : 'outbound@mailplus.com.au'
+                                      )}
+                                    </span>
+                                  </div>
                                   
                                   <div className="flex items-center gap-2">
                                     <span className="font-semibold text-slate-700 w-16 inline-block">To:</span>

@@ -1387,13 +1387,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         </a>
                     ) : <span className="text-sm text-muted-foreground">-</span>
                 ) : emailClickable && value ? (
-                    userProfile?.activeRole === 'user' ? (
-                        <span className="text-sm font-semibold text-foreground text-left">{value}</span>
-                    ) : (
-                        <a href={`mailto:${value}`} className="text-sm font-semibold text-primary hover:underline text-left">
-                            {value}
-                        </a>
-                    )
+                    <a href={`mailto:${value}`} className="text-sm font-semibold text-primary hover:underline text-left">
+                        {value}
+                    </a>
                 ) : isLink ? (
                     <div className="flex items-center gap-1.5">
                         <span className="text-sm font-semibold">{value || '-'}</span>
