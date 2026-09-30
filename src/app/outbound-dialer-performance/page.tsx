@@ -5,8 +5,6 @@ import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Loader } from '@/components/ui/loader';
 import { AccessDenied } from '@/components/access-denied';
-const DEFAULT_DIALERS = ['Alex Mabuda', 'Melody Muriritirwa', 'Sergio Coetzee', 'Warren Mkonto'];
-
 export default function OutboundDialerPerformancePage() {
   const { userProfile, loading: authLoading } = useAuth();
   const { canView, loadingPermissions } = usePermissions();
@@ -30,7 +28,6 @@ export default function OutboundDialerPerformancePage() {
     <ReportsClientPage 
       isDialerPerformanceOnly={true}
       visibleSections={['team-performance']}
-      defaultDialers={DEFAULT_DIALERS}
     />
   );
 }

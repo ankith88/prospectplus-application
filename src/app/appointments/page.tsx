@@ -17,11 +17,13 @@ import {
 import type { Appointment, Lead, LeadStatus, AppointmentStatus, DiscoveryData, VisitNote } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download, ArrowUpDown, Route, ClipboardCheck, MoreHorizontal } from 'lucide-react'
+import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download, ArrowUpDown, Route, ClipboardCheck, MoreHorizontal, BarChart3, CalendarCheck } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { SUPER_ADMIN_UIDS } from '@/lib/constants'
 import { getAllAppointments, getLeadsFromFirebase, getVisitNotes, logActivity } from '@/services/firebase'
 import { firestore } from '@/lib/firebase'
 import { doc, setDoc, updateDoc } from 'firebase/firestore'
@@ -77,8 +79,31 @@ export default function AllAppointmentsPage() {
   });
 
   const router = useRouter();
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading, isSuperAdmin } = useAuth();
   const { toast } = useToast();
+
+  const allowedReportingRoles = [
+    'admin',
+    'superadmin',
+    'superadmins',
+    'super user',
+    'sales manager',
+    'sales_manager',
+    'outbound admin',
+    'outbound admins',
+    'outbound_admin'
+  ];
+  const userRoleLower = (userProfile?.activeRole || userProfile?.role || '').toLowerCase().trim();
+  const assignedRolesLower = (userProfile?.assignedRoles || []).map((r: any) => String(r).toLowerCase().trim());
+  const canViewAppointmentReporting = Boolean(
+    isSuperAdmin ||
+    (userProfile as any)?.isSuperAdmin ||
+    (userProfile as any)?.superAdmin ||
+    (user?.uid && SUPER_ADMIN_UIDS.includes(user.uid)) ||
+    (userProfile?.uid && SUPER_ADMIN_UIDS.includes(userProfile.uid)) ||
+    allowedReportingRoles.includes(userRoleLower) ||
+    assignedRolesLower.some(r => allowedReportingRoles.includes(r))
+  );
 
   const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers', 'Outbound Admin'].includes(userProfile.activeRole);
 
@@ -413,9 +438,19 @@ export default function AllAppointmentsPage() {
   return (
     <>
     <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">All Appointments</h1>
-        <p className="text-muted-foreground">Review all scheduled appointments.</p>
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">All Appointments</h1>
+          <p className="text-muted-foreground">Review all scheduled appointments.</p>
+        </div>
+        {canViewAppointmentReporting && (
+          <Button asChild className="bg-[#095c7b] hover:bg-[#074760] text-white font-bold text-xs gap-2 shadow-sm self-start sm:self-auto">
+            <Link href="/appointment-reporting">
+              <BarChart3 className="h-4 w-4" />
+              <span>Open Appointment Reporting</span>
+            </Link>
+          </Button>
+        )}
       </header>
        <Collapsible>
           <Card>

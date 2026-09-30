@@ -485,7 +485,7 @@ export default function ReportsClientPage({
     getLeadCampaigns().then(camps => setAvailableCampaigns(camps.filter(c => c.isActive))).catch(console.error);
   }, []);
 
-  const DEFAULT_DIALERS = defaultDialers || ['Alex Mabuda', 'Melody Muriritirwa', 'Sergio Coetzee', 'Warren Mkonto', 'Kerina Helliwell', 'Lee Russell'];
+  const DEFAULT_DIALERS = defaultDialers || [];
 
   const [filters, setFilters] = useState({
     status: [] as string[],
