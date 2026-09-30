@@ -21,6 +21,7 @@ import { firestore, storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, doc, getDoc, updateDoc, addDoc, getDocs } from 'firebase/firestore';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
+import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy';
 import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal';
 import { isAccountManagerUser } from '@/lib/lead-permissions';
 import type { Lead } from '@/lib/types';
@@ -339,6 +340,24 @@ export function CancelCustomerDialog({
             }
           })
         }).catch(err => console.error("Error triggering cancellation email notification:", err));
+
+        // Call NetSuite outcome sync with Customer - Lost outcome (same API as Customer Success)
+        try {
+          const leadData = (existsInCompany ? companySnap.data() : leadSnap.data()) || {};
+          await sendFieldSalesOutcomeToNetSuite({
+            leadId: lead.id,
+            outcome: "Customer - Lost",
+            linkedSalesRep: leadData?.salesRepAssigned || (lead as any)?.salesRepAssigned || 'Unassigned',
+            processedBy: staffName,
+            cancellationTheme: themeName,
+            cancellationWhy: whyName,
+            cancellationReason: reasonName,
+            cancellationDate: cancellationDate,
+            cancellationNotes: `Direct cancellation completed by ${staffName}. Requested By (External): ${requestedBy.trim()}.`,
+          });
+        } catch (nsErr) {
+          console.error("NetSuite outcome sync failed during direct cancellation:", nsErr);
+        }
 
         // Deactivate LocalMile access if active
         deactivateLocalMileAccessForLead(lead.id, lead.contacts, existsInCompany ? 'companies' : 'leads').catch(err => {
