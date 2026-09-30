@@ -81,7 +81,7 @@ import { cn, getQuickDateRange, isManualActivity, getLeadDisplayDateValue, getLe
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
-import { getLeadInitialBucket } from '@/lib/lead-stage-analytics';
+import { getLeadInitialBucket, getLeadAmHandoverTrigger, formatAmHandoverTriggerLabel, type AmHandoverTrigger } from '@/lib/lead-stage-analytics';
 
 const isLostLead = (l: Lead) => {
     const status = l.status || '';
@@ -422,6 +422,7 @@ export default function ReportsClientPage({
 
   // Bucket breakdown filter states for drill-down dialogs
   const [trialDrilldownBucketFilter, setTrialDrilldownBucketFilter] = useState<string | null>(null);
+  const [trialDrilldownTriggerFilter, setTrialDrilldownTriggerFilter] = useState<'all' | 'appointment' | 'localmile' | 'manual'>('all');
   const [apptListBucketFilter, setApptListBucketFilter] = useState<string | null>(null);
   const [engagementBucketFilter, setEngagementBucketFilter] = useState<string | null>(null);
   const [wonBucketFilter, setWonBucketFilter] = useState<string | null>(null);
@@ -1764,6 +1765,9 @@ export default function ReportsClientPage({
       const dialerUnactionedPipeline = dialerUnactionedPipelineLeads.length;
 
       const dialerMovedToAmLeads = topLevelMovedToAmLeads.filter(isMatch).filter(l => isEventInTimeframe(l, 'movedToAmAt'));
+      const dialerMovedToAmApptLeads = dialerMovedToAmLeads.filter(l => getLeadAmHandoverTrigger(l, allActivities) === 'appointment');
+      const dialerMovedToAmLmLeads = dialerMovedToAmLeads.filter(l => getLeadAmHandoverTrigger(l, allActivities) === 'localmile');
+      const dialerMovedToAmManualLeads = dialerMovedToAmLeads.filter(l => getLeadAmHandoverTrigger(l, allActivities) === 'manual');
 
       const dialerLeads = [...dialerUnactionedPipelineLeads, ...dialerActivePipelineLeads, ...dialerLostPipelineLeads, ...dialerWonLeads];
 
@@ -1790,6 +1794,9 @@ export default function ReportsClientPage({
         'ShipMate Trials': dialerShipmateTrials,
         'Signed Customers': dialerWon,
         'Moved to AM': dialerMovedToAmLeads.length,
+        'Moved to AM (Appt)': dialerMovedToAmApptLeads.length,
+        'Moved to AM (LocalMile)': dialerMovedToAmLmLeads.length,
+        'Moved to AM (Manual)': dialerMovedToAmManualLeads.length,
         perfCallsList: dialerCallsList,
         perfAppointmentsList: dialerApptLeads,
         perfActiveLeadsList: dialerActivePipelineLeads,
@@ -1802,7 +1809,10 @@ export default function ReportsClientPage({
         perfLmPendingLeadsList: lmPendingLeads,
         perfTrialingLmLeadsList: trialingLMLeads,
         perfShipmateTrialLeadsList: dialerShipmateTrialLeads,
-        perfMovedToAmLeadsList: dialerMovedToAmLeads
+        perfMovedToAmLeadsList: dialerMovedToAmLeads,
+        perfMovedToAmApptLeadsList: dialerMovedToAmApptLeads,
+        perfMovedToAmLmLeadsList: dialerMovedToAmLmLeads,
+        perfMovedToAmManualLeadsList: dialerMovedToAmManualLeads
       };
     }).filter(d => {
       if (appliedFilters.dialerAssigned.length > 0) {
@@ -1814,6 +1824,9 @@ export default function ReportsClientPage({
     // Unassigned / System row for un-attributed leads
     const isUnassignedLead = (l: any) => !getDialerForLead(l) && !allDialers.includes(l.dialerAssigned);
     const unassignedMovedToAm = topLevelMovedToAmLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).movedToAmAt || l.assignedToDialerAt || l.dateLeadEntered || (l as any).createdAt));
+    const unassignedMovedToAmAppt = unassignedMovedToAm.filter(l => getLeadAmHandoverTrigger(l, allActivities) === 'appointment');
+    const unassignedMovedToAmLm = unassignedMovedToAm.filter(l => getLeadAmHandoverTrigger(l, allActivities) === 'localmile');
+    const unassignedMovedToAmManual = unassignedMovedToAm.filter(l => getLeadAmHandoverTrigger(l, allActivities) === 'manual');
     const unassignedQuotes = topLevelQuotesLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).dateQuoted || (l as any).quotedAt || l.dateLeadEntered || (l as any).createdAt));
     const unassignedLmOpp = topLevelLmOppLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).dateRegistrationSent || (l as any).registrationSentAt || l.dateLeadEntered || (l as any).createdAt));
     const unassignedLmPending = topLevelLmPendingLeads.filter(isUnassignedLead).filter(l => isDateInTimeframe((l as any).localMileAcceptedAt || (l as any).dateLocalmileAccepted || l.dateLeadEntered || (l as any).createdAt));
@@ -1845,6 +1858,9 @@ export default function ReportsClientPage({
         'ShipMate Trials': 0,
         'Signed Customers': unassignedSigned.length,
         'Moved to AM': unassignedMovedToAm.length,
+        'Moved to AM (Appt)': unassignedMovedToAmAppt.length,
+        'Moved to AM (LocalMile)': unassignedMovedToAmLm.length,
+        'Moved to AM (Manual)': unassignedMovedToAmManual.length,
         perfCallsList: [],
         perfAppointmentsList: unassignedAppt,
         perfActiveLeadsList: [],
@@ -1857,7 +1873,10 @@ export default function ReportsClientPage({
         perfLmPendingLeadsList: unassignedLmPending,
         perfTrialingLmLeadsList: unassignedTrialingLm,
         perfShipmateTrialLeadsList: [],
-        perfMovedToAmLeadsList: unassignedMovedToAm
+        perfMovedToAmLeadsList: unassignedMovedToAm,
+        perfMovedToAmApptLeadsList: unassignedMovedToAmAppt,
+        perfMovedToAmLmLeadsList: unassignedMovedToAmLm,
+        perfMovedToAmManualLeadsList: unassignedMovedToAmManual
       });
     }
 
@@ -1885,6 +1904,9 @@ export default function ReportsClientPage({
     const totalTrialingLMRate = totalTeamCalls > 0 ? (totalTrialingLM / totalTeamCalls) * 100 : 0;
     const totalShipmateTrials = teamPerformanceData.reduce((acc, d) => acc + d['ShipMate Trials'], 0);
     const totalMovedToAm = teamPerformanceData.reduce((acc, d) => acc + d['Moved to AM'], 0);
+    const totalMovedToAmAppt = teamPerformanceData.reduce((acc, d) => acc + (d['Moved to AM (Appt)'] || 0), 0);
+    const totalMovedToAmLm = teamPerformanceData.reduce((acc, d) => acc + (d['Moved to AM (LocalMile)'] || 0), 0);
+    const totalMovedToAmManual = teamPerformanceData.reduce((acc, d) => acc + (d['Moved to AM (Manual)'] || 0), 0);
 
     const teamPerformanceTotals = {
       name: 'Total',
@@ -1908,7 +1930,10 @@ export default function ReportsClientPage({
       'Trialing LocalMile Rate': totalTrialingLMRate,
       'ShipMate Trials': totalShipmateTrials,
       'Signed Customers': totalWon,
-      'Moved to AM': totalMovedToAm
+      'Moved to AM': totalMovedToAm,
+      'Moved to AM (Appt)': totalMovedToAmAppt,
+      'Moved to AM (LocalMile)': totalMovedToAmLm,
+      'Moved to AM (Manual)': totalMovedToAmManual
     };
 
     const callOutcomesData = filteredCalls.reduce((acc, call) => {
@@ -3686,8 +3711,33 @@ export default function ReportsClientPage({
                                 >
                                     Monthly
                                 </button>
-                            </div>
-                            <Button variant="outline" size="sm" onClick={() => handleExportChartData([...stats.teamPerformanceData, stats.teamPerformanceTotals], 'dialer_performance_details')}>
+                            </div>                            <Button variant="outline" size="sm" onClick={() => {
+                                const exportableData = [...stats.teamPerformanceData, stats.teamPerformanceTotals].map(d => ({
+                                    'Agent / Dialer': d.name,
+                                    'Calls Made': d['Total Engagement'],
+                                    'Total Assigned Leads': d['Total Assigned Leads'],
+                                    'Un-actioned Pipeline': d['Un-actioned Pipeline'],
+                                    'Active Pipeline': d['Active Pipeline'],
+                                    'Lost Pipeline': d['Lost Pipeline'],
+                                    'Signed Customers': d['Signed Customers'],
+                                    'Avg Attempts / Lead': typeof d['Avg Attempts'] === 'number' ? d['Avg Attempts'].toFixed(1) : d['Avg Attempts'],
+                                    'Connect Rate %': typeof d['Connect Rate'] === 'number' ? `${d['Connect Rate'].toFixed(1)}%` : d['Connect Rate'],
+                                    'Appointments Set': d.Appointments,
+                                    'Moved to AM (Total)': d['Moved to AM'],
+                                    'Moved via Appointment': d['Moved to AM (Appt)'] || 0,
+                                    'Moved via LocalMile': d['Moved to AM (LocalMile)'] || 0,
+                                    'Moved via Manual': d['Moved to AM (Manual)'] || 0,
+                                    'Quotes Sent': d['Quotes Sent'],
+                                    'LM Opportunity': d['LM Opportunity'],
+                                    'LM Opportunity Rate %': typeof d['LM Opportunity Rate'] === 'number' ? `${d['LM Opportunity Rate'].toFixed(1)}%` : d['LM Opportunity Rate'],
+                                    'LM Pending': d['LM Pending'],
+                                    'LM Pending Rate %': typeof d['LM Pending Rate'] === 'number' ? `${d['LM Pending Rate'].toFixed(1)}%` : d['LM Pending Rate'],
+                                    'Trialing LocalMile': d['Trialing LocalMile'],
+                                    'Trialing LocalMile Rate %': typeof d['Trialing LocalMile Rate'] === 'number' ? `${d['Trialing LocalMile Rate'].toFixed(1)}%` : d['Trialing LocalMile Rate'],
+                                    'ShipMate Trials': d['ShipMate Trials']
+                                }));
+                                handleExportChartData(exportableData, 'dialer_performance_details');
+                            }}>
                                 <Download className="h-4 w-4 mr-2" /> Export Table
                             </Button>
                         </div>
@@ -3771,7 +3821,22 @@ export default function ReportsClientPage({
                                 <TableHead className="text-right">Avg Attempts / Lead</TableHead>
                                 <TableHead className="text-right">Connect Rate %</TableHead>
                                 <TableHead className="text-right">Appointments Set</TableHead>
-                                <TableHead className="text-right">Moved to AM</TableHead>
+                                <TableHead className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <span>Moved to AM</span>
+                                        <SectionHelp content={
+                                            <div className="space-y-1.5 text-left">
+                                                <p className="font-semibold text-foreground">Moved to Account Manager</p>
+                                                <p>Total outbound leads moved to the Account Manager bucket during the timeframe, broken down by handover trigger:</p>
+                                                <div className="space-y-1 text-xs pt-1">
+                                                    <div><strong className="text-blue-600 dark:text-blue-400">📅 Appt:</strong> Appointment Booked with an Account Manager</div>
+                                                    <div><strong className="text-amber-600 dark:text-amber-400">⚡ LM:</strong> LocalMile Trigger (T&Cs accepted or first job created)</div>
+                                                    <div><strong className="text-slate-600 dark:text-slate-400">👤 Man:</strong> Manual Reassignment / Other</div>
+                                                </div>
+                                            </div>
+                                        } />
+                                    </div>
+                                </TableHead>
                                 <TableHead className="text-right">Quotes Sent</TableHead>
                                 <TableHead className="text-right">LM Opportunity (Registration Sent)</TableHead>
                                 <TableHead className="text-right">LM Pending (T&C&apos;s Accepted)</TableHead>
@@ -3829,14 +3894,14 @@ export default function ReportsClientPage({
                                         {dialer['Active Pipeline']}
                                     </TableCell>
                                     <TableCell 
-                                         className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
-                                         onClick={() => {
-                                             const list = dialer.perfLostLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && isLostLead(l));
-                                             setTrialDrilldown({ 
-                                                 title: `${dialer.name} - Lost Pipeline Leads (Archived Lost)`, 
-                                                 leads: list
-                                             });
-                                         }}
+                                        className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
+                                        onClick={() => {
+                                            const list = dialer.perfLostLeadsList || stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && isLostLead(l));
+                                            setTrialDrilldown({ 
+                                                title: `${dialer.name} - Lost Pipeline Leads (Archived Lost)`, 
+                                                leads: list
+                                            });
+                                        }}
                                     >
                                         {dialer['Lost Pipeline']}
                                     </TableCell>
@@ -3861,13 +3926,36 @@ export default function ReportsClientPage({
                                         {dialer.Appointments}
                                     </TableCell>
                                     <TableCell 
-                                        className="text-right font-bold text-amber-700 dark:text-amber-300 cursor-pointer hover:underline"
+                                        className="text-right cursor-pointer hover:underline"
                                         onClick={() => setTrialDrilldown({ 
                                             title: `${dialer.name} - Outbound → AM Handover Leads`, 
                                             leads: dialer.perfMovedToAmLeadsList || [] 
                                         })}
                                     >
-                                        {dialer['Moved to AM']}
+                                        <div className="flex flex-col items-end">
+                                            <span className="font-bold text-amber-700 dark:text-amber-300">
+                                                {dialer['Moved to AM']}
+                                            </span>
+                                            {dialer['Moved to AM'] > 0 && (
+                                                <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5">
+                                                    {dialer['Moved to AM (Appt)'] > 0 && (
+                                                        <span className="text-blue-600 dark:text-blue-400 font-semibold mr-1">
+                                                            {dialer['Moved to AM (Appt)']} Appt{dialer['Moved to AM (Appt)'] > 1 ? 's' : ''}
+                                                        </span>
+                                                    )}
+                                                    {dialer['Moved to AM (LocalMile)'] > 0 && (
+                                                        <span className="text-amber-600 dark:text-amber-400 font-semibold mr-1">
+                                                            {dialer['Moved to AM (LocalMile)']} LM
+                                                        </span>
+                                                    )}
+                                                    {dialer['Moved to AM (Manual)'] > 0 && (
+                                                        <span className="text-slate-500 font-medium">
+                                                            {dialer['Moved to AM (Manual)']} Man
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            )}
+                                        </div>
                                     </TableCell>
                                     <TableCell 
                                         className="text-right font-semibold text-orange-600 cursor-pointer hover:underline"
@@ -3996,7 +4084,28 @@ export default function ReportsClientPage({
                                         leads: stats.teamPerformanceData.flatMap(d => d.perfMovedToAmLeadsList || []) 
                                     })}
                                 >
-                                    {stats.teamPerformanceTotals['Moved to AM']}
+                                    <div className="flex flex-col items-end">
+                                        <span>{stats.teamPerformanceTotals['Moved to AM']}</span>
+                                        {stats.teamPerformanceTotals['Moved to AM'] > 0 && (
+                                            <span className="text-[10px] font-normal text-muted-foreground whitespace-nowrap mt-0.5">
+                                                {stats.teamPerformanceTotals['Moved to AM (Appt)'] > 0 && (
+                                                    <span className="text-blue-600 dark:text-blue-400 font-semibold mr-1">
+                                                        {stats.teamPerformanceTotals['Moved to AM (Appt)']} Appt{stats.teamPerformanceTotals['Moved to AM (Appt)'] > 1 ? 's' : ''}
+                                                    </span>
+                                                )}
+                                                {stats.teamPerformanceTotals['Moved to AM (LocalMile)'] > 0 && (
+                                                    <span className="text-amber-600 dark:text-amber-400 font-semibold mr-1">
+                                                        {stats.teamPerformanceTotals['Moved to AM (LocalMile)']} LM
+                                                    </span>
+                                                )}
+                                                {stats.teamPerformanceTotals['Moved to AM (Manual)'] > 0 && (
+                                                    <span className="text-slate-500 font-medium">
+                                                        {stats.teamPerformanceTotals['Moved to AM (Manual)']} Man
+                                                    </span>
+                                                )}
+                                            </span>
+                                        )}
+                                    </div>
                                 </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-orange-600 cursor-pointer hover:underline"
@@ -5537,7 +5646,14 @@ export default function ReportsClientPage({
           </DialogContent>
       </Dialog>
 
-      <Dialog open={!!trialDrilldown} onOpenChange={(open) => { if (!open) { setTrialDrilldown(null); setTrialDrilldownStatusFilter(null); setTrialDrilldownBucketFilter(null); } }}>
+      <Dialog open={!!trialDrilldown} onOpenChange={(open) => { 
+        if (!open) { 
+          setTrialDrilldown(null); 
+          setTrialDrilldownStatusFilter(null); 
+          setTrialDrilldownBucketFilter(null); 
+          setTrialDrilldownTriggerFilter('all');
+        } 
+      }}>
           <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
@@ -5545,19 +5661,93 @@ export default function ReportsClientPage({
                         <DialogTitle>{trialDrilldown?.title}</DialogTitle>
                         <DialogDescription>Total count: {trialDrilldown?.leads.length || 0}</DialogDescription>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => trialDrilldown && handleExportList(
-                        trialDrilldown.leads,
-                        ['Company Name', 'Prospect+ ID', 'Status', 'Dialer', 'Franchisee', getLeadDisplayDateLabel(trialDrilldownStatusFilter || trialDrilldown.title)],
-                        trialDrilldown.title.toLowerCase().replace(/\s+/g, '_'),
-                        (l) => [l.companyName, l.prospectPlusId || l.id || 'N/A', l.status, l.dialerAssigned || 'N/A', l.franchisee || 'N/A', safeFormatDate(getLeadDisplayDateValue(l))]
-                    )}>
-                        <Download className="mr-2 h-4 w-4" /> Export
-                    </Button>
+                    {(() => {
+                      const isAmHandover = trialDrilldown?.title?.toLowerCase().includes('handover') || trialDrilldown?.title?.toLowerCase().includes('moved to am');
+                      return (
+                        <Button variant="outline" size="sm" onClick={() => trialDrilldown && handleExportList(
+                            trialDrilldown.leads,
+                            isAmHandover 
+                              ? ['Company Name', 'Prospect+ ID', 'Status', 'Handover Trigger', 'Dialer', 'Franchisee', getLeadDisplayDateLabel(trialDrilldownStatusFilter || trialDrilldown.title)]
+                              : ['Company Name', 'Prospect+ ID', 'Status', 'Dialer', 'Franchisee', getLeadDisplayDateLabel(trialDrilldownStatusFilter || trialDrilldown.title)],
+                            trialDrilldown.title.toLowerCase().replace(/\s+/g, '_'),
+                            (l) => isAmHandover
+                              ? [l.companyName, l.prospectPlusId || l.id || 'N/A', l.status, formatAmHandoverTriggerLabel(getLeadAmHandoverTrigger(l, allActivities)), l.dialerAssigned || 'N/A', l.franchisee || 'N/A', safeFormatDate(getLeadDisplayDateValue(l))]
+                              : [l.companyName, l.prospectPlusId || l.id || 'N/A', l.status, l.dialerAssigned || 'N/A', l.franchisee || 'N/A', safeFormatDate(getLeadDisplayDateValue(l))]
+                        )}>
+                            <Download className="mr-2 h-4 w-4" /> Export
+                        </Button>
+                      );
+                    })()}
                   </div>
               </DialogHeader>
 
               {trialDrilldown?.leads && (
-                <div className="space-y-1">
+                <div className="space-y-2 pt-1">
+                  {/* Handover Trigger Filter Chips for AM Handover drilldowns */}
+                  {(() => {
+                    const isAmHandover = trialDrilldown?.title?.toLowerCase().includes('handover') || trialDrilldown?.title?.toLowerCase().includes('moved to am');
+                    if (!isAmHandover) return null;
+                    const apptCount = trialDrilldown.leads.filter(l => getLeadAmHandoverTrigger(l, allActivities) === 'appointment').length;
+                    const lmCount = trialDrilldown.leads.filter(l => getLeadAmHandoverTrigger(l, allActivities) === 'localmile').length;
+                    const manualCount = trialDrilldown.leads.filter(l => getLeadAmHandoverTrigger(l, allActivities) === 'manual').length;
+                    return (
+                      <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-200/80 dark:border-slate-800 text-xs">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300 mr-1">Handover Trigger:</span>
+                        <button
+                          type="button"
+                          onClick={() => setTrialDrilldownTriggerFilter('all')}
+                          className={cn(
+                            "px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-150 border",
+                            trialDrilldownTriggerFilter === 'all'
+                              ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-transparent shadow-xs"
+                              : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                          )}
+                        >
+                          All ({trialDrilldown.leads.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTrialDrilldownTriggerFilter('appointment')}
+                          className={cn(
+                            "px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-150 border flex items-center gap-1",
+                            trialDrilldownTriggerFilter === 'appointment'
+                              ? "bg-blue-600 text-white border-transparent shadow-xs"
+                              : "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100"
+                          )}
+                        >
+                          <span>📅 Appointment Booked</span>
+                          <span className="opacity-90">({apptCount})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTrialDrilldownTriggerFilter('localmile')}
+                          className={cn(
+                            "px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-150 border flex items-center gap-1",
+                            trialDrilldownTriggerFilter === 'localmile'
+                              ? "bg-amber-600 text-white border-transparent shadow-xs"
+                              : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100"
+                          )}
+                        >
+                          <span>⚡ LocalMile Trigger</span>
+                          <span className="opacity-90">({lmCount})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTrialDrilldownTriggerFilter('manual')}
+                          className={cn(
+                            "px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-150 border flex items-center gap-1",
+                            trialDrilldownTriggerFilter === 'manual'
+                              ? "bg-slate-700 text-white border-transparent shadow-xs"
+                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                          )}
+                        >
+                          <span>👤 Manual Move</span>
+                          <span className="opacity-90">({manualCount})</span>
+                        </button>
+                      </div>
+                    );
+                  })()}
+
                   <StatusBreakdownBar 
                     items={trialDrilldown.leads} 
                     selectedStatus={trialDrilldownStatusFilter} 
@@ -5580,6 +5770,10 @@ export default function ReportsClientPage({
                             <TableRow>
                                 <TableHead>Company Name</TableHead>
                                 <TableHead>Status</TableHead>
+                                {(() => {
+                                  const isAmHandover = trialDrilldown?.title?.toLowerCase().includes('handover') || trialDrilldown?.title?.toLowerCase().includes('moved to am');
+                                  return isAmHandover ? <TableHead>Handover Trigger</TableHead> : null;
+                                })()}
                                 <TableHead>Dialer</TableHead>
                                 <TableHead>Franchisee</TableHead>
                                 <TableHead>{getLeadDisplayDateLabel(trialDrilldownStatusFilter || trialDrilldown?.title)}</TableHead>
@@ -5588,29 +5782,66 @@ export default function ReportsClientPage({
                         </TableHeader>
                         <TableBody>
                             {trialDrilldown?.leads && trialDrilldown.leads.length > 0 ? (
-                              trialDrilldown.leads
-                                .filter((l) => {
+                              (() => {
+                                const isAmHandover = trialDrilldown?.title?.toLowerCase().includes('handover') || trialDrilldown?.title?.toLowerCase().includes('moved to am');
+                                const filteredCohort = trialDrilldown.leads.filter((l) => {
                                   if (trialDrilldownStatusFilter && (l.customerStatus || l.status || 'New') !== trialDrilldownStatusFilter) return false;
                                   if (trialDrilldownBucketFilter) {
                                     const b = l.bucket || (l.fieldSales ? 'field_sales' : 'outbound');
                                     if (b !== trialDrilldownBucketFilter) return false;
                                   }
+                                  if (isAmHandover && trialDrilldownTriggerFilter !== 'all') {
+                                    const trigger = getLeadAmHandoverTrigger(l, allActivities);
+                                    if (trigger !== trialDrilldownTriggerFilter) return false;
+                                  }
                                   return true;
-                                })
-                                .map((lead) => (
-                                  <TableRow key={lead.id}>
-                                      <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                      <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                      <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
-                                      <TableCell>{lead.franchisee || 'N/A'}</TableCell>
-                                      <TableCell>{safeFormatDate(getLeadDisplayDateValue(lead))}</TableCell>
-                                      <TableCell className="text-right">
-                                          <Button variant="ghost" size="sm" asChild>
-                                              <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                          </Button>
+                                });
+
+                                if (filteredCohort.length === 0) {
+                                  return (
+                                    <TableRow>
+                                      <TableCell colSpan={isAmHandover ? 7 : 6} className="text-center py-8 text-muted-foreground italic">
+                                        No leads found in this cohort for selected filter criteria.
                                       </TableCell>
-                                  </TableRow>
-                              ))
+                                    </TableRow>
+                                  );
+                                }
+
+                                return filteredCohort.map((lead) => {
+                                  const trigger = isAmHandover ? getLeadAmHandoverTrigger(lead, allActivities) : null;
+                                  return (
+                                    <TableRow key={lead.id}>
+                                        <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                        <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                        {isAmHandover && (
+                                          <TableCell>
+                                            {trigger === 'appointment' ? (
+                                              <Badge variant="outline" className="text-blue-700 bg-blue-50 border-blue-200 dark:text-blue-300 dark:bg-blue-950/50 dark:border-blue-800 font-semibold text-[11px] whitespace-nowrap">
+                                                📅 Appointment
+                                              </Badge>
+                                            ) : trigger === 'localmile' ? (
+                                              <Badge variant="outline" className="text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-950/50 dark:border-amber-800 font-semibold text-[11px] whitespace-nowrap">
+                                                ⚡ LocalMile
+                                              </Badge>
+                                            ) : (
+                                              <Badge variant="outline" className="text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-300 dark:bg-slate-800 dark:border-slate-700 text-[11px] whitespace-nowrap">
+                                                👤 Manual
+                                              </Badge>
+                                            )}
+                                          </TableCell>
+                                        )}
+                                        <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                        <TableCell>{lead.franchisee || 'N/A'}</TableCell>
+                                        <TableCell>{safeFormatDate(getLeadDisplayDateValue(lead))}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="sm" asChild>
+                                                <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                  );
+                                });
+                              })()
                             ) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No leads found in this cohort.</TableCell></TableRow>}
                         </TableBody>
                     </Table>

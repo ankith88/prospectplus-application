@@ -168,6 +168,97 @@ export function getLeadInitialBucket(lead: Lead): string {
   return 'Outbound';
 }
 
+export type AmHandoverTrigger = 'appointment' | 'localmile' | 'manual';
+
+/**
+ * Determines whether an Outbound lead was moved into the Account Manager bucket
+ * via an Appointment Booking, LocalMile Trigger, or Manual Reassignment.
+ */
+export function getLeadAmHandoverTrigger(lead: Lead | any, allActivities?: any[]): AmHandoverTrigger {
+  if (!lead) return 'manual';
+
+  // 1. Check Appointment Booking Triggers
+  const hasApptTrigger = 
+    lead.initialAppointmentBucket === 'outbound' ||
+    (lead.initialAppointmentBucket && lead.initialAppointmentBucket !== 'account_manager') ||
+    lead.status === 'Appointment Booked' ||
+    (lead as any).customerStatus === 'Appointment Booked' ||
+    (lead.appointments && Array.isArray(lead.appointments) && lead.appointments.length > 0) ||
+    (lead.bucketHistory && Array.isArray(lead.bucketHistory) && lead.bucketHistory.some((h: any) => {
+      const nb = (h.newBucket || h.toBucket || h.bucket || '').toLowerCase().trim();
+      const author = (h.author || '').toLowerCase();
+      const notes = (h.notes || '').toLowerCase();
+      return (nb === 'account_manager' || nb === 'account manager') && 
+        (author.includes('appointment') || notes.includes('appointment') || notes.includes('booked'));
+    })) ||
+    (lead.statusHistory && Array.isArray(lead.statusHistory) && lead.statusHistory.some((s: any) => 
+      s.newStatus === 'Appointment Booked' || (s.reason || '').toLowerCase().includes('appointment')
+    ));
+
+  if (hasApptTrigger) return 'appointment';
+
+  // 2. Check LocalMile Triggers
+  const hasLmTrigger = 
+    lead.status === 'LocalMile Opportunity' ||
+    (lead as any).customerStatus === 'LocalMile Opportunity' ||
+    lead.status === 'LocalMile Pending' ||
+    (lead as any).customerStatus === 'LocalMile Pending' ||
+    lead.status === 'Trialing LocalMile' ||
+    (lead as any).customerStatus === 'Trialing LocalMile' ||
+    (lead as any).localMileTermsAccepted === true ||
+    !!lead.dateLocalmileAccepted ||
+    !!(lead as any).localMileAcceptedAt ||
+    !!(lead as any).localMileTermsAcceptedAt ||
+    !!(lead as any).firstJobCreatedAt ||
+    !!(lead as any).hasCreatedJob ||
+    !!lead.dateRegistrationSent ||
+    !!(lead as any).registrationSentAt ||
+    (lead.bucketHistory && Array.isArray(lead.bucketHistory) && lead.bucketHistory.some((h: any) => {
+      const nb = (h.newBucket || h.toBucket || h.bucket || '').toLowerCase().trim();
+      const author = (h.author || '').toLowerCase();
+      const notes = (h.notes || '').toLowerCase();
+      return (nb === 'account_manager' || nb === 'account manager') && 
+        (author.includes('localmile') || notes.includes('localmile') || notes.includes('trial'));
+    })) ||
+    (lead.statusHistory && Array.isArray(lead.statusHistory) && lead.statusHistory.some((s: any) => 
+      (s.newStatus && s.newStatus.toLowerCase().includes('localmile')) || (s.reason || '').toLowerCase().includes('localmile')
+    ));
+
+  if (hasLmTrigger) return 'localmile';
+
+  // 3. Check activity logs if provided
+  if (allActivities && Array.isArray(allActivities)) {
+    const leadActs = allActivities.filter(a => a.leadId === lead.id);
+    const hasApptAct = leadActs.some(a => {
+      const n = (a.notes || '').toLowerCase();
+      return n.includes('appointment booked') || n.includes('appointment booking');
+    });
+    if (hasApptAct) return 'appointment';
+    const hasLmAct = leadActs.some(a => {
+      const n = (a.notes || '').toLowerCase();
+      return n.includes('localmile trial') || n.includes('localmile opportunity') || n.includes('localmile pending') || n.includes('localmile.plus');
+    });
+    if (hasLmAct) return 'localmile';
+  }
+
+  // 4. Default to manual reassignment / other
+  return 'manual';
+}
+
+export function formatAmHandoverTriggerLabel(trigger: AmHandoverTrigger): string {
+  switch (trigger) {
+    case 'appointment':
+      return 'Appointment Booked';
+    case 'localmile':
+      return 'LocalMile Trigger';
+    case 'manual':
+      return 'Manual Reassignment';
+    default:
+      return 'Other';
+  }
+}
+
+
 function safeParseDate(val: any): Date | null {
   if (!val) return null;
   if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
