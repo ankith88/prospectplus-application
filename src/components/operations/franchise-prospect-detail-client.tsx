@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FranchiseProspect, KeyFactSheetData, KeyFactSheetHistoryColumn, DepositDetails, EOIData, ConfidentialityDeedData, ProspectDocument, NABFundingDetails } from '@/lib/types';
+import { FranchiseProspect, KeyFactSheetData, KeyFactSheetHistoryColumn, DepositDetails, EOIData, ConfidentialityDeedData, ProspectDocument, NABFundingDetails, RequestForDocsData, DisclosureDocumentData, FranchiseAgreementData, OperationalTrainingSchedule } from '@/lib/types';
 import { firestore, storage } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -46,12 +46,16 @@ import {
   Download,
   Save,
   Tag,
+  Clock,
+  CheckSquare,
+  FileCheck2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { AccessDenied } from '@/components/access-denied';
 import { CreateUserDialog } from '@/components/admin/create-user-dialog';
 import { encodeProspectToken } from '@/lib/presale-token';
+import { differenceInCalendarDays, parseISO, addDays, format } from 'date-fns';
 
 function getInitialFyColumns(): KeyFactSheetHistoryColumn[] {
   const now = new Date();
@@ -366,6 +370,63 @@ export default function FranchiseProspectDetailClient() {
     notes: '',
   });
   const [savingDeposit, setSavingDeposit] = useState(false);
+
+  // Step 6: Request for Docs (Lawyer Anna Trist) State
+  const [savingRFD, setSavingRFD] = useState(false);
+  const [instructingAnna, setInstructingAnna] = useState(false);
+  const [rfdForm, setRfdForm] = useState({
+    incomingEntityName: '',
+    abn: '',
+    registeredAddress: '',
+    email: '',
+    mobile: '',
+    outgoingFranchiseeName: '',
+    businessName: '',
+    territoryName: '',
+    territoryMapUrl: '',
+    termYears: 5,
+    commencementDate: '',
+    expiryDate: '',
+    depositFee: 2000,
+    initialFranchiseFee: 25000,
+    renewalFee: 5000,
+    transferFee: 5000,
+    transactionFee: 1500,
+    serviceFeePercent: 25,
+    marketingLevyPercent: 5,
+    techLicenceFee: 250,
+    earningsProvided: false,
+    mpFinancingProvided: false,
+    vehicleRange: '$35,000 – $45,000 (Approved White Van)',
+    toolsOfTrade: '$3,500 (Scanner, Uniforms, Starter Kit)',
+    specialConditions: '',
+    reviewedByMatt: false,
+    chasedByMaddie: false,
+  });
+
+  // Step 7: Disclosure Document & 14-Day Statutory Rule State
+  const [disclosureBackdateInput, setDisclosureBackdateInput] = useState('');
+  const [savingDisclosureBackdate, setSavingDisclosureBackdate] = useState(false);
+  const [uploadingDisclosureReceipt, setUploadingDisclosureReceipt] = useState(false);
+  const [sendingDisclosureEmail, setSendingDisclosureEmail] = useState(false);
+
+  // Step 8: Franchise Agreement Execution State
+  const [uploadingFAPdf, setUploadingFAPdf] = useState(false);
+  const [executingFA, setExecutingFA] = useState(false);
+  const [syncingNetSuite, setSyncingNetSuite] = useState(false);
+
+  // Step 9: Role-Sequenced Operational Training Module State
+  const [savingTraining, setSavingTraining] = useState(false);
+  const [trainingForm, setTrainingForm] = useState({
+    confirmedStartDate: '',
+    salesTrainingDate: '',
+    salesStatus: 'pending' as 'pending' | 'scheduled' | 'completed',
+    appTrainingDate: '',
+    appStatus: 'pending' as 'pending' | 'scheduled' | 'completed',
+    billingTrainingDate: '',
+    billingStatus: 'pending' as 'pending' | 'scheduled' | 'completed',
+    syncGregCalendar: true,
+  });
 
   // Document Upload States
   const [uploadingDeed, setUploadingDeed] = useState(false);
@@ -1148,6 +1209,58 @@ export default function FranchiseProspectDetailClient() {
             `Congratulations on progressing in the MailPlus Franchise Selection process for ${territory}!\n\nThe next step is completing your official Expression of Interest (EOI) application form online.`,
         }));
 
+        // Step 6: Populate RFD Form
+        const rfd: any = data.requestForDocs || {};
+        const fees: any = rfd.fees || {};
+        const eoi: any = data.eoiData || {};
+        setRfdForm({
+          incomingEntityName: rfd.incomingEntityName || eoi.companyName || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+          abn: rfd.abn || eoi.abn || '',
+          registeredAddress: rfd.registeredAddress || eoi.registeredAddress || eoi.applicant1PrivateAddress || '',
+          email: rfd.email || data.email || eoi.applicant1Email || '',
+          mobile: rfd.mobile || data.phone || eoi.applicant1PhoneHome || '',
+          outgoingFranchiseeName: rfd.outgoingFranchiseeName || data.linkedFranchiseeName || '',
+          businessName: rfd.businessName || `Mail Plus – ${data.preferredTerritory || 'Territory'}`,
+          territoryName: rfd.territoryName || data.preferredTerritory || 'Exclusive Territory',
+          territoryMapUrl: rfd.territoryMapUrl || data.keyFactSheet?.territoryMapUrl || '',
+          termYears: rfd.termYears || 5,
+          commencementDate: rfd.commencementDate || new Date().toISOString().split('T')[0],
+          expiryDate: rfd.expiryDate || '',
+          depositFee: fees.deposit ?? 2000,
+          initialFranchiseFee: fees.initialFranchiseFee ?? 25000,
+          renewalFee: fees.renewalFee ?? 5000,
+          transferFee: fees.transferFee ?? 5000,
+          transactionFee: fees.transactionFee ?? 1500,
+          serviceFeePercent: fees.serviceFeePercent ?? 25,
+          marketingLevyPercent: fees.marketingLevyPercent ?? 5,
+          techLicenceFee: fees.techLicenceFee ?? 250,
+          earningsProvided: rfd.earningsProvided ?? false,
+          mpFinancingProvided: rfd.mpFinancingProvided ?? Boolean(data.nabFunding?.accreditationFundingRequired),
+          vehicleRange: rfd.capitalExpenditure?.vehicleRange || '$35,000 – $45,000 (Approved White Van)',
+          toolsOfTrade: rfd.capitalExpenditure?.toolsOfTrade || '$3,500 (Scanner, Uniforms, Starter Kit)',
+          specialConditions: rfd.specialConditions || '',
+          reviewedByMatt: Boolean(rfd.reviewedByMatt),
+          chasedByMaddie: Boolean(rfd.chasedByMaddie),
+        });
+
+        // Step 7: Populate Disclosure Backdate
+        if (data.disclosureDocument?.receiptSignedAt) {
+          setDisclosureBackdateInput(data.disclosureDocument.receiptSignedAt.split('T')[0]);
+        }
+
+        // Step 9: Populate Training Form
+        const trn: any = data.trainingSchedule || {};
+        setTrainingForm({
+          confirmedStartDate: trn.confirmedStartDate ? trn.confirmedStartDate.split('T')[0] : '',
+          salesTrainingDate: trn.salesTraining?.scheduledDate ? trn.salesTraining.scheduledDate.split('T')[0] : '',
+          salesStatus: trn.salesTraining?.status || 'pending',
+          appTrainingDate: trn.appPustraining?.scheduledDate ? trn.appPustraining.scheduledDate.split('T')[0] : '',
+          appStatus: trn.appPustraining?.status || 'pending',
+          billingTrainingDate: trn.billingTraining?.scheduledDate ? trn.billingTraining.scheduledDate.split('T')[0] : '',
+          billingStatus: trn.billingTraining?.status || 'pending',
+          syncGregCalendar: trn.gregCalendarSynced ?? true,
+        });
+
         // Automatically set initial active tab based on candidate progress
         const deedDone = data.confidentialityDeed?.status === 'signed_online' || data.confidentialityDeed?.status === 'uploaded' || Boolean(data.confidentialityDeed?.documents && data.confidentialityDeed.documents.length > 0);
         const kfsDone = Boolean(data.keyFactSheet?.publicToken);
@@ -1759,6 +1872,362 @@ export default function FranchiseProspectDetailClient() {
       toast({ variant: 'destructive', title: 'Save Failed', description: error.message || 'Could not save deposit.' });
     } finally {
       setSavingDeposit(false);
+    }
+  };
+
+  // Step 6: RFD Handlers
+  const handleSaveRFD = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!prospect) return;
+    setSavingRFD(true);
+    try {
+      const payload = {
+        prospectId: prospect.id,
+        token: rfdToken,
+        requestForDocs: {
+          incomingEntityName: rfdForm.incomingEntityName,
+          abn: rfdForm.abn,
+          registeredAddress: rfdForm.registeredAddress,
+          email: rfdForm.email,
+          mobile: rfdForm.mobile,
+          outgoingFranchiseeName: rfdForm.outgoingFranchiseeName,
+          businessName: rfdForm.businessName,
+          territoryName: rfdForm.territoryName,
+          territoryMapUrl: rfdForm.territoryMapUrl,
+          termYears: Number(rfdForm.termYears) || 5,
+          commencementDate: rfdForm.commencementDate,
+          expiryDate: rfdForm.expiryDate,
+          fees: {
+            deposit: Number(rfdForm.depositFee) || 2000,
+            initialFranchiseFee: Number(rfdForm.initialFranchiseFee) || 25000,
+            renewalFee: Number(rfdForm.renewalFee) || 5000,
+            transferFee: Number(rfdForm.transferFee) || 5000,
+            transactionFee: Number(rfdForm.transactionFee) || 1500,
+            serviceFeePercent: Number(rfdForm.serviceFeePercent) || 25,
+            marketingLevyPercent: Number(rfdForm.marketingLevyPercent) || 5,
+            techLicenceFee: Number(rfdForm.techLicenceFee) || 250,
+          },
+          earningsProvided: Boolean(rfdForm.earningsProvided),
+          mpFinancingProvided: Boolean(rfdForm.mpFinancingProvided),
+          capitalExpenditure: {
+            vehicleRange: rfdForm.vehicleRange,
+            toolsOfTrade: rfdForm.toolsOfTrade,
+          },
+          specialConditions: rfdForm.specialConditions,
+          reviewedByMatt: Boolean(rfdForm.reviewedByMatt),
+          reviewedByMattAt: rfdForm.reviewedByMatt ? new Date().toISOString() : undefined,
+          chasedByMaddie: Boolean(rfdForm.chasedByMaddie),
+          chasedByMaddieAt: rfdForm.chasedByMaddie ? new Date().toISOString() : undefined,
+        },
+      };
+
+      const res = await fetch('/api/sign/request-for-docs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.message || 'Failed to save RFD details');
+
+      toast({ title: 'Request for Docs Saved', description: 'Legal instruction parameters updated.' });
+      fetchProspect();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Save Failed', description: error.message });
+    } finally {
+      setSavingRFD(false);
+    }
+  };
+
+  const handleInstructAnna = async () => {
+    if (!prospect) return;
+    setInstructingAnna(true);
+    try {
+      const payload = {
+        prospectId: prospect.id,
+        token: rfdToken,
+        action: 'instruct_lawyer',
+        requestForDocs: {
+          incomingEntityName: rfdForm.incomingEntityName,
+          abn: rfdForm.abn,
+          registeredAddress: rfdForm.registeredAddress,
+          email: rfdForm.email,
+          mobile: rfdForm.mobile,
+          outgoingFranchiseeName: rfdForm.outgoingFranchiseeName,
+          businessName: rfdForm.businessName,
+          territoryName: rfdForm.territoryName,
+          territoryMapUrl: rfdForm.territoryMapUrl,
+          termYears: Number(rfdForm.termYears) || 5,
+          commencementDate: rfdForm.commencementDate,
+          expiryDate: rfdForm.expiryDate,
+          fees: {
+            deposit: Number(rfdForm.depositFee) || 2000,
+            initialFranchiseFee: Number(rfdForm.initialFranchiseFee) || 25000,
+            renewalFee: Number(rfdForm.renewalFee) || 5000,
+            transferFee: Number(rfdForm.transferFee) || 5000,
+            transactionFee: Number(rfdForm.transactionFee) || 1500,
+            serviceFeePercent: Number(rfdForm.serviceFeePercent) || 25,
+            marketingLevyPercent: Number(rfdForm.marketingLevyPercent) || 5,
+            techLicenceFee: Number(rfdForm.techLicenceFee) || 250,
+          },
+          earningsProvided: Boolean(rfdForm.earningsProvided),
+          mpFinancingProvided: Boolean(rfdForm.mpFinancingProvided),
+          specialConditions: rfdForm.specialConditions,
+          reviewedByMatt: Boolean(rfdForm.reviewedByMatt),
+          chasedByMaddie: Boolean(rfdForm.chasedByMaddie),
+        },
+      };
+
+      const res = await fetch('/api/sign/request-for-docs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.message || 'Failed to instruct lawyer');
+
+      const refDoc = doc(firestore, 'franchise_prospects', prospect.id);
+      const newNote = {
+        id: Math.random().toString(36).substring(2, 9),
+        text: `Formal legal instructions dispatched to Lawyer Anna Trist for ${rfdForm.territoryName || prospect.preferredTerritory}. Request for Docs status updated to "Instructed".`,
+        createdAt: new Date().toISOString(),
+        createdByName: userProfile?.displayName || userProfile?.email || 'Operations User',
+        createdByUid: userProfile?.uid || 'system',
+      };
+      await updateDoc(refDoc, {
+        status: 'Legal Instructions Sent',
+        notes: [...(prospect.notes || []), newNote],
+      });
+
+      toast({ title: 'Lawyer Anna Trist Instructed', description: 'Request for Docs status updated to "Instructed".' });
+      fetchProspect();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Instruction Failed', description: error.message });
+    } finally {
+      setInstructingAnna(false);
+    }
+  };
+
+  // Step 7: Disclosure Handlers
+  const handleSaveDisclosureBackdate = async () => {
+    if (!disclosureBackdateInput) {
+      toast({ variant: 'destructive', title: 'Date Required', description: 'Please select a date for the disclosure receipt.' });
+      return;
+    }
+    setSavingDisclosureBackdate(true);
+    try {
+      await handleBackdateDisclosure(disclosureBackdateInput);
+    } finally {
+      setSavingDisclosureBackdate(false);
+    }
+  };
+
+  const handleUploadDisclosureReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !prospect) return;
+    setUploadingDisclosureReceipt(true);
+    try {
+      const file = files[0];
+      const storageRef = ref(storage, `franchise_prospects/${prospect.id}/disclosure_receipts/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+
+      const nowIso = new Date().toISOString();
+      const earliestIso = addDays(new Date(), 14).toISOString();
+
+      const refDoc = doc(firestore, 'franchise_prospects', prospect.id);
+      const updatedDisc: DisclosureDocumentData = {
+        ...(prospect.disclosureDocument || { publicToken: discToken, dispatchMethod: 'electronic' }),
+        status: 'receipt_signed',
+        receiptSignedAt: nowIso,
+        receiptUploadedAt: nowIso,
+        receiptPdfUrl: url,
+        earliestFranchiseAgreementExecutionDate: earliestIso,
+      };
+
+      const newNote = {
+        id: Math.random().toString(36).substring(2, 9),
+        text: `Uploaded signed Disclosure Document receipt (${file.name}). 14-day statutory waiting period initiated (Earliest FA execution: ${new Date(earliestIso).toLocaleDateString('en-AU')}).`,
+        createdAt: nowIso,
+        createdByName: userProfile?.displayName || 'Operations User',
+        createdByUid: userProfile?.uid || 'system',
+      };
+
+      await updateDoc(refDoc, {
+        disclosureDocument: updatedDisc,
+        status: 'Disclosure 14-Day Lock',
+        notes: [...(prospect.notes || []), newNote],
+      });
+
+      toast({ title: 'Disclosure Receipt Uploaded', description: '14-day statutory cooling timer active.' });
+      fetchProspect();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message || 'Could not upload receipt.' });
+    } finally {
+      setUploadingDisclosureReceipt(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  // Step 8: Franchise Agreement Handlers
+  const handleUploadFAPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !prospect) return;
+    setUploadingFAPdf(true);
+    try {
+      const file = files[0];
+      const storageRef = ref(storage, `franchise_prospects/${prospect.id}/franchise_agreements/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+
+      const nowIso = new Date().toISOString();
+      const refDoc = doc(firestore, 'franchise_prospects', prospect.id);
+      const updatedFA: FranchiseAgreementData = {
+        ...(prospect.franchiseAgreement || { publicToken: faToken }),
+        status: 'completed',
+        executionType: 'wet_ink',
+        executedAt: nowIso,
+        signedPdfUrl: url,
+        netSuiteSyncStatus: 'manual_pending',
+      };
+
+      const newNote = {
+        id: Math.random().toString(36).substring(2, 9),
+        text: `Uploaded fully executed Franchise Agreement (${file.name}). Candidate is ready for role-sequenced training.`,
+        createdAt: nowIso,
+        createdByName: userProfile?.displayName || 'Operations User',
+        createdByUid: userProfile?.uid || 'system',
+      };
+
+      await updateDoc(refDoc, {
+        franchiseAgreement: updatedFA,
+        status: 'FA Executed',
+        notes: [...(prospect.notes || []), newNote],
+      });
+
+      toast({ title: 'Franchise Agreement Uploaded', description: 'Execution logged. Step 9 Training is now unlocked.' });
+      fetchProspect();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message || 'Could not upload agreement.' });
+    } finally {
+      setUploadingFAPdf(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleExecuteFAOnline = async () => {
+    if (!prospect) return;
+    setExecutingFA(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const refDoc = doc(firestore, 'franchise_prospects', prospect.id);
+      const updatedFA: FranchiseAgreementData = {
+        ...(prospect.franchiseAgreement || { publicToken: faToken }),
+        status: 'signed_online',
+        executionType: 'digital',
+        executedAt: nowIso,
+        signerName: `${prospect.firstName || ''} ${prospect.lastName || ''}`.trim() || 'Franchisee Signer',
+        signerEmail: prospect.email,
+        netSuiteSyncStatus: 'manual_pending',
+      };
+
+      const newNote = {
+        id: Math.random().toString(36).substring(2, 9),
+        text: `Franchise Agreement executed digitally online via R-Sign / Secure Portal. Status updated to "FA Executed".`,
+        createdAt: nowIso,
+        createdByName: userProfile?.displayName || 'Operations User',
+        createdByUid: userProfile?.uid || 'system',
+      };
+
+      await updateDoc(refDoc, {
+        franchiseAgreement: updatedFA,
+        status: 'FA Executed',
+        notes: [...(prospect.notes || []), newNote],
+      });
+
+      toast({ title: 'Agreement Executed', description: 'Franchise Agreement execution recorded successfully.' });
+      fetchProspect();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Execution Failed', description: err.message });
+    } finally {
+      setExecutingFA(false);
+    }
+  };
+
+  const handleSyncNetSuite = async () => {
+    if (!prospect) return;
+    setSyncingNetSuite(true);
+    try {
+      const refDoc = doc(firestore, 'franchise_prospects', prospect.id);
+      const newNote = {
+        id: Math.random().toString(36).substring(2, 9),
+        text: `Synchronized Franchisee entity and billing profile with NetSuite CRM.`,
+        createdAt: new Date().toISOString(),
+        createdByName: userProfile?.displayName || 'Operations User',
+        createdByUid: userProfile?.uid || 'system',
+      };
+      await updateDoc(refDoc, {
+        'franchiseAgreement.netSuiteSyncStatus': 'auto_synced',
+        notes: [...(prospect.notes || []), newNote],
+      });
+      toast({ title: 'NetSuite Synced', description: 'Franchisee record synchronized with NetSuite.' });
+      fetchProspect();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Sync Failed', description: err.message });
+    } finally {
+      setSyncingNetSuite(false);
+    }
+  };
+
+  // Step 9: Training Handlers
+  const handleSaveTrainingSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prospect) return;
+    if (!trainingForm.confirmedStartDate) {
+      toast({ variant: 'destructive', title: 'Start Date Required', description: 'Please set the confirmed start date.' });
+      return;
+    }
+    setSavingTraining(true);
+    try {
+      const payload = {
+        prospectId: prospect.id,
+        confirmedStartDate: trainingForm.confirmedStartDate,
+        salesTrainingDate: trainingForm.salesTrainingDate || null,
+        appPusTrainingDate: trainingForm.appTrainingDate || null,
+        billingTrainingDate: trainingForm.billingTrainingDate || null,
+        syncGregCalendar: trainingForm.syncGregCalendar,
+      };
+
+      const res = await fetch('/api/franchise-prospects/training', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.message || 'Failed to update training schedule');
+
+      const refDoc = doc(firestore, 'franchise_prospects', prospect.id);
+      const newNote = {
+        id: Math.random().toString(36).substring(2, 9),
+        text: `Operational Training modules scheduled: Sales (Aleyna: ${trainingForm.salesTrainingDate || 'TBD'}), App Pus (Ops Lead: ${trainingForm.appTrainingDate || 'TBD'}), Billing (Popie: ${trainingForm.billingTrainingDate || 'TBD'}). Greg Hart calendar sync: ${trainingForm.syncGregCalendar ? 'Yes' : 'No'}.`,
+        createdAt: new Date().toISOString(),
+        createdByName: userProfile?.displayName || 'Operations User',
+        createdByUid: userProfile?.uid || 'system',
+      };
+
+      await updateDoc(refDoc, {
+        status: 'Training Scheduled',
+        notes: [...(prospect.notes || []), newNote],
+      });
+
+      toast({ title: 'Training Schedule Saved', description: json.message });
+      fetchProspect();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
+    } finally {
+      setSavingTraining(false);
     }
   };
 
@@ -3882,6 +4351,835 @@ export default function FranchiseProspectDetailClient() {
                         </Button>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 6: Request for Docs Legal Instructions (Lawyer Anna Trist) */}
+              {activeTab === 6 && (
+                <div className="space-y-6">
+                  {/* Top Header & Public Link Banner */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-teal-50/80 border border-teal-200 rounded-xl">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-teal-700" />
+                        <span className="text-sm font-bold text-teal-950 uppercase tracking-wider">
+                          Legal Instruction Pack for Lawyer Anna Trist
+                        </span>
+                        <Badge className={prospect.requestForDocs?.status === 'instructed' ? 'bg-emerald-600 text-white font-bold' : 'bg-teal-600 text-white font-bold'}>
+                          {prospect.requestForDocs?.status === 'instructed' ? 'Anna Instructed ✓' : 'Drafting Stage'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-teal-900">
+                        {prospect.requestForDocs?.status === 'instructed'
+                          ? `Instructed by ${prospect.requestForDocs.instructedBy || 'Operations'} on ${prospect.requestForDocs.instructedAt ? new Date(prospect.requestForDocs.instructedAt).toLocaleDateString('en-AU') : 'Recently'}.`
+                          : 'Review and confirm the legal instructions below before formal dispatch to Anna Trist.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCopyLink(rfdPublicUrl, 'Request for Docs')}
+                        className="text-xs bg-white border-teal-300 text-teal-900 hover:bg-teal-100"
+                      >
+                        <Copy className="h-3.5 w-3.5 mr-1" /> Copy Legal Link
+                      </Button>
+                      <Link href={`/sign/request-for-docs/${rfdToken}`} target="_blank">
+                        <Button size="sm" className="bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold gap-1">
+                          <Eye className="h-3.5 w-3.5" /> View Live Doc <ExternalLink className="h-3 w-3" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Internal Review Checkpoints (Matt & Maddie) */}
+                  <div className="p-4 bg-slate-50 border rounded-xl space-y-3">
+                    <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">
+                      Internal Pre-Flight Sign-Offs
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <label className="flex items-start gap-3 p-3 bg-white border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={rfdForm.reviewedByMatt}
+                          onChange={(e) => setRfdForm({ ...rfdForm, reviewedByMatt: e.target.checked })}
+                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b]"
+                        />
+                        <div className="text-xs space-y-0.5">
+                          <span className="font-bold text-slate-900 block">Reviewed by Matt</span>
+                          <span className="text-slate-500 block text-[11px]">
+                            Commercial terms, commission adjustments, and fee schedule verified.
+                          </span>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start gap-3 p-3 bg-white border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={rfdForm.chasedByMaddie}
+                          onChange={(e) => setRfdForm({ ...rfdForm, chasedByMaddie: e.target.checked })}
+                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b]"
+                        />
+                        <div className="text-xs space-y-0.5">
+                          <span className="font-bold text-slate-900 block">Chased / Tracked by Maddie</span>
+                          <span className="text-slate-500 block text-[11px]">
+                            Applicant documents, ID verification, and guarantor proofs collected.
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Instruction Parameters Form */}
+                  <form onSubmit={handleSaveRFD} className="space-y-5">
+                    {/* Section 1: Entity & Contact */}
+                    <div className="p-4 bg-white border rounded-xl space-y-4">
+                      <h4 className="text-xs font-bold text-[#095c7b] uppercase tracking-wider border-b pb-2">
+                        1. Incoming Franchisee Legal Entity & Contacts
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Legal Entity Name</label>
+                          <Input
+                            value={rfdForm.incomingEntityName}
+                            onChange={(e) => setRfdForm({ ...rfdForm, incomingEntityName: e.target.value })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">ABN</label>
+                          <Input
+                            value={rfdForm.abn}
+                            onChange={(e) => setRfdForm({ ...rfdForm, abn: e.target.value })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Email Address</label>
+                          <Input
+                            value={rfdForm.email}
+                            onChange={(e) => setRfdForm({ ...rfdForm, email: e.target.value })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Mobile Phone</label>
+                          <Input
+                            value={rfdForm.mobile}
+                            onChange={(e) => setRfdForm({ ...rfdForm, mobile: e.target.value })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="sm:col-span-2 space-y-1">
+                          <label className="font-semibold text-slate-700">Registered Business Address</label>
+                          <Input
+                            value={rfdForm.registeredAddress}
+                            onChange={(e) => setRfdForm({ ...rfdForm, registeredAddress: e.target.value })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Territory & Contract Term */}
+                    <div className="p-4 bg-white border rounded-xl space-y-4">
+                      <h4 className="text-xs font-bold text-[#095c7b] uppercase tracking-wider border-b pb-2">
+                        2. Territory Details & Franchise Agreement Term
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Territory Name</label>
+                          <Input
+                            value={rfdForm.territoryName}
+                            onChange={(e) => setRfdForm({ ...rfdForm, territoryName: e.target.value })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Outgoing Franchisee</label>
+                          <Input
+                            value={rfdForm.outgoingFranchiseeName}
+                            onChange={(e) => setRfdForm({ ...rfdForm, outgoingFranchiseeName: e.target.value })}
+                            placeholder="e.g. Smith Logistics Pty Ltd"
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Contract Term (Years)</label>
+                          <Input
+                            type="number"
+                            value={rfdForm.termYears}
+                            onChange={(e) => setRfdForm({ ...rfdForm, termYears: Number(e.target.value) || 5 })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Commencement Date</label>
+                          <Input
+                            type="date"
+                            value={rfdForm.commencementDate}
+                            onChange={(e) => setRfdForm({ ...rfdForm, commencementDate: e.target.value })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Expiry Date</label>
+                          <Input
+                            type="date"
+                            value={rfdForm.expiryDate}
+                            onChange={(e) => setRfdForm({ ...rfdForm, expiryDate: e.target.value })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Territory Map URL</label>
+                          <Input
+                            value={rfdForm.territoryMapUrl}
+                            onChange={(e) => setRfdForm({ ...rfdForm, territoryMapUrl: e.target.value })}
+                            placeholder="https://..."
+                            className="text-xs h-8"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 3: Commercial Fees & Special Conditions */}
+                    <div className="p-4 bg-white border rounded-xl space-y-4">
+                      <h4 className="text-xs font-bold text-[#095c7b] uppercase tracking-wider border-b pb-2">
+                        3. Agreed Commercial Fees & Special Instructions
+                      </h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Initial Franchise Fee ($)</label>
+                          <Input
+                            type="number"
+                            value={rfdForm.initialFranchiseFee}
+                            onChange={(e) => setRfdForm({ ...rfdForm, initialFranchiseFee: Number(e.target.value) || 0 })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Deposit Paid ($)</label>
+                          <Input
+                            type="number"
+                            value={rfdForm.depositFee}
+                            onChange={(e) => setRfdForm({ ...rfdForm, depositFee: Number(e.target.value) || 0 })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Service Fee (%)</label>
+                          <Input
+                            type="number"
+                            value={rfdForm.serviceFeePercent}
+                            onChange={(e) => setRfdForm({ ...rfdForm, serviceFeePercent: Number(e.target.value) || 25 })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Marketing Levy (%)</label>
+                          <Input
+                            type="number"
+                            value={rfdForm.marketingLevyPercent}
+                            onChange={(e) => setRfdForm({ ...rfdForm, marketingLevyPercent: Number(e.target.value) || 5 })}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5 pt-2">
+                        <label className="font-semibold text-slate-700 text-xs">Special Legal Conditions / Instructions for Anna Trist</label>
+                        <textarea
+                          value={rfdForm.specialConditions}
+                          onChange={(e) => setRfdForm({ ...rfdForm, specialConditions: e.target.value })}
+                          rows={3}
+                          placeholder="Add any non-standard clauses, territory exemptions, vehicle requirements, or custom conditions..."
+                          className="w-full text-xs p-2.5 border rounded-lg focus:ring-2 focus:ring-[#095c7b] outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Action Bar */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                      <Button
+                        type="submit"
+                        disabled={savingRFD}
+                        variant="outline"
+                        className="w-full sm:w-auto text-xs font-semibold"
+                      >
+                        {savingRFD ? <Loader className="h-4 w-4 animate-spin mr-1.5" /> : <Save className="h-4 w-4 mr-1.5" />}
+                        Save Instruction Draft
+                      </Button>
+
+                      <Button
+                        type="button"
+                        onClick={handleInstructAnna}
+                        disabled={instructingAnna}
+                        className="w-full sm:w-auto bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold px-6 py-2.5 shadow-sm gap-1.5"
+                      >
+                        {instructingAnna ? <Loader className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Dispatch Instructions to Lawyer Anna Trist (Mark Instructed)
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* STEP 7: Disclosure Document & 14-Day Statutory Rule */}
+              {activeTab === 7 && (() => {
+                const isReceiptSigned = Boolean(prospect.disclosureDocument?.receiptSignedAt);
+                const receiptSignedDate = prospect.disclosureDocument?.receiptSignedAt ? parseISO(prospect.disclosureDocument.receiptSignedAt) : null;
+                const earliestDate = prospect.disclosureDocument?.earliestFranchiseAgreementExecutionDate
+                  ? parseISO(prospect.disclosureDocument.earliestFranchiseAgreementExecutionDate)
+                  : (receiptSignedDate ? addDays(receiptSignedDate, 14) : null);
+                const now = new Date();
+                const daysRemaining = earliestDate ? Math.max(0, differenceInCalendarDays(earliestDate, now)) : 14;
+                const isStatutoryComplete = isReceiptSigned && earliestDate ? (now >= earliestDate) : false;
+
+                return (
+                  <div className="space-y-6">
+                    {/* Compliance Alert Box */}
+                    <div className="p-4 bg-rose-50/80 border border-rose-200 rounded-xl space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Lock className="h-5 w-5 text-rose-700" />
+                        <span className="text-sm font-bold text-rose-950 uppercase tracking-wider">
+                          Australian Franchising Code of Conduct — 14-Day Statutory Cooling Rule
+                        </span>
+                      </div>
+                      <p className="text-xs text-rose-900 leading-relaxed">
+                        Under Australian Franchising Law, a Franchise Agreement <strong>cannot legally be signed</strong> until a minimum of <strong>14 clear statutory days</strong> have elapsed after the prospective franchisee receives and acknowledges the formal Disclosure Document & Key Fact Sheet.
+                      </p>
+                    </div>
+
+                    {/* 14-Day Countdown & Status Gauge */}
+                    <div className={`p-5 rounded-xl border-2 space-y-4 ${
+                      isStatutoryComplete
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-950'
+                        : isReceiptSigned
+                        ? 'bg-amber-50 border-amber-300 text-amber-950'
+                        : 'bg-slate-50 border-slate-300 text-slate-800'
+                    }`}>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b pb-3">
+                        <div>
+                          <span className="text-xs font-bold uppercase tracking-wider block">Statutory Disclosure Status</span>
+                          <span className="text-sm font-extrabold mt-0.5 block">
+                            {isStatutoryComplete
+                              ? '✓ 14-Day Statutory Period Complete — Franchise Agreement Unlocked'
+                              : isReceiptSigned
+                              ? `14-Day Lock Active — ${daysRemaining} Day${daysRemaining === 1 ? '' : 's'} Remaining`
+                              : 'Waiting for Signed Disclosure Document Receipt'}
+                          </span>
+                        </div>
+                        <Badge className={
+                          isStatutoryComplete
+                            ? 'bg-emerald-600 text-white font-bold'
+                            : isReceiptSigned
+                            ? 'bg-amber-600 text-white font-bold'
+                            : 'bg-slate-600 text-white font-bold'
+                        }>
+                          {isStatutoryComplete ? 'Unlocked for FA' : isReceiptSigned ? `Day ${14 - daysRemaining} of 14` : 'Receipt Pending'}
+                        </Badge>
+                      </div>
+
+                      {/* Detail Metric Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div className="p-3 bg-white rounded-lg border">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">RECEIPT SIGNED AT</span>
+                          <span className="font-bold text-slate-900 block mt-1">
+                            {receiptSignedDate ? receiptSignedDate.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Not yet signed'}
+                          </span>
+                        </div>
+                        <div className="p-3 bg-white rounded-lg border">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">EARLIEST FA EXECUTION DATE</span>
+                          <span className="font-bold text-[#095c7b] block mt-1">
+                            {earliestDate ? earliestDate.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Calculated upon signature'}
+                          </span>
+                        </div>
+                        <div className="p-3 bg-white rounded-lg border">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">DAYS REMAINING</span>
+                          <span className={`font-extrabold block mt-1 text-sm ${daysRemaining === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {isReceiptSigned ? (daysRemaining === 0 ? '0 Days (Complete)' : `${daysRemaining} Day${daysRemaining === 1 ? '' : 's'}`) : '14 Days'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Candidate Portal Link & Offline Backdate Utility */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Left: Online E-Sign Portal */}
+                      <div className="p-4 bg-white border rounded-xl space-y-3">
+                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">
+                          Online Disclosure Receipt Portal
+                        </span>
+                        <p className="text-xs text-slate-600">
+                          Candidate can electronically review the Disclosure Document and sign the statutory receipt online.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCopyLink(discPublicUrl, 'Disclosure Receipt')}
+                            className="text-xs flex-1"
+                          >
+                            <Copy className="h-3.5 w-3.5 mr-1" /> Copy Receipt Link
+                          </Button>
+                          <Link href={`/sign/disclosure/${discToken}`} target="_blank" className="flex-1">
+                            <Button size="sm" className="w-full bg-[#095c7b] hover:bg-[#074760] text-white text-xs font-bold">
+                              <Eye className="h-3.5 w-3.5 mr-1" /> Open Portal
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+
+                      {/* Right: Upload Wet-Ink Signed Receipt Scan */}
+                      <div className="p-4 bg-white border rounded-xl space-y-3">
+                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">
+                          Upload Wet-Ink Signed Receipt Scan
+                        </span>
+                        <p className="text-xs text-slate-600">
+                          If candidate signed a physical paper disclosure receipt, upload the scanned PDF/image here.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <label className="flex-1">
+                            <input
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg"
+                              disabled={uploadingDisclosureReceipt}
+                              onChange={handleUploadDisclosureReceipt}
+                              className="hidden"
+                            />
+                            <Button
+                              type="button"
+                              disabled={uploadingDisclosureReceipt}
+                              className="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold"
+                              asChild
+                            >
+                              <span>
+                                {uploadingDisclosureReceipt ? <Loader className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+                                Upload Signed Receipt
+                              </span>
+                            </Button>
+                          </label>
+                          {prospect.disclosureDocument?.receiptPdfUrl && (
+                            <Link href={prospect.disclosureDocument.receiptPdfUrl} target="_blank">
+                              <Button size="sm" variant="outline" className="text-xs text-emerald-700 border-emerald-300">
+                                <Download className="h-3.5 w-3.5 mr-1" /> View Receipt
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Anna Trist Historical Backdate Utility */}
+                    <div className="p-4 bg-slate-50 border rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                          <Clock className="h-4 w-4" /> Anna Trist Disclosure Backdate Override
+                        </span>
+                        <Badge variant="outline" className="text-[10px] text-slate-500">
+                          For Prior Physical Delivery
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-slate-600">
+                        If the Disclosure Document was delivered to the candidate prior to logging into ProspectPlus, specify the historical delivery date below to adjust the 14-day statutory lock window accordingly.
+                      </p>
+                      <div className="flex flex-col sm:flex-row items-center gap-3 pt-1">
+                        <Input
+                          type="date"
+                          value={disclosureBackdateInput}
+                          onChange={(e) => setDisclosureBackdateInput(e.target.value)}
+                          className="text-xs h-9 bg-white max-w-xs"
+                        />
+                        <Button
+                          type="button"
+                          onClick={handleSaveDisclosureBackdate}
+                          disabled={savingDisclosureBackdate || !disclosureBackdateInput}
+                          className="bg-[#095c7b] hover:bg-[#074760] text-white text-xs font-bold shrink-0"
+                        >
+                          {savingDisclosureBackdate ? <Loader className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
+                          Set Historical Receipt Date
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* STEP 8: Franchise Agreement Execution & NetSuite Sync */}
+              {activeTab === 8 && (() => {
+                const isReceiptSigned = Boolean(prospect.disclosureDocument?.receiptSignedAt);
+                const receiptSignedDate = prospect.disclosureDocument?.receiptSignedAt ? parseISO(prospect.disclosureDocument.receiptSignedAt) : null;
+                const earliestDate = prospect.disclosureDocument?.earliestFranchiseAgreementExecutionDate
+                  ? parseISO(prospect.disclosureDocument.earliestFranchiseAgreementExecutionDate)
+                  : (receiptSignedDate ? addDays(receiptSignedDate, 14) : null);
+                const now = new Date();
+                const daysRemaining = earliestDate ? Math.max(0, differenceInCalendarDays(earliestDate, now)) : 14;
+                const isFaUnlocked = isReceiptSigned && earliestDate ? (now >= earliestDate) : false;
+                const isFaExecuted = Boolean(prospect.franchiseAgreement?.executedAt);
+
+                return (
+                  <div className="space-y-6">
+                    {/* Execution Gate Banner */}
+                    {!isFaUnlocked && !isFaExecuted ? (
+                      <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Lock className="h-5 w-5 text-amber-700" />
+                          <span className="text-sm font-bold text-amber-950 uppercase tracking-wider">
+                            Franchise Agreement Hard-Locked (14-Day Rule Active)
+                          </span>
+                        </div>
+                        <p className="text-xs text-amber-900 leading-relaxed">
+                          Under Franchising Code compliance, this agreement is currently hard-locked until <strong>{earliestDate ? earliestDate.toLocaleDateString('en-AU') : '14 days post-disclosure'}</strong> ({daysRemaining} days remaining).
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-xl space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-5 w-5 text-emerald-700" />
+                          <span className="text-sm font-bold text-emerald-950 uppercase tracking-wider">
+                            {isFaExecuted ? 'Franchise Agreement Fully Executed ✓' : 'Statutory Period Passed — Ready for Execution'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-emerald-900 leading-relaxed">
+                          {isFaExecuted
+                            ? `Executed on ${new Date(prospect.franchiseAgreement!.executedAt!).toLocaleDateString('en-AU')} via ${prospect.franchiseAgreement?.executionType === 'wet_ink' ? 'Wet-Ink Upload' : 'Digital R-Sign Portal'}.`
+                            : 'The 14-day statutory waiting requirement is satisfied. You can now execute the Franchise Agreement digitally or upload signed scans.'}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Execution Options Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Option 1: Digital R-Sign Portal */}
+                      <div className="p-4 bg-white border rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">
+                            1. Digital Execution (R-Sign / Portal)
+                          </span>
+                          <Badge className={isFaExecuted ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'}>
+                            {isFaExecuted ? 'Executed' : 'Digital E-Sign'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-slate-600">
+                          Dispatches the agreement to candidate for digital signing, countersigned by Director Chris Burgess.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCopyLink(faPublicUrl, 'Franchise Agreement')}
+                            className="text-xs flex-1"
+                          >
+                            <Copy className="h-3.5 w-3.5 mr-1" /> Copy FA Link
+                          </Button>
+                          <Link href={`/sign/franchise-agreement/${faToken}`} target="_blank" className="flex-1">
+                            <Button size="sm" className="w-full bg-[#095c7b] hover:bg-[#074760] text-white text-xs font-bold">
+                              <Eye className="h-3.5 w-3.5 mr-1" /> Open Portal
+                            </Button>
+                          </Link>
+                        </div>
+                        {!isFaExecuted && (
+                          <Button
+                            size="sm"
+                            onClick={handleExecuteFAOnline}
+                            disabled={executingFA}
+                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                          >
+                            {executingFA ? <Loader className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <PenTool className="h-3.5 w-3.5 mr-1.5" />}
+                            Record Digital Signature Online
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Option 2: Wet-Ink Scan Upload */}
+                      <div className="p-4 bg-white border rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">
+                            2. Wet-Ink Signed Agreement Scan
+                          </span>
+                          <Badge variant="outline" className="text-xs text-slate-600">
+                            Physical Paper Contract
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-slate-600">
+                          Attach the complete, countersigned wet-ink scanned Franchise Agreement PDF.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <label className="flex-1">
+                            <input
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg"
+                              disabled={uploadingFAPdf}
+                              onChange={handleUploadFAPdf}
+                              className="hidden"
+                            />
+                            <Button
+                              type="button"
+                              disabled={uploadingFAPdf}
+                              className="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold"
+                              asChild
+                            >
+                              <span>
+                                {uploadingFAPdf ? <Loader className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+                                Upload Executed Agreement
+                              </span>
+                            </Button>
+                          </label>
+                          {prospect.franchiseAgreement?.signedPdfUrl && (
+                            <Link href={prospect.franchiseAgreement.signedPdfUrl} target="_blank">
+                              <Button size="sm" variant="outline" className="text-xs text-emerald-700 border-emerald-300">
+                                <Download className="h-3.5 w-3.5 mr-1" /> View PDF
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* NetSuite CRM Integration Box */}
+                    <div className="p-4 bg-slate-50 border rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <Building className="h-4 w-4 text-[#095c7b]" />
+                          <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider">
+                            NetSuite CRM Franchisee Entity Sync
+                          </span>
+                          <Badge className={prospect.franchiseAgreement?.netSuiteSyncStatus === 'auto_synced' ? 'bg-emerald-600 text-white' : 'bg-amber-600 text-white'}>
+                            {prospect.franchiseAgreement?.netSuiteSyncStatus === 'auto_synced' ? 'NetSuite Synced ✓' : 'Sync Pending'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-slate-600">
+                          Pushes the executed franchisee entity, billing schedules, and territory boundary to NetSuite.
+                        </p>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        onClick={handleSyncNetSuite}
+                        disabled={syncingNetSuite || prospect.franchiseAgreement?.netSuiteSyncStatus === 'auto_synced'}
+                        className="bg-[#095c7b] hover:bg-[#074760] text-white text-xs font-bold shrink-0 gap-1.5"
+                      >
+                        {syncingNetSuite ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        {prospect.franchiseAgreement?.netSuiteSyncStatus === 'auto_synced' ? 'Re-Sync NetSuite' : 'Trigger NetSuite Sync'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* STEP 9: Role-Sequenced Operational Training Module */}
+              {activeTab === 9 && (
+                <div className="space-y-6">
+                  {/* Module Sequence Explanation Banner */}
+                  <div className="p-4 bg-blue-50/80 border border-blue-200 rounded-xl space-y-2">
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="h-5 w-5 text-blue-700" />
+                      <span className="text-sm font-bold text-blue-950 uppercase tracking-wider">
+                        Role-Sequenced Operational Training Curriculum (T-14 Days to Start)
+                      </span>
+                    </div>
+                    <p className="text-xs text-blue-900 leading-relaxed">
+                      Prior to taking over the territory, the incoming franchisee must complete 3 mandatory training tracks led by department heads. Dates are scheduled within the <strong>T-14 window</strong> before the confirmed commercial start date.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleSaveTrainingSchedule} className="space-y-5">
+                    {/* Confirmed Commercial Start Date */}
+                    <div className="p-4 bg-white border rounded-xl space-y-3">
+                      <div className="flex items-center justify-between border-b pb-2">
+                        <span className="text-xs font-bold text-[#095c7b] uppercase tracking-wider">
+                          1. Confirmed Commercial Start Date
+                        </span>
+                        <Badge variant="outline" className="text-xs text-slate-700">
+                          Territory Handover Date
+                        </Badge>
+                      </div>
+                      <div className="max-w-xs space-y-1">
+                        <label className="text-xs font-semibold text-slate-700">Start / Handover Date</label>
+                        <Input
+                          type="date"
+                          value={trainingForm.confirmedStartDate}
+                          onChange={(e) => setTrainingForm({ ...trainingForm, confirmedStartDate: e.target.value })}
+                          className="text-xs h-9"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* 3 Department Modules */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Module 1: Aleyna (Sales) */}
+                      <div className="p-4 bg-white border rounded-xl space-y-3">
+                        <div className="flex items-center justify-between border-b pb-2">
+                          <span className="text-xs font-bold text-slate-900 uppercase">Sales & Growth</span>
+                          <Badge className="bg-purple-600 text-white text-[10px]">Aleyna</Badge>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Sales methodology, cold prospecting, flyer distribution, and customer retention.
+                        </p>
+                        <div className="space-y-2 text-xs">
+                          <div className="space-y-1">
+                            <label className="font-semibold text-slate-700">Training Date</label>
+                            <Input
+                              type="date"
+                              value={trainingForm.salesTrainingDate}
+                              onChange={(e) => setTrainingForm({ ...trainingForm, salesTrainingDate: e.target.value })}
+                              className="text-xs h-8"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="font-semibold text-slate-700">Status</label>
+                            <Select
+                              value={trainingForm.salesStatus}
+                              onValueChange={(val: any) => setTrainingForm({ ...trainingForm, salesStatus: val })}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending" className="text-xs">Pending</SelectItem>
+                                <SelectItem value="scheduled" className="text-xs">Scheduled</SelectItem>
+                                <SelectItem value="completed" className="text-xs">Completed ✓</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Module 2: Ops Lead (App & Scanner) */}
+                      <div className="p-4 bg-white border rounded-xl space-y-3">
+                        <div className="flex items-center justify-between border-b pb-2">
+                          <span className="text-xs font-bold text-slate-900 uppercase">Ops & Scanner App</span>
+                          <Badge className="bg-teal-600 text-white text-[10px]">Ops Lead</Badge>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          App Pus handheld scanner setup, parcel barcode manifests, and daily run routing.
+                        </p>
+                        <div className="space-y-2 text-xs">
+                          <div className="space-y-1">
+                            <label className="font-semibold text-slate-700">Training Date</label>
+                            <Input
+                              type="date"
+                              value={trainingForm.appTrainingDate}
+                              onChange={(e) => setTrainingForm({ ...trainingForm, appTrainingDate: e.target.value })}
+                              className="text-xs h-8"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="font-semibold text-slate-700">Status</label>
+                            <Select
+                              value={trainingForm.appStatus}
+                              onValueChange={(val: any) => setTrainingForm({ ...trainingForm, appStatus: val })}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending" className="text-xs">Pending</SelectItem>
+                                <SelectItem value="scheduled" className="text-xs">Scheduled</SelectItem>
+                                <SelectItem value="completed" className="text-xs">Completed ✓</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Module 3: Popie (Billing) */}
+                      <div className="p-4 bg-white border rounded-xl space-y-3">
+                        <div className="flex items-center justify-between border-b pb-2">
+                          <span className="text-xs font-bold text-slate-900 uppercase">Billing & Invoicing</span>
+                          <Badge className="bg-blue-600 text-white text-[10px]">Popie</Badge>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Weekly client billing runs, customer pricing matrix, credit terms, and banking reconciliation.
+                        </p>
+                        <div className="space-y-2 text-xs">
+                          <div className="space-y-1">
+                            <label className="font-semibold text-slate-700">Training Date</label>
+                            <Input
+                              type="date"
+                              value={trainingForm.billingTrainingDate}
+                              onChange={(e) => setTrainingForm({ ...trainingForm, billingTrainingDate: e.target.value })}
+                              className="text-xs h-8"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="font-semibold text-slate-700">Status</label>
+                            <Select
+                              value={trainingForm.billingStatus}
+                              onValueChange={(val: any) => setTrainingForm({ ...trainingForm, billingStatus: val })}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending" className="text-xs">Pending</SelectItem>
+                                <SelectItem value="scheduled" className="text-xs">Scheduled</SelectItem>
+                                <SelectItem value="completed" className="text-xs">Completed ✓</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Master Calendar Checkbox */}
+                    <div className="p-3.5 bg-slate-50 border rounded-xl flex items-center justify-between">
+                      <label className="flex items-center gap-3 cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={trainingForm.syncGregCalendar}
+                          onChange={(e) => setTrainingForm({ ...trainingForm, syncGregCalendar: e.target.checked })}
+                          className="h-4 w-4 rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b]"
+                        />
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-slate-900 block">Sync with Greg Hart’s Master Calendar</span>
+                          <span className="text-slate-500 text-[11px] block">
+                            Automatically pushes training events to Greg Hart, Aleyna, Popie, and Operational Lead diaries.
+                          </span>
+                        </div>
+                      </label>
+                      <Badge className="bg-emerald-600 text-white text-[10px]">Master Diary Sync Active</Badge>
+                    </div>
+
+                    {/* Save Schedule Button */}
+                    <div className="flex justify-end pt-1">
+                      <Button
+                        type="submit"
+                        disabled={savingTraining}
+                        className="bg-[#095c7b] hover:bg-[#074760] text-white text-xs font-bold px-6 py-2.5 shadow-sm gap-1.5"
+                      >
+                        {savingTraining ? <Loader className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+                        Save Training Curriculum & Dispatch Calendar Invites
+                      </Button>
+                    </div>
+                  </form>
+
+                  {/* Final Conversion to Active Franchisee Card */}
+                  <div className="p-5 bg-linear-to-r from-[#095c7b] to-[#0d7ea8] text-white rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-5 w-5 text-[#eaf143]" />
+                        <span className="font-extrabold text-sm uppercase tracking-wider">
+                          Ready to Onboard as Official MailPlus Franchisee?
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-200 max-w-xl leading-relaxed">
+                        Creates an active user login in ProspectPlus, establishes the franchisee profile with their verified ABN and territory, and marks the application pipeline as <strong>Converted</strong>.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={handleStartConvert}
+                      className="bg-[#eaf143] hover:bg-[#d8df3d] text-slate-900 font-extrabold text-xs px-6 py-3 rounded-xl shadow-md shrink-0 gap-1.5"
+                    >
+                      <UserCheck className="h-4 w-4" /> Convert to Active Franchisee
+                    </Button>
                   </div>
                 </div>
               )}
