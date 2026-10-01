@@ -190,7 +190,7 @@ export default function AdminAppTicketsPage() {
     setBranchNameVal(ticket.branchName || "");
     setSendEmailVal(false);
     setEmailNotesVal(ticket.adminNotes || "");
-    setCcEmailVal("ankith.ravindran@mailplus.com.au");
+    setCcEmailVal(userProfile?.email || "ankith.ravindran@mailplus.com.au");
     setUserSearchQuery("");
 
     setAssignedToUidVal(ticket.assignedToUid || "ncyhwLtOG1W7TZ43PkYCcObeCAf2");
@@ -350,12 +350,18 @@ export default function AdminAppTicketsPage() {
 
         const isWaiting = statusVal === "waiting_on_user";
 
+        const senderName = userProfile?.displayName || 
+          (userProfile?.firstName && userProfile?.lastName ? `${userProfile.firstName} ${userProfile.lastName}` : userProfile?.name) || 
+          userProfile?.email || 
+          "Admin";
+        const senderEmail = userProfile?.email || "ankith.ravindran@mailplus.com.au";
+
         // Dispatch In-App Notification to ticket creator
         if (selectedTicket.createdBy) {
           try {
             await createNotification(selectedTicket.createdBy, {
               title: isWaiting 
-                ? "Action Required: Super Admin is waiting on your input" 
+                ? `Action Required: ${senderName} is waiting on your input` 
                 : `App Ticket Update: ${statusLabel}`,
               message: (emailNotesVal.trim() || adminNotesVal.trim())
                 ? (emailNotesVal.trim() || adminNotesVal.trim())
@@ -374,11 +380,11 @@ export default function AdminAppTicketsPage() {
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
   <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">${isWaiting ? '⚠️ Action Required on Your Support Request' : 'Ticket Progress Update'}</h2>
   <p>Hi <strong>${selectedTicket.createdByName}</strong>,</p>
-  <p>${isWaiting ? 'The Super Admin is currently <strong>waiting on your input or clarification</strong> regarding your request:' : 'We wanted to let you know that there is an update on your request:'} "<strong>${selectedTicket.title}</strong>".</p>
+  <p>${isWaiting ? `<strong>${senderName}</strong> is currently <strong>waiting on your input or clarification</strong> regarding your request:` : `We wanted to let you know that there is an update on your request:`} "<strong>${selectedTicket.title}</strong>".</p>
   
   <div style="margin: 20px 0; padding: 15px; background-color: ${isWaiting ? '#fffbeb' : '#f8fafc'}; border-left: 4px solid ${isWaiting ? '#d97706' : '#095c7b'}; border-radius: 4px; border-top: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
     <p style="margin: 0 0 10px 0;"><strong>Current Status:</strong> <span style="background-color: ${statusColor}20; color: ${statusColor}; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 13px; text-transform: uppercase;">${statusLabel}</span></p>
-    ${emailNotesVal.trim() ? `<p style="margin: 0;"><strong>Message from Super Admin:</strong><br /><span style="color: #475569; font-size: 14px;">${emailNotesVal.trim().replace(/\n/g, '<br />')}</span></p>` : ''}
+    ${emailNotesVal.trim() ? `<p style="margin: 0;"><strong>Message from ${senderName}:</strong><br /><span style="color: #475569; font-size: 14px;">${emailNotesVal.trim().replace(/\n/g, '<br />')}</span></p>` : ''}
   </div>
 
   <p style="font-size: 14px; color: #475569;">Please view your ticket on the Feedback & Ideas Board to respond or provide additional details:</p>
@@ -405,7 +411,7 @@ export default function AdminAppTicketsPage() {
               to: selectedTicket.createdByEmail,
               subject: isWaiting ? `[Action Required] Waiting on your response: ${selectedTicket.title}` : `[Progress Update] ${selectedTicket.title}`,
               html: emailHtml,
-              customFrom: "ankith.ravindran@mailplus.com.au",
+              customFrom: senderEmail,
               cc: ccEmailVal,
             }),
           });

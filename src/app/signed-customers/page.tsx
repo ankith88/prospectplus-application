@@ -1748,6 +1748,7 @@ export default function SignedCustomersPage() {
           onOpenChange={setIsInvoiceModalOpen}
           invoice={selectedInvoiceForModal?.invoice || null}
           companyName={selectedInvoiceForModal?.companyName}
+          companyAbn={(selectedInvoiceForModal as any)?.lead?.abn || (selectedInvoiceForModal as any)?.abn}
         />
         <EnterMultiSiteLeadDialog
           isOpen={isMultiSiteDialogOpen}

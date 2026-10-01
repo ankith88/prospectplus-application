@@ -89,7 +89,7 @@ import { EditTaskDialog } from '@/components/edit-task-dialog'
 import { setHours, setMinutes } from 'date-fns'
 import { RequestAssignmentDialog } from '@/components/request-assignment-dialog'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile, Invoice } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
@@ -156,6 +156,9 @@ import { EmailVerificationBadge } from '@/components/ui/email-verification-badge
 import { verifyEmailsClient } from '@/lib/verify-email-client'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select'
+import { CreateInvoiceDialog } from '@/components/create-invoice-dialog'
+import { InvoiceDetailsDialog } from '@/components/invoice-details-dialog'
+import { canCreateCustomerInvoice } from '@/lib/invoice-services-catalog'
 import {
   Dialog,
   DialogContent,
@@ -495,8 +498,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             reasonName
         );
 
+        if (!isLostStatus) return null;
         if (!hasSpecificDetails) return null;
-        if (!isLostStatus && !hasSpecificDetails) return null;
 
         const cancellationDateStr = lead.cancellationdate || (lead as any).cancellationDate || null;
 
@@ -1600,6 +1603,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [invoicesLoaded, setInvoicesLoaded] = useState(false);
   const [showAllInvoices, setShowAllInvoices] = useState(false);
   const [expandedInvoiceIds, setExpandedInvoiceIds] = useState<Set<string>>(new Set());
+  const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const canCreateInvoice = canCreateCustomerInvoice(userProfile, isSuperAdmin);
 
   const { recentInvoices, olderInvoices } = useMemo(() => {
     if (!invoices || invoices.length === 0) return { recentInvoices: [], olderInvoices: [] };
@@ -8487,7 +8493,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             )}
             </TabsContent>
             <TabsContent value="history" className="flex flex-col gap-6 mt-0">
-                {resolvedCancellation && (
+                {resolvedCancellation && resolvedCancellation.isLost && (
                     <Card className="border-rose-200 bg-gradient-to-br from-rose-50/70 via-slate-50/50 to-amber-50/30 dark:from-rose-950/20 dark:via-slate-900/30 dark:to-amber-950/10 shadow-sm overflow-hidden">
                         <CardHeader className="pb-3 border-b border-rose-100 dark:border-rose-900/40 flex flex-row items-center justify-between flex-wrap gap-2 bg-white/60 dark:bg-slate-900/60">
                             <div className="flex items-center gap-2">
@@ -8958,17 +8964,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                           : `Showing ${recentInvoices.length} invoice${recentInvoices.length === 1 ? '' : 's'} from the last 12 months${olderInvoices.length > 0 ? ` (${olderInvoices.length} older invoice${olderInvoices.length === 1 ? '' : 's'} hidden)` : ''}`}
                       </CardDescription>
                     </div>
-                    {invoices.length > 0 && olderInvoices.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowAllInvoices(!showAllInvoices)}
-                        className="shrink-0 gap-2 font-medium"
-                      >
-                        <History className="h-4 w-4" />
-                        {showAllInvoices ? 'Show Last 1 Year Only' : `Show Older Invoices (${olderInvoices.length})`}
-                      </Button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {canCreateInvoice && (
+                        <Button
+                          size="sm"
+                          onClick={() => setIsCreateInvoiceOpen(true)}
+                          className="bg-[#095c7b] hover:bg-[#07475f] text-white gap-1.5 shadow-sm font-medium h-9 text-xs"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Create Invoice
+                        </Button>
+                      )}
+                      {invoices.length > 0 && olderInvoices.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowAllInvoices(!showAllInvoices)}
+                          className="shrink-0 gap-2 font-medium"
+                        >
+                          <History className="h-4 w-4" />
+                          {showAllInvoices ? 'Show Last 1 Year Only' : `Show Older Invoices (${olderInvoices.length})`}
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="pt-6">
                     {loadingInvoices ? (
@@ -9051,16 +9068,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         ${Number(inv.invoiceTotal || 0).toFixed(2)}
                                       </TableCell>
                                       <TableCell className="text-right">
-                                        {inv.invoiceURL ? (
-                                          <Button size="sm" variant="outline" asChild className="h-8 gap-1 text-xs font-medium">
-                                            <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
-                                              <ExternalLink className="h-3.5 w-3.5" />
-                                              View Invoice
-                                            </a>
+                                        <div className="flex items-center justify-end gap-1.5">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => setSelectedInvoice(inv)}
+                                            className="h-7 text-xs font-semibold gap-1 text-[#095c7b] border-[#095c7b]/30 hover:bg-[#095c7b]/5"
+                                          >
+                                            <FileText className="h-3.5 w-3.5" />
+                                            Tax Invoice
                                           </Button>
-                                        ) : (
-                                          <span className="text-xs text-muted-foreground">No link</span>
-                                        )}
+                                          {inv.invoiceURL && (
+                                            <Button size="sm" variant="ghost" asChild className="h-7 w-7 p-0 text-muted-foreground" title="Open NetSuite Invoice">
+                                              <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                              </a>
+                                            </Button>
+                                          )}
+                                        </div>
                                       </TableCell>
                                     </TableRow>
                                     {isExpanded && (
@@ -9150,6 +9175,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                   </CardContent>
                 </Card>
+
+                {isCreateInvoiceOpen && (
+                  <CreateInvoiceDialog
+                    open={isCreateInvoiceOpen}
+                    onOpenChange={setIsCreateInvoiceOpen}
+                    company={lead}
+                    onInvoiceCreated={() => {
+                      const invoicesRef = collection(firestore, 'companies', lead.id, 'invoices');
+                      getDocs(query(invoicesRef)).then(snapshot => {
+                        const invoicesData = snapshot.docs.map(doc => ({
+                          id: doc.id,
+                          ...doc.data()
+                        }));
+                        invoicesData.sort((a: any, b: any) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
+                        setInvoices(invoicesData);
+                      });
+                    }}
+                  />
+                )}
+
+                {selectedInvoice && (
+                  <InvoiceDetailsDialog
+                    isOpen={!!selectedInvoice}
+                    onOpenChange={(open) => !open && setSelectedInvoice(null)}
+                    invoice={selectedInvoice}
+                    companyName={lead.companyName}
+                    companyAbn={lead.abn}
+                    companyAddress={lead.address || (lead as any).customerAddress}
+                  />
+                )}
               </TabsContent>
             )}
 
@@ -9350,6 +9405,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => { setResendScfId(undefined); setIsServiceSelectionOpen(true); setServiceSelectionMode('Confirm Signup'); }}>
                                 <Mail className="mr-2 h-4 w-4" />Resend Signup Confirmation
                             </Button>
+                            {canCreateInvoice && (
+                              <Button
+                                className="w-full justify-start font-medium bg-[#095c7b] text-white hover:bg-[#07475f] shadow-sm"
+                                variant="default"
+                                onClick={() => setIsCreateInvoiceOpen(true)}
+                              >
+                                <Plus className="mr-2 h-4 w-4" />Create Customer Invoice
+                              </Button>
+                            )}
                         </>
                     )}
                     {(!isCompanyProfile && (showCall || showProcessLead) && lead.bucket !== 'lpo_network' && !isLpoLeadProcess) && (

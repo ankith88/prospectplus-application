@@ -9,7 +9,7 @@ import { getSydneyISOString } from '@/lib/utils';
 import type { Lead, LeadStatus, Address, TaggedAddress, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, AppointmentStatus, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead, CompanyInsight } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion, arrayRemove, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
-import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
+import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite, sendCompanyCustomerUpdateToNetSuite } from './netsuite';
 import { rekeyLeadToNetSuite } from './rekey-lead';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
 import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
@@ -2058,13 +2058,40 @@ async function logCsCallActivity(
     ]);
 }
 
-async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string }, collectionName?: 'leads' | 'companies' | string): Promise<void> {
+async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string, title?: string }, collectionName?: 'leads' | 'companies' | string): Promise<void> {
     const colName = (collectionName === 'companies' || collectionName === 'leads')
         ? collectionName
         : await getLeadOrCompanyCollection(leadId);
 
-    await addDoc(collection(firestore, colName, leadId, 'notes'), { ...noteData, syncedWithNetSuite: false });
+    const noteDocRef = await addDoc(collection(firestore, colName, leadId, 'notes'), { ...noteData, syncedWithNetSuite: false });
     await logActivity(leadId, { type: 'Update', notes: `Note added: ${noteData.content.substring(0, 100)}...`, date: noteData.date }, colName);
+
+    if (colName === 'companies') {
+        try {
+            const compRef = doc(firestore, 'companies', leadId);
+            const compSnap = await getDoc(compRef);
+            if (compSnap.exists()) {
+                const compData = compSnap.data() || {};
+                const netSuiteRes = await sendCompanyCustomerUpdateToNetSuite({
+                    internalId: compData.internalId || compData.netsuiteId || (/^\d+$/.test(String(leadId)) ? String(leadId) : '') || leadId,
+                    companyName: compData.companyName || '',
+                    abn: compData.abn || '',
+                    email: compData.customerServiceEmail || compData.email || '',
+                    phone: compData.customerPhone || compData.phone || '',
+                    franchiseeId: compData.franchisee_id || compData.franchiseeId || '',
+                    prospectPlusId: compData.prospectPlusId || leadId,
+                    noteTitle: noteData.title || `Note - ${noteData.author || 'User'}`,
+                    noteBody: noteData.content || '',
+                    noteAuthorId: '1952193',
+                });
+                if (netSuiteRes && netSuiteRes.success && noteDocRef?.id) {
+                    await updateDoc(doc(firestore, 'companies', leadId, 'notes', noteDocRef.id), { syncedWithNetSuite: true }).catch(() => {});
+                }
+            }
+        } catch (nsErr) {
+            console.error('[NetSuite Note Sync Error] Failed to sync note to NetSuite for company:', nsErr);
+        }
+    }
 
     try {
         const leadRef = doc(firestore, colName, leadId);

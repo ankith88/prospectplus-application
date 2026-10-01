@@ -43,6 +43,9 @@ export default function AdminSettingsPage() {
           <p className="text-muted-foreground">Manage users and system settings.</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push('/admin/services')}>
+            Service Line Items & Commissions
+          </Button>
           <Button variant="outline" onClick={() => router.push('/admin/settings/cancellation-reasons')}>
             Cancellation Hierarchy
           </Button>

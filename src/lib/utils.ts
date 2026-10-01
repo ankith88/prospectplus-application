@@ -27,7 +27,16 @@ export function safeFormatDate(dateVal: any, formatStr: string = 'MMM d, yyyy'):
     if (!d) {
       let cleaned = String(dateVal).trim();
       cleaned = cleaned.replace(/\s*\([^)]*\)$/, '');
-      d = new Date(cleaned);
+      const slashParts = cleaned.split('/');
+      if (slashParts.length === 3 && slashParts[0] && slashParts[1] && slashParts[2]) {
+        const [day, month, year] = slashParts.map(Number);
+        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+          const fullYear = year < 100 ? 2000 + year : year;
+          d = new Date(fullYear, month - 1, day, 0, 0, 0, 0);
+        }
+      } else {
+        d = new Date(cleaned);
+      }
     }
     if (d && isValid(d)) {
       return dateFnsFormat(d, formatStr);

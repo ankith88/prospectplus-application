@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { doc, getDoc, updateDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDocs, where, deleteDoc, deleteField } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { logActivity, getAllFranchisees, getPendingItemsForLead, resolvePendingItemsForLead } from '@/services/firebase';
+import { logActivity, logNoteActivity, getAllFranchisees, getPendingItemsForLead, resolvePendingItemsForLead } from '@/services/firebase';
 import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal';
 import { isAccountManagerUser } from '@/lib/lead-permissions';
 import { useAuth } from '@/hooks/use-auth';
@@ -406,24 +406,20 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
           const lRef = doc(firestore, 'leads', crmId);
           const lSnap = await getDoc(lRef);
           if (lSnap.exists()) {
-            await addDoc(collection(firestore, 'leads', crmId, 'notes'), {
+            await logNoteActivity(crmId, {
               content: `LPO Lead Note: ${content}`,
               author: authorName,
               date: nowIso,
-              syncedWithNetSuite: false
-            });
-            await logActivity(crmId, { type: 'Update', notes: `LPO Note added: ${content.substring(0, 100)}...`, date: nowIso }, 'leads');
+            }, 'leads');
           } else {
             const cRef = doc(firestore, 'companies', crmId);
             const cSnap = await getDoc(cRef);
             if (cSnap.exists()) {
-              await addDoc(collection(firestore, 'companies', crmId, 'notes'), {
+              await logNoteActivity(crmId, {
                 content: `LPO Lead Note: ${content}`,
                 author: authorName,
                 date: nowIso,
-                syncedWithNetSuite: false
-              });
-              await logActivity(crmId, { type: 'Update', notes: `LPO Note added: ${content.substring(0, 100)}...`, date: nowIso }, 'companies');
+              }, 'companies');
             }
           }
         } catch (e) {

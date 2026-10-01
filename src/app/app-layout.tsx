@@ -387,6 +387,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/admin/franchisees/operators': { label: 'Operators Directory', category: 'Network', icon: Users, href: '/admin/franchisees/operators' },
     '/admin/franchisees/territory-map': { label: 'Franchisee Territory Map', category: 'Network', icon: Map, href: '/admin/franchisees/territory-map' },
     '/admin/franchisees/suburb-mapping': { label: 'Suburb & Lodgement Mapping', category: 'Network', icon: MapPin, href: '/admin/franchisees/suburb-mapping' },
+    '/admin/services': { label: 'Service Line Items & Commissions', category: 'Settings', icon: Package, href: '/admin/services' },
   };
 
   const toggleExpand = (key: string) => {
@@ -2305,6 +2306,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             </Link>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/admin/services")} tooltip="Service Line Items & Commissions">
+                            <Link href="/admin/services">
+                              <Package />
+                              <span>Service Line Items</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
                       </SidebarMenu>
                     </SidebarGroupContent>
                   )}
@@ -2359,6 +2368,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <Link href="/admin/settings/am-leave">
                           <CalendarOff />
                           <span>AM Leave Settings</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive('/admin/services')}>
+                        <Link href="/admin/services">
+                          <Package className="h-4 w-4" />
+                          <span>Service Line Items</span>
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>

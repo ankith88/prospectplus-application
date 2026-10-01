@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { DataDeletionTable } from '@/components/admin/data-deletion-table';
 import { GranularDeletion } from '@/components/admin/granular-deletion';
@@ -165,10 +166,18 @@ export default function AdminDataPage() {
       </CollapsibleCard>
 
       <CollapsibleCard
-        title="Bulk Import Services"
+        title="Bulk Import Services & Line Items"
         description="Upload a CSV file to bulk import or update the services database. Required columns: Internal ID, Name, NetSuite Item."
       >
-        <BulkImportServices />
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 bg-blue-50/60 rounded-lg border border-blue-100 text-xs">
+            <span className="text-slate-700">Looking to edit existing services, default rates, or franchisee commission structures?</span>
+            <Button size="sm" variant="outline" className="text-xs h-7 bg-white text-[#095c7b] border-[#095c7b]/30" onClick={() => router.push('/admin/services')}>
+              Open Service Line Items Catalog &rarr;
+            </Button>
+          </div>
+          <BulkImportServices />
+        </div>
       </CollapsibleCard>
       
       <CollapsibleCard

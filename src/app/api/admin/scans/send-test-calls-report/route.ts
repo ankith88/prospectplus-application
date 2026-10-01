@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
+import { generateInboundCallsReport, InboundCallsReportResponse } from '@/services/aircall-reporting-server';
 import * as admin from 'firebase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,7 @@ function parseDuration(durationStr?: string): number {
 }
 
 function formatDurationSeconds(totalSeconds: number): string {
+  if (isNaN(totalSeconds) || totalSeconds <= 0) return '0s';
   const m = Math.floor(totalSeconds / 60);
   const s = Math.round(totalSeconds % 60);
   if (m > 0) return `${m}m ${s}s`;
@@ -61,7 +63,18 @@ export async function POST(request: Request) {
       targetEnd = new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999);
     }
 
-    // Query all activities of type "Call"
+    const fromSeconds = Math.floor(targetStart.getTime() / 1000);
+    const toSeconds = Math.floor(targetEnd.getTime() / 1000);
+
+    // 1. Fetch Inbound Calls via Aircall API + Lead Enrichment in parallel
+    let inboundReport: InboundCallsReportResponse | null = null;
+    try {
+      inboundReport = await generateInboundCallsReport(fromSeconds, toSeconds);
+    } catch (inboundErr) {
+      console.warn('[Calls Report] Failed to fetch live Aircall inbound report:', inboundErr);
+    }
+
+    // 2. Query all activities of type "Call" (Outbound / Activity Calls)
     const activityQuery = db.collectionGroup('activity').where('type', '==', 'Call');
     const snapshot = await activityQuery.get();
 
@@ -78,8 +91,10 @@ export async function POST(request: Request) {
       return callDate >= targetStart && callDate <= targetEnd;
     });
 
-    if (rawCalls.length === 0) {
-      return NextResponse.json({ message: 'No call data found for the selected date range.' });
+    const totalInboundCallsCount = inboundReport?.summary?.totalInbound || 0;
+
+    if (rawCalls.length === 0 && totalInboundCallsCount === 0) {
+      return NextResponse.json({ message: `No call data (outbound or inbound) found for ${dateString}.` });
     }
 
     // Load lead status (customerStatus) from leads and companies collections
@@ -105,7 +120,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Populate lead details
+    // Populate lead details for outbound calls
     const populatedCalls = rawCalls.map(c => {
       const lead = leadsData[c.leadId];
       return {
@@ -244,7 +259,128 @@ export async function POST(request: Request) {
       return bucketKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     };
 
-    // Construct Email HTML template adhering to outbound email templates rules
+    // ==========================================
+    // INBOUND CALLS DATA AGGREGATION
+    // ==========================================
+    const inboundSummary = inboundReport?.summary || {
+      totalInbound: 0,
+      totalAnswered: 0,
+      answeredRate: 0,
+      totalMissed: 0,
+      missedRate: 0,
+      inHoursMissed: 0,
+      outOfHoursMissed: 0,
+      matchedLeadsCount: 0,
+      unmatchedCount: 0,
+      unreturnedCount: 0,
+      resolvedCount: 0,
+    };
+
+    // Group Inbound Calls by Agent / Recipient ("To Who")
+    const inboundByUser: Record<string, {
+      user: string;
+      total: number;
+      answered: number;
+      missed: number;
+      durations: number[];
+      lines: Set<string>;
+    }> = {};
+
+    (inboundReport?.calls || []).forEach(call => {
+      const user = call.aircallUser?.name || 'Team Line / Unassigned';
+      if (!inboundByUser[user]) {
+        inboundByUser[user] = {
+          user,
+          total: 0,
+          answered: 0,
+          missed: 0,
+          durations: [],
+          lines: new Set()
+        };
+      }
+      inboundByUser[user].total++;
+      if (call.callType === 'answered') {
+        inboundByUser[user].answered++;
+        if (call.duration > 0) inboundByUser[user].durations.push(call.duration);
+      } else {
+        inboundByUser[user].missed++;
+      }
+      if (call.aircallNumberName) {
+        inboundByUser[user].lines.add(call.aircallNumberName);
+      }
+    });
+
+    const inboundUserBreakdownRowsHtml = Object.keys(inboundByUser)
+      .sort((a, b) => inboundByUser[b].total - inboundByUser[a].total)
+      .map(user => {
+        const item = inboundByUser[user];
+        const answeredRate = item.total > 0 ? Math.round((item.answered / item.total) * 100) : 0;
+        const avgDur = item.durations.length > 0 
+          ? formatDurationSeconds(item.durations.reduce((a, b) => a + b, 0) / item.durations.length)
+          : '—';
+        const linesStr = Array.from(item.lines).join(', ') || '—';
+
+        return `
+        <tr style="border-bottom: 1px solid #edf2f7;">
+          <td style="padding: 10px 12px; font-size: 13px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+            <strong>${user}</strong>
+            <div style="font-size: 11px; color: #718096; margin-top: 2px;">${linesStr}</div>
+          </td>
+          <td align="center" style="padding: 10px 12px; font-size: 13px; color: #2d3748; font-weight: 700; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${item.total}</td>
+          <td align="center" style="padding: 10px 12px; font-size: 13px; color: #16a34a; font-weight: 700; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${item.answered}</td>
+          <td align="center" style="padding: 10px 12px; font-size: 13px; color: ${item.missed > 0 ? '#dc2626' : '#718096'}; font-weight: 700; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${item.missed}</td>
+          <td align="center" style="padding: 10px 12px; font-size: 13px; color: ${answeredRate >= 80 ? '#16a34a' : answeredRate >= 50 ? '#d97706' : '#dc2626'}; font-weight: 700; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${answeredRate}%</td>
+          <td align="right" style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${avgDur}</td>
+        </tr>`;
+      }).join('');
+
+    // Inbound Calls by Phone Line Breakdown
+    const inboundLineBreakdownRowsHtml = (inboundReport?.numbersBreakdown || [])
+      .filter(n => n.totalInbound > 0)
+      .map(n => {
+        const answeredRate = n.totalInbound > 0 ? Math.round((n.totalAnswered / n.totalInbound) * 100) : 0;
+        return `
+        <tr style="border-bottom: 1px solid #edf2f7;">
+          <td style="padding: 10px 12px; font-size: 13px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+            <strong>${n.name}</strong>
+            ${n.digits ? `<div style="font-size: 11px; color: #718096; margin-top: 2px;">${n.digits}</div>` : ''}
+          </td>
+          <td style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${n.assignedUser || 'Team Line'}</td>
+          <td align="center" style="padding: 10px 12px; font-size: 13px; color: #2d3748; font-weight: 700; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${n.totalInbound}</td>
+          <td align="center" style="padding: 10px 12px; font-size: 13px; color: #16a34a; font-weight: 700; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${n.totalAnswered}</td>
+          <td align="center" style="padding: 10px 12px; font-size: 13px; color: ${n.totalMissed > 0 ? '#dc2626' : '#718096'}; font-weight: 700; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${n.totalMissed}</td>
+          <td align="right" style="padding: 10px 12px; font-size: 13px; color: ${answeredRate >= 80 ? '#16a34a' : answeredRate >= 50 ? '#d97706' : '#dc2626'}; font-weight: 700; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${answeredRate}%</td>
+        </tr>`;
+      }).join('');
+
+    // Missed Inbound Calls Log Rows
+    const missedInboundCalls = (inboundReport?.calls || []).filter(c => c.callType === 'missed');
+    const missedCallsRowsHtml = missedInboundCalls.slice(0, 15).map(c => {
+      const callTimeStr = new Intl.DateTimeFormat('en-AU', {
+        timeZone: 'Australia/Sydney',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }).format(new Date(c.startedAt));
+
+      const contactDisplay = c.matchedLead?.companyName 
+        ? `<strong>${c.matchedLead.companyName}</strong> <span style="color: #718096; font-size: 11px;">(${c.callerNumber})</span>`
+        : `<strong>${c.callerNumber}</strong>`;
+
+      const recipientDisplay = c.aircallUser?.name 
+        ? `${c.aircallUser.name} <span style="color: #718096; font-size: 11px;">(${c.aircallNumberName})</span>`
+        : c.aircallNumberName;
+
+      return `
+      <tr style="border-bottom: 1px solid #edf2f7;">
+        <td style="padding: 8px 10px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; white-space: nowrap;">${callTimeStr}</td>
+        <td style="padding: 8px 10px; font-size: 12px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${contactDisplay}</td>
+        <td style="padding: 8px 10px; font-size: 12px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${recipientDisplay}</td>
+        <td style="padding: 8px 10px; font-size: 12px; color: #dc2626; font-weight: 600; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${c.missedReason}</td>
+      </tr>`;
+    }).join('');
+
+    // Outbound Agent Breakdown rows
     const userBreakdownRowsHtml = Object.keys(callsByUser).map(user => {
       const callsCount = callsByUser[user].length;
       const uniqueCallIds = uniqueCallIdsPerUser[user] || 0;
@@ -295,12 +431,13 @@ export async function POST(request: Request) {
       </tr>`;
       }).join('');
 
+    // Construct Email HTML template adhering to outbound email templates rules
     const emailHtml = `
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
   <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>Daily Call Report</title>
+    <title>Daily Call Performance Report</title>
   </head>
   <body style="margin: 0; padding: 0; background-color: #f4f7f8; -webkit-text-size-adjust: 100%;">
     <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f4f7f8; padding: 20px 0; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
@@ -316,81 +453,170 @@ export async function POST(request: Request) {
             <!-- Body Content -->
             <tr>
               <td style="padding: 30px 25px; background-color: #ffffff;">
-                <h2 style="margin: 0 0 10px; font-size: 20px; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 700;">Daily Call Performance Report (Test Email)</h2>
+                <h2 style="margin: 0 0 10px; font-size: 20px; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 700;">Daily Call Performance Report</h2>
                 <p style="margin: 0 0 20px; font-size: 14px; color: #4a5568; line-height: 1.5; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
-                  This is a manually triggered test email showing call performance metrics for yesterday (<strong>${dateString}</strong>).
+                  Daily summary of outbound sales calls and inbound calls for yesterday (<strong>${dateString}</strong>).
                 </p>
                 
-                <!-- Summary Metrics Grid -->
+                <!-- Summary Metrics 2x2 Grid (Outbound + Inbound) -->
                 <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 25px; border-collapse: collapse;">
                   <tr>
-                    <td width="50%" style="padding: 10px; background-color: #f8fafc; border-radius: 6px; border: 1px solid #edf2f7;">
-                      <div style="font-size: 11px; color: #718096; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Total Calls</div>
-                      <div style="font-size: 20px; font-weight: 700; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; margin-top: 4px;">${finalCalls.length}</div>
+                    <td width="25%" style="padding: 10px 8px; background-color: #f8fafc; border-radius: 6px 0 0 0; border: 1px solid #edf2f7;">
+                      <div style="font-size: 10px; color: #718096; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Outbound Calls</div>
+                      <div style="font-size: 18px; font-weight: 700; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; margin-top: 4px;">${finalCalls.length}</div>
+                      <div style="font-size: 10px; color: #718096; margin-top: 2px;">${uniqueLeadsCount} accounts</div>
                     </td>
-                    <td width="50%" style="padding: 10px; background-color: #f8fafc; border-radius: 6px; border: 1px solid #edf2f7; border-left: 0;">
-                      <div style="font-size: 11px; color: #718096; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Unique Call IDs</div>
-                      <div style="font-size: 20px; font-weight: 700; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; margin-top: 4px;">${uniqueCallIdsCount}</div>
+                    <td width="25%" style="padding: 10px 8px; background-color: #f8fafc; border: 1px solid #edf2f7; border-left: 0;">
+                      <div style="font-size: 10px; color: #718096; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Total Inbound</div>
+                      <div style="font-size: 18px; font-weight: 700; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; margin-top: 4px;">${inboundSummary.totalInbound}</div>
+                      <div style="font-size: 10px; color: #718096; margin-top: 2px;">received</div>
                     </td>
-                  </tr>
-                  <tr>
-                    <td width="50%" style="padding: 10px; background-color: #f8fafc; border-radius: 6px; border: 1px solid #edf2f7; border-top: 0;">
-                      <div style="font-size: 11px; color: #718096; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Unique Accounts</div>
-                      <div style="font-size: 20px; font-weight: 700; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; margin-top: 4px;">${uniqueLeadsCount}</div>
+                    <td width="25%" style="padding: 10px 8px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 0;">
+                      <div style="font-size: 10px; color: #15803d; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Inbound Answered</div>
+                      <div style="font-size: 18px; font-weight: 700; color: #16a34a; font-family: 'Inter', system-ui, -apple-system, sans-serif; margin-top: 4px;">${inboundSummary.totalAnswered}</div>
+                      <div style="font-size: 10px; color: #15803d; margin-top: 2px;">${inboundSummary.answeredRate}% answered</div>
                     </td>
-                    <td width="50%" style="padding: 10px; background-color: #f8fafc; border-radius: 6px; border: 1px solid #edf2f7; border-left: 0; border-top: 0;">
-                      <div style="font-size: 11px; color: #718096; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Avg Call Duration</div>
-                      <div style="font-size: 20px; font-weight: 700; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; margin-top: 4px;">${formatDurationSeconds(avgDurationOverall)}</div>
+                    <td width="25%" style="padding: 10px 8px; background-color: ${inboundSummary.totalMissed > 0 ? '#fef2f2' : '#f8fafc'}; border-radius: 0 6px 0 0; border: 1px solid ${inboundSummary.totalMissed > 0 ? '#fecaca' : '#edf2f7'}; border-left: 0;">
+                      <div style="font-size: 10px; color: ${inboundSummary.totalMissed > 0 ? '#b91c1c' : '#718096'}; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Inbound Missed</div>
+                      <div style="font-size: 18px; font-weight: 700; color: ${inboundSummary.totalMissed > 0 ? '#dc2626' : '#718096'}; font-family: 'Inter', system-ui, -apple-system, sans-serif; margin-top: 4px;">${inboundSummary.totalMissed}</div>
+                      <div style="font-size: 10px; color: ${inboundSummary.totalMissed > 0 ? '#b91c1c' : '#718096'}; margin-top: 2px;">${inboundSummary.inHoursMissed} in-hrs</div>
                     </td>
                   </tr>
                 </table>
-  
-                <!-- User Breakdown Table -->
-                <h3 style="margin: 25px 0 10px; font-size: 16px; color: #1a202c; border-bottom: 2px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Agent Breakdown</h3>
+
+                <!-- SECTION 1: INBOUND CALLS PERFORMANCE & AGENT BREAKDOWN -->
+                <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-top: 25px; margin-bottom: 6px;">
+                  <tr>
+                    <td>
+                      <h3 style="margin: 0; font-size: 16px; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 700;">
+                        Inbound Calls — To Who & Response Breakdown
+                      </h3>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin: 0 0 12px; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                  Breakdown of incoming calls directed to team members and phone lines, including answered vs missed counts.
+                </p>
+
+                ${Object.keys(inboundByUser).length > 0 ? `
                 <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 25px;">
                   <thead>
                     <tr style="background-color: #f7fafc; border-bottom: 2px solid #edf2f7;">
-                      <th align="left" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">User</th>
-                      <th align="center" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Total Calls</th>
-                      <th align="center" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Unique Call IDs</th>
-                      <th align="right" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Avg Duration</th>
+                      <th align="left" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Recipient / User</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Inbound</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 11px; color: #15803d; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Answered</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 11px; color: #b91c1c; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Missed</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Ans Rate</th>
+                      <th align="right" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Avg Duration</th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${userBreakdownRowsHtml}
+                    ${inboundUserBreakdownRowsHtml}
+                  </tbody>
+                </table>
+                ` : `
+                <div style="background-color: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 12px; text-align: center; color: #64748b; font-size: 12px; margin-bottom: 25px;">
+                  No inbound call activity recorded for ${dateString}.
+                </div>
+                `}
+
+                ${(inboundReport?.numbersBreakdown || []).filter(n => n.totalInbound > 0).length > 0 ? `
+                <!-- Inbound Calls by Phone Line Table -->
+                <h4 style="margin: 20px 0 10px; font-size: 14px; color: #1a202c; border-bottom: 1px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Inbound Calls by Line / Number</h4>
+                <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 25px;">
+                  <thead>
+                    <tr style="background-color: #f7fafc; border-bottom: 2px solid #edf2f7;">
+                      <th align="left" style="padding: 8px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Line Name</th>
+                      <th align="left" style="padding: 8px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Assigned Rep</th>
+                      <th align="center" style="padding: 8px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Inbound</th>
+                      <th align="center" style="padding: 8px 12px; font-size: 11px; color: #15803d; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Answered</th>
+                      <th align="center" style="padding: 8px 12px; font-size: 11px; color: #b91c1c; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Missed</th>
+                      <th align="right" style="padding: 8px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Ans Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${inboundLineBreakdownRowsHtml}
+                  </tbody>
+                </table>
+                ` : ''}
+
+                ${missedInboundCalls.length > 0 ? `
+                <!-- Missed Inbound Calls Log -->
+                <h4 style="margin: 20px 0 10px; font-size: 14px; color: #b91c1c; border-bottom: 1px solid #fee2e2; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">
+                  Missed Inbound Calls (${missedInboundCalls.length})
+                </h4>
+                <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 25px;">
+                  <thead>
+                    <tr style="background-color: #fef2f2; border-bottom: 2px solid #fecaca;">
+                      <th align="left" style="padding: 8px 10px; font-size: 11px; color: #991b1b; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Time</th>
+                      <th align="left" style="padding: 8px 10px; font-size: 11px; color: #991b1b; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Caller</th>
+                      <th align="left" style="padding: 8px 10px; font-size: 11px; color: #991b1b; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">To Who / Line</th>
+                      <th align="left" style="padding: 8px 10px; font-size: 11px; color: #991b1b; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${missedCallsRowsHtml}
+                  </tbody>
+                </table>
+                ` : ''}
+
+                <!-- SECTION 2: OUTBOUND & ACTIVITY PERFORMANCE -->
+                <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-top: 30px; margin-bottom: 6px; border-top: 2px solid #edf2f7; padding-top: 20px;">
+                  <tr>
+                    <td>
+                      <h3 style="margin: 0; font-size: 16px; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 700;">
+                        Outbound & Activity Calls Performance
+                      </h3>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- User Breakdown Table -->
+                <h4 style="margin: 15px 0 10px; font-size: 14px; color: #1a202c; border-bottom: 1px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Agent Outbound Breakdown</h4>
+                <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 25px;">
+                  <thead>
+                    <tr style="background-color: #f7fafc; border-bottom: 2px solid #edf2f7;">
+                      <th align="left" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">User</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Total Calls</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Unique Call IDs</th>
+                      <th align="right" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Avg Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${userBreakdownRowsHtml.length > 0 ? userBreakdownRowsHtml : '<tr><td colspan="4" style="padding: 12px; text-align: center; color: #718096; font-size: 12px;">No outbound calls logged.</td></tr>'}
                   </tbody>
                 </table>
 
                 <!-- Calls per Bucket Table -->
-                <h3 style="margin: 25px 0 10px; font-size: 16px; color: #1a202c; border-bottom: 2px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Calls per Bucket</h3>
+                <h4 style="margin: 20px 0 10px; font-size: 14px; color: #1a202c; border-bottom: 1px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Calls per Bucket</h4>
                 <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 25px;">
                   <thead>
                     <tr style="background-color: #f7fafc; border-bottom: 2px solid #edf2f7;">
-                      <th align="left" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Bucket</th>
-                      <th align="center" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Total Calls</th>
-                      <th align="center" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Unique Call IDs</th>
-                      <th align="right" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Avg Duration</th>
+                      <th align="left" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Bucket</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Total Calls</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Unique Call IDs</th>
+                      <th align="right" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Avg Duration</th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${bucketBreakdownRowsHtml}
+                    ${bucketBreakdownRowsHtml.length > 0 ? bucketBreakdownRowsHtml : '<tr><td colspan="4" style="padding: 12px; text-align: center; color: #718096; font-size: 12px;">No bucket calls logged.</td></tr>'}
                   </tbody>
                 </table>
 
                 <!-- User Calls per Bucket Table -->
-                <h3 style="margin: 25px 0 10px; font-size: 16px; color: #1a202c; border-bottom: 2px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">User Calls per Bucket</h3>
+                <h4 style="margin: 20px 0 10px; font-size: 14px; color: #1a202c; border-bottom: 1px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">User Calls per Bucket</h4>
                 <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 25px;">
                   <thead>
                     <tr style="background-color: #f7fafc; border-bottom: 2px solid #edf2f7;">
-                      <th align="left" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">User</th>
-                      <th align="left" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Bucket</th>
-                      <th align="center" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Total Calls</th>
-                      <th align="center" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Unique Call IDs</th>
-                      <th align="right" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Avg Duration</th>
+                      <th align="left" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">User</th>
+                      <th align="left" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Bucket</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Total Calls</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Unique Call IDs</th>
+                      <th align="right" style="padding: 10px 12px; font-size: 11px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Avg Duration</th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${userBucketBreakdownRowsHtml}
+                    ${userBucketBreakdownRowsHtml.length > 0 ? userBucketBreakdownRowsHtml : '<tr><td colspan="5" style="padding: 12px; text-align: center; color: #718096; font-size: 12px;">No user bucket calls logged.</td></tr>'}
                   </tbody>
                 </table>
               </td>
@@ -447,3 +673,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

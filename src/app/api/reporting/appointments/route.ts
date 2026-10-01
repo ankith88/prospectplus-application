@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
-import { formatBucketLabel } from '@/lib/lead-stage-analytics';
+import { formatBucketLabel, getLeadAmHandoverTrigger, formatAmHandoverTriggerLabel, type AmHandoverTrigger } from '@/lib/lead-stage-analytics';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +11,18 @@ interface CacheEntry {
 
 const memoryCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 60 * 1000; // 60s cache
+
+function resolveBookerRole(bookedBy: string, usersRoleMap: Map<string, string>): string {
+  if (!bookedBy || bookedBy === 'Unassigned') return 'Unassigned';
+  const lower = bookedBy.toLowerCase().trim();
+  if (lower.includes('system') || lower.includes('booking') || lower.includes('prospectplus')) {
+    return 'System / Automated';
+  }
+  if (usersRoleMap.has(lower)) {
+    return usersRoleMap.get(lower)!;
+  }
+  return 'SDR / Dialer';
+}
 
 function parseFlexibleDate(val: any): Date | null {
   if (!val) return null;
@@ -234,6 +246,129 @@ function isLostStatus(status: string): boolean {
   ].includes(s);
 }
 
+function evaluateLeadHandover(lead: any, originalBucket: string) {
+  const currentBucket = (lead?.bucket || '').toLowerCase().trim();
+  const isCurrentlyAm = currentBucket === 'account_manager' || currentBucket === 'account manager';
+  const comesFromOutbound = originalBucket.toLowerCase().includes('outbound') || lead?.wasOutbound || !!lead?.assignedToDialerAt;
+
+  // For non-outbound origins (e.g. Inbound, Field Sales, Marketing, LPO):
+  if (!comesFromOutbound) {
+    let label = `${originalBucket} Channel`;
+    if (isCurrentlyAm || lead?.accountManagerAssigned) {
+      label = `Inbound (Direct AM Handled)`;
+    }
+    return {
+      isCurrentlyAm,
+      isMovedToAm: false, // Handover tracking specifically monitors SDR Outbound -> AM transitions
+      amHandoverTrigger: 'non_outbound' as const,
+      amHandoverLabel: label,
+      movedToAmDate: null,
+    };
+  }
+
+  // Confirmed Outbound origin:
+  let hasMovedToAm = isCurrentlyAm;
+  let movedToAmDate: string | null = lead?.movedToAmAt || null;
+
+  if (!hasMovedToAm) {
+    if (lead?.bucketHistory && Array.isArray(lead.bucketHistory)) {
+      const bhMatch = lead.bucketHistory.find((h: any) => {
+        const nb = (h.newBucket || h.toBucket || h.bucket || '').toLowerCase().trim();
+        return nb === 'account_manager' || nb === 'account manager';
+      });
+      if (bhMatch) {
+        hasMovedToAm = true;
+        if (!movedToAmDate && bhMatch.timestamp) {
+          movedToAmDate = bhMatch.timestamp;
+        }
+      }
+    }
+  }
+
+  if (!hasMovedToAm) {
+    if (lead?.statusHistory && Array.isArray(lead.statusHistory)) {
+      const shMatch = lead.statusHistory.find((s: any) => s.newStatus === 'Appointment Booked' || s.newStatus === 'Account Manager');
+      if (shMatch) {
+        hasMovedToAm = true;
+        if (!movedToAmDate && shMatch.date) {
+          movedToAmDate = shMatch.date;
+        }
+      }
+    }
+  }
+
+  if (!hasMovedToAm && lead?.initialAppointmentBucket === 'outbound' && isCurrentlyAm) {
+    hasMovedToAm = true;
+  }
+
+  if (!hasMovedToAm) {
+    return {
+      isCurrentlyAm: false,
+      isMovedToAm: false,
+      amHandoverTrigger: 'none' as const,
+      amHandoverLabel: 'In Outbound / SDR Pipeline',
+      movedToAmDate: null,
+    };
+  }
+
+  // Lead HAS moved from Outbound to AM - determine exact handover trigger:
+  const hasApptTrigger = 
+    lead?.initialAppointmentBucket === 'outbound' ||
+    (lead?.initialAppointmentBucket && lead?.initialAppointmentBucket !== 'account_manager') ||
+    lead?.status === 'Appointment Booked' ||
+    lead?.customerStatus === 'Appointment Booked' ||
+    (lead?.bucketHistory && Array.isArray(lead.bucketHistory) && lead.bucketHistory.some((h: any) => {
+      const nb = (h.newBucket || h.toBucket || h.bucket || '').toLowerCase().trim();
+      const author = (h.author || '').toLowerCase();
+      const notes = (h.notes || '').toLowerCase();
+      const reason = (h.reason || '').toLowerCase();
+      return (nb === 'account_manager' || nb === 'account manager') && 
+        (author.includes('appointment') || notes.includes('appointment') || notes.includes('booked') || reason.includes('appointment'));
+    })) ||
+    (lead?.statusHistory && Array.isArray(lead.statusHistory) && lead.statusHistory.some((s: any) => 
+      s.newStatus === 'Appointment Booked' || (s.reason || '').toLowerCase().includes('appointment')
+    ));
+
+  if (hasApptTrigger) {
+    return {
+      isCurrentlyAm,
+      isMovedToAm: true,
+      amHandoverTrigger: 'appointment' as const,
+      amHandoverLabel: 'Moved to AM via Appointment',
+      movedToAmDate,
+    };
+  }
+
+  const hasLmTrigger = 
+    lead?.status === 'LocalMile Opportunity' ||
+    lead?.customerStatus === 'LocalMile Opportunity' ||
+    lead?.status === 'LocalMile Pending' ||
+    lead?.customerStatus === 'LocalMile Pending' ||
+    lead?.status === 'Trialing LocalMile' ||
+    lead?.customerStatus === 'Trialing LocalMile' ||
+    lead?.localMileTermsAccepted === true ||
+    !!lead?.dateLocalmileAccepted ||
+    !!lead?.localMileAcceptedAt;
+
+  if (hasLmTrigger) {
+    return {
+      isCurrentlyAm,
+      isMovedToAm: true,
+      amHandoverTrigger: 'localmile' as const,
+      amHandoverLabel: 'Moved to AM via LocalMile',
+      movedToAmDate,
+    };
+  }
+
+  return {
+    isCurrentlyAm,
+    isMovedToAm: true,
+    amHandoverTrigger: 'manual' as const,
+    amHandoverLabel: 'Moved to AM (Manual Transfer)',
+    movedToAmDate,
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -298,10 +433,37 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // 4. Fetch users collection for accurate role mapping
+    const usersSnap = await db.collection('users').get();
+    const usersRoleMap = new Map<string, string>();
+    usersSnap.docs.forEach(doc => {
+      const u = doc.data();
+      const role = (u.activeRole || u.role || 'user').toLowerCase().trim();
+      const displayName = (u.displayName || u.name || `${u.firstName || ''} ${u.lastName || ''}`).trim();
+      const email = (u.email || '').toLowerCase().trim();
+
+      let canonicalRole = 'SDR / Dialer';
+      if (role.includes('account_manager') || role.includes('account manager') || role === 'am') {
+        canonicalRole = 'Account Manager';
+      } else if (role.includes('franchisee')) {
+        canonicalRole = 'Franchisee';
+      } else if (role.includes('superadmin') || role.includes('admin') || role.includes('sales_manager') || role.includes('sales manager') || role.includes('manager')) {
+        canonicalRole = 'Admin / Manager';
+      } else if (role.includes('field')) {
+        canonicalRole = 'Field Sales';
+      } else if (role.includes('dialer') || role.includes('sdr') || role === 'user' || role === 'outbound') {
+        canonicalRole = 'SDR / Dialer';
+      }
+
+      if (displayName) usersRoleMap.set(displayName.toLowerCase(), canonicalRole);
+      if (email) usersRoleMap.set(email, canonicalRole);
+      usersRoleMap.set(doc.id.toLowerCase(), canonicalRole);
+    });
+
     const appointmentsList: any[] = [];
     const seenApptKeys = new Set<string>();
 
-    // 4. Enrich appointments
+    // 5. Enrich appointments
     rawApptItems.forEach(({ id: apptId, parentId, data }) => {
       const lead = leadsMap.get(parentId) || {};
       const key = `${parentId}-${apptId}`;
@@ -327,9 +489,17 @@ export async function GET(req: NextRequest) {
       const isOverdue = cleanStatus === 'Pending' && apptDateObj !== null && apptDateObj.getTime() < now;
 
       const bookedBy = resolveBookedBy(lead, data);
+      const bookedByRole = resolveBookerRole(bookedBy, usersRoleMap);
       const bookedWith = resolveBookedWith(lead, data);
       const originalBucket = resolveOriginalBucket(lead, data);
       const currentLeadStatus = lead.customerStatus || lead.status || 'New';
+
+      const handover = evaluateLeadHandover(lead, originalBucket);
+      const isCurrentlyAm = handover.isCurrentlyAm;
+      const amHandoverTrigger = handover.amHandoverTrigger;
+      const amHandoverLabel = handover.amHandoverLabel;
+      const isMovedToAm = handover.isMovedToAm;
+      const movedToAmDate = handover.movedToAmDate;
 
       const hasStatusChanged = currentLeadStatus !== 'Appointment Booked' && currentLeadStatus !== 'Account Manager';
       
@@ -374,6 +544,13 @@ export async function GET(req: NextRequest) {
       const contactEmail = primaryContact?.email || lead.customerServiceEmail || lead.email || '';
       const contactPhone = primaryContact?.phone || lead.customerServicePhone || lead.phone || '';
 
+      const isExplicitReschedule = cleanStatus === 'Rescheduled' || 
+        data.isRescheduled === true || 
+        (typeof data.rescheduledCount === 'number' && data.rescheduledCount > 0) || 
+        !!data.rescheduledFrom || 
+        (data.statusNotes && data.statusNotes.toLowerCase().includes('rescheduled')) || 
+        (data.notes && data.notes.toLowerCase().includes('rescheduled'));
+
       appointmentsList.push({
         id: apptId,
         leadId: parentId,
@@ -386,9 +563,20 @@ export async function GET(req: NextRequest) {
         appointmentStatus: cleanStatus,
         isOverdue,
         bookedBy,
+        bookedByRole,
         bookedWith,
         originalBucket,
+        currentBucket: formatBucketLabel(lead.bucket || 'outbound'),
         currentLeadStatus,
+        isCurrentlyAm,
+        isMovedToAm,
+        amHandoverTrigger,
+        amHandoverLabel,
+        movedToAmDate,
+        isExplicitReschedule: Boolean(isExplicitReschedule),
+        isInitialBooking: true, // will be finalized by group sequence
+        isRescheduled: Boolean(isExplicitReschedule),
+        bookingSequence: 1,
         statusChangedPostAppt: hasStatusChanged,
         statusChangeDate,
         statusProgression: postBookingHistory.map(h => ({
@@ -434,9 +622,17 @@ export async function GET(req: NextRequest) {
           const isOverdue = cleanStatus === 'Pending' && apptDateObj !== null && apptDateObj.getTime() < now;
 
           const bookedBy = resolveBookedBy(lead, data);
+          const bookedByRole = resolveBookerRole(bookedBy, usersRoleMap);
           const bookedWith = resolveBookedWith(lead, data);
           const originalBucket = resolveOriginalBucket(lead, data);
           const currentLeadStatus = lead.customerStatus || lead.status || 'New';
+
+          const handover = evaluateLeadHandover(lead, originalBucket);
+          const isCurrentlyAm = handover.isCurrentlyAm;
+          const amHandoverTrigger = handover.amHandoverTrigger;
+          const amHandoverLabel = handover.amHandoverLabel;
+          const isMovedToAm = handover.isMovedToAm;
+          const movedToAmDate = handover.movedToAmDate;
 
           const hasStatusChanged = currentLeadStatus !== 'Appointment Booked' && currentLeadStatus !== 'Account Manager';
           
@@ -451,6 +647,13 @@ export async function GET(req: NextRequest) {
 
           const primaryContact = Array.isArray(lead.contacts) ? lead.contacts.find((c: any) => c.isPrimary) || lead.contacts[0] : null;
 
+          const isExplicitReschedule = cleanStatus === 'Rescheduled' || 
+            data.isRescheduled === true || 
+            (typeof data.rescheduledCount === 'number' && data.rescheduledCount > 0) || 
+            !!data.rescheduledFrom || 
+            (data.statusNotes && data.statusNotes.toLowerCase().includes('rescheduled')) || 
+            (data.notes && data.notes.toLowerCase().includes('rescheduled'));
+
           appointmentsList.push({
             id: apptId,
             leadId,
@@ -463,9 +666,20 @@ export async function GET(req: NextRequest) {
             appointmentStatus: cleanStatus,
             isOverdue,
             bookedBy,
+            bookedByRole,
             bookedWith,
             originalBucket,
+            currentBucket: formatBucketLabel(lead.bucket || 'outbound'),
             currentLeadStatus,
+            isCurrentlyAm,
+            isMovedToAm,
+            amHandoverTrigger,
+            amHandoverLabel,
+            movedToAmDate,
+            isExplicitReschedule: Boolean(isExplicitReschedule),
+            isInitialBooking: true,
+            isRescheduled: Boolean(isExplicitReschedule),
+            bookingSequence: 1,
             statusChangedPostAppt: hasStatusChanged,
             statusChangeDate: null,
             statusProgression: [],
@@ -482,12 +696,32 @@ export async function GET(req: NextRequest) {
       }
     });
 
+    // 6. Post-process appointments grouped by parent lead to accurately set bookingSequence, isInitialBooking, and isRescheduled
+    const leadApptsMap = new Map<string, any[]>();
+    appointmentsList.forEach(a => {
+      if (!leadApptsMap.has(a.leadId)) {
+        leadApptsMap.set(a.leadId, []);
+      }
+      leadApptsMap.get(a.leadId)!.push(a);
+    });
+
+    leadApptsMap.forEach(appts => {
+      // Sort chronologically (oldest booked first)
+      appts.sort((a, b) => new Date(a.bookedAt).getTime() - new Date(b.bookedAt).getTime());
+      appts.forEach((a, idx) => {
+        a.bookingSequence = idx + 1;
+        a.isInitialBooking = idx === 0 && !a.isExplicitReschedule;
+        a.isRescheduled = a.isExplicitReschedule || idx > 0;
+      });
+    });
+
     // Sort default: newest booked first
     appointmentsList.sort((a, b) => new Date(b.bookedAt).getTime() - new Date(a.bookedAt).getTime());
 
     // Extract unique filter options
     const uniqueAccountManagers = Array.from(new Set(appointmentsList.map(a => a.bookedWith))).filter(Boolean).sort();
     const uniqueBookedBy = Array.from(new Set(appointmentsList.map(a => a.bookedBy))).filter(Boolean).sort();
+    const uniqueBookerRoles = Array.from(new Set(appointmentsList.map(a => a.bookedByRole))).filter(Boolean).sort();
     const uniqueOriginalBuckets = Array.from(new Set(appointmentsList.map(a => a.originalBucket))).filter(Boolean).sort();
     const uniqueAppointmentStatuses = ['Completed', 'Pending', 'No Show', 'Rescheduled', 'Cancelled'];
     const uniqueLeadStatuses = Array.from(new Set(appointmentsList.map(a => a.currentLeadStatus))).filter(Boolean).sort();
@@ -499,6 +733,7 @@ export async function GET(req: NextRequest) {
       filterOptions: {
         accountManagers: uniqueAccountManagers,
         bookedBy: uniqueBookedBy,
+        bookerRoles: uniqueBookerRoles,
         originalBuckets: uniqueOriginalBuckets,
         appointmentStatuses: uniqueAppointmentStatuses,
         leadStatuses: uniqueLeadStatuses,

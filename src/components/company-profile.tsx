@@ -16,6 +16,7 @@ import {
   Phone,
   Users,
   FileDigit,
+  FileText,
   ClipboardEdit,
   TrendingUp,
   Info,
@@ -81,13 +82,16 @@ import { RequestAddressChangeDialog } from '@/components/request-address-change-
 import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
-import { logActivity, getAllUsers, getCompanyFromFirebase, deleteAdditionalAddress, getOperatorsForFranchisee, getAllFranchisees } from '@/services/firebase'
+import { logActivity, getAllUsers, getCompanyFromFirebase, deleteAdditionalAddress, getOperatorsForFranchisee, getAllFranchisees, isLostLeadStatus } from '@/services/firebase'
 import { formatInTimezone, parseDateString, safeFormatDate, getLeadDisplayDateValue, getLeadDisplayDateLabel, getInvoiceLineItems } from '@/lib/utils'
 import { getMergedCancellationHierarchy, autoMapLostOutcome, getCancellationTypeInfo } from '@/lib/cancellation-reasons-mapper'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Textarea } from './ui/textarea'
+import { CreateInvoiceDialog } from '@/components/create-invoice-dialog'
+import { InvoiceDetailsDialog } from '@/components/invoice-details-dialog'
+import { canCreateCustomerInvoice } from '@/lib/invoice-services-catalog'
 import { Input } from './ui/input'
 import { CompanyScanMetrics } from './company-scan-metrics'
 import { EditAddressDialog } from './edit-address-dialog'
@@ -121,6 +125,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   }
 
   const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.role === 'admin' || isSuperAdmin;
+  const canCreateInvoice = canCreateCustomerInvoice(userProfile, isSuperAdmin);
 
   const [company, setCompany] = useState<Lead>(initialCompany);
   const [localMileJobs, setLocalMileJobs] = useState<any[]>([]);
@@ -132,6 +137,8 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [showAllInvoices, setShowAllInvoices] = useState(false);
+  const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
 
@@ -223,8 +230,8 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       reasonName
     );
 
+    if (!isLostStatus) return null;
     if (!hasSpecificDetails) return null;
-    if (!isLostStatus && !hasSpecificDetails) return null;
 
     const cancellationDateStr = company.cancellationdate || (company as any).cancellationDate || null;
 
@@ -1537,7 +1544,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
-          {resolvedCancellation && (
+          {resolvedCancellation && resolvedCancellation.isLost && (
             <Card className="border-rose-200 bg-gradient-to-br from-rose-50/70 via-slate-50/50 to-amber-50/30 dark:from-rose-950/20 dark:via-slate-900/30 dark:to-amber-950/10 shadow-sm overflow-hidden">
                 <CardHeader className="pb-3 border-b border-rose-100 dark:border-rose-900/40 flex flex-row items-center justify-between flex-wrap gap-2 bg-white/60 dark:bg-slate-900/60">
                     <div className="flex items-center gap-2">
@@ -2229,7 +2236,21 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             </Card>
 
             <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><FileDigit className="w-5 h-5 text-muted-foreground" />Invoices</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <CardTitle className="flex items-center gap-2">
+                        <FileDigit className="w-5 h-5 text-muted-foreground" />
+                        Invoices {invoices.length > 0 && <span className="text-xs font-normal text-muted-foreground">({invoices.length})</span>}
+                    </CardTitle>
+                    {canCreateInvoice && (
+                        <Button
+                            size="sm"
+                            onClick={() => setIsCreateInvoiceOpen(true)}
+                            className="h-8 text-xs bg-[#095c7b] hover:bg-[#07475f] text-white gap-1.5 shadow-sm font-medium"
+                        >
+                            <Plus className="w-3.5 h-3.5" /> Create Invoice
+                        </Button>
+                    )}
+                </CardHeader>
                 <CardContent>
                     {loadingInvoices ? <Loader /> : displayedInvoices.length > 0 ? (
                         <div className="space-y-4">
@@ -2271,16 +2292,24 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                                 </TableCell>
                                                 <TableCell className="text-right">${Number(inv.invoiceTotal).toFixed(2)}</TableCell>
                                                 <TableCell className="text-right">
-                                                    {inv.invoiceURL ? (
-                                                        <Button size="sm" variant="outline" asChild>
-                                                            <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
-                                                                <ExternalLink className="h-4 w-4 mr-2" />
-                                                                View
-                                                            </a>
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => setSelectedInvoice(inv)}
+                                                            className="h-7 text-xs font-semibold gap-1 text-[#095c7b] border-[#095c7b]/30 hover:bg-[#095c7b]/5"
+                                                        >
+                                                            <FileText className="h-3.5 w-3.5" />
+                                                            Tax Invoice
                                                         </Button>
-                                                    ) : (
-                                                        <span className="text-xs text-muted-foreground">No link</span>
-                                                    )}
+                                                        {inv.invoiceURL && (
+                                                            <Button size="sm" variant="ghost" asChild className="h-7 w-7 p-0 text-slate-500" title="Open NetSuite Invoice">
+                                                                <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
+                                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                                </a>
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                             {(() => {
@@ -2337,6 +2366,31 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     ) : <div className="text-center py-10 text-muted-foreground">No invoices found.</div>}
                 </CardContent>
             </Card>
+
+            {isCreateInvoiceOpen && (
+                <CreateInvoiceDialog
+                    open={isCreateInvoiceOpen}
+                    onOpenChange={setIsCreateInvoiceOpen}
+                    company={company}
+                    onInvoiceCreated={() => {
+                        const invoicesRef = collection(firestore, 'companies', company.id, 'invoices');
+                        getDocs(query(invoicesRef, orderBy('invoiceDate', 'desc'))).then(snapshot => {
+                            setInvoices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice)));
+                        });
+                    }}
+                />
+            )}
+
+            {selectedInvoice && (
+                <InvoiceDetailsDialog
+                    isOpen={!!selectedInvoice}
+                    onOpenChange={(open) => !open && setSelectedInvoice(null)}
+                    invoice={selectedInvoice}
+                    companyName={company.companyName}
+                    companyAbn={company.abn}
+                    companyAddress={company.address || (company as any).customerAddress}
+                />
+            )}
 
             <Card>
                 <CardHeader className="pb-3 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

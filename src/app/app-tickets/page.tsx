@@ -1160,10 +1160,10 @@ export default function AppTicketsPage() {
                 <div className="bg-amber-50 border-2 border-amber-300 text-amber-900 p-4 rounded-xl shadow-xs space-y-1">
                   <div className="flex items-center gap-2 font-bold text-sm text-amber-900">
                     <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
-                    Action Required: Super Admin is waiting on your response
+                    Action Required: {selectedTicket.assignedToName || "Admin"} is waiting on your response
                   </div>
                   <p className="text-xs text-amber-800/90 leading-relaxed pl-7">
-                    The admin team has requested additional details or clarification on this request before proceeding. Please reply below or update the ticket details.
+                    {selectedTicket.assignedToName ? `${selectedTicket.assignedToName} has` : "The admin team has"} requested additional details or clarification on this request before proceeding. Please reply below or update the ticket details.
                   </p>
                 </div>
               )}

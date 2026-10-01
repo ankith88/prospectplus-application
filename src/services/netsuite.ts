@@ -639,15 +639,18 @@ export interface NetSuiteUpdateCustomerPayload {
     franchiseeId: string;
     prospectPlusId: string;
     abn?: string;
+    noteTitle?: string;
+    noteBody?: string;
+    noteAuthorId?: string;
 }
 
 /**
  * Sends updated customer/company details to NetSuite Scriptlet 1900 with operation 'updateCustomer'.
- * @param payload The customer update payload containing document IDs, company name, email, phone, franchisee ID, and abn.
+ * @param payload The customer update payload containing document IDs, company name, email, phone, franchisee ID, abn, and optional note details.
  * @returns A promise that resolves with the result of the NetSuite API call.
  */
 export async function sendCompanyCustomerUpdateToNetSuite(payload: NetSuiteUpdateCustomerPayload): Promise<{ success: boolean; message: string }> {
-    const { internalId, companyName, email, phone, franchiseeId, prospectPlusId, abn } = payload;
+    const { internalId, companyName, email, phone, franchiseeId, prospectPlusId, abn, noteTitle, noteBody, noteAuthorId } = payload;
 
     if (!internalId && !prospectPlusId) {
         const errorMsg = 'Invalid payload: internalId or prospectPlusId is required.';
@@ -657,17 +660,25 @@ export async function sendCompanyCustomerUpdateToNetSuite(payload: NetSuiteUpdat
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc";
 
+    const requestParams: any = {
+        internalId: internalId || prospectPlusId,
+        companyName: companyName || '',
+        abn: abn || '',
+        email: email || '',
+        phone: phone || '',
+        franchiseeId: franchiseeId || '',
+        prospectPlusId: prospectPlusId || internalId,
+    };
+
+    if (noteTitle !== undefined || noteBody !== undefined || noteAuthorId !== undefined) {
+        requestParams.noteTitle = noteTitle || '';
+        requestParams.noteBody = noteBody || '';
+        requestParams.noteAuthorId = noteAuthorId || '1952193';
+    }
+
     const requestData = {
         operation: "updateCustomer",
-        requestParams: {
-            internalId: internalId || prospectPlusId,
-            companyName: companyName || '',
-            email: email || '',
-            phone: phone || '',
-            franchiseeId: franchiseeId || '',
-            prospectPlusId: prospectPlusId || internalId,
-            abn: abn || '',
-        }
+        requestParams
     };
 
     const url = `${baseUrl}&requestData=${encodeURIComponent(JSON.stringify(requestData))}`;

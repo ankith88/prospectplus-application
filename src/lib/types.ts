@@ -327,6 +327,8 @@ export interface Invoice {
     invoiceStatus?: string;
     status?: string;
     syncedWithNetSuite?: boolean;
+    customerPO?: string;
+    poNumber?: string;
     items?: InvoiceItem[];
 }
 

@@ -1196,6 +1196,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                  onOpenChange={setIsInvoiceDialogOpen}
                  invoice={selectedInvoice}
                  companyName={selectedInvoiceCompany}
+                 companyAbn={parentLead?.abn || lead?.abn}
              />
              <DiscoverMultiSitesDialog
                  isOpen={isDiscoverOpen}

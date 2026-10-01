@@ -99,9 +99,19 @@ export interface AppointmentRecord {
   appointmentStatus: 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled' | 'Pending';
   isOverdue: boolean;
   bookedBy: string; // SDR / Dialer / User
+  bookedByRole?: string; // SDR / Dialer, Account Manager, Admin / Manager, Franchisee, System / Automated
   bookedWith: string; // Account Manager
   originalBucket: string; // Outbound, Inbound, Field Sales, etc.
+  currentBucket?: string;
   currentLeadStatus: string;
+  isCurrentlyAm?: boolean;
+  isMovedToAm?: boolean;
+  amHandoverTrigger?: 'appointment' | 'localmile' | 'manual' | 'none' | 'non_outbound' | null;
+  amHandoverLabel?: string;
+  movedToAmDate?: string | null;
+  isInitialBooking?: boolean;
+  isRescheduled?: boolean;
+  bookingSequence?: number;
   statusChangedPostAppt: boolean;
   statusChangeDate: string | null;
   statusProgression: Array<{
@@ -155,6 +165,10 @@ export interface CompanyAppointmentGroup {
   originalBucket: string;
   bookedWith?: string;
   bookedBy?: string;
+  bookedByRole?: string;
+  isMovedToAm?: boolean;
+  amHandoverTrigger?: 'appointment' | 'localmile' | 'manual' | 'none' | 'non_outbound' | null;
+  amHandoverLabel?: string;
   appointments: AppointmentRecord[];
   latestAppointmentDate: string;
   earliestBookedAt: string;
@@ -201,7 +215,6 @@ export function AppointmentReportingClient() {
 
   const isFranchisee = Boolean(
     userProfile?.activeRole === 'Franchisee' ||
-    userProfile?.activeRole === 'Franchisees' ||
     userProfile?.role === 'Franchisee' ||
     activeRoleLower === 'franchisee' ||
     activeRoleLower === 'franchisees' ||
@@ -214,18 +227,21 @@ export function AppointmentReportingClient() {
     assignedRolesLower.some((r: string) => allowedRoles.includes(r))
   );
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [allAppointments, setAllAppointments] = useState<AppointmentRecord[]>([]);
+
   const [filterOptions, setFilterOptions] = useState<{
     accountManagers: string[];
     bookedBy: string[];
+    bookerRoles: string[];
     originalBuckets: string[];
     appointmentStatuses: string[];
     leadStatuses: string[];
   }>({
     accountManagers: [],
     bookedBy: [],
+    bookerRoles: [],
     originalBuckets: [],
     appointmentStatuses: [],
     leadStatuses: [],
@@ -235,9 +251,12 @@ export function AppointmentReportingClient() {
   const [companySearch, setCompanySearch] = useState('');
   const [selectedAMs, setSelectedAMs] = useState<string[]>([]);
   const [selectedBookedBy, setSelectedBookedBy] = useState<string[]>([]);
+  const [selectedBookerRoles, setSelectedBookerRoles] = useState<string[]>([]);
   const [selectedBuckets, setSelectedBuckets] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedLeadStatusChange, setSelectedLeadStatusChange] = useState<string>('all'); // all, changed, unchanged, won, lost, pipeline
+  const [selectedAppointmentNature, setSelectedAppointmentNature] = useState<string>('all'); // all, initial_only, rescheduled_only
+  const [selectedHandoverTrigger, setSelectedHandoverTrigger] = useState<string>('all'); // all, moved_am_appt, moved_am_any, still_outbound
   
   // Date Filters - Default to Current Month for instant high-speed reporting
   const [bookedDateRange, setBookedDateRange] = useState<DateRange | undefined>(() => getQuickDateRange('thismonth'));
@@ -360,15 +379,31 @@ export function AppointmentReportingClient() {
     setCompanySearch('');
     setSelectedAMs([]);
     setSelectedBookedBy([]);
+    setSelectedBookerRoles([]);
     setSelectedBuckets([]);
     setSelectedStatuses([]);
     setSelectedLeadStatusChange('all');
+    setSelectedAppointmentNature('all');
+    setSelectedHandoverTrigger('all');
     setBookedDateRange(getQuickDateRange('thismonth'));
     setBookedDatePreset('thismonth');
     setApptDateRange(undefined);
     setApptDatePreset('all');
     setCurrentPage(1);
     toast({ title: 'Filters Reset', description: 'Reset to Current Month view.' });
+  };
+
+  // Quick Preset to Match Outbound Reporting
+  const handleMatchOutboundReport = () => {
+    setSelectedBuckets(['Outbound']);
+    setSelectedBookerRoles(['SDR / Dialer']);
+    setSelectedAppointmentNature('initial_only');
+    setSelectedHandoverTrigger('moved_am_appt');
+    setCurrentPage(1);
+    toast({ 
+      title: '⚡ Matched Outbound Report Settings', 
+      description: 'Filtered to Outbound SDR initial appointments that completed an AM Handover.' 
+    });
   };
 
   // Filtering Logic
@@ -396,6 +431,14 @@ export function AppointmentReportingClient() {
         return false;
       }
 
+      // Booked By Role Filter
+      if (selectedBookerRoles.length > 0) {
+        const role = appt.bookedByRole || 'Other';
+        if (!selectedBookerRoles.includes(role)) {
+          return false;
+        }
+      }
+
       // Original Bucket Filter
       if (selectedBuckets.length > 0 && !selectedBuckets.includes(appt.originalBucket)) {
         return false;
@@ -408,6 +451,32 @@ export function AppointmentReportingClient() {
           const matchOverdue = appt.isOverdue;
           if (!matchStandard && !matchOverdue) return false;
         } else if (!selectedStatuses.includes(appt.appointmentStatus)) {
+          return false;
+        }
+      }
+
+      // Appointment Nature / Initial vs Rescheduled Filter
+      if (selectedAppointmentNature === 'initial_only') {
+        if (!appt.isInitialBooking || appt.appointmentStatus === 'Rescheduled') {
+          return false;
+        }
+      } else if (selectedAppointmentNature === 'rescheduled_only') {
+        if (!appt.isRescheduled && appt.appointmentStatus !== 'Rescheduled') {
+          return false;
+        }
+      }
+
+      // AM Handover Alignment / Stage Filter
+      if (selectedHandoverTrigger === 'moved_am_appt') {
+        if (!appt.isMovedToAm || appt.amHandoverTrigger !== 'appointment') {
+          return false;
+        }
+      } else if (selectedHandoverTrigger === 'moved_am_any') {
+        if (!appt.isMovedToAm) {
+          return false;
+        }
+      } else if (selectedHandoverTrigger === 'still_outbound') {
+        if (appt.isMovedToAm) {
           return false;
         }
       }
@@ -444,8 +513,11 @@ export function AppointmentReportingClient() {
     companySearch,
     selectedAMs,
     selectedBookedBy,
+    selectedBookerRoles,
     selectedBuckets,
     selectedStatuses,
+    selectedAppointmentNature,
+    selectedHandoverTrigger,
     selectedLeadStatusChange,
     bookedDateRange,
     apptDateRange,
@@ -459,7 +531,7 @@ export function AppointmentReportingClient() {
       const groupKey = appt.leadId || appt.companyName || 'unknown';
       let group = groupMap.get(groupKey);
       if (!group) {
-        group = {
+        const newGroup: CompanyAppointmentGroup = {
           key: groupKey,
           leadId: appt.leadId,
           companyName: appt.companyName || 'Unnamed Company',
@@ -472,6 +544,10 @@ export function AppointmentReportingClient() {
           originalBucket: appt.originalBucket,
           bookedWith: appt.bookedWith,
           bookedBy: appt.bookedBy,
+          bookedByRole: appt.bookedByRole,
+          isMovedToAm: appt.isMovedToAm,
+          amHandoverTrigger: appt.amHandoverTrigger,
+          amHandoverLabel: appt.amHandoverLabel,
           appointments: [],
           latestAppointmentDate: appt.appointmentDate,
           earliestBookedAt: appt.bookedAt,
@@ -485,7 +561,8 @@ export function AppointmentReportingClient() {
           },
           hasStatusChanged: false,
         };
-        groupMap.set(groupKey, group);
+        groupMap.set(groupKey, newGroup);
+        group = newGroup;
       }
 
       group.appointments.push(appt);
@@ -827,6 +904,11 @@ export function AppointmentReportingClient() {
         'Status Changed Post-Appt',
         'Status Change Date',
         'Outcome Category',
+        'Booked By Role',
+        'Booking Sequence',
+        'Booking Nature',
+        'Moved to AM?',
+        'AM Handover Trigger',
         'Meeting Type',
         'Meeting Join URL',
         'Appointment Notes'
@@ -849,6 +931,11 @@ export function AppointmentReportingClient() {
         `"${a.statusChangedPostAppt ? 'Yes' : 'No'}"`,
         `"${a.statusChangeDate ? safeFormatDate(a.statusChangeDate, 'yyyy-MM-dd HH:mm') : 'N/A'}"`,
         `"${a.outcomeCategory}"`,
+        `"${a.bookedByRole || 'Other'}"`,
+        `"${a.bookingSequence || 1}"`,
+        `"${a.isInitialBooking ? 'Initial Booking' : 'Rescheduled / Follow-up'}"`,
+        `"${a.isMovedToAm ? 'Yes' : 'No'}"`,
+        `"${a.amHandoverLabel || 'None'}"`,
         `"${(a.meetingType || '').replace(/"/g, '""')}"`,
         `"${(a.joinUrl || '').replace(/"/g, '""')}"`,
         `"${(a.notes || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`
@@ -882,6 +969,13 @@ export function AppointmentReportingClient() {
     return filterOptions.accountManagers.map(am => ({ value: am, label: am }));
   }, [filterOptions.accountManagers]);
 
+  const bookerRoleOptions: Option[] = useMemo(() => {
+    const roles = filterOptions.bookerRoles?.length > 0 
+      ? filterOptions.bookerRoles 
+      : ['SDR / Dialer', 'Account Manager', 'Admin / Manager', 'Franchisee', 'System / Automated'];
+    return roles.map(r => ({ value: r, label: r }));
+  }, [filterOptions.bookerRoles]);
+
   const bookerOptions: Option[] = useMemo(() => {
     return filterOptions.bookedBy.map(b => ({ value: b, label: b }));
   }, [filterOptions.bookedBy]);
@@ -904,20 +998,27 @@ export function AppointmentReportingClient() {
     if (companySearch.trim()) count++;
     if (selectedAMs.length > 0) count++;
     if (selectedBookedBy.length > 0) count++;
+    if (selectedBookerRoles.length > 0) count++;
     if (selectedBuckets.length > 0) count++;
     if (selectedStatuses.length > 0) count++;
+    if (selectedAppointmentNature !== 'all') count++;
+    if (selectedHandoverTrigger !== 'all') count++;
     if (selectedLeadStatusChange !== 'all') count++;
-    if (bookedDateRange?.from) count++;
+    if (bookedDateRange?.from && bookedDatePreset !== 'thismonth') count++;
     if (apptDateRange?.from) count++;
     return count;
   }, [
     companySearch,
     selectedAMs,
     selectedBookedBy,
+    selectedBookerRoles,
     selectedBuckets,
     selectedStatuses,
+    selectedAppointmentNature,
+    selectedHandoverTrigger,
     selectedLeadStatusChange,
     bookedDateRange,
+    bookedDatePreset,
     apptDateRange
   ]);
 
@@ -1069,7 +1170,7 @@ export function AppointmentReportingClient() {
           title="Unique Customers"
           value={stats.uniqueCustomers}
           icon={<Building2 className="h-4 w-4" />}
-          accentColor="indigo"
+          accentColor="purple"
           description="Accounts booked"
           onClick={() => {
             setSelectedStatuses([]);
@@ -1231,6 +1332,18 @@ export function AppointmentReportingClient() {
                 </Button>
               ))}
 
+              {/* Quick Action: Match Outbound Reporting */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleMatchOutboundReport}
+                className="h-7 px-2.5 text-xs font-bold rounded-full border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 hover:text-amber-950 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 flex items-center gap-1 shadow-xs ml-1"
+                title="Filter to Outbound SDR initial appointments that completed an AM Handover (aligns count with Outbound Reporting)"
+              >
+                <Sparkles className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                <span>Match Outbound Report</span>
+              </Button>
+
               {activeFiltersCount > 0 && (
                 <Button
                   variant="ghost"
@@ -1247,18 +1360,18 @@ export function AppointmentReportingClient() {
         </CardHeader>
 
         <CardContent className="p-4 space-y-4">
-          {/* Row 1: Search & Dropdowns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {/* Row 1: Search & Core Dropdowns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {/* Search Company / Contact */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                 <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                Company / Contact Search
+                Company / Contact
               </label>
               <div className="relative">
                 <Search className="h-4 w-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                 <Input
-                  placeholder="Search company, contact, phone..."
+                  placeholder="Search company, phone..."
                   value={companySearch}
                   onChange={e => {
                     setCompanySearch(e.target.value);
@@ -1290,7 +1403,7 @@ export function AppointmentReportingClient() {
                   setSelectedAMs(v);
                   setCurrentPage(1);
                 }}
-                placeholder="All Account Managers"
+                placeholder="All AMs"
                 className="h-9 text-xs"
               />
             </div>
@@ -1308,7 +1421,7 @@ export function AppointmentReportingClient() {
                   setSelectedBuckets(v);
                   setCurrentPage(1);
                 }}
-                placeholder="All Original Buckets"
+                placeholder="All Buckets"
                 className="h-9 text-xs"
               />
             </div>
@@ -1326,16 +1439,34 @@ export function AppointmentReportingClient() {
                   setSelectedStatuses(v);
                   setCurrentPage(1);
                 }}
-                placeholder="All Appointment Outcomes"
+                placeholder="All Outcomes"
                 className="h-9 text-xs"
               />
             </div>
 
-            {/* Booked By / Dialer */}
+            {/* Booked By Role */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                <Target className="h-3.5 w-3.5 text-blue-500" />
+                Booked By (Role)
+              </label>
+              <MultiSelectCombobox
+                options={bookerRoleOptions}
+                selected={selectedBookerRoles}
+                onSelectedChange={(v: string[]) => {
+                  setSelectedBookerRoles(v);
+                  setCurrentPage(1);
+                }}
+                placeholder="All Booker Roles"
+                className="h-9 text-xs"
+              />
+            </div>
+
+            {/* Booked By User */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                 <User className="h-3.5 w-3.5 text-slate-400" />
-                Booked By (SDR / Dialer)
+                Booked By (User)
               </label>
               <MultiSelectCombobox
                 options={bookerOptions}
@@ -1350,14 +1481,14 @@ export function AppointmentReportingClient() {
             </div>
           </div>
 
-          {/* Row 2: Date Filters & Lead Status Shift */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+          {/* Row 2: Date Filters & Flow Classifiers */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
             {/* Appointment Creation Date (When Booked) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                   <CalendarClock className="h-3.5 w-3.5 text-blue-500" />
-                  Booking Creation Date (When Booked)
+                  Booking Date (Created)
                 </label>
                 {bookedDateRange?.from && (
                   <button
@@ -1370,7 +1501,7 @@ export function AppointmentReportingClient() {
               </div>
               <div className="flex items-center gap-1.5">
                 <Select value={bookedDatePreset} onValueChange={handleBookedDatePreset}>
-                  <SelectTrigger className="h-9 text-xs w-[130px]">
+                  <SelectTrigger className="h-9 text-xs w-[110px]">
                     <SelectValue placeholder="Preset" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1387,18 +1518,18 @@ export function AppointmentReportingClient() {
 
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="h-9 text-xs flex-1 justify-start font-normal text-left">
-                      <CalendarIcon className="h-3.5 w-3.5 mr-1.5 text-slate-400" />
+                    <Button variant="outline" className="h-9 text-xs flex-1 justify-start font-normal text-left truncate">
+                      <CalendarIcon className="h-3.5 w-3.5 mr-1.5 text-slate-400 shrink-0" />
                       {bookedDateRange?.from ? (
                         bookedDateRange.to ? (
                           <>
-                            {format(bookedDateRange.from, 'LLL dd, y')} - {format(bookedDateRange.to, 'LLL dd, y')}
+                            {format(bookedDateRange.from, 'd MMM')} - {format(bookedDateRange.to, 'd MMM')}
                           </>
                         ) : (
-                          format(bookedDateRange.from, 'LLL dd, y')
+                          format(bookedDateRange.from, 'd MMM yyyy')
                         )
                       ) : (
-                        <span className="text-slate-400">Custom Range...</span>
+                        <span className="text-slate-400">Custom...</span>
                       )}
                     </Button>
                   </PopoverTrigger>
@@ -1425,7 +1556,7 @@ export function AppointmentReportingClient() {
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                   <CalendarCheck className="h-3.5 w-3.5 text-emerald-500" />
-                  Appointment Date (Scheduled Meeting)
+                  Meeting Date (Scheduled)
                 </label>
                 {apptDateRange?.from && (
                   <button
@@ -1438,7 +1569,7 @@ export function AppointmentReportingClient() {
               </div>
               <div className="flex items-center gap-1.5">
                 <Select value={apptDatePreset} onValueChange={handleApptDatePreset}>
-                  <SelectTrigger className="h-9 text-xs w-[130px]">
+                  <SelectTrigger className="h-9 text-xs w-[110px]">
                     <SelectValue placeholder="Preset" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1455,18 +1586,18 @@ export function AppointmentReportingClient() {
 
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="h-9 text-xs flex-1 justify-start font-normal text-left">
-                      <CalendarIcon className="h-3.5 w-3.5 mr-1.5 text-slate-400" />
+                    <Button variant="outline" className="h-9 text-xs flex-1 justify-start font-normal text-left truncate">
+                      <CalendarIcon className="h-3.5 w-3.5 mr-1.5 text-slate-400 shrink-0" />
                       {apptDateRange?.from ? (
                         apptDateRange.to ? (
                           <>
-                            {format(apptDateRange.from, 'LLL dd, y')} - {format(apptDateRange.to, 'LLL dd, y')}
+                            {format(apptDateRange.from, 'd MMM')} - {format(apptDateRange.to, 'd MMM')}
                           </>
                         ) : (
-                          format(apptDateRange.from, 'LLL dd, y')
+                          format(apptDateRange.from, 'd MMM yyyy')
                         )
                       ) : (
-                        <span className="text-slate-400">Custom Range...</span>
+                        <span className="text-slate-400">Custom...</span>
                       )}
                     </Button>
                   </PopoverTrigger>
@@ -1488,11 +1619,60 @@ export function AppointmentReportingClient() {
               </div>
             </div>
 
+            {/* Booking Nature / Initial vs Rescheduled */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                <RotateCcw className="h-3.5 w-3.5 text-indigo-500" />
+                Booking Type (Initial vs Rescheduled)
+              </label>
+              <Select
+                value={selectedAppointmentNature}
+                onValueChange={v => {
+                  setSelectedAppointmentNature(v);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="All Bookings" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Bookings (Initial & Rescheduled)</SelectItem>
+                  <SelectItem value="initial_only">Initial Scheduled Only (Exclude Rescheduled)</SelectItem>
+                  <SelectItem value="rescheduled_only">Rescheduled Only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* AM Handover Alignment / Stage */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                AM Handover Stage
+              </label>
+              <Select
+                value={selectedHandoverTrigger}
+                onValueChange={v => {
+                  setSelectedHandoverTrigger(v);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="All Leads" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Leads (No Handover Filter)</SelectItem>
+                  <SelectItem value="moved_am_appt">Moved to AM via Appointment (Matches Outbound)</SelectItem>
+                  <SelectItem value="moved_am_any">Moved to AM (Any Trigger)</SelectItem>
+                  <SelectItem value="still_outbound">Still in Outbound / SDR Pipeline</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Post-Appointment Lead Status Transition */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                 <TrendingUp className="h-3.5 w-3.5 text-purple-500" />
-                Post-Appointment Lead Status Shift
+                Lead Status Shift Post-Appt
               </label>
               <Select
                 value={selectedLeadStatusChange}
@@ -1502,11 +1682,11 @@ export function AppointmentReportingClient() {
                 }}
               >
                 <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="All Lead Statuses" />
+                  <SelectValue placeholder="All Status Shifts" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Leads (Changed & Unchanged)</SelectItem>
-                  <SelectItem value="changed">Status Changed After Appointment ({stats.statusChanged})</SelectItem>
+                  <SelectItem value="changed">Status Changed After Appt ({stats.statusChanged})</SelectItem>
                   <SelectItem value="unchanged">Status Unchanged / Pending ({stats.total - stats.statusChanged})</SelectItem>
                   <SelectItem value="won">Converted to Won / Signed ({stats.wonSigned})</SelectItem>
                   <SelectItem value="pipeline">Active in Pipeline ({stats.activePipeline})</SelectItem>
@@ -1797,12 +1977,28 @@ export function AppointmentReportingClient() {
 
                             {/* Original Bucket */}
                             <TableCell>
-                              <Badge 
-                                variant="outline" 
-                                className="text-[11px] font-semibold bg-slate-50 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300"
-                              >
-                                {group.originalBucket}
-                              </Badge>
+                              <div className="flex flex-col gap-1">
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-[11px] font-semibold bg-slate-50 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 w-fit"
+                                >
+                                  {group.originalBucket}
+                                </Badge>
+                                {group.amHandoverLabel && (
+                                  <span 
+                                    className={cn(
+                                      "text-[10px] font-medium",
+                                      group.isMovedToAm 
+                                        ? "text-amber-600 dark:text-amber-400"
+                                        : group.originalBucket === 'Inbound'
+                                        ? "text-sky-600 dark:text-sky-400"
+                                        : "text-slate-500 dark:text-slate-400"
+                                    )}
+                                  >
+                                    ↳ {group.amHandoverLabel}
+                                  </span>
+                                )}
+                              </div>
                             </TableCell>
 
                             {/* Current Lead Status */}
@@ -1936,9 +2132,28 @@ export function AppointmentReportingClient() {
 
                                             {/* Who Booked */}
                                             <TableCell className="py-2.5 font-medium text-slate-800 dark:text-slate-200">
-                                              <div className="flex items-center gap-1">
-                                                <User className="h-3 w-3 text-slate-400" />
-                                                <span>{appt.bookedBy}</span>
+                                              <div className="flex flex-col gap-0.5">
+                                                <div className="flex items-center gap-1">
+                                                  <User className="h-3 w-3 text-slate-400" />
+                                                  <span>{appt.bookedBy}</span>
+                                                </div>
+                                                {appt.bookedByRole && (
+                                                  <div>
+                                                    <Badge 
+                                                      variant="outline" 
+                                                      className={cn(
+                                                        "text-[9px] px-1 py-0 font-medium",
+                                                        appt.bookedByRole === 'SDR / Dialer' 
+                                                          ? "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300"
+                                                          : appt.bookedByRole === 'Account Manager'
+                                                          ? "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300"
+                                                          : "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400"
+                                                      )}
+                                                    >
+                                                      {appt.bookedByRole}
+                                                    </Badge>
+                                                  </div>
+                                                )}
                                               </div>
                                             </TableCell>
 
@@ -1950,11 +2165,22 @@ export function AppointmentReportingClient() {
                                               </div>
                                             </TableCell>
 
-                                            {/* Original Bucket */}
+                                            {/* Original Bucket & Booking Nature */}
                                             <TableCell className="py-2.5">
-                                              <Badge variant="outline" className="text-[10px] font-semibold bg-slate-50 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300">
-                                                {appt.originalBucket}
-                                              </Badge>
+                                              <div className="flex flex-col gap-1">
+                                                <Badge variant="outline" className="text-[10px] font-semibold bg-slate-50 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 w-fit">
+                                                  {appt.originalBucket}
+                                                </Badge>
+                                                {appt.isInitialBooking ? (
+                                                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                                    ● Initial Booking
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+                                                    ↺ Follow-up / Rescheduled
+                                                  </span>
+                                                )}
+                                              </div>
                                             </TableCell>
 
                                             {/* Actions */}
