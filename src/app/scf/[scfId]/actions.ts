@@ -597,3 +597,211 @@ export async function updateScfDetailsAction(
     return { success: false, message: error.message };
   }
 }
+
+export interface UploadAndAcceptManualScfParams {
+  leadId: string;
+  scfId?: string;
+  pdfUrl: string;
+  pdfName: string;
+  acceptedAt: string; // ISO string or YYYY-MM-DD
+  signerName?: string;
+  signerEmail?: string;
+  uploaderName: string;
+  uploaderEmail?: string;
+  uploaderUid?: string;
+  notes?: string;
+}
+
+export async function uploadAndAcceptManualScfAction(params: UploadAndAcceptManualScfParams) {
+  try {
+    const { leadId, scfId, pdfUrl, pdfName, acceptedAt, signerName, signerEmail, uploaderName, notes } = params;
+
+    if (!leadId) {
+      return { success: false, message: 'Lead ID is required.' };
+    }
+    if (!pdfUrl) {
+      return { success: false, message: 'Uploaded file URL is required.' };
+    }
+    if (!acceptedAt) {
+      return { success: false, message: 'Terms & Conditions acceptance date is required.' };
+    }
+
+    const { ref: leadRef, snap: leadSnap, collectionName } = await getAdminLeadOrCompanyRef(leadId);
+    if (!leadSnap.exists) {
+      return { success: false, message: 'Lead or company details not found.' };
+    }
+
+    const leadData = leadSnap.data();
+    const nowStr = new Date().toISOString();
+    
+    // Normalize acceptedAt into a clean ISO string
+    let acceptedAtIso = acceptedAt;
+    try {
+      acceptedAtIso = new Date(acceptedAt).toISOString();
+    } catch {
+      acceptedAtIso = nowStr;
+    }
+    const acceptedDateFormatted = acceptedAtIso.split('T')[0];
+
+    // Determine or create SCF document in subcollection
+    let targetScfDocRef: any = null;
+    let existingScfData: any = null;
+
+    if (scfId) {
+      let docRef = adminDb.collection(collectionName).doc(leadId).collection('scfs').doc(scfId);
+      let docSnap = await docRef.get();
+      if (!docSnap.exists) {
+        const altCol = collectionName === 'companies' ? 'leads' : 'companies';
+        const altRef = adminDb.collection(altCol).doc(leadId).collection('scfs').doc(scfId);
+        const altSnap = await altRef.get();
+        if (altSnap.exists) {
+          docRef = altRef;
+          docSnap = altSnap;
+        }
+      }
+      if (docSnap.exists) {
+        targetScfDocRef = docRef;
+        existingScfData = docSnap.data();
+      }
+    }
+
+    if (!targetScfDocRef) {
+      // Create new manual SCF record
+      const scfCollection = adminDb.collection(collectionName).doc(leadId).collection('scfs');
+      targetScfDocRef = scfCollection.doc();
+    }
+
+    const scfRecordData: any = {
+      status: 'Accepted',
+      acceptedAt: acceptedAtIso,
+      termsAccepted: true,
+      termsAcceptedAt: acceptedAtIso,
+      isManualScf: true,
+      uploadedPdfUrl: pdfUrl,
+      uploadedPdfName: pdfName || 'Manual_Signed_SCF.pdf',
+      uploadedPdfAt: nowStr,
+      uploadedPdfBy: uploaderName || 'Account Manager',
+      signerName: signerName || leadData?.customerName || '',
+      signerEmail: signerEmail || leadData?.customerServiceEmail || leadData?.customerEmail || '',
+      notes: notes || '',
+      updatedAt: nowStr,
+    };
+
+    if (!existingScfData) {
+      scfRecordData.id = targetScfDocRef.id;
+      scfRecordData.createdAt = acceptedAtIso;
+      scfRecordData.createdBy = uploaderName || 'Account Manager';
+      scfRecordData.services = leadData?.services || [];
+      scfRecordData.products = leadData?.products || [];
+      await targetScfDocRef.set(scfRecordData);
+    } else {
+      await targetScfDocRef.update(scfRecordData);
+    }
+
+    // Update Lead Document
+    const currentStatus = leadData?.status || leadData?.customerStatus || '';
+    const isCompanyOrSignedCustomer = 
+      leadData?.leadType === 'Company' ||
+      ['Signed', 'Customer', 'Won', 'Signed Customer'].includes(currentStatus);
+
+    const leadUpdates: any = {
+      scfAcceptedAt: acceptedAtIso,
+      scfStatus: 'Accepted',
+      manualScfUploaded: true,
+      manualScfUrl: pdfUrl,
+      manualScfName: pdfName || 'Manual_Signed_SCF.pdf',
+      manualScfAcceptedDate: acceptedAtIso,
+      termsAccepted: true,
+      termsAcceptedAt: acceptedAtIso,
+      localMileTermsAccepted: true,
+      localMileTermsAcceptedAt: acceptedAtIso,
+      updatedAt: nowStr
+    };
+
+    if (!isCompanyOrSignedCustomer) {
+      leadUpdates.status = 'Quote Accepted';
+      leadUpdates.customerStatus = 'Quote Accepted';
+    }
+
+    await leadRef.update(leadUpdates);
+
+    // If LPO process lead, propagate 'Quote Accepted' status to all child leads
+    const isLpoProcess = Boolean(
+      leadData?.isParentLead ||
+      leadData?.bucket === 'lpo_network' ||
+      leadData?.source === 'LPO Lead Conversion' ||
+      leadData?.leadSource === 'LPO Expressions of Interest'
+    );
+
+    if (isLpoProcess) {
+      try {
+        const childSnaps = await adminDb.collection('leads').where('parentLeadId', '==', leadId).get();
+        if (!childSnaps.empty) {
+          const batch = adminDb.batch();
+          childSnaps.docs.forEach((cDoc) => {
+            batch.update(cDoc.ref, {
+              status: 'Quote Accepted',
+              customerStatus: 'Quote Accepted',
+              scfAcceptedAt: acceptedAtIso,
+              termsAccepted: true,
+              termsAcceptedAt: acceptedAtIso,
+              updatedAt: nowStr
+            });
+          });
+          await batch.commit();
+        }
+      } catch (childErr) {
+        console.warn('[Manual SCF] Error updating child leads:', childErr);
+      }
+    }
+
+    // Call NetSuite sync if lead is synced with NetSuite
+    const isSyncedWithNetSuite = leadData?.syncedWithNetSuite === true && Boolean(leadData?.internalid || leadData?.netsuiteId);
+    if (isSyncedWithNetSuite) {
+      const commRegId = leadData?.commRegId || "";
+      if (commRegId) {
+        const payload1 = {
+          operation: "signCustomerSCF",
+          requestParams: { comRegId: commRegId }
+        };
+        const nsUrl1 = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc&requestData=${encodeURIComponent(JSON.stringify(payload1))}`;
+        try {
+          console.log(`[Manual SCF] Calling NetSuite Script 1900 for Lead ${leadId}...`);
+          const res1 = await fetch(nsUrl1, { method: "GET" });
+          const text1 = await res1.text();
+          if (res1.ok && (text1.includes('Commencement Register signed') || text1.includes('comRegId') || text1.includes('scriptlet.nl'))) {
+            const salesRep = leadData?.accountManagerAssigned || '';
+            const leadInternalId = leadData?.internalid || leadData?.netsuiteId || leadId;
+            const nsUrl2 = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2514&deploy=1&compid=1048144&ns-at=AAEJ7tMQJhlGIUNNmxKFwd5sprCqoBuWrh_H7J14_qzpLd1ajvg&salesRep=${encodeURIComponent(salesRep)}&outcome=${encodeURIComponent('Sign Up')}&leadId=${encodeURIComponent(leadInternalId)}`;
+            await fetch(nsUrl2, { method: "GET" }).catch(e => console.warn('[Manual SCF] NetSuite 2514 error:', e));
+          }
+        } catch (nsErr) {
+          console.warn('[Manual SCF] NetSuite sync warning:', nsErr);
+        }
+      }
+    }
+
+    // Log Activity
+    try {
+      const activityNotes = `Manual signed SCF uploaded (${pdfName || 'Document'}) by ${uploaderName || 'User'}. Terms & Conditions accepted on ${acceptedDateFormatted}.`;
+      await leadRef.collection('activity').add({
+        type: 'Update',
+        notes: activityNotes,
+        author: uploaderName || 'User',
+        createdAt: nowStr
+      });
+    } catch (actErr) {
+      console.warn('[Manual SCF] Error logging activity:', actErr);
+    }
+
+    return { 
+      success: true, 
+      message: `Manual SCF uploaded successfully. Terms & Conditions marked as accepted on ${acceptedDateFormatted}.`, 
+      scfId: targetScfDocRef.id 
+    };
+  } catch (error: any) {
+    console.error('Error uploading and accepting manual SCF:', error);
+    return { success: false, message: error.message || 'Failed to upload and accept manual SCF.' };
+  }
+}
+

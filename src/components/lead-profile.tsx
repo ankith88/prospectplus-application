@@ -160,6 +160,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGr
 import { CreateInvoiceDialog } from '@/components/create-invoice-dialog'
 import { InvoiceDetailsDialog } from '@/components/invoice-details-dialog'
 import { canCreateCustomerInvoice } from '@/lib/invoice-services-catalog'
+import { ManualScfUploadDialog } from '@/components/manual-scf-upload-dialog'
+import { MissingScfDialog } from '@/components/missing-scf-dialog'
 import {
   Dialog,
   DialogContent,
@@ -1725,6 +1727,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isManageServicesOpen, setIsManageServicesOpen] = useState(false);
   const [serviceCatalog, setServiceCatalog] = useState<any[]>([]);
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote' | 'Resend SCF' | 'Confirm Signup' | 'Resell'>('Signup');
+  const [isManualScfUploadOpen, setIsManualScfUploadOpen] = useState(false);
+  const [manualScfTargetId, setManualScfTargetId] = useState<string | undefined>(undefined);
+  const [isMissingScfAlertOpen, setIsMissingScfAlertOpen] = useState(false);
 
   useEffect(() => {
     getServices().then(setServiceCatalog).catch(err => console.error("Error fetching services for email template:", err));
@@ -4866,12 +4871,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!showSales) return null;
 
     const isLeadWonOrSigned = lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed';
+    const isQuoteAccepted = isScfAcceptedForLead(lead);
 
     const signupItem = (
       <DropdownMenuItem 
         key="signup" 
         disabled={userProfile?.activeRole === 'user'} 
-        onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); })); }}
+        onSelect={(e) => { 
+          e.preventDefault(); 
+          if (!isQuoteAccepted) {
+            setIsMissingScfAlertOpen(true);
+            return;
+          }
+          requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); })); 
+        }}
       >
         <Briefcase className="mr-2 h-4 w-4" />Signup
       </DropdownMenuItem>
@@ -4935,7 +4948,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const stopLocalMileItem = isTrialingLocalMile ? (
         <DropdownMenuItem 
-            key="stop-localmile"
+            key="stop-localmile" 
             className="text-amber-700 dark:text-amber-400 font-medium cursor-pointer"
             onSelect={(e) => {
                 e.preventDefault();
@@ -4959,8 +4972,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenuItem>
     ) : null;
 
-    const isQuoteAccepted = isScfAcceptedForLead(lead);
-
     const isChildLpoLead = Boolean(isLpoLeadProcess && (lead.isChildLead || (lead.parentLeadId && !lead.isParentLead)));
 
     let salesItems: React.ReactNode[] = (isChildLpoLead || isLeadWonOrSigned)
@@ -4968,10 +4979,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         : (isMailPlusPtyLtd && !isLpoLeadProcess)
             ? []
             : (isMailPlusPtyLtd && isLpoLeadProcess)
-                ? (isQuoteAccepted ? [quoteItem, signupItem].filter(Boolean) : [quoteItem].filter(Boolean))
-                : (isQuoteAccepted
-                    ? [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean)
-                    : [quoteItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean));
+                ? [quoteItem, signupItem].filter(Boolean)
+                : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
 
     const hasSalesItems = salesItems.length > 0;
     const canShowLpoPlus = userProfile?.activeRole !== 'user' && !isLeadWonOrSigned && !isLpoNetworkBucket;
@@ -7862,30 +7871,54 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     {lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt ? "Accepted" : "Pending"}
                                 </Badge>
                             </div>
-                            {scfLinks.length > 0 && (
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
-                                    <div>
-                                        <p className="font-semibold text-sm">Service Commencement Form (SCF) T&amp;C&apos;s</p>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
-                                            {scfLinks.some(s => s.status === 'Accepted') 
-                                                ? `Accepted via SCF`
-                                                : "Pending acceptance via SCF"}
-                                        </p>
-                                    </div>
-                                    <Badge variant={scfLinks.some(s => s.status === 'Accepted') ? "outline" : "secondary"} className={scfLinks.some(s => s.status === 'Accepted') ? "bg-green-100 text-green-700 border-green-200" : ""}>
-                                        {scfLinks.some(s => s.status === 'Accepted') ? "Accepted" : "Pending"}
-                                    </Badge>
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
+                                <div>
+                                    <p className="font-semibold text-sm">Service Commencement Form (SCF) T&amp;C&apos;s</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        {lead.scfAcceptedAt || scfLinks.some(s => s.status === 'Accepted') 
+                                            ? `Accepted on ${safeFormatDate(lead.scfAcceptedAt || scfLinks.find(s => s.status === 'Accepted')?.acceptedAt, 'PPpp')}`
+                                            : "Pending acceptance via SCF"}
+                                    </p>
                                 </div>
-                            )}
+                                <div className="flex items-center gap-2">
+                                    <Badge variant={lead.scfAcceptedAt || scfLinks.some(s => s.status === 'Accepted') ? "outline" : "secondary"} className={lead.scfAcceptedAt || scfLinks.some(s => s.status === 'Accepted') ? "bg-green-100 text-green-700 border-green-200" : ""}>
+                                        {lead.scfAcceptedAt || scfLinks.some(s => s.status === 'Accepted') ? "Accepted" : "Pending"}
+                                    </Badge>
+                                    {!isScfAcceptedForLead(lead) && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                setManualScfTargetId(undefined);
+                                                setIsManualScfUploadOpen(true);
+                                            }}
+                                            className="h-7 text-xs border-[#095c7b] text-[#095c7b] hover:bg-slate-50"
+                                        >
+                                            <Upload className="h-3 w-3 mr-1" /> Upload Manual SCF
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                     {scfLinks.length > 0 && (
                     <Card className="h-full">
-                        <CardHeader className="pb-3 border-b">
+                        <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
                             <CardTitle className="flex items-center gap-2">
                                 <Briefcase className="w-5 h-5 text-muted-foreground" />
                                 Service Commencement Forms
-                                            </CardTitle>
+                            </CardTitle>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    setManualScfTargetId(undefined);
+                                    setIsManualScfUploadOpen(true);
+                                }}
+                                className="h-8 text-xs border-[#095c7b] text-[#095c7b] hover:bg-slate-50"
+                            >
+                                <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload Manual SCF
+                            </Button>
                         </CardHeader>
                         <CardContent className="pt-6">
                             <div className="space-y-4">
@@ -7974,6 +8007,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                              )}
                                              {scf.status === 'Pending' && (
                                                  <>
+                                                     <Button 
+                                                         variant="outline" 
+                                                         size="sm" 
+                                                         onClick={() => { 
+                                                             setManualScfTargetId(scf.id); 
+                                                             setIsManualScfUploadOpen(true); 
+                                                         }} 
+                                                         className="flex-1 bg-blue-50/60 hover:bg-blue-100/60 text-[#095c7b] border-[#095c7b]/40 font-medium"
+                                                     >
+                                                         <Upload className="h-4 w-4 mr-2 shrink-0 text-[#095c7b]" /> <span className="truncate">Upload Signed SCF</span>
+                                                     </Button>
                                                      <Button variant="outline" size="sm" onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setResendScfId(scf.id); setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); })); }} className="flex-1">
                                                          <Edit className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Redo Quote</span>
                                                      </Button>
@@ -10028,6 +10072,38 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} collectionName={isCompanyProfile ? 'companies' : 'leads'} />
     <EditNoteDialog lead={lead} note={noteToEdit} onNoteUpdated={handleNoteUpdated} isOpen={isEditNoteOpen} onOpenChange={setIsEditNoteOpen} collectionName={isCompanyProfile ? 'companies' : 'leads'} />
     <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} onSuccess={refreshLeadData} scfId={resendScfId} />
+    <MissingScfDialog
+      isOpen={isMissingScfAlertOpen}
+      onOpenChange={setIsMissingScfAlertOpen}
+      leadName={lead.companyName || (lead as any).name || 'this lead'}
+      onUploadManualScf={() => {
+        setManualScfTargetId(undefined);
+        setIsManualScfUploadOpen(true);
+      }}
+      onSendDigitalScf={() => {
+        requireLeadType(() => checkPrimary(async () => {
+          await ensureFranchiseeIdField();
+          setServiceSelectionMode('Quote');
+          setIsServiceSelectionOpen(true);
+        }));
+      }}
+    />
+    <ManualScfUploadDialog
+      isOpen={isManualScfUploadOpen}
+      onOpenChange={setIsManualScfUploadOpen}
+      lead={lead}
+      defaultScfId={manualScfTargetId}
+      pendingScfs={scfLinks}
+      onSuccess={async () => {
+        await refreshLeadData();
+        getScfRecords(lead.id).then(records => setScfLinks(records)).catch(console.error);
+        requireLeadType(() => checkPrimary(async () => {
+          await ensureFranchiseeIdField();
+          setServiceSelectionMode('Signup');
+          setIsServiceSelectionOpen(true);
+        }));
+      }}
+    />
     <ManageServicesDialog isOpen={isManageServicesOpen} onOpenChange={setIsManageServicesOpen} lead={lead} onSuccess={refreshLeadData} />
 
     <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />

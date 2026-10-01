@@ -57,6 +57,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   multisiteReporting: ['admin', 'superadmin', 'Marketing Manager', 'Customer Success', 'customer success', 'customer_success', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager'],
   cancellationReporting: ['admin', 'superadmin', 'Marketing Manager', 'marketing manager', 'Customer Success', 'customer success', 'customer_success', 'Customer Service', 'customer service'],
   posthogReporting: ['admin', 'superadmin', 'Marketing Manager', 'marketing manager'],
+  revenueAnalysis: ['admin', 'superadmin', 'super user', 'Sales Manager', 'sales manager', 'sales_manager', 'Account Managers', 'Account Manager', 'account managers'],
 };
 
 export const PermissionsProvider = ({ children }: { children: React.ReactNode }) => {
@@ -157,6 +158,11 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
                         ...currentTickets,
                         'Customer Success', 'customer success', 'customer_success'
                     ]));
+                    needsUpdate = true;
+                }
+
+                if (!currentFeatures.revenueAnalysis) {
+                    currentFeatures.revenueAnalysis = DEFAULT_ROLE_ACCESS.revenueAnalysis;
                     needsUpdate = true;
                 }
 
@@ -268,6 +274,17 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
     // Explicit override for Franchisee to create leads
     if (feature === 'newLead' && (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee')) {
       return true;
+    }
+
+    // Explicit override for Revenue Analysis (Admins, Superadmins, Sales Manager, Account Managers)
+    if (feature === 'revenueAnalysis') {
+      const roleLower = userProfile.activeRole.toLowerCase().replace(/_/g, ' ').trim();
+      if (['admin', 'superadmin', 'super user', 'sales manager', 'account manager', 'account managers'].includes(roleLower)) {
+        return true;
+      }
+      if ((userProfile.assignedRoles || []).some((r: any) => ['admin', 'superadmin', 'super user', 'sales manager', 'account manager', 'account managers'].includes(String(r).toLowerCase().replace(/_/g, ' ').trim()))) {
+        return true;
+      }
     }
 
     const firestoreRoles = roleAccessMatrix[feature] || [];

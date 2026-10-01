@@ -189,7 +189,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       if (path === '/admin/tickets/reporting' || path === '/scans/report' || path === '/appointment-reporting' || path === '/appointments/reporting') return 'analytics-reports';
       return 'ops-history';
     }
-    if (path.startsWith('/sales-snapshot') || path.startsWith('/reports') || path.startsWith('/appointment-reporting') || path.startsWith('/outbound-dialer-performance') || path.startsWith('/inbound-reporting') || path.startsWith('/multisite-reporting') || path.startsWith('/admin/lifecycle-dashboard') || path.startsWith('/admin/franchisee-invoicing') || path.startsWith('/account-manager/reports') || path.startsWith('/customer-success/reporting') || path.startsWith('/customer-success/cancellation-reporting') || path.startsWith('/field-activity-report') || path.startsWith('/admin/deployments')) {
+    if (path.startsWith('/sales-snapshot') || path.startsWith('/reports') || path.startsWith('/revenue-analysis') || path.startsWith('/appointment-reporting') || path.startsWith('/outbound-dialer-performance') || path.startsWith('/inbound-reporting') || path.startsWith('/multisite-reporting') || path.startsWith('/admin/lifecycle-dashboard') || path.startsWith('/admin/franchisee-invoicing') || path.startsWith('/account-manager/reports') || path.startsWith('/customer-success/reporting') || path.startsWith('/customer-success/cancellation-reporting') || path.startsWith('/field-activity-report') || path.startsWith('/admin/deployments')) {
       return 'analytics-reports';
     }
     if (path.startsWith('/my-franchise')) {
@@ -373,6 +373,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/multisite-reporting': { label: 'MultiSite Reporting', category: 'Analytics & Reports', icon: Network, href: '/multisite-reporting' },
     '/admin/lifecycle-dashboard': { label: 'Lifecycle Dashboard', category: 'Analytics & Reports', icon: Activity, href: '/admin/lifecycle-dashboard' },
     '/account-manager/reports': { label: 'AM Reporting', category: 'Analytics & Reports', icon: BarChart3, href: '/account-manager/reports' },
+    '/revenue-analysis': { label: 'Revenue Analysis', category: 'Analytics & Reports', icon: DollarSign, href: '/revenue-analysis' },
     '/admin/tickets/reporting': { label: 'Ticket Reporting', category: 'Analytics & Reports', icon: BarChart2, href: '/admin/tickets/reporting' },
     '/scans/report': { label: 'Scan Reporting', category: 'Analytics & Reports', icon: BarChart2, href: '/scans/report' },
     '/field-activity-report': { label: 'Field Activity', category: 'Analytics & Reports', icon: BarChart3, href: '/field-activity-report' },
@@ -429,7 +430,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       if (pathname.startsWith('/sales-snapshot') || pathname.startsWith('/reports') || pathname.startsWith('/outbound-dialer-performance') || pathname.startsWith('/inbound-reporting') || pathname.startsWith('/multisite-reporting') || pathname.startsWith('/admin/lifecycle-dashboard')) {
         setExpandedStates(prev => ({ ...prev, 'sales-reports': true }));
       }
-      if (pathname.startsWith('/account-manager/reports') || pathname.startsWith('/customer-success/reporting') || pathname.startsWith('/field-activity-report') || pathname.startsWith('/admin/deployments')) {
+      if (pathname.startsWith('/account-manager/reports') || pathname.startsWith('/revenue-analysis') || pathname.startsWith('/customer-success/reporting') || pathname.startsWith('/field-activity-report') || pathname.startsWith('/admin/deployments')) {
         setExpandedStates(prev => ({ ...prev, 'op-reports': true }));
       }
       setExpandedStates(prev => ({ ...prev, 'reporting': false }));
@@ -790,10 +791,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     (userProfile?.assignedRoles || []).some((r: any) => allowedAppointmentReportingRoles.includes(String(r).trim().toLowerCase()))
   );
 
+  const allowedRevenueAnalysisRoles = [
+    'admin',
+    'superadmin',
+    'super user',
+    'sales manager',
+    'sales_manager',
+    'account manager',
+    'account managers'
+  ];
+  const canViewRevenueAnalysis = !isFranchiseeRole && !isUserRole && (
+    isSuperAdmin ||
+    Boolean((userProfile as any)?.isSuperAdmin) ||
+    Boolean((userProfile as any)?.superAdmin) ||
+    canView('revenueAnalysis') ||
+    allowedRevenueAnalysisRoles.includes(activeRoleLower) ||
+    (userProfile?.assignedRoles || []).some((r: any) => allowedRevenueAnalysisRoles.includes(String(r).trim().toLowerCase().replace(/_/g, ' ')))
+  );
+
   const canViewCustomers = canView('signedCustomers');
   const canViewAnalyticsReportsGroup = canViewReporting || 
                                         isFranchiseeRole || 
                                         canViewAppointmentReporting ||
+                                        canViewRevenueAnalysis ||
                                         canViewInboundReporting || 
                                         canViewMultiSiteReporting || 
                                         canViewCustomerSuccessPipeline || 
@@ -2158,6 +2178,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             </SidebarMenuButton>
                           </SidebarMenuItem>
                         )}
+                        {canViewRevenueAnalysis && (
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/revenue-analysis")} tooltip="Revenue Analysis">
+                              <Link href="/revenue-analysis">
+                                <DollarSign />
+                                <span>Revenue Analysis</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )}
                         {canViewCustomerSuccessPipeline && (
                           <SidebarMenuItem>
                             <SidebarMenuButton asChild isActive={isActive("/customer-success/reporting")} tooltip="CS Reporting">
@@ -2773,6 +2803,7 @@ const isBlockedForUserRole = (path: string, role?: string) => {
   if (isFranchisee) {
     const blockedFranchiseePaths = [
       '/reports',
+      '/revenue-analysis',
       '/outbound-dialer-performance',
       '/inbound-reporting',
       '/field-activity-report',
@@ -2793,11 +2824,13 @@ const isBlockedForUserRole = (path: string, role?: string) => {
          path.startsWith('/admin/mailbox') || 
          path.startsWith('/admin/financial-dashboard') || 
          path.startsWith('/admin/lifecycle-dashboard') || 
+         path.startsWith('/revenue-analysis') || 
          path === '/leads/suppressions';
 };
 
 const CUSTOM_TIMER_PATHS = [
   '/reports',
+  '/revenue-analysis',
   '/reports/missed-calls',
   '/my-inbound-calls',
   '/my-calls',
@@ -2825,6 +2858,7 @@ const getPageNameFromPath = (path: string) => {
   if (path === '/leads/archive') return 'Archived Leads';
   if (path === '/leads/map') return 'Territory Map';
   if (path.startsWith('/leads/')) return 'Lead Profile';
+  if (path === '/revenue-analysis') return 'Revenue Analysis';
   if (path === '/tasks') return 'Tasks';
   if (path === '/appointments') return 'Appointments';
   if (path === '/appointment-reporting' || path === '/appointments/reporting') return 'Appointment Reporting';

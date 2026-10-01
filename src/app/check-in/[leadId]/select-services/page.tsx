@@ -29,8 +29,9 @@ import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { isScfAcceptedForLead } from '@/lib/utils';
+import { ManualScfUploadDialog } from '@/components/manual-scf-upload-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, UserPlus, ArrowLeft, Building2, Search } from 'lucide-react';
+import { CalendarIcon, UserPlus, ArrowLeft, Building2, Search, AlertTriangle, Upload } from 'lucide-react';
 import { isBankingServiceSelected, isH2hServiceSelected, getNearbyBanks, saveOrUpdateTaggedAddress, normalizeState } from '@/lib/bank-utils';
 import { GoogleAddressInput } from '@/components/google-address-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -132,6 +133,8 @@ function SelectServicesContent() {
     },
   });
 
+  const [isManualUploadOpen, setIsManualUploadOpen] = useState(false);
+
   useEffect(() => {
     const leadId = params.leadId as string;
     if (leadId) {
@@ -151,14 +154,13 @@ function SelectServicesContent() {
     if (lead && mode === 'signup') {
       if (!isScfAcceptedForLead(lead)) {
         toast({
-          variant: 'destructive',
-          title: 'SCF Acceptance Required',
-          description: 'Signup cannot be initiated until the Service Confirmation Form (SCF) has been accepted.',
+          title: 'Signed SCF Required',
+          description: 'This lead requires an accepted SCF before signing up. If you received a manual SCF, please upload it to record accepted Terms & Conditions.',
         });
-        router.push(`/check-in/${lead.id}`);
+        setIsManualUploadOpen(true);
       }
     }
-  }, [lead, mode, router, toast]);
+  }, [lead, mode, toast]);
 
   useEffect(() => {
     getServices().then((data) => {
@@ -220,6 +222,16 @@ function SelectServicesContent() {
 
   const handleSubmit = async (values: FormValues) => {
     if (!lead || !mode) return;
+
+    if (mode === 'signup' && !isScfAcceptedForLead(lead)) {
+      toast({
+        variant: 'destructive',
+        title: 'Signed SCF Required',
+        description: 'Lead cannot be signed up without an accepted SCF. Please upload the signed manual SCF first.',
+      });
+      setIsManualUploadOpen(true);
+      return;
+    }
     
     // Validations based on mode
     if (mode === 'service-trial' && (!values.selectedServices || values.selectedServices.length === 0)) {
@@ -539,6 +551,27 @@ function SelectServicesContent() {
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col h-full gap-6">
                                 <ScrollArea className="flex-grow pr-4 -mr-4">
                                     <div className="space-y-6">
+                                    {mode === 'signup' && !isScfAcceptedForLead(lead) && (
+                                      <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200">
+                                        <div className="flex items-center gap-2.5">
+                                          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                                          <div>
+                                            <p className="font-semibold text-sm text-amber-950 dark:text-amber-100">No Signed SCF Present</p>
+                                            <p className="text-slate-600 dark:text-slate-300 text-xs">
+                                              This lead requires an accepted SCF before finalizing signup. If you received a physical/manual form, upload it now to record accepted Terms &amp; Conditions.
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={() => setIsManualUploadOpen(true)}
+                                          className="bg-[#095c7b] hover:bg-[#064258] text-white shrink-0 w-full sm:w-auto"
+                                        >
+                                          <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload Manual SCF
+                                        </Button>
+                                      </div>
+                                    )}
                                     {(mode === 'service-trial' || mode === 'localmile-trial' || mode === 'shipmate-trial') && (
                                         <FormField
                                         control={form.control}
@@ -911,6 +944,21 @@ function SelectServicesContent() {
                 </CardContent>
             </Card>
         </main>
+        {lead && (
+          <ManualScfUploadDialog
+            isOpen={isManualUploadOpen}
+            onOpenChange={setIsManualUploadOpen}
+            lead={lead}
+            onSuccess={() => {
+              getLeadFromFirebase(lead.id, true).then(updated => {
+                if (updated) {
+                  setLead(updated);
+                  setContacts(updated.contacts || []);
+                }
+              });
+            }}
+          />
+        )}
     </div>
   );
 }

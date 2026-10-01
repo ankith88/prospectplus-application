@@ -6,7 +6,7 @@ import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 import { logEmailServer, getLeadServer, getFranchiseeEmailServer } from '@/services/firebase-server';
 import { sendSms } from '@/services/sms-service';
 import { getPmpoServiceForLead } from '@/lib/localmile-utils';
-import { checkLocalMileCompanyExists } from '@/lib/localmile-db';
+import { checkLocalMileCompanyExists, getLocalMilePlusDb } from '@/lib/localmile-db';
 
 /**
  * @fileoverview Server action to proxy LocalMile free trial requests to NetSuite.
@@ -409,6 +409,16 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 
 									if (schedRes.ok) {
 										console.log(`[LocalMile Proxy] Successfully created PMPO scheduled_job in LocalMile for lead ${payload.leadId}`);
+										const schedData = await schedRes.json().catch(() => ({}));
+										const createdJobId = schedData?.data?.id || schedData?.id;
+										if (createdJobId) {
+											try {
+												const db = getLocalMilePlusDb();
+												await db.collection('scheduled_jobs').doc(String(createdJobId)).update({ parent_id: '' });
+											} catch (dbErr) {
+												console.warn(`[LocalMile Proxy] Could not enforce empty parent_id on scheduled_job ${createdJobId}:`, dbErr);
+											}
+										}
 									} else {
 										console.error(`[LocalMile Proxy Error] Scheduled job creation failed: status ${schedRes.status}, error: ${await schedRes.text()}`);
 									}

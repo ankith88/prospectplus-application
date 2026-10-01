@@ -162,5 +162,22 @@ export interface DailyAuditReportData {
     summary: string;
     reps: AMRepSummary[];
   };
+  statusAudits?: StatusAuditItem[];
+}
+
+export interface StatusAuditItem {
+  leadId: string;
+  leadName: string;
+  prospectPlusId?: string;
+  time?: string;
+  oldStatus?: string;
+  newStatus: string;
+  reason?: string;
+  author?: string;
+  callId?: string;
+  callDuration?: string;
+  auditFlag: 'CONTRADICTION' | 'FLAGGED' | 'VERIFIED';
+  auditNote: string;
+  evidence: string;
 }
 

@@ -677,9 +677,9 @@ const FinishStep = ({ onBack, lead, onOpenScheduleAppointment, onOpenLogOutcome,
 
                 <h3 className="text-xl font-semibold">Check-in Complete! Choose your next action.</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                    {isScfAccepted && (
-                        <Button size="lg" className="h-auto py-4" onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}><Briefcase className="mr-2"/> Signup</Button>
-                    )}
+                    <Button size="lg" className="h-auto py-4" onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}>
+                        <Briefcase className="mr-2"/> Signup
+                    </Button>
                     <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700" onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=service-trial`)}><Star className="mr-2"/> Free Trial</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>

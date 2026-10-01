@@ -191,6 +191,26 @@ export function generateDailyAuditEmailHTML(report: DailyAuditReportData, downlo
     `;
   }).join('');
 
+  const contradictionAudits = (report.statusAudits || []).filter(s => s.auditFlag === 'CONTRADICTION');
+  const contradictionHtml = contradictionAudits.length > 0 ? `
+    <div style="background-color: #fff1f2; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+      <div style="font-weight: 700; color: #9f1239; font-size: 11.5px; margin-bottom: 6px;">
+        ⚠️ Record Hygiene &amp; Status Audit Alert (${contradictionAudits.length} Contradiction${contradictionAudits.length > 1 ? 's' : ''} Flagged):
+      </div>
+      <table width="100%" border="0" cellpadding="0" cellspacing="0">
+        ${contradictionAudits.map(c => `
+          <tr>
+            <td width="20" valign="top" style="padding: 3px 0; color: #e11d48; font-weight: bold; font-size: 12px;">•</td>
+            <td valign="top" style="padding: 3px 0; font-size: 11px; color: #881337; line-height: 1.4;">
+              <strong>${c.leadName}</strong> (ID: ${c.prospectPlusId}) — Claimed Status: <em>"${c.newStatus}"</em> (${c.reason || 'N/A'}): 
+              <span style="color: #4c0519;">${c.auditNote}</span>
+            </td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+  ` : '';
+
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
@@ -224,6 +244,7 @@ export function generateDailyAuditEmailHTML(report: DailyAuditReportData, downlo
               <div style="background-color: #f1f5f9; padding: 8px 12px; border-radius: 6px; font-size: 11px; color: #475569; margin-bottom: 16px;">
                 📎 <strong>Attached Files:</strong> Full Executive Presentation (<strong>PDF</strong>) &amp; Editable Document (<strong>Word .docx</strong>)
               </div>
+              ${contradictionHtml}
             </td>
           </tr>
 

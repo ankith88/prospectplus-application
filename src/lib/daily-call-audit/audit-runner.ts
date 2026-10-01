@@ -1,7 +1,7 @@
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import { fetchAndAggregateDayCalls } from './transcript-fetcher';
-import { analyzeDailyCalls } from './ai-analyzer';
+import { fetchAndAggregateDayCalls, fetchTomorrowAppointments, fetchDayStatusAudits, fetchWeekRetentionTrends } from './transcript-fetcher';
+import { analyzeDailyCalls, computeCallCardLines } from './ai-analyzer';
 import { generateDailyAuditPDF } from './pdf-generator';
 import { generateDailyAuditDOCX } from './docx-generator';
 import { generateDailyAuditEmailHTML } from './email-template';
@@ -16,6 +16,7 @@ export interface RunDailyCallAuditOptions {
   recipients?: string[];
   fromAddress?: string;
   skipEmail?: boolean;
+  isTest?: boolean;
 }
 
 export async function runDailyCallAudit(options: RunDailyCallAuditOptions = {}) {
@@ -68,19 +69,27 @@ export async function runDailyCallAudit(options: RunDailyCallAuditOptions = {}) 
 
   console.log(`[Daily Audit Runner] Starting audit for ${dateFormatted} (${dateString})...`);
 
-  // Step 1: Pre-fetch missing transcripts and aggregate all calls for the day
+  // Step 1: Pre-fetch missing transcripts and aggregate all calls for the day (strictly Aircall call IDs only)
   const calls = await fetchAndAggregateDayCalls(targetStart, targetEnd);
 
-  // Step 2: Run Gemini Evaluation & Coaching Rubric
-  const reportData = await analyzeDailyCalls(dateFormatted, dateString, calls);
+  // Step 2: Fetch tomorrow's actual scheduled pipeline appointments and audit day's status changes
+  const tomorrowAppointments = await fetchTomorrowAppointments(targetDate);
+  const statusAudits = await fetchDayStatusAudits(targetStart, targetEnd, calls);
 
-  // Step 3: Generate Executive PDF (2-page landscape)
+  // Step 2b: Pre-compute preliminary card lines to fetch current week retention & decay trends across Mon-Fri
+  const preliminaryCardLines = computeCallCardLines(calls, dateFormatted);
+  const weeklyRetentionTrends = await fetchWeekRetentionTrends(targetDate, preliminaryCardLines, calls);
+
+  // Step 3: Run Gemini Evaluation & Coaching Rubric strictly grounded in that day's data
+  const reportData = await analyzeDailyCalls(dateFormatted, dateString, calls, tomorrowAppointments, statusAudits, weeklyRetentionTrends);
+
+  // Step 4: Generate Executive PDF (2-page landscape)
   const pdfBuffer = generateDailyAuditPDF(reportData);
 
-  // Step 4: Generate Word (.docx) Document
+  // Step 5: Generate Word (.docx) Document
   const docxBuffer = await generateDailyAuditDOCX(reportData);
 
-  // Step 5: Save files to temporary local storage for email attachment / download serving
+  // Step 6: Save files to temporary local storage for email attachment / download serving
   const outDir = path.join(process.cwd(), 'tmp', 'reports');
   if (!fs.existsSync(outDir)) {
     fs.mkdirSync(outDir, { recursive: true });
@@ -94,31 +103,36 @@ export async function runDailyCallAudit(options: RunDailyCallAuditOptions = {}) 
   fs.writeFileSync(pdfFilePath, pdfBuffer);
   fs.writeFileSync(docxFilePath, docxBuffer);
 
-  // Save audit record to Firestore
+  // Save audit record to Firestore (sanitized to remove any undefined fields)
   const auditDocId = `daily_audit_${dateString}`;
+  const sanitizedReportData = JSON.parse(JSON.stringify(reportData));
   await db.collection('daily_call_audits').doc(auditDocId).set({
     dateString,
     dateFormatted,
-    reportData,
+    reportData: sanitizedReportData,
     callsCount: calls.length,
     generatedAt: new Date().toISOString(),
     pdfFileName,
     docxFileName
   }, { merge: true });
 
-  // Step 6: Dispatch Email
+  // Step 7: Dispatch Email
   let emailResult: any = { skipped: true };
   if (!options.skipEmail) {
-    let recipients = options.recipients || [];
-    if (recipients.length === 0) {
-      // Lookup configured recipients from settings (or fallback to report_configs)
+    let recipients: string[] = [];
+    if (options.isTest) {
+      recipients = ['ankith.ravindran@mailplus.com.au'];
+    } else if (options.recipients && options.recipients.length > 0) {
+      recipients = options.recipients;
+    } else {
+      // Lookup configured recipients from settings (check daily_call_audit_report, then daily_calls_report)
       const settingsSnap = await db.collection('settings').doc('daily_call_audit_report').get();
       if (settingsSnap.exists && settingsSnap.data()?.recipients?.length) {
         recipients = settingsSnap.data()!.recipients;
       } else {
-        const configSnap = await db.collection('report_configs').doc('daily_call_audit_report').get();
-        if (configSnap.exists && configSnap.data()?.recipients?.length) {
-          recipients = configSnap.data()!.recipients;
+        const callsSnap = await db.collection('settings').doc('daily_calls_report').get();
+        if (callsSnap.exists && callsSnap.data()?.recipients?.length) {
+          recipients = callsSnap.data()!.recipients;
         } else {
           recipients = ['ankith.ravindran@mailplus.com.au'];
         }

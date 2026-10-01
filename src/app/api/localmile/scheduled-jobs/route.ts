@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { checkLocalMileCompanyExists } from '@/lib/localmile-db';
+import { checkLocalMileCompanyExists, getLocalMilePlusDb } from '@/lib/localmile-db';
 
 export async function POST(request: Request) {
   try {
@@ -23,14 +23,18 @@ export async function POST(request: Request) {
 
     const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY || process.env.PROSPECTPLUS_API_KEY || '454e75f843954875ccff72537d7702ba1ab6f65c';
 
-    // Forward the request to the LocalMile Plus Backend
+    // Forward the request to the LocalMile Plus Backend with empty parent_id
     const response = await fetch(`https://us-central1-localmile-plus.cloudfunctions.net/api/api/v1/companies/${companyId}/scheduled-jobs`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': localMileApiKey
       },
-      body: JSON.stringify(restPayload)
+      body: JSON.stringify({
+        ...restPayload,
+        parentId: '',
+        parent_id: ''
+      })
     });
 
     const data = await response.json();
@@ -38,6 +42,17 @@ export async function POST(request: Request) {
     if (!response.ok) {
       console.error('LocalMile Plus API Error:', data);
       return NextResponse.json({ success: false, message: data.message || 'Failed to create scheduled job in LocalMile Plus' }, { status: response.status });
+    }
+
+    // Enforce empty parent_id on the scheduled_jobs document
+    const createdJobId = data?.data?.id || data?.id;
+    if (createdJobId) {
+      try {
+        const db = getLocalMilePlusDb();
+        await db.collection('scheduled_jobs').doc(String(createdJobId)).update({ parent_id: '' });
+      } catch (dbErr) {
+        console.warn(`[Scheduled Jobs API] Could not enforce empty parent_id on scheduled_job ${createdJobId}:`, dbErr);
+      }
     }
 
     return NextResponse.json({ success: true, data });

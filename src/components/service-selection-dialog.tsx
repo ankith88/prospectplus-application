@@ -47,7 +47,9 @@ import { GoogleAddressInput } from './google-address-input';
 import { Calendar } from './ui/calendar';
 import { OpenTrackingTips } from '@/components/ui/open-tracking-tips';
 import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, isScfAcceptedForLead } from '@/lib/utils';
+import { ManualScfUploadDialog } from '@/components/manual-scf-upload-dialog';
+import { AlertTriangle, Upload } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
 import type { Lead, Contact, Franchisee } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
@@ -128,6 +130,14 @@ export function ServiceSelectionDialog({
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [isPostalAddressDialogOpen, setIsPostalAddressDialogOpen] = useState(false);
   const [localLead, setLocalLead] = useState<Lead | null>(lead);
+  const [isManualScfUploadOpen, setIsManualScfUploadOpen] = useState(false);
+  const [leadScfs, setLeadScfs] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (lead?.id) {
+      getScfRecords(lead.id).then(setLeadScfs).catch(console.error);
+    }
+  }, [lead?.id]);
   
   const [selectionType, setSelectionType] = useState<'services' | 'products' | 'both' | null>(null);
 
@@ -165,6 +175,10 @@ export function ServiceSelectionDialog({
         }
       }
       if (lead?.services && lead.services.length > 0) {
+        setSelectionType('services');
+        return;
+      }
+      if ((lead as any)?.scheduledServiceChange?.services && (lead as any).scheduledServiceChange.services.length > 0) {
         setSelectionType('services');
         return;
       }
@@ -753,18 +767,65 @@ export function ServiceSelectionDialog({
       let initialRates: Record<string, any> = {};
       let startDate = undefined;
 
+      let candidateServices: any[] = [];
       if (lead?.services && lead.services.length > 0) {
-        initialSelectedServices = lead.services.map(s => s.name);
-        initialFrequencies = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: isLpoProcessLead ? 'Adhoc' : s.frequency }), {});
-        initialRates = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.rate }), {});
-        if (lead.services[0]?.startDate) {
-            startDate = new Date(lead.services[0].startDate);
+        candidateServices = lead.services;
+      } else if ((lead as any)?.scheduledServiceChange?.services && (lead as any).scheduledServiceChange.services.length > 0) {
+        candidateServices = (lead as any).scheduledServiceChange.services;
+        if ((lead as any).scheduledServiceChange.effectiveDate) {
+          try {
+            startDate = new Date((lead as any).scheduledServiceChange.effectiveDate);
+          } catch (e) {
+            // ignore
+          }
+        }
+      } else if (leadScfs && leadScfs.length > 0) {
+        const sortedScfs = [...leadScfs].sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        const activeScf = sortedScfs.find((s: any) => s.status !== 'Cancelled' && s.services && s.services.length > 0);
+        if (activeScf) {
+          candidateServices = activeScf.services;
+          if (activeScf.startDate) {
+            try {
+              const rawSd = activeScf.startDate;
+              startDate = new Date(
+                typeof rawSd === 'object' && '_seconds' in rawSd
+                  ? rawSd._seconds * 1000
+                  : rawSd
+              );
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      }
+
+      if (candidateServices.length > 0) {
+        initialSelectedServices = candidateServices.map((s: any) => s.name || s.service).filter(Boolean);
+        initialFrequencies = candidateServices.reduce((acc: any, s: any) => {
+          const sName = s.name || s.service;
+          return { ...acc, [sName]: isLpoProcessLead ? 'Adhoc' : (s.frequency || s.freq || 'Adhoc') };
+        }, {});
+        initialRates = candidateServices.reduce((acc: any, s: any) => {
+          const sName = s.name || s.service;
+          return { ...acc, [sName]: s.rate ?? s.price ?? '' };
+        }, {});
+        if (!startDate && candidateServices[0]?.startDate) {
+          try {
+            const rawSd = candidateServices[0].startDate;
+            startDate = new Date(
+              typeof rawSd === 'object' && '_seconds' in rawSd
+                ? rawSd._seconds * 1000
+                : rawSd
+            );
+          } catch (e) {
+            // ignore
+          }
         }
       }
 
       const hasLocalMile = lead?.localMileTrialsRemaining !== undefined || lead?.contacts?.some(c => c.accessToLocalMile === 'yes');
       if (mode === 'Signup' && hasLocalMile) {
-         if (!initialSelectedServices.includes('PMPO')) {
+         if (initialSelectedServices.length === 0 && !initialSelectedServices.includes('PMPO')) {
              initialSelectedServices.push('PMPO');
              initialFrequencies['PMPO'] = lead?.serviceType === 'Recurring' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] : 'Adhoc';
              initialRates['PMPO'] = lead?.rate ?? 15;
@@ -1455,6 +1516,16 @@ export function ServiceSelectionDialog({
     if (mode === 'Signup' && !values.startDate) {
       form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select a service start date.' });
+      return;
+    }
+
+    if (mode === 'Signup' && !isScfAcceptedForLead(lead)) {
+      toast({
+        variant: 'destructive',
+        title: 'Signed SCF Required',
+        description: 'This lead cannot be signed up without an accepted SCF. Please upload the signed manual SCF or send an SCF quote for customer acceptance.',
+      });
+      setIsManualScfUploadOpen(true);
       return;
     }
 
@@ -2660,6 +2731,28 @@ export function ServiceSelectionDialog({
                   >
                     <div className="flex-1 overflow-y-auto -mx-6 px-6 py-2 space-y-6 min-h-0">
                         
+                        {mode === 'Signup' && !isScfAcceptedForLead(lead) && (
+                          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200">
+                            <div className="flex items-center gap-2.5">
+                              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                              <div>
+                                <p className="font-semibold text-sm text-amber-950 dark:text-amber-100">No Signed SCF Present</p>
+                                <p className="text-slate-600 dark:text-slate-300 text-xs">
+                                  This lead has not accepted an SCF online. If you received a physical/manual SCF, upload it now to record the accepted Terms &amp; Conditions date and unlock signup.
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => setIsManualScfUploadOpen(true)}
+                              className="bg-[#095c7b] hover:bg-[#064258] text-white shrink-0 w-full sm:w-auto"
+                            >
+                              <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload Manual SCF
+                            </Button>
+                          </div>
+                        )}
+                        
                         {(mode === 'Quote' || mode === 'Signup' || mode === 'Resell') && (
                           <div className="space-y-3 pb-5 border-b">
                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3607,6 +3700,22 @@ export function ServiceSelectionDialog({
                 onOpenChange={setIsPostalAddressDialogOpen} 
                 onLeadUpdated={(updates) => setLocalLead(prev => prev ? ({ ...prev, ...updates }) : prev)} 
              />
+          )}
+          {lead && (
+            <ManualScfUploadDialog
+              isOpen={isManualScfUploadOpen}
+              onOpenChange={setIsManualScfUploadOpen}
+              lead={lead}
+              pendingScfs={leadScfs}
+              onSuccess={async () => {
+                if (lead?.id) {
+                  getScfRecords(lead.id).then(setLeadScfs).catch(console.error);
+                }
+                if (onSuccess) {
+                  onSuccess();
+                }
+              }}
+            />
           )}
         </DialogContent>
       )}

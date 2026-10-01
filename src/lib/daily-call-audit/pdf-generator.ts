@@ -427,7 +427,7 @@ export function generateDailyAuditPDF(report: DailyAuditReportData): Buffer {
   doc.setFont('Helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(textMuted);
-  doc.text('Proof: Alex raised ShipMate on product signal (4184422626) -> set-time booking tomorrow 11am.', margin + 8, currentY + 46);
+  doc.text(`Proof: ${report.forkBreakdown?.proofSummary || 'No carrier signals on tape.'}`, margin + 8, currentY + 46);
 
   currentY += 62;
 

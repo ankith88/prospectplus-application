@@ -10,6 +10,7 @@ interface StatusBreakdownBarProps<T = any> {
   selectedStatus: string | null;
   onSelectStatus: (status: string | null) => void;
   getStatus?: (item: T) => string;
+  getOriginBucket?: (item: T) => string;
   className?: string;
   title?: string;
   unitLabel?: string;
@@ -20,22 +21,42 @@ export function StatusBreakdownBar<T = any>({
   selectedStatus,
   onSelectStatus,
   getStatus = (item: any) => item.customerStatus || item.status || item.leadStatus || 'New',
+  getOriginBucket,
   className,
   title = "Status Breakdown",
   unitLabel = "lead",
 }: StatusBreakdownBarProps<T>) {
   const statusBreakdown = useMemo(() => {
     if (!items || items.length === 0) return [];
-    const counts: Record<string, number> = {};
+    const counts: Record<string, { count: number; originCounts: Record<string, number> }> = {};
     items.forEach(item => {
       const rawStatus = getStatus(item);
       const s = (typeof rawStatus === 'string' && rawStatus.trim()) ? rawStatus.trim() : 'New';
-      counts[s] = (counts[s] || 0) + 1;
+      if (!counts[s]) {
+        counts[s] = { count: 0, originCounts: {} };
+      }
+      counts[s].count += 1;
+
+      if (getOriginBucket) {
+        const rawOrigin = getOriginBucket(item);
+        const origin = (typeof rawOrigin === 'string' && rawOrigin.trim()) ? rawOrigin.trim() : 'Outbound';
+        counts[s].originCounts[origin] = (counts[s].originCounts[origin] || 0) + 1;
+      }
     });
+
     return Object.entries(counts)
-      .map(([status, count]) => ({ status, count }))
+      .map(([status, data]) => {
+        const originBreakdown = Object.entries(data.originCounts)
+          .map(([bucket, count]) => ({ bucket, count }))
+          .sort((a, b) => b.count - a.count);
+        return {
+          status,
+          count: data.count,
+          originBreakdown,
+        };
+      })
       .sort((a, b) => b.count - a.count);
-  }, [items, getStatus]);
+  }, [items, getStatus, getOriginBucket]);
 
   if (statusBreakdown.length === 0) return null;
 
@@ -58,7 +79,7 @@ export function StatusBreakdownBar<T = any>({
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {statusBreakdown.map(({ status, count }) => {
+        {statusBreakdown.map(({ status, count, originBreakdown }) => {
           const isSelected = selectedStatus === status;
           const percentage = items.length > 0 ? Math.round((count / items.length) * 100) : 0;
           return (
@@ -67,16 +88,36 @@ export function StatusBreakdownBar<T = any>({
               type="button"
               onClick={() => onSelectStatus(isSelected ? null : status)}
               className={cn(
-                "flex items-center gap-2 rounded-md px-2.5 py-1 text-xs border transition-all cursor-pointer shadow-2xs",
+                "flex flex-col gap-1.5 rounded-lg px-2.5 py-1.5 text-xs border transition-all cursor-pointer shadow-2xs text-left",
                 isSelected 
                   ? "bg-[#095c7b]/10 border-[#095c7b] ring-1 ring-[#095c7b]" 
                   : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-100/70"
               )}
               title={`Click to filter list by status: ${status}`}
             >
-              <LeadStatusBadge status={status as LeadStatus} />
-              <span className="font-bold text-slate-800 text-xs">{count} {unitLabel}{count === 1 ? '' : 's'}</span>
-              <span className="text-[10px] text-slate-500 font-medium">({percentage}%)</span>
+              <div className="flex items-center gap-2">
+                <LeadStatusBadge status={status as LeadStatus} />
+                <span className="font-bold text-slate-800 text-xs">{count} {unitLabel}{count === 1 ? '' : 's'}</span>
+                <span className="text-[10px] text-slate-500 font-medium">({percentage}%)</span>
+              </div>
+              {originBreakdown.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-slate-100 w-full">
+                  <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Origin:</span>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {originBreakdown.map(({ bucket, count: bCount }) => (
+                      <span
+                        key={bucket}
+                        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-50 text-slate-700 font-medium border border-slate-200/80"
+                      >
+                        <span className="truncate max-w-[120px]">{bucket}</span>
+                        <span className="bg-white px-1 py-0.2 rounded font-bold text-slate-900 text-[9px] shadow-2xs border border-slate-200/50">
+                          {bCount}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </button>
           );
         })}

@@ -3,7 +3,7 @@
  * to LocalMile Plus scheduled_jobs collection.
  */
 
-import { checkLocalMileCompanyExists } from '@/lib/localmile-db';
+import { checkLocalMileCompanyExists, getLocalMilePlusDb } from '@/lib/localmile-db';
 
 export async function syncPmpoToLocalMileServer(
   leadId: string,
@@ -78,6 +78,7 @@ export async function syncPmpoToLocalMileServer(
 
     const schedPayload = {
       parentId: '',
+      parent_id: '',
       startDate: startDateVal,
       date: startDateVal,
       frequency: frequencyArray,
@@ -123,6 +124,19 @@ export async function syncPmpoToLocalMileServer(
 
     const resData = await response.json();
     console.log(`[LocalMile Sync Success] Successfully synced scheduled_job for lead ${leadId}:`, resData);
+
+    // Enforce empty parent_id on the scheduled_jobs document (do not store franchisee ID under parent_id)
+    const createdJobId = resData?.data?.id || resData?.id;
+    if (createdJobId) {
+      try {
+        const db = getLocalMilePlusDb();
+        await db.collection('scheduled_jobs').doc(String(createdJobId)).update({ parent_id: '' });
+        console.log(`[LocalMile Sync] Ensured parent_id is empty for scheduled_job ${createdJobId}`);
+      } catch (dbErr) {
+        console.warn(`[LocalMile Sync] Could not enforce empty parent_id directly on scheduled_job ${createdJobId}:`, dbErr);
+      }
+    }
+
     return { success: true };
   } catch (error: any) {
     console.error(`[LocalMile Sync Exception] Error syncing scheduled_job for lead ${leadId}:`, error);
