@@ -83,21 +83,20 @@ export function AnimatedStatCard({
       {/* Subtle Background Glow on Hover */}
       <div className="absolute -right-12 -bottom-12 w-32 h-32 rounded-full bg-slate-100/50 dark:bg-slate-800/30 group-hover:scale-150 transition-transform duration-500 blur-2xl pointer-events-none" />
 
-      <div className="p-5 relative z-10">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            {title}
-          </span>
-          <div className="flex items-center gap-2">
-            {badgeText && (
-              <PulseBadge variant={accentColor} pulse={badgePulse}>
-                {badgeText}
-              </PulseBadge>
-            )}
+      <div className="p-3.5 sm:p-4 relative z-10 flex flex-col justify-between h-full">
+        <div>
+          {/* Header: Title & Icon */}
+          <div className="flex items-start justify-between gap-1.5 mb-2">
+            <span
+              className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 line-clamp-1 leading-snug"
+              title={title}
+            >
+              {title}
+            </span>
             {icon && (
               <div
                 className={cn(
-                  "p-2.5 rounded-xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 shadow-xs",
+                  "p-1.5 sm:p-2 rounded-lg shrink-0 transition-all duration-300 group-hover:scale-110 shadow-xs",
                   iconBgColors[accentColor]
                 )}
               >
@@ -105,35 +104,48 @@ export function AnimatedStatCard({
               </div>
             )}
           </div>
-        </div>
 
-        <div className="flex items-baseline justify-between gap-2">
-          <div className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            <AnimatedNumber
-              value={value}
-              prefix={prefix}
-              suffix={suffix}
-              decimals={decimals}
-              formatter={formatter}
-            />
-          </div>
-
-          {trend && (
-            <div
-              className={cn(
-                "inline-flex items-center text-xs font-bold px-2 py-0.5 rounded-md",
-                trend.isPositive !== false
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
-              )}
-            >
-              {trend.isPositive !== false ? "↑" : "↓"} {trend.value}%
+          {/* Value & Badge/Trend Row */}
+          <div className="flex items-baseline justify-between gap-1.5 flex-wrap">
+            <div className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-none">
+              <AnimatedNumber
+                value={value}
+                prefix={prefix}
+                suffix={suffix}
+                decimals={decimals}
+                formatter={formatter}
+              />
             </div>
-          )}
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {badgeText && (
+                <PulseBadge variant={accentColor} pulse={badgePulse}>
+                  {badgeText}
+                </PulseBadge>
+              )}
+
+              {trend && (
+                <div
+                  className={cn(
+                    "inline-flex items-center text-xs font-bold px-1.5 py-0.5 rounded-md shrink-0",
+                    trend.isPositive !== false
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                  )}
+                >
+                  {trend.isPositive !== false ? "↑" : "↓"} {trend.value}%
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
+        {/* Footer: Description / Subtitle */}
         {(description || trend?.label) && (
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+          <p
+            className="mt-2 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 font-medium"
+            title={trend?.label || description}
+          >
             {trend?.label || description}
           </p>
         )}

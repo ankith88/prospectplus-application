@@ -93,6 +93,7 @@ import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Ap
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
+import { enrichLeadAction } from '@/ai/flows/enrich-lead-flow'
 import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskInLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices, isLostLeadStatus, getPendingItemsForLead, resolvePendingItemsForLead, getAllFranchisees } from '@/services/firebase'
 import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal'
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName } from '@/lib/duplicate-detector'
@@ -407,6 +408,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [editWhyId, setEditWhyId] = useState('');
     const [editReasonId, setEditReasonId] = useState('');
     const [isSavingLossReason, setIsSavingLossReason] = useState(false);
+    const [isEnrichingLead, setIsEnrichingLead] = useState(false);
 
     useEffect(() => {
         const fetchThemes = async () => {
@@ -3567,6 +3569,49 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         toast({ variant: "destructive", title: "Scan Failed", description: error.message || "Failed to scan website." });
     } finally {
         setIsAnalyzingWebsite(false);
+    }
+  };
+
+  const handleEnrichLead = async () => {
+    if (!lead || !lead.id) return;
+    setIsEnrichingLead(true);
+    try {
+      const res = await enrichLeadAction(lead.id);
+      if (!res.success || !res.data) {
+        throw new Error(res.error || 'Failed to enrich lead');
+      }
+      const data = res.data;
+      setLead(prev => ({
+        ...prev,
+        industryCategory: data.industryCategory,
+        industrySubCategory: data.industrySubCategory,
+        shipperEvidence: data.shipperEvidence,
+        lodgementEvidence: data.lodgementEvidence,
+        shopifyDetected: data.shopifyDetected,
+        xeroDetected: data.xeroDetected,
+        apRelationship: data.apRelationship,
+        prospectSummary: data.prospectSummary,
+        suggestedProduct: data.suggestedProduct,
+        suggestedOpener: data.suggestedOpener,
+        suggestedPersonalisation: data.suggestedPersonalisation,
+        similarSignedCustomers: data.similarSignedCustomers,
+        hasParcelShipping: data.hasParcelShipping,
+        isAiEnriched: true,
+        enrichedAt: new Date().toISOString(),
+      }));
+      toast({
+        title: 'Lead Enriched Successfully',
+        description: `Classified as ${data.industryCategory} with evidence & cold opener.`,
+      });
+    } catch (err: any) {
+      console.error('Lead enrichment failed:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Enrichment Failed',
+        description: err.message || 'Could not enrich lead with AI.',
+      });
+    } finally {
+      setIsEnrichingLead(false);
     }
   };
 
@@ -6850,6 +6895,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   const suggestedProduct = lead.suggestedProduct || lead.discoveryData?.suggestedProduct || (lead as any).suggested_product || (lead as any)['Suggessted Product'] || (lead as any)['Suggested Product'] || lead.discoveryData?.interestedIn || lead.interestedIn;
                   const suggestedOpener = lead.suggestedOpener || lead.discoveryData?.suggestedOpener || (lead as any).suggested_opener || (lead as any)['Suggessted Opener'] || (lead as any)['Suggested Opener'];
                   const suggestedPersonalisation = lead.suggestedPersonalisation || lead.discoveryData?.suggestedPersonalisation || (lead as any).suggested_personalisation || (lead as any)['Suggested Personalisation'] || (lead as any)['Suggested Personalization'];
+                  const similarSignedCustomers = lead.similarSignedCustomers || lead.discoveryData?.similarSignedCustomers || (lead as any).similar_signed_customers || [];
+                  const hasParcelShipping = lead.hasParcelShipping !== undefined ? lead.hasParcelShipping : lead.discoveryData?.hasParcelShipping;
 
                   const hasEnrichment = Boolean(
                     lodgementEvidence ||
@@ -6860,7 +6907,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     apRelationship ||
                     suggestedProduct ||
                     suggestedOpener ||
-                    suggestedPersonalisation
+                    suggestedPersonalisation ||
+                    hasParcelShipping !== undefined ||
+                    (similarSignedCustomers && similarSignedCustomers.length > 0)
                   );
 
                   return (
@@ -6875,23 +6924,69 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                               Enrichment & AI Lead Intelligence
                               {hasEnrichment && (
                                 <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 text-[10px] font-semibold">
-                                  Enriched
+                                  ✓ Enriched
                                 </Badge>
                               )}
                             </CardTitle>
                             <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
-                              Platform detections, shipper & lodgement evidence, and recommended sales openers.
+                              Industry classification, parcel shipping evidence, similar signed customer references, and AI cold call openers.
                             </CardDescription>
                           </div>
                         </div>
+                        <Button
+                          size="sm"
+                          onClick={handleEnrichLead}
+                          disabled={isEnrichingLead}
+                          className="bg-[#095c7b] hover:bg-[#074b64] text-white shadow-sm font-semibold flex items-center gap-1.5"
+                        >
+                          {isEnrichingLead ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Enriching Lead...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>{hasEnrichment ? 'Re-Enrich with AI' : 'Enrich Lead with AI'}</span>
+                            </>
+                          )}
+                        </Button>
                       </CardHeader>
                       <CardContent className="pt-6 space-y-6">
+                        {/* Industry & Sub-Industry Header Row */}
+                        {(lead.industryCategory || lead.industrySubCategory || hasParcelShipping !== undefined) && (
+                          <div className="p-4 bg-gradient-to-r from-sky-50/80 via-blue-50/50 to-indigo-50/50 dark:from-slate-800/80 dark:to-slate-900 rounded-xl border border-sky-200/80 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold tracking-wider uppercase text-sky-800 dark:text-sky-300">
+                                AI Industry Classification
+                              </span>
+                              <div className="flex items-center flex-wrap gap-2">
+                                <Badge className="bg-[#095c7b] text-white font-semibold text-xs px-2.5 py-0.5 shadow-sm">
+                                  {lead.industryCategory || 'Unclassified'}
+                                </Badge>
+                                {lead.industrySubCategory && (
+                                  <Badge variant="outline" className="bg-white/80 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-sky-300 dark:border-sky-800 font-medium text-xs">
+                                    {lead.industrySubCategory}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            {hasParcelShipping !== undefined && (
+                              <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                                <Badge variant="outline" className={cn("text-xs font-semibold px-2.5 py-1", hasParcelShipping ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300" : "bg-amber-50 text-amber-700 border-amber-300")}>
+                                  {hasParcelShipping ? '📦 Verified Parcel Shipper' : 'ℹ️ Non-Parcel Business'}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {!hasEnrichment ? (
                           <div className="text-center py-8 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border border-dashed text-slate-500 text-xs">
                             <Sparkles className="w-8 h-8 text-slate-400 mx-auto mb-2 opacity-60" />
                             <p className="font-medium text-slate-700 dark:text-slate-300">No Enrichment Data Recorded</p>
                             <p className="text-slate-500 mt-1 max-w-sm mx-auto">
-                              Import leads via the CSV wizard with columns BR to BZ to automatically populate intelligence for this record.
+                              Click &quot;Enrich Lead with AI&quot; above to automatically classify this lead&apos;s industry, verify parcel shipping proof, match signed clients, and generate cold openers.
                             </p>
                           </div>
                         ) : (
@@ -6966,6 +7061,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                               </div>
                             </div>
 
+                            {/* Similar Signed Customers (Social Proof) */}
+                            {similarSignedCustomers && similarSignedCustomers.length > 0 && (
+                              <div className="p-4 bg-gradient-to-br from-emerald-50/60 to-slate-50 dark:from-emerald-950/20 dark:to-slate-900 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                                    <ShieldCheck className="w-4 h-4 text-emerald-600" /> Similar Signed Customers (Social Proof)
+                                  </span>
+                                  <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">
+                                    {similarSignedCustomers.length} Reference Clients
+                                  </Badge>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                                  {similarSignedCustomers.map((c: any, idx: number) => (
+                                    <div key={idx} className="bg-white dark:bg-slate-800/80 p-3 rounded-lg border border-emerald-100 dark:border-slate-700 shadow-xs space-y-1">
+                                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{c.companyName}</p>
+                                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                        {c.industryCategory || 'Commercial'} {c.suburb ? `• ${c.suburb}` : ''}
+                                      </p>
+                                      {c.franchiseeName && (
+                                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0 mt-1">
+                                          Territory: {c.franchiseeName}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Prospect Summary */}
                             {prospectSummary && (
                               <div className="p-4 bg-gradient-to-br from-blue-50/60 to-slate-50 dark:from-slate-800/80 dark:to-slate-900 rounded-xl border border-blue-100 dark:border-slate-800 space-y-2">
@@ -7003,7 +7127,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <CopyButton textToCopy={suggestedOpener} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
                                   </div>
                                   <p className="text-xs font-medium text-slate-800 dark:text-slate-200 italic bg-white/80 dark:bg-slate-800/80 p-2.5 rounded-lg border border-amber-200/50 dark:border-amber-800/50 break-words max-h-60 overflow-y-auto">
-                                    "{suggestedOpener}"
+                                    &quot;{suggestedOpener}&quot;
                                   </p>
                                 </div>
                               )}
@@ -7034,7 +7158,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </span>
                                     <CopyButton textToCopy={shipperEvidence} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
                                   </div>
-                                  <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap break-words max-h-80 overflow-y-auto pr-2">
+                                  <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap break-words max-h-80 overflow-y-auto pr-2 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-lg border">
                                     {shipperEvidence}
                                   </div>
                                 </div>
@@ -7048,7 +7172,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </span>
                                     <CopyButton textToCopy={lodgementEvidence} className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
                                   </div>
-                                  <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap break-words max-h-80 overflow-y-auto pr-2">
+                                  <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap break-words max-h-80 overflow-y-auto pr-2 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-lg border">
                                     {lodgementEvidence}
                                   </div>
                                 </div>

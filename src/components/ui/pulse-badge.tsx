@@ -41,13 +41,13 @@ export function PulseBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border backdrop-blur-sm transition-all duration-300 shadow-xs hover:shadow",
+        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold border backdrop-blur-sm transition-all duration-300 shadow-xs whitespace-nowrap shrink-0",
         variantStyles[variant],
         className
       )}
     >
       {pulse ? (
-        <span className="relative flex h-2 w-2">
+        <span className="relative flex h-1.5 w-1.5 shrink-0">
           <span
             className={cn(
               "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
@@ -56,15 +56,15 @@ export function PulseBadge({
           />
           <span
             className={cn(
-              "relative inline-flex rounded-full h-2 w-2",
+              "relative inline-flex rounded-full h-1.5 w-1.5",
               dotStyles[variant]
             )}
           />
         </span>
       ) : icon ? (
-        icon
+        <span className="shrink-0">{icon}</span>
       ) : null}
-      <span>{children}</span>
+      <span className="leading-tight">{children}</span>
     </span>
   );
 }

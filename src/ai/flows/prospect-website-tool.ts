@@ -159,8 +159,8 @@ export const prospectWebsiteTool = ai.defineTool(
 
             if (websiteResponse.ok) {
                 const html = await websiteResponse.text();
-                const textContent = html.replace(/<style[^>]*>.*<\/style>/gs, '')
-                                        .replace(/<script[^>]*>.*<\/script>/gs, '')
+                const textContent = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                                        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
                                         .replace(/<[^>]+>/g, ' ')
                                         .replace(/\s+/g, ' ')
                                         .trim();

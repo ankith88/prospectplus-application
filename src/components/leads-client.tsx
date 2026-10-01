@@ -533,6 +533,7 @@ export default function LeadsClientPage({
   const [isStartingDialing, setIsStartingDialing] = useState(false);
   const [leadsToDelete, setLeadsToDelete] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isBatchEnriching, setIsBatchEnriching] = useState(false);
   const [isMoveToNurtureDialogOpen, setIsMoveToNurtureDialogOpen] = useState(false);
   const [leadsToMoveToNurture, setLeadsToMoveToNurture] = useState<Lead[]>([]);
   const [isAllocateBucketDialogOpen, setIsAllocateBucketDialogOpen] = useState(false);
@@ -1417,6 +1418,47 @@ export default function LeadsClientPage({
         toast({ variant: "destructive", title: "Error", description: "Failed to assign leads." });
     }
   };
+
+  const handleBatchEnrich = async () => {
+    if (selectedLeads.length === 0) return;
+    setIsBatchEnriching(true);
+    toast({
+      title: "Batch Enrichment Started",
+      description: `Analyzing and classifying ${selectedLeads.length} leads with AI...`,
+    });
+
+    try {
+      const response = await fetch('/api/admin/leads/batch-enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadIds: selectedLeads,
+          requestorUid: userProfile?.uid || user?.uid,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to complete batch enrichment.');
+      }
+
+      toast({
+        title: "Batch Enrichment Complete",
+        description: `Successfully enriched ${data.successCount} of ${data.total} leads.`,
+      });
+      setSelectedLeads([]);
+      handleRefresh();
+    } catch (error: any) {
+      console.error("Failed to batch enrich leads:", error);
+      toast({
+        variant: "destructive",
+        title: "Batch Enrichment Failed",
+        description: error.message || "Failed to batch enrich leads.",
+      });
+    } finally {
+      setIsBatchEnriching(false);
+    }
+  };
   
   const handleBulkReassign = async () => {
     if (idsForReassignment.length === 0 || reassignToUsers.length === 0) return;
@@ -2165,6 +2207,20 @@ export default function LeadsClientPage({
                         <Button onClick={() => handleBulkUnassign(selectedLeads)} variant="outline" size="sm">
                             <UserX className="mr-2 h-4 w-4" />
                             Unassign ({selectedLeads.length})
+                        </Button>
+                        <Button 
+                            onClick={handleBatchEnrich} 
+                            variant="outline" 
+                            size="sm" 
+                            disabled={isBatchEnriching}
+                            className="bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b]/20 border-[#095c7b]/30 font-semibold"
+                        >
+                            {isBatchEnriching ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Sparkles className="mr-2 h-4 w-4 text-[#095c7b]" />
+                            )}
+                            Enrich with AI ({selectedLeads.length})
                         </Button>
                     </>
                 )}

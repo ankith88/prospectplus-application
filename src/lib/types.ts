@@ -306,6 +306,19 @@ export interface DiscoveryData {
   suggestedProduct?: string;
   suggestedOpener?: string;
   suggestedPersonalisation?: string;
+  similarSignedCustomers?: Array<{
+    id?: string;
+    companyName: string;
+    industryCategory?: string;
+    industrySubCategory?: string;
+    suburb?: string;
+    state?: string;
+    franchiseeName?: string;
+  }>;
+  hasParcelShipping?: boolean;
+  isAiEnriched?: boolean;
+  enrichedAt?: string;
+  enrichedBy?: string;
 }
 
 export interface InvoiceItem {
@@ -759,6 +772,19 @@ export interface Lead {
   suggestedProduct?: string;
   suggestedOpener?: string;
   suggestedPersonalisation?: string;
+  similarSignedCustomers?: Array<{
+    id?: string;
+    companyName: string;
+    industryCategory?: string;
+    industrySubCategory?: string;
+    suburb?: string;
+    state?: string;
+    franchiseeName?: string;
+  }>;
+  hasParcelShipping?: boolean;
+  isAiEnriched?: boolean;
+  enrichedAt?: string;
+  enrichedBy?: string;
   pricing_table?: PricingTableRow[];
   suburb_mapping?: LeadSuburbMapping[];
   quoteSentAt?: string;

@@ -733,17 +733,18 @@ export function AppointmentReportingClient() {
     })).sort((a, b) => b.Total - a.Total);
 
     // Booker / Dialer Breakdown Data
-    const bookerMap: Record<string, { total: number; completed: number; won: number; noShow: number; rescheduled: number; cancelled: number }> = {};
+    const bookerMap: Record<string, { total: number; completed: number; won: number; noShow: number; rescheduled: number; cancelled: number; pending: number }> = {};
     filteredAppointments.forEach(a => {
       const b = a.bookedBy || 'Unassigned';
       if (!bookerMap[b]) {
-        bookerMap[b] = { total: 0, completed: 0, won: 0, noShow: 0, rescheduled: 0, cancelled: 0 };
+        bookerMap[b] = { total: 0, completed: 0, won: 0, noShow: 0, rescheduled: 0, cancelled: 0, pending: 0 };
       }
       bookerMap[b].total++;
       if (a.appointmentStatus === 'Completed') bookerMap[b].completed++;
       if (a.appointmentStatus === 'Rescheduled') bookerMap[b].rescheduled++;
       if (a.appointmentStatus === 'No Show') bookerMap[b].noShow++;
       if (a.appointmentStatus === 'Cancelled') bookerMap[b].cancelled++;
+      if (a.appointmentStatus === 'Pending') bookerMap[b].pending++;
       if (a.outcomeCategory === 'Won / Signed') bookerMap[b].won++;
     });
 
@@ -751,6 +752,7 @@ export function AppointmentReportingClient() {
       booker,
       Total: counts.total,
       Completed: counts.completed,
+      Pending: counts.pending,
       'Won / Signed': counts.won,
       'No Show': counts.noShow,
       Rescheduled: counts.rescheduled,
@@ -1165,7 +1167,7 @@ export function AppointmentReportingClient() {
       )}
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-9 gap-3">
         <AnimatedStatCard
           title="Unique Customers"
           value={stats.uniqueCustomers}
@@ -2489,6 +2491,7 @@ export function AppointmentReportingClient() {
                       <TableHead className="font-bold text-xs">Booked By (Dialer / SDR)</TableHead>
                       <TableHead className="text-center font-bold text-xs">Appointments Booked</TableHead>
                       <TableHead className="text-center font-bold text-xs text-emerald-600">Completed</TableHead>
+                      <TableHead className="text-center font-bold text-xs text-blue-600">Scheduled / Pending</TableHead>
                       <TableHead className="text-center font-bold text-xs text-purple-600">Rescheduled</TableHead>
                       <TableHead className="text-center font-bold text-xs text-amber-600">No Show</TableHead>
                       <TableHead className="text-center font-bold text-xs text-rose-600">Cancelled</TableHead>
@@ -2499,7 +2502,7 @@ export function AppointmentReportingClient() {
                   <TableBody>
                     {stats.bookerChartData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-6 text-slate-400">
+                        <TableCell colSpan={9} className="text-center py-6 text-slate-400">
                           No Booker data available
                         </TableCell>
                       </TableRow>
@@ -2511,6 +2514,7 @@ export function AppointmentReportingClient() {
                           </TableCell>
                           <TableCell className="text-center font-bold text-xs">{row.Total}</TableCell>
                           <TableCell className="text-center font-semibold text-xs text-emerald-600">{row.Completed}</TableCell>
+                          <TableCell className="text-center text-xs text-blue-600">{row.Pending}</TableCell>
                           <TableCell className="text-center text-xs text-purple-600">{row.Rescheduled}</TableCell>
                           <TableCell className="text-center text-xs text-amber-600">{row['No Show']}</TableCell>
                           <TableCell className="text-center text-xs text-rose-600">{row.Cancelled}</TableCell>
