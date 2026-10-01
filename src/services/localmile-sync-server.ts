@@ -46,12 +46,32 @@ export async function syncPmpoToLocalMileServer(
     const startDateVal = effectiveDateStr || new Date().toISOString().split('T')[0];
     const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY || process.env.PROSPECTPLUS_API_KEY || '454e75f843954875ccff72537d7702ba1ab6f65c';
 
+    const rawAddress = (typeof leadData?.postalAddress === 'object' ? leadData?.postalAddress?.street : leadData?.postalAddress) ||
+      (typeof leadData?.address === 'object' ? leadData?.address?.street : leadData?.address) ||
+      (leadData as any)?.street ||
+      (leadData as any)?.address1 ||
+      '';
+    const rawSuburb = (typeof leadData?.postalAddress === 'object' ? leadData?.postalAddress?.city : '') ||
+      (typeof leadData?.address === 'object' ? leadData?.address?.city : '') ||
+      (leadData as any)?.city ||
+      (leadData as any)?.suburb ||
+      '';
+    const rawState = (typeof leadData?.postalAddress === 'object' ? leadData?.postalAddress?.state : '') ||
+      (typeof leadData?.address === 'object' ? leadData?.address?.state : '') ||
+      (leadData as any)?.state ||
+      'NSW';
+    const rawPostcode = (typeof leadData?.postalAddress === 'object' ? (leadData?.postalAddress?.zip || (leadData?.postalAddress as any)?.postcode) : '') ||
+      (typeof leadData?.address === 'object' ? (leadData?.address?.zip || (leadData?.address as any)?.postcode) : '') ||
+      (leadData as any)?.zip ||
+      (leadData as any)?.postcode ||
+      '';
+
     const customerObj = {
       company: leadData?.companyName || leadData?.name || '',
-      address: (leadData as any)?.address1 || (leadData as any)?.street || (typeof leadData?.address === 'object' ? leadData?.address?.street : leadData?.address) || '',
-      suburb: (leadData as any)?.city || (typeof leadData?.address === 'object' ? leadData?.address?.city : '') || '',
-      state: (leadData as any)?.state || (typeof leadData?.address === 'object' ? leadData?.address?.state : '') || 'NSW',
-      postcode: (leadData as any)?.zip || (typeof leadData?.address === 'object' ? leadData?.address?.zip : '') || '',
+      address: rawAddress === 'undefined' ? '' : rawAddress,
+      suburb: rawSuburb === 'undefined' ? '' : rawSuburb,
+      state: rawState === 'undefined' ? 'NSW' : rawState,
+      postcode: rawPostcode === 'undefined' ? '' : rawPostcode,
       email: leadData?.customerServiceEmail || leadData?.email || '',
       phone: leadData?.customerPhone || leadData?.phone || ''
     };

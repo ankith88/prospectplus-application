@@ -331,6 +331,31 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 
 								const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY || process.env.PROSPECTPLUS_API_KEY || '454e75f843954875ccff72537d7702ba1ab6f65c';
 
+								const rawAddress = (typeof lead?.postalAddress === 'object' ? lead?.postalAddress?.street : lead?.postalAddress) ||
+									(typeof lead?.address === 'object' ? lead?.address?.street : lead?.address) ||
+									(lead as any)?.street ||
+									(lead as any)?.address1 ||
+									'';
+								const rawSuburb = (typeof lead?.postalAddress === 'object' ? lead?.postalAddress?.city : '') ||
+									(typeof lead?.address === 'object' ? lead?.address?.city : '') ||
+									(lead as any)?.city ||
+									(lead as any)?.suburb ||
+									'';
+								const rawState = (typeof lead?.postalAddress === 'object' ? lead?.postalAddress?.state : '') ||
+									(typeof lead?.address === 'object' ? lead?.address?.state : '') ||
+									(lead as any)?.state ||
+									'NSW';
+								const rawPostcode = (typeof lead?.postalAddress === 'object' ? (lead?.postalAddress?.zip || (lead?.postalAddress as any)?.postcode) : '') ||
+									(typeof lead?.address === 'object' ? (lead?.address?.zip || (lead?.address as any)?.postcode) : '') ||
+									(lead as any)?.zip ||
+									(lead as any)?.postcode ||
+									'';
+
+								const customerAddress = rawAddress === 'undefined' ? '' : rawAddress;
+								const customerSuburb = rawSuburb === 'undefined' ? '' : rawSuburb;
+								const customerState = rawState === 'undefined' ? 'NSW' : rawState;
+								const customerPostcode = rawPostcode === 'undefined' ? '' : rawPostcode;
+
 								const schedPayload = {
 									parentId: "",
 									startDate: new Date().toISOString().split('T')[0],
@@ -340,19 +365,19 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 									accountManagerName: payload.accountManagerName || lead.accountManagerAssigned || '',
 									customer: {
 										company: lead.companyName || '',
-										address: (lead as any).address1 || (lead as any).street || (typeof lead.address === 'object' ? lead.address?.street : lead.address) || '',
-										suburb: (lead as any).city || (typeof lead.address === 'object' ? lead.address?.city : '') || '',
-										state: (lead as any).state || (typeof lead.address === 'object' ? lead.address?.state : '') || 'NSW',
-										postcode: (lead as any).zip || (typeof lead.address === 'object' ? lead.address?.zip : '') || '',
+										address: customerAddress,
+										suburb: customerSuburb,
+										state: customerState,
+										postcode: customerPostcode,
 										email: contactEmail || lead.customerServiceEmail || '',
 										phone: contactPhone || lead.customerPhone || ''
 									},
 									recipient: {
 										company: 'Australia Post',
-										address: (lead as any).address1 || (lead as any).street || (typeof lead.address === 'object' ? lead.address?.street : lead.address) || '',
-										suburb: (lead as any).city || (typeof lead.address === 'object' ? lead.address?.city : '') || '',
-										state: (lead as any).state || (typeof lead.address === 'object' ? lead.address?.state : '') || 'NSW',
-										postcode: (lead as any).zip || (typeof lead.address === 'object' ? lead.address?.zip : '') || '',
+										address: customerAddress,
+										suburb: customerSuburb,
+										state: customerState,
+										postcode: customerPostcode,
 										firstName: 'Australia',
 										lastName: 'Post',
 										phone: '13 13 18',

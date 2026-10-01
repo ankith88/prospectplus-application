@@ -62,6 +62,8 @@ export async function checkLocalMileCompanyExists(
 ): Promise<boolean> {
   if (!companyId) return false;
 
+  let hadPermissionOrConnectionError = false;
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const db = getLocalMilePlusDb();
@@ -72,13 +74,21 @@ export async function checkLocalMileCompanyExists(
         }
         return true;
       }
-    } catch (error) {
-      console.error(`[LocalMile DB Check Error] Attempt ${attempt}/${maxRetries} failed for company ${companyId}:`, error);
+    } catch (error: any) {
+      hadPermissionOrConnectionError = true;
+      console.error(`[LocalMile DB Check Error] Attempt ${attempt}/${maxRetries} failed for company ${companyId}:`, error?.message || error);
     }
 
     if (attempt < maxRetries) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
+  }
+
+  // If the Firestore query threw permission or connection errors (e.g., cross-project IAM restrictions in App Hosting),
+  // do not block downstream API requests. Fall back to allowing the REST API call to proceed.
+  if (hadPermissionOrConnectionError) {
+    console.warn(`[LocalMile DB Check] Direct Firestore check encountered permission/connection errors for company ${companyId}. Proceeding with API fallback.`);
+    return true;
   }
 
   console.warn(`[LocalMile DB Check] Company ${companyId} does not exist in LocalMile application database (companies collection) after ${maxRetries} attempt(s).`);
