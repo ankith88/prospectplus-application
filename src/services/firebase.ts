@@ -2268,9 +2268,14 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
     return null;
 }
 
-async function getAllUserTasks(displayName: string): Promise<Array<Task & { leadId: string; leadName: string }>> {
+async function getAllUserTasks(displayName: string, options?: { startDate?: string; endDate?: string }): Promise<Array<Task & { leadId: string; leadName: string }>> {
     try {
-        const res = await fetch(`/api/tasks?user=${encodeURIComponent(displayName)}`, { cache: 'no-store' });
+        const params = new URLSearchParams();
+        if (displayName) params.set('user', displayName);
+        if (options?.startDate) params.set('startDate', options.startDate);
+        if (options?.endDate) params.set('endDate', options.endDate);
+
+        const res = await fetch(`/api/tasks?${params.toString()}`, { cache: 'no-store' });
         if (res.ok) {
             const data = await res.json();
             if (data.success && Array.isArray(data.tasks)) {
@@ -2282,9 +2287,21 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
     }
 
     try {
-        const q = query(collectionGroup(firestore, 'tasks'), where('dialerAssigned', '==', displayName));
+        let q = displayName && displayName !== 'all'
+            ? query(collectionGroup(firestore, 'tasks'), where('dialerAssigned', '==', displayName))
+            : query(collectionGroup(firestore, 'tasks'));
         const snap = await getDocs(q);
-        return snap.docs.map(doc => ({ ...sanitizeData(doc.data()), id: doc.id, leadId: doc.ref.parent.parent!.id, leadName: doc.data().leadName || 'Lead' } as any));
+        let tasks = snap.docs.map(doc => ({ ...sanitizeData(doc.data()), id: doc.id, leadId: doc.ref.parent.parent!.id, leadName: doc.data().leadName || 'Lead' } as any));
+        if (options?.startDate || options?.endDate) {
+            const start = options?.startDate ? new Date(options.startDate).getTime() : -Infinity;
+            const end = options?.endDate ? new Date(options.endDate).getTime() : Infinity;
+            tasks = tasks.filter(t => {
+                if (!t.dueDate) return false;
+                const d = new Date(t.dueDate).getTime();
+                return !isNaN(d) && d >= start && d <= end;
+            });
+        }
+        return tasks;
     } catch (err) {
         console.error('Failed to get tasks via client Firestore:', err);
         return [];
