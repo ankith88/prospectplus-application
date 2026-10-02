@@ -48,10 +48,11 @@ import { Calendar } from './ui/calendar';
 import { OpenTrackingTips } from '@/components/ui/open-tracking-tips';
 import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
 import { cn, isScfAcceptedForLead } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 import { ManualScfUploadDialog } from '@/components/manual-scf-upload-dialog';
 import { AlertTriangle, Upload } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
-import type { Lead, Contact, Franchisee } from '@/lib/types';
+import type { Lead, Contact, Franchisee, LeadStatus } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { AddContactForm } from './add-contact-form';
 import { EditPostalAddressDialog } from './edit-postal-address-dialog';
@@ -225,14 +226,128 @@ export function ServiceSelectionDialog({
   const [lpoChildFranchiseeEmails, setLpoChildFranchiseeEmails] = useState<string>('');
 
   const isLpoProcessLead = Boolean(
-    lead?.isParentLead ||
-    lead?.isChildLead ||
     lead?.bucket === 'lpo_network' ||
+    (lead?.bucket as string)?.toLowerCase() === 'lpo_network' ||
+    lead?.bucket === 'LPO Network' ||
     (lead as any)?.source === 'LPO Lead Conversion' ||
     lead?.leadSource === 'LPO Expressions of Interest' ||
     lead?.lpoLeadId ||
-    lead?.parentLeadId
+    (lead as any)?.linkedLpoLeadId
   );
+
+  const [availableChildLeads, setAvailableChildLeads] = useState<Lead[]>([]);
+  const [selectedChildLeadIds, setSelectedChildLeadIds] = useState<Set<string>>(new Set());
+  const [replicateServicesToChildLeads, setReplicateServicesToChildLeads] = useState<boolean>(true);
+  const [preparedChildScfPayload, setPreparedChildScfPayload] = useState<any>(null);
+  const [preparedServiceSelections, setPreparedServiceSelections] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchMultiSiteChildLeads() {
+      if (!isOpen || !lead?.id || isLpoProcessLead) {
+        setAvailableChildLeads([]);
+        setSelectedChildLeadIds(new Set());
+        return;
+      }
+      try {
+        const isParentSuffixed = (obj: any) => {
+          const n = (obj?.companyName || obj?.businessName || obj?.company || '').trim().toLowerCase();
+          return n.endsWith('- parent') || n.endsWith(' - parent') || n.endsWith('-parent');
+        };
+
+        const parentId = lead.isParentLead ? lead.id : (lead.parentLeadId || lead.id);
+        const childMap = new Map<string, Lead>();
+
+        if (parentId) {
+          const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentId));
+          const snap = await getDocs(qChild);
+          snap.docs.forEach(d => {
+            const data = d.data();
+            if (d.id !== lead.id && !isParentSuffixed(data)) {
+              childMap.set(d.id, { id: d.id, ...data } as Lead);
+            }
+          });
+        }
+
+        if (lead.createdChildLeadIds && Array.isArray(lead.createdChildLeadIds)) {
+          for (const cId of lead.createdChildLeadIds) {
+            if (cId !== lead.id && !childMap.has(cId)) {
+              try {
+                const cSnap = await getDoc(doc(firestore, 'leads', cId));
+                if (cSnap.exists()) {
+                  const cData = cSnap.data();
+                  if (!isParentSuffixed(cData)) {
+                    childMap.set(cSnap.id, { id: cSnap.id, ...cData } as Lead);
+                  }
+                }
+              } catch (e) {}
+            }
+          }
+        }
+
+        const childArray = Array.from(childMap.values()).filter(c => !isParentSuffixed(c));
+        setAvailableChildLeads(childArray);
+        setSelectedChildLeadIds(new Set());
+      } catch (err) {
+        console.warn('Error fetching multi-site child leads:', err);
+      }
+    }
+
+    fetchMultiSiteChildLeads();
+  }, [isOpen, lead?.id, isLpoProcessLead]);
+
+  const processMultiSiteChildLeads = async (
+    targetStatus: LeadStatus,
+    scfDataToCopy?: any,
+    serviceSelectionsToCopy?: any[]
+  ) => {
+    if (selectedChildLeadIds.size === 0 || !lead) return;
+
+    const selectedIds = Array.from(selectedChildLeadIds);
+    console.log(`[Multi-Site Batch Action] Applying ${targetStatus} to ${selectedIds.length} child leads:`, selectedIds);
+
+    for (const childId of selectedIds) {
+      try {
+        const childDoc = availableChildLeads.find(c => c.id === childId);
+        if (!childDoc) continue;
+
+        const nowIso = new Date().toISOString();
+
+        if (replicateServicesToChildLeads && serviceSelectionsToCopy && serviceSelectionsToCopy.length > 0) {
+          const childRef = doc(firestore, 'leads', childId);
+          await updateDoc(childRef, {
+            services: serviceSelectionsToCopy,
+            serviceOption: (lead as any).serviceOption || 'corporate',
+            selectedServiceOption: lead.selectedServiceOption || 'corporate',
+            updatedAt: nowIso
+          }).catch(err => console.warn(`Could not replicate services for child ${childId}:`, err));
+
+          if (scfDataToCopy) {
+            const childScfPayload = {
+              ...scfDataToCopy,
+              companyName: childDoc.companyName || (childDoc as any).businessName || '',
+              franchisee: childDoc.franchisee || '',
+              franchisee_id: childDoc.franchisee_id || (childDoc as any).franchiseeInternalId || '',
+              createdAt: nowIso,
+              updatedAt: nowIso
+            };
+            const childScfId = await createScfRecord(childId, childScfPayload);
+            const childScfUrl = `${window.location.origin}/scf/${childScfId}`;
+            await updateLeadCommReg(childId, childDoc.commRegId || '', childScfUrl).catch(() => {});
+          }
+        }
+
+        await updateLeadStatus(childId, targetStatus);
+
+        await logActivity(childId, {
+          type: 'Update',
+          notes: `Processed multi-site action: ${mode} (${targetStatus}) replicated from parent/linked account ${lead.companyName} (${lead.id}).`,
+          author: user?.displayName || user?.email || 'Unknown User'
+        });
+      } catch (childErr) {
+        console.error(`Failed to process multi-site child lead ${childId}:`, childErr);
+      }
+    }
+  };
 
   const isLpoNetworkBucket = lead?.bucket === 'lpo_network' || (lead?.bucket as string)?.toLowerCase() === 'lpo_network' || lead?.bucket === 'LPO Network';
 
@@ -1175,12 +1290,15 @@ export function ServiceSelectionDialog({
         if (!isCompanyOrSignedCustomer && !isResendingQuote) {
           await updateLeadStatus(lead.id, 'Quote Sent');
         }
+        if (selectedChildLeadIds.size > 0) {
+          await processMultiSiteChildLeads('Quote Sent', preparedChildScfPayload, preparedServiceSelections);
+        }
         await logActivity(lead.id, {
             type: 'Update',
             notes: `Processed sales option: Quote for services and sent email.`,
             author: user?.displayName || 'Unknown'
         });
-        toast({ title: 'Success!', description: 'The quote email has been sent.' });
+        toast({ title: 'Success!', description: selectedChildLeadIds.size > 0 ? `Quote sent for active lead and ${selectedChildLeadIds.size} child account(s).` : 'The quote email has been sent.' });
       } else if (mode === 'Signup' || mode === 'Resend SCF' || mode === 'Confirm Signup') {
         const response = await fetch('/api/campaigns/send-custom-email', {
           method: 'POST',
@@ -1207,6 +1325,10 @@ export function ServiceSelectionDialog({
           await updateLeadStatus(lead.id, 'Won');
         }
 
+        if (selectedChildLeadIds.size > 0 && mode === 'Signup') {
+          await processMultiSiteChildLeads('Won', preparedChildScfPayload, preparedServiceSelections);
+        }
+
         let activityNotes = `Sent Signup confirmation email to ${emailPreviewData.to}`;
         if (mode === 'Resend SCF') {
           activityNotes = `Resent SCF email to ${emailPreviewData.to}`;
@@ -1219,7 +1341,7 @@ export function ServiceSelectionDialog({
             notes: activityNotes,
             author: user?.displayName || 'Unknown'
         });
-        toast({ title: 'Success!', description: 'The email has been sent.' });
+        toast({ title: 'Success!', description: selectedChildLeadIds.size > 0 ? `Signup completed for active lead and ${selectedChildLeadIds.size} child account(s).` : 'The email has been sent.' });
       }
       onOpenChange(false);
       onSuccess?.();
@@ -1249,15 +1371,21 @@ export function ServiceSelectionDialog({
         if (!isCompanyOrSignedCustomer && !isResendingQuote) {
           await updateLeadStatus(lead.id, 'Quote Sent');
         }
+        if (selectedChildLeadIds.size > 0) {
+          await processMultiSiteChildLeads('Quote Sent', preparedChildScfPayload, preparedServiceSelections);
+        }
         await logActivity(lead.id, {
             type: 'Update',
             notes: `Processed sales option: Quote for services (no email sent).`,
             author: user?.displayName || 'Unknown'
         });
-        toast({ title: 'Success!', description: 'The quote process has been completed without sending an email.' });
+        toast({ title: 'Success!', description: selectedChildLeadIds.size > 0 ? `Quote saved for active lead and ${selectedChildLeadIds.size} child account(s).` : 'The quote process has been completed without sending an email.' });
       } else if (mode === 'Signup' || mode === 'Resend SCF' || mode === 'Confirm Signup') {
         if (mode === 'Signup' || mode === 'Confirm Signup') {
           await updateLeadStatus(lead.id, 'Won');
+        }
+        if (selectedChildLeadIds.size > 0 && (mode === 'Signup' || mode === 'Confirm Signup')) {
+          await processMultiSiteChildLeads('Won', preparedChildScfPayload, preparedServiceSelections);
         }
 
         let activityNotes = `Processed sales option: Signup (no email sent).`;
@@ -1272,7 +1400,7 @@ export function ServiceSelectionDialog({
             notes: activityNotes,
             author: user?.displayName || 'Unknown'
         });
-        toast({ title: 'Success!', description: `${mode} completed without sending an email.` });
+        toast({ title: 'Success!', description: selectedChildLeadIds.size > 0 ? `${mode} completed for active lead and ${selectedChildLeadIds.size} child account(s).` : `${mode} completed without sending an email.` });
       }
       onOpenChange(false);
       onSuccess?.();
@@ -1873,6 +2001,9 @@ export function ServiceSelectionDialog({
                 updatedAt: new Date().toISOString(),
             };
 
+            setPreparedChildScfPayload(scfData);
+            setPreparedServiceSelections(serviceSelections);
+
             const activeScfs = (existingScfs || []).filter((s: any) => s.status !== 'Cancelled');
 
             if (activeScfs.length > 0) {
@@ -1925,12 +2056,15 @@ export function ServiceSelectionDialog({
                     if (!isCompanyOrSignedCustomer && !isResendingQuote) {
                       await updateLeadStatus(lead.id, 'Quote Sent');
                     }
+                    if (selectedChildLeadIds.size > 0) {
+                      await processMultiSiteChildLeads('Quote Sent', scfData, serviceSelections);
+                    }
                     await logActivity(lead.id, {
                         type: 'Update',
                         notes: `Processed sales option: Quote for services (no email sent).`,
                         author: user?.displayName || 'Unknown'
                     });
-                    toast({ title: 'Success!', description: 'The quote process has been completed without sending an email.' });
+                    toast({ title: 'Success!', description: selectedChildLeadIds.size > 0 ? `Quote saved for active lead and ${selectedChildLeadIds.size} child account(s).` : 'The quote process has been completed without sending an email.' });
                     setIsSubmitting(false);
                     onOpenChange(false);
                     onSuccess?.();
@@ -1992,7 +2126,7 @@ export function ServiceSelectionDialog({
                     ? (currentUserEmail ? `${currentUserName} (${currentUserEmail})` : currentUserName)
                     : (currentUserEmail || 'Unknown User');
 
-                const scfId = await createScfRecord(lead.id, {
+                const signupScfData = {
                     contactId: values.selectedContactId || values.selectedContactIds?.join(',') || '',
                     services: serviceSelections,
                     products: scfProducts,
@@ -2005,7 +2139,12 @@ export function ServiceSelectionDialog({
                     createdByUid: user?.uid || userProfile?.uid || '',
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
-                });
+                };
+
+                setPreparedChildScfPayload(signupScfData);
+                setPreparedServiceSelections(serviceSelections);
+
+                const scfId = await createScfRecord(lead.id, signupScfData);
                 
                 const scfUrl = `${window.location.origin}/scf/${scfId}`;
                 await updateLeadCommReg(lead.id, lead.commRegId || '', scfUrl);
@@ -2014,6 +2153,10 @@ export function ServiceSelectionDialog({
                     title: "SCF Created",
                     description: "The Service Creation Form (SCF) has been created. The Terms & Conditions (T&Cs) have not yet been accepted via the SCF."
                 });
+            } else {
+                const latestScf = existingScfs[0];
+                setPreparedChildScfPayload(latestScf || { services: serviceSelections });
+                setPreparedServiceSelections(serviceSelections);
             }
 
             // 1. Call NetSuite APIs first
@@ -2186,6 +2329,9 @@ export function ServiceSelectionDialog({
 
             if (skipEmail) {
               await updateLeadStatus(lead.id, 'Won');
+              if (selectedChildLeadIds.size > 0) {
+                await processMultiSiteChildLeads('Won', preparedChildScfPayload, serviceSelections);
+              }
               const signupDesc = selectionType === 'both' 
                 ? `both services (${values.selectedServices.join(', ')}) and products`
                 : selectionType === 'products'
@@ -2197,7 +2343,7 @@ export function ServiceSelectionDialog({
                   notes: `Processed sales option: Signup for ${signupDesc} (no email sent).`,
                   author: user?.displayName || 'Unknown'
               });
-              toast({ title: 'Success!', description: 'Signup has been completed successfully without sending an email.' });
+              toast({ title: 'Success!', description: selectedChildLeadIds.size > 0 ? `Signup completed for active lead and ${selectedChildLeadIds.size} child account(s).` : 'Signup has been completed successfully without sending an email.' });
               setIsSubmitting(false);
               onOpenChange(false);
               onSuccess?.();
@@ -3657,6 +3803,121 @@ export function ServiceSelectionDialog({
                                 </Button>
                             </div>
                         )}
+
+                        {availableChildLeads.length > 0 && !isLpoProcessLead && (
+                          <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3.5 mt-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-800 pb-3">
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                                      Multi-Site Child Accounts
+                                    </h4>
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 font-medium">
+                                      {availableChildLeads.length} Linked Sites
+                                    </Badge>
+                                  </div>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    Choose which child locations to apply this {mode} to. Unselected sites will not have their status changed.
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 text-[11px] px-2"
+                                  onClick={() => setSelectedChildLeadIds(new Set(availableChildLeads.map(c => c.id)))}
+                                >
+                                  Select All
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                                  onClick={() => setSelectedChildLeadIds(new Set())}
+                                >
+                                  Clear Selection
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Service & Pricing Replication Switch */}
+                            <div className="flex items-center justify-between p-2.5 bg-white dark:bg-slate-950 border border-slate-200/70 dark:border-slate-800 rounded-lg">
+                              <div className="space-y-0.5 pr-2">
+                                <Label className="text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+                                  Replicate Services, Rates &amp; Frequencies
+                                </Label>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Apply the configured services, custom rates, and pickup frequency to all selected child accounts.
+                                </p>
+                              </div>
+                              <Switch
+                                checked={replicateServicesToChildLeads}
+                                onCheckedChange={setReplicateServicesToChildLeads}
+                              />
+                            </div>
+
+                            {/* Child Sites List */}
+                            <div className="max-h-[180px] overflow-y-auto space-y-1.5 pr-1">
+                              {availableChildLeads.map(child => {
+                                const isChecked = selectedChildLeadIds.has(child.id);
+                                const childStatus = child.customerStatus || child.status || 'New';
+                                return (
+                                  <label
+                                    key={child.id}
+                                    className={cn(
+                                      "flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors",
+                                      isChecked
+                                        ? "bg-indigo-50/70 border-indigo-200 text-indigo-950 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-200"
+                                        : "bg-white border-slate-200 hover:bg-slate-100/60 dark:bg-slate-950 dark:border-slate-800 dark:hover:bg-slate-900"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                      <Checkbox
+                                        checked={isChecked}
+                                        onCheckedChange={(checked) => {
+                                          setSelectedChildLeadIds(prev => {
+                                            const next = new Set(prev);
+                                            if (checked) next.add(child.id);
+                                            else next.delete(child.id);
+                                            return next;
+                                          });
+                                        }}
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="font-semibold truncate text-slate-800 dark:text-slate-200">
+                                          {child.companyName || (child as any).businessName || 'Unnamed Child'}
+                                        </p>
+                                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                                          {((child as any).suburb || child.postalAddress?.city || child.address?.city) && (
+                                            <span>{(child as any).suburb || child.postalAddress?.city || child.address?.city} {child.postalAddress?.state || child.address?.state || child.state}</span>
+                                          )}
+                                          {child.franchisee && <span>• Zee: {child.franchisee}</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-slate-300">
+                                        {childStatus}
+                                      </Badge>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+
+                            {selectedChildLeadIds.size > 0 && (
+                              <div className="text-[11px] text-indigo-700 dark:text-indigo-300 font-medium pt-1">
+                                ✓ This action will be applied to <strong>{lead.companyName}</strong> and <strong>{selectedChildLeadIds.size} child account(s)</strong>.
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {(mode === 'Quote' || mode === 'Signup' || mode === 'Resell' || mode === 'Resend SCF' || mode === 'Confirm Signup') && (
                           <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg p-3 mt-4">
                             <Checkbox 

@@ -34,8 +34,8 @@ import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail, Building, Lock } from 'lucide-react'
-import { logCallActivity, logActivity, addTaskToLead, updateTaskInLead, updateContactSendEmail, updateContactInLead, updateLeadDetails, logBucketChange, isLostLeadStatus, getPendingItemsForLead, resolvePendingItemsForLead } from '@/services/firebase'
+import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail, Building, Building2, Lock } from 'lucide-react'
+import { logCallActivity, logActivity, addTaskToLead, updateTaskInLead, updateContactSendEmail, updateContactInLead, updateLeadDetails, logBucketChange, isLostLeadStatus, getPendingItemsForLead, resolvePendingItemsForLead, updateLeadStatus } from '@/services/firebase'
 import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal'
 import { isAccountManagerUser } from '@/lib/lead-permissions'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
@@ -272,6 +272,125 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
   const [parcelVolumeGreaterThan20, setParcelVolumeGreaterThan20] = useState<'Yes' | 'No' | ''>('');
   const [selectedCarriers, setSelectedCarriers] = useState<string[]>([]);
   const [pushToLpoPlusRequested, setPushToLpoPlusRequested] = useState<boolean>(false);
+
+  // Multi-Site child accounts states (non-LPO leads only)
+  const isLpoProcessLead = Boolean(
+    lead?.bucket === 'lpo_network' ||
+    (lead?.bucket as string)?.toLowerCase() === 'lpo_network' ||
+    lead?.bucket === 'LPO Network' ||
+    (lead as any)?.source === 'LPO Lead Conversion' ||
+    lead?.leadSource === 'LPO Expressions of Interest' ||
+    lead?.lpoLeadId ||
+    (lead as any)?.linkedLpoLeadId
+  );
+
+  const [availableChildLeads, setAvailableChildLeads] = useState<Lead[]>([]);
+  const [selectedChildLeadIds, setSelectedChildLeadIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    async function fetchMultiSiteChildLeads() {
+      if (!isOpen || !lead?.id || isLpoProcessLead) {
+        setAvailableChildLeads([]);
+        setSelectedChildLeadIds(new Set());
+        return;
+      }
+      try {
+        const isParentSuffixed = (obj: any) => {
+          const n = (obj?.companyName || obj?.businessName || obj?.company || '').trim().toLowerCase();
+          return n.endsWith('- parent') || n.endsWith(' - parent') || n.endsWith('-parent');
+        };
+
+        const parentId = lead.isParentLead ? lead.id : (lead.parentLeadId || lead.id);
+        const childMap = new Map<string, Lead>();
+
+        if (parentId) {
+          const qChild = query(collection(db, 'leads'), where('parentLeadId', '==', parentId));
+          const snap = await getDocs(qChild);
+          snap.docs.forEach(d => {
+            const data = d.data();
+            if (d.id !== lead.id && !isParentSuffixed(data)) {
+              childMap.set(d.id, { id: d.id, ...data } as Lead);
+            }
+          });
+        }
+
+        if (lead.createdChildLeadIds && Array.isArray(lead.createdChildLeadIds)) {
+          for (const cId of lead.createdChildLeadIds) {
+            if (cId !== lead.id && !childMap.has(cId)) {
+              try {
+                const cSnap = await getDoc(doc(db, 'leads', cId));
+                if (cSnap.exists()) {
+                  const cData = cSnap.data();
+                  if (!isParentSuffixed(cData)) {
+                    childMap.set(cSnap.id, { id: cSnap.id, ...cData } as Lead);
+                  }
+                }
+              } catch (e) {}
+            }
+          }
+        }
+
+        const childArray = Array.from(childMap.values()).filter(c => !isParentSuffixed(c));
+        setAvailableChildLeads(childArray);
+        setSelectedChildLeadIds(new Set());
+      } catch (err) {
+        console.warn('Error fetching multi-site child leads in post-call outcome dialog:', err);
+      }
+    }
+
+    fetchMultiSiteChildLeads();
+  }, [isOpen, lead?.id, isLpoProcessLead]);
+
+  const processMultiSiteLostChildLeads = async (
+    targetStatus: LeadStatus,
+    lossDetails?: {
+      cancellationTheme?: string;
+      cancellationThemeId?: string;
+      cancellationCategory?: string;
+      cancellationWhyId?: string;
+      cancellationReason?: string;
+      cancellationReasonId?: string;
+    },
+    outcomeName?: string,
+    notesText?: string
+  ) => {
+    if (selectedChildLeadIds.size === 0 || !lead) return;
+
+    const selectedIds = Array.from(selectedChildLeadIds);
+    console.log(`[Multi-Site Lost Batch Action] Applying ${targetStatus} to ${selectedIds.length} child leads:`, selectedIds);
+
+    for (const childId of selectedIds) {
+      try {
+        const childDoc = availableChildLeads.find(c => c.id === childId);
+        if (!childDoc) continue;
+
+        const nowIso = new Date().toISOString();
+        const updates: any = {
+          updatedAt: nowIso,
+          ...(lossDetails?.cancellationThemeId ? {
+            cancellationTheme: lossDetails.cancellationTheme || '',
+            cancellationThemeId: lossDetails.cancellationThemeId,
+            cancellationCategory: lossDetails.cancellationCategory || '',
+            cancellationWhyId: lossDetails.cancellationWhyId || '',
+            cancellationReason: lossDetails.cancellationReason || '',
+            cancellationReasonId: lossDetails.cancellationReasonId || '',
+            cancellationdate: nowIso.split('T')[0]
+          } : {})
+        };
+
+        await updateDoc(doc(db, 'leads', childId), updates).catch(err => console.warn(`Could not update loss details for child ${childId}:`, err));
+        await updateLeadStatus(childId, targetStatus);
+
+        await logActivity(childId, {
+          type: 'Call',
+          notes: `Outcome: ${outcomeName || targetStatus}. Multi-site action replicated from ${lead.companyName} (${lead.id}). Notes: ${notesText || 'Marked lost via multi-site action.'}`,
+          author: user?.displayName || user?.email || 'Unknown User'
+        });
+      } catch (childErr) {
+        console.error(`Failed to process multi-site child lead ${childId} as lost:`, childErr);
+      }
+    }
+  };
 
   const handleCarrierToggle = (courierValue: string) => {
     setSelectedCarriers(prev => {
@@ -1115,6 +1234,27 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                 deactivateLocalMileAccessForLead(lead.id, lead.contacts).catch(err => {
                     console.error("Failed to deactivate LocalMile access during outcome save:", err);
                 });
+
+                if (selectedChildLeadIds.size > 0) {
+                    const activeThemesList = getMergedCancellationHierarchy(cancellationThemes);
+                    const selectedThemeObj = activeThemesList.find(t => String(t.id) === String(selectedThemeId));
+                    const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => String(w.id) === String(selectedWhyId));
+                    const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => String(r.id) === String(selectedReasonId));
+                    
+                    await processMultiSiteLostChildLeads(
+                        (newStatus || 'Lost') as LeadStatus,
+                        {
+                            cancellationTheme: selectedThemeObj?.name || '',
+                            cancellationThemeId: selectedThemeId,
+                            cancellationCategory: selectedWhyObj?.name || '',
+                            cancellationWhyId: selectedWhyId,
+                            cancellationReason: selectedReasonObj?.name || '',
+                            cancellationReasonId: selectedReasonId,
+                        },
+                        values.outcome,
+                        values.notes
+                    );
+                }
             }
         }
         
@@ -2344,6 +2484,91 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                           }}
                           disabled={submissionState !== 'idle'}
                         />
+
+                        {availableChildLeads.length > 0 && !isLpoProcessLead && (
+                          <div className="border border-amber-200 bg-amber-50/60 rounded-lg p-3 space-y-2.5 mt-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Building2 className="w-4 h-4 text-amber-700 shrink-0" />
+                                <span className="text-xs font-semibold text-amber-950">
+                                  Also Apply Lost Status to Linked Child Accounts ({availableChildLeads.length} available)
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 text-[11px] px-2 bg-white hover:bg-amber-100"
+                                  onClick={() => setSelectedChildLeadIds(new Set(availableChildLeads.map(c => c.id)))}
+                                >
+                                  Select All
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-[11px] px-2 text-slate-600 hover:text-slate-900"
+                                  onClick={() => setSelectedChildLeadIds(new Set())}
+                                >
+                                  Clear
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-amber-800">
+                              By default, only this account is marked as lost. Select any linked child accounts below to also mark them as lost.
+                            </p>
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                              {availableChildLeads.map((child) => {
+                                const isChecked = selectedChildLeadIds.has(child.id);
+                                const suburb = child.postalAddress?.city || child.address?.city || (child as any).suburb || '';
+                                const fran = child.franchisee || (child as any).franchisee_name || '';
+                                return (
+                                  <div
+                                    key={child.id}
+                                    onClick={() => {
+                                      setSelectedChildLeadIds(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(child.id)) next.delete(child.id);
+                                        else next.add(child.id);
+                                        return next;
+                                      });
+                                    }}
+                                    className={cn(
+                                      "flex items-center justify-between p-2 rounded border text-xs cursor-pointer transition-colors bg-white",
+                                      isChecked ? "border-amber-500 bg-amber-50/80 text-amber-950 font-medium" : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0 pr-2">
+                                      <Checkbox
+                                        checked={isChecked}
+                                        onCheckedChange={(checked) => {
+                                          setSelectedChildLeadIds(prev => {
+                                            const next = new Set(prev);
+                                            if (checked) next.add(child.id);
+                                            else next.delete(child.id);
+                                            return next;
+                                          });
+                                        }}
+                                      />
+                                      <div className="truncate">
+                                        <span>{child.companyName || (child as any).businessName || 'Child Account'}</span>
+                                        {(suburb || fran) && (
+                                          <span className="text-[10px] text-muted-foreground ml-1.5">
+                                            ({suburb ? `${suburb}, ` : ''}{fran})
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Badge variant="outline" className="text-[10px] py-0 shrink-0">
+                                      {child.customerStatus || child.status || 'New'}
+                                    </Badge>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 

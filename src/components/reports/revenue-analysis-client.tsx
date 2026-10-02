@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import type { DateRange } from 'react-day-picker';
-import { cn, parseDateString, isManualActivity, isTestLeadOrCompany } from '@/lib/utils';
+import { cn, parseDateString, isManualActivity, isTestLeadOrCompany, isParentSuffixLeadOrCompany } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
@@ -35,7 +35,146 @@ import { AnimatedNumber } from '@/components/ui/animated-number';
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, startOfYear, endOfYear, subWeeks, subDays } from 'date-fns';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Cell, LabelList } from 'recharts';
 
-export function getLeadAccountType(lead: Lead): 'BAU' | 'J2' | 'Corporate / Multisite' {
+export function isLpoLeadOrCompany(lead: Lead | any): boolean {
+  if (!lead) return false;
+
+  // 1. Check company name prefixes / markers (e.g. "LPO - Blacktown City Council", "[LPO] ...")
+  const name = String(lead.companyName || '').trim();
+  if (/^\[?(?:lpo|lpo\.plus|lpo\s*plus)\]?\s*[-:–—\s/]/i.test(name) || /^lpo\b/i.test(name)) {
+    return true;
+  }
+  if (/\bLPO\b/i.test(name) && (name.toLowerCase().includes('lpo -') || name.toLowerCase().includes('lpo-') || name.toLowerCase().includes('lpo :') || name.toLowerCase().includes('lpo plus') || name.toLowerCase().includes('lpo.plus') || name.toLowerCase().startsWith('lpo'))) {
+    return true;
+  }
+
+  // 2. Check bucket & original bucket & history
+  const b = String(lead.bucket || '').toLowerCase().trim();
+  if (b === 'lpo' || b === 'lpo_plus' || b === 'lpo_network' || b === 'lpo_opportunities' || b.startsWith('lpo')) {
+    return true;
+  }
+  const origB = String(lead.originalBucket || '').toLowerCase().trim();
+  if (origB === 'lpo' || origB === 'lpo_plus' || origB === 'lpo_network' || origB.startsWith('lpo')) {
+    return true;
+  }
+  const initApptB = String(lead.initialAppointmentBucket || '').toLowerCase().trim();
+  if (initApptB === 'lpo' || initApptB === 'lpo_plus' || initApptB === 'lpo_network' || initApptB.startsWith('lpo')) {
+    return true;
+  }
+  if (getLeadInitialBucket(lead) === 'LPO') {
+    return true;
+  }
+  if (Array.isArray(lead.bucketHistory)) {
+    if (lead.bucketHistory.some((bh: any) => {
+      const ob = String(bh.oldBucket || '').toLowerCase();
+      const nb = String(bh.newBucket || '').toLowerCase();
+      const notes = String(bh.notes || '').toLowerCase();
+      return ob.startsWith('lpo') || nb.startsWith('lpo') || notes.includes('lpo');
+    })) {
+      return true;
+    }
+  }
+
+  // 3. Check sources and campaigns
+  const sources = [
+    lead.source,
+    lead.leadSource,
+    lead.customerSource,
+    (lead as any).utmSource,
+    lead.campaign,
+    (lead as any).customerCampaign
+  ];
+  for (const s of sources) {
+    if (!s) continue;
+    const str = String(s).toLowerCase().trim();
+    if (str === 'lpo' || str === 'lpo_plus' || str === 'lpo plus' || str === 'lpo.plus' || str.includes('lpo') || str === '491777') {
+      return true;
+    }
+  }
+
+  // 4. Check explicit flags and billing
+  if (
+    lead.isLpoLead === true ||
+    !!lead.lpoLeadId ||
+    !!lead.linkedLpoLeadId ||
+    !!lead.lpoPlusStatus ||
+    !!lead.lpoDocId ||
+    !!lead.lpoId ||
+    !!lead.lpoName ||
+    !!lead.lpoLeadName ||
+    lead.billing === 'lpo' ||
+    String(lead.serviceType || '').toLowerCase() === 'lpo'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function isSecureCashLead(lead: Lead | any): boolean {
+  if (!lead) return false;
+  const aType = String(lead.accountType || '').toLowerCase().trim();
+  if (aType === 'secure cash' || aType === 'securecash' || aType === 'sc') return true;
+
+  const sources = [
+    lead.source,
+    lead.leadSource,
+    lead.customerSource,
+    lead.utmSource,
+    lead.campaign,
+    lead.customerCampaign
+  ];
+  for (const s of sources) {
+    if (!s) continue;
+    const str = String(s).toLowerCase().trim();
+    if (str === 'secure cash' || str === 'securecash' || str === 'sc' || str.includes('secure cash') || str.includes('securecash')) {
+      return true;
+    }
+  }
+
+  const name = String(lead.companyName || '').trim();
+  if (/^\[?(?:sc|secure\s*cash)\]?\s*[-:–—\s]/i.test(name) || /^sc\b/i.test(name)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function isNeoPostLead(lead: Lead | any): boolean {
+  if (!lead) return false;
+  const aType = String(lead.accountType || '').toLowerCase().trim();
+  if (aType === 'neopost' || aType === 'neo post' || aType === 'np') return true;
+
+  const sources = [
+    lead.source,
+    lead.leadSource,
+    lead.customerSource,
+    lead.utmSource,
+    lead.campaign,
+    lead.customerCampaign
+  ];
+  for (const s of sources) {
+    if (!s) continue;
+    const str = String(s).toLowerCase().trim();
+    if (str === 'neopost' || str === 'neo post' || str === '207048' || str === 'np' || str.includes('neopost')) {
+      return true;
+    }
+  }
+
+  const name = String(lead.companyName || '').trim();
+  if (/^\[?(?:neopost|neo\s*post|np)\]?\s*[-:–—\s]/i.test(name)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function getLeadAccountType(lead: Lead): 'Secure Cash' | 'NeoPost' | 'Corporate / Multisite' | 'J2' | 'BAU' {
+  if (isSecureCashLead(lead)) {
+    return 'Secure Cash';
+  }
+  if (isNeoPostLead(lead)) {
+    return 'NeoPost';
+  }
   if (
     lead.accountType === 'Corporate / Multisite' ||
     lead.accountType === 'Corporate' ||
@@ -67,6 +206,182 @@ export function getLeadAccountType(lead: Lead): 'BAU' | 'J2' | 'Corporate / Mult
   }
 
   return 'BAU';
+}
+
+export function normalizeCustomerKey(name?: string | null): string {
+  if (!name) return '';
+  let cleaned = name.trim();
+  // Strip prefixes like "SC - ", "SC- ", "SC : ", "[SC] ", "(SC) ", "Secure Cash - ", "NeoPost - ", "Neopost - ", "NP - ", "NP- "
+  cleaned = cleaned.replace(/^\[?(?:sc|secure\s*cash|neopost|neo\s*post|np)\]?\s*[-:–—/]\s*/i, '');
+  cleaned = cleaned.replace(/^\[?(?:sc|secure\s*cash|neopost|neo\s*post|np)\]?\s+/i, '');
+
+  return cleaned
+    .toLowerCase()
+    .replace(/\b(pty\s+ltd|pty\s+limited|pty|ltd|limited|inc|llc)\b/gi, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+}
+
+export function deduplicateRevenueLeads(leads: Lead[]): Lead[] {
+  const isSignedStatus = (status?: string): boolean => {
+    if (!status) return false;
+    const s = status.trim().toLowerCase();
+    return s === 'signed' || s === 'won' || s === 'customer' || s === 'signed customer';
+  };
+
+  const isLostStatus = (status?: string): boolean => {
+    if (!status) return false;
+    const st = status.trim().toLowerCase();
+    const lostStatuses = ['lost', 'lost customer', 'unqualified', 'email brush off', 'out of territory', 'localmile trial stopped', 'shipmate trial stopped'];
+    return lostStatuses.includes(st) || st.includes('lost');
+  };
+
+  const groups = new Map<string, Lead[]>();
+
+  leads.forEach(lead => {
+    if (isLpoLeadOrCompany(lead) || isParentSuffixLeadOrCompany(lead)) return;
+    const customerKey = normalizeCustomerKey(lead.companyName);
+    const pId = lead.prospectPlusId ? lead.prospectPlusId.trim().toLowerCase() : '';
+    const key = customerKey.length >= 3 ? `name:${customerKey}` : (pId ? `pid:${pId}` : `id:${lead.id}`);
+
+    const list = groups.get(key) || [];
+    list.push(lead);
+    groups.set(key, list);
+  });
+
+  const deduplicated: Lead[] = [];
+
+  groups.forEach((groupLeads) => {
+    if (groupLeads.some(l => isLpoLeadOrCompany(l) || isParentSuffixLeadOrCompany(l))) {
+      return;
+    }
+    if (groupLeads.length === 1) {
+      deduplicated.push(groupLeads[0]);
+      return;
+    }
+
+    // Sort to prioritize the best canonical record
+    groupLeads.sort((a, b) => {
+      const aIsSigned = isSignedStatus(a.customerStatus || a.status) || !!a.signedUpAt || !!(a as any).isCompany;
+      const bIsSigned = isSignedStatus(b.customerStatus || b.status) || !!b.signedUpAt || !!(b as any).isCompany;
+      if (aIsSigned !== bIsSigned) return aIsSigned ? -1 : 1;
+
+      const aIsLost = isLostStatus(a.customerStatus || a.status);
+      const bIsLost = isLostStatus(b.customerStatus || b.status);
+      if (aIsLost !== bIsLost) return aIsLost ? 1 : -1;
+
+      const aVal = calculateMonthlyValueUtil(a, true);
+      const bVal = calculateMonthlyValueUtil(b, true);
+      if (aVal !== bVal) return bVal - aVal;
+
+      const aHasAm = Boolean(a.accountManagerAssigned);
+      const bHasAm = Boolean(b.accountManagerAssigned);
+      if (aHasAm !== bHasAm) return aHasAm ? -1 : 1;
+
+      const aActs = a.activity?.length || 0;
+      const bActs = b.activity?.length || 0;
+      if (aActs !== bActs) return bActs - aActs;
+
+      const aPref = /^\[?(?:sc|secure\s*cash|neopost|neo\s*post|np)\]?\s*[-:–—]/i.test(a.companyName || '');
+      const bPref = /^\[?(?:sc|secure\s*cash|neopost|neo\s*post|np)\]?\s*[-:–—]/i.test(b.companyName || '');
+      if (aPref !== bPref) return aPref ? 1 : -1;
+
+      return 0;
+    });
+
+    const primary = { ...groupLeads[0] };
+
+    const hasSecureCash = groupLeads.some(l => isSecureCashLead(l));
+    const hasNeoPost = !hasSecureCash && groupLeads.some(l => isNeoPostLead(l));
+    const hasMultisite = groupLeads.some(l =>
+      l.accountType === 'Corporate / Multisite' ||
+      l.accountType === 'Corporate' ||
+      l.accountType === 'Multisite' ||
+      l.bucket === 'multisite'
+    );
+
+    if (hasSecureCash) {
+      primary.accountType = 'Secure Cash';
+      if (!primary.source && !primary.leadSource) primary.leadSource = 'Secure Cash';
+    } else if (hasNeoPost) {
+      primary.accountType = 'NeoPost';
+      if (!primary.source && !primary.leadSource) primary.leadSource = 'NeoPost';
+    } else if (hasMultisite) {
+      primary.accountType = 'Corporate / Multisite';
+    }
+
+    // Prefer clean company name without SC / NeoPost prefix if available
+    const cleanNamedLead = groupLeads.find(l => l.companyName && !/^\[?(?:sc|secure\s*cash|neopost|neo\s*post|np)\]?\s*[-:–—]/i.test(l.companyName));
+    if (cleanNamedLead?.companyName) {
+      primary.companyName = cleanNamedLead.companyName;
+    }
+
+    // Merge activities
+    const allActivities = groupLeads.flatMap(l => l.activity || []);
+    if (allActivities.length > 0) {
+      const seenActs = new Set<string>();
+      const mergedActs: Activity[] = [];
+      allActivities.forEach(act => {
+        const actKey = act.id || `${act.date}_${act.type}_${act.author}_${act.notes}`;
+        if (!seenActs.has(actKey)) {
+          seenActs.add(actKey);
+          mergedActs.push(act);
+        }
+      });
+      primary.activity = mergedActs;
+    }
+
+    // Merge SCFs
+    const allScfs = groupLeads.flatMap(l => (l as any).scfs || []);
+    if (allScfs.length > 0) {
+      const seenScfs = new Set<string>();
+      const mergedScfs: any[] = [];
+      allScfs.forEach(scf => {
+        const scfId = scf.id || scf.scfId || `${scf.status}_${scf.totalAmount}`;
+        if (!seenScfs.has(scfId)) {
+          seenScfs.add(scfId);
+          mergedScfs.push(scf);
+        }
+      });
+      (primary as any).scfs = mergedScfs;
+    }
+
+    // Merge dates if missing
+    if (!primary.signedUpAt) {
+      const withSigned = groupLeads.find(l => l.signedUpAt || (l as any).signedDate || (l as any).signedAt);
+      if (withSigned) primary.signedUpAt = withSigned.signedUpAt || (withSigned as any).signedDate || (withSigned as any).signedAt;
+    }
+    if (!primary.scfAcceptedAt) {
+      const withScf = groupLeads.find(l => (l as any).scfAcceptedAt || (l as any).acceptedAt);
+      if (withScf) (primary as any).scfAcceptedAt = (withScf as any).scfAcceptedAt || (withScf as any).acceptedAt;
+    }
+    if (!primary.quoteSentAt) {
+      const withQuote = groupLeads.find(l => l.quoteSentAt || (l as any).dateQuoteSent);
+      if (withQuote) primary.quoteSentAt = withQuote.quoteSentAt || (withQuote as any).dateQuoteSent;
+    }
+
+    // Transfer value/rates if primary has 0 value
+    const primaryVal = calculateMonthlyValueUtil(primary, true);
+    if (primaryVal === 0) {
+      const leadWithVal = groupLeads.find(l => calculateMonthlyValueUtil(l, true) > 0);
+      if (leadWithVal) {
+        primary.rate = leadWithVal.rate;
+        primary.ampoRate = leadWithVal.ampoRate;
+        primary.pmpoRate = leadWithVal.pmpoRate;
+        primary.packageRate = leadWithVal.packageRate;
+        primary.additionalBagRate = leadWithVal.additionalBagRate;
+        primary.servicesAndRates = leadWithVal.servicesAndRates;
+      }
+    }
+
+    if (groupLeads.some(l => (l as any).isCompany)) {
+      (primary as any).isCompany = true;
+    }
+
+    deduplicated.push(primary);
+  });
+
+  return deduplicated;
 }
 
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (
@@ -459,14 +774,14 @@ export default function RevenueAnalysisClient() {
               status: data.status || data.customerStatus || 'Signed'
             } as unknown as Lead;
           })
-          .filter(c => !isTestLeadOrCompany(c));
+          .filter(c => !isTestLeadOrCompany(c) && !isParentSuffixLeadOrCompany(c));
 
         const companyIds = new Set(rawCompanies.map(c => c.id));
 
         const rawLeads = snapLeads.docs
           .filter(doc => !companyIds.has(doc.id))
           .map(doc => ({ id: doc.id, ...doc.data() } as Lead))
-          .filter(l => !isTestLeadOrCompany(l));
+          .filter(l => !isTestLeadOrCompany(l) && !isParentSuffixLeadOrCompany(l));
 
         const fetchedLeads = [...rawLeads, ...rawCompanies];
 
@@ -491,12 +806,16 @@ export default function RevenueAnalysisClient() {
 
         const filteredLeads = fetchedLeads.filter(l => {
           if (isTestLeadOrCompany(l)) return false;
+          if (isLpoLeadOrCompany(l)) return false;
+          if (isParentSuffixLeadOrCompany(l)) return false;
           const isDirectlyAm = l.bucket === 'account_manager' || l.bucket === 'inbound' || l.bucket === 'multisite';
           const wasInAm = l.bucketHistory?.some(bh => bh.oldBucket === 'account_manager' || bh.oldBucket === 'inbound' || bh.oldBucket === 'multisite');
           return isDirectlyAm || wasInAm || !!l.accountManagerAssigned || (l as any).isCompany;
         });
 
-        setLeads(filteredLeads);
+        const deduplicatedLeads = deduplicateRevenueLeads(filteredLeads);
+
+        setLeads(deduplicatedLeads);
       } catch (error) {
         console.error("Error fetching revenue analysis leads", error);
       } finally {
@@ -515,6 +834,7 @@ export default function RevenueAnalysisClient() {
   };
 
   const isSignedLead = (lead: Lead): boolean => {
+    if (isParentSuffixLeadOrCompany(lead)) return false;
     if ((lead as any).isCompany) return true;
     if (lead.signedUpAt || (lead as any).signedDate || (lead as any).signedAt) return true;
     const status = lead.customerStatus || lead.status;
@@ -688,6 +1008,8 @@ export default function RevenueAnalysisClient() {
     const query = appliedCompanyName.trim().toLowerCase();
     return leads.filter(lead => {
       if (isTestLeadOrCompany(lead)) return false;
+      if (isLpoLeadOrCompany(lead)) return false;
+      if (isParentSuffixLeadOrCompany(lead)) return false;
 
       if (query) {
         const compName = (lead.companyName || '').toLowerCase();
@@ -942,18 +1264,11 @@ export default function RevenueAnalysisClient() {
       lead: Lead;
     }[] = [];
 
-    const hasQuoteFilter = !!appliedQuoteSentDateRange?.from;
-
     displayedLeads.forEach(l => {
       const isLost = isLostLead(l);
       const isSigned = !isLost && isSignedLead(l);
       // Strictly exclude leads that are marked as Lost or have converted to Signed
       if (isLost || isSigned) return;
-
-      // If Date Quote Sent filter is active, only include leads whose quote was sent in that range
-      if (hasQuoteFilter && !isDateInRange(getLeadQuoteSentDate(l), appliedQuoteSentDateRange)) {
-        return;
-      }
 
       const isQuoteSentStatus = (l.customerStatus || l.status) === 'Quote Sent';
       const quoteSentDate = getLeadQuoteSentDate(l);
@@ -1060,15 +1375,8 @@ export default function RevenueAnalysisClient() {
       lead: Lead;
     }[] = [];
 
-    const hasSignedFilter = !!appliedSignedUpDateRange?.from;
-
     displayedLeads.forEach(l => {
       if (!isLostLead(l) && isSignedLead(l)) {
-        // If Date Signed Up filter is active, only include leads that signed within this range
-        if (hasSignedFilter && !isDateInRange(getLeadSignedDate(l), appliedSignedUpDateRange)) {
-          return;
-        }
-
         const signedMrr = calculateRawLeadValue(l);
         const bucketRaw = l.bucket || 'Unassigned';
         const bucket = String(bucketRaw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -1372,7 +1680,9 @@ export default function RevenueAnalysisClient() {
     return [
       { label: 'BAU', value: 'BAU' },
       { label: 'J2', value: 'J2' },
-      { label: 'Corporate / Multisite', value: 'Corporate / Multisite' }
+      { label: 'Corporate / Multisite', value: 'Corporate / Multisite' },
+      { label: 'Secure Cash', value: 'Secure Cash' },
+      { label: 'NeoPost', value: 'NeoPost' }
     ];
   }, []);
 

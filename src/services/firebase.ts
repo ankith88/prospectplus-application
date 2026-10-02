@@ -530,7 +530,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           cancellationReasonId: data.cancellationReasonId,
           cancellationdate: data.cancellationdate,
           netsuiteLeadStatus: data.netsuiteLeadStatus,
-          bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+          bucket: data.bucket || (data.fieldSales ? 'field_sales' : (data.accountManagerAssigned ? 'account_manager' : 'account_manager')),
           inboundDetails: data.inboundDetails,
           attribution: data.attribution,
           marketingChannel: data.marketingChannel || data.attribution?.channel,
@@ -729,7 +729,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           customerSource: data.customerSource || data.source || data.leadSource,
           visitNoteID: data.visitNoteID,
           netsuiteLeadStatus: data.netsuiteLeadStatus,
-          bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+          bucket: data.bucket || (data.fieldSales ? 'field_sales' : (data.accountManagerAssigned ? 'account_manager' : 'account_manager')),
           inboundDetails: data.inboundDetails,
           attribution: data.attribution,
           marketingChannel: data.marketingChannel || data.attribution?.channel,
@@ -1653,15 +1653,15 @@ async function updateLeadStatus(
         }
         await updateDoc(leadRef, updates);
 
-        // Synchronize status across LPO Parent and Child leads hierarchy
+        // Synchronize status across LPO Parent and Child leads hierarchy (Strictly for LPO Network bucket / LPO leads)
         const isLpoLeadProcess = Boolean(
-            leadData?.isParentLead ||
-            leadData?.isChildLead ||
             leadData?.bucket === 'lpo_network' ||
+            (leadData?.bucket as string)?.toLowerCase() === 'lpo_network' ||
+            leadData?.bucket === 'LPO Network' ||
             leadData?.source === 'LPO Lead Conversion' ||
             leadData?.leadSource === 'LPO Expressions of Interest' ||
             leadData?.lpoLeadId ||
-            leadData?.parentLeadId
+            leadData?.linkedLpoLeadId
         );
 
         const isChildLeadOrCompany = Boolean(
@@ -1702,7 +1702,10 @@ async function updateLeadStatus(
                     const qChild = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentIdToSync));
                     const childSnap = await getDocs(qChild);
                     for (const childDoc of childSnap.docs) {
-                        if (childDoc.id !== leadId) {
+                        const cData = childDoc.data();
+                        const cName = (cData?.companyName || cData?.businessName || cData?.company || '').trim().toLowerCase();
+                        const isParentSuffixed = cName.endsWith('- parent') || cName.endsWith(' - parent') || cName.endsWith('-parent');
+                        if (childDoc.id !== leadId && !isParentSuffixed) {
                             await updateDoc(doc(firestore, 'leads', childDoc.id), syncPayload).catch(err => console.warn('Child lead status sync warning:', err));
                         }
                     }

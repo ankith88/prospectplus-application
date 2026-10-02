@@ -731,6 +731,7 @@ export default function LeadsClientPage({
     franchisee: [] as string[],
     campaign: 'all',
     suburb: '',
+    state: [] as string[],
     dateLeadEntered: undefined as DateRange | undefined,
     dateDialerAssigned: undefined as DateRange | undefined,
     source: [] as string[],
@@ -969,6 +970,7 @@ export default function LeadsClientPage({
       franchisee: [],
       campaign: 'all',
       suburb: '',
+      state: [],
       dateLeadEntered: undefined,
       dateDialerAssigned: undefined,
       source: [],
@@ -999,6 +1001,9 @@ export default function LeadsClientPage({
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
+      const stateMatch = filters.state.length === 0 || (
+        Boolean(lead.address?.state) && filters.state.some(s => s.toLowerCase() === lead.address?.state?.trim().toLowerCase())
+      );
       const isArchived = filters.bucket === 'inbound'
         ? ['Lost', 'Won', 'LPO Review', 'LPO Opportunity'].includes(lead.status)
         : ['Lost', 'Qualified', 'Appointment Booked', 'LPO Review', 'LPO Opportunity', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted'].includes(lead.status);
@@ -1031,7 +1036,7 @@ export default function LeadsClientPage({
       const entityIdMatch = filters.entityId ? lead.entityId?.toLowerCase().includes(filters.entityId.toLowerCase()) : true;
       const customerStatusMatch = filters.customerStatus.length === 0 || (lead.customerStatus && filters.customerStatus.includes(lead.customerStatus));
 
-      return !isArchived && !isFieldSalesLead && companyNameMatch && prospectPlusIdMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && dateDialerAssignedMatch && sourceMatch && entityIdMatch && bucketMatch && customerStatusMatch;
+      return !isArchived && !isFieldSalesLead && companyNameMatch && prospectPlusIdMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && stateMatch && dateLeadEnteredMatch && dateDialerAssignedMatch && sourceMatch && entityIdMatch && bucketMatch && customerStatusMatch;
     });
 
     if (sortConfig !== null) {
@@ -1752,6 +1757,23 @@ export default function LeadsClientPage({
     const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
     return Array.from(franchisees).map(f => ({ value: f!, label: f! })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
+
+  const uniqueStates: Option[] = useMemo(() => {
+    const states = new Set<string>();
+    const standardStates = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'];
+    standardStates.forEach(s => states.add(s));
+    allLeads.forEach(lead => {
+      const st = lead.address?.state?.trim();
+      if (st) {
+        const standardMatch = standardStates.find(s => s.toLowerCase() === st.toLowerCase());
+        states.add(standardMatch || st.toUpperCase());
+      }
+    });
+    return Array.from(states)
+      .filter(Boolean)
+      .map(s => ({ value: s, label: s }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads]);
   
   const uniqueSources: Option[] = useMemo(() => {
     const sources = new Set(allLeads.map(lead => lead.customerSource).filter(Boolean));
@@ -2083,6 +2105,15 @@ export default function LeadsClientPage({
                         <div className="space-y-2">
                             <Label htmlFor="suburb">Suburb</Label>
                             <Input id="suburb" value={filters.suburb} onChange={(e) => handleFilterChange('suburb', e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="state">State</Label>
+                            <MultiSelectCombobox
+                                options={uniqueStates}
+                                selected={filters.state}
+                                onSelectedChange={(selected) => handleFilterChange('state', selected)}
+                                placeholder="Select states..."
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>

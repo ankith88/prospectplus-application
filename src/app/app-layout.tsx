@@ -798,14 +798,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     'sales manager',
     'sales_manager',
     'account manager',
-    'account managers'
+    'account managers',
+    'account_manager',
+    'accountmanager',
+    'am'
   ];
-  const canViewRevenueAnalysis = !isFranchiseeRole && !isUserRole && (
+  const isAmUserForRevenue = canViewAccountManagerPipeline || allowedRevenueAnalysisRoles.includes(activeRoleLower) || allowedRevenueAnalysisRoles.includes((userProfile?.role || '').toLowerCase().trim());
+  const canViewRevenueAnalysis = !isFranchiseeRole && (
     isSuperAdmin ||
     Boolean((userProfile as any)?.isSuperAdmin) ||
     Boolean((userProfile as any)?.superAdmin) ||
     canView('revenueAnalysis') ||
+    canViewAccountManagerPipeline ||
+    isAmUserForRevenue ||
     allowedRevenueAnalysisRoles.includes(activeRoleLower) ||
+    allowedRevenueAnalysisRoles.includes((userProfile?.role || '').toLowerCase().trim()) ||
     (userProfile?.assignedRoles || []).some((r: any) => allowedRevenueAnalysisRoles.includes(String(r).trim().toLowerCase().replace(/_/g, ' ')))
   );
 

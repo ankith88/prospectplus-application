@@ -93,7 +93,7 @@ export function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targ
         }
     }, [isOpen]);
 
-    const displayBucketName = targetBucket === 'field' || targetBucket === 'field_sales' ? 'Field Sales' : targetBucket === 'multisite' ? 'MultiSite' : targetBucket === 'outbound' ? 'Outbound' : targetBucket === 'account_manager' ? 'Account Manager' : targetBucket === 'customer_success' ? 'Customer Success' : targetBucket === 'lpo_plus' ? 'LPO.Plus' : targetBucket;
+    const displayBucketName = targetBucket === 'field' || targetBucket === 'field_sales' ? 'Field Sales' : targetBucket === 'multisite' ? 'MultiSite' : targetBucket === 'outbound' ? 'Outbound' : targetBucket === 'account_manager' ? 'Account Manager' : targetBucket === 'customer_success' ? 'Customer Success' : targetBucket === 'lpo_plus' ? 'LPO.Plus' : targetBucket === 'secure_cash' ? 'Secure Cash' : targetBucket === 'neopost' ? 'NeoPost' : targetBucket;
     const repType = targetBucket === 'field' || targetBucket === 'field_sales' ? 'Field Sales Rep' : targetBucket === 'outbound' ? 'Dialer' : targetBucket === 'account_manager' ? 'Account Manager' : targetBucket === 'customer_success' ? 'CS Rep' : 'Representative';
 
     return (

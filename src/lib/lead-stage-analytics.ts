@@ -55,6 +55,8 @@ export const BUCKET_LABEL_MAP: Record<string, string> = {
   account_manager: 'Account Manager',
   in_review: 'In Review',
   multisite: 'Multisite',
+  secure_cash: 'Secure Cash',
+  neopost: 'NeoPost',
   unassigned: 'Unassigned',
   blank: 'Unassigned'
 };
@@ -95,7 +97,7 @@ export function isLeadTransferred(lead: Lead): boolean {
  * Resolves the initial bucket of a lead before it was moved to Account Manager
  */
 export function getLeadInitialBucket(lead: Lead): string {
-  if (!lead) return 'Outbound';
+  if (!lead) return 'Unassigned';
 
   // 1. If lead source is Website or Inbound details present, it originally came from Inbound
   const sourceStr = (lead.customerSource || (lead as any).source || lead.leadSource || '').toLowerCase();
@@ -111,7 +113,7 @@ export function getLeadInitialBucket(lead: Lead): string {
   }
 
   // 2. Explicit property set when appointment booked
-  if (lead.initialAppointmentBucket && lead.initialAppointmentBucket !== 'account_manager') {
+  if (lead.initialAppointmentBucket) {
     return formatBucketLabel(lead.initialAppointmentBucket);
   }
 
@@ -126,10 +128,13 @@ export function getLeadInitialBucket(lead: Lead): string {
     if (earliestNonAm) {
       return formatBucketLabel(earliestNonAm.oldBucket);
     }
+    if (sorted[0]?.oldBucket) {
+      return formatBucketLabel(sorted[0].oldBucket);
+    }
   }
 
   // 4. Check originalBucket property
-  if (lead.originalBucket && lead.originalBucket !== 'account_manager') {
+  if (lead.originalBucket) {
     return formatBucketLabel(lead.originalBucket);
   }
 
@@ -160,12 +165,16 @@ export function getLeadInitialBucket(lead: Lead): string {
     return 'Outbound';
   }
 
-  // 7. Fallback to current bucket if not account_manager, otherwise default Outbound
-  if (lead.bucket && lead.bucket !== 'account_manager') {
+  // 7. If there is no bucket history or prior origin indicator, default to the current bucket
+  if (lead.bucket) {
     return formatBucketLabel(lead.bucket);
   }
 
-  return 'Outbound';
+  if (lead.accountManagerAssigned) {
+    return 'Account Manager';
+  }
+
+  return 'Unassigned';
 }
 
 export type AmHandoverTrigger = 'appointment' | 'localmile' | 'manual';

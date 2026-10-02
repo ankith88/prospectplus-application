@@ -97,6 +97,30 @@ const COLOR_OPTIONS = [
 ];
 
 export function resolveLeadTag(lead: Lead): string {
+  const aType = String(lead.accountType || '').toLowerCase().trim();
+  if (aType === 'secure cash' || aType === 'securecash' || aType === 'sc') return 'Secure Cash';
+  if (aType === 'neopost' || aType === 'neo post' || aType === 'np') return 'NeoPost';
+
+  const sources = [lead.source, lead.leadSource, lead.customerSource, (lead as any).utmSource, lead.campaign, (lead as any).customerCampaign];
+  for (const s of sources) {
+    if (!s) continue;
+    const str = String(s).toLowerCase().trim();
+    if (str === 'secure cash' || str === 'securecash' || str === 'sc' || str.includes('secure cash') || str.includes('securecash')) {
+      return 'Secure Cash';
+    }
+    if (str === 'neopost' || str === 'neo post' || str === '207048' || str === 'np' || str.includes('neopost')) {
+      return 'NeoPost';
+    }
+  }
+
+  const name = String(lead.companyName || '').trim();
+  if (/^\[?(?:sc|secure\s*cash)\]?\s*[-:–—\s]/i.test(name) || /^sc\b/i.test(name)) {
+    return 'Secure Cash';
+  }
+  if (/^\[?(?:neopost|neo\s*post|np)\]?\s*[-:–—\s]/i.test(name)) {
+    return 'NeoPost';
+  }
+
   if (
     lead.accountType === 'Corporate / Multisite' ||
     lead.accountType === 'Corporate' ||

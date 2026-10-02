@@ -54,6 +54,15 @@ export function LeadBucketBadge({ bucket, className }: { bucket?: string | null;
       label = 'Multisite';
       badgeStyle = 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-300 dark:border-cyan-800';
       break;
+    case 'secure_cash':
+    case 'securecash':
+      label = 'Secure Cash';
+      badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
+      break;
+    case 'neopost':
+      label = 'NeoPost';
+      badgeStyle = 'bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800';
+      break;
     case 'blank':
     case 'unassigned':
     case '':

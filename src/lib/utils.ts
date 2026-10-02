@@ -659,6 +659,16 @@ export function isTestLeadOrCompany(lead?: any): boolean {
 }
 
 /**
+ * Determines if a lead or company is a parent container/placeholder record (name ending with '- Parent').
+ */
+export function isParentSuffixLeadOrCompany(lead?: any): boolean {
+  if (!lead) return false;
+  const name = (lead.companyName || lead.company || lead.name || lead.leadName || lead.businessName || '').toString().trim().toLowerCase();
+  if (!name) return false;
+  return name.endsWith('- parent') || name.endsWith(' - parent') || name.endsWith('-parent');
+}
+
+/**
  * Normalized representation of an individual invoice line item.
  */
 export interface NormalizedInvoiceLineItem {

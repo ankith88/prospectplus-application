@@ -725,6 +725,8 @@ export async function GET(req: NextRequest) {
     const uniqueOriginalBuckets = Array.from(new Set(appointmentsList.map(a => a.originalBucket))).filter(Boolean).sort();
     const uniqueAppointmentStatuses = ['Completed', 'Pending', 'No Show', 'Rescheduled', 'Cancelled'];
     const uniqueLeadStatuses = Array.from(new Set(appointmentsList.map(a => a.currentLeadStatus))).filter(Boolean).sort();
+    const uniqueFranchisees = Array.from(new Set(appointmentsList.map(a => a.franchisee))).filter(Boolean).sort();
+    const uniqueStates = Array.from(new Set(appointmentsList.map(a => a.state))).filter(Boolean).sort();
 
     const responsePayload = {
       success: true,
@@ -737,6 +739,8 @@ export async function GET(req: NextRequest) {
         originalBuckets: uniqueOriginalBuckets,
         appointmentStatuses: uniqueAppointmentStatuses,
         leadStatuses: uniqueLeadStatuses,
+        franchisees: uniqueFranchisees,
+        states: uniqueStates,
       },
       cachedAt: new Date().toISOString()
     };

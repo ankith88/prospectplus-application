@@ -174,13 +174,22 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                     setParentLead(resolvedParent);
 
                     // Fetch sibling leads (other children of the parent)
+                    const isParentSuffixed = (l: any) => {
+                        const n = (l?.companyName || l?.businessName || l?.company || '').trim().toLowerCase();
+                        return n.endsWith('- parent') || n.endsWith(' - parent') || n.endsWith('-parent');
+                    };
                     const siblings = await getSiblingLeads(lead.parentLeadId);
-                    resolvedChildren = siblings.filter(s => s.id !== lead.id);
+                    resolvedChildren = siblings.filter(s => s.id !== lead.id && !isParentSuffixed(s));
                     setChildLeads(resolvedChildren);
                 } else {
                     // This is a parent lead. Fetch child leads.
+                    const isParentSuffixed = (l: any) => {
+                        const n = (l?.companyName || l?.businessName || l?.company || '').trim().toLowerCase();
+                        return n.endsWith('- parent') || n.endsWith(' - parent') || n.endsWith('-parent');
+                    };
                     setParentLead(null);
-                    resolvedChildren = await getSiblingLeads(lead.id);
+                    const allChildren = await getSiblingLeads(lead.id);
+                    resolvedChildren = allChildren.filter(s => s.id !== lead.id && !isParentSuffixed(s));
                     setChildLeads(resolvedChildren);
                 }
 

@@ -49,6 +49,8 @@ export const BUCKET_OPTIONS: { value: string; label: string }[] = [
   { value: 'nurture', label: 'Nurture' },
   { value: 'marketing', label: 'Marketing' },
   { value: 'multisite', label: 'Multi-site' },
+  { value: 'secure_cash', label: 'Secure Cash' },
+  { value: 'neopost', label: 'NeoPost' },
 ];
 
 export interface StaffUser {

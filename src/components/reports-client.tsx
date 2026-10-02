@@ -77,7 +77,7 @@ import { StatusOutcomeBanner } from './status-outcome-guide';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBreakdownBar } from './status-breakdown-bar';
 import { BucketBreakdownBar } from './bucket-breakdown-bar';
-import { cn, getQuickDateRange, isManualActivity, getLeadDisplayDateValue, getLeadDisplayDateLabel, safeFormatDate } from '@/lib/utils';
+import { cn, getQuickDateRange, isManualActivity, getLeadDisplayDateValue, getLeadDisplayDateLabel, safeFormatDate, isParentSuffixLeadOrCompany } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getLeadCampaigns, LeadCampaign } from '@/services/lead-campaigns';
@@ -94,6 +94,7 @@ const isLostLead = (l: Lead) => {
 };
 
 const isSignedLead = (l: Lead) => {
+    if (isParentSuffixLeadOrCompany(l)) return false;
     const status = (l.status as string) || '';
     const customerStatus = l.customerStatus || '';
     return customerStatus === 'Won' || customerStatus === 'Signed' || status === 'Won' || status === 'Signed';

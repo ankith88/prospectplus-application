@@ -1,11 +1,25 @@
 import React, { useMemo } from 'react';
-import { Building2, Building, Phone, Store } from 'lucide-react';
+import { Building2, Building, Phone, Store, ShieldCheck, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export function AccountTypeBadge({ type, className }: { type?: string | null; className?: string }) {
   const val = type || 'BAU';
+  if (val === 'Secure Cash' || val === 'SecureCash' || val === 'SC') {
+    return (
+      <Badge className={cn("bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-semibold flex items-center gap-1", className)}>
+        <ShieldCheck className="w-3 h-3 text-emerald-600" /> Secure Cash
+      </Badge>
+    );
+  }
+  if (val === 'NeoPost' || val === 'Neopost' || val === 'NP') {
+    return (
+      <Badge className={cn("bg-indigo-50 text-indigo-700 border-indigo-200 text-xs font-semibold flex items-center gap-1", className)}>
+        <Mail className="w-3 h-3 text-indigo-600" /> NeoPost
+      </Badge>
+    );
+  }
   if (val === 'Corporate / Multisite' || val === 'Corporate' || val === 'Multisite') {
     return (
       <Badge className={cn("bg-purple-50 text-purple-700 border-purple-200 text-xs font-semibold flex items-center gap-1", className)}>

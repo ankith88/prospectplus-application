@@ -30,7 +30,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
-import { cn, parseDateString, isManualActivity, getLeadDisplayDateValue, getLeadDisplayDateLabel, safeFormatDate, isTestLeadOrCompany } from '@/lib/utils';
+import { cn, parseDateString, isManualActivity, getLeadDisplayDateValue, getLeadDisplayDateLabel, safeFormatDate, isTestLeadOrCompany, isParentSuffixLeadOrCompany } from '@/lib/utils';
 import { getAllAppointments, getAllActivities } from '@/services/firebase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -46,7 +46,71 @@ import { getLeadInitialBucket, calculateAmStageMetrics, calculateLeadStageDurati
 
 import { AnimatedNumber } from '@/components/ui/animated-number';
 
-export function getLeadAccountType(lead: Lead): 'BAU' | 'J2' | 'Corporate / Multisite' {
+export function isSecureCashLead(lead: Lead | any): boolean {
+  if (!lead) return false;
+  const aType = String(lead.accountType || '').toLowerCase().trim();
+  if (aType === 'secure cash' || aType === 'securecash' || aType === 'sc') return true;
+
+  const sources = [
+    lead.source,
+    lead.leadSource,
+    lead.customerSource,
+    lead.utmSource,
+    lead.campaign,
+    lead.customerCampaign
+  ];
+  for (const s of sources) {
+    if (!s) continue;
+    const str = String(s).toLowerCase().trim();
+    if (str === 'secure cash' || str === 'securecash' || str === 'sc' || str.includes('secure cash') || str.includes('securecash')) {
+      return true;
+    }
+  }
+
+  const name = String(lead.companyName || '').trim();
+  if (/^\[?(?:sc|secure\s*cash)\]?\s*[-:–—\s]/i.test(name) || /^sc\b/i.test(name)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function isNeoPostLead(lead: Lead | any): boolean {
+  if (!lead) return false;
+  const aType = String(lead.accountType || '').toLowerCase().trim();
+  if (aType === 'neopost' || aType === 'neo post' || aType === 'np') return true;
+
+  const sources = [
+    lead.source,
+    lead.leadSource,
+    lead.customerSource,
+    lead.utmSource,
+    lead.campaign,
+    lead.customerCampaign
+  ];
+  for (const s of sources) {
+    if (!s) continue;
+    const str = String(s).toLowerCase().trim();
+    if (str === 'neopost' || str === 'neo post' || str === '207048' || str === 'np' || str.includes('neopost')) {
+      return true;
+    }
+  }
+
+  const name = String(lead.companyName || '').trim();
+  if (/^\[?(?:neopost|neo\s*post|np)\]?\s*[-:–—\s]/i.test(name)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function getLeadAccountType(lead: Lead): 'Secure Cash' | 'NeoPost' | 'Corporate / Multisite' | 'J2' | 'BAU' {
+  if (isSecureCashLead(lead)) {
+    return 'Secure Cash';
+  }
+  if (isNeoPostLead(lead)) {
+    return 'NeoPost';
+  }
   if (
     lead.accountType === 'Corporate / Multisite' ||
     lead.accountType === 'Corporate' ||
@@ -560,14 +624,14 @@ export default function AMReportsDashboard() {
                             status: data.status || data.customerStatus || 'Signed'
                         } as unknown as Lead;
                     })
-                    .filter(c => !isTestLeadOrCompany(c));
+                    .filter(c => !isTestLeadOrCompany(c) && !isParentSuffixLeadOrCompany(c));
 
                 const companyIds = new Set(rawCompanies.map(c => c.id));
 
                 const rawLeads = snapLeads.docs
                     .filter(doc => !companyIds.has(doc.id))
                     .map(doc => ({ id: doc.id, ...doc.data() } as Lead))
-                    .filter(l => !isTestLeadOrCompany(l));
+                    .filter(l => !isTestLeadOrCompany(l) && !isParentSuffixLeadOrCompany(l));
 
                 const fetchedLeads = [...rawLeads, ...rawCompanies];
 
@@ -620,6 +684,7 @@ export default function AMReportsDashboard() {
                 
                 const filteredLeads = leadsWithActivities.filter(l => {
                     if (isTestLeadOrCompany(l)) return false;
+                    if (isParentSuffixLeadOrCompany(l)) return false;
                     const isDirectlyAm = l.bucket === 'account_manager' || l.bucket === 'inbound' || l.bucket === 'multisite';
                     const wasInAm = l.bucketHistory?.some(bh => bh.oldBucket === 'account_manager' || bh.oldBucket === 'inbound' || bh.oldBucket === 'multisite');
                     const hasAnyAmActivity = l.activity?.some(act => amNames.includes(act.author || ''));
@@ -740,6 +805,7 @@ export default function AMReportsDashboard() {
         const query = appliedCompanyName.trim().toLowerCase();
         return leads.filter(lead => {
             if (isTestLeadOrCompany(lead)) return false;
+            if (isParentSuffixLeadOrCompany(lead)) return false;
 
             if (query) {
                 const compName = (lead.companyName || '').toLowerCase();
@@ -1794,6 +1860,8 @@ export default function AMReportsDashboard() {
         { value: 'BAU', label: 'BAU' },
         { value: 'J2', label: 'J2' },
         { value: 'Corporate / Multisite', label: 'Corporate / Multisite' },
+        { value: 'Secure Cash', label: 'Secure Cash' },
+        { value: 'NeoPost', label: 'NeoPost' },
     ], []);
     const statusOptions: Option[] = useMemo(() => uniqueStatuses.map(s => ({ value: s as string, label: s as string })), [uniqueStatuses]);
     const clearFilters = () => {

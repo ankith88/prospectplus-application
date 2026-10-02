@@ -1,4 +1,4 @@
-export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing' | 'lpo_plus' | 'lpo_network' | 'in_review' | 'multisite' | '' | 'blank' | 'unassigned' | (string & {});
+export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing' | 'lpo_plus' | 'lpo_network' | 'in_review' | 'multisite' | 'secure_cash' | 'neopost' | '' | 'blank' | 'unassigned' | (string & {});
 
 export interface BucketHistory {
   id: string;
@@ -649,9 +649,8 @@ export interface Lead {
   fieldSales?: boolean;
   serviceType?: string;
   selectedServiceOption?: string;
-  accountType?: 'BAU' | 'J2' | 'Corporate / Multisite' | 'Corporate' | 'Multisite' | 'Standard' | string;
+  accountType?: 'BAU' | 'J2' | 'Corporate / Multisite' | 'Corporate' | 'Multisite' | 'Standard' | 'Secure Cash' | 'NeoPost' | string;
   rate?: number;
-  initialNotes?: string;
   lastProspected?: string;
   dateLeadEntered?: string;
   dateRegistrationSent?: string;
