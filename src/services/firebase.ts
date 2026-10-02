@@ -2269,14 +2269,33 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
 }
 
 async function getAllUserTasks(displayName: string): Promise<Array<Task & { leadId: string; leadName: string }>> {
-    const q = query(collectionGroup(firestore, 'tasks'), where('dialerAssigned', '==', displayName));
-    const snap = await getDocs(q);
-    return snap.docs.map(doc => ({ ...sanitizeData(doc.data()), id: doc.id, leadId: doc.ref.parent.parent!.id, leadName: 'Lead' } as any));
+    try {
+        const res = await fetch(`/api/tasks?user=${encodeURIComponent(displayName)}`, { cache: 'no-store' });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.tasks)) {
+                return data.tasks;
+            }
+        }
+    } catch (e) {
+        console.warn('Fast /api/tasks fetch failed, falling back to client Firestore SDK:', e);
+    }
+
+    try {
+        const q = query(collectionGroup(firestore, 'tasks'), where('dialerAssigned', '==', displayName));
+        const snap = await getDocs(q);
+        return snap.docs.map(doc => ({ ...sanitizeData(doc.data()), id: doc.id, leadId: doc.ref.parent.parent!.id, leadName: doc.data().leadName || 'Lead' } as any));
+    } catch (err) {
+        console.error('Failed to get tasks via client Firestore:', err);
+        return [];
+    }
 }
 
 async function addTaskToLead(leadId: string, taskData: { title: string; dueDate: string; author: string; durationMinutes?: number; outlookEventId?: string }): Promise<Task> {
     const leadSnap = await getDoc(doc(firestore, 'leads', leadId));
-    const newTask = { ...taskData, dialerAssigned: leadSnap.data()?.dialerAssigned || null, isCompleted: false, createdAt: new Date().toISOString() };
+    const leadData = leadSnap.data();
+    const leadName = leadData?.companyName || leadData?.name || 'Lead';
+    const newTask = { ...taskData, leadName, dialerAssigned: leadData?.dialerAssigned || null, isCompleted: false, createdAt: new Date().toISOString() };
     const docRef = await addDoc(collection(firestore, 'leads', leadId, 'tasks'), prepareForFirestore(newTask));
     return { ...newTask, id: docRef.id } as Task;
 }
