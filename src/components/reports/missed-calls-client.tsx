@@ -59,11 +59,16 @@ import {
   HelpCircle,
   Copy,
   Check,
-  CheckCircle,
   FileText,
   Mail,
   Edit3,
   Sparkles,
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  Layers,
+  List,
+  ArrowRight,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -78,12 +83,12 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay, formatDistanceToNow } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { useToast } from '@/hooks/use-toast';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
 import type { LeadStatus } from '@/lib/types';
-import type { InboundCallsReportResponse, EnrichedInboundCall, NumberMetric, AircallNumber } from '@/services/aircall-reporting-server';
+import type { InboundCallsReportResponse, EnrichedInboundCall, NumberMetric, AircallNumber, MatchedLeadInfo } from '@/services/aircall-reporting-server';
 import { ResolveMissedCallDialog } from './resolve-missed-call-dialog';
 
 const PIE_COLORS = ['#ef4444', '#f97316', '#eab308', '#8b5cf6', '#06b6d4', '#64748b'];
@@ -103,6 +108,18 @@ function formatResponseTime(minutes?: number): string {
   const hours = Math.floor(minutes / 60);
   const remMin = minutes % 60;
   return remMin > 0 ? `${hours}h ${remMin}m` : `${hours}h`;
+}
+
+interface CallerPhoneGroup {
+  callerNumber: string;
+  matchedLead: MatchedLeadInfo | null;
+  totalCalls: number;
+  missedCount: number;
+  answeredCount: number;
+  unreturnedCount: number;
+  latestCallDate: Date;
+  latestCall: EnrichedInboundCall;
+  calls: EnrichedInboundCall[];
 }
 
 export default function MissedCallsClient() {
@@ -130,6 +147,10 @@ export default function MissedCallsClient() {
   const [pendingHoursFilter, setPendingHoursFilter] = useState<'all' | 'in_hours' | 'out_of_hours'>('all');
   const [pendingFollowupFilter, setPendingFollowupFilter] = useState<'all' | 'unreturned' | 'callback' | 'lead_activity' | 'resolved'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Grouping & Display View Mode: default to grouped by caller phone number
+  const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
+  const [expandedPhoneGroups, setExpandedPhoneGroups] = useState<Record<string, boolean>>({});
 
   // Resolution Dialog State
   const [resolutionCall, setResolutionCall] = useState<EnrichedInboundCall | null>(null);
@@ -305,7 +326,6 @@ export default function MissedCallsClient() {
     if (!reportData) return;
     const updatedCalls = reportData.calls.map((c) => (c.id === updatedCall.id ? updatedCall : c));
 
-    // Recalculate summary stats
     let totalResolved = 0;
     let totalMissed = 0;
     updatedCalls.forEach((c) => {
@@ -379,6 +399,88 @@ export default function MissedCallsClient() {
     });
   }, [reportData, appliedCallStatusFilter, appliedMatchFilter, appliedHoursFilter, appliedFollowupFilter, searchQuery]);
 
+  // Group filtered calls by Inbound Caller Phone Number
+  const groupedCallsByPhone = useMemo<CallerPhoneGroup[]>(() => {
+    const groupsMap = new Map<string, CallerPhoneGroup>();
+
+    filteredCalls.forEach((call) => {
+      const phoneKey = call.callerNumber || 'Unknown';
+      let group = groupsMap.get(phoneKey);
+
+      if (!group) {
+        group = {
+          callerNumber: phoneKey,
+          matchedLead: call.matchedLead,
+          totalCalls: 0,
+          missedCount: 0,
+          answeredCount: 0,
+          unreturnedCount: 0,
+          latestCallDate: new Date(call.startedAt),
+          latestCall: call,
+          calls: [],
+        };
+        groupsMap.set(phoneKey, group);
+      }
+
+      group.totalCalls++;
+      if (call.callType === 'missed') {
+        group.missedCount++;
+        if (call.followup.status === 'unreturned') {
+          group.unreturnedCount++;
+        }
+      } else {
+        group.answeredCount++;
+      }
+
+      const callTime = new Date(call.startedAt);
+      if (callTime > group.latestCallDate) {
+        group.latestCallDate = callTime;
+        group.latestCall = call;
+      }
+
+      if (!group.matchedLead && call.matchedLead) {
+        group.matchedLead = call.matchedLead;
+      }
+
+      group.calls.push(call);
+    });
+
+    // Sort calls within each group from newest to oldest
+    groupsMap.forEach((group) => {
+      group.calls.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    });
+
+    const groupList = Array.from(groupsMap.values());
+
+    // Sort groups: Priority 1: Unreturned missed calls first, Priority 2: Newest latest call date
+    groupList.sort((a, b) => {
+      if (a.unreturnedCount > 0 && b.unreturnedCount === 0) return -1;
+      if (a.unreturnedCount === 0 && b.unreturnedCount > 0) return 1;
+      return b.latestCallDate.getTime() - a.latestCallDate.getTime();
+    });
+
+    return groupList;
+  }, [filteredCalls]);
+
+  const toggleGroupExpand = (phone: string) => {
+    setExpandedPhoneGroups((prev) => ({
+      ...prev,
+      [phone]: !prev[phone],
+    }));
+  };
+
+  const expandAllGroups = () => {
+    const allExpanded: Record<string, boolean> = {};
+    groupedCallsByPhone.forEach((g) => {
+      allExpanded[g.callerNumber] = true;
+    });
+    setExpandedPhoneGroups(allExpanded);
+  };
+
+  const collapseAllGroups = () => {
+    setExpandedPhoneGroups({});
+  };
+
   const copyPhoneNumber = (phone: string) => {
     navigator.clipboard.writeText(phone);
     setCopiedPhone(phone);
@@ -398,17 +500,17 @@ export default function MissedCallsClient() {
 
     const headers = [
       'Call ID',
-      'Date & Time (AEST)',
+      'Missed / Call Time (AEST)',
       'Call Type',
       'Follow-Up Status',
       'Follow-Up Action',
+      'Follow-Up Performed At (AEST)',
       'Follow-Up By',
-      'Follow-Up Time (AEST)',
       'Response Time (Mins)',
       'Aircall Line Name',
       'Aircall Line Digits',
       'Aircall Line User / Owner',
-      'Incoming Phone Number',
+      'Incoming Caller Phone',
       'Matched Prospect/Company',
       'Lead Status',
       'Contact Person',
@@ -423,8 +525,8 @@ export default function MissedCallsClient() {
       `"${c.callType.toUpperCase()}"`,
       `"${c.followup.status}"`,
       `"${c.followup.label}"`,
-      `"${c.followup.author || 'N/A'}"`,
       c.followup.performedAt ? `"${format(new Date(c.followup.performedAt), 'dd/MM/yyyy HH:mm:ss')}"` : 'N/A',
+      `"${c.followup.author || 'N/A'}"`,
       c.followup.responseTimeMinutes ?? 'N/A',
       `"${c.aircallNumberName}"`,
       `"${c.aircallNumberDigits}"`,
@@ -473,7 +575,7 @@ export default function MissedCallsClient() {
               </Badge>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Track inbound and missed calls, verify outbound callbacks & CRM lead activities, and monitor team response SLAs.
+              Track inbound and missed calls, view full activity timelines (when call happened vs when followed up), and group by caller phone number.
             </p>
           </div>
 
@@ -689,7 +791,7 @@ export default function MissedCallsClient() {
                 Answered Calls
               </CardTitle>
               <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600 dark:text-emerald-400">
-                <CheckCircle className="h-4 w-4" />
+                <CheckCircle2 className="h-4 w-4" />
               </div>
             </CardHeader>
             <CardContent>
@@ -754,7 +856,7 @@ export default function MissedCallsClient() {
               </div>
               <div className="flex items-center gap-1.5 mt-1 text-xs">
                 {(reportData?.summary.unaddressedMissedCount ?? 0) > 0 ? (
-                  <Badge variant="destructive" className="text-[10px] font-semibold py-0 px-1.5 bg-red-100 text-red-700 hover:bg-red-200 border-red-200">
+                  <Badge variant="destructive" className="text-[10px] font-semibold py-0 px-1.5 bg-red-100 text-red-800 border-red-200">
                     {reportData?.summary.unaddressedMissedCount} Action Needed
                   </Badge>
                 ) : (
@@ -806,7 +908,7 @@ export default function MissedCallsClient() {
                       : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'
                   }`}
                 >
-                  Inbound Calls Log ({filteredCalls.length})
+                  Inbound Calls Log ({filteredCalls.length} calls • {groupedCallsByPhone.length} callers)
                 </button>
                 <button
                   onClick={() => setActiveTab('lines')}
@@ -834,337 +936,594 @@ export default function MissedCallsClient() {
             {/* TAB 1: CALLS LOG */}
             {activeTab === 'calls' && (
               <Card className="border shadow-sm">
-                <CardHeader className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b bg-slate-50/40 dark:bg-slate-900/40">
+                <CardHeader className="p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b bg-slate-50/40 dark:bg-slate-900/40">
                   <div>
                     <CardTitle className="text-base font-semibold">Inbound & Missed Calls Log</CardTitle>
                     <CardDescription className="text-xs">
-                      Showing {filteredCalls.length} inbound calls with live follow-up detection, outbound callbacks, and CRM lead touchpoints.
+                      {viewMode === 'grouped'
+                        ? `Grouped into ${groupedCallsByPhone.length} caller phone numbers (${filteredCalls.length} total calls).`
+                        : `Showing all ${filteredCalls.length} inbound calls.`}
                     </CardDescription>
                   </div>
-                  <div className="relative w-full sm:w-64">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                      placeholder="Search phone, lead, rep, action..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 h-9 text-xs bg-white dark:bg-slate-800"
-                    />
+
+                  <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                    {/* View Mode Toggle */}
+                    <div className="flex items-center bg-slate-200/80 dark:bg-slate-800 p-0.5 rounded-lg text-xs">
+                      <button
+                        onClick={() => setViewMode('grouped')}
+                        className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1.5 transition-all ${
+                          viewMode === 'grouped'
+                            ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs font-semibold'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                        }`}
+                        title="Group calls by inbound caller phone number"
+                      >
+                        <Layers className="h-3.5 w-3.5" />
+                        <span>Group by Phone</span>
+                      </button>
+                      <button
+                        onClick={() => setViewMode('flat')}
+                        className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1.5 transition-all ${
+                          viewMode === 'flat'
+                            ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs font-semibold'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                        }`}
+                        title="Flat list of all individual calls"
+                      >
+                        <List className="h-3.5 w-3.5" />
+                        <span>Flat List</span>
+                      </button>
+                    </div>
+
+                    {viewMode === 'grouped' && (
+                      <div className="flex items-center gap-1 text-xs">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={expandAllGroups}
+                          className="h-8 px-2 text-xs bg-white dark:bg-slate-800"
+                        >
+                          Expand All
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={collapseAllGroups}
+                          className="h-8 px-2 text-xs bg-white dark:bg-slate-800"
+                        >
+                          Collapse All
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="relative flex-1 sm:w-60">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Search phone, lead, rep, action..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9 h-8 text-xs bg-white dark:bg-slate-800"
+                      />
+                    </div>
                   </div>
                 </CardHeader>
+
                 <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader className="bg-slate-50 dark:bg-slate-900">
-                        <TableRow>
-                          <TableHead className="w-[140px]">Date & Time</TableHead>
-                          <TableHead className="w-[100px]">Status</TableHead>
-                          <TableHead className="w-[200px]">Follow-Up & Activity</TableHead>
-                          <TableHead className="w-[160px]">Aircall Line</TableHead>
-                          <TableHead className="w-[130px]">Aircall User</TableHead>
-                          <TableHead className="w-[150px]">Caller Phone</TableHead>
-                          <TableHead>Matched Prospect+ Lead</TableHead>
-                          <TableHead className="w-[130px]">Lead Assigned Rep</TableHead>
-                          <TableHead className="w-[130px]">Missed Reason</TableHead>
-                          <TableHead className="text-right w-[150px]">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredCalls.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={10} className="h-40 text-center text-slate-500">
-                              <div className="flex flex-col items-center justify-center gap-1">
-                                <CheckCircle2 className="h-8 w-8 text-emerald-500 mb-1" />
-                                <p className="font-semibold text-slate-800 dark:text-slate-200">No Calls Found</p>
-                                <p className="text-xs text-slate-400">
-                                  {searchQuery ? 'Try adjusting your search criteria.' : 'No calls match the selected filters.'}
-                                </p>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          filteredCalls.map((call) => {
-                            const callDate = new Date(call.startedAt);
-                            const isMissed = call.callType === 'missed';
-                            const isOOH = call.missedReason === 'Out of Opening Hours';
-                            const followup = call.followup;
+                  {/* GROUPED VIEW (DEFAULT) */}
+                  {viewMode === 'grouped' ? (
+                    <div className="divide-y divide-slate-200 dark:divide-slate-800">
+                      {groupedCallsByPhone.length === 0 ? (
+                        <div className="py-20 text-center text-slate-500">
+                          <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
+                          <p className="font-semibold text-slate-800 dark:text-slate-200">No Calls Found</p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {searchQuery ? 'Try adjusting your search criteria.' : 'No calls match the selected filters.'}
+                          </p>
+                        </div>
+                      ) : (
+                        groupedCallsByPhone.map((group) => {
+                          const isExpanded = !!expandedPhoneGroups[group.callerNumber];
+                          const hasUnreturned = group.unreturnedCount > 0;
 
-                            return (
-                              <TableRow key={call.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
-                                {/* Date & Time */}
-                                <TableCell className="text-xs">
-                                  <div className="font-medium text-slate-900 dark:text-white">
-                                    {format(callDate, 'dd MMM yyyy')}
-                                  </div>
-                                  <div className="text-slate-500 text-[11px] flex items-center gap-1 mt-0.5">
-                                    <Clock className="h-3 w-3" />
-                                    {format(callDate, 'hh:mm a')}
-                                  </div>
-                                </TableCell>
+                          return (
+                            <div key={group.callerNumber} className="transition-colors">
+                              {/* Group Header Row */}
+                              <div
+                                onClick={() => toggleGroupExpand(group.callerNumber)}
+                                className={`p-3.5 sm:p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/90 dark:hover:bg-slate-800/60 ${
+                                  hasUnreturned
+                                    ? 'bg-red-50/30 dark:bg-red-950/10'
+                                    : 'bg-white dark:bg-slate-900'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 flex-1">
+                                  <button
+                                    type="button"
+                                    className="p-1 text-slate-400 hover:text-slate-600 rounded"
+                                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="h-4 w-4 text-blue-600" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
+                                    )}
+                                  </button>
 
-                                {/* Status Badge */}
-                                <TableCell className="text-xs">
-                                  {isMissed ? (
-                                    <Badge variant="destructive" className="bg-red-50 text-red-700 hover:bg-red-100 border-red-200 text-[11px] font-semibold">
-                                      Missed
+                                  {/* Caller Phone & Lead Name */}
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-mono font-bold text-sm text-slate-900 dark:text-white">
+                                        {group.callerNumber}
+                                      </span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          copyPhoneNumber(group.callerNumber);
+                                        }}
+                                        className="text-slate-400 hover:text-slate-600 p-0.5"
+                                        title="Copy phone"
+                                      >
+                                        {copiedPhone === group.callerNumber ? (
+                                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                        ) : (
+                                          <Copy className="h-3.5 w-3.5" />
+                                        )}
+                                      </button>
+
+                                      {/* Lead Match */}
+                                      {group.matchedLead ? (
+                                        <div className="flex items-center gap-1.5 ml-1">
+                                          <Link
+                                            href={group.matchedLead.leadUrl}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="font-semibold text-xs text-blue-600 hover:underline flex items-center gap-0.5"
+                                          >
+                                            <span>{group.matchedLead.companyName}</span>
+                                            <ArrowUpRight className="h-3 w-3" />
+                                          </Link>
+                                          <LeadStatusBadge status={group.matchedLead.status as LeadStatus} />
+                                        </div>
+                                      ) : (
+                                        <Badge variant="outline" className="text-[10px] text-slate-500 bg-slate-100 font-normal">
+                                          Unregistered Caller
+                                        </Badge>
+                                      )}
+                                    </div>
+
+                                    {/* Contact & Assigned Rep Info */}
+                                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                                      {group.matchedLead?.contactName && (
+                                        <span className="flex items-center gap-1">
+                                          <User className="h-3 w-3 text-slate-400" />
+                                          {group.matchedLead.contactName}
+                                        </span>
+                                      )}
+                                      {group.matchedLead?.assignedRep && (
+                                        <span>Rep: <strong className="text-slate-700 dark:text-slate-300 font-medium">{group.matchedLead.assignedRep}</strong></span>
+                                      )}
+                                      <span className="text-slate-400">• Latest Call: {format(group.latestCallDate, 'dd MMM, hh:mm a')}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Right Side: Call Counts & Follow-Up Status Summary */}
+                                <div className="flex items-center gap-3 self-stretch md:self-auto justify-between md:justify-end">
+                                  {/* Call Volume Badge */}
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-medium">
+                                      {group.totalCalls} {group.totalCalls === 1 ? 'Call' : 'Calls'}
+                                    </Badge>
+                                    {group.missedCount > 0 && (
+                                      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-[11px] font-medium">
+                                        {group.missedCount} Missed
+                                      </Badge>
+                                    )}
+                                    {group.answeredCount > 0 && (
+                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px] font-medium">
+                                        {group.answeredCount} Answered
+                                      </Badge>
+                                    )}
+                                  </div>
+
+                                  {/* Follow-up State Pill */}
+                                  {hasUnreturned ? (
+                                    <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-200 border-red-300 font-semibold text-xs gap-1 py-1">
+                                      <AlertCircle className="h-3.5 w-3.5 text-red-600" />
+                                      <span>{group.unreturnedCount} Needs Action</span>
+                                    </Badge>
+                                  ) : group.missedCount > 0 ? (
+                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold text-xs gap-1 py-1">
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                      <span>Followed Up</span>
                                     </Badge>
                                   ) : (
-                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px] font-semibold">
+                                    <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200 text-xs">
                                       Answered
                                     </Badge>
                                   )}
-                                </TableCell>
 
-                                {/* Follow-Up & Activity Column */}
-                                <TableCell className="text-xs">
-                                  {!isMissed ? (
-                                    <span className="text-slate-400 text-[11px] italic">Answered ({formatDurationSeconds(call.duration)})</span>
-                                  ) : followup.status === 'unreturned' ? (
-                                    <div className="flex items-center gap-1.5">
-                                      <Badge variant="destructive" className="bg-red-100/90 text-red-800 dark:bg-red-950/60 dark:text-red-300 border-red-300 font-semibold text-[10px] gap-1 py-0.5">
-                                        <AlertCircle className="h-3 w-3 text-red-600" />
-                                        <span>Action Needed</span>
-                                      </Badge>
-                                    </div>
-                                  ) : followup.status === 'callback_connected' ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="flex flex-col gap-0.5 cursor-pointer">
-                                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold text-[10px] gap-1 py-0.5 w-fit">
-                                            <PhoneCall className="h-3 w-3 text-emerald-600" />
-                                            <span>Callback Connected</span>
-                                          </Badge>
-                                          <span className="text-[10px] text-slate-500 truncate max-w-[190px]">
-                                            {followup.author ? `by ${followup.author}` : 'Outbound Call'}
-                                            {followup.responseTimeMinutes !== undefined ? ` • in ${formatResponseTime(followup.responseTimeMinutes)}` : ''}
-                                          </span>
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs max-w-xs p-2.5">
-                                        <p className="font-semibold text-emerald-600">Outbound Callback Connected</p>
-                                        <p className="text-slate-300 mt-0.5">{followup.label}</p>
-                                        {followup.performedAt && (
-                                          <p className="text-slate-400 text-[11px] mt-1">
-                                            Performed: {format(new Date(followup.performedAt), 'dd MMM yyyy, hh:mm a')}
-                                          </p>
-                                        )}
-                                        {followup.notes && (
-                                          <p className="text-slate-300 text-[11px] mt-1 italic">&quot;{followup.notes}&quot;</p>
-                                        )}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : followup.status === 'callback_attempted' ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="flex flex-col gap-0.5 cursor-pointer">
-                                          <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 font-semibold text-[10px] gap-1 py-0.5 w-fit">
-                                            <PhoneOutgoing className="h-3 w-3 text-amber-600" />
-                                            <span>Callback Attempted</span>
-                                          </Badge>
-                                          <span className="text-[10px] text-slate-500 truncate max-w-[190px]">
-                                            {followup.author ? `by ${followup.author}` : 'Dialed back'}
-                                            {followup.responseTimeMinutes !== undefined ? ` • in ${formatResponseTime(followup.responseTimeMinutes)}` : ''}
-                                          </span>
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs max-w-xs p-2.5">
-                                        <p className="font-semibold text-amber-600">Callback Attempted (No Answer)</p>
-                                        <p className="text-slate-400 text-[11px] mt-1">
-                                          Logged by {followup.author || 'User'}
-                                        </p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : followup.status === 'lead_activity' ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="flex flex-col gap-0.5 cursor-pointer">
-                                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 font-semibold text-[10px] gap-1 py-0.5 w-fit">
-                                            {followup.actionType === 'email' ? (
-                                              <Mail className="h-3 w-3 text-blue-600" />
-                                            ) : (
-                                              <FileText className="h-3 w-3 text-blue-600" />
-                                            )}
-                                            <span>CRM Activity</span>
-                                          </Badge>
-                                          <span className="text-[10px] text-slate-500 truncate max-w-[190px]">
-                                            {followup.label}
-                                            {followup.responseTimeMinutes !== undefined ? ` • in ${formatResponseTime(followup.responseTimeMinutes)}` : ''}
-                                          </span>
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs max-w-xs p-2.5">
-                                        <p className="font-semibold text-blue-600">Lead Activity Logged</p>
-                                        <p className="text-slate-200 text-xs mt-0.5">{followup.label}</p>
-                                        {followup.author && <p className="text-slate-400 text-[11px] mt-1">Rep: {followup.author}</p>}
-                                        {followup.notes && <p className="text-slate-300 text-[11px] mt-1 italic">&quot;{followup.notes}&quot;</p>}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="flex flex-col gap-0.5 cursor-pointer">
-                                          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-300 font-semibold text-[10px] gap-1 py-0.5 w-fit">
-                                            <CheckCircle2 className="h-3 w-3 text-purple-600" />
-                                            <span>Resolved Manually</span>
-                                          </Badge>
-                                          <span className="text-[10px] text-slate-500 truncate max-w-[190px]">
-                                            {followup.label} • by {followup.author || 'Staff'}
-                                          </span>
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs max-w-xs p-2.5">
-                                        <p className="font-semibold text-purple-600">{followup.label}</p>
-                                        {followup.author && <p className="text-slate-400 text-[11px] mt-1">Resolved by: {followup.author}</p>}
-                                        {followup.notes && <p className="text-slate-300 text-[11px] mt-1 italic">&quot;{followup.notes}&quot;</p>}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  )}
-                                </TableCell>
+                                  {/* Quick Call Button */}
+                                  <a
+                                    href={`tel:${group.callerNumber.replace(/\s+/g, '')}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-md transition shadow-xs"
+                                    title="Dial caller"
+                                  >
+                                    <PhoneCall className="h-3.5 w-3.5" />
+                                    <span>Call</span>
+                                  </a>
+                                </div>
+                              </div>
 
-                                {/* Aircall Line */}
-                                <TableCell className="text-xs">
-                                  <div className="font-medium text-slate-900 dark:text-slate-200 truncate max-w-[150px]" title={call.aircallNumberName}>
-                                    {call.aircallNumberName}
+                              {/* Expanded Table showing each call and its Timeline */}
+                              {isExpanded && (
+                                <div className="bg-slate-50/70 dark:bg-slate-900/60 p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800">
+                                  <div className="overflow-x-auto rounded-md border bg-white dark:bg-slate-900">
+                                    <Table>
+                                      <TableHeader className="bg-slate-100/70 dark:bg-slate-800/70">
+                                        <TableRow>
+                                          <TableHead className="w-[160px]">Call Time (When Received)</TableHead>
+                                          <TableHead className="w-[100px]">Type</TableHead>
+                                          <TableHead className="w-[280px]">Follow-Up Timeline & Activity</TableHead>
+                                          <TableHead className="w-[150px]">Aircall Line</TableHead>
+                                          <TableHead className="w-[130px]">Line Owner</TableHead>
+                                          <TableHead className="w-[130px]">Reason</TableHead>
+                                          <TableHead className="text-right w-[140px]">Actions</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {group.calls.map((call) => {
+                                          const callDate = new Date(call.startedAt);
+                                          const isMissed = call.callType === 'missed';
+                                          const followup = call.followup;
+
+                                          return (
+                                            <TableRow key={call.id} className="hover:bg-slate-50/80">
+                                              {/* 1. When Missed Call Happened */}
+                                              <TableCell className="text-xs">
+                                                <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                                  {isMissed ? (
+                                                    <PhoneMissed className="h-3.5 w-3.5 text-red-500" />
+                                                  ) : (
+                                                    <PhoneIncoming className="h-3.5 w-3.5 text-emerald-600" />
+                                                  )}
+                                                  <span>{format(callDate, 'dd MMM yyyy')}</span>
+                                                </div>
+                                                <div className="text-slate-500 text-[11px] flex items-center gap-1 mt-0.5 font-mono">
+                                                  <Clock className="h-3 w-3 text-slate-400" />
+                                                  <span>{format(callDate, 'hh:mm:ss a')}</span>
+                                                </div>
+                                              </TableCell>
+
+                                              {/* Call Type */}
+                                              <TableCell className="text-xs">
+                                                {isMissed ? (
+                                                  <Badge variant="destructive" className="bg-red-50 text-red-700 border-red-200 text-[10px] font-semibold">
+                                                    Missed
+                                                  </Badge>
+                                                ) : (
+                                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-semibold">
+                                                    Answered
+                                                  </Badge>
+                                                )}
+                                              </TableCell>
+
+                                              {/* 2. Full Timeline of Activities (When follow up happened) */}
+                                              <TableCell className="text-xs">
+                                                {!isMissed ? (
+                                                  <span className="text-slate-400 text-[11px] italic">
+                                                    Answered on line ({formatDurationSeconds(call.duration)})
+                                                  </span>
+                                                ) : followup.status === 'unreturned' ? (
+                                                  <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-300 font-semibold text-[10px] gap-1 py-0.5">
+                                                        <AlertCircle className="h-3 w-3 text-red-600" />
+                                                        <span>Action Needed (Unreturned)</span>
+                                                      </Badge>
+                                                    </div>
+                                                    <span className="text-[11px] text-red-600 dark:text-red-400 font-medium">
+                                                      ⏳ Elapsed: {formatDistanceToNow(callDate)} ago
+                                                    </span>
+                                                  </div>
+                                                ) : (
+                                                  /* Activity timeline showing When call happened -> When follow-up happened */
+                                                  <div className="flex flex-col gap-1 p-1.5 rounded-md bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                                                    <div className="flex items-center gap-1.5 text-[11px]">
+                                                      <span className="text-slate-500 font-medium">
+                                                        {followup.actionType === 'call' ? '📞 Callback' : followup.actionType === 'email' ? '✉️ Email' : '📝 CRM Note'}:
+                                                      </span>
+                                                      <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                                        {followup.label}
+                                                      </span>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400">
+                                                      {followup.performedAt && (
+                                                        <span className="font-mono text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
+                                                          <Clock className="h-3 w-3 inline" />
+                                                          {format(new Date(followup.performedAt), 'dd MMM, hh:mm a')}
+                                                        </span>
+                                                      )}
+                                                      {followup.responseTimeMinutes !== undefined && (
+                                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 text-[10px] py-0 px-1 font-bold">
+                                                          +{formatResponseTime(followup.responseTimeMinutes)} response
+                                                        </Badge>
+                                                      )}
+                                                      {followup.author && (
+                                                        <span className="text-slate-500 text-[10px]">
+                                                          by {followup.author}
+                                                        </span>
+                                                      )}
+                                                    </div>
+
+                                                    {followup.notes && (
+                                                      <p className="text-[11px] text-slate-500 italic mt-0.5 truncate max-w-[260px]" title={followup.notes}>
+                                                        &quot;{followup.notes}&quot;
+                                                      </p>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </TableCell>
+
+                                              {/* Line */}
+                                              <TableCell className="text-xs">
+                                                <div className="font-medium text-slate-900 truncate max-w-[140px]">
+                                                  {call.aircallNumberName}
+                                                </div>
+                                                <div className="text-slate-400 text-[11px] font-mono">
+                                                  {call.aircallNumberDigits}
+                                                </div>
+                                              </TableCell>
+
+                                              {/* User */}
+                                              <TableCell className="text-xs text-slate-700">
+                                                {call.aircallUser?.name ? (
+                                                  <div className="flex items-center gap-1">
+                                                    <User className="h-3 w-3 text-slate-400" />
+                                                    <span>{call.aircallUser.name}</span>
+                                                  </div>
+                                                ) : (
+                                                  <span className="text-slate-400 italic">Team Line</span>
+                                                )}
+                                              </TableCell>
+
+                                              {/* Missed Reason */}
+                                              <TableCell className="text-xs">
+                                                <Badge variant="secondary" className="text-[10px]">
+                                                  {call.missedReason}
+                                                </Badge>
+                                              </TableCell>
+
+                                              {/* Actions */}
+                                              <TableCell className="text-right text-xs">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                  {isMissed && (
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      onClick={() => openResolutionModal(call)}
+                                                      className="h-7 px-2 text-xs text-slate-700 hover:bg-slate-100"
+                                                      title="Log follow-up action or mark resolved"
+                                                    >
+                                                      <Edit3 className="h-3 w-3 mr-1" />
+                                                      <span>Resolve</span>
+                                                    </Button>
+                                                  )}
+
+                                                  {call.matchedLead ? (
+                                                    <Link
+                                                      href={call.matchedLead.leadUrl}
+                                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-md border"
+                                                    >
+                                                      <span>View</span>
+                                                    </Link>
+                                                  ) : (
+                                                    <Link
+                                                      href={`/leads?create=true&phone=${encodeURIComponent(call.callerNumber)}`}
+                                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200"
+                                                    >
+                                                      <span>+ Lead</span>
+                                                    </Link>
+                                                  )}
+                                                </div>
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })}
+                                      </TableBody>
+                                    </Table>
                                   </div>
-                                  <div className="text-slate-400 text-[11px] font-mono">
-                                    {call.aircallNumberDigits}
-                                  </div>
-                                </TableCell>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  ) : (
+                    /* FLAT LIST VIEW */
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader className="bg-slate-50 dark:bg-slate-900">
+                          <TableRow>
+                            <TableHead className="w-[150px]">Missed Call Time</TableHead>
+                            <TableHead className="w-[90px]">Status</TableHead>
+                            <TableHead className="w-[280px]">Follow-Up Timeline & Activity</TableHead>
+                            <TableHead className="w-[150px]">Aircall Line</TableHead>
+                            <TableHead className="w-[130px]">Caller Phone</TableHead>
+                            <TableHead>Matched Lead</TableHead>
+                            <TableHead className="w-[120px]">Rep</TableHead>
+                            <TableHead className="text-right w-[140px]">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredCalls.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={8} className="h-40 text-center text-slate-500">
+                                <div className="flex flex-col items-center justify-center gap-1">
+                                  <CheckCircle2 className="h-8 w-8 text-emerald-500 mb-1" />
+                                  <p className="font-semibold text-slate-800 dark:text-slate-200">No Calls Found</p>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredCalls.map((call) => {
+                              const callDate = new Date(call.startedAt);
+                              const isMissed = call.callType === 'missed';
+                              const followup = call.followup;
 
-                                {/* Aircall User / Line Owner */}
-                                <TableCell className="text-xs">
-                                  {call.aircallUser?.name ? (
-                                    <div className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                                      <User className="h-3 w-3 text-slate-400" />
-                                      <span>{call.aircallUser.name}</span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-slate-400 italic">Team Line</span>
-                                  )}
-                                </TableCell>
-
-                                {/* Incoming Caller Phone */}
-                                <TableCell className="text-xs font-mono">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-medium text-slate-900 dark:text-slate-100">{call.callerNumber}</span>
-                                    <button
-                                      onClick={() => copyPhoneNumber(call.callerNumber)}
-                                      className="text-slate-400 hover:text-slate-600 p-0.5 rounded transition"
-                                      title="Copy Phone Number"
-                                    >
-                                      {copiedPhone === call.callerNumber ? (
-                                        <Check className="h-3 w-3 text-emerald-600" />
+                              return (
+                                <TableRow key={call.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
+                                  {/* Missed Call Time */}
+                                  <TableCell className="text-xs">
+                                    <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                      {isMissed ? (
+                                        <PhoneMissed className="h-3.5 w-3.5 text-red-500" />
                                       ) : (
-                                        <Copy className="h-3 w-3" />
+                                        <PhoneIncoming className="h-3.5 w-3.5 text-emerald-600" />
                                       )}
-                                    </button>
-                                  </div>
-                                </TableCell>
+                                      <span>{format(callDate, 'dd MMM yyyy')}</span>
+                                    </div>
+                                    <div className="text-slate-500 text-[11px] font-mono flex items-center gap-1 mt-0.5">
+                                      <Clock className="h-3 w-3 text-slate-400" />
+                                      <span>{format(callDate, 'hh:mm:ss a')}</span>
+                                    </div>
+                                  </TableCell>
 
-                                {/* Matched Lead */}
-                                <TableCell className="text-xs">
-                                  {call.matchedLead ? (
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex items-center gap-2">
+                                  {/* Status */}
+                                  <TableCell className="text-xs">
+                                    {isMissed ? (
+                                      <Badge variant="destructive" className="bg-red-50 text-red-700 border-red-200 text-[10px] font-semibold">
+                                        Missed
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-semibold">
+                                        Answered
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+
+                                  {/* Follow-Up Timeline & Activity */}
+                                  <TableCell className="text-xs">
+                                    {!isMissed ? (
+                                      <span className="text-slate-400 text-[11px] italic">
+                                        Answered ({formatDurationSeconds(call.duration)})
+                                      </span>
+                                    ) : followup.status === 'unreturned' ? (
+                                      <div className="flex flex-col gap-1">
+                                        <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-300 font-semibold text-[10px] gap-1 py-0.5 w-fit">
+                                          <AlertCircle className="h-3 w-3 text-red-600" />
+                                          <span>Action Needed (Unreturned)</span>
+                                        </Badge>
+                                        <span className="text-[11px] text-red-600 dark:text-red-400">
+                                          ⏳ Waiting {formatDistanceToNow(callDate)} ago
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex flex-col gap-1 p-1.5 rounded-md bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80">
+                                        <div className="flex items-center gap-1.5 text-[11px]">
+                                          <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                            {followup.label}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[11px] text-slate-600">
+                                          {followup.performedAt && (
+                                            <span className="font-mono text-emerald-700 dark:text-emerald-400 font-medium">
+                                              {format(new Date(followup.performedAt), 'dd MMM, hh:mm a')}
+                                            </span>
+                                          )}
+                                          {followup.responseTimeMinutes !== undefined && (
+                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 text-[10px] py-0 px-1 font-bold">
+                                              +{formatResponseTime(followup.responseTimeMinutes)}
+                                            </Badge>
+                                          )}
+                                          {followup.author && (
+                                            <span className="text-slate-500 text-[10px]">by {followup.author}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </TableCell>
+
+                                  {/* Line */}
+                                  <TableCell className="text-xs">
+                                    <div className="font-medium text-slate-900 truncate max-w-[140px]">
+                                      {call.aircallNumberName}
+                                    </div>
+                                    <div className="text-slate-400 text-[11px] font-mono">
+                                      {call.aircallNumberDigits}
+                                    </div>
+                                  </TableCell>
+
+                                  {/* Caller Phone */}
+                                  <TableCell className="text-xs font-mono">
+                                    <div className="flex items-center gap-1">
+                                      <span>{call.callerNumber}</span>
+                                      <button
+                                        onClick={() => copyPhoneNumber(call.callerNumber)}
+                                        className="text-slate-400 hover:text-slate-600 p-0.5"
+                                      >
+                                        <Copy className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  </TableCell>
+
+                                  {/* Matched Lead */}
+                                  <TableCell className="text-xs">
+                                    {call.matchedLead ? (
+                                      <div className="flex flex-col gap-0.5">
                                         <Link
                                           href={call.matchedLead.leadUrl}
-                                          className="font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                                          className="font-semibold text-blue-600 hover:underline flex items-center gap-0.5"
                                         >
                                           {call.matchedLead.companyName}
-                                          <ArrowUpRight className="h-3 w-3 inline" />
+                                          <ArrowUpRight className="h-3 w-3" />
                                         </Link>
                                         <LeadStatusBadge status={call.matchedLead.status as LeadStatus} />
                                       </div>
-                                      {call.matchedLead.contactName && (
-                                        <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                                          <User className="h-3 w-3 text-slate-400" />
-                                          <span>{call.matchedLead.contactName}</span>
-                                        </div>
+                                    ) : (
+                                      <span className="text-slate-400 text-[11px] italic">Unregistered</span>
+                                    )}
+                                  </TableCell>
+
+                                  {/* Rep */}
+                                  <TableCell className="text-xs text-slate-700">
+                                    {call.matchedLead?.assignedRep || <span className="text-slate-400 italic">Unassigned</span>}
+                                  </TableCell>
+
+                                  {/* Actions */}
+                                  <TableCell className="text-right text-xs">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <a
+                                        href={`tel:${call.callerNumber.replace(/\s+/g, '')}`}
+                                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-md"
+                                      >
+                                        <PhoneCall className="h-3 w-3" />
+                                        <span>Call</span>
+                                      </a>
+
+                                      {isMissed && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => openResolutionModal(call)}
+                                          className="h-7 px-2 text-xs"
+                                        >
+                                          <Edit3 className="h-3 w-3 mr-1" />
+                                          <span>Resolve</span>
+                                        </Button>
                                       )}
                                     </div>
-                                  ) : (
-                                    <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200 text-[10px] font-normal">
-                                      Unregistered Caller
-                                    </Badge>
-                                  )}
-                                </TableCell>
-
-                                {/* Lead Assigned Rep */}
-                                <TableCell className="text-xs text-slate-700 dark:text-slate-300">
-                                  {call.matchedLead?.assignedRep ? (
-                                    <span className="font-medium">{call.matchedLead.assignedRep}</span>
-                                  ) : (
-                                    <span className="text-slate-400 italic">Unassigned</span>
-                                  )}
-                                </TableCell>
-
-                                {/* Outcome / Reason */}
-                                <TableCell className="text-xs">
-                                  <Badge
-                                    variant="secondary"
-                                    className={`text-[10px] font-medium border ${
-                                      isMissed
-                                        ? isOOH
-                                          ? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300'
-                                          : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400'
-                                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    }`}
-                                  >
-                                    {call.missedReason}
-                                  </Badge>
-                                </TableCell>
-
-                                {/* Actions */}
-                                <TableCell className="text-right text-xs">
-                                  <div className="flex items-center justify-end gap-1.5">
-                                    {/* Quick Call */}
-                                    <a
-                                      href={`tel:${call.callerNumber.replace(/\s+/g, '')}`}
-                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 rounded-md transition shadow-sm"
-                                      title="Call back via phone dialer"
-                                    >
-                                      <PhoneCall className="h-3 w-3" />
-                                      <span>Call</span>
-                                    </a>
-
-                                    {/* Follow Up / Resolve Button for Missed Calls */}
-                                    {isMissed && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => openResolutionModal(call)}
-                                        className="h-7 px-2 text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                                        title="Log follow-up action or mark resolved"
-                                      >
-                                        <Edit3 className="h-3 w-3 mr-1" />
-                                        <span>Resolve</span>
-                                      </Button>
-                                    )}
-
-                                    {call.matchedLead ? (
-                                      <Link
-                                        href={call.matchedLead.leadUrl}
-                                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-md border"
-                                      >
-                                        <span>View</span>
-                                      </Link>
-                                    ) : (
-                                      <Link
-                                        href={`/leads?create=true&phone=${encodeURIComponent(call.callerNumber)}`}
-                                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200"
-                                        title="Create new lead from this phone number"
-                                      >
-                                        <span>+ Lead</span>
-                                      </Link>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
