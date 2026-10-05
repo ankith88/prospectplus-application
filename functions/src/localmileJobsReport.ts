@@ -74,7 +74,7 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
     isCompleted: boolean;
   }
 
-  const matchingJobs: LocalMileJobReportItem[] = [];
+  const jobsMap = new Map<string, LocalMileJobReportItem>();
 
   for (const doc of jobsSnap.docs) {
     const data = doc.data();
@@ -85,6 +85,37 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
 
     const parentLeadRef = doc.ref.parent.parent;
     const leadId = parentLeadRef ? parentLeadRef.id : 'Unknown';
+    const jobId = String(data.jobId || doc.id).trim();
+
+    const statusRaw = (data.status || 'created').toString();
+    const statusLower = statusRaw.toLowerCase().trim();
+    const isCompleted = ['completed', 'complete', 'delivered', 'done', 'finished'].includes(statusLower);
+
+    if (jobsMap.has(jobId)) {
+      const existing = jobsMap.get(jobId)!;
+      if (!existing.isCompleted && isCompleted) {
+        existing.status = statusRaw;
+        existing.isCompleted = true;
+      }
+      if ((existing.customerName === 'Unknown' || existing.leadId === 'Unknown') && leadId !== 'Unknown') {
+        let leadData = leadCache.get(leadId);
+        if (!leadData && parentLeadRef) {
+          const leadSnap = await parentLeadRef.get();
+          if (leadSnap.exists) {
+            leadData = leadSnap.data();
+            leadCache.set(leadId, leadData);
+          }
+        }
+        existing.leadId = leadId;
+        existing.customerName = leadData?.companyName || leadData?.tradingName || leadData?.displayName || leadData?.name || (leadData?.firstName ? `${leadData.firstName} ${leadData.lastName || ''}`.trim() : '') || leadId;
+        existing.customerStatus = leadData?.customerStatus || leadData?.status || 'N/A';
+        existing.franchisee = leadData?.franchisee || leadData?.franchiseeName || leadData?.franchise || leadData?.assignedFranchisee || leadData?.franchiseeCode || 'Unassigned';
+        existing.trialsRemaining = leadData?.localMileTrialsRemaining !== undefined && leadData?.localMileTrialsRemaining !== null
+          ? Number(leadData.localMileTrialsRemaining)
+          : (leadData?.jobCount !== undefined ? Math.max(0, 5 - Number(leadData.jobCount || 0)) : 5);
+      }
+      continue;
+    }
 
     let leadData = leadCache.get(leadId);
     if (!leadData && parentLeadRef) {
@@ -103,12 +134,8 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
       ? Number(leadData.localMileTrialsRemaining)
       : (leadData?.jobCount !== undefined ? Math.max(0, 5 - Number(leadData.jobCount || 0)) : 5);
 
-    const statusRaw = (data.status || 'created').toString();
-    const statusLower = statusRaw.toLowerCase().trim();
-    const isCompleted = ['completed', 'complete', 'delivered', 'done', 'finished'].includes(statusLower);
-
-    matchingJobs.push({
-      jobId: data.jobId || doc.id,
+    jobsMap.set(jobId, {
+      jobId,
       status: statusRaw,
       createdAtStr: createdAtDate.toLocaleTimeString('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit' }),
       leadId,
@@ -119,6 +146,8 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
       isCompleted
     });
   }
+
+  const matchingJobs = Array.from(jobsMap.values());
 
   const totalJobsCreated = matchingJobs.length;
   const completedJobsCount = matchingJobs.filter(j => j.isCompleted).length;

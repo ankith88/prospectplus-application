@@ -91,9 +91,31 @@ export interface InboundCallsReportResponse {
   calls: EnrichedInboundCall[];
 }
 
+export function resolveRepFromNumber(numName: string, assignedUsers?: Array<{ name: string }>): string {
+  if (assignedUsers && assignedUsers.length > 0) {
+    const valid = assignedUsers.find(u => u.name && u.name !== 'Mail Plus' && u.name !== 'Admin');
+    if (valid) return valid.name;
+  }
+  const lower = (numName || '').toLowerCase();
+  if (lower.includes('alex')) return 'Alex Mabuda';
+  if (lower.includes('melody')) return 'Melody Muriritirwa';
+  if (lower.includes('nick')) return 'Nick Williams';
+  if (lower.includes('lee')) return 'Lee Russell';
+  if (lower.includes('warren')) return 'Warren Mkonto';
+  if (lower.includes('sarah')) return 'Sarah Hart';
+  if (lower.includes('michael')) return "Michael O'Halloran";
+  if (lower.includes('ankith')) return 'Ankith Ravindran';
+  if (lower.includes('luke')) return 'Luke Forbes';
+  if (lower.includes('aleyna')) return 'Aleyna Harnett';
+  if (lower.includes('belinda')) return 'Belinda Urbani';
+  if (lower.includes('kerina')) return 'Kerina Helliwell';
+  if (assignedUsers && assignedUsers.length > 0 && assignedUsers[0].name !== 'Mail Plus') return assignedUsers[0].name;
+  return numName || 'Team Line';
+}
+
 function getAircallAuthHeaders(): { Authorization: string } | null {
-  const apiId = (process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID || '').trim().replace(/^["']|["']$/g, '');
-  const apiToken = (process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN || '').trim().replace(/^["']|["']$/g, '');
+  const apiId = (process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID || '494cbe8bcfe6e809016f74019fdff1bb').trim().replace(/^["']|["']$/g, '');
+  const apiToken = (process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN || 'f1fa3d2057264085560ae9af350009ad').trim().replace(/^["']|["']$/g, '');
 
   if (!apiId || !apiToken) {
     return null;
@@ -110,7 +132,7 @@ export function formatMissedReason(reason: string | null | undefined, isOutOfHou
   if (reason === 'no_available_agent') return 'No Agent Available';
   if (reason === 'agents_did_not_answer') return 'Agents Did Not Answer';
   if (reason === 'abandoned_in_ivr') return 'Abandoned in IVR';
-  if (reason === 'short') return 'Short Ring / Hangup';
+  if (reason === 'short' || reason === 'short_abandoned') return 'Short Ring / Hangup';
   if (!reason) return 'Unanswered';
   return reason.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -476,8 +498,13 @@ export async function generateInboundCallsReport(
     let aircallUser: AircallUserSummary | null = null;
     if (call.user?.name) {
       aircallUser = { id: call.user.id, name: call.user.name, email: call.user.email };
-    } else if (assignedUserFromNumber) {
+    } else if (assignedUserFromNumber && assignedUserFromNumber.name !== 'Mail Plus') {
       aircallUser = assignedUserFromNumber;
+    } else {
+      const repName = resolveRepFromNumber(call.number?.name || numObj?.name || '', numObj?.assignedUsers);
+      if (repName && repName !== 'Team Line') {
+        aircallUser = { name: repName };
+      }
     }
 
     return {

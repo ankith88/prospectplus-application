@@ -20,9 +20,31 @@ function formatDurationSeconds(totalSeconds: number): string {
   return `${s}s`;
 }
 
+export function resolveRepFromNumber(numName: string, assignedUsers?: Array<{ name: string }>): string {
+  if (assignedUsers && assignedUsers.length > 0) {
+    const valid = assignedUsers.find(u => u.name && u.name !== 'Mail Plus' && u.name !== 'Admin');
+    if (valid) return valid.name;
+  }
+  const lower = (numName || '').toLowerCase();
+  if (lower.includes('alex')) return 'Alex Mabuda';
+  if (lower.includes('melody')) return 'Melody Muriritirwa';
+  if (lower.includes('nick')) return 'Nick Williams';
+  if (lower.includes('lee')) return 'Lee Russell';
+  if (lower.includes('warren')) return 'Warren Mkonto';
+  if (lower.includes('sarah')) return 'Sarah Hart';
+  if (lower.includes('michael')) return "Michael O'Halloran";
+  if (lower.includes('ankith')) return 'Ankith Ravindran';
+  if (lower.includes('luke')) return 'Luke Forbes';
+  if (lower.includes('aleyna')) return 'Aleyna Harnett';
+  if (lower.includes('belinda')) return 'Belinda Urbani';
+  if (lower.includes('kerina')) return 'Kerina Helliwell';
+  if (assignedUsers && assignedUsers.length > 0 && assignedUsers[0].name !== 'Mail Plus') return assignedUsers[0].name;
+  return numName || 'Team Line';
+}
+
 function getAircallAuthHeaders(): { Authorization: string } | null {
-  const apiId = (process.env.AIRCALL_API_ID || '').trim().replace(/^["']|["']$/g, '');
-  const apiToken = (process.env.AIRCALL_API_TOKEN || '').trim().replace(/^["']|["']$/g, '');
+  const apiId = (process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID || '494cbe8bcfe6e809016f74019fdff1bb').trim().replace(/^["']|["']$/g, '');
+  const apiToken = (process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN || 'f1fa3d2057264085560ae9af350009ad').trim().replace(/^["']|["']$/g, '');
 
   if (!apiId || !apiToken) {
     return null;
@@ -36,7 +58,7 @@ function formatMissedReason(reason: string | null | undefined, isOutOfHours?: bo
   if (reason === 'no_available_agent') return 'No Agent Available';
   if (reason === 'agents_did_not_answer') return 'Agents Did Not Answer';
   if (reason === 'abandoned_in_ivr') return 'Abandoned in IVR';
-  if (reason === 'short') return 'Short Ring / Hangup';
+  if (reason === 'short' || reason === 'short_abandoned') return 'Short Ring / Hangup';
   if (!reason) return 'Unanswered';
   return reason.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -55,6 +77,34 @@ function isOutOfBusinessHours(epochSeconds: number): boolean {
   } catch {
     return false;
   }
+}
+
+function getSydneyDayRange(dateString: string): { startEpoch: number; endEpoch: number; targetStart: Date; targetEnd: Date } {
+  const [dayStr, monthStr, yearStr] = dateString.split('-');
+  const y = parseInt(yearStr, 10);
+  const m = parseInt(monthStr, 10);
+  const d = parseInt(dayStr, 10);
+
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const isoDay = `${y}-${pad(m)}-${pad(d)}`;
+  
+  const testDate = new Date(`${isoDay}T12:00:00Z`);
+  const sydneyHour = parseInt(
+    new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', hour12: false }).format(testDate),
+    10
+  );
+  const offsetHours = (sydneyHour - 12 + 24) % 24;
+  const offsetStr = `+${pad(offsetHours)}:00`;
+
+  const targetStart = new Date(`${isoDay}T00:00:00.000${offsetStr}`);
+  const targetEnd = new Date(`${isoDay}T23:59:59.999${offsetStr}`);
+
+  return {
+    startEpoch: Math.floor(targetStart.getTime() / 1000),
+    endEpoch: Math.floor(targetEnd.getTime() / 1000),
+    targetStart,
+    targetEnd,
+  };
 }
 
 async function fetchAircallInboundData(fromSeconds: number, toSeconds: number) {
@@ -123,11 +173,12 @@ async function fetchAircallInboundData(fromSeconds: number, toSeconds: number) {
     const numbersBreakdownMap = new Map<number, any>();
     numbersList.forEach(n => {
       const assignedUsers = numberUsersMap.get(n.id) || [];
+      const rep = resolveRepFromNumber(n.name, assignedUsers);
       numbersBreakdownMap.set(n.id, {
         numberId: n.id,
         name: n.name,
         digits: n.digits,
-        assignedUser: assignedUsers.map(u => u.name).join(', ') || 'Team Line',
+        assignedUser: rep,
         totalInbound: 0,
         totalAnswered: 0,
         totalMissed: 0,
@@ -137,9 +188,10 @@ async function fetchAircallInboundData(fromSeconds: number, toSeconds: number) {
     const enrichedCalls: any[] = [];
 
     for (const call of allInboundCalls) {
-      const isAnswered = call.status === 'done' || (call.answered_at && call.duration > 0);
+      const isMissed = call.status === 'missed' || !call.answered_at || !!call.missed_call_reason;
+      const isAnswered = !isMissed;
       const startedAtTimestamp = call.started_at || call.created_at || fromSeconds;
-      const outOfHours = isOutOfBusinessHours(startedAtTimestamp);
+      const outOfHours = call.missed_call_reason === 'out_of_opening_hours' || isOutOfBusinessHours(startedAtTimestamp);
 
       if (isAnswered) {
         totalAnswered++;
@@ -158,9 +210,17 @@ async function fetchAircallInboundData(fromSeconds: number, toSeconds: number) {
       }
 
       const assignedUsers = numId ? numberUsersMap.get(numId) || [] : [];
-      const primaryUser = call.user?.name 
-        ? { id: call.user.id, name: call.user.name, email: call.user.email } 
-        : (assignedUsers.length === 1 ? assignedUsers[0] : null);
+      let primaryUser: { id?: number; name: string; email?: string } | null = null;
+      if (call.user?.name) {
+        primaryUser = { id: call.user.id, name: call.user.name, email: call.user.email };
+      } else if (assignedUsers.length > 0 && assignedUsers[0].name !== 'Mail Plus') {
+        primaryUser = assignedUsers[0];
+      } else {
+        const repName = resolveRepFromNumber(call.number?.name || '', assignedUsers);
+        if (repName && repName !== 'Team Line') {
+          primaryUser = { name: repName };
+        }
+      }
 
       enrichedCalls.push({
         id: call.id,
@@ -201,18 +261,13 @@ export async function runCallsReport(dateString: string, recipients: string[], f
   const db = admin.firestore();
   functions.logger.info(`Generating calls report for date: ${dateString}`);
 
-  // parse target date (DD-MM-YYYY)
-  const [day, month, year] = dateString.split("-").map(Number);
-  const targetStart = new Date(year, month - 1, day, 0, 0, 0, 0);
-  const targetEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
-
-  const fromSeconds = Math.floor(targetStart.getTime() / 1000);
-  const toSeconds = Math.floor(targetEnd.getTime() / 1000);
+  // parse target date using Sydney timezone
+  const { startEpoch, endEpoch, targetStart, targetEnd } = getSydneyDayRange(dateString);
 
   // 1. Fetch Inbound Calls from Aircall
   let inboundReport: any = null;
   try {
-    inboundReport = await fetchAircallInboundData(fromSeconds, toSeconds);
+    inboundReport = await fetchAircallInboundData(startEpoch, endEpoch);
   } catch (err) {
     functions.logger.warn('Failed to fetch Aircall inbound data:', err);
   }
@@ -342,6 +397,7 @@ export async function runCallsReport(dateString: string, recipients: string[], f
     seenCallIds.add(c.callId);
     return true;
   });
+
   // 2. Unique Leads/Companies
   const uniqueLeads = new Set(finalCalls.map(c => c.leadId));
   const uniqueLeadsCount = uniqueLeads.size;
@@ -832,7 +888,7 @@ export const sendDailyCallsReport = functions
 
     const db = admin.firestore();
     let recipients = ["ankith.ravindran@mailplus.com.au"];
-    let frequency = "06:00"; // Default to 6:00 AM Sydney Time
+    let frequency = "08:00"; // Default to 8:00 AM Sydney Time
     let fromAddress = "ankith.ravindran@mailplus.com.au";
 
     try {

@@ -24,6 +24,34 @@ function formatDurationSeconds(totalSeconds: number): string {
   return `${s}s`;
 }
 
+function getSydneyDayRange(dateString: string): { startEpoch: number; endEpoch: number; targetStart: Date; targetEnd: Date } {
+  const [dayStr, monthStr, yearStr] = dateString.split('-');
+  const y = parseInt(yearStr, 10);
+  const m = parseInt(monthStr, 10);
+  const d = parseInt(dayStr, 10);
+
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const isoDay = `${y}-${pad(m)}-${pad(d)}`;
+  
+  const testDate = new Date(`${isoDay}T12:00:00Z`);
+  const sydneyHour = parseInt(
+    new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', hour12: false }).format(testDate),
+    10
+  );
+  const offsetHours = (sydneyHour - 12 + 24) % 24;
+  const offsetStr = `+${pad(offsetHours)}:00`;
+
+  const targetStart = new Date(`${isoDay}T00:00:00.000${offsetStr}`);
+  const targetEnd = new Date(`${isoDay}T23:59:59.999${offsetStr}`);
+
+  return {
+    startEpoch: Math.floor(targetStart.getTime() / 1000),
+    endEpoch: Math.floor(targetEnd.getTime() / 1000),
+    targetStart,
+    targetEnd,
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -43,14 +71,10 @@ export async function POST(request: Request) {
     });
 
     let dateString: string;
-    let targetStart: Date;
-    let targetEnd: Date;
 
     if (date) {
       const [y, m, d] = date.split("-");
       dateString = `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
-      targetStart = new Date(Number(y), Number(m) - 1, Number(d), 0, 0, 0, 0);
-      targetEnd = new Date(Number(y), Number(m) - 1, Number(d), 23, 59, 59, 999);
     } else {
       const now = new Date();
       now.setDate(now.getDate() - 1); // Yesterday
@@ -59,12 +83,9 @@ export async function POST(request: Request) {
       const month = parts.find(p => p.type === 'month')?.value || '';
       const year = parts.find(p => p.type === 'year')?.value || '';
       dateString = `${day}-${month}-${year}`;
-      targetStart = new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
-      targetEnd = new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999);
     }
 
-    const fromSeconds = Math.floor(targetStart.getTime() / 1000);
-    const toSeconds = Math.floor(targetEnd.getTime() / 1000);
+    const { startEpoch: fromSeconds, endEpoch: toSeconds, targetStart, targetEnd } = getSydneyDayRange(dateString);
 
     // 1. Fetch Inbound Calls via Aircall API + Lead Enrichment in parallel
     let inboundReport: InboundCallsReportResponse | null = null;

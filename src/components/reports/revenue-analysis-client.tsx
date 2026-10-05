@@ -1111,6 +1111,8 @@ export default function RevenueAnalysisClient() {
     displayedLeads.forEach(lead => {
       const isLost = isLostLead(lead);
       const isSigned = !isLost && isSignedLead(lead);
+      const signedDate = getLeadSignedDate(lead);
+      const signedDateMatches = !appliedSignedUpDateRange?.from || isDateInRange(signedDate, appliedSignedUpDateRange);
       const rawVal = calculateRawLeadValue(lead);
       const leadType = lead.leadType || 'Unknown';
       const status = isLost ? (lead.customerStatus || lead.status || 'Lost') : (isSigned ? 'Signed' : (lead.customerStatus || lead.status || 'New'));
@@ -1119,9 +1121,11 @@ export default function RevenueAnalysisClient() {
         totalLostCount += 1;
         totalLostMrr += rawVal;
       } else if (isSigned) {
-        totalSignedLeadsCount += 1;
-        if (rawVal > 0) {
-          totalSignedMrr += rawVal;
+        if (signedDateMatches) {
+          totalSignedLeadsCount += 1;
+          if (rawVal > 0) {
+            totalSignedMrr += rawVal;
+          }
         }
       } else {
         // Active Open Pipeline lead
@@ -1204,7 +1208,7 @@ export default function RevenueAnalysisClient() {
       valueByAM,
       valueByLead
     };
-  }, [displayedLeads]);
+  }, [displayedLeads, appliedSignedUpDateRange]);
 
   // Chart Data
   const statusChartData = useMemo(() => {
@@ -1272,9 +1276,10 @@ export default function RevenueAnalysisClient() {
 
       const isQuoteSentStatus = (l.customerStatus || l.status) === 'Quote Sent';
       const quoteSentDate = getLeadQuoteSentDate(l);
+      const quoteDateMatches = !appliedQuoteSentDateRange?.from || isDateInRange(quoteSentDate, appliedQuoteSentDateRange);
       const hasQuoteSent = isQuoteSentStatus || !!quoteSentDate || !!l.quoteSentAt || !!(l as any).dateQuoteSent;
       
-      if (hasQuoteSent) {
+      if (hasQuoteSent && quoteDateMatches) {
         const quotedMrr = calculateRawLeadValue(l);
         const bucketRaw = l.bucket || 'Unassigned';
         const bucket = String(bucketRaw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -1376,7 +1381,10 @@ export default function RevenueAnalysisClient() {
     }[] = [];
 
     displayedLeads.forEach(l => {
-      if (!isLostLead(l) && isSignedLead(l)) {
+      const signedDate = getLeadSignedDate(l);
+      const signedDateMatches = !appliedSignedUpDateRange?.from || isDateInRange(signedDate, appliedSignedUpDateRange);
+
+      if (!isLostLead(l) && isSignedLead(l) && signedDateMatches) {
         const signedMrr = calculateRawLeadValue(l);
         const bucketRaw = l.bucket || 'Unassigned';
         const bucket = String(bucketRaw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -1384,7 +1392,6 @@ export default function RevenueAnalysisClient() {
         const am = l.accountManagerAssigned || 'Unassigned';
         const status = 'Signed';
 
-        const signedDate = getLeadSignedDate(l);
         let dateSignedStr = '-';
         if (signedDate) {
           try {
