@@ -28,6 +28,8 @@ interface LocalMileAccessDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead;
+  collectionName?: 'leads' | 'companies';
+  preselectedContactId?: string | null;
   onConfirm: (serviceType: string, rate: number, selectedContactsInfo: any[]) => Promise<void>;
 }
 
@@ -35,6 +37,8 @@ export function LocalMileAccessDialog({
   isOpen,
   onOpenChange,
   lead,
+  collectionName = 'leads',
+  preselectedContactId,
   onConfirm,
 }: LocalMileAccessDialogProps) {
   const { userProfile } = useAuth();
@@ -49,13 +53,17 @@ export function LocalMileAccessDialog({
 
   useEffect(() => {
     if (isOpen && lead) {
-      setSelectedContacts([]);
+      if (preselectedContactId) {
+        setSelectedContacts([preselectedContactId]);
+      } else {
+        setSelectedContacts([]);
+      }
       const pmpo = getPmpoServiceForLead(lead);
       setHasPmpo(pmpo.hasPmpoService);
       setServiceType(pmpo.serviceType);
       setRate(String(pmpo.rate));
     }
-  }, [isOpen, lead]);
+  }, [isOpen, lead, preselectedContactId]);
 
   useEffect(() => {
     if (!hasPmpo && serviceType) {
@@ -131,7 +139,7 @@ export function LocalMileAccessDialog({
           }
           return Promise.all([
             updateContactSendEmail(lead.id, contactId),
-            updateContactInLead(lead.id, contactId, { accessToLocalMile: 'yes' })
+            updateContactInLead(lead.id, contactId, { accessToLocalMile: 'yes' }, collectionName)
           ]);
         })
       );
@@ -142,7 +150,7 @@ export function LocalMileAccessDialog({
       console.error('[LocalMile Trial] Error during submission:', error);
       toast({
         variant: 'destructive',
-        title: 'Failed to Initiate Trial',
+        title: 'Failed to Grant Access',
         description: error.message || 'An error occurred while granting access. Please try again.',
       });
     } finally {
@@ -271,7 +279,7 @@ export function LocalMileAccessDialog({
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting || selectedContacts.length === 0 || !rate}>
-            {isSubmitting ? <Loader /> : 'Confirm and Initiate Trial'}
+            {isSubmitting ? <Loader /> : 'Confirm & Grant Access'}
           </Button>
         </DialogFooter>
       </DialogContent>

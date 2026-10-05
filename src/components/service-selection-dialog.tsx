@@ -34,7 +34,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg, updateLeadDetails, getScfRecords, updateScfRecord, getLeadOrCompanyCollection } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, updateContactInLead, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg, updateLeadDetails, getScfRecords, updateScfRecord, getLeadOrCompanyCollection } from '@/services/firebase';
 import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { useAuth } from '@/hooks/use-auth';
@@ -97,6 +97,7 @@ const formSchema = z.object({
   selectedContactId: z.string().optional(),
   selectedContactIds: z.array(z.string()).optional(),
   shipmateContactIds: z.array(z.string()).optional(),
+  localmileContactIds: z.array(z.string()).optional(),
   rates: z.record(z.coerce.number().min(0)).optional(),
   createLocalMileSchedules: z.record(z.boolean().optional()).optional(),
   createLocalMileAccount: z.boolean().optional(),
@@ -711,6 +712,9 @@ export function ServiceSelectionDialog({
       createLocalMileSchedules: {},
       createLocalMileAccount: false,
       createShipMateAccount: false,
+      selectedContactIds: [],
+      shipmateContactIds: [],
+      localmileContactIds: [],
       chosenPremiumPlan: 'Merchant',
       chosenExpressPlan: 'None',
     },
@@ -980,6 +984,11 @@ export function ServiceSelectionDialog({
           defaultAccountType = 'J2';
       }
 
+      const existingLocalMileContactIds = validContacts.filter(c => c.accessToLocalMile === 'yes').map(c => c.id);
+      const defaultLocalMileContactIds = existingLocalMileContactIds.length > 0
+        ? existingLocalMileContactIds
+        : (defaultContactId ? [defaultContactId] : []);
+
       form.reset({
           selectedServices: initialSelectedServices,
           frequencies: initialFrequencies,
@@ -993,6 +1002,7 @@ export function ServiceSelectionDialog({
           selectedContactId: defaultContactId,
           selectedContactIds: defaultContactId ? [defaultContactId] : [],
           shipmateContactIds: defaultContactId ? [defaultContactId] : [],
+          localmileContactIds: defaultLocalMileContactIds,
       });
     } else {
         setIsAddingContact(false);
@@ -1614,6 +1624,13 @@ export function ServiceSelectionDialog({
       }
     }
 
+    if (!values.localmileContactIds || values.localmileContactIds.length === 0) {
+      if (values.selectedContactIds && values.selectedContactIds.length > 0) {
+        values.localmileContactIds = values.selectedContactIds;
+        form.setValue('localmileContactIds', values.selectedContactIds);
+      }
+    }
+
     if (mode === 'Signup' && (selectionType === 'both' || selectionType === 'products')) {
       if (!skipEmail && (!values.shipmateContactIds || values.shipmateContactIds.length === 0)) {
         form.setError('shipmateContactIds' as any, { type: 'manual', message: 'Please select at least one contact for ShipMate access.' });
@@ -1621,6 +1638,26 @@ export function ServiceSelectionDialog({
           variant: 'destructive', 
           title: 'ShipMate Access Required', 
           description: 'Selecting at least one contact for ShipMate access is mandatory when signing up for Products or Both.' 
+        });
+        return;
+      }
+    }
+
+    if (mode === 'Signup' && !isLpoNetworkBucket && values.createLocalMileAccount) {
+      const validLocalMileContacts = (values.localmileContactIds || []).filter(id => {
+        const c = contacts.find(ct => ct.id === id);
+        return Boolean(c?.name?.trim() && c?.email?.trim());
+      });
+
+      if (validLocalMileContacts.length === 0) {
+        form.setError('localmileContactIds' as any, { 
+          type: 'manual', 
+          message: 'Please select at least one contact with a valid name and email for LocalMile access.' 
+        });
+        toast({ 
+          variant: 'destructive', 
+          title: 'LocalMile Contact Required', 
+          description: 'A contact must be selected to grant access before creating a company in LocalMile.' 
         });
         return;
       }
@@ -2213,6 +2250,16 @@ export function ServiceSelectionDialog({
            if (shouldCreateLocalMile || shouldCreateShipMate) {
              if (shouldCreateLocalMile) {
                await updateLeadDetails(lead.id, lead, { localMileTrialsRemaining: 0 });
+               if (values.localmileContactIds && values.localmileContactIds.length > 0) {
+                 await Promise.all(
+                   values.localmileContactIds.map(contactId =>
+                     Promise.all([
+                       updateContactSendEmail(lead.id, contactId),
+                       updateContactInLead(lead.id, contactId, { accessToLocalMile: 'yes' })
+                     ])
+                   )
+                 );
+               }
              }
              try {
                await initiateSignup({
@@ -3713,28 +3760,138 @@ export function ServiceSelectionDialog({
 
                         {mode === 'Signup' && !isLpoNetworkBucket && (
                             <div className="space-y-4">
-                                <FormField
-                                control={form.control}
-                                name="createLocalMileAccount"
-                                render={({ field }) => (
-                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-card">
-                                    <FormControl>
-                                        <Checkbox
-                                        checked={field.value || false}
-                                        onCheckedChange={field.onChange}
-                                        />
-                                    </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                        <FormLabel className="font-medium cursor-pointer">
-                                        Create LocalMile account (0 free trials)
-                                        </FormLabel>
-                                        <p className="text-xs text-muted-foreground">
-                                        This will provision a LocalMile account for this customer with 0 free trials.
-                                        </p>
-                                    </div>
-                                    </FormItem>
-                                )}
-                                />
+                                <div className="space-y-3">
+                                    <FormField
+                                    control={form.control}
+                                    name="createLocalMileAccount"
+                                    render={({ field }) => (
+                                        <FormItem className={cn(
+                                            "flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-card transition-colors",
+                                            field.value && "border-primary/40 bg-primary/5"
+                                        )}>
+                                        <FormControl>
+                                            <Checkbox
+                                            checked={field.value || false}
+                                            onCheckedChange={(checked) => {
+                                                field.onChange(checked);
+                                                if (checked) {
+                                                    const currentLocalMileContacts = form.getValues('localmileContactIds') || [];
+                                                    if (currentLocalMileContacts.length === 0) {
+                                                        const defaultContactId = form.getValues('selectedContactIds')?.[0] || form.getValues('selectedContactId');
+                                                        if (defaultContactId) {
+                                                            form.setValue('localmileContactIds', [defaultContactId], { shouldValidate: true });
+                                                        }
+                                                    }
+                                                }
+                                            }}
+                                            />
+                                        </FormControl>
+                                        <div className="space-y-1 leading-none">
+                                            <FormLabel className="font-medium cursor-pointer">
+                                            Create LocalMile account (0 free trials)
+                                            </FormLabel>
+                                            <p className="text-xs text-muted-foreground">
+                                            This will provision a LocalMile account for this customer with 0 free trials.
+                                            </p>
+                                        </div>
+                                        </FormItem>
+                                    )}
+                                    />
+
+                                    {watchCreateLocalMileAccount && (
+                                        <div className="ml-2 sm:ml-4 rounded-xl border border-primary/20 bg-slate-50/70 dark:bg-slate-900/50 p-4 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                                                        Select Contact(s) for LocalMile Access <span className="text-destructive">*</span>
+                                                    </Label>
+                                                </div>
+                                                <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                                                    Mandatory
+                                                </Badge>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                Choose which contact from {lead?.companyName || 'this company'} will receive access credentials for LocalMile Plus.
+                                            </p>
+
+                                            <div className="space-y-2">
+                                                {contacts && contacts.filter(c => !isContactEmpty(c)).length > 0 ? (
+                                                    contacts.filter(c => !isContactEmpty(c)).map((contact) => {
+                                                        const isValidContact = Boolean(contact.name?.trim() && contact.email?.trim());
+                                                        const currentLmIds = form.watch('localmileContactIds') || [];
+                                                        const isChecked = currentLmIds.includes(contact.id);
+
+                                                        return (
+                                                            <div
+                                                                key={contact.id}
+                                                                className={cn(
+                                                                    "flex items-center space-x-3 rounded-lg border p-3 bg-white dark:bg-slate-950 transition-all",
+                                                                    !isValidContact && "opacity-60 bg-muted/40",
+                                                                    isChecked && isValidContact && "border-primary/50 bg-primary/5 shadow-xs"
+                                                                )}
+                                                            >
+                                                                <Checkbox
+                                                                    id={`lm-signup-contact-${contact.id}`}
+                                                                    disabled={!isValidContact}
+                                                                    checked={isValidContact && isChecked}
+                                                                    onCheckedChange={(checked) => {
+                                                                        if (!isValidContact) return;
+                                                                        const nextIds = checked
+                                                                            ? [...currentLmIds, contact.id]
+                                                                            : currentLmIds.filter((id: string) => id !== contact.id);
+                                                                        form.setValue('localmileContactIds', nextIds, { shouldValidate: true });
+                                                                    }}
+                                                                />
+                                                                <Label
+                                                                    htmlFor={`lm-signup-contact-${contact.id}`}
+                                                                    className={cn(
+                                                                        "flex flex-col flex-1",
+                                                                        isValidContact ? "cursor-pointer" : "cursor-not-allowed"
+                                                                    )}
+                                                                >
+                                                                    <span className="font-semibold text-sm flex items-center gap-2">
+                                                                        {contact.name || 'Unnamed Contact'}
+                                                                        {contact.isPrimary && (
+                                                                            <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 py-0 px-1.5 h-3.5 font-bold">Primary</Badge>
+                                                                        )}
+                                                                        {contact.isAccountsPayable && (
+                                                                            <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-700 border-purple-200 py-0 px-1.5 h-3.5 font-bold">AP</Badge>
+                                                                        )}
+                                                                        {!isValidContact && (
+                                                                            <span className="text-xs text-destructive font-normal">(Name & email required)</span>
+                                                                        )}
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground">{contact.email || 'No email specified'}</span>
+                                                                </Label>
+                                                            </div>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <div className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 p-3 rounded-lg flex items-center gap-2">
+                                                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                                                        <span>No contacts available. You must add a contact before granting LocalMile access.</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {form.formState.errors.localmileContactIds && (
+                                                <p className="text-xs font-semibold text-destructive mt-1.5">
+                                                    {form.formState.errors.localmileContactIds.message as string}
+                                                </p>
+                                            )}
+
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full mt-2"
+                                                onClick={() => setIsAddingContact(true)}
+                                            >
+                                                <UserPlus className="mr-2 h-4 w-4" /> Add New Contact
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
 
                                 <FormField
                                 control={form.control}

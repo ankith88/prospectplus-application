@@ -31,10 +31,17 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   Phone,
   PhoneMissed,
   PhoneCall,
   PhoneIncoming,
+  PhoneOutgoing,
   Calendar as CalendarIcon,
   Download,
   Filter,
@@ -56,6 +63,10 @@ import {
   SlidersHorizontal,
   Info,
   UserCheck,
+  Sparkles,
+  FileText,
+  Mail,
+  Edit3,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -78,6 +89,7 @@ import { AccessDenied } from '@/components/access-denied';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
 import type { LeadStatus } from '@/lib/types';
 import type { InboundCallsReportResponse, EnrichedInboundCall, AircallNumber } from '@/services/aircall-reporting-server';
+import { ResolveMissedCallDialog } from './reports/resolve-missed-call-dialog';
 
 const PIE_COLORS = ['#ef4444', '#f97316', '#eab308', '#8b5cf6', '#06b6d4', '#64748b'];
 
@@ -87,6 +99,15 @@ function formatDurationSeconds(sec: number): string {
   const s = sec % 60;
   if (m === 0) return `${s}s`;
   return `${m}m ${s}s`;
+}
+
+function formatResponseTime(minutes?: number): string {
+  if (minutes === undefined || minutes === null) return '';
+  if (minutes < 1) return '< 1 min';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remMin = minutes % 60;
+  return remMin > 0 ? `${hours}h ${remMin}m` : `${hours}h`;
 }
 
 function normalizeDigits(phone?: string | null): string {
@@ -109,6 +130,7 @@ export default function MyInboundCallsClient() {
   const [appliedCallStatusFilter, setAppliedCallStatusFilter] = useState<'all' | 'missed' | 'answered'>('all');
   const [appliedMatchFilter, setAppliedMatchFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [appliedHoursFilter, setAppliedHoursFilter] = useState<'all' | 'in_hours' | 'out_of_hours'>('all');
+  const [appliedFollowupFilter, setAppliedFollowupFilter] = useState<'all' | 'unreturned' | 'callback' | 'lead_activity' | 'resolved'>('all');
 
   // Pending Filters (controlled by user inputs before applying)
   const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>(appliedDateRange);
@@ -117,11 +139,16 @@ export default function MyInboundCallsClient() {
   const [pendingCallStatusFilter, setPendingCallStatusFilter] = useState<'all' | 'missed' | 'answered'>('all');
   const [pendingMatchFilter, setPendingMatchFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [pendingHoursFilter, setPendingHoursFilter] = useState<'all' | 'in_hours' | 'out_of_hours'>('all');
+  const [pendingFollowupFilter, setPendingFollowupFilter] = useState<'all' | 'unreturned' | 'callback' | 'lead_activity' | 'resolved'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Aircall Numbers & Selection
   const [allAircallNumbers, setAllAircallNumbers] = useState<AircallNumber[]>([]);
   const [loadingNumbers, setLoadingNumbers] = useState<boolean>(true);
+
+  // Resolution Dialog State
+  const [resolutionCall, setResolutionCall] = useState<EnrichedInboundCall | null>(null);
+  const [isResolutionDialogOpen, setIsResolutionDialogOpen] = useState<boolean>(false);
 
   // Data states
   const [reportData, setReportData] = useState<InboundCallsReportResponse | null>(null);
@@ -218,8 +245,9 @@ export default function MyInboundCallsClient() {
     const statusChanged = pendingCallStatusFilter !== appliedCallStatusFilter;
     const matchChanged = pendingMatchFilter !== appliedMatchFilter;
     const hoursChanged = pendingHoursFilter !== appliedHoursFilter;
+    const followupChanged = pendingFollowupFilter !== appliedFollowupFilter;
 
-    return dateChanged || numberChanged || statusChanged || matchChanged || hoursChanged;
+    return dateChanged || numberChanged || statusChanged || matchChanged || hoursChanged || followupChanged;
   }, [
     pendingDateRange,
     appliedDateRange,
@@ -231,6 +259,8 @@ export default function MyInboundCallsClient() {
     appliedMatchFilter,
     pendingHoursFilter,
     appliedHoursFilter,
+    pendingFollowupFilter,
+    appliedFollowupFilter,
   ]);
 
   // 3. Fetch Inbound Calls for the logged in user's number(s)
@@ -304,11 +334,11 @@ export default function MyInboundCallsClient() {
         setPendingDateRange({ from: startOfDay(subDays(now, 14)), to: endOfDay(now) });
         break;
       case 'this_month':
-        setPendingDateRange({ from: startOfMonth(now), to: endOfMonth(now) });
+        setPendingDateRange({ from: startOfMonth(now), to: endOfDay(now) });
         break;
       case 'last_month': {
-        const prevMonth = subMonths(now, 1);
-        setPendingDateRange({ from: startOfMonth(prevMonth), to: endOfMonth(prevMonth) });
+        const prevM = subMonths(now, 1);
+        setPendingDateRange({ from: startOfMonth(prevM), to: endOfMonth(prevM) });
         break;
       }
       default:
@@ -316,7 +346,7 @@ export default function MyInboundCallsClient() {
     }
   };
 
-  // Explicit Apply Filters Action
+  // Apply Pending Filters
   const handleApplyFilters = () => {
     setAppliedDateRange(pendingDateRange);
     setAppliedDatePreset(pendingDatePreset);
@@ -324,12 +354,9 @@ export default function MyInboundCallsClient() {
     setAppliedCallStatusFilter(pendingCallStatusFilter);
     setAppliedMatchFilter(pendingMatchFilter);
     setAppliedHoursFilter(pendingHoursFilter);
+    setAppliedFollowupFilter(pendingFollowupFilter);
 
     fetchReport(pendingDateRange, pendingNumberId);
-    toast({
-      title: 'Filters Applied',
-      description: 'Your inbound calls have been updated.',
-    });
   };
 
   // Reset Filters to Default
@@ -344,6 +371,7 @@ export default function MyInboundCallsClient() {
     setPendingCallStatusFilter('all');
     setPendingMatchFilter('all');
     setPendingHoursFilter('all');
+    setPendingFollowupFilter('all');
     setSearchQuery('');
 
     setAppliedDateRange(defRange);
@@ -352,48 +380,86 @@ export default function MyInboundCallsClient() {
     setAppliedCallStatusFilter('all');
     setAppliedMatchFilter('all');
     setAppliedHoursFilter('all');
+    setAppliedFollowupFilter('all');
 
     fetchReport(defRange, 'all_my_lines');
-    toast({
-      title: 'Filters Reset',
-      description: 'Reset back to default Last 7 Days for all your lines.',
+  };
+
+  // Update a single call after resolution
+  const handleCallResolved = (updatedCall: EnrichedInboundCall) => {
+    if (!reportData) return;
+    const updatedCalls = reportData.calls.map((c) => (c.id === updatedCall.id ? updatedCall : c));
+
+    let totalResolved = 0;
+    let totalMissed = 0;
+    updatedCalls.forEach((c) => {
+      if (c.callType === 'missed') {
+        totalMissed++;
+        if (c.followup.status !== 'unreturned') totalResolved++;
+      }
+    });
+
+    const followupRate = totalMissed > 0 ? Number(((totalResolved / totalMissed) * 100).toFixed(1)) : 100;
+    const unaddressedMissedCount = totalMissed - totalResolved;
+
+    setReportData({
+      ...reportData,
+      summary: {
+        ...reportData.summary,
+        resolvedCount: totalResolved,
+        unreturnedCount: unaddressedMissedCount,
+        unaddressedMissedCount,
+        followupRate,
+      },
+      calls: updatedCalls,
     });
   };
 
-  // Filter and Search Calls using APPLIED filters + real-time search query
+  // Client-side filtering on calls
   const filteredCalls = useMemo(() => {
-    if (!reportData?.calls) return [];
+    if (!reportData || !reportData.calls) return [];
 
     return reportData.calls.filter((call) => {
-      // Applied Call status filter
+      // 1. Call status filter
       if (appliedCallStatusFilter === 'missed' && call.callType !== 'missed') return false;
       if (appliedCallStatusFilter === 'answered' && call.callType !== 'answered') return false;
 
-      // Applied Match filter
+      // 2. Lead Match filter
       if (appliedMatchFilter === 'matched' && !call.matchedLead) return false;
       if (appliedMatchFilter === 'unmatched' && call.matchedLead) return false;
 
-      // Applied Hours filter
+      // 3. Opening Hours filter
       const isOOH = call.missedReason === 'Out of Opening Hours';
       if (appliedHoursFilter === 'in_hours' && isOOH) return false;
       if (appliedHoursFilter === 'out_of_hours' && !isOOH) return false;
 
-      // Search query filter
+      // 4. Follow-up Status filter
+      if (appliedFollowupFilter === 'unreturned') {
+        if (call.callType !== 'missed' || call.followup.status !== 'unreturned') return false;
+      } else if (appliedFollowupFilter === 'callback') {
+        if (call.followup.status !== 'callback_connected' && call.followup.status !== 'callback_attempted') return false;
+      } else if (appliedFollowupFilter === 'lead_activity') {
+        if (call.followup.status !== 'lead_activity') return false;
+      } else if (appliedFollowupFilter === 'resolved') {
+        if (call.followup.status !== 'resolved_manually') return false;
+      }
+
+      // 5. Search query filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesPhone = call.callerNumber.toLowerCase().includes(q);
-        const matchesLead = call.matchedLead?.companyName?.toLowerCase().includes(q);
+        const matchesLead = call.matchedLead?.companyName.toLowerCase().includes(q);
         const matchesContact = call.matchedLead?.contactName?.toLowerCase().includes(q);
-        const matchesRep = call.matchedLead?.assignedRep?.toLowerCase().includes(q);
         const matchesLine = call.aircallNumberName.toLowerCase().includes(q);
         const matchesReason = call.missedReason.toLowerCase().includes(q);
+        const matchesFollowup = call.followup.label.toLowerCase().includes(q) || (call.followup.author && call.followup.author.toLowerCase().includes(q));
 
-        return matchesPhone || matchesLead || matchesContact || matchesRep || matchesLine || matchesReason;
+        return matchesPhone || matchesLead || matchesContact || matchesLine || matchesReason || matchesFollowup;
       }
 
       return true;
     });
-  }, [reportData, appliedCallStatusFilter, appliedMatchFilter, appliedHoursFilter, searchQuery]);
+  }, [reportData, appliedCallStatusFilter, appliedMatchFilter, appliedHoursFilter, appliedFollowupFilter, searchQuery]);
 
   const copyPhoneNumber = (phone: string) => {
     navigator.clipboard.writeText(phone);
@@ -416,28 +482,34 @@ export default function MyInboundCallsClient() {
       'Call ID',
       'Date & Time (AEST)',
       'Call Type',
-      'My Aircall Line',
-      'Line Digits',
+      'Follow-Up Status',
+      'Follow-Up Action',
+      'Follow-Up By',
+      'Response Time (Mins)',
+      'Aircall Line Name',
+      'Aircall Line Digits',
       'Incoming Caller Phone',
-      'Matched Lead / Company',
+      'Matched Lead',
       'Lead Status',
-      'Contact Person',
-      'Assigned Lead Rep',
-      'Outcome / Reason',
-      'Call Duration (seconds)',
+      'Contact Name',
+      'Reason / Outcome',
+      'Duration (Seconds)',
     ];
 
     const rows = filteredCalls.map((c) => [
       c.id,
       format(new Date(c.startedAt), 'dd/MM/yyyy HH:mm:ss'),
       `"${c.callType.toUpperCase()}"`,
+      `"${c.followup.status}"`,
+      `"${c.followup.label}"`,
+      `"${c.followup.author || 'N/A'}"`,
+      c.followup.responseTimeMinutes ?? 'N/A',
       `"${c.aircallNumberName}"`,
       `"${c.aircallNumberDigits}"`,
       `"${c.callerNumber}"`,
-      `"${c.matchedLead?.companyName || 'Unregistered Caller'}"`,
+      `"${c.matchedLead?.companyName || 'Unmatched'}"`,
       `"${c.matchedLead?.status || 'N/A'}"`,
       `"${c.matchedLead?.contactName || 'N/A'}"`,
-      `"${c.matchedLead?.assignedRep || 'N/A'}"`,
       `"${c.missedReason}"`,
       c.duration,
     ]);
@@ -457,710 +529,801 @@ export default function MyInboundCallsClient() {
     });
   };
 
+  const openResolutionModal = (call: EnrichedInboundCall) => {
+    setResolutionCall(call);
+    setIsResolutionDialogOpen(true);
+  };
+
   if (authLoading || loadingNumbers) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+      <div className="flex flex-col items-center justify-center py-24">
         <Loader />
-        <p className="text-sm font-medium text-slate-500 animate-pulse">Loading your Aircall profile & call history...</p>
+        <p className="text-sm text-slate-500 mt-3 animate-pulse">Detecting your Aircall phone line...</p>
       </div>
     );
   }
 
-  // If user has no linked Aircall number
-  if (userLinkedNumbers.length === 0) {
-    return <AccessDenied />;
-  }
-
-  // Active Linked Line Details
-  const primaryLine = userLinkedNumbers[0];
-  const isMultiLine = userLinkedNumbers.length > 1;
-
   return (
-    <div className="container max-w-7xl mx-auto py-6 px-4 sm:px-6 space-y-6">
-      {/* Top Header & Context */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-5">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-              <PhoneIncoming className="h-7 w-7 text-[#095c7b]" />
-              My Inbound Calls
-            </h1>
-            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 border-emerald-200 text-xs font-semibold flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              {userLinkedNumbers.length === 1
-                ? `${primaryLine.name} (${primaryLine.digits})`
-                : `${userLinkedNumbers.length} Linked Lines`}
-            </Badge>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Tracking all incoming and missed calls received on your Aircall line, with automatic lead & customer attribution.
-          </p>
-        </div>
-
-        {/* Global Action Buttons */}
-        <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchReport(appliedDateRange, appliedNumberId, true)}
-            disabled={loading || isRefreshing}
-            className="text-xs gap-1.5 h-9 bg-white dark:bg-slate-800"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={exportToCSV}
-            disabled={loading || !filteredCalls.length}
-            className="text-xs gap-1.5 h-9 bg-white dark:bg-slate-800"
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span>Export CSV</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* Filter Toolbar */}
-      <Card className="border shadow-sm bg-slate-50/50 dark:bg-slate-900/50">
-        <CardContent className="p-4 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Date Preset Selector */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                <CalendarIcon className="h-3.5 w-3.5" /> Period:
-              </span>
-              <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-lg border text-xs shadow-sm">
-                {[
-                  { id: 'today', label: 'Today' },
-                  { id: 'yesterday', label: 'Yesterday' },
-                  { id: 'last_7_days', label: 'Last 7 Days' },
-                  { id: 'last_14_days', label: '14 Days' },
-                  { id: 'this_month', label: 'This Month' },
-                  { id: 'last_month', label: 'Last Month' },
-                ].map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => handlePresetChange(p.id)}
-                    className={`px-2.5 py-1 rounded-md transition font-medium ${
-                      pendingDatePreset === p.id
-                        ? 'bg-[#095c7b] text-white shadow-xs font-semibold'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Custom Date Picker Popover */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`h-8 text-xs gap-1.5 bg-white dark:bg-slate-800 ${
-                      pendingDatePreset === 'custom' ? 'border-[#095c7b] text-[#095c7b] font-semibold' : ''
-                    }`}
-                  >
-                    <CalendarIcon className="h-3.5 w-3.5" />
-                    <span>
-                      {pendingDateRange?.from ? (
-                        pendingDateRange.to ? (
-                          <>
-                            {format(pendingDateRange.from, 'dd MMM')} - {format(pendingDateRange.to, 'dd MMM yyyy')}
-                          </>
-                        ) : (
-                          format(pendingDateRange.from, 'dd MMM yyyy')
-                        )
-                      ) : (
-                        'Custom Date'
-                      )}
-                    </span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={pendingDateRange?.from}
-                    selected={pendingDateRange}
-                    onSelect={(range) => {
-                      setPendingDateRange(range);
-                      setPendingDatePreset('custom');
-                    }}
-                    numberOfMonths={2}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* If user has multiple linked numbers, show line switcher */}
-            {isMultiLine && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-slate-500">My Line:</span>
-                <Select value={pendingNumberId} onValueChange={setPendingNumberId}>
-                  <SelectTrigger className="h-8 text-xs w-[220px] bg-white dark:bg-slate-800">
-                    <SelectValue placeholder="All My Lines" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all_my_lines">All My Lines ({userLinkedNumbers.length})</SelectItem>
-                    {userLinkedNumbers.map((num) => (
-                      <SelectItem key={num.id} value={String(num.id)}>
-                        {num.name} ({num.digits})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-
-          {/* Secondary Quick Filters */}
-          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-200/80 dark:border-slate-800">
-            {/* Call Status Filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-slate-500">Status:</span>
-              <Select
-                value={pendingCallStatusFilter}
-                onValueChange={(val: any) => setPendingCallStatusFilter(val)}
-              >
-                <SelectTrigger className="h-8 text-xs w-[140px] bg-white dark:bg-slate-800">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Inbound</SelectItem>
-                  <SelectItem value="missed">Missed Only</SelectItem>
-                  <SelectItem value="answered">Answered Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Lead Match Filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-slate-500">CRM Match:</span>
-              <Select
-                value={pendingMatchFilter}
-                onValueChange={(val: any) => setPendingMatchFilter(val)}
-              >
-                <SelectTrigger className="h-8 text-xs w-[150px] bg-white dark:bg-slate-800">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Callers</SelectItem>
-                  <SelectItem value="matched">Matched in CRM</SelectItem>
-                  <SelectItem value="unmatched">Unregistered Caller</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Business Hours Filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-slate-500">Hours:</span>
-              <Select
-                value={pendingHoursFilter}
-                onValueChange={(val: any) => setPendingHoursFilter(val)}
-              >
-                <SelectTrigger className="h-8 text-xs w-[140px] bg-white dark:bg-slate-800">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Hours</SelectItem>
-                  <SelectItem value="in_hours">Business Hours</SelectItem>
-                  <SelectItem value="out_of_hours">After Hours</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Action Bar with Apply Filters and Reset */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200/80 dark:border-slate-800">
+    <TooltipProvider>
+      <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-5">
+          <div>
             <div className="flex items-center gap-2">
-              <Button
-                onClick={handleApplyFilters}
-                disabled={loading}
-                className={`h-9 px-4 text-xs font-semibold gap-2 transition-all duration-200 shadow-sm ${
-                  hasUnappliedFilters
-                    ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-300 dark:ring-amber-800 scale-[1.02]'
-                    : 'bg-[#095c7b] hover:bg-[#07475e] text-white'
-                }`}
-              >
-                <Filter className="h-3.5 w-3.5" />
-                <span>{hasUnappliedFilters ? 'Apply Filters (Unsaved Changes)' : 'Apply Filters'}</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={handleResetFilters}
-                disabled={loading}
-                className="h-9 px-3 text-xs bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-              >
-                Reset
-              </Button>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                My Inbound & Missed Calls
+              </h1>
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 font-semibold px-2.5 py-0.5">
+                Personal Line
+              </Badge>
             </div>
-
-            {hasUnappliedFilters && (
-              <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-md border border-amber-200 dark:border-amber-800">
-                Click &quot;Apply Filters&quot; to update your calls list
-              </span>
-            )}
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Your direct inbound calls log with live callback verification, lead activity tracking, and quick follow-up tools.
+            </p>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Inbound Calls */}
-        <Card className="border shadow-sm bg-gradient-to-br from-white to-blue-50/40 dark:from-slate-900 dark:to-blue-950/20">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-              Total Inbound Calls
-            </CardTitle>
-            <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-600 dark:text-blue-400">
-              <PhoneIncoming className="h-5 w-5" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
-              {loading ? '-' : reportData?.summary.totalInbound ?? 0}
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {loading ? '-' : `Across ${reportData?.calls.length || 0} recorded sessions`}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Answered Calls */}
-        <Card className="border shadow-sm bg-gradient-to-br from-white to-emerald-50/40 dark:from-slate-900 dark:to-emerald-950/20">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-              Answered Calls
-            </CardTitle>
-            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600 dark:text-emerald-400">
-              <PhoneCall className="h-5 w-5" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
-              {loading ? '-' : reportData?.summary.totalAnswered ?? 0}
-            </div>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1 font-medium">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              <span>{loading ? '-' : `${reportData?.summary.answeredRate ?? 0}% Answer Rate`}</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Missed Calls */}
-        <Card className="border shadow-sm bg-gradient-to-br from-white to-red-50/40 dark:from-slate-900 dark:to-red-950/20">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-              Missed Calls
-            </CardTitle>
-            <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-lg text-red-600 dark:text-red-400">
-              <PhoneMissed className="h-5 w-5" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
-              {loading ? '-' : reportData?.summary.totalMissed ?? 0}
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-              <span>Missed Rate:</span>
-              <span className="font-semibold text-red-600 dark:text-red-400">
-                {loading ? '-' : `${reportData?.summary.missedRate ?? 0}%`}
-              </span>
-              <span className="text-slate-400">({reportData?.summary.inHoursMissed ?? 0} in-hours)</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Matched CRM Leads */}
-        <Card className="border shadow-sm bg-gradient-to-br from-white to-purple-50/40 dark:from-slate-900 dark:to-purple-950/20">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-              Matched Prospect+ Leads
-            </CardTitle>
-            <div className="p-2 bg-purple-100 dark:bg-purple-900/50 rounded-lg text-purple-600 dark:text-purple-400">
-              <Building className="h-5 w-5" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
-              {loading ? '-' : reportData?.summary.matchedLeadsCount ?? 0}
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {loading ? '-' : `${reportData?.summary.unmatchedCount ?? 0} unregistered callers`}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content Area */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-slate-900 rounded-xl border">
-          <Loader />
-          <p className="text-sm text-slate-500 mt-3 animate-pulse">Syncing calls from your Aircall line...</p>
+          <div className="flex items-center gap-2 self-stretch sm:self-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchReport(appliedDateRange, appliedNumberId, true)}
+              disabled={loading || isRefreshing}
+              className="flex items-center gap-1.5 shadow-sm"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToCSV}
+              disabled={loading || filteredCalls.length === 0}
+              className="flex items-center gap-1.5 shadow-sm"
+            >
+              <Download className="h-4 w-4" />
+              <span>Export CSV</span>
+            </Button>
+          </div>
         </div>
-      ) : (
-        <div className="flex flex-col gap-6">
-          {/* Navigation View Tabs */}
-          <div className="flex items-center justify-between border-b">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setActiveTab('calls')}
-                className={`pb-3 px-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'calls'
-                    ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 font-semibold'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'
-                }`}
-              >
-                Inbound Calls Log ({filteredCalls.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('analytics')}
-                className={`pb-3 px-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'analytics'
-                    ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 font-semibold'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'
-                }`}
-              >
-                Visual Analytics & Peak Times
-              </button>
-            </div>
-          </div>
 
-          {/* TAB 1: CALLS LOG */}
-          {activeTab === 'calls' && (
-            <Card className="border shadow-sm">
-              <CardHeader className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b bg-slate-50/40 dark:bg-slate-900/40">
-                <div>
-                  <CardTitle className="text-base font-semibold">Incoming Calls Log</CardTitle>
-                  <CardDescription className="text-xs">
-                    Showing {filteredCalls.length} inbound calls received on your Aircall line with Prospect+ CRM matching.
-                  </CardDescription>
+        {/* Warning if no lines matched to user */}
+        {userLinkedNumbers.length === 0 ? (
+          <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+            <CardContent className="p-6 flex flex-col sm:flex-row items-center gap-4">
+              <div className="p-3 bg-amber-100 rounded-full text-amber-800 shrink-0">
+                <AlertCircle className="h-6 w-6" />
+              </div>
+              <div className="flex-1 text-center sm:text-left">
+                <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  No Personal Aircall Line Auto-Detected
+                </h3>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                  We could not automatically detect an Aircall number matching your profile email ({user?.email}) or name ({userProfile?.displayName || userProfile?.name}).
+                  Please make sure your Aircall User ID or Phone Number is configured in your user profile, or visit the global Inbound Calls Report.
+                </p>
+                <div className="mt-3 flex items-center gap-3 justify-center sm:justify-start">
+                  <Link href="/reports/missed-calls">
+                    <Button size="sm" variant="outline" className="text-xs h-8 bg-white dark:bg-slate-800">
+                      View All Aircall Lines Report
+                    </Button>
+                  </Link>
                 </div>
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                  <Input
-                    placeholder="Search phone, lead, contact..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 h-9 text-xs bg-white dark:bg-slate-800"
-                  />
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Filter Toolbar */}
+            <Card className="border shadow-sm bg-slate-50/50 dark:bg-slate-900/40">
+              <CardContent className="p-4 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {/* Date Range Preset */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Timeframe</label>
+                    <Select value={pendingDatePreset} onValueChange={handlePresetChange}>
+                      <SelectTrigger className="bg-white dark:bg-slate-800">
+                        <SelectValue placeholder="Select timeframe" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="yesterday">Yesterday</SelectItem>
+                        <SelectItem value="last_7_days">Last 7 Days</SelectItem>
+                        <SelectItem value="last_14_days">Last 14 Days</SelectItem>
+                        <SelectItem value="this_month">This Month</SelectItem>
+                        <SelectItem value="last_month">Last Month</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Custom Date Range Popover */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Date Range</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start text-left font-normal bg-white dark:bg-slate-800 text-xs">
+                          <CalendarIcon className="mr-2 h-4 w-4 text-slate-500" />
+                          {pendingDateRange?.from ? (
+                            pendingDateRange.to ? (
+                              <>
+                                {format(pendingDateRange.from, 'dd MMM')} - {format(pendingDateRange.to, 'dd MMM yyyy')}
+                              </>
+                            ) : (
+                              format(pendingDateRange.from, 'dd MMM yyyy')
+                            )
+                          ) : (
+                            <span>Pick date range</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          initialFocus
+                          mode="range"
+                          defaultMonth={pendingDateRange?.from}
+                          selected={pendingDateRange}
+                          onSelect={(range) => {
+                            setPendingDateRange(range);
+                            setPendingDatePreset('custom');
+                          }}
+                          numberOfMonths={2}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Call Status Filter */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Call Type</label>
+                    <Select value={pendingCallStatusFilter} onValueChange={(v: any) => setPendingCallStatusFilter(v)}>
+                      <SelectTrigger className="bg-white dark:bg-slate-800">
+                        <SelectValue placeholder="All Calls" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Inbound Calls</SelectItem>
+                        <SelectItem value="missed">Missed Calls Only</SelectItem>
+                        <SelectItem value="answered">Answered Calls Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Follow-Up Filter */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Follow-Up Status</label>
+                    <Select value={pendingFollowupFilter} onValueChange={(v: any) => setPendingFollowupFilter(v)}>
+                      <SelectTrigger className="bg-white dark:bg-slate-800">
+                        <SelectValue placeholder="All Follow-ups" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Follow-Up States</SelectItem>
+                        <SelectItem value="unreturned">🔴 Action Needed</SelectItem>
+                        <SelectItem value="callback">🟢 Callback Made</SelectItem>
+                        <SelectItem value="lead_activity">🔵 CRM Activity Logged</SelectItem>
+                        <SelectItem value="resolved">⚪ Resolved Manually</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* User Line Selector */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">My Line</label>
+                    <Select value={pendingNumberId} onValueChange={setPendingNumberId}>
+                      <SelectTrigger className="bg-white dark:bg-slate-800">
+                        <SelectValue placeholder="Select Line" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {userLinkedNumbers.length > 1 && (
+                          <SelectItem value="all_my_lines">
+                            All My Lines ({userLinkedNumbers.length})
+                          </SelectItem>
+                        )}
+                        {userLinkedNumbers.map((num) => (
+                          <SelectItem key={num.id} value={String(num.id)}>
+                            {num.name} ({num.digits})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Lead Match Filter */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Lead Match</label>
+                    <Select value={pendingMatchFilter} onValueChange={(v: any) => setPendingMatchFilter(v)}>
+                      <SelectTrigger className="bg-white dark:bg-slate-800">
+                        <SelectValue placeholder="All Callers" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Callers</SelectItem>
+                        <SelectItem value="matched">Matched Leads Only</SelectItem>
+                        <SelectItem value="unmatched">Unregistered Numbers</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader className="bg-slate-50 dark:bg-slate-900">
-                      <TableRow>
-                        <TableHead className="w-[150px]">Date & Time</TableHead>
-                        <TableHead className="w-[120px]">Status</TableHead>
-                        <TableHead className="w-[160px]">Incoming Phone</TableHead>
-                        <TableHead>Matched Prospect+ Lead</TableHead>
-                        <TableHead className="w-[140px]">Lead Assigned Rep</TableHead>
-                        <TableHead className="w-[150px]">Outcome / Reason</TableHead>
-                        {isMultiLine && <TableHead className="w-[160px]">Line Received</TableHead>}
-                        <TableHead className="text-right w-[130px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredCalls.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={isMultiLine ? 8 : 7} className="h-40 text-center text-slate-500">
-                            <div className="flex flex-col items-center justify-center gap-1">
-                              <CheckCircle2 className="h-8 w-8 text-emerald-500 mb-1" />
-                              <p className="font-semibold text-slate-800 dark:text-slate-200">No Calls Found</p>
-                              <p className="text-xs text-slate-400">
-                                {searchQuery ? 'Try adjusting your search criteria.' : 'No inbound calls match the selected filters.'}
-                              </p>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredCalls.map((call) => {
-                          const callDate = new Date(call.startedAt);
-                          const isMissed = call.callType === 'missed';
-                          const isOOH = call.missedReason === 'Out of Opening Hours';
 
-                          return (
-                            <TableRow key={call.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
-                              {/* Date & Time */}
-                              <TableCell className="text-xs">
-                                <div className="font-medium text-slate-900 dark:text-white">
-                                  {format(callDate, 'dd MMM yyyy')}
-                                </div>
-                                <div className="text-slate-500 text-[11px] flex items-center gap-1 mt-0.5">
-                                  <Clock className="h-3 w-3" />
-                                  {format(callDate, 'hh:mm a')}
-                                </div>
-                              </TableCell>
+                {/* Action Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200/80 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={handleApplyFilters}
+                      disabled={loading}
+                      className={`h-9 px-4 text-xs font-semibold gap-2 transition-all duration-200 shadow-sm ${
+                        hasUnappliedFilters
+                          ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-300 scale-[1.02]'
+                          : 'bg-[#095c7b] hover:bg-[#07475e] text-white'
+                      }`}
+                    >
+                      <Filter className="h-3.5 w-3.5" />
+                      <span>{hasUnappliedFilters ? 'Apply Filters (Unsaved Changes)' : 'Apply Filters'}</span>
+                    </Button>
 
-                              {/* Status Badge */}
-                              <TableCell className="text-xs">
-                                {isMissed ? (
-                                  <Badge variant="destructive" className="bg-red-50 text-red-700 hover:bg-red-100 border-red-200 text-[11px] font-semibold">
-                                    Missed
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px] font-semibold">
-                                    Answered ({formatDurationSeconds(call.duration)})
-                                  </Badge>
-                                )}
-                              </TableCell>
+                    <Button
+                      variant="outline"
+                      onClick={handleResetFilters}
+                      disabled={loading}
+                      className="h-9 px-3 text-xs bg-white dark:bg-slate-800 text-slate-600"
+                    >
+                      Reset
+                    </Button>
+                  </div>
 
-                              {/* Incoming Caller Phone */}
-                              <TableCell className="text-xs font-mono">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-medium text-slate-900 dark:text-slate-100">{call.callerNumber}</span>
-                                  <button
-                                    onClick={() => copyPhoneNumber(call.callerNumber)}
-                                    className="text-slate-400 hover:text-slate-600 p-0.5 rounded transition"
-                                    title="Copy Phone Number"
-                                  >
-                                    {copiedPhone === call.callerNumber ? (
-                                      <Check className="h-3 w-3 text-emerald-600" />
-                                    ) : (
-                                      <Copy className="h-3 w-3" />
-                                    )}
-                                  </button>
-                                </div>
-                              </TableCell>
-
-                              {/* Matched Lead */}
-                              <TableCell className="text-xs">
-                                {call.matchedLead ? (
-                                  <div className="flex flex-col gap-1">
-                                    <div className="flex items-center gap-2">
-                                      <Link
-                                        href={call.matchedLead.leadUrl}
-                                        className="font-semibold text-blue-600 hover:underline flex items-center gap-1"
-                                      >
-                                        {call.matchedLead.companyName}
-                                        <ArrowUpRight className="h-3 w-3 inline" />
-                                      </Link>
-                                      <LeadStatusBadge status={call.matchedLead.status as LeadStatus} />
-                                    </div>
-                                    {call.matchedLead.contactName && (
-                                      <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                                        <User className="h-3 w-3 text-slate-400" />
-                                        <span>{call.matchedLead.contactName}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200 text-[10px] font-normal">
-                                    Unregistered Caller
-                                  </Badge>
-                                )}
-                              </TableCell>
-
-                              {/* Lead Assigned Rep */}
-                              <TableCell className="text-xs text-slate-700 dark:text-slate-300">
-                                {call.matchedLead?.assignedRep ? (
-                                  <span className="font-medium">{call.matchedLead.assignedRep}</span>
-                                ) : (
-                                  <span className="text-slate-400 italic">Unassigned</span>
-                                )}
-                              </TableCell>
-
-                              {/* Outcome / Reason */}
-                              <TableCell className="text-xs">
-                                <Badge
-                                  variant="secondary"
-                                  className={`text-[11px] font-medium border ${
-                                    isMissed
-                                      ? isOOH
-                                        ? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300'
-                                        : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400'
-                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  }`}
-                                >
-                                  {call.missedReason}
-                                </Badge>
-                              </TableCell>
-
-                              {/* Line Received (if multiple) */}
-                              {isMultiLine && (
-                                <TableCell className="text-xs">
-                                  <div className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[140px]">
-                                    {call.aircallNumberName}
-                                  </div>
-                                  <div className="text-slate-400 text-[11px] font-mono">
-                                    {call.aircallNumberDigits}
-                                  </div>
-                                </TableCell>
-                              )}
-
-                              {/* Actions */}
-                              <TableCell className="text-right text-xs">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  {/* Call Back Link */}
-                                  <a
-                                    href={`tel:${call.callerNumber.replace(/\s+/g, '')}`}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 rounded-md transition shadow-sm"
-                                    title="Call back via phone dialer"
-                                  >
-                                    <PhoneCall className="h-3 w-3" />
-                                    <span>Call</span>
-                                  </a>
-
-                                  {call.matchedLead ? (
-                                    <Link
-                                      href={call.matchedLead.leadUrl}
-                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-md border"
-                                    >
-                                      <span>View</span>
-                                    </Link>
-                                  ) : (
-                                    <Link
-                                      href={`/leads?create=true&phone=${encodeURIComponent(call.callerNumber)}`}
-                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200"
-                                      title="Create new lead from this phone number"
-                                    >
-                                      <span>+ Lead</span>
-                                    </Link>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
+                  {hasUnappliedFilters && (
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-md border border-amber-200">
+                      Click &quot;Apply Filters&quot; to load data with your new criteria
+                    </span>
+                  )}
                 </div>
               </CardContent>
             </Card>
-          )}
 
-          {/* TAB 2: ANALYTICS */}
-          {activeTab === 'analytics' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Hourly Call Distribution */}
-              <Card className="border shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-[#095c7b]" />
-                    Hourly Call Traffic
+            {/* KPI Metric Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              {/* Total Inbound */}
+              <Card className="border shadow-sm bg-gradient-to-br from-white to-blue-50/40 dark:from-slate-900 dark:to-blue-950/20">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Total Inbound
                   </CardTitle>
-                  <CardDescription className="text-xs">
-                    Inbound and missed call distribution by hour of day (Sydney AEST/AEDT)
-                  </CardDescription>
+                  <div className="p-1.5 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-600 dark:text-blue-400">
+                    <PhoneIncoming className="h-4 w-4" />
+                  </div>
                 </CardHeader>
-                <CardContent className="h-[300px] pt-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={reportData?.hourlyDistribution || []}
-                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={2} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <ChartTooltip />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="answeredCount" name="Answered" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="missedCount" name="Missed" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <CardContent>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-white">
+                    {loading ? '-' : reportData?.summary.totalInbound ?? 0}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">Calls to your line</p>
                 </CardContent>
               </Card>
 
-              {/* Day of Week Distribution */}
-              <Card className="border shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
-                    <BarChart2 className="h-4 w-4 text-[#095c7b]" />
-                    Day of Week Activity
+              {/* Answered Calls */}
+              <Card className="border shadow-sm bg-gradient-to-br from-white to-emerald-50/40 dark:from-slate-900 dark:to-emerald-950/20">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Answered Calls
                   </CardTitle>
-                  <CardDescription className="text-xs">
-                    Volume of inbound calls across days of the week
-                  </CardDescription>
+                  <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
                 </CardHeader>
-                <CardContent className="h-[300px] pt-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={reportData?.dayOfWeekDistribution || []}
-                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <ChartTooltip />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="inboundCount" name="Total Inbound" fill="#095c7b" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="missedCount" name="Missed" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <CardContent>
+                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                    {loading ? '-' : reportData?.summary.totalAnswered ?? 0}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {loading ? '-' : `${reportData?.summary.answeredRate ?? 0}% Answered Rate`}
+                  </p>
                 </CardContent>
               </Card>
 
-              {/* Missed Call Reasons */}
-              <Card className="border shadow-sm lg:col-span-2">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
-                    <PieChartIcon className="h-4 w-4 text-[#095c7b]" />
-                    Missed Call Reasons
+              {/* Missed Calls */}
+              <Card className="border shadow-sm bg-gradient-to-br from-white to-red-50/40 dark:from-slate-900 dark:to-red-950/20">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Missed Calls
                   </CardTitle>
-                  <CardDescription className="text-xs">
-                    Breakdown of reasons why calls went unanswered
-                  </CardDescription>
+                  <div className="p-1.5 bg-red-100 dark:bg-red-900/50 rounded-lg text-red-600 dark:text-red-400">
+                    <PhoneMissed className="h-4 w-4" />
+                  </div>
                 </CardHeader>
-                <CardContent className="p-6">
-                  {reportData?.reasonsBreakdown && reportData.reasonsBreakdown.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                      <div className="h-[240px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={reportData.reasonsBreakdown}
-                              dataKey="count"
-                              nameKey="label"
-                              cx="50%"
-                              cy="50%"
-                              outerRadius={80}
-                              label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                            >
-                              {reportData.reasonsBreakdown.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                              ))}
-                            </Pie>
-                            <ChartTooltip />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                    {loading ? '-' : reportData?.summary.totalMissed ?? 0}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {loading ? '-' : `${reportData?.summary.inHoursMissed ?? 0} in-hours missed`}
+                  </p>
+                </CardContent>
+              </Card>
 
-                      <div className="space-y-3">
-                        {reportData.reasonsBreakdown.map((r, i) => (
-                          <div key={r.reason} className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="w-3 h-3 rounded-full"
-                                style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
-                              />
-                              <span className="font-medium text-slate-800 dark:text-slate-200">{r.label}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 dark:text-white">{r.count}</span>
-                              <span className="text-slate-400">({r.percentage}%)</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-10 text-slate-400 text-xs">
-                      No missed call reasons recorded in this period.
-                    </div>
-                  )}
+              {/* Follow-up Rate */}
+              <Card className="border shadow-sm bg-gradient-to-br from-white to-purple-50/40 dark:from-slate-900 dark:to-purple-950/20">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Follow-Up Rate
+                  </CardTitle>
+                  <div className="p-1.5 bg-purple-100 dark:bg-purple-900/50 rounded-lg text-purple-600 dark:text-purple-400">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-2xl font-bold ${
+                      (reportData?.summary.followupRate ?? 100) >= 80
+                        ? 'text-emerald-600'
+                        : (reportData?.summary.followupRate ?? 100) >= 50
+                        ? 'text-amber-600'
+                        : 'text-red-600'
+                    }`}>
+                      {loading ? '-' : `${reportData?.summary.followupRate ?? 100}%`}
+                    </span>
+                    <span className="text-xs text-slate-500">followed up</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 text-xs">
+                    {(reportData?.summary.unaddressedMissedCount ?? 0) > 0 ? (
+                      <Badge variant="destructive" className="text-[10px] font-semibold py-0 px-1.5 bg-red-100 text-red-800 border-red-200">
+                        {reportData?.summary.unaddressedMissedCount} Action Needed
+                      </Badge>
+                    ) : (
+                      <span className="text-emerald-600 text-xs font-medium flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" /> All followed up
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Avg Response Time */}
+              <Card className="border shadow-sm bg-gradient-to-br from-white to-indigo-50/40 dark:from-slate-900 dark:to-indigo-950/20">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Avg Response Time
+                  </CardTitle>
+                  <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg text-indigo-600 dark:text-indigo-400">
+                    <Clock className="h-4 w-4" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-white">
+                    {loading ? '-' : reportData?.summary.avgResponseTimeMinutes ? formatResponseTime(reportData.summary.avgResponseTimeMinutes) : 'N/A'}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {loading ? '-' : `${reportData?.summary.callbackCount ?? 0} callbacks & ${(reportData?.summary.leadActivityCount ?? 0) + (reportData?.summary.manualResolvedCount ?? 0)} CRM actions`}
+                  </p>
                 </CardContent>
               </Card>
             </div>
-          )}
-        </div>
-      )}
-    </div>
+
+            {/* Main Content Area */}
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-slate-900 rounded-xl border">
+                <Loader />
+                <p className="text-sm text-slate-500 mt-3 animate-pulse">Syncing call records from Aircall & CRM activities...</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {/* Navigation View Tabs */}
+                <div className="flex items-center justify-between border-b">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setActiveTab('calls')}
+                      className={`pb-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === 'calls'
+                          ? 'border-blue-600 text-blue-600 font-semibold'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      My Calls Log ({filteredCalls.length})
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('analytics')}
+                      className={`pb-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === 'analytics'
+                          ? 'border-blue-600 text-blue-600 font-semibold'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Call Analytics & Peak Times
+                    </button>
+                  </div>
+                </div>
+
+                {/* TAB 1: CALLS LOG */}
+                {activeTab === 'calls' && (
+                  <Card className="border shadow-sm">
+                    <CardHeader className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b bg-slate-50/40 dark:bg-slate-900/40">
+                      <div>
+                        <CardTitle className="text-base font-semibold">Inbound Calls & Callback Verification</CardTitle>
+                        <CardDescription className="text-xs">
+                          Showing {filteredCalls.length} inbound calls to your lines with automatic callback detection and follow-up logging.
+                        </CardDescription>
+                      </div>
+                      <div className="relative w-full sm:w-64">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                        <Input
+                          placeholder="Search phone, lead, note..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-9 h-9 text-xs bg-white dark:bg-slate-800"
+                        />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader className="bg-slate-50 dark:bg-slate-900">
+                            <TableRow>
+                              <TableHead className="w-[140px]">Date & Time</TableHead>
+                              <TableHead className="w-[100px]">Status</TableHead>
+                              <TableHead className="w-[200px]">Follow-Up & Activity</TableHead>
+                              <TableHead className="w-[150px]">Line Called</TableHead>
+                              <TableHead className="w-[150px]">Caller Phone</TableHead>
+                              <TableHead>Matched Prospect+ Lead</TableHead>
+                              <TableHead className="w-[130px]">Reason</TableHead>
+                              <TableHead className="text-right w-[150px]">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredCalls.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={8} className="h-40 text-center text-slate-500">
+                                  <div className="flex flex-col items-center justify-center gap-1">
+                                    <CheckCircle2 className="h-8 w-8 text-emerald-500 mb-1" />
+                                    <p className="font-semibold text-slate-800 dark:text-slate-200">No Calls Found</p>
+                                    <p className="text-xs text-slate-400">
+                                      {searchQuery ? 'Try adjusting your search query.' : 'No calls match your criteria.'}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              filteredCalls.map((call) => {
+                                const callDate = new Date(call.startedAt);
+                                const isMissed = call.callType === 'missed';
+                                const isOOH = call.missedReason === 'Out of Opening Hours';
+                                const followup = call.followup;
+
+                                return (
+                                  <TableRow key={call.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
+                                    {/* Date & Time */}
+                                    <TableCell className="text-xs">
+                                      <div className="font-medium text-slate-900 dark:text-white">
+                                        {format(callDate, 'dd MMM yyyy')}
+                                      </div>
+                                      <div className="text-slate-500 text-[11px] flex items-center gap-1 mt-0.5">
+                                        <Clock className="h-3 w-3" />
+                                        {format(callDate, 'hh:mm a')}
+                                      </div>
+                                    </TableCell>
+
+                                    {/* Status Badge */}
+                                    <TableCell className="text-xs">
+                                      {isMissed ? (
+                                        <Badge variant="destructive" className="bg-red-50 text-red-700 hover:bg-red-100 border-red-200 text-[11px] font-semibold">
+                                          Missed
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px] font-semibold">
+                                          Answered
+                                        </Badge>
+                                      )}
+                                    </TableCell>
+
+                                    {/* Follow-Up & Activity Column */}
+                                    <TableCell className="text-xs">
+                                      {!isMissed ? (
+                                        <span className="text-slate-400 text-[11px] italic">Answered ({formatDurationSeconds(call.duration)})</span>
+                                      ) : followup.status === 'unreturned' ? (
+                                        <div className="flex items-center gap-1.5">
+                                          <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-300 font-semibold text-[10px] gap-1 py-0.5">
+                                            <AlertCircle className="h-3 w-3 text-red-600" />
+                                            <span>Action Needed</span>
+                                          </Badge>
+                                        </div>
+                                      ) : followup.status === 'callback_connected' ? (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="flex flex-col gap-0.5 cursor-pointer">
+                                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold text-[10px] gap-1 py-0.5 w-fit">
+                                                <PhoneCall className="h-3 w-3 text-emerald-600" />
+                                                <span>Callback Connected</span>
+                                              </Badge>
+                                              <span className="text-[10px] text-slate-500 truncate max-w-[190px]">
+                                                {followup.author ? `by ${followup.author}` : 'Outbound Call'}
+                                                {followup.responseTimeMinutes !== undefined ? ` • in ${formatResponseTime(followup.responseTimeMinutes)}` : ''}
+                                              </span>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="text-xs max-w-xs p-2.5">
+                                            <p className="font-semibold text-emerald-600">Outbound Callback Connected</p>
+                                            <p className="text-slate-300 mt-0.5">{followup.label}</p>
+                                            {followup.performedAt && (
+                                              <p className="text-slate-400 text-[11px] mt-1">
+                                                Performed: {format(new Date(followup.performedAt), 'dd MMM yyyy, hh:mm a')}
+                                              </p>
+                                            )}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      ) : followup.status === 'callback_attempted' ? (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="flex flex-col gap-0.5 cursor-pointer">
+                                              <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 font-semibold text-[10px] gap-1 py-0.5 w-fit">
+                                                <PhoneOutgoing className="h-3 w-3 text-amber-600" />
+                                                <span>Callback Attempted</span>
+                                              </Badge>
+                                              <span className="text-[10px] text-slate-500 truncate max-w-[190px]">
+                                                {followup.author ? `by ${followup.author}` : 'Dialed back'}
+                                                {followup.responseTimeMinutes !== undefined ? ` • in ${formatResponseTime(followup.responseTimeMinutes)}` : ''}
+                                              </span>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="text-xs max-w-xs p-2.5">
+                                            <p className="font-semibold text-amber-600">Callback Attempted (No Answer)</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      ) : followup.status === 'lead_activity' ? (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="flex flex-col gap-0.5 cursor-pointer">
+                                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 font-semibold text-[10px] gap-1 py-0.5 w-fit">
+                                                {followup.actionType === 'email' ? (
+                                                  <Mail className="h-3 w-3 text-blue-600" />
+                                                ) : (
+                                                  <FileText className="h-3 w-3 text-blue-600" />
+                                                )}
+                                                <span>CRM Activity</span>
+                                              </Badge>
+                                              <span className="text-[10px] text-slate-500 truncate max-w-[190px]">
+                                                {followup.label}
+                                                {followup.responseTimeMinutes !== undefined ? ` • in ${formatResponseTime(followup.responseTimeMinutes)}` : ''}
+                                              </span>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="text-xs max-w-xs p-2.5">
+                                            <p className="font-semibold text-blue-600">Lead Activity Logged</p>
+                                            <p className="text-slate-200 text-xs mt-0.5">{followup.label}</p>
+                                            {followup.notes && <p className="text-slate-300 text-[11px] mt-1 italic">&quot;{followup.notes}&quot;</p>}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      ) : (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="flex flex-col gap-0.5 cursor-pointer">
+                                              <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-300 font-semibold text-[10px] gap-1 py-0.5 w-fit">
+                                                <CheckCircle2 className="h-3 w-3 text-purple-600" />
+                                                <span>Resolved</span>
+                                              </Badge>
+                                              <span className="text-[10px] text-slate-500 truncate max-w-[190px]">
+                                                {followup.label} • by {followup.author || 'Staff'}
+                                              </span>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="text-xs max-w-xs p-2.5">
+                                            <p className="font-semibold text-purple-600">{followup.label}</p>
+                                            {followup.notes && <p className="text-slate-300 text-[11px] mt-1 italic">&quot;{followup.notes}&quot;</p>}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      )}
+                                    </TableCell>
+
+                                    {/* Line Called */}
+                                    <TableCell className="text-xs">
+                                      <div className="font-medium text-slate-900 dark:text-slate-200 truncate max-w-[140px]" title={call.aircallNumberName}>
+                                        {call.aircallNumberName}
+                                      </div>
+                                      <div className="text-slate-400 text-[11px] font-mono">
+                                        {call.aircallNumberDigits}
+                                      </div>
+                                    </TableCell>
+
+                                    {/* Caller Phone */}
+                                    <TableCell className="text-xs font-mono">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-medium text-slate-900 dark:text-slate-100">{call.callerNumber}</span>
+                                        <button
+                                          onClick={() => copyPhoneNumber(call.callerNumber)}
+                                          className="text-slate-400 hover:text-slate-600 p-0.5 rounded transition"
+                                          title="Copy Phone Number"
+                                        >
+                                          {copiedPhone === call.callerNumber ? (
+                                            <Check className="h-3 w-3 text-emerald-600" />
+                                          ) : (
+                                            <Copy className="h-3 w-3" />
+                                          )}
+                                        </button>
+                                      </div>
+                                    </TableCell>
+
+                                    {/* Matched Lead */}
+                                    <TableCell className="text-xs">
+                                      {call.matchedLead ? (
+                                        <div className="flex flex-col gap-1">
+                                          <div className="flex items-center gap-2">
+                                            <Link
+                                              href={call.matchedLead.leadUrl}
+                                              className="font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                                            >
+                                              {call.matchedLead.companyName}
+                                              <ArrowUpRight className="h-3 w-3 inline" />
+                                            </Link>
+                                            <LeadStatusBadge status={call.matchedLead.status as LeadStatus} />
+                                          </div>
+                                          {call.matchedLead.contactName && (
+                                            <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                              <User className="h-3 w-3 text-slate-400" />
+                                              <span>{call.matchedLead.contactName}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200 text-[10px] font-normal">
+                                          Unregistered Caller
+                                        </Badge>
+                                      )}
+                                    </TableCell>
+
+                                    {/* Reason */}
+                                    <TableCell className="text-xs">
+                                      <Badge
+                                        variant="secondary"
+                                        className={`text-[10px] font-medium border ${
+                                          isMissed
+                                            ? isOOH
+                                              ? 'bg-slate-100 text-slate-700 border-slate-200'
+                                              : 'bg-red-50 text-red-700 border-red-200'
+                                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        }`}
+                                      >
+                                        {call.missedReason}
+                                      </Badge>
+                                    </TableCell>
+
+                                    {/* Actions */}
+                                    <TableCell className="text-right text-xs">
+                                      <div className="flex items-center justify-end gap-1.5">
+                                        <a
+                                          href={`tel:${call.callerNumber.replace(/\s+/g, '')}`}
+                                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-md transition shadow-sm"
+                                          title="Call back via phone dialer"
+                                        >
+                                          <PhoneCall className="h-3 w-3" />
+                                          <span>Call</span>
+                                        </a>
+
+                                        {isMissed && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => openResolutionModal(call)}
+                                            className="h-7 px-2 text-xs text-slate-700 hover:bg-slate-100"
+                                            title="Log follow-up action or mark resolved"
+                                          >
+                                            <Edit3 className="h-3 w-3 mr-1" />
+                                            <span>Resolve</span>
+                                          </Button>
+                                        )}
+
+                                        {call.matchedLead ? (
+                                          <Link
+                                            href={call.matchedLead.leadUrl}
+                                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-md border"
+                                          >
+                                            <span>View</span>
+                                          </Link>
+                                        ) : (
+                                          <Link
+                                            href={`/leads?create=true&phone=${encodeURIComponent(call.callerNumber)}`}
+                                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200"
+                                            title="Create new lead from this phone number"
+                                          >
+                                            <span>+ Lead</span>
+                                          </Link>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* TAB 2: ANALYTICS */}
+                {activeTab === 'analytics' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Hourly Breakdown Chart */}
+                    <Card className="border shadow-sm">
+                      <CardHeader className="p-4 sm:p-5 border-b">
+                        <CardTitle className="text-base font-semibold flex items-center gap-2">
+                          <BarChart2 className="h-4 w-4 text-blue-600" />
+                          My Calls by Time of Day (AEST)
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          Hourly volume of answered vs missed calls received on your line.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-4">
+                        <div className="h-72 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={reportData?.hourlyDistribution || []}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                              <XAxis dataKey="label" fontSize={10} interval={2} />
+                              <YAxis fontSize={10} allowDecimals={false} />
+                              <ChartTooltip />
+                              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                              <Bar dataKey="answeredCount" name="Answered" fill="#10b981" radius={[2, 2, 0, 0]} />
+                              <Bar dataKey="missedCount" name="Missed" fill="#ef4444" radius={[2, 2, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Reasons Breakdown Pie Chart */}
+                    <Card className="border shadow-sm">
+                      <CardHeader className="p-4 sm:p-5 border-b">
+                        <CardTitle className="text-base font-semibold flex items-center gap-2">
+                          <PieChartIcon className="h-4 w-4 text-purple-600" />
+                          Missed Call Reasons
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          Breakdown of reasons for missed calls.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-4">
+                        <div className="h-72 w-full flex items-center justify-center">
+                          {reportData?.reasonsBreakdown && reportData.reasonsBreakdown.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={reportData.reasonsBreakdown}
+                                  dataKey="count"
+                                  nameKey="label"
+                                  cx="50%"
+                                  cy="50%"
+                                  outerRadius={80}
+                                  innerRadius={40}
+                                  paddingAngle={2}
+                                  label={({ label, percentage }) => `${label} (${percentage}%)`}
+                                  labelLine={false}
+                                >
+                                  {reportData.reasonsBreakdown.map((_, index) => (
+                                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                                  ))}
+                                </Pie>
+                                <ChartTooltip />
+                                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="text-xs text-slate-400">No missed call data available.</div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Resolution Dialog Modal */}
+        <ResolveMissedCallDialog
+          call={resolutionCall}
+          isOpen={isResolutionDialogOpen}
+          onClose={() => {
+            setIsResolutionDialogOpen(false);
+            setResolutionCall(null);
+          }}
+          onResolved={handleCallResolved}
+        />
+      </div>
+    </TooltipProvider>
   );
 }

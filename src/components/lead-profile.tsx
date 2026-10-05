@@ -1737,6 +1737,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isMarketingListDialogOpen, setIsMarketingListDialogOpen] = useState(false);
   const [allMarketingLists, setAllMarketingLists] = useState<string[]>([]);
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
+  const [preselectedLocalMileContactId, setPreselectedLocalMileContactId] = useState<string | null>(null);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
   const [stopTrialType, setStopTrialType] = useState<'LocalMile' | 'ShipMate' | null>(null);
   const [stopTrialReason, setStopTrialReason] = useState('');
@@ -4166,64 +4167,74 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             accountManagerName: lead.accountManagerAssigned
         });
         if (result.success) {
-            toast({ title: 'Success', description: 'LocalMile trial initiated and synced with NetSuite.' });
+            toast({ title: 'Success', description: 'LocalMile access granted and synced with NetSuite.' });
             
             if (contact.id && result.localMilePlusAuthLink && result.securityCode) {
                await updateContactInLead(lead.id, contact.id, {
+                   accessToLocalMile: 'yes',
                    localMilePlusAuthLink: result.localMilePlusAuthLink,
                    securityCode: result.securityCode
-               });
+               }, isCompanyProfile ? 'companies' : 'leads');
             }
 
+            const isSigned = isCompanyProfile || lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed';
             const isOutbound = lead.bucket === 'outbound';
             const nowIso = new Date().toISOString();
-            await updateLeadDetails(lead.id, lead, { 
-                status: 'LocalMile Opportunity',
-                customerStatus: 'LocalMile Opportunity', 
+
+            const updates: Partial<Lead> = {
                 serviceType, 
                 rate, 
                 dateRegistrationSent: nowIso,
                 registrationSentAt: nowIso,
-                ...(!isOutbound ? { 
-                    bucket: 'account_manager', 
-                } : {}), 
-                localMileTrialsRemaining: 5 
-            });
+                localMileTrialsRemaining: lead.localMileTrialsRemaining !== undefined ? lead.localMileTrialsRemaining : 5,
+                ...(isSigned ? {} : {
+                    status: 'LocalMile Opportunity',
+                    customerStatus: 'LocalMile Opportunity',
+                    ...(!isOutbound ? { bucket: 'account_manager' } : {}),
+                })
+            };
+
+            await updateLeadDetails(lead.id, lead, updates);
 
             setLead(prev => ({ 
                 ...prev, 
-                status: 'LocalMile Opportunity', 
-                customerStatus: 'LocalMile Opportunity',
-                serviceType, 
-                rate,
-                dateRegistrationSent: nowIso,
-                registrationSentAt: nowIso,
-                ...(!isOutbound ? { 
-                    bucket: 'account_manager',
-                } : {}),
-                localMileTrialsRemaining: 5,
+                ...updates,
                 contacts: prev.contacts?.map(c => 
-                   (c.id === contact.id && result.localMilePlusAuthLink && result.securityCode) ? { 
+                   (c.id === contact.id) ? { 
                        ...c, 
-                       localMilePlusAuthLink: result.localMilePlusAuthLink,
-                       securityCode: result.securityCode
+                       accessToLocalMile: 'yes',
+                       localMilePlusAuthLink: result.localMilePlusAuthLink || c.localMilePlusAuthLink,
+                       securityCode: result.securityCode || c.securityCode
                    } : c
                 )
             }));
             await logActivity(lead.id, {
                 type: 'Update',
-                notes: `Initiated LocalMile Trial (${serviceType} at $${rate})`,
+                notes: isSigned 
+                    ? `Granted LocalMile Access for ${contact.name || contact.email || 'contact'} (${serviceType} at $${rate})`
+                    : `Initiated LocalMile Trial (${serviceType} at $${rate})`,
                 author: user?.displayName || 'Unknown'
-            });
+            }, isCompanyProfile ? 'companies' : 'leads');
             await refreshLeadData();
         } else {
             throw new Error(result.message);
         }
     } catch (error: any) {
         // Fallback to local Firestore save if NetSuite fails
+        const isSigned = isCompanyProfile || lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed';
         const nowIsoFallback = new Date().toISOString();
-        await updateLeadDetails(lead.id, lead, { customerStatus: 'LocalMile Opportunity', status: 'LocalMile Opportunity', serviceType, rate, dateRegistrationSent: nowIsoFallback, registrationSentAt: nowIsoFallback });
-        setLead(prev => ({ ...prev, status: 'LocalMile Opportunity', customerStatus: 'LocalMile Opportunity', serviceType, rate, dateRegistrationSent: nowIsoFallback, registrationSentAt: nowIsoFallback }));
+        const fallbackUpdates: Partial<Lead> = {
+            serviceType,
+            rate,
+            dateRegistrationSent: nowIsoFallback,
+            registrationSentAt: nowIsoFallback,
+            ...(isSigned ? {} : {
+                status: 'LocalMile Opportunity',
+                customerStatus: 'LocalMile Opportunity'
+            })
+        };
+        await updateLeadDetails(lead.id, lead, fallbackUpdates);
+        setLead(prev => ({ ...prev, ...fallbackUpdates }));
         await refreshLeadData();
         toast({ 
             variant: 'destructive', 
@@ -4862,10 +4873,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       setUploadingScfId(null);
     }
   };
-
   const renderActionButtons = () => {
     if (isCompanyProfile) {
-      return null;
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+            <Button
+                variant="outline"
+                onClick={() => {
+                    setPreselectedLocalMileContactId(null);
+                    setIsLocalMileDialogOpen(true);
+                }}
+                className="border-sky-300 text-sky-700 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950 font-medium shadow-2xs"
+            >
+                <Star className="mr-2 h-4 w-4 text-sky-600" />
+                Grant LocalMile Access
+            </Button>
+        </div>
+      );
     }
 
     if (!showSales) return null;
@@ -4936,7 +4960,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <DropdownMenuPortal>
                     <DropdownMenuSubContent>
                         <DropdownMenuItem disabled={userProfile?.activeRole === 'user'} onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setIsShipMateDialogOpen(true); })); }}>ShipMate</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setIsLocalMileDialogOpen(true); })); }}>LocalMile</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setPreselectedLocalMileContactId(null); setIsLocalMileDialogOpen(true); })); }}>LocalMile</DropdownMenuItem>
                     </DropdownMenuSubContent>
                 </DropdownMenuPortal>
             )}
@@ -4961,7 +4985,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const stopShipMateItem = isTrialingShipMate ? (
         <DropdownMenuItem 
-            key="stop-shipmate"
+            key="stop-shipmate" 
             className="text-amber-700 dark:text-amber-400 font-medium cursor-pointer"
             onSelect={(e) => {
                 e.preventDefault();
@@ -4972,15 +4996,33 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenuItem>
     ) : null;
 
+    const grantLocalMileItem = (
+        <DropdownMenuItem 
+            key="grant-localmile" 
+            onSelect={(e) => { 
+                e.preventDefault(); 
+                requireLeadType(() => checkPrimary(async () => { 
+                    await ensureFranchiseeIdField(); 
+                    setPreselectedLocalMileContactId(null);
+                    setIsLocalMileDialogOpen(true); 
+                })); 
+            }}
+        >
+            <Star className="mr-2 h-4 w-4 text-sky-600" />Grant LocalMile Access
+        </DropdownMenuItem>
+    );
+
     const isChildLpoLead = Boolean(isLpoLeadProcess && (lead.isChildLead || (lead.parentLeadId && !lead.isParentLead)));
 
-    let salesItems: React.ReactNode[] = (isChildLpoLead || isLeadWonOrSigned)
+    let salesItems: React.ReactNode[] = (isChildLpoLead)
         ? []
-        : (isMailPlusPtyLtd && !isLpoLeadProcess)
-            ? []
-            : (isMailPlusPtyLtd && isLpoLeadProcess)
-                ? [quoteItem, signupItem].filter(Boolean)
-                : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
+        : (isLeadWonOrSigned)
+            ? [grantLocalMileItem].filter(Boolean)
+            : (isMailPlusPtyLtd && !isLpoLeadProcess)
+                ? []
+                : (isMailPlusPtyLtd && isLpoLeadProcess)
+                    ? [quoteItem, signupItem].filter(Boolean)
+                    : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);;
 
     const hasSalesItems = salesItems.length > 0;
     const canShowLpoPlus = userProfile?.activeRole !== 'user' && !isLeadWonOrSigned && !isLpoNetworkBucket;
@@ -7839,6 +7881,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             </div>
                                         </div>
                                     )}
+
+                                    {(!contact.localMilePlusAuthLink || !contact.securityCode) && contact.email && (
+                                        <div className="mt-2 pt-2 border-t border-muted-foreground/10">
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                className="w-full text-xs text-sky-700 border-sky-200 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950 flex items-center justify-center gap-1.5" 
+                                                onClick={() => {
+                                                    setPreselectedLocalMileContactId(contact.id);
+                                                    setIsLocalMileDialogOpen(true);
+                                                }}
+                                            >
+                                                <Star className="w-3.5 h-3.5 text-sky-600" />
+                                                Grant LocalMile Access
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             </Card>
                         ))}
@@ -10106,7 +10165,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     />
     <ManageServicesDialog isOpen={isManageServicesOpen} onOpenChange={setIsManageServicesOpen} lead={lead} onSuccess={refreshLeadData} />
 
-    <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
+    <LocalMileAccessDialog 
+        isOpen={isLocalMileDialogOpen} 
+        onOpenChange={(open) => {
+            setIsLocalMileDialogOpen(open);
+            if (!open) setPreselectedLocalMileContactId(null);
+        }} 
+        lead={lead} 
+        collectionName={isCompanyProfile ? 'companies' : 'leads'}
+        preselectedContactId={preselectedLocalMileContactId}
+        onConfirm={handleLocalMileConfirm} 
+    />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
     <Dialog open={!!stopTrialType} onOpenChange={(open) => { if (!open) { setStopTrialType(null); setStopTrialReason(''); } }}>
         <DialogContent className="sm:max-w-[425px]">

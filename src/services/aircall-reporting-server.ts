@@ -33,6 +33,27 @@ export interface MatchedLeadInfo {
   leadUrl: string;
 }
 
+export type FollowupStatus =
+  | 'unreturned'
+  | 'callback_connected'
+  | 'callback_attempted'
+  | 'lead_activity'
+  | 'resolved_manually'
+  | 'not_applicable';
+
+export interface ActivityFollowupInfo {
+  status: FollowupStatus;
+  label: string;
+  actionType: 'call' | 'note' | 'email' | 'meeting' | 'manual' | 'none';
+  performedAt?: string; // ISO string
+  performedAtTimestamp?: number; // Unix seconds
+  author?: string;
+  notes?: string;
+  duration?: number;
+  responseTimeMinutes?: number; // Minutes from missed call to first action
+  resolutionType?: string;
+}
+
 export interface EnrichedInboundCall {
   id: number;
   callType: 'missed' | 'answered';
@@ -53,7 +74,9 @@ export interface EnrichedInboundCall {
     date: string;
     author: string;
     notes?: string;
+    duration?: number;
   };
+  followup: ActivityFollowupInfo;
 }
 
 export interface NumberMetric {
@@ -68,6 +91,9 @@ export interface NumberMetric {
   inHoursMissed: number;
   outOfHoursMissed: number;
   topReason: string;
+  totalFollowedUp: number;
+  unaddressedMissed: number;
+  followupRate: number; // percentage (0-100)
 }
 
 export interface InboundCallsReportResponse {
@@ -83,6 +109,12 @@ export interface InboundCallsReportResponse {
     unmatchedCount: number;
     unreturnedCount: number;
     resolvedCount: number;
+    followupRate: number; // % of missed calls followed up / resolved
+    unaddressedMissedCount: number;
+    callbackCount: number;
+    leadActivityCount: number;
+    manualResolvedCount: number;
+    avgResponseTimeMinutes: number;
   };
   numbersBreakdown: NumberMetric[];
   reasonsBreakdown: { reason: string; label: string; count: number; percentage: number }[];
@@ -154,6 +186,18 @@ function isOutOfBusinessHours(epochSeconds: number): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Normalizes phone numbers to standard digit strings for reliable matching.
+ */
+export function normalizePhoneDigits(phone?: string | null): string {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('61') && digits.length === 11) {
+    return '0' + digits.substring(2);
+  }
+  return digits;
 }
 
 // In-memory cache for Aircall numbers and assigned users
@@ -236,13 +280,13 @@ export async function getAircallNumbers(): Promise<AircallNumber[]> {
 }
 
 /**
- * Fetches inbound calls from Aircall API within the specified time range.
+ * Fetches all calls (inbound and outbound) from Aircall API within the specified time range.
  */
-export async function fetchAircallInboundCalls(
+export async function fetchAircallCalls(
   fromSeconds: number,
   toSeconds: number,
   numberId?: number | number[]
-): Promise<any[]> {
+): Promise<{ inboundCalls: any[]; outboundCalls: any[] }> {
   const headers = getAircallAuthHeaders();
   if (!headers) {
     throw new Error('Aircall API credentials are not configured.');
@@ -254,7 +298,8 @@ export async function fetchAircallInboundCalls(
     ? [numberId]
     : undefined;
 
-  const allCalls: any[] = [];
+  const inboundCalls: any[] = [];
+  const outboundCalls: any[] = [];
   let page = 1;
   const perPage = 50;
   const maxPages = 100; // Scan up to 5,000 calls in the timeframe
@@ -273,12 +318,13 @@ export async function fetchAircallInboundCalls(
     if (calls.length === 0) break;
 
     for (const c of calls) {
-      // Critical: Aircall API returns both inbound and outbound calls in /v1/calls.
-      // We must explicitly filter for direction === 'inbound'.
-      if (c.direction !== 'inbound') continue;
-
-      if (!filterIds || (c.number?.id && filterIds.includes(c.number.id))) {
-        allCalls.push(c);
+      if (c.direction === 'inbound') {
+        if (!filterIds || (c.number?.id && filterIds.includes(c.number.id))) {
+          inboundCalls.push(c);
+        }
+      } else if (c.direction === 'outbound') {
+        // Collect outbound calls to detect callbacks to numbers
+        outboundCalls.push(c);
       }
     }
 
@@ -288,8 +334,17 @@ export async function fetchAircallInboundCalls(
     page++;
   }
 
-  console.log(`[Aircall Reporting] Fetched ${allCalls.length} true inbound calls across ${page} page(s)`);
-  return allCalls;
+  console.log(`[Aircall Reporting] Fetched ${inboundCalls.length} inbound calls and ${outboundCalls.length} outbound calls across ${page} page(s)`);
+  return { inboundCalls, outboundCalls };
+}
+
+export async function fetchAircallInboundCalls(
+  fromSeconds: number,
+  toSeconds: number,
+  numberId?: number | number[]
+): Promise<any[]> {
+  const { inboundCalls } = await fetchAircallCalls(fromSeconds, toSeconds, numberId);
+  return inboundCalls;
 }
 
 /**
@@ -355,7 +410,89 @@ async function batchResolveLeadProfiles(phoneNumbers: string[]): Promise<Map<str
 }
 
 /**
- * Generates the complete Inbound & Missed Calls Report across all Aircall numbers with User and Lead Matching.
+ * Batch fetches manual resolutions for a list of call IDs.
+ */
+async function batchFetchManualResolutions(callIds: (number | string)[]): Promise<Map<string, any>> {
+  const resolutionMap = new Map<string, any>();
+  if (callIds.length === 0) return resolutionMap;
+
+  try {
+    const uniqueIds = Array.from(new Set(callIds.map(String)));
+    const batchSize = 30;
+
+    for (let i = 0; i < uniqueIds.length; i += batchSize) {
+      const chunk = uniqueIds.slice(i, i + batchSize);
+      await Promise.allSettled(
+        chunk.map(async (id) => {
+          try {
+            const snap = await db.collection('missed_call_resolutions').doc(id).get();
+            if (snap.exists) {
+              resolutionMap.set(id, snap.data());
+            }
+          } catch (e) {
+            // ignore individual doc fetch failure
+          }
+        })
+      );
+    }
+  } catch (err) {
+    console.warn('[Aircall Reporting] Failed to fetch manual resolutions:', err);
+  }
+
+  return resolutionMap;
+}
+
+/**
+ * Batch fetches recent activities from matched leads to detect CRM activity post-call.
+ */
+async function batchFetchLeadActivities(matchedLeads: MatchedLeadInfo[]): Promise<Map<string, any[]>> {
+  const activitiesMap = new Map<string, any[]>();
+  if (matchedLeads.length === 0) return activitiesMap;
+
+  const uniqueLeads = new Map<string, { id: string; type: 'leads' | 'companies' }>();
+  matchedLeads.forEach((m) => {
+    const key = `${m.type}/${m.id}`;
+    if (!uniqueLeads.has(key)) {
+      uniqueLeads.set(key, { id: m.id, type: m.type });
+    }
+  });
+
+  const entries = Array.from(uniqueLeads.values());
+  const batchSize = 20;
+
+  for (let i = 0; i < entries.length; i += batchSize) {
+    const chunk = entries.slice(i, i + batchSize);
+    await Promise.allSettled(
+      chunk.map(async ({ id, type }) => {
+        try {
+          const actSnap = await db
+            .collection(type)
+            .doc(id)
+            .collection('activity')
+            .orderBy('date', 'desc')
+            .limit(15)
+            .get();
+
+          if (!actSnap.empty) {
+            const list = actSnap.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+            activitiesMap.set(`${type}/${id}`, list);
+          }
+        } catch (err) {
+          // ignore index / fetch errors
+        }
+      })
+    );
+  }
+
+  return activitiesMap;
+}
+
+/**
+ * Generates the complete Inbound & Missed Calls Report across all Aircall numbers with User and Lead Matching,
+ * Outbound Callback Detection, and CRM Lead Activity Cross-referencing.
  */
 export async function generateInboundCallsReport(
   fromSeconds: number,
@@ -373,8 +510,21 @@ export async function generateInboundCallsReport(
   const numberMap = new Map<number, AircallNumber>();
   aircallNumbers.forEach((n) => numberMap.set(n.id, n));
 
-  // 2. Fetch all inbound calls from Aircall
-  const rawCalls = await fetchAircallInboundCalls(fromSeconds, toSeconds, filterIds);
+  // 2. Fetch all inbound & outbound calls from Aircall in the timeframe
+  const { inboundCalls: rawCalls, outboundCalls } = await fetchAircallCalls(fromSeconds, toSeconds, filterIds);
+
+  // Group outbound calls by normalized recipient phone number
+  const outboundMap = new Map<string, any[]>();
+  outboundCalls.forEach((outCall) => {
+    const destPhone = outCall.raw_digits || outCall.contact?.phone_number;
+    if (destPhone) {
+      const norm = normalizePhoneDigits(destPhone);
+      if (norm) {
+        if (!outboundMap.has(norm)) outboundMap.set(norm, []);
+        outboundMap.get(norm)!.push(outCall);
+      }
+    }
+  });
 
   // 3. Stats trackers
   const numbersStatMap = new Map<
@@ -386,6 +536,8 @@ export async function generateInboundCallsReport(
       inHoursMissed: number;
       outOfHoursMissed: number;
       reasons: Record<string, number>;
+      totalFollowedUp: number;
+      unaddressedMissed: number;
     }
   >();
 
@@ -397,6 +549,8 @@ export async function generateInboundCallsReport(
       inHoursMissed: 0,
       outOfHoursMissed: 0,
       reasons: {},
+      totalFollowedUp: 0,
+      unaddressedMissed: 0,
     });
   });
 
@@ -431,6 +585,8 @@ export async function generateInboundCallsReport(
         inHoursMissed: 0,
         outOfHoursMissed: 0,
         reasons: {},
+        totalFollowedUp: 0,
+        unaddressedMissed: 0,
       });
     }
 
@@ -483,9 +639,23 @@ export async function generateInboundCallsReport(
   const callerPhones = rawCalls.map((c) => c.raw_digits || c.contact?.phone_number).filter(Boolean);
   const leadMatchMap = await batchResolveLeadProfiles(callerPhones);
 
-  // 5. Enrich all inbound calls with Aircall User and Lead Details
+  // 5. Batch fetch manual resolutions and lead activities
+  const allCallIds = rawCalls.map((c) => c.id);
+  const resolutionsMap = await batchFetchManualResolutions(allCallIds);
+
+  const matchedLeadValues = Array.from(leadMatchMap.values());
+  const leadActivitiesMap = await batchFetchLeadActivities(matchedLeadValues);
+
+  // 6. Enrich all inbound calls with Follow-up Status and Lead Activity Cross-referencing
+  let totalCallbackCount = 0;
+  let totalLeadActivityCount = 0;
+  let totalManualResolvedCount = 0;
+  let totalResponseTimeMinutes = 0;
+  let responseTimeCount = 0;
+
   const enrichedCalls: EnrichedInboundCall[] = rawCalls.map((call) => {
     const callerNumber = call.raw_digits || call.contact?.phone_number || 'Unknown';
+    const normCallerPhone = normalizePhoneDigits(callerNumber);
     const matchedLead = leadMatchMap.get(callerNumber) || null;
     const isMissed = call.status === 'missed' || !call.answered_at || !!call.missed_call_reason;
     const isOOH = call.missed_call_reason === 'out_of_opening_hours' || isOutOfBusinessHours(call.started_at);
@@ -507,6 +677,161 @@ export async function generateInboundCallsReport(
       }
     }
 
+    // Determine Follow-up Activity for missed calls
+    let followup: ActivityFollowupInfo = {
+      status: isMissed ? 'unreturned' : 'not_applicable',
+      label: isMissed ? 'Action Needed' : 'Call Answered',
+      actionType: 'none',
+    };
+
+    let hasCallback = false;
+    let callbackDetails: { date: string; author: string; notes?: string; duration?: number } | undefined = undefined;
+
+    if (isMissed) {
+      const callTimeSeconds = call.started_at;
+      const callTimeMs = callTimeSeconds * 1000;
+
+      // 1. Check for manual resolution first
+      const manualRes = resolutionsMap.get(String(call.id));
+      if (manualRes) {
+        const resLabels: Record<string, string> = {
+          callback_manual: 'Outbound Callback Made',
+          left_voicemail: 'Left Voicemail',
+          emailed: 'Contacted via Email',
+          spam_wrong_number: 'Marked Spam / Wrong Number',
+          handled_external: 'Handled Externally',
+          other: 'Resolved',
+        };
+        const label = resLabels[manualRes.resolutionType] || 'Resolved Manually';
+        const resTimeMs = manualRes.resolvedAt ? new Date(manualRes.resolvedAt).getTime() : 0;
+        const diffMinutes = resTimeMs > callTimeMs ? Math.round((resTimeMs - callTimeMs) / 60000) : undefined;
+
+        followup = {
+          status: 'resolved_manually',
+          label,
+          actionType: 'manual',
+          performedAt: manualRes.resolvedAt,
+          performedAtTimestamp: resTimeMs ? Math.floor(resTimeMs / 1000) : undefined,
+          author: manualRes.authorName || 'Staff Member',
+          notes: manualRes.notes || undefined,
+          responseTimeMinutes: diffMinutes,
+          resolutionType: manualRes.resolutionType,
+        };
+
+        hasCallback = true;
+        callbackDetails = {
+          date: manualRes.resolvedAt || new Date().toISOString(),
+          author: manualRes.authorName || 'Staff Member',
+          notes: manualRes.notes || label,
+        };
+
+        totalManualResolvedCount++;
+        if (diffMinutes !== undefined && diffMinutes >= 0) {
+          totalResponseTimeMinutes += diffMinutes;
+          responseTimeCount++;
+        }
+      } else {
+        // 2. Check for Aircall Outbound Calls to this caller after the missed call
+        const matchingOutbounds = (normCallerPhone ? outboundMap.get(normCallerPhone) : null) || [];
+        const subsequentOutbound = matchingOutbounds
+          .filter((out) => out.started_at >= callTimeSeconds - 60) // Allow 1-min buffer
+          .sort((a, b) => a.started_at - b.started_at)[0];
+
+        if (subsequentOutbound) {
+          const outSeconds = subsequentOutbound.started_at;
+          const diffMinutes = Math.max(0, Math.round((outSeconds - callTimeSeconds) / 60));
+          const isConnected = (subsequentOutbound.duration || 0) > 0 || !!subsequentOutbound.answered_at;
+          const outAuthor = subsequentOutbound.user?.name || 'Aircall User';
+          const outDate = new Date(outSeconds * 1000).toISOString();
+
+          followup = {
+            status: isConnected ? 'callback_connected' : 'callback_attempted',
+            label: isConnected
+              ? `Callback Connected (${Math.floor((subsequentOutbound.duration || 0) / 60)}m ${(subsequentOutbound.duration || 0) % 60}s)`
+              : 'Callback Attempted (No Answer)',
+            actionType: 'call',
+            performedAt: outDate,
+            performedAtTimestamp: outSeconds,
+            author: outAuthor,
+            notes: subsequentOutbound.note || (isConnected ? 'Outbound call connected' : 'Outbound callback attempted'),
+            duration: subsequentOutbound.duration || 0,
+            responseTimeMinutes: diffMinutes,
+          };
+
+          hasCallback = true;
+          callbackDetails = {
+            date: outDate,
+            author: outAuthor,
+            notes: subsequentOutbound.note,
+            duration: subsequentOutbound.duration,
+          };
+
+          totalCallbackCount++;
+          totalResponseTimeMinutes += diffMinutes;
+          responseTimeCount++;
+        } else if (matchedLead) {
+          // 3. Check for Lead Activities recorded in CRM after the missed call
+          const leadActs = leadActivitiesMap.get(`${matchedLead.type}/${matchedLead.id}`) || [];
+          const subsequentActivity = leadActs
+            .filter((act) => {
+              if (!act.date) return false;
+              const actMs = new Date(act.date).getTime();
+              return actMs >= callTimeMs - 60000; // 1-min buffer
+            })
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+
+          if (subsequentActivity) {
+            const actMs = new Date(subsequentActivity.date).getTime();
+            const diffMinutes = Math.max(0, Math.round((actMs - callTimeMs) / 60000));
+            const actAuthor = subsequentActivity.author || subsequentActivity.userName || 'Rep';
+            const isCallAct = subsequentActivity.type === 'Call';
+
+            followup = {
+              status: isCallAct ? 'callback_connected' : 'lead_activity',
+              label: isCallAct
+                ? `CRM Call Logged (${subsequentActivity.duration || 'Done'})`
+                : `${subsequentActivity.type || 'Activity'}: ${subsequentActivity.notes ? subsequentActivity.notes.slice(0, 35) + '...' : 'Lead Updated'}`,
+              actionType: isCallAct
+                ? 'call'
+                : subsequentActivity.type === 'Email'
+                ? 'email'
+                : subsequentActivity.type === 'Meeting'
+                ? 'meeting'
+                : 'note',
+              performedAt: subsequentActivity.date,
+              performedAtTimestamp: Math.floor(actMs / 1000),
+              author: actAuthor,
+              notes: subsequentActivity.notes,
+              responseTimeMinutes: diffMinutes,
+            };
+
+            hasCallback = true;
+            callbackDetails = {
+              date: subsequentActivity.date,
+              author: actAuthor,
+              notes: subsequentActivity.notes,
+            };
+
+            if (isCallAct) totalCallbackCount++;
+            else totalLeadActivityCount++;
+
+            totalResponseTimeMinutes += diffMinutes;
+            responseTimeCount++;
+          }
+        }
+      }
+    }
+
+    // Update numbers stat followed up count
+    const numStat = call.number?.id ? numbersStatMap.get(call.number.id) : null;
+    if (numStat && isMissed) {
+      if (followup.status !== 'unreturned') {
+        numStat.totalFollowedUp++;
+      } else {
+        numStat.unaddressedMissed++;
+      }
+    }
+
     return {
       id: call.id,
       callType: isMissed ? 'missed' : 'answered',
@@ -522,11 +847,13 @@ export async function generateInboundCallsReport(
       missedReason,
       status: isMissed ? 'missed' : 'answered',
       matchedLead,
-      hasCallback: false,
+      hasCallback,
+      callbackDetails,
+      followup,
     };
   });
 
-  // 6. Summary metrics
+  // 7. Summary metrics
   const totalInbound = rawCalls.length;
   const missedRate = totalInbound > 0 ? Number(((totalMissedCount / totalInbound) * 100).toFixed(1)) : 0;
   const answeredRate = totalInbound > 0 ? Number(((totalAnsweredCount / totalInbound) * 100).toFixed(1)) : 0;
@@ -534,18 +861,26 @@ export async function generateInboundCallsReport(
   let inHoursMissed = 0;
   let outOfHoursMissed = 0;
   let matchedLeadsCount = 0;
+  let totalResolvedMissed = 0;
 
   enrichedCalls.forEach((c) => {
     if (c.callType === 'missed') {
       if (c.missedReason === 'Out of Opening Hours') outOfHoursMissed++;
       else inHoursMissed++;
+
+      if (c.followup.status !== 'unreturned') {
+        totalResolvedMissed++;
+      }
     }
     if (c.matchedLead) matchedLeadsCount++;
   });
 
   const unmatchedCount = totalInbound - matchedLeadsCount;
+  const unaddressedMissedCount = totalMissedCount - totalResolvedMissed;
+  const followupRate = totalMissedCount > 0 ? Number(((totalResolvedMissed / totalMissedCount) * 100).toFixed(1)) : 100;
+  const avgResponseTimeMinutes = responseTimeCount > 0 ? Math.round(totalResponseTimeMinutes / responseTimeCount) : 0;
 
-  // 7. Numbers breakdown
+  // 8. Numbers breakdown
   const numbersBreakdown: NumberMetric[] = [];
   numbersStatMap.forEach((stat, numId) => {
     if (filterIds && !filterIds.includes(numId)) return;
@@ -561,6 +896,7 @@ export async function generateInboundCallsReport(
 
     const rate = stat.totalInbound > 0 ? Number(((stat.totalMissed / stat.totalInbound) * 100).toFixed(1)) : 0;
     const assignedUser = numObj?.assignedUsers?.map((u) => u.name).join(', ') || 'Team Line';
+    const lineFollowupRate = stat.totalMissed > 0 ? Number(((stat.totalFollowedUp / stat.totalMissed) * 100).toFixed(1)) : 100;
 
     if (numObj || stat.totalInbound > 0) {
       numbersBreakdown.push({
@@ -575,13 +911,16 @@ export async function generateInboundCallsReport(
         inHoursMissed: stat.inHoursMissed,
         outOfHoursMissed: stat.outOfHoursMissed,
         topReason,
+        totalFollowedUp: stat.totalFollowedUp,
+        unaddressedMissed: stat.unaddressedMissed,
+        followupRate: lineFollowupRate,
       });
     }
   });
 
   numbersBreakdown.sort((a, b) => b.totalInbound - a.totalInbound);
 
-  // 8. Reasons breakdown
+  // 9. Reasons breakdown
   const reasonsBreakdown = Object.entries(reasonsCount).map(([reason, count]) => ({
     reason,
     label: reason,
@@ -589,7 +928,7 @@ export async function generateInboundCallsReport(
     percentage: totalMissedCount > 0 ? Number(((count / totalMissedCount) * 100).toFixed(1)) : 0,
   })).sort((a, b) => b.count - a.count);
 
-  // 9. Hourly distribution
+  // 10. Hourly distribution
   const hourlyDistribution = hourlyStats.map((stat, hour) => {
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 === 0 ? 12 : hour % 12;
@@ -602,7 +941,7 @@ export async function generateInboundCallsReport(
     };
   });
 
-  // 10. Day of week distribution
+  // 11. Day of week distribution
   const dayOfWeekDistribution = Object.entries(dayOfWeekStats).map(([day, stat]) => ({
     day,
     inboundCount: stat.inbound,
@@ -620,8 +959,14 @@ export async function generateInboundCallsReport(
       outOfHoursMissed,
       matchedLeadsCount,
       unmatchedCount,
-      unreturnedCount: totalMissedCount,
-      resolvedCount: 0,
+      unreturnedCount: unaddressedMissedCount,
+      resolvedCount: totalResolvedMissed,
+      followupRate,
+      unaddressedMissedCount,
+      callbackCount: totalCallbackCount,
+      leadActivityCount: totalLeadActivityCount,
+      manualResolvedCount: totalManualResolvedCount,
+      avgResponseTimeMinutes,
     },
     numbersBreakdown,
     reasonsBreakdown,
