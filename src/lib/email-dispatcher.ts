@@ -25,6 +25,8 @@ interface EmailDispatchOptions {
   notifyUserEmail?: string;
   trackingCategory?: 'quote' | 'signup' | 'nurture' | 'custom' | 'system' | string;
   skipTracking?: boolean;
+  campaignId?: string;
+  campaignName?: string;
 }
 
 function extractCleanEmail(toField: string): string {
@@ -48,7 +50,7 @@ function isInternalRecipient(toField: string): boolean {
   return true;
 }
 
-export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc, leadId, prospectPlusId, attachments, ticketId, notifyOnOpen, notifyUserId, notifyUserEmail, trackingCategory, skipTracking }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
+export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc, leadId, prospectPlusId, attachments, ticketId, notifyOnOpen, notifyUserId, notifyUserEmail, trackingCategory, skipTracking, campaignId, campaignName }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
   try {
     const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
     if (!configSnap.exists) {
@@ -165,6 +167,8 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
 
         await deliveryRef.set({
           id: deliveryId,
+          campaignId: campaignId || null,
+          campaignName: campaignName || null,
           leadId: leadId || null,
           leadEmail: extractCleanEmail(to),
           companyName: resolvedCompanyName || null,

@@ -28,6 +28,8 @@ interface DeliveryLog {
 interface Campaign {
   id: string;
   name: string;
+  type?: 'campaign' | 'journey';
+  nurtureJourneyIds?: string[];
   metrics?: {
     sent: number;
     delivered: number;
@@ -67,15 +69,25 @@ export function CampaignAnalytics() {
       })) as DeliveryLog[];
       setDeliveries(dList.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()));
 
-      const cList = campaignsSnap.docs.map(doc => ({
-        id: doc.id,
-        name: `[Campaign] ${doc.data().name || 'Unnamed Campaign'}`
-      })) as Campaign[];
+      const cList = campaignsSnap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: `[Campaign] ${data.name || 'Unnamed Campaign'}`,
+          type: 'campaign' as const,
+          nurtureJourneyIds: Array.isArray(data.nurtureJourneyIds) ? data.nurtureJourneyIds : []
+        };
+      }) as Campaign[];
 
-      const jList = journeysSnap.docs.map(doc => ({
-        id: doc.id,
-        name: `[Journey] ${doc.data().name || 'Unnamed Journey'}`
-      })) as Campaign[];
+      const jList = journeysSnap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: `[Journey] ${data.name || 'Unnamed Journey'}`,
+          type: 'journey' as const,
+          nurtureJourneyIds: []
+        };
+      }) as Campaign[];
 
       setCampaigns([...cList, ...jList].sort((a, b) => a.name.localeCompare(b.name)));
 
@@ -94,7 +106,23 @@ export function CampaignAnalytics() {
   // Filtered Deliveries based on Campaign Selection
   let filteredDeliveries = deliveries;
   if (selectedCampaignId !== 'all') {
-    filteredDeliveries = filteredDeliveries.filter(d => d.campaignId === selectedCampaignId);
+    const selectedCamp = campaigns.find(c => c.id === selectedCampaignId);
+    const targetCampaignIds = new Set<string>([selectedCampaignId]);
+
+    if (selectedCamp) {
+      if (selectedCamp.nurtureJourneyIds && selectedCamp.nurtureJourneyIds.length > 0) {
+        selectedCamp.nurtureJourneyIds.forEach(id => targetCampaignIds.add(id));
+      }
+      if (selectedCamp.type === 'journey') {
+        campaigns.forEach(c => {
+          if (c.nurtureJourneyIds?.includes(selectedCampaignId)) {
+            targetCampaignIds.add(c.id);
+          }
+        });
+      }
+    }
+
+    filteredDeliveries = filteredDeliveries.filter(d => targetCampaignIds.has(d.campaignId));
   }
   if (selectedCompany !== 'all') {
     filteredDeliveries = filteredDeliveries.filter(d => d.companyName === selectedCompany);
@@ -495,11 +523,11 @@ export function CampaignAnalytics() {
                       <tr key={d.id} className="hover:bg-slate-50/50">
                         <td className="p-4">
                           <div className="flex flex-col">
-                            <span className="font-semibold text-slate-800">{d.leadName}</span>
+                            <span className="font-semibold text-slate-800">{d.leadName || d.companyName || 'Recipient'}</span>
                             <span className="text-[10px] text-muted-foreground">{d.leadEmail}</span>
                           </div>
                         </td>
-                        <td className="p-4 text-slate-700 font-medium">{d.companyName}</td>
+                        <td className="p-4 text-slate-700 font-medium">{d.companyName || '-'}</td>
                         <td className="p-4 text-muted-foreground">
                           {new Date(d.sentAt).toLocaleString()}
                         </td>

@@ -37,7 +37,7 @@ export function LocalMileStatusBadge({
   onReactivateClick,
   className,
 }: LocalMileStatusBadgeProps) {
-  if (loading) {
+  if (loading || status === null) {
     return (
       <Badge
         variant="outline"
@@ -52,7 +52,7 @@ export function LocalMileStatusBadge({
     );
   }
 
-  if (!status || !status.exists) {
+  if (!status.exists) {
     return (
       <Badge
         variant="outline"

@@ -644,7 +644,9 @@ export async function POST(request: Request) {
                 leadId,
                 notifyOnOpen: !!config.notifyOnOpen,
                 notifyUserEmail: config.notifyUserEmail,
-                trackingCategory: 'nurture'
+                trackingCategory: 'nurture',
+                campaignId: journeyId,
+                campaignName: journey.name || 'Nurture Campaign'
               });
 
               if (!sendResult.success) {
@@ -706,6 +708,29 @@ export async function POST(request: Request) {
               }
 
               const sendResult = await sendSms(contactPhone, smsMessage);
+
+              // Log delivery record in campaign_deliveries
+              try {
+                const deliveryRef = db.collection('campaign_deliveries').doc();
+                await deliveryRef.set({
+                  id: deliveryRef.id,
+                  campaignId: journeyId,
+                  campaignName: journey.name || 'Nurture Campaign',
+                  leadId,
+                  leadPhone: contactPhone,
+                  companyName: leadData.companyName || leadData.company_name || 'Unknown',
+                  leadName: contactName || null,
+                  sentAt: nowStr,
+                  status: sendResult.success ? 'delivered' : 'failed',
+                  errorMessage: sendResult.success ? null : (sendResult.message || 'SMS send failed'),
+                  type: 'sms',
+                  trackingCategory: 'nurture',
+                  isNurture: true,
+                  message: smsMessage
+                });
+              } catch (delErr) {
+                console.error('[Nurture] Error recording SMS delivery record:', delErr);
+              }
 
               if (!sendResult.success) {
                 console.error(`[Nurture] SMS dispatch failed for lead ${leadId}:`, sendResult.message);
