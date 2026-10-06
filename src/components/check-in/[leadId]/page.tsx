@@ -381,8 +381,21 @@ export default function UnifiedCheckinPage() {
             const result = await initiateLocalMileTrial({ leadId: lead!.id, serviceType, rate, accountManagerName: lead?.accountManagerAssigned });
             if (result.success) {
               toast({ title: 'Success', description: 'LocalMile trial initiated.' });
-              await updateLeadDetails(lead!.id, lead!, { status: 'LocalMile Opportunity', serviceType, rate });
-              setLead(prev => prev ? { ...prev, status: 'LocalMile Opportunity', serviceType, rate } : null);
+              const regPmpoRate = result.localmilePMPORate !== undefined 
+                ? (parseFloat(String(result.localmilePMPORate)) || rate)
+                : rate;
+              const updates: any = { 
+                status: 'LocalMile Opportunity', 
+                serviceType, 
+                rate,
+                pmpoRate: regPmpoRate,
+                ...(result.services ? { services: result.services } : {}),
+                ...(result.localmilePMPOInternalID ? { localmilePMPOInternalID: String(result.localmilePMPOInternalID) } : {}),
+                ...(result.localmileTrialInternalID ? { localmileTrialInternalID: String(result.localmileTrialInternalID) } : {}),
+                ...(result.localmilePMPORate !== undefined ? { localmilePMPORate: regPmpoRate } : {})
+              };
+              await updateLeadDetails(lead!.id, lead!, updates);
+              setLead(prev => prev ? { ...prev, ...updates } : null);
             } else {
               toast({ variant: 'destructive', title: 'Error', description: result.message });
               throw new Error(result.message);

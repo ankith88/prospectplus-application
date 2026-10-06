@@ -187,7 +187,9 @@ export async function POST(req: NextRequest) {
       message: 'Job recorded successfully',
       jobId,
       jobCount: totalJobCount,
-      trialsRemaining: computedTrialsRemaining
+      trialsRemaining: computedTrialsRemaining,
+      isFirstJob,
+      hasCreatedJob: totalJobCount > 0
     });
 
   } catch (error: any) {

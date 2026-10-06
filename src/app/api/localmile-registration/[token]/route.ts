@@ -285,14 +285,23 @@ export async function POST(
 
     const isOutbound = leadData.bucket === 'outbound';
     const nowIso = new Date().toISOString();
+    const pmpoRateNum = trialRes.localmilePMPORate !== undefined 
+      ? (parseFloat(String(trialRes.localmilePMPORate)) || 15) 
+      : 15;
+
     await leadRef.update({
       status: 'LocalMile Opportunity',
       customerStatus: 'LocalMile Opportunity',
       serviceType: 'Adhoc',
-      rate: 15,
+      rate: pmpoRateNum,
+      pmpoRate: pmpoRateNum,
       localMileTrialsRemaining: 5,
       dateRegistrationSent: nowIso,
       registrationSentAt: nowIso,
+      ...(trialRes.services ? { services: trialRes.services } : {}),
+      ...(trialRes.localmilePMPOInternalID ? { localmilePMPOInternalID: String(trialRes.localmilePMPOInternalID) } : {}),
+      ...(trialRes.localmileTrialInternalID ? { localmileTrialInternalID: String(trialRes.localmileTrialInternalID) } : {}),
+      ...(trialRes.localmilePMPORate !== undefined ? { localmilePMPORate: pmpoRateNum } : {}),
       ...(!isOutbound ? {
         bucket: 'account_manager'
       } : {}),

@@ -542,15 +542,24 @@ export async function POST(req: NextRequest) {
           if (trialResult.success && trialResult.localMilePlusAuthLink) {
             localMilePlusAuthLink = trialResult.localMilePlusAuthLink;
 
+            const pmpoRateVal = trialResult.localmilePMPORate !== undefined 
+              ? (parseFloat(String(trialResult.localmilePMPORate)) || 15) 
+              : 15;
+
             // Update Lead fields in Firestore
             const leadRef = db.collection('leads').doc(netSuiteId);
             await leadRef.set({
               status: 'LocalMile Opportunity',
               customerStatus: 'LocalMile Opportunity',
               serviceType: 'Adhoc',
-              rate: 15,
+              rate: pmpoRateVal,
+              pmpoRate: pmpoRateVal,
               bucket: 'account_manager',
-              localMileTrialsRemaining: 5
+              localMileTrialsRemaining: 5,
+              ...(trialResult.services ? { services: trialResult.services } : {}),
+              ...(trialResult.localmilePMPOInternalID ? { localmilePMPOInternalID: String(trialResult.localmilePMPOInternalID) } : {}),
+              ...(trialResult.localmileTrialInternalID ? { localmileTrialInternalID: String(trialResult.localmileTrialInternalID) } : {}),
+              ...(trialResult.localmilePMPORate !== undefined ? { localmilePMPORate: pmpoRateVal } : {})
             }, { merge: true });
 
             // Update primary contact document with registration details

@@ -1332,18 +1332,27 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
 
                 const isOutbound = lead.bucket === 'outbound';
                 const nowIso = new Date().toISOString();
+                const regPmpoRate = regResult.localmilePMPORate !== undefined 
+                    ? (parseFloat(String(regResult.localmilePMPORate)) || numericRate)
+                    : numericRate;
+
                 postTrialPromises.push(
                     updateLeadDetails(lead.id, lead, {
                         status: 'LocalMile Opportunity',
                         customerStatus: 'LocalMile Opportunity',
                         serviceType: registerServiceType,
                         rate: numericRate,
+                        pmpoRate: regPmpoRate,
                         dateRegistrationSent: nowIso,
                         registrationSentAt: nowIso,
                         ...(!isOutbound ? {
                             bucket: 'account_manager',
                         } : {}),
-                        localMileTrialsRemaining: 5
+                        localMileTrialsRemaining: 5,
+                        ...(regResult.services ? { services: regResult.services } : {}),
+                        ...(regResult.localmilePMPOInternalID ? { localmilePMPOInternalID: String(regResult.localmilePMPOInternalID) } : {}),
+                        ...(regResult.localmileTrialInternalID ? { localmileTrialInternalID: String(regResult.localmileTrialInternalID) } : {}),
+                        ...(regResult.localmilePMPORate !== undefined ? { localmilePMPORate: regPmpoRate } : {})
                     })
                 );
                 postTrialPromises.push(

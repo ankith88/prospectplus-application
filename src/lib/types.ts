@@ -714,6 +714,9 @@ export interface Lead {
   localMileTrialStopped?: boolean;
   localMileTrialCancelled?: boolean;
   trialCancelledAt?: string;
+  localmilePMPOInternalID?: string;
+  localmileTrialInternalID?: string;
+  localmilePMPORate?: number | string;
   lastLocalMileJobCreatedAt?: string;
   localMileNudgeCount?: number;
   lastLocalMileNudgeSentAt?: string;

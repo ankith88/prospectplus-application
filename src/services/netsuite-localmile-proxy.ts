@@ -7,6 +7,7 @@ import { logEmailServer, getLeadServer, getFranchiseeEmailServer } from '@/servi
 import { sendSms } from '@/services/sms-service';
 import { getPmpoServiceForLead } from '@/lib/localmile-utils';
 import { checkLocalMileCompanyExists, getLocalMilePlusDb } from '@/lib/localmile-db';
+import { ServiceSelection } from '@/lib/types';
 
 /**
  * @fileoverview Server action to proxy LocalMile free trial requests to NetSuite.
@@ -25,13 +26,17 @@ interface InitiateLocalMileTrialPayload {
 	accountManagerName?: string;
 }
 
-interface NetSuiteResponse {
+export interface NetSuiteResponse {
 	success: boolean;
 	leadID?: string;
 	message: string;
 	result?: string;
 	securityCode?: string;
 	localMilePlusAuthLink?: string;
+	localmilePMPOInternalID?: string;
+	localmilePMPORate?: number | string;
+	localmileTrialInternalID?: string;
+	services?: ServiceSelection[];
 }
 
 export async function initiateMPProductsTrial(payload: InitiateLocalMileTrialPayload): Promise<NetSuiteResponse> {
@@ -254,6 +259,77 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 
 		const responseBody = await response.json();
 		console.log(`[LocalMile Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
+
+		if (responseBody.success) {
+			try {
+				const { adminApp } = await import('@/lib/firebase-admin');
+				const { getFirestore } = await import('firebase-admin/firestore');
+				const db = getFirestore(adminApp);
+
+				const rawPmpoRate = responseBody.localmilePMPORate !== undefined 
+					? responseBody.localmilePMPORate 
+					: (payload.rate !== undefined ? payload.rate : 15);
+				const parsedPmpoRate = typeof rawPmpoRate === 'number' ? rawPmpoRate : (parseFloat(String(rawPmpoRate)) || 0);
+
+				const todayStr = new Date().toISOString().split('T')[0];
+
+				const pmpoService: ServiceSelection = {
+					id: responseBody.localmilePMPOInternalID ? String(responseBody.localmilePMPOInternalID) : undefined,
+					name: 'PMPO',
+					frequency: 'Adhoc',
+					rate: parsedPmpoRate,
+					startDate: todayStr
+				};
+
+				const trialService: ServiceSelection = {
+					id: responseBody.localmileTrialInternalID ? String(responseBody.localmileTrialInternalID) : undefined,
+					name: 'LocalMile Trial',
+					frequency: 'Adhoc',
+					rate: 0,
+					startDate: todayStr,
+					trialStartDate: todayStr
+				};
+
+				const leadRef = db.collection('leads').doc(leadId);
+				const leadSnap = await leadRef.get();
+
+				let existingServices: ServiceSelection[] = [];
+				let targetRef: FirebaseFirestore.DocumentReference = leadRef;
+
+				if (leadSnap.exists) {
+					const data = leadSnap.data() || {};
+					existingServices = Array.isArray(data.services) ? data.services : [];
+				} else {
+					const compRef = db.collection('companies').doc(leadId);
+					const compSnap = await compRef.get();
+					if (compSnap.exists) {
+						targetRef = compRef;
+						const compData = compSnap.data() || {};
+						existingServices = Array.isArray(compData.services) ? compData.services : [];
+					}
+				}
+
+				const filteredServices = existingServices.filter((s: ServiceSelection) => {
+					const nameLower = (s.name || '').toLowerCase();
+					return nameLower !== 'pmpo' && nameLower !== 'localmile trial';
+				});
+
+				const mergedServices: ServiceSelection[] = [...filteredServices, pmpoService, trialService];
+
+				await targetRef.set({
+					services: mergedServices,
+					pmpoRate: parsedPmpoRate,
+					localmilePMPOInternalID: responseBody.localmilePMPOInternalID ? String(responseBody.localmilePMPOInternalID) : null,
+					localmileTrialInternalID: responseBody.localmileTrialInternalID ? String(responseBody.localmileTrialInternalID) : null,
+					localmilePMPORate: parsedPmpoRate
+				}, { merge: true });
+
+				responseBody.services = mergedServices;
+				console.log(`[LocalMile Proxy] Successfully saved PMPO & LocalMile Trial services for ${leadId}:`, mergedServices);
+			} catch (serviceErr: any) {
+				console.error(`[LocalMile Proxy Error] Failed to update PMPO & LocalMile Trial services for ${leadId}:`, serviceErr);
+			}
+		}
 
 		if (responseBody.success && responseBody.localMilePlusAuthLink && responseBody.securityCode && contactEmail) {
 			// Trigger background notifications asynchronously without blocking NetSuite response

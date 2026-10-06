@@ -4205,14 +4205,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
             const isSigned = isCompanyProfile || lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed';
             const isOutbound = lead.bucket === 'outbound';
+            const pmpoRateNum = result.localmilePMPORate !== undefined 
+                ? (parseFloat(String(result.localmilePMPORate)) || rate)
+                : rate;
             const nowIso = new Date().toISOString();
 
             const updates: Partial<Lead> = {
                 serviceType, 
                 rate, 
+                pmpoRate: pmpoRateNum,
                 dateRegistrationSent: nowIso,
                 registrationSentAt: nowIso,
                 localMileTrialsRemaining: lead.localMileTrialsRemaining !== undefined ? lead.localMileTrialsRemaining : 5,
+                ...(result.services ? { services: result.services } : {}),
+                ...(result.localmilePMPOInternalID ? { localmilePMPOInternalID: String(result.localmilePMPOInternalID) } : {}),
+                ...(result.localmileTrialInternalID ? { localmileTrialInternalID: String(result.localmileTrialInternalID) } : {}),
+                ...(result.localmilePMPORate !== undefined ? { localmilePMPORate: pmpoRateNum } : {}),
                 ...(isSigned ? {} : {
                     status: 'LocalMile Opportunity',
                     customerStatus: 'LocalMile Opportunity',
