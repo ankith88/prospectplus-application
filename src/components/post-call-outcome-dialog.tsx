@@ -218,7 +218,131 @@ const outcomeStructure = [
   }
 ];
 
-
+const DEFAULT_NO_ANSWER_SHIPMATE_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your MailPlus enquiry</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    img {
+      border: 0;
+      outline: none;
+      text-decoration: none;
+      -ms-interpolation-mode: bicubic;
+    }
+    @media screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 8px !important;
+      }
+      .content-cell {
+        padding: 30px 20px !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0; width: 100%;">
+    <tr>
+      <td align="center">
+        <table class="email-container" align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(9, 92, 123, 0.06);">
+          <tr>
+            <td class="content-cell" style="padding: 45px 35px; color: #2d3748; font-size: 15px; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              <p style="margin: 0 0 16px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">Hi {{contact.firstName}},</p>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">Thanks again for your enquiry. I've tried to reach you without luck, so here's a quick rundown of our shipping service. If you'd like to talk rates or any of our other services, you can book a time that suits you here:</p>
+              <p style="margin: 0 0 24px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                <strong>Link:</strong> <span style="background-color: #eaf044; color: #095c7b; font-weight: bold; padding: 4px 8px; border-radius: 4px;">{{Lead.ContactBookingLink}}</span>
+              </p>
+              <p style="margin: 0 0 12px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6; font-weight: bold;">Here's what you get with MailPlus:</p>
+              <div style="margin-bottom: 20px;">
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 12px;">
+                  <tr>
+                    <td valign="top" style="width: 24px; font-size: 14px; line-height: 1.6; color: #095c7b;">•</td>
+                    <td valign="top" style="font-size: 14.5px; color: #4a5568; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                      <strong style="color: #2d3748;">A dedicated pickup run</strong> &mdash; the same local driver every time, on the collection day(s) you choose each week, with same-day lodgement guaranteed. Minimum is just one collection a week.
+                    </td>
+                  </tr>
+                </table>
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 12px;">
+                  <tr>
+                    <td valign="top" style="width: 24px; font-size: 14px; line-height: 1.6; color: #095c7b;">•</td>
+                    <td valign="top" style="font-size: 14.5px; color: #4a5568; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                      <strong style="color: #2d3748;">Flat-rate shipping Australia-wide up to 5kg</strong>, 1&ndash;2 day delivery, with items up to 20kg on our Premium service.
+                    </td>
+                  </tr>
+                </table>
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 12px;">
+                  <tr>
+                    <td valign="top" style="width: 24px; font-size: 14px; line-height: 1.6; color: #095c7b;">•</td>
+                    <td valign="top" style="font-size: 14.5px; color: #4a5568; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                      <strong style="color: #2d3748;">ShipMate, our free portal</strong> &mdash; create consignments, print labels, notify receivers and track everything in one place.
+                    </td>
+                  </tr>
+                </table>
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 12px;">
+                  <tr>
+                    <td valign="top" style="width: 24px; font-size: 14px; line-height: 1.6; color: #095c7b;">•</td>
+                    <td valign="top" style="font-size: 14.5px; color: #4a5568; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                      <strong style="color: #2d3748;">Shopify, WooCommerce or custom API integration</strong> if you're shipping from a store.
+                    </td>
+                  </tr>
+                </table>
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 12px;">
+                  <tr>
+                    <td valign="top" style="width: 24px; font-size: 14px; line-height: 1.6; color: #095c7b;">•</td>
+                    <td valign="top" style="font-size: 14.5px; color: #4a5568; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                      <strong style="color: #2d3748;">Australia Post collection and lodgement</strong> &mdash; we pick up and lodge your AP mail and parcels too.
+                    </td>
+                  </tr>
+                </table>
+              </div>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">Worth knowing: we run the largest overnight network in Australia (currently 96% next-day delivery), every shipment is covered by our service guarantee up to $250, and there's no fixed term or commitment required.</p>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">If a call's not your thing, just hit reply &mdash; happy to answer anything by email.</p>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">Thank you,</p>
+              <p style="margin: 0; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                {{AccountManager.Name}}<br />
+                <strong style="color: #2d3748;">M:</strong> {{AccountManager.Mobile}}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+              <img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" width="135" style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;" />
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+              <p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+              </p>
+              <p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Powered by MailPlus Australia
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+                &copy; 2026 MailPlus. All rights reserved. <br />
+                If you no longer wish to receive marketing communications, you can&nbsp;
+                <a href="{{unsubscribe_link}}" style="color: #095c7b; text-decoration: underline;">Unsubscribe here</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
 export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false, initialOutcome = '' }: PostCallOutcomeDialogProps) {
   const [wizardStep, setWizardStep] = useState<1 | 2>(1);
@@ -415,7 +539,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
   const isEmailOutcome = useMemo(() => {
     if (!outcome) return false;
     if (outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') return true;
-    if (!isUserRole && (outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory')) return true;
+    if (!isUserRole && (outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory' || outcome === 'No Answer')) return true;
     return false;
   }, [outcome, isUserRole]);
 
@@ -782,6 +906,14 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
       if (found) {
         applyTemplate(found.id);
       }
+    } else if (!isUserRole && outcome === 'No Answer') {
+      const found = marketingTemplates.find(t => t.name === 'No Answer - ShipMate Info' || t.name.toLowerCase().includes('no answer - shipmate'));
+      if (found) {
+        applyTemplate(found.id);
+      } else {
+        form.setValue('subject', compilePlaceholders('Your MailPlus enquiry'));
+        setEditableEmailBody(compilePlaceholders(DEFAULT_NO_ANSWER_SHIPMATE_HTML));
+      }
     }
   }, [isOpen, outcome, userProfile, marketingTemplates]);
 
@@ -814,6 +946,21 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
           }
         } catch (e) {
           console.error("Error fetching Out of Territory template subject:", e);
+        }
+      } else if (outcome === 'No Answer') {
+        try {
+          const templatesRef = collection(db, 'marketing_templates');
+          const q = query(templatesRef, where('name', '==', 'No Answer - ShipMate Info'));
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+            const subj = querySnapshot.docs[0].data()?.subject || 'Your MailPlus enquiry';
+            form.setValue('subject', compilePlaceholders(subj));
+          } else {
+            form.setValue('subject', compilePlaceholders('Your MailPlus enquiry'));
+          }
+        } catch (e) {
+          console.error("Error fetching No Answer template subject:", e);
+          form.setValue('subject', compilePlaceholders('Your MailPlus enquiry'));
         }
       }
     }
@@ -1003,7 +1150,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
 
     const isUserRoleSubmitted = userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user';
     const isEmailOutcomeSubmitted = (values.outcome === 'Email Interested' || values.outcome === 'Email Brush-Off' || values.outcome === 'Email Brush Off') ||
-      (!isUserRoleSubmitted && (values.outcome === 'LOST - No Response' || values.outcome === 'Lost - Out of Territory'));
+      (!isUserRoleSubmitted && (values.outcome === 'LOST - No Response' || values.outcome === 'Lost - Out of Territory' || values.outcome === 'No Answer'));
 
     if (isEmailOutcomeSubmitted && values.sendEmail && uniqueEmails.length > 0 && !values.targetEmail) {
         form.setError('targetEmail', { type: 'manual', message: 'Please select an email address.' });
@@ -1412,6 +1559,9 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                 } else if (values.outcome === 'Lost - Out of Territory') {
                     const found = marketingTemplates.find(t => t.name === 'Sales - Out of Territory');
                     templateIdToUse = found?.id || 'ZNI8yZ4PP5Q7UawHhbZh';
+                } else if (values.outcome === 'No Answer') {
+                    const found = marketingTemplates.find(t => t.name === 'No Answer - ShipMate Info' || t.name.toLowerCase().includes('no answer - shipmate'));
+                    templateIdToUse = found?.id || 'no_answer_shipmate_info';
                 } else {
                     templateIdToUse = 'ZNI8yZ4PP5Q7UawHhbZh';
                 }
@@ -1736,6 +1886,8 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                                     ? "Send automatic 'Sales - Out of Territory' email"
                                     : outcome === 'LOST - No Response'
                                     ? "Send automatic 'No Response' email"
+                                    : outcome === 'No Answer'
+                                    ? "Send automatic 'No Answer - ShipMate Info' email to prospect"
                                     : outcome === 'Email Brush-Off' || outcome === 'Email Brush Off'
                                     ? "Send 'Email Brush-Off' template email"
                                     : "Send 'Email Interested' template email"}
@@ -1862,6 +2014,8 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                                         ? "Send 'Sales - Out of Territory' Email To"
                                         : outcome === 'LOST - No Response'
                                         ? "Send 'No Response' Email To"
+                                        : outcome === 'No Answer'
+                                        ? "Send 'No Answer - ShipMate Info' Email To"
                                         : "Send Email To"}
                                     </FormLabel>
                                     {uniqueEmails.length > 1 && (
@@ -2105,6 +2259,9 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                           </div>
                         )}
                       </div>
+                    )}
+                    {!isUserRole && outcome === 'No Answer' && uniqueEmails.length === 0 && (
+                      <p className="text-sm text-destructive">No email addresses found for this lead. The No Answer email will not be sent.</p>
                     )}
                     {!isUserRole && outcome === 'No Answer' && uniquePhones.length > 0 && (
                       <div className="space-y-4 border p-4 rounded-lg bg-amber-50/40 border-amber-200">

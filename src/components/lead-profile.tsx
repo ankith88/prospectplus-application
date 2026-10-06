@@ -2052,15 +2052,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         return;
       }
 
-      const isAmOrSalesManager = isAccountOrSalesManager(userProfile, isSuperAdmin);
-      const isAmOnly = isAmOrSalesManager && !isSuperAdmin && !['admin', 'superadmin', 'sales manager', 'marketing manager'].includes((userProfile?.activeRole || userProfile?.role || '').toLowerCase().trim());
-      
-      if (isAmOnly) {
-        if (!campName.includes('account manager') && !campName.includes('am')) {
-          return;
-        }
-      }
-
       const campTemplates = templates.filter(t => camp.templateId === t.id || camp.emailTemplateIds?.includes(t.id));
       if (campTemplates.length > 0) {
         groups.push({

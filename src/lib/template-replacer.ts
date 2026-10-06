@@ -207,13 +207,17 @@ export function replaceTemplatePlaceholders(
     /\{\{\s*Lead\.BookingLink\s*\}\}/gi,
     /\{\{\s*booking_link\s*\}\}/gi,
     /\{\{\s*booking_url\s*\}\}/gi,
-  ], generalBookingLink);
+    /\[REP:\s*PASTE\s+THIS\s+LEAD['’]?S\s+BOOKING\s+LINK\s+HERE\]/gi,
+    /\[REP:\s*PASTE\s+THIS\s+LEAD&#39;S\s+BOOKING\s+LINK\s+HERE\]/gi,
+  ], generalBookingLink || contactBookingLink);
 
   content = replaceUrlPlaceholder(content, [
     /\{\{\s*Lead\.ContactBookingLink\s*\}\}/gi,
     /\{\{\s*ContactBookingLink\s*\}\}/gi,
     /\{\{\s*Lead\.BookingUrlId\s*\}\}/gi,
-  ], contactBookingLink);
+    /\[REP:\s*PASTE\s+THIS\s+LEAD['’]?S\s+BOOKING\s+LINK\s+HERE\]/gi,
+    /\[REP:\s*PASTE\s+THIS\s+LEAD&#39;S\s+BOOKING\s+LINK\s+HERE\]/gi,
+  ], contactBookingLink || generalBookingLink);
 
   content = replaceUrlPlaceholder(content, [
     /\{\{\s*Lead\.SCFLink\s*\}\}/gi,
@@ -302,6 +306,10 @@ export function replaceTemplatePlaceholders(
     .replace(/\{\{\s*phone\s*\}\}/gi, contactPhone)
     .replace(/\{\{\s*Lead\.City\s*\}\}/gi, leadCity)
     .replace(/\{\{\s*city\s*\}\}/gi, leadCity)
+    .replace(/\[REP:\s*PASTE\s+THIS\s+LEAD['’]?S\s+BOOKING\s+LINK\s+HERE\]/gi, contactBookingLink || generalBookingLink || 'https://prospectplus.com.au')
+    .replace(/\[REP:\s*PASTE\s+THIS\s+LEAD&#39;S\s+BOOKING\s+LINK\s+HERE\]/gi, contactBookingLink || generalBookingLink || 'https://prospectplus.com.au')
+    .replace(/\{\{\s*Lead\.ContactBookingLink\s*\}\}/gi, contactBookingLink || generalBookingLink || '')
+    .replace(/\{\{\s*Lead\.GeneralBookingLink\s*\}\}/gi, generalBookingLink || contactBookingLink || '')
 
     // LocalMile Security Code
     .replace(/\{\{\s*Lead\.LocalMileSecurityCode\s*\}\}/gi, localMileSecurityCode)

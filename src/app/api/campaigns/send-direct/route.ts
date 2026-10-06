@@ -46,15 +46,30 @@ export async function POST(request: Request) {
     const senderEmail = activeConfig?.senderEmail || 'campaigns@mailplus.com.au';
 
     // 2. Fetch the Email Template
-    const templateDoc = await db.collection('marketing_templates').doc(templateId).get();
-    if (!templateDoc.exists) {
+    let templateData: any = null;
+    if (templateId) {
+      const templateDoc = await db.collection('marketing_templates').doc(templateId).get();
+      if (templateDoc.exists) {
+        templateData = templateDoc.data();
+      } else {
+        const nameQuery = await db.collection('marketing_templates').where('name', '==', templateId).limit(1).get();
+        if (!nameQuery.empty) {
+          templateData = nameQuery.docs[0].data();
+        }
+      }
+    }
+
+    if (!templateData && customHtml) {
+      templateData = { body: customHtml, subject: customSubject || 'Your MailPlus enquiry' };
+    }
+
+    if (!templateData) {
       return NextResponse.json(
         { success: false, message: `Template not found: ${templateId}` },
         { status: 404 }
       );
     }
 
-    const templateData = templateDoc.data();
     const templateBody = templateData?.body || '';
     const subjectLine = customSubject !== undefined ? customSubject : (templateData?.subject || 'Outbound Update');
 

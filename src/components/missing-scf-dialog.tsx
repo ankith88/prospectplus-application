@@ -29,10 +29,10 @@ export function MissingScfDialog({
 }: MissingScfDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100vw-32px)] sm:max-w-xl">
         <DialogHeader>
           <div className="flex items-center gap-2.5 text-amber-600">
-            <div className="p-2 bg-amber-100 dark:bg-amber-950/60 rounded-full">
+            <div className="p-2 bg-amber-100 dark:bg-amber-950/60 rounded-full shrink-0">
               <AlertTriangle className="h-5 w-5" />
             </div>
             <DialogTitle className="text-lg">Signed SCF Required</DialogTitle>
