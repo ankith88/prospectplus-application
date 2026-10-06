@@ -61,3 +61,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, message: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    let targetId = '';
+    let reason = 'Lead marked lost or customer cancelled';
+    let deactivatedBy = 'API Caller';
+
+    // Parse URL query params
+    const { searchParams } = new URL(request.url);
+    const queryCompanyId = searchParams.get('companyId') || searchParams.get('leadId') || searchParams.get('id');
+    if (queryCompanyId) targetId = queryCompanyId;
+    if (searchParams.get('reason')) reason = searchParams.get('reason')!;
+    if (searchParams.get('deactivatedBy')) deactivatedBy = searchParams.get('deactivatedBy')!;
+
+    // Also check request body if provided
+    try {
+      const body = await request.json();
+      if (body.companyId || body.leadId || body.id) {
+        targetId = body.companyId || body.leadId || body.id;
+      }
+      if (body.reason) reason = body.reason;
+      if (body.deactivatedBy) deactivatedBy = body.deactivatedBy;
+    } catch {
+      // Body may be empty in standard DELETE requests
+    }
+
+    if (!targetId) {
+      return NextResponse.json({ success: false, message: 'companyId or leadId is required.' }, { status: 400 });
+    }
+
+    const { deactivateLocalMileScheduledJobs } = await import('@/services/localmile-scheduled-jobs-service');
+    const result = await deactivateLocalMileScheduledJobs(targetId, { reason, deactivatedBy });
+    return NextResponse.json(result);
+  } catch (error: any) {
+    console.error('[Scheduled Jobs API DELETE Error]:', error);
+    return NextResponse.json({ success: false, message: error.message || 'Internal Server Error' }, { status: 500 });
+  }
+}
+

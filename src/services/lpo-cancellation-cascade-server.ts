@@ -114,6 +114,17 @@ export async function processLpoCancellationCascade(options: LpoCancellationCasc
       await disableLpoPlusAccount(mainNetsuiteId, mainEmail);
     }
 
+    // Inactivate any scheduled jobs in LocalMile Plus
+    try {
+      const { deactivateLocalMileScheduledJobs } = await import('@/services/localmile-scheduled-jobs-service');
+      await deactivateLocalMileScheduledJobs(leadId, {
+        reason: `LPO Cancellation Cascade: ${cancellationReason}`,
+        deactivatedBy: cancelledBy
+      });
+    } catch (schedErr) {
+      console.warn('[processLpoCancellationCascade] Scheduled jobs deactivation warning:', schedErr);
+    }
+
     return { success: true, updatedChildCount: childCount, updatedLpoCount: lpoCount };
   } catch (error) {
     console.error('[processLpoCancellationCascade] Error processing cascade:', error);

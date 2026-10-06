@@ -120,6 +120,24 @@ export async function deactivateLocalMileAccessForLead(
       }
     }
 
+    // 6. Deactivate scheduled jobs in LocalMile Plus database via API route
+    try {
+      const isClient = typeof window !== 'undefined';
+      const deactUrl = isClient ? '/api/localmile/scheduled-jobs/deactivate' : 'http://localhost:3000/api/localmile/scheduled-jobs/deactivate';
+      fetch(deactUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: leadId,
+          leadId: leadId,
+          reason: 'Customer cancelled or lead marked lost',
+          deactivatedBy: 'LocalMile Deactivation Service'
+        })
+      }).catch(schedErr => console.warn('[LocalMile Deactivation] Scheduled jobs deactivation warning:', schedErr));
+    } catch (schedErr) {
+      console.warn('[LocalMile Deactivation] Could not trigger scheduled jobs deactivation for lead:', leadId, schedErr);
+    }
+
     return { success: revokedEmails.length > 0, emailsRevoked: revokedEmails };
   } catch (error) {
     console.error("[LocalMile Deactivation] Fatal error executing deactivation:", error);
