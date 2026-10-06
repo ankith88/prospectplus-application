@@ -47,6 +47,8 @@ const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   isPrimary: z.boolean().default(false),
   isAccountsPayable: z.boolean().default(false),
+  accessToLocalMile: z.boolean().default(false),
+  accessToShipMate: z.boolean().default(false),
 })
 
 interface EditContactFormProps {
@@ -75,6 +77,8 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
       title: contact.title,
       isPrimary: !!contact.isPrimary,
       isAccountsPayable: !!contact.isAccountsPayable,
+      accessToLocalMile: contact.accessToLocalMile === 'yes',
+      accessToShipMate: contact.accessToShipMate === 'yes',
     },
   })
 
@@ -83,8 +87,28 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
       const firstName = values.firstName.trim();
       const lastName = values.lastName.trim();
       const fullName = `${firstName} ${lastName}`.trim();
-      const accessToLocalMile: 'yes' | 'no' = contact.accessToLocalMile || 'no';
-      const accessToShipMate: 'yes' | 'no' = contact.accessToShipMate || 'no';
+      const newAccessToLocalMile: 'yes' | 'no' = values.accessToLocalMile ? 'yes' : 'no';
+      const newAccessToShipMate: 'yes' | 'no' = values.accessToShipMate ? 'yes' : 'no';
+
+      // If LocalMile access was previously 'yes' and is now being revoked, call the deactivation endpoint
+      const hadLocalMileAccess = contact.accessToLocalMile === 'yes';
+      if (hadLocalMileAccess && !values.accessToLocalMile && values.email) {
+        try {
+          console.log(`[Edit Contact] Revoking LocalMile access for ${values.email} (lead: ${leadId})...`);
+          await fetch('/api/localmile/deactivate-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: values.email,
+              leadId: leadId,
+              customer_id: leadId,
+            }),
+          });
+        } catch (deactErr) {
+          console.warn('[Edit Contact] Could not deactivate LocalMile user account via API:', deactErr);
+        }
+      }
+
       const updatedContactData: Contact = { 
         ...contact, 
         firstName,
@@ -95,9 +119,10 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
         phone: values.phone,
         isPrimary: values.isPrimary,
         isAccountsPayable: values.isAccountsPayable,
-        accessToLocalMile,
-        accessToShipMate,
+        accessToLocalMile: newAccessToLocalMile,
+        accessToShipMate: newAccessToShipMate,
       };
+
       const response = await sendContactToNetSuite({
         leadId,
         contact: {
@@ -110,8 +135,8 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
           phone: values.phone,
           isPrimary: values.isPrimary,
           isAccountsPayable: values.isAccountsPayable,
-          accessToLocalMile,
-          accessToShipMate,
+          accessToLocalMile: newAccessToLocalMile,
+          accessToShipMate: newAccessToShipMate,
         }
       });
 
@@ -119,14 +144,21 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
         throw new Error(response.message || "Failed to update contact in NetSuite.");
       }
 
+      const localMileNote = hadLocalMileAccess && !values.accessToLocalMile
+        ? ' (LocalMile access revoked)'
+        : !hadLocalMileAccess && values.accessToLocalMile
+        ? ' (LocalMile access granted)'
+        : '';
+
       await logActivity(leadId, {
           type: 'Update',
-          notes: `Contact details updated for ${fullName}. Primary: ${values.isPrimary}, Accounts Payable: ${values.isAccountsPayable}`,
+          notes: `Contact details updated for ${fullName}. Primary: ${values.isPrimary}, Accounts Payable: ${values.isAccountsPayable}, LocalMile: ${newAccessToLocalMile}${localMileNote}`,
           author: user?.displayName || 'Unknown'
       }, collectionName);
+
       toast({
         title: "Success",
-        description: "Contact updated via NetSuite successfully.",
+        description: `Contact updated successfully.${localMileNote}`,
       })
       onContactUpdated(updatedContactData);
       onClose();
@@ -210,12 +242,12 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
             </FormItem>
           )}
         />
-        <div className="grid grid-cols-2 gap-4 py-2">
+        <div className="grid grid-cols-2 gap-3 py-1">
           <FormField
             control={form.control}
             name="isPrimary"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-muted/20">
                 <FormControl>
                   <Checkbox
                     checked={field.value}
@@ -223,7 +255,7 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
                   />
                 </FormControl>
                 <div className="space-y-1 leading-none">
-                  <FormLabel className="cursor-pointer font-semibold">Primary Contact</FormLabel>
+                  <FormLabel className="cursor-pointer font-semibold text-xs sm:text-sm">Primary Contact</FormLabel>
                 </div>
               </FormItem>
             )}
@@ -232,7 +264,7 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
             control={form.control}
             name="isAccountsPayable"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-muted/20">
                 <FormControl>
                   <Checkbox
                     checked={field.value}
@@ -240,7 +272,43 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose, co
                   />
                 </FormControl>
                 <div className="space-y-1 leading-none">
-                  <FormLabel className="cursor-pointer font-semibold">Accounts Payable</FormLabel>
+                  <FormLabel className="cursor-pointer font-semibold text-xs sm:text-sm">Accounts Payable</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="accessToLocalMile"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-emerald-50/40 border-emerald-200">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer font-semibold text-xs sm:text-sm text-emerald-950">LocalMile Access</FormLabel>
+                  <p className="text-[11px] text-emerald-700">Parcel Pickup portal login</p>
+                </div>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="accessToShipMate"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-blue-50/40 border-blue-200">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer font-semibold text-xs sm:text-sm text-blue-950">ShipMate Access</FormLabel>
+                  <p className="text-[11px] text-blue-700">Courier Shipping portal login</p>
                 </div>
               </FormItem>
             )}

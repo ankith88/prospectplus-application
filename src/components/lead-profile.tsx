@@ -67,6 +67,7 @@ import {
   Share2,
   Shield,
   ShieldCheck,
+  ShieldOff,
   Download,
   Upload,
   FileAudio,
@@ -196,6 +197,7 @@ import { ManageServicesDialog } from './manage-services-dialog'
 import { LocalMileAccessDialog } from './localmile-access-dialog'
 import { LocalMileStatusBadge } from './localmile-status-badge'
 import { ReactivateLocalMileDialog } from './reactivate-localmile-dialog'
+import { DeactivateLocalMileDialog } from './deactivate-localmile-dialog'
 import type { LocalMileCompanyStatusResponse } from '@/services/localmile-company-service'
 import { ShipMateAccessDialog } from './shipmate-access-dialog'
 import { EditPostalAddressDialog } from './edit-postal-address-dialog'
@@ -1744,6 +1746,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [localMileStatus, setLocalMileStatus] = useState<LocalMileCompanyStatusResponse | null>(null);
   const [loadingLocalMileStatus, setLoadingLocalMileStatus] = useState(false);
   const [isReactivateLocalMileOpen, setIsReactivateLocalMileOpen] = useState(false);
+  const [isDeactivateLocalMileOpen, setIsDeactivateLocalMileOpen] = useState(false);
   const isCancelledInLocalMile = Boolean(
     localMileStatus?.isCompanyCancelled ||
     localMileStatus?.companyStatus === 'cancelled' ||
@@ -4918,7 +4921,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 className="border-emerald-500 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950 font-semibold shadow-2xs"
               >
                 <RefreshCw className="mr-2 h-4 w-4 text-emerald-600" />
-                Reactivate in LocalMile Plus
+                Reactivate in LocalMile
               </Button>
             )}
             {!isCancelledInLocalMile && (
@@ -5069,7 +5072,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 setIsReactivateLocalMileOpen(true); 
             }}
         >
-            <RefreshCw className="mr-2 h-4 w-4 text-emerald-600" />Reactivate in LocalMile Plus
+            <RefreshCw className="mr-2 h-4 w-4 text-emerald-600" />Reactivate in LocalMile
         </DropdownMenuItem>
     ) : null;
 
@@ -5776,6 +5779,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     loading={loadingLocalMileStatus}
                                     onRefresh={fetchLocalMileStatus}
                                     onReactivateClick={() => setIsReactivateLocalMileOpen(true)}
+                                    onDeactivateClick={() => setIsDeactivateLocalMileOpen(true)}
                                 />
                             )}
                             {hasJobs ? (
@@ -5816,17 +5820,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 >
                                     <ExternalLink className="h-3 w-3 text-sky-700" />
                                     Reg Link
-                                </button>
-                            )}
-                            {!isTrialStoppedOrCancelled && userProfile?.activeRole?.toLowerCase() !== 'user' && (
-                                <button
-                                    onClick={() => setStopTrialType('LocalMile')}
-                                    className="inline-flex items-center gap-1.5 text-xs text-amber-800 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full transition-all font-semibold shadow-2xs cursor-pointer"
-                                    title="Stop / Cancel Free Trial"
-                                    type="button"
-                                >
-                                    <AlertTriangle className="h-3 w-3 text-amber-600" />
-                                    Stop Free Trial
                                 </button>
                             )}
                         </div>
@@ -9741,6 +9734,54 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
                         </Button>
                     )}
+
+                    {/* LocalMile Quick Actions */}
+                    {(() => {
+                        const isLocalMileRelevant = Boolean(
+                            isCompanyProfile ||
+                            localMileStatus?.exists ||
+                            lead.hasCreatedJob ||
+                            lead.localMileTrialsRemaining !== undefined ||
+                            lead.status?.includes('LocalMile') ||
+                            lead.customerStatus?.includes('LocalMile') ||
+                            (lead.contacts || []).some(c => c.accessToLocalMile === 'yes')
+                        );
+                        const isLocalMileTrialStopped = Boolean(
+                            lead.localMileTrialStopped ||
+                            lead.localMileTrialCancelled ||
+                            lead.status === 'LocalMile Trial Stopped' ||
+                            lead.customerStatus === 'LocalMile Trial Stopped'
+                        );
+                        const canManage = userProfile?.activeRole?.toLowerCase() !== 'user';
+
+                        if (!isLocalMileRelevant || !canManage) return null;
+
+                        return (
+                            <>
+                                {!isCancelledInLocalMile && (
+                                    <Button
+                                        className="w-full justify-start bg-background hover:bg-rose-50 text-rose-700 border-rose-200 hover:border-rose-300 font-medium"
+                                        variant="outline"
+                                        onClick={() => setIsDeactivateLocalMileOpen(true)}
+                                    >
+                                        <ShieldOff className="mr-2 h-4 w-4 text-rose-600" />
+                                        Deactivate LocalMile
+                                    </Button>
+                                )}
+                                {!isLocalMileTrialStopped && (
+                                    <Button
+                                        className="w-full justify-start bg-background hover:bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300 font-medium"
+                                        variant="outline"
+                                        onClick={() => setStopTrialType('LocalMile')}
+                                    >
+                                        <AlertTriangle className="mr-2 h-4 w-4 text-amber-600" />
+                                        Stop Free Trial
+                                    </Button>
+                                )}
+                            </>
+                        );
+                    })()}
+
                     {isCompanyProfile && (
                         <>
                             {lead.status !== 'Lost Customer' ? (
@@ -10247,6 +10288,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <ReactivateLocalMileDialog
         isOpen={isReactivateLocalMileOpen}
         onOpenChange={setIsReactivateLocalMileOpen}
+        lead={lead}
+        localMileStatus={localMileStatus}
+        onSuccess={async () => {
+            await fetchLocalMileStatus();
+            await refreshLeadData();
+        }}
+    />
+    <DeactivateLocalMileDialog
+        isOpen={isDeactivateLocalMileOpen}
+        onOpenChange={setIsDeactivateLocalMileOpen}
         lead={lead}
         localMileStatus={localMileStatus}
         onSuccess={async () => {

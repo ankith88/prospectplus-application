@@ -72,7 +72,7 @@ export function ReactivateLocalMileDialog({
     (!(pmpoService as any).serviceType || String((pmpoService as any).serviceType).toLowerCase() !== 'adhoc')
   );
 
-  // Map contacts to their LocalMile Plus database user status
+  // Map contacts to their LocalMile database user status
   const localMileUsers = localMileStatus?.users || [];
 
   const contactStatusList = eligibleContacts.map((c) => {
@@ -118,7 +118,7 @@ export function ReactivateLocalMileDialog({
     setSelectedContactIds([]);
   };
 
-  // Users in LocalMile Plus that are not matched to any contact on the lead
+  // Users in LocalMile that are not matched to any contact on the lead
   const unlinkedLocalMileUsers = localMileUsers.filter(
     (u) =>
       u.email &&
@@ -173,14 +173,14 @@ export function ReactivateLocalMileDialog({
       if (newProvisionCount > 0 && resendCount > 0) {
         contactMsg = ` Provisioned access for ${newProvisionCount} contact(s) and resent credentials to ${resendCount} existing contact(s).`;
       } else if (newProvisionCount > 0) {
-        contactMsg = ` Provisioned new LocalMile Plus access for ${newProvisionCount} contact(s).`;
+        contactMsg = ` Provisioned new LocalMile access for ${newProvisionCount} contact(s).`;
       } else if (resendCount > 0) {
         contactMsg = ` Resent credentials to ${resendCount} contact(s).`;
       }
 
       toast({
         title: 'Company Reactivated',
-        description: `Successfully restored ${lead.companyName || 'Company'} to active in LocalMile Plus database.${contactMsg}`,
+        description: `Successfully restored ${lead.companyName || 'Company'} to active in LocalMile database.${contactMsg}`,
       });
 
       onOpenChange(false);
@@ -203,10 +203,10 @@ export function ReactivateLocalMileDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-emerald-900 dark:text-emerald-300">
             <RefreshCw className="h-5 w-5 text-emerald-600 animate-spin-reverse" />
-            Reactivate in LocalMile Plus
+            Reactivate in LocalMile
           </DialogTitle>
           <DialogDescription className="text-slate-600 dark:text-slate-400 pt-1">
-            Restore account access for <strong>{lead.companyName || 'this company'}</strong> in the LocalMile Plus database.
+            Restore account access for <strong>{lead.companyName || 'this company'}</strong> in the LocalMile database.
           </DialogDescription>
         </DialogHeader>
 
@@ -215,7 +215,7 @@ export function ReactivateLocalMileDialog({
           <Alert className="bg-amber-50/80 border-amber-200 text-amber-900 dark:bg-amber-950/20 dark:border-amber-900/40 dark:text-amber-200">
             <AlertTriangle className="h-4 w-4 text-amber-600" />
             <AlertTitle className="text-xs font-bold uppercase tracking-wider">
-              Current LocalMile Plus Status: Cancelled
+              Current LocalMile Status: Cancelled
             </AlertTitle>
             <AlertDescription className="text-xs mt-1 space-y-1">
               <div>
@@ -244,7 +244,7 @@ export function ReactivateLocalMileDialog({
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
                 <UserCheck className="h-3.5 w-3.5 text-[#095c7b]" />
-                Select Contact(s) for LocalMile Plus Access
+                Select Contact(s) for LocalMile Access
               </span>
               <span className="text-[11px] font-normal text-muted-foreground">
                 {selectedContactIds.length === 0
@@ -375,7 +375,7 @@ export function ReactivateLocalMileDialog({
                           <div className="text-[11px] text-sky-900 dark:text-sky-200 flex items-start gap-1.5 font-normal">
                             <Sparkles className="h-3.5 w-3.5 text-sky-600 shrink-0 mt-0.5" />
                             <span>
-                              <strong>Will Provision New Access:</strong> Confirming will provision a new user account for <strong>{contact.name || contact.email}</strong> in LocalMile Plus and dispatch their activation invite link.
+                              <strong>Will Provision New Access:</strong> Confirming will provision a new user account for <strong>{contact.name || contact.email}</strong> in LocalMile and dispatch their activation invite link.
                             </span>
                           </div>
                         ) : (
@@ -422,11 +422,11 @@ export function ReactivateLocalMileDialog({
             )}
           </div>
 
-            {/* Other LocalMile Plus Users not listed in ProspectPlus Contacts */}
+            {/* Other LocalMile Users not listed in ProspectPlus Contacts */}
             {unlinkedLocalMileUsers.length > 0 && (
               <div className="pt-1.5 mt-1 border-t border-dashed border-slate-200 dark:border-slate-800">
                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Other User(s) Found in LocalMile Plus Database
+                  Other User(s) Found in LocalMile Database
                 </div>
                 <div className="space-y-1">
                   {unlinkedLocalMileUsers.map((u) => (
@@ -456,7 +456,7 @@ export function ReactivateLocalMileDialog({
               Reactivation Actions
             </div>
             <ul className="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400 text-[11px]">
-              <li>Sets company status back to <span className="text-emerald-700 font-semibold">active</span> in LocalMile Plus.</li>
+              <li>Sets company status back to <span className="text-emerald-700 font-semibold">active</span> in LocalMile.</li>
               <li>Re-enables existing users and clears cancellation flags.</li>
               <li>Restores recurring collection scheduled jobs (if applicable).</li>
               <li>Logs a permanent audit record in ProspectPlus activity history.</li>
@@ -480,7 +480,7 @@ export function ReactivateLocalMileDialog({
                     Restore PMPO Scheduled Collections
                   </label>
                   <p className="text-[11px] text-muted-foreground">
-                    Reactivates recurring scheduled parcel collections in the LocalMile Plus database.
+                    Reactivates recurring scheduled parcel collections in the LocalMile database.
                   </p>
                 </div>
               </div>

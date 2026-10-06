@@ -3811,7 +3811,7 @@ export function ServiceSelectionDialog({
                                                 </Badge>
                                             </div>
                                             <p className="text-xs text-muted-foreground">
-                                                Choose which contact from {lead?.companyName || 'this company'} will receive access credentials for LocalMile Plus.
+                                                Choose which contact from {lead?.companyName || 'this company'} will receive access credentials for LocalMile.
                                             </p>
 
                                             <div className="space-y-2">

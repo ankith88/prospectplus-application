@@ -27,6 +27,7 @@ interface LocalMileStatusBadgeProps {
   loading?: boolean;
   onRefresh?: () => void;
   onReactivateClick?: () => void;
+  onDeactivateClick?: () => void;
   className?: string;
 }
 
@@ -35,6 +36,7 @@ export function LocalMileStatusBadge({
   loading = false,
   onRefresh,
   onReactivateClick,
+  onDeactivateClick,
   className,
 }: LocalMileStatusBadgeProps) {
   if (loading || status === null) {
@@ -47,7 +49,36 @@ export function LocalMileStatusBadge({
         )}
       >
         <Loader2 className="h-3 w-3 animate-spin text-slate-500" />
-        <span>LocalMile Plus: Checking...</span>
+        <span>LocalMile: Checking...</span>
+      </Badge>
+    );
+  }
+
+  if (status.companyStatus === 'error' || status.success === false) {
+    return (
+      <Badge
+        variant="outline"
+        className={cn(
+          'bg-slate-50 text-slate-500 border-slate-200 text-xs px-2.5 py-0.5 shadow-2xs inline-flex items-center gap-1.5',
+          className
+        )}
+        title={status.message || 'Failed to check LocalMile database status'}
+      >
+        <AlertTriangle className="h-3 w-3 text-amber-500" />
+        <span>LocalMile: Status Unavailable</span>
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRefresh();
+            }}
+            className="hover:text-foreground ml-0.5 cursor-pointer"
+            title="Retry"
+          >
+            <RefreshCw className="h-2.5 w-2.5" />
+          </button>
+        )}
       </Badge>
     );
   }
@@ -60,10 +91,10 @@ export function LocalMileStatusBadge({
           'bg-slate-50 text-slate-500 border-slate-200 text-xs px-2.5 py-0.5 shadow-2xs inline-flex items-center gap-1.5',
           className
         )}
-        title="Company not found in LocalMile Plus database"
+        title="Company not found in LocalMile database"
       >
         <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-        <span>LocalMile Plus: Not Registered</span>
+        <span>LocalMile: Not Registered</span>
       </Badge>
     );
   }
@@ -73,28 +104,28 @@ export function LocalMileStatusBadge({
   // Determine Badge visual configuration
   let badgeStyle = 'bg-slate-50 text-slate-700 border-slate-300';
   let dotColor = 'bg-slate-400';
-  let label = 'LocalMile Plus: Unknown';
+  let label = 'LocalMile: Unknown';
 
   if (isCompanyActive) {
     if (hasActiveUser) {
       badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800';
       dotColor = 'bg-emerald-500';
-      label = `LocalMile Plus: Active (${activeUsersCount} Active User${activeUsersCount > 1 ? 's' : ''})`;
+      label = `LocalMile: Active (${activeUsersCount} Active User${activeUsersCount > 1 ? 's' : ''})`;
     } else if (pendingUsersCount > 0) {
       badgeStyle = 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800';
       dotColor = 'bg-amber-500';
-      label = `LocalMile Plus: Active (${pendingUsersCount} User Pending)`;
+      label = `LocalMile: Active (${pendingUsersCount} User Pending)`;
     } else {
       badgeStyle = 'bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-800';
       dotColor = 'bg-sky-500';
-      label = 'LocalMile Plus: Active (No Users)';
+      label = 'LocalMile: Active (No Users)';
     }
   } else if (isCompanyCancelled) {
     badgeStyle = 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800';
     dotColor = 'bg-rose-500';
     label = hasActiveUser
-      ? `LocalMile Plus: Cancelled (${activeUsersCount} Active User)`
-      : `LocalMile Plus: Cancelled (No Active User)`;
+      ? `LocalMile: Cancelled (${activeUsersCount} Active User)`
+      : `LocalMile: Cancelled (No Active User)`;
   }
 
   return (
@@ -117,7 +148,7 @@ export function LocalMileStatusBadge({
           <div className="flex items-center justify-between border-b pb-2">
             <div className="flex items-center gap-1.5 font-bold text-sm text-slate-900 dark:text-slate-100">
               <ShieldCheck className="h-4 w-4 text-[#095c7b]" />
-              LocalMile Plus Status
+              LocalMile Status
             </div>
             {onRefresh && (
               <Button
@@ -168,7 +199,7 @@ export function LocalMileStatusBadge({
             </div>
             {users.length === 0 ? (
               <div className="text-xs text-muted-foreground italic bg-slate-50 dark:bg-slate-900 p-2 rounded text-center">
-                No users linked in LocalMile Plus database.
+                No users linked in LocalMile database.
               </div>
             ) : (
               <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
@@ -213,7 +244,22 @@ export function LocalMileStatusBadge({
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8 flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
-                Reactivate in LocalMile Plus
+                Reactivate in LocalMile
+              </Button>
+            </div>
+          )}
+
+          {/* Deactivate Action Button if Active or Has Active Users */}
+          {!canReactivate && (isCompanyActive || hasActiveUser) && onDeactivateClick && (
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onDeactivateClick}
+                className="w-full border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-950/30 font-semibold text-xs h-8 flex items-center justify-center gap-1.5 shadow-2xs"
+              >
+                <XCircle className="h-3.5 w-3.5 text-rose-600" />
+                Deactivate LocalMile Account
               </Button>
             </div>
           )}

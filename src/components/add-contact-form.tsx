@@ -45,6 +45,8 @@ const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   isPrimary: z.boolean().default(false),
   isAccountsPayable: z.boolean().default(false),
+  accessToLocalMile: z.boolean().default(false),
+  accessToShipMate: z.boolean().default(false),
 })
 
 interface AddContactFormProps {
@@ -66,6 +68,8 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
       title: "",
       isPrimary: false,
       isAccountsPayable: false,
+      accessToLocalMile: false,
+      accessToShipMate: false,
     },
   })
 
@@ -82,8 +86,8 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
         title: values.title,
         email: values.email,
         phone: values.phone || '',
-        accessToLocalMile: 'no',
-        accessToShipMate: 'no',
+        accessToLocalMile: values.accessToLocalMile ? 'yes' : 'no',
+        accessToShipMate: values.accessToShipMate ? 'yes' : 'no',
         isPrimary: values.isPrimary,
         isAccountsPayable: values.isAccountsPayable,
       }
@@ -183,12 +187,12 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
             </FormItem>
           )}
         />
-        <div className="grid grid-cols-2 gap-4 py-2">
+        <div className="grid grid-cols-2 gap-3 py-1">
           <FormField
             control={form.control}
             name="isPrimary"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-muted/20">
                 <FormControl>
                   <Checkbox
                     checked={field.value}
@@ -196,7 +200,7 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
                   />
                 </FormControl>
                 <div className="space-y-1 leading-none">
-                  <FormLabel className="cursor-pointer font-semibold">Primary Contact</FormLabel>
+                  <FormLabel className="cursor-pointer font-semibold text-xs sm:text-sm">Primary Contact</FormLabel>
                 </div>
               </FormItem>
             )}
@@ -205,7 +209,7 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
             control={form.control}
             name="isAccountsPayable"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-muted/20">
                 <FormControl>
                   <Checkbox
                     checked={field.value}
@@ -213,7 +217,43 @@ export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads
                   />
                 </FormControl>
                 <div className="space-y-1 leading-none">
-                  <FormLabel className="cursor-pointer font-semibold">Accounts Payable</FormLabel>
+                  <FormLabel className="cursor-pointer font-semibold text-xs sm:text-sm">Accounts Payable</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="accessToLocalMile"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-emerald-50/40 border-emerald-200">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer font-semibold text-xs sm:text-sm text-emerald-950">LocalMile Access</FormLabel>
+                  <p className="text-[11px] text-emerald-700">Parcel Pickup portal login</p>
+                </div>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="accessToShipMate"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-blue-50/40 border-blue-200">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer font-semibold text-xs sm:text-sm text-blue-950">ShipMate Access</FormLabel>
+                  <p className="text-[11px] text-blue-700">Courier Shipping portal login</p>
                 </div>
               </FormItem>
             )}

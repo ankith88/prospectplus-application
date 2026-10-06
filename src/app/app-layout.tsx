@@ -170,7 +170,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       return 'search-ai';
     }
     if (path === '/leads/map') return 'field-logistics';
-    if (path.startsWith('/leads') || path.startsWith('/inbound-leads') || path.startsWith('/franchisee-leads') || path.startsWith('/admin/marketing/import-leads') || path.startsWith('/franchisee-lead-verification') || path.startsWith('/admin/in-review-leads') || path.startsWith('/admin/mass-link-customers') || path.startsWith('/admin/all-leads') || path.startsWith('/admin/unassigned-leads') || path.startsWith('/account-manager/pipeline') || path.startsWith('/multisites') || path.startsWith('/account-manager/multisites') || path.startsWith('/signed-customers') || path.startsWith('/lost-customers')) {
+    if (path.startsWith('/leads') || path.startsWith('/inbound-leads') || path.startsWith('/franchisee-leads') || path.startsWith('/admin/marketing/import-leads') || path.startsWith('/franchisee-lead-verification') || path.startsWith('/admin/in-review-leads') || path.startsWith('/admin/mass-link-customers') || path.startsWith('/admin/all-leads') || path.startsWith('/admin/unassigned-leads') || path.startsWith('/account-manager/pipeline') || path.startsWith('/multisites') || path.startsWith('/account-manager/multisites') || path.startsWith('/signed-customers') || path.startsWith('/lost-customers') || path.startsWith('/admin/customer-invoicing')) {
       return 'sales-crm';
     }
     if (path.startsWith('/customer-success') && !path.includes('/reporting')) {
@@ -312,6 +312,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/account-manager/multisites': { label: 'MultiSites', category: 'Sales & CRM', icon: Network, href: '/account-manager/multisites' },
     '/signed-customers': { label: 'Signed Customers', category: 'Sales & CRM', icon: Star, href: '/signed-customers' },
     '/lost-customers': { label: 'Lost Customers', category: 'Sales & CRM', icon: UserX, href: '/lost-customers' },
+    '/admin/customer-invoicing': { label: 'Customer Invoicing', category: 'Sales & CRM', icon: DollarSign, href: '/admin/customer-invoicing' },
 
     // Customer Success
     '/customer-success/onboarding': { label: 'Onboarding Requests', category: 'Customer Success', icon: CalendarCheck, href: '/customer-success/onboarding' },
@@ -1538,6 +1539,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                 </Link>
                               </SidebarMenuButton>
                             </SidebarMenuItem>
+                            {isAdmin && (
+                              <SidebarMenuItem>
+                                <SidebarMenuButton asChild isActive={isActive("/admin/customer-invoicing")} tooltip="Customer Invoicing">
+                                  <Link href="/admin/customer-invoicing">
+                                    <DollarSign />
+                                    <span>Customer Invoicing</span>
+                                  </Link>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            )}
                           </>
                         )}
                       </SidebarMenu>
@@ -2862,6 +2873,7 @@ const getPageNameFromPath = (path: string) => {
   if (path === '/franchisee-leads') return 'All Leads';
   if (path === '/admin/mass-link-customers') return 'Mass Link Customers';
   if (path === '/admin/in-review-leads') return 'In Review Leads';
+  if (path === '/admin/customer-invoicing') return 'Customer Invoicing';
   if (path === '/leads/archive') return 'Archived Leads';
   if (path === '/leads/map') return 'Territory Map';
   if (path.startsWith('/leads/')) return 'Lead Profile';

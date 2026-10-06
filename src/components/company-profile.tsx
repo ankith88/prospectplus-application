@@ -1561,7 +1561,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                 className="border-emerald-500 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950 font-semibold h-7 text-xs shadow-2xs"
                             >
                                 <RefreshCw className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
-                                Reactivate in LocalMile Plus
+                                Reactivate in LocalMile
                             </Button>
                         )}
                         {hasJobs ? (
