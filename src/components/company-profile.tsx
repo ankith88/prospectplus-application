@@ -48,10 +48,13 @@ import {
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { getOnboardingRequestByLeadId } from '@/services/onboarding-service'
 import type { OnboardingRequest } from '@/lib/types'
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { Lead, LeadStatus, Note, Address, Invoice, VisitNote, DiscoveryData, UserProfile } from '@/lib/types'
 import { EmailVerificationBadge } from '@/components/ui/email-verification-badge'
 import { verifyEmailsClient } from '@/lib/verify-email-client'
+import { LocalMileStatusBadge } from './localmile-status-badge'
+import { ReactivateLocalMileDialog } from './reactivate-localmile-dialog'
+import type { LocalMileCompanyStatusResponse } from '@/services/localmile-company-service'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
@@ -129,6 +132,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
   const [company, setCompany] = useState<Lead>(initialCompany);
   const [localMileJobs, setLocalMileJobs] = useState<any[]>([]);
+  const [localMileStatus, setLocalMileStatus] = useState<LocalMileCompanyStatusResponse | null>(null);
+  const [loadingLocalMileStatus, setLoadingLocalMileStatus] = useState(false);
+  const [isReactivateLocalMileOpen, setIsReactivateLocalMileOpen] = useState(false);
   const [shipMateJobs, setShipMateJobs] = useState<any[]>([]);
   const [loadingShipMateJobs, setLoadingShipMateJobs] = useState<boolean>(true);
   const [selectedShipMateJob, setSelectedShipMateJob] = useState<any | null>(null);
@@ -355,6 +361,28 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       unsubCompanies();
     };
   }, [company?.id, company?.jobCount, company?.localMileTrialsRemaining, company?.hasCreatedJob]);
+
+  const fetchLocalMileStatus = useCallback(async () => {
+    if (!company?.id) return;
+    try {
+      setLoadingLocalMileStatus(true);
+      const res = await fetch(`/api/localmile/company-status?companyId=${encodeURIComponent(company.id)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLocalMileStatus(data);
+      }
+    } catch (e) {
+      console.warn('[CompanyProfile] Failed to fetch LocalMile status:', e);
+    } finally {
+      setLoadingLocalMileStatus(false);
+    }
+  }, [company?.id]);
+
+  useEffect(() => {
+    if (company?.id) {
+      fetchLocalMileStatus();
+    }
+  }, [company?.id, fetchLocalMileStatus]);
 
   useEffect(() => {
     if (!company?.id) return;
@@ -1511,12 +1539,31 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 const actualTrialsRemaining = localMileJobs.length > 0 ? Math.max(0, 5 - validJobsCount) : (company.localMileTrialsRemaining ?? 5);
                 const hasJobs = company.hasCreatedJob === true || String(company.hasCreatedJob) === 'true' || actualJobCount > 0;
 
-                if (!hasJobs && company.localMileTrialsRemaining === undefined && !company.status?.includes('LocalMile') && !company.customerStatus?.includes('LocalMile') && company.jobCount === undefined && !company.lastLocalMileJobCreatedAt) {
+                const hasLocalMileRecord = Boolean(localMileStatus?.exists);
+
+                if (!hasLocalMileRecord && !hasJobs && company.localMileTrialsRemaining === undefined && !company.status?.includes('LocalMile') && !company.customerStatus?.includes('LocalMile') && company.jobCount === undefined && !company.lastLocalMileJobCreatedAt) {
                     return null;
                 }
 
                 return (
                     <div className="flex wrap items-center gap-x-2 gap-y-1 mt-2">
+                        <LocalMileStatusBadge
+                            status={localMileStatus}
+                            loading={loadingLocalMileStatus}
+                            onRefresh={fetchLocalMileStatus}
+                            onReactivateClick={() => setIsReactivateLocalMileOpen(true)}
+                        />
+                        {localMileStatus?.canReactivate && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setIsReactivateLocalMileOpen(true)}
+                                className="border-emerald-500 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950 font-semibold h-7 text-xs shadow-2xs"
+                            >
+                                <RefreshCw className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                                Reactivate in LocalMile Plus
+                            </Button>
+                        )}
                         {hasJobs ? (
                             <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800" title={`First job created on ${company.firstJobCreatedAt ? new Date(company.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
                                 Jobs Created: {actualJobCount}
@@ -2549,6 +2596,16 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             if (updates) {
                 setCompany(prev => ({ ...prev, ...updates }));
             }
+        }}
+    />
+
+    <ReactivateLocalMileDialog
+        isOpen={isReactivateLocalMileOpen}
+        onOpenChange={setIsReactivateLocalMileOpen}
+        lead={company}
+        localMileStatus={localMileStatus}
+        onSuccess={async () => {
+            await fetchLocalMileStatus();
         }}
     />
 

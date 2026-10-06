@@ -731,15 +731,16 @@ export async function generateInboundCallsReport(
           responseTimeCount++;
         }
       } else {
-        // 2. Check for Aircall Outbound Calls to this caller after the missed call
+        // 2. Check for Aircall Outbound Calls to this caller that occurred strictly AFTER the missed call
         const matchingOutbounds = (normCallerPhone ? outboundMap.get(normCallerPhone) : null) || [];
         const subsequentOutbound = matchingOutbounds
-          .filter((out) => out.started_at >= callTimeSeconds - 60) // Allow 1-min buffer
+          .filter((out) => out.started_at > callTimeSeconds && String(out.id) !== String(call.id))
           .sort((a, b) => a.started_at - b.started_at)[0];
 
         if (subsequentOutbound) {
           const outSeconds = subsequentOutbound.started_at;
-          const diffMinutes = Math.max(0, Math.round((outSeconds - callTimeSeconds) / 60));
+          const diffSeconds = outSeconds - callTimeSeconds;
+          const diffMinutes = Math.max(0, Math.round(diffSeconds / 60));
           const isConnected = (subsequentOutbound.duration || 0) > 0 || !!subsequentOutbound.answered_at;
           const outAuthor = subsequentOutbound.user?.name || 'Aircall User';
           const outDate = new Date(outSeconds * 1000).toISOString();
@@ -770,13 +771,18 @@ export async function generateInboundCallsReport(
           totalResponseTimeMinutes += diffMinutes;
           responseTimeCount++;
         } else if (matchedLead) {
-          // 3. Check for Lead Activities recorded in CRM after the missed call
+          // 3. Check for Lead Activities recorded in CRM strictly AFTER the missed call
           const leadActs = leadActivitiesMap.get(`${matchedLead.type}/${matchedLead.id}`) || [];
           const subsequentActivity = leadActs
             .filter((act) => {
               if (!act.date) return false;
               const actMs = new Date(act.date).getTime();
-              return actMs >= callTimeMs - 60000; // 1-min buffer
+              // Must be strictly after the missed call timestamp
+              if (actMs <= callTimeMs) return false;
+              // Ignore if this activity was the auto-logged missed call event itself
+              if (act.callId && String(act.callId) === String(call.id)) return false;
+              if (act.aircallStatus === 'missed') return false;
+              return true;
             })
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
 

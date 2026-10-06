@@ -34,13 +34,38 @@ export async function syncPmpoToLocalMileServer(
     }
 
     const freqRaw = pmpoService.frequency;
+    const isAdhoc =
+      !freqRaw ||
+      (typeof freqRaw === 'string' && freqRaw.trim().toLowerCase() === 'adhoc') ||
+      (pmpoService.serviceType && String(pmpoService.serviceType).toLowerCase() === 'adhoc');
+
+    if (isAdhoc) {
+      console.log(`[LocalMile Sync] PMPO frequency for lead ${leadId} is Adhoc. No scheduled_jobs will be created.`);
+      // If there are existing scheduled jobs in LocalMile Plus for this company, deactivate them since service is Adhoc
+      try {
+        const { deactivateLocalMileScheduledJobs } = await import('@/services/localmile-scheduled-jobs-service');
+        await deactivateLocalMileScheduledJobs(leadId, { reason: 'PMPO service frequency is Adhoc' });
+      } catch (deactErr) {
+        console.warn(`[LocalMile Sync] Could not clean up scheduled jobs for Adhoc lead ${leadId}:`, deactErr);
+      }
+      return { success: true, message: 'Adhoc PMPO service does not require scheduled_jobs.' };
+    }
+
     let frequencyArray: string[] = [];
     if (Array.isArray(freqRaw)) {
-      frequencyArray = freqRaw;
-    } else if (typeof freqRaw === 'string' && freqRaw.toLowerCase() !== 'adhoc') {
-      frequencyArray = freqRaw.split(',').map((f: string) => f.trim()).filter(Boolean);
-    } else {
-      frequencyArray = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+      frequencyArray = freqRaw.filter(Boolean);
+    } else if (typeof freqRaw === 'string') {
+      const lower = freqRaw.trim().toLowerCase();
+      if (lower === 'daily') {
+        frequencyArray = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+      } else {
+        frequencyArray = freqRaw.split(',').map((f: string) => f.trim()).filter(Boolean);
+      }
+    }
+
+    if (frequencyArray.length === 0) {
+      console.log(`[LocalMile Sync] No recurring days specified for lead ${leadId}. Skipping scheduled_jobs creation.`);
+      return { success: true, message: 'No recurring days specified.' };
     }
 
     const startDateVal = effectiveDateStr || new Date().toISOString().split('T')[0];

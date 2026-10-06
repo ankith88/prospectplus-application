@@ -7,10 +7,20 @@ export async function POST(request: Request) {
     
     // We expect the frontend to pass the companyId as part of the payload, 
     // or we can extract it if needed. For now, we assume it's in the payload.
-    const { companyId, ...restPayload } = payload;
+    const { companyId, frequency, ...restPayload } = payload;
 
     if (!companyId) {
       return NextResponse.json({ success: false, message: 'companyId is required' }, { status: 400 });
+    }
+
+    const isAdhoc =
+      !frequency ||
+      (typeof frequency === 'string' && frequency.trim().toLowerCase() === 'adhoc') ||
+      (Array.isArray(frequency) && frequency.length === 0);
+
+    if (isAdhoc) {
+      console.log(`[Scheduled Jobs API] Company ${companyId} frequency is Adhoc. Skipping scheduled_job creation.`);
+      return NextResponse.json({ success: true, message: 'Adhoc frequency does not require scheduled_jobs' });
     }
 
     // Verify company document exists in LocalMile application database (companies collection) before proceeding

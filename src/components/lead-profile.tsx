@@ -82,7 +82,7 @@ import {
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
-import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isFranchiseeRole, isAccountOrSalesManager, isDialerRole, isOutboundLead } from '@/lib/lead-permissions'
+import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isLostCustomerOrLead, isFranchiseeRole, isAccountOrSalesManager, isDialerRole, isOutboundLead } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
 import { Pencil } from 'lucide-react'
 import { EditTaskDialog } from '@/components/edit-task-dialog'
@@ -194,6 +194,9 @@ import {
 import { ServiceSelectionDialog } from './service-selection-dialog'
 import { ManageServicesDialog } from './manage-services-dialog'
 import { LocalMileAccessDialog } from './localmile-access-dialog'
+import { LocalMileStatusBadge } from './localmile-status-badge'
+import { ReactivateLocalMileDialog } from './reactivate-localmile-dialog'
+import type { LocalMileCompanyStatusResponse } from '@/services/localmile-company-service'
 import { ShipMateAccessDialog } from './shipmate-access-dialog'
 import { EditPostalAddressDialog } from './edit-postal-address-dialog'
 import { EditAddressDialog } from './edit-address-dialog'
@@ -1738,6 +1741,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [allMarketingLists, setAllMarketingLists] = useState<string[]>([]);
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [preselectedLocalMileContactId, setPreselectedLocalMileContactId] = useState<string | null>(null);
+  const [localMileStatus, setLocalMileStatus] = useState<LocalMileCompanyStatusResponse | null>(null);
+  const [loadingLocalMileStatus, setLoadingLocalMileStatus] = useState(false);
+  const [isReactivateLocalMileOpen, setIsReactivateLocalMileOpen] = useState(false);
+  const isCancelledInLocalMile = Boolean(
+    localMileStatus?.isCompanyCancelled ||
+    localMileStatus?.companyStatus === 'cancelled' ||
+    localMileStatus?.canReactivate
+  );
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
   const [stopTrialType, setStopTrialType] = useState<'LocalMile' | 'ShipMate' | null>(null);
   const [stopTrialReason, setStopTrialReason] = useState('');
@@ -2647,6 +2658,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     });
     return () => unsubscribe();
   }, [lead?.id, isCompanyProfile]);
+
+  const fetchLocalMileStatus = useCallback(async () => {
+    if (!lead?.id) return;
+    try {
+      setLoadingLocalMileStatus(true);
+      const res = await fetch(`/api/localmile/company-status?companyId=${encodeURIComponent(lead.id)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLocalMileStatus(data);
+      }
+    } catch (e) {
+      console.warn('[LeadProfile] Failed to fetch LocalMile status:', e);
+    } finally {
+      setLoadingLocalMileStatus(false);
+    }
+  }, [lead?.id]);
+
+  useEffect(() => {
+    if (!lead?.id) return;
+    const isSigned = isCompanyProfile || lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed';
+    if (isSigned || lead.hasCreatedJob || lead.localMileTrialsRemaining !== undefined || lead.status?.includes('LocalMile') || lead.customerStatus?.includes('LocalMile')) {
+      fetchLocalMileStatus();
+    }
+  }, [lead?.id, isCompanyProfile, lead?.status, lead?.customerStatus, lead?.hasCreatedJob, lead?.localMileTrialsRemaining, fetchLocalMileStatus]);
 
   const filteredShipMateJobs = useMemo(() => {
     return shipMateJobs.filter(job => {
@@ -4868,17 +4903,29 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (isCompanyProfile) {
       return (
         <div className="flex flex-wrap items-center gap-2">
-            <Button
+            {localMileStatus?.canReactivate && (
+              <Button
                 variant="outline"
-                onClick={() => {
-                    setPreselectedLocalMileContactId(null);
-                    setIsLocalMileDialogOpen(true);
-                }}
-                className="border-sky-300 text-sky-700 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950 font-medium shadow-2xs"
-            >
-                <Star className="mr-2 h-4 w-4 text-sky-600" />
-                Grant LocalMile Access
-            </Button>
+                onClick={() => setIsReactivateLocalMileOpen(true)}
+                className="border-emerald-500 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950 font-semibold shadow-2xs"
+              >
+                <RefreshCw className="mr-2 h-4 w-4 text-emerald-600" />
+                Reactivate in LocalMile Plus
+              </Button>
+            )}
+            {!isCancelledInLocalMile && (
+              <Button
+                  variant="outline"
+                  onClick={() => {
+                      setPreselectedLocalMileContactId(null);
+                      setIsLocalMileDialogOpen(true);
+                  }}
+                  className="border-sky-300 text-sky-700 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950 font-medium shadow-2xs"
+              >
+                  <Star className="mr-2 h-4 w-4 text-sky-600" />
+                  Grant LocalMile Access
+              </Button>
+            )}
         </div>
       );
     }
@@ -4933,7 +4980,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenuItem>
     );
     
-    const trialsExceeded = lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1;
+    const trialsExceeded = !isSignedCustomer(lead) && !isLostCustomerOrLead(lead) && lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1;
 
     const freeTrialItem = (
         <DropdownMenuSub key="trial">
@@ -4987,7 +5034,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenuItem>
     ) : null;
 
-    const grantLocalMileItem = (
+    const grantLocalMileItem = !isCancelledInLocalMile ? (
         <DropdownMenuItem 
             key="grant-localmile" 
             onSelect={(e) => { 
@@ -5001,19 +5048,32 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         >
             <Star className="mr-2 h-4 w-4 text-sky-600" />Grant LocalMile Access
         </DropdownMenuItem>
-    );
+    ) : null;
 
     const isChildLpoLead = Boolean(isLpoLeadProcess && (lead.isChildLead || (lead.parentLeadId && !lead.isParentLead)));
+
+    const reactivateLocalMileItem = localMileStatus?.canReactivate ? (
+        <DropdownMenuItem 
+            key="reactivate-localmile" 
+            className="text-emerald-700 dark:text-emerald-400 font-semibold cursor-pointer"
+            onSelect={(e) => { 
+                e.preventDefault(); 
+                setIsReactivateLocalMileOpen(true); 
+            }}
+        >
+            <RefreshCw className="mr-2 h-4 w-4 text-emerald-600" />Reactivate in LocalMile Plus
+        </DropdownMenuItem>
+    ) : null;
 
     let salesItems: React.ReactNode[] = (isChildLpoLead)
         ? []
         : (isLeadWonOrSigned)
-            ? [grantLocalMileItem].filter(Boolean)
+            ? [reactivateLocalMileItem, grantLocalMileItem].filter(Boolean)
             : (isMailPlusPtyLtd && !isLpoLeadProcess)
                 ? []
                 : (isMailPlusPtyLtd && isLpoLeadProcess)
                     ? [quoteItem, signupItem].filter(Boolean)
-                    : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);;
+                    : [quoteItem, signupItem, freeTrialItem, stopLocalMileItem, stopShipMateItem].filter(Boolean);
 
     const hasSalesItems = salesItems.length > 0;
     const canShowLpoPlus = userProfile?.activeRole !== 'user' && !isLeadWonOrSigned && !isLpoNetworkBucket;
@@ -5690,8 +5750,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     const isTrialStoppedOrCancelled = Boolean(lead.localMileTrialStopped || lead.localMileTrialCancelled || lead.status === 'LocalMile Trial Stopped' || lead.customerStatus === 'LocalMile Trial Stopped');
                     const actualTrialsRemaining = isTrialStoppedOrCancelled ? 0 : (localMileJobs.length > 0 ? Math.max(0, 5 - validJobsCount) : (lead.localMileTrialsRemaining ?? 5));
                     const hasJobs = lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' || actualJobCount > 0;
+                    const hasLocalMileRecord = Boolean(localMileStatus?.exists || isCompanyProfile);
 
-                    if (!hasJobs && (isTrialStoppedOrCancelled || (lead.localMileTrialsRemaining === undefined && !lead.status?.includes('LocalMile') && !lead.customerStatus?.includes('LocalMile') && lead.jobCount === undefined && !lead.lastLocalMileJobCreatedAt))) {
+                    if (!hasLocalMileRecord && !hasJobs && (isTrialStoppedOrCancelled || (lead.localMileTrialsRemaining === undefined && !lead.status?.includes('LocalMile') && !lead.customerStatus?.includes('LocalMile') && lead.jobCount === undefined && !lead.lastLocalMileJobCreatedAt))) {
                         return null;
                     }
 
@@ -5701,6 +5762,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
                     return (
                         <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {(isCompanyProfile || localMileStatus?.exists || loadingLocalMileStatus) && (
+                                <LocalMileStatusBadge
+                                    status={localMileStatus}
+                                    loading={loadingLocalMileStatus}
+                                    onRefresh={fetchLocalMileStatus}
+                                    onReactivateClick={() => setIsReactivateLocalMileOpen(true)}
+                                />
+                            )}
                             {hasJobs ? (
                                 <Badge variant="outline" className="bg-emerald-100 text-emerald-900 border-emerald-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
                                     Jobs Created: {actualJobCount}
@@ -5849,7 +5918,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Alert>
       )}
 
-      {lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
+      {!isSignedCustomer(lead) && !isLostCustomerOrLead(lead) && lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
           <Alert className="bg-red-50 border-red-200 text-red-800 mb-6">
               <AlertCircle className="h-4 w-4 !text-red-800" />
               <AlertTitle className="font-semibold text-red-900">Conversion Call Required</AlertTitle>
@@ -7873,7 +7942,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         </div>
                                     )}
 
-                                    {(!contact.localMilePlusAuthLink || !contact.securityCode) && contact.email && (
+                                    {(!contact.localMilePlusAuthLink || !contact.securityCode) && contact.email && !isCancelledInLocalMile && (
                                         <div className="mt-2 pt-2 border-t border-muted-foreground/10">
                                             <Button 
                                                 variant="outline" 
@@ -10166,6 +10235,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         collectionName={isCompanyProfile ? 'companies' : 'leads'}
         preselectedContactId={preselectedLocalMileContactId}
         onConfirm={handleLocalMileConfirm} 
+    />
+    <ReactivateLocalMileDialog
+        isOpen={isReactivateLocalMileOpen}
+        onOpenChange={setIsReactivateLocalMileOpen}
+        lead={lead}
+        localMileStatus={localMileStatus}
+        onSuccess={async () => {
+            await fetchLocalMileStatus();
+            await refreshLeadData();
+        }}
     />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
     <Dialog open={!!stopTrialType} onOpenChange={(open) => { if (!open) { setStopTrialType(null); setStopTrialReason(''); } }}>

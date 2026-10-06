@@ -24,6 +24,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { parseDateString, getLeadDisplayDateValue, getLeadDisplayDateLabel } from '@/lib/utils';
 import { getLeadInitialBucket, formatBucketLabel, isLeadTransferred } from '@/lib/lead-stage-analytics';
+import { isSignedCustomer, isLostCustomerOrLead } from '@/lib/lead-permissions';
 import { AmQueueView } from './am-queue-view';
 import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
 
@@ -668,7 +669,7 @@ export default function PipelineDashboard() {
                 try { return startOfDay(parseISO(task.dueDate)).getTime() === today; } catch(e) { return false; }
             });
             
-            const isLowOnLocalMileTrials = lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1;
+            const isLowOnLocalMileTrials = !isSignedCustomer(lead) && !isLostCustomerOrLead(lead) && lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1;
             
             return isPriorityStatus || hasAppointmentToday || hasTaskToday || isLowOnLocalMileTrials;
         });
@@ -1810,7 +1811,7 @@ function LeadGrid({
                                                     Franchisee Lead
                                                 </Badge>
                                             )}
-                                            {lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
+                                            {!isSignedCustomer(lead) && !isLostCustomerOrLead(lead) && lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
                                                 <Badge 
                                                     variant="outline" 
                                                     className="text-[10px] uppercase shrink-0 border bg-red-50 text-red-700 border-red-200 animate-pulse"
@@ -2210,7 +2211,7 @@ function LeadCard({
                                     Franchisee Lead
                                 </Badge>
                             )}
-                            {lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
+                            {!isSignedCustomer(lead) && !isLostCustomerOrLead(lead) && lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
                                 <Badge 
                                     variant="outline" 
                                     className="text-[10px] uppercase shrink-0 border bg-red-50 text-red-700 border-red-200 animate-pulse"

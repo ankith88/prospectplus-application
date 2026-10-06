@@ -363,6 +363,29 @@ export function isSignedCustomer(lead?: Partial<Lead> | null): boolean {
   );
 }
 
+export function isLostCustomerOrLead(lead?: Partial<Lead> | null): boolean {
+  if (!lead) return false;
+  const status = (lead.status || '').toString().toLowerCase().trim();
+  const customerStatus = (lead.customerStatus || '').toString().toLowerCase().trim();
+  const outcome = ((lead as any).outcome || (lead as any).lastOutcome || '').toString().toLowerCase().trim();
+
+  const isLost = (s: string) =>
+    s === 'lost' ||
+    s === 'lost customer' ||
+    s === 'customer lost' ||
+    s === 'lor' ||
+    s.includes('lost') ||
+    s.includes('lor') ||
+    s === 'unqualified' ||
+    s === 'email brush off' ||
+    s === 'out of territory' ||
+    s.includes('cancelled') ||
+    s.includes('cancellation');
+
+  return isLost(status) || isLost(customerStatus) || (outcome ? isLost(outcome) : false);
+}
+
+
 export function canChangeFranchisee(
   lead: Partial<Lead> | null | undefined,
   userProfile: UserProfile | null | undefined,
