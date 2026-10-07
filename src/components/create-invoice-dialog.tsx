@@ -62,8 +62,14 @@ import {
   FileText, 
   MapPin, 
   Edit3, 
-  RotateCcw 
+  RotateCcw,
+  Mail,
+  Copy,
+  Camera,
+  Download,
+  ExternalLink
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
@@ -91,6 +97,7 @@ interface InvoiceLineDraft {
   id: string;
   itemId: string;
   itemName: string;
+  itemCode?: string;
   displayName?: string;
   itemType: 'service' | 'extra';
   isFixedRate: boolean;
@@ -321,9 +328,17 @@ export function CreateInvoiceDialog({
   const [adminFeeQty, setAdminFeeQty] = useState<number>(1);
   const [adminFeeRate, setAdminFeeRate] = useState<number>(9.00);
 
-  // Submission state
+  // Submission state & error diagnostics
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<{
+    message: string;
+    rawResponse?: any;
+    debugPayload?: any;
+    timestamp?: string;
+  } | null>(null);
+  const [copiedError, setCopiedError] = useState<boolean>(false);
+  const [capturingScreenshot, setCapturingScreenshot] = useState<boolean>(false);
 
   // Row popover open state for item picker
   const [activePickerRowId, setActivePickerRowId] = useState<string | null>(null);
@@ -615,36 +630,61 @@ export function CreateInvoiceDialog({
 
     const fetchFirestoreServices = async () => {
       try {
-        const q = query(collection(firestore, 'services'), where('isActive', '==', true));
-        const snap = await getDocs(q);
+        const snap = await getDocs(collection(firestore, 'services'));
 
         if (!snap.empty && isMounted) {
-          const loaded: ServiceCatalogItem[] = snap.docs.map(doc => {
-            const data = doc.data();
-            const rawCat = String(data.category || '').trim();
-            const isExtra = rawCat.toLowerCase().includes('extra');
-            const rawCode = String(data.code || data.netsuiteItemName || data.name || doc.id).trim();
-            const rawName = String(data.netsuiteItemName || data.code || rawCode).trim();
-            const basePrice = data.basePrice != null && !isNaN(Number(data.basePrice)) ? Number(data.basePrice) : null;
-            
-            // Fixed rate extras: items under category 'Extras' with a predefined positive basePrice
-            const isFixed = isExtra && rawCat === 'Extras' && basePrice != null && basePrice > 0;
+          const loaded: ServiceCatalogItem[] = snap.docs
+            .map(doc => {
+              const data = doc.data();
+              if (data.isActive === false) return null;
+              const rawCat = String(data.category || '').trim();
+              const isExtra = data.itemType === 'extra' || rawCat.toLowerCase().includes('extra');
+              const code = String(data.code || doc.id).trim();
+              const netsuiteItemId = String(data.netsuiteItemId || data.id || doc.id).trim();
+              const netsuiteItemName = String(data.netsuiteItemName || data.name || code).trim();
+              const basePrice = data.basePrice != null && !isNaN(Number(data.basePrice)) 
+                ? Number(data.basePrice) 
+                : (data.defaultRate != null && !isNaN(Number(data.defaultRate)) ? Number(data.defaultRate) : null);
+              
+              // Fixed rate extras: items under category 'Extras' with a predefined positive basePrice or explicit isFixedRate
+              const isFixed = Boolean(data.isFixedRate) || (isExtra && rawCat === 'Extras' && basePrice != null && basePrice > 0);
 
-            return {
-              itemId: String(data.netsuiteItemId || data.id || doc.id).trim(),
-              itemName: rawCode,
-              defaultRate: basePrice ?? (isExtra ? 0 : 10.00),
-              category: (rawCat || (isExtra ? 'Extras' : 'Services')) as any,
-              itemType: isExtra ? 'extra' : 'service',
-              isFixedRate: isFixed,
-              defaultFrequency: isExtra ? 'Adhoc' : 'Mon,Tue,Wed,Thu,Fri',
-              description: rawName !== rawCode ? rawName : undefined
-            };
-          });
+              return {
+                itemId: netsuiteItemId,
+                code: code,
+                itemName: netsuiteItemName, // Displayed name and NetSuite itemName
+                netsuiteItemId: netsuiteItemId,
+                netsuiteItemName: netsuiteItemName,
+                defaultRate: basePrice ?? (isExtra ? 0 : 10.00),
+                category: (rawCat || (isExtra ? 'Extras' : 'Services')) as any,
+                itemType: isExtra ? 'extra' : 'service',
+                isFixedRate: isFixed,
+                defaultFrequency: data.defaultFrequency || (isExtra ? 'Adhoc' : 'Mon,Tue,Wed,Thu,Fri'),
+                description: code !== netsuiteItemName ? code : undefined
+              };
+            })
+            .filter(Boolean) as ServiceCatalogItem[];
 
-          // Sort by name
+          // Sort by itemName
           loaded.sort((a, b) => a.itemName.localeCompare(b.itemName));
           setCatalogItems(loaded);
+
+          // Update any active draft line items to match resolved netsuiteItemId & netsuiteItemName
+          setLines(prevLines => {
+            if (prevLines.length === 0) return prevLines;
+            return prevLines.map(line => {
+              const matched = resolveServiceCatalogItem(line.itemCode || line.itemName, loaded);
+              if (!matched) return line;
+              return {
+                ...line,
+                itemId: matched.netsuiteItemId || matched.itemId || line.itemId,
+                itemName: matched.netsuiteItemName || matched.itemName || line.itemName,
+                itemCode: matched.code || line.itemCode,
+                displayName: matched.netsuiteItemName || line.displayName,
+                isFixedRate: matched.isFixedRate ?? line.isFixedRate
+              };
+            });
+          });
         }
       } catch (err) {
         console.warn('[CreateInvoiceDialog] Failed to fetch services collection, using fallback:', err);
@@ -742,6 +782,7 @@ export function CreateInvoiceDialog({
   useEffect(() => {
     if (!open) {
       setErrorMessage(null);
+      setErrorDetails(null);
       return;
     }
 
@@ -858,7 +899,7 @@ export function CreateInvoiceDialog({
 
     if (existingServices.length > 0) {
       existingServices.forEach((s: ServiceSelection, idx: number) => {
-        const cat = resolveServiceCatalogItem(s.name);
+        const cat = resolveServiceCatalogItem(s.name || (s as any).code || (s as any).service, catalogItems);
         let freq = '';
         if (Array.isArray(s.frequency) && s.frequency.length > 0) {
           freq = s.frequency.join(',');
@@ -874,11 +915,16 @@ export function CreateInvoiceDialog({
         const computedQty = isExtra ? 1 : (calc ? calc.billableDaysCount : 0);
         const computedAmount = Number((computedQty * rate).toFixed(2));
 
+        const resolvedItemId = cat?.netsuiteItemId || cat?.itemId || (idx === 0 ? '501' : '502');
+        const resolvedItemName = cat?.netsuiteItemName || cat?.itemName || s.name || 'Service';
+        const resolvedCode = cat?.code || s.name || 'Service';
+
         initialLines.push({
           id: `line-${idx}-${Date.now()}`,
-          itemId: cat?.itemId || (idx === 0 ? '501' : '502'),
-          itemName: s.name || cat?.itemName || 'Service',
-          displayName: cat?.description || s.name || cat?.itemName,
+          itemId: resolvedItemId,
+          itemName: resolvedItemName,
+          itemCode: resolvedCode,
+          displayName: resolvedItemName,
           itemType: isExtra ? 'extra' : 'service',
           isFixedRate: isFixed,
           frequency: isExtra ? 'Adhoc' : freq,
@@ -893,11 +939,13 @@ export function CreateInvoiceDialog({
     } else {
       // Fallback to explicit rate properties if no services array exists
       if (amRate > 0) {
+        const cat = resolveServiceCatalogItem('AMPO', catalogItems);
         initialLines.push({
           id: `line-am-${Date.now()}`,
-          itemId: '501',
-          itemName: 'AMPO',
-          displayName: 'AM Mail Pickup from Post Office',
+          itemId: cat?.netsuiteItemId || '501',
+          itemName: cat?.netsuiteItemName || 'Pick up and Delivery from PO',
+          itemCode: 'AMPO',
+          displayName: cat?.netsuiteItemName || 'Pick up and Delivery from PO',
           itemType: 'service',
           isFixedRate: false,
           frequency: '',
@@ -909,11 +957,13 @@ export function CreateInvoiceDialog({
         });
       }
       if (pmRate > 0) {
+        const cat = resolveServiceCatalogItem('PMPO', catalogItems);
         initialLines.push({
           id: `line-pm-${Date.now()}`,
-          itemId: '502',
-          itemName: 'PMPO',
-          displayName: 'PM Mail Lodgement to Post Office',
+          itemId: cat?.netsuiteItemId || '502',
+          itemName: cat?.netsuiteItemName || 'Pick up and Lodge at PO',
+          itemCode: 'PMPO',
+          displayName: cat?.netsuiteItemName || 'Pick up and Lodge at PO',
           itemType: 'service',
           isFixedRate: false,
           frequency: '',
@@ -925,11 +975,13 @@ export function CreateInvoiceDialog({
         });
       }
       if (addBagRate > 0) {
+        const cat = resolveServiceCatalogItem('10910', catalogItems);
         initialLines.push({
           id: `line-bag-${Date.now()}`,
-          itemId: '10910',
-          itemName: 'Additional LPO Bag',
-          displayName: 'Additional Post Office Mail Bag',
+          itemId: cat?.netsuiteItemId || '10910',
+          itemName: cat?.netsuiteItemName || 'Additional LPO Bag',
+          itemCode: '10910',
+          displayName: cat?.netsuiteItemName || 'Additional LPO Bag',
           itemType: 'extra',
           isFixedRate: true,
           frequency: 'Adhoc',
@@ -944,11 +996,13 @@ export function CreateInvoiceDialog({
 
     // If still no services found, provide a blank AMPO template row
     if (initialLines.length === 0) {
+      const cat = resolveServiceCatalogItem('AMPO', catalogItems);
       initialLines.push({
         id: `line-default-${Date.now()}`,
-        itemId: '501',
-        itemName: 'AMPO',
-        displayName: 'AM Mail Pickup from Post Office',
+        itemId: cat?.netsuiteItemId || '501',
+        itemName: cat?.netsuiteItemName || 'Pick up and Delivery from PO',
+        itemCode: 'AMPO',
+        displayName: cat?.netsuiteItemName || 'Pick up and Delivery from PO',
         itemType: 'service',
         isFixedRate: false,
         frequency: '',
@@ -996,9 +1050,10 @@ export function CreateInvoiceDialog({
   const findItemInCatalog = useCallback((nameOrCode: string): ServiceCatalogItem | undefined => {
     const lower = nameOrCode.toLowerCase().trim();
     return (
-      catalogItems.find(i => i.itemName.toLowerCase() === lower) ||
+      catalogItems.find(i => (i.code || '').toLowerCase() === lower) ||
+      catalogItems.find(i => (i.netsuiteItemName || i.itemName).toLowerCase() === lower) ||
       catalogItems.find(i => (i.description || '').toLowerCase() === lower) ||
-      resolveServiceCatalogItem(nameOrCode) ||
+      resolveServiceCatalogItem(nameOrCode, catalogItems) ||
       undefined
     );
   }, [catalogItems]);
@@ -1027,11 +1082,15 @@ export function CreateInvoiceDialog({
         const rate = isFixed ? defaultRate : (item.rate > 0 && !item.isFixedRate ? item.rate : defaultRate);
         const amount = Number((newQty * rate).toFixed(2));
 
+        const finalItemId = catalogItem.netsuiteItemId || catalogItem.itemId;
+        const finalItemName = catalogItem.netsuiteItemName || catalogItem.itemName;
+
         return {
           ...item,
-          itemName: catalogItem.itemName,
-          displayName: catalogItem.description || catalogItem.itemName,
-          itemId: catalogItem.itemId,
+          itemId: finalItemId,
+          itemName: finalItemName,
+          itemCode: catalogItem.code,
+          displayName: finalItemName,
           itemType: catalogItem.itemType,
           isFixedRate: isFixed,
           frequency: defaultFreq,
@@ -1110,11 +1169,15 @@ export function CreateInvoiceDialog({
       customerState
     );
 
+    const finalItemId = selected.netsuiteItemId || selected.itemId;
+    const finalItemName = selected.netsuiteItemName || selected.itemName;
+
     const newLine: InvoiceLineDraft = {
       id: `line-srv-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      itemId: selected.itemId,
-      itemName: selected.itemName,
-      displayName: selected.description || selected.itemName,
+      itemId: finalItemId,
+      itemName: finalItemName,
+      itemCode: selected.code,
+      displayName: finalItemName,
       itemType: 'service',
       isFixedRate: false,
       frequency: selected.defaultFrequency || 'Mon,Tue,Wed,Thu,Fri',
@@ -1132,12 +1195,15 @@ export function CreateInvoiceDialog({
   const handleAddExtra = (extraItem?: ServiceCatalogItem) => {
     const selected = extraItem || availableExtras[0] || DEFAULT_EXTRAS[0];
     const isFixed = selected.isFixedRate ?? false;
+    const finalItemId = selected.netsuiteItemId || selected.itemId;
+    const finalItemName = selected.netsuiteItemName || selected.itemName;
 
     const newLine: InvoiceLineDraft = {
       id: `line-ext-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      itemId: selected.itemId,
-      itemName: selected.itemName,
-      displayName: selected.description || selected.itemName,
+      itemId: finalItemId,
+      itemName: finalItemName,
+      itemCode: selected.code,
+      displayName: finalItemName,
       itemType: 'extra',
       isFixedRate: isFixed,
       frequency: 'Adhoc',
@@ -1246,6 +1312,7 @@ export function CreateInvoiceDialog({
           amount: Number(l.amount || 0).toFixed(2),
           itemId: String(l.itemId || '').trim(),
           itemName: String(l.itemName || '').trim(),
+          itemCode: String(l.itemCode || '').trim(),
           rate: Number(l.rate || 0).toFixed(2),
           itemDetails: l.itemDetails || '',
           frequency: l.frequency || ''
@@ -1287,10 +1354,28 @@ export function CreateInvoiceDialog({
           rawResponse: data.rawResponse,
           fullResponse: data
         });
-        throw new Error(data.error || 'Failed to create invoice in NetSuite');
+
+        const errorMsg = data.error || 'Failed to create invoice in NetSuite.';
+        setErrorMessage(errorMsg);
+        setErrorDetails({
+          message: errorMsg,
+          rawResponse: data.rawResponse,
+          debugPayload: data.debugPayload || payload,
+          timestamp: new Date().toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })
+        });
+
+        toast({
+          title: 'Invoice Creation Failed',
+          description: errorMsg,
+          variant: 'destructive'
+        });
+        return; // Retain pop-up window open so user can troubleshoot and contact support
       }
 
       console.log('✅ [CreateInvoice] NetSuite Invoice Created Successfully:', data);
+
+      setErrorDetails(null);
+      setErrorMessage(null);
 
       // Update local company.services in memory so next time user creates an invoice, it defaults to the selected frequency
       if (company) {
@@ -1298,14 +1383,17 @@ export function CreateInvoiceDialog({
           (company as any).services = [];
         }
         lines.forEach(l => {
-          const match = company.services?.find(s => (s.name || (s as any).service || '').toLowerCase() === l.itemName.toLowerCase());
+          const match = company.services?.find(s => 
+            (s.name || (s as any).service || '').toLowerCase() === (l.itemCode || l.itemName).toLowerCase() ||
+            (s.name || (s as any).service || '').toLowerCase() === l.itemName.toLowerCase()
+          );
           const freqArr = l.frequency ? (l.frequency.includes(',') ? l.frequency.split(',').map(s => s.trim()) : [l.frequency.trim()]) : [];
           if (match) {
             match.frequency = freqArr as any;
             match.rate = l.rate;
           } else if (l.itemName) {
             company.services?.push({
-              name: l.itemName,
+              name: l.itemCode || l.itemName,
               frequency: freqArr as any,
               rate: l.rate
             });
@@ -1316,7 +1404,7 @@ export function CreateInvoiceDialog({
       toast({
         title: 'Invoice Created Successfully',
         description: `NetSuite Invoice #${data.invoiceId} generated and saved to company profile.`,
-        className: 'bg-emerald-700 text-white'
+        className: 'bg-emerald-700 text-white font-medium'
       });
 
       if (onInvoiceCreated) {
@@ -1327,10 +1415,119 @@ export function CreateInvoiceDialog({
 
     } catch (err: any) {
       console.error('[Create Invoice Modal Error]:', err);
-      setErrorMessage(err?.message || 'Failed to generate invoice. Please review line items and try again.');
+      const errorMsg = err?.message || 'Failed to generate invoice. Please review line items and try again.';
+      setErrorMessage(errorMsg);
+      setErrorDetails({
+        message: errorMsg,
+        timestamp: new Date().toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })
+      });
+      toast({
+        title: 'Invoice Creation Error',
+        description: errorMsg,
+        variant: 'destructive'
+      });
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Copy formatted error report to clipboard
+  const handleCopyError = () => {
+    const errorText = [
+      `=== NETSUITE INVOICE CREATION ERROR REPORT ===`,
+      `Timestamp: ${errorDetails?.timestamp || new Date().toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })}`,
+      `Company Name: ${company?.companyName || 'Valued Customer'}`,
+      `Company Firestore ID: ${company?.id || 'N/A'}`,
+      `NetSuite Customer ID: ${customerId || company?.id || 'N/A'}`,
+      `Franchisee: ${franchiseeName || 'Unassigned'} (ID: ${franchiseeId || 'N/A'})`,
+      `Invoice Period: ${startDateStr || 'N/A'} to ${endDateStr || 'N/A'}`,
+      `Invoice Date: ${invoiceDateStr || 'N/A'}`,
+      `Invoice Type: ${invoiceType || 'Service'}`,
+      `Error Message: ${errorMessage || errorDetails?.message || 'Unknown error'}`,
+      errorDetails?.rawResponse ? `\n--- Raw NetSuite Response ---\n${typeof errorDetails.rawResponse === 'object' ? JSON.stringify(errorDetails.rawResponse, null, 2) : errorDetails.rawResponse}` : '',
+      errorDetails?.debugPayload ? `\n--- Debug Payload Sent ---\n${typeof errorDetails.debugPayload === 'object' ? JSON.stringify(errorDetails.debugPayload, null, 2) : errorDetails.debugPayload}` : ''
+    ].filter(Boolean).join('\n');
+
+    navigator.clipboard.writeText(errorText).then(() => {
+      setCopiedError(true);
+      setTimeout(() => setCopiedError(false), 2500);
+      toast({
+        title: 'Error Report Copied',
+        description: 'Formatted error report copied to clipboard. You can paste it in an email.'
+      });
+    }).catch(err => {
+      console.error('Failed to copy to clipboard:', err);
+    });
+  };
+
+  // Capture screenshot of the dialog container
+  const handleTakeScreenshot = async () => {
+    try {
+      setCapturingScreenshot(true);
+      const container = document.getElementById('create-invoice-dialog-container') || document.querySelector('[role="dialog"]') || document.body;
+      const canvas = await html2canvas(container as HTMLElement, {
+        useCORS: true,
+        scale: 2,
+        backgroundColor: '#f8fafc',
+        logging: false
+      });
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = `netsuite-invoice-error-${company?.id || 'export'}-${Date.now()}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: 'Screenshot Captured',
+        description: 'Error screenshot downloaded. You can attach it to your email to Ankith Ravindran.',
+        className: 'bg-emerald-700 text-white'
+      });
+    } catch (sErr) {
+      console.error('Screenshot capture failed:', sErr);
+      toast({
+        title: 'Screenshot Capture Failed',
+        description: 'Please capture a manual screenshot (Cmd+Shift+4 on Mac / Win+Shift+S on Windows).',
+        variant: 'destructive'
+      });
+    } finally {
+      setCapturingScreenshot(false);
+    }
+  };
+
+  // Direct email to Ankith Ravindran
+  const handleSendEmail = () => {
+    const recipient = 'ankith.ravindran@mailplus.com.au';
+    const subject = encodeURIComponent(`NetSuite Invoice Creation Error - ${company?.companyName || 'Customer'} (ID: ${company?.id || customerId})`);
+    
+    const bodyContent = [
+      `Hi Ankith,`,
+      ``,
+      `I encountered an error while trying to create and sync a customer invoice in NetSuite.`,
+      ``,
+      `--- Company & Invoice Details ---`,
+      `• Company Name: ${company?.companyName || 'Valued Customer'}`,
+      `• Company ID: ${company?.id || 'N/A'}`,
+      `• NetSuite Customer ID: ${customerId || company?.id || 'N/A'}`,
+      `• Franchisee: ${franchiseeName || 'Unassigned'} (ID: ${franchiseeId || 'N/A'})`,
+      `• Invoice Period: ${startDateStr || 'N/A'} to ${endDateStr || 'N/A'}`,
+      `• Invoice Date: ${invoiceDateStr || 'N/A'}`,
+      `• Invoice Type: ${invoiceType || 'Service'}`,
+      `• Timestamp: ${errorDetails?.timestamp || new Date().toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })}`,
+      ``,
+      `--- Error Message ---`,
+      `${errorMessage || errorDetails?.message || 'Unknown error occurred'}`,
+      ``,
+      errorDetails?.rawResponse ? `--- NetSuite Diagnostics ---\n${typeof errorDetails.rawResponse === 'object' ? JSON.stringify(errorDetails.rawResponse, null, 2) : errorDetails.rawResponse}\n` : '',
+      `Please assist in resolving this.`,
+      ``,
+      `Thanks,`,
+      `${userProfile?.displayName || userProfile?.name || 'Administrator'}`
+    ].filter(Boolean).join('\n');
+
+    const mailtoUrl = `mailto:${recipient}?subject=${subject}&body=${encodeURIComponent(bodyContent)}`;
+    window.location.href = mailtoUrl;
   };
 
   const handleResetAddress = () => {
@@ -1375,11 +1572,15 @@ export function CreateInvoiceDialog({
   // Filtered items for popover search
   const filteredServices = availableServices.filter(s => 
     s.itemName.toLowerCase().includes(pickerSearchQuery.toLowerCase()) ||
+    (s.code || '').toLowerCase().includes(pickerSearchQuery.toLowerCase()) ||
+    (s.netsuiteItemId || '').toLowerCase().includes(pickerSearchQuery.toLowerCase()) ||
     (s.description || '').toLowerCase().includes(pickerSearchQuery.toLowerCase())
   );
 
   const filteredExtras = availableExtras.filter(e => 
     e.itemName.toLowerCase().includes(pickerSearchQuery.toLowerCase()) ||
+    (e.code || '').toLowerCase().includes(pickerSearchQuery.toLowerCase()) ||
+    (e.netsuiteItemId || '').toLowerCase().includes(pickerSearchQuery.toLowerCase()) ||
     (e.description || '').toLowerCase().includes(pickerSearchQuery.toLowerCase())
   );
 
@@ -1426,7 +1627,7 @@ export function CreateInvoiceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl w-[96vw] max-h-[94vh] overflow-y-auto p-4 sm:p-6 bg-slate-50">
+      <DialogContent id="create-invoice-dialog-container" className="max-w-7xl w-[96vw] max-h-[94vh] overflow-y-auto p-4 sm:p-6 bg-slate-50">
         {/* Header */}
         <DialogHeader className="border-b border-slate-200 pb-3.5 bg-white -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 px-4 py-4 sm:px-6 rounded-t-lg">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1461,9 +1662,81 @@ export function CreateInvoiceDialog({
         </DialogHeader>
 
         {errorMessage && (
-          <div className="mt-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <div className="flex-1 font-medium">{errorMessage}</div>
+          <div className="mt-3 bg-red-50/95 border-2 border-red-300 rounded-xl p-4 text-xs shadow-sm space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-red-100 rounded-lg text-red-700 shrink-0 mt-0.5">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm font-bold text-red-900">
+                    NetSuite Invoice Creation Failed
+                  </div>
+                  <div className="text-xs font-semibold text-red-800 break-words leading-relaxed">
+                    {errorMessage}
+                  </div>
+                  <div className="text-xs text-red-700 mt-2 flex flex-wrap items-center gap-1.5 pt-1 border-t border-red-200/70">
+                    <span>Please contact <strong>Ankith Ravindran</strong> at</span>
+                    <a 
+                      href={`mailto:ankith.ravindran@mailplus.com.au?subject=${encodeURIComponent(`NetSuite Invoice Error - ${company?.companyName || 'Customer'} (ID: ${company?.id || customerId})`)}`}
+                      className="font-bold underline text-red-900 hover:text-red-950 inline-flex items-center gap-1"
+                    >
+                      ankith.ravindran@mailplus.com.au
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCopyError}
+                  className="h-8 text-xs font-semibold bg-white hover:bg-red-50 border-red-200 text-red-800 gap-1.5 shadow-xs"
+                  title="Copy error report to clipboard"
+                >
+                  {copiedError ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedError ? 'Copied' : 'Copy Error'}
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleTakeScreenshot}
+                  disabled={capturingScreenshot}
+                  className="h-8 text-xs font-semibold bg-white hover:bg-red-50 border-red-200 text-red-800 gap-1.5 shadow-xs"
+                  title="Capture & download screenshot of error"
+                >
+                  {capturingScreenshot ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                  {capturingScreenshot ? 'Capturing...' : 'Screenshot'}
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleSendEmail}
+                  className="h-8 text-xs font-bold bg-red-700 hover:bg-red-800 text-white gap-1.5 shadow-xs"
+                  title="Send pre-filled error email directly to Ankith Ravindran"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  Send Email
+                </Button>
+              </div>
+            </div>
+
+            {errorDetails?.rawResponse && (
+              <details className="mt-2 pt-2 border-t border-red-200/80">
+                <summary className="text-[11px] font-semibold text-red-800 cursor-pointer hover:underline">
+                  View Technical NetSuite Diagnostic Output
+                </summary>
+                <pre className="mt-1.5 p-2 bg-white/90 border border-red-200 rounded text-[10px] font-mono text-red-950 overflow-x-auto max-h-36">
+                  {typeof errorDetails.rawResponse === 'object' ? JSON.stringify(errorDetails.rawResponse, null, 2) : String(errorDetails.rawResponse)}
+                </pre>
+              </details>
+            )}
           </div>
         )}
 
@@ -2129,13 +2402,14 @@ export function CreateInvoiceDialog({
                                 <PopoverTrigger asChild>
                                   <button
                                     type="button"
-                                    className="text-xs font-bold text-slate-800 hover:text-[#095c7b] flex items-center gap-1 max-w-[130px] truncate text-left group"
+                                    className="text-xs font-bold text-slate-800 hover:text-[#095c7b] flex items-center gap-1 max-w-[210px] truncate text-left group"
+                                    title={line.itemName}
                                   >
                                     <span className="truncate">{line.itemName}</span>
                                     <ChevronsUpDown className="w-3 h-3 text-slate-400 group-hover:text-[#095c7b] shrink-0" />
                                   </button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-72 p-2 text-xs" align="start">
+                                <PopoverContent className="w-80 p-2 text-xs" align="start">
                                   <div className="flex items-center border border-slate-200 rounded px-2 mb-2 bg-slate-50">
                                     <Search className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
                                     <Input
@@ -2155,16 +2429,23 @@ export function CreateInvoiceDialog({
                                         <div className="space-y-0.5 mt-0.5">
                                           {filteredServices.map((srv) => (
                                             <button
-                                              key={srv.itemId + srv.itemName}
+                                              key={srv.itemId + (srv.code || srv.itemName)}
                                               type="button"
                                               onClick={() => handleSelectItem(line.id, srv)}
-                                              className={`w-full text-left px-2 py-1 rounded text-xs flex items-center justify-between hover:bg-slate-100 transition-colors ${
+                                              className={`w-full text-left px-2 py-1.5 rounded text-xs flex items-center justify-between hover:bg-slate-100 transition-colors ${
                                                 line.itemName === srv.itemName ? 'bg-[#095c7b]/10 text-[#095c7b] font-semibold' : 'text-slate-700'
                                               }`}
                                             >
-                                              <span className="truncate mr-2">{srv.itemName}</span>
+                                              <div className="flex flex-col truncate mr-2">
+                                                <span className="truncate font-semibold text-slate-900">{srv.netsuiteItemName || srv.itemName}</span>
+                                                {srv.code && (
+                                                  <span className="text-[10px] text-slate-500 font-mono">
+                                                    {srv.code} {srv.netsuiteItemId ? `• NetSuite ID: ${srv.netsuiteItemId}` : ''}
+                                                  </span>
+                                                )}
+                                              </div>
                                               {srv.defaultRate > 0 && (
-                                                <span className="text-slate-400 text-[11px] shrink-0">${srv.defaultRate.toFixed(2)}</span>
+                                                <span className="text-slate-600 font-medium text-[11px] shrink-0">${srv.defaultRate.toFixed(2)}</span>
                                               )}
                                             </button>
                                           ))}
@@ -2180,20 +2461,27 @@ export function CreateInvoiceDialog({
                                         <div className="space-y-0.5 mt-0.5">
                                           {filteredExtras.map((ext) => (
                                             <button
-                                              key={ext.itemId + ext.itemName}
+                                              key={ext.itemId + (ext.code || ext.itemName)}
                                               type="button"
                                               onClick={() => handleSelectItem(line.id, ext)}
-                                              className={`w-full text-left px-2 py-1 rounded text-xs flex items-center justify-between hover:bg-amber-50/60 transition-colors ${
+                                              className={`w-full text-left px-2 py-1.5 rounded text-xs flex items-center justify-between hover:bg-amber-50/60 transition-colors ${
                                                 line.itemName === ext.itemName ? 'bg-amber-100 text-amber-900 font-semibold' : 'text-slate-700'
                                               }`}
                                             >
-                                              <div className="flex items-center gap-1.5 truncate mr-2">
-                                                {ext.isFixedRate && (
-                                                  <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                                              <div className="flex flex-col truncate mr-2">
+                                                <div className="flex items-center gap-1.5 truncate">
+                                                  {ext.isFixedRate && (
+                                                    <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                                                  )}
+                                                  <span className="truncate font-semibold text-slate-900">{ext.netsuiteItemName || ext.itemName}</span>
+                                                </div>
+                                                {ext.code && (
+                                                  <span className="text-[10px] text-slate-500 font-mono">
+                                                    {ext.code} {ext.netsuiteItemId ? `• NetSuite ID: ${ext.netsuiteItemId}` : ''}
+                                                  </span>
                                                 )}
-                                                <span className="truncate">{ext.itemName}</span>
                                               </div>
-                                              <span className="text-slate-500 text-[11px] shrink-0">
+                                              <span className="text-slate-600 font-medium text-[11px] shrink-0">
                                                 {ext.defaultRate > 0 ? `$${ext.defaultRate.toFixed(2)}` : 'Custom'}
                                               </span>
                                             </button>

@@ -9463,36 +9463,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                   </CardContent>
                 </Card>
-
-                {isCreateInvoiceOpen && (
-                  <CreateInvoiceDialog
-                    open={isCreateInvoiceOpen}
-                    onOpenChange={setIsCreateInvoiceOpen}
-                    company={lead}
-                    onInvoiceCreated={() => {
-                      const invoicesRef = collection(firestore, 'companies', lead.id, 'invoices');
-                      getDocs(query(invoicesRef)).then(snapshot => {
-                        const invoicesData = snapshot.docs.map(doc => ({
-                          id: doc.id,
-                          ...doc.data()
-                        }));
-                        invoicesData.sort((a: any, b: any) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
-                        setInvoices(invoicesData);
-                      });
-                    }}
-                  />
-                )}
-
-                {selectedInvoice && (
-                  <InvoiceDetailsDialog
-                    isOpen={!!selectedInvoice}
-                    onOpenChange={(open) => !open && setSelectedInvoice(null)}
-                    invoice={selectedInvoice}
-                    companyName={lead.companyName}
-                    companyAbn={lead.abn}
-                    companyAddress={lead.address || (lead as any).customerAddress}
-                  />
-                )}
               </TabsContent>
             )}
 
@@ -11486,6 +11456,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DialogFooter>
         </DialogContent>
     </Dialog>
+
+    {isCreateInvoiceOpen && (
+      <CreateInvoiceDialog
+        open={isCreateInvoiceOpen}
+        onOpenChange={setIsCreateInvoiceOpen}
+        company={lead}
+        onInvoiceCreated={() => {
+          const invoicesRef = collection(firestore, 'companies', lead.id, 'invoices');
+          getDocs(query(invoicesRef)).then(snapshot => {
+            const invoicesData = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            invoicesData.sort((a: any, b: any) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
+            setInvoices(invoicesData);
+          });
+        }}
+      />
+    )}
+
+    {selectedInvoice && (
+      <InvoiceDetailsDialog
+        isOpen={!!selectedInvoice}
+        onOpenChange={(open) => !open && setSelectedInvoice(null)}
+        invoice={selectedInvoice}
+        companyName={lead.companyName}
+        companyAbn={lead.abn}
+        companyAddress={lead.address || (lead as any).customerAddress}
+      />
+    )}
     </>
   )
 }

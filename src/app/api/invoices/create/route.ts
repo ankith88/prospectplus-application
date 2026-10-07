@@ -126,7 +126,60 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Dispatch to NetSuite API Proxy (customerId matches companyId)
+    // 3. Resolve Service Line Items from Firestore 'services' collection
+    let firestoreServices: any[] = [];
+    try {
+      const servicesSnap = await db.collection('services').get();
+      if (!servicesSnap.empty) {
+        firestoreServices = servicesSnap.docs.map(d => ({ docId: d.id, ...d.data() }));
+      }
+    } catch (sErr) {
+      console.warn('[API /api/invoices/create] Warning: Could not fetch services collection:', sErr);
+    }
+
+    const resolvedLines = lines.map((l: any) => {
+      const candidateCode = String(l.itemCode || l.code || l.itemName || l.service || '').trim();
+      const candidateName = String(l.itemName || l.service || l.displayName || '').trim();
+      const candidateId = String(l.itemId || '').trim();
+
+      // Find match in Firestore services collection
+      const matched = firestoreServices.find(srv => {
+        const srvCode = String(srv.code || '').trim().toLowerCase();
+        const srvNetsuiteName = String(srv.netsuiteItemName || srv.name || '').trim().toLowerCase();
+        const srvId = String(srv.netsuiteItemId || srv.id || srv.docId || '').trim();
+
+        if (srvCode && (srvCode === candidateCode.toLowerCase() || srvCode === candidateName.toLowerCase())) return true;
+        if (srvNetsuiteName && (srvNetsuiteName === candidateName.toLowerCase() || srvNetsuiteName === candidateCode.toLowerCase())) return true;
+        if (srvId && srvId === candidateId) return true;
+        return false;
+      });
+
+      // Priority: matched.netsuiteItemId -> matched.id -> l.itemId
+      const finalItemId = matched?.netsuiteItemId 
+        ? String(matched.netsuiteItemId).trim() 
+        : (matched?.id ? String(matched.id).trim() : (candidateId || '501'));
+
+      // Priority: matched.netsuiteItemName -> matched.name -> l.itemName
+      const finalItemName = matched?.netsuiteItemName 
+        ? String(matched.netsuiteItemName).trim() 
+        : (matched?.name ? String(matched.name).trim() : (candidateName || 'Service'));
+
+      const finalCode = matched?.code ? String(matched.code).trim() : (candidateCode || 'Service');
+
+      return {
+        qty: l.qty ?? '1',
+        amount: l.amount ?? '0.00',
+        itemId: finalItemId,
+        itemName: finalItemName,
+        code: finalCode,
+        rate: l.rate ?? '0.00',
+        itemDetails: l.itemDetails ?? ''
+      };
+    });
+
+    console.log('🚀 [API /api/invoices/create] Resolved Line Items for NetSuite:', resolvedLines);
+
+    // 4. Dispatch to NetSuite API Proxy (customerId matches companyId)
     const targetCustomerId = String(companyId || customerId).trim();
 
     const netSuitePayload: CreateCustomerInvoicePayload = {
@@ -139,16 +192,18 @@ export async function POST(req: NextRequest) {
       periodEndDate: String(periodEndDate).trim(),
       ...(invoiceDate || tranDate ? { invoiceDate: String(invoiceDate || tranDate).trim(), tranDate: String(tranDate || invoiceDate).trim() } : {}),
       ...(invoiceType ? { invoiceType: String(invoiceType).trim() } : {}),
-      lines: lines.map((l: any) => ({
-        qty: l.qty ?? '1',
-        amount: l.amount ?? '0.00',
-        itemId: l.itemId ?? '',
-        itemName: l.itemName ?? '',
-        rate: l.rate ?? '0.00',
-        itemDetails: l.itemDetails ?? ''
+      lines: resolvedLines.map((l: any) => ({
+        qty: l.qty,
+        amount: l.amount,
+        itemId: l.itemId,
+        itemName: l.itemName,
+        rate: l.rate,
+        itemDetails: l.itemDetails
       })),
       adminFeeRows: Array.isArray(adminFeeRows) ? adminFeeRows : []
     };
+
+    console.log('🚀 [API /api/invoices/create] Dispatching NetSuite Payload:', JSON.stringify(netSuitePayload, null, 2));
 
     const netSuiteRes = await createCustomerInvoiceInNetSuite(netSuitePayload);
 

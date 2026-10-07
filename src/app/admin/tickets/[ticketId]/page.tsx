@@ -20,6 +20,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import {
   ChevronLeft,
   Mail,
   FileText,
@@ -49,13 +54,21 @@ import {
   Tag,
   Copy,
   Eye,
-  Phone
+  Phone,
+  Pencil,
+  Trash2,
+  Search,
+  ChevronDown,
+  X,
+  Folder
 } from "lucide-react";
+import { replaceTemplatePlaceholders } from "@/lib/template-replacer";
 import Link from "next/link";
 import {
   doc,
   getDoc,
   updateDoc,
+  deleteDoc,
   collection,
   addDoc,
   query,
@@ -314,6 +327,8 @@ export default function TicketDetailsPage() {
       author: act.user,
       date: act.date || act.createdAt,
       status: act.status || "Pending",
+      editedAt: undefined as string | undefined,
+      editedBy: undefined as string | undefined,
       raw: act,
     }));
 
@@ -325,6 +340,8 @@ export default function TicketDetailsPage() {
       content: note.content,
       author: note.author,
       date: note.timestamp,
+      editedAt: note.editedAt,
+      editedBy: note.editedBy,
       raw: note,
     }));
 
@@ -360,6 +377,9 @@ export default function TicketDetailsPage() {
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [selectedAttachments, setSelectedAttachments] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [templateSearchQuery, setTemplateSearchQuery] = useState<string>("");
+  const [isTemplatePopoverOpen, setIsTemplatePopoverOpen] = useState<boolean>(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
   const [selectedCommToPreview, setSelectedCommToPreview] = useState<any>(null);
   const [isCommPreviewOpen, setIsCommPreviewOpen] = useState(false);
@@ -619,6 +639,113 @@ export default function TicketDetailsPage() {
     }
   };
 
+  // Staff Notes Editing & Deleting States
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editNoteContent, setEditNoteContent] = useState<string>("");
+  const [isSavingNote, setIsSavingNote] = useState<boolean>(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+  const [noteToDelete, setNoteToDelete] = useState<any | null>(null);
+  const [isDeletingNote, setIsDeletingNote] = useState<boolean>(false);
+
+  const handleStartEditNote = (noteId: string, currentContent: string) => {
+    setEditingNoteId(noteId);
+    setEditNoteContent(currentContent || "");
+  };
+
+  const handleCancelEditNote = () => {
+    setEditingNoteId(null);
+    setEditNoteContent("");
+  };
+
+  const handleSaveEditNote = async (noteId: string) => {
+    if (!editNoteContent.trim()) {
+      toast.error("Note content cannot be empty.");
+      return;
+    }
+    setIsSavingNote(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const editorName = userProfile?.displayName || userProfile?.email || "Staff";
+      await updateDoc(doc(db, "tickets", ticketId, "staffNotes", noteId), {
+        content: editNoteContent.trim(),
+        editedAt: nowIso,
+        editedBy: editorName,
+      });
+
+      // Update parent ticket updatedAt
+      await updateDoc(doc(db, "tickets", ticketId), {
+        updatedAt: nowIso
+      });
+      setTicket((prev: any) => ({
+        ...prev,
+        updatedAt: nowIso
+      }));
+
+      setEditingNoteId(null);
+      setEditNoteContent("");
+      toast.success("Staff note updated successfully.");
+    } catch (err) {
+      console.error("Failed to update staff note:", err);
+      toast.error("Failed to update staff note.");
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
+  const handleConfirmDeleteNote = async (noteId: string) => {
+    setIsDeletingNote(true);
+    try {
+      await deleteDoc(doc(db, "tickets", ticketId, "staffNotes", noteId));
+
+      const nowIso = new Date().toISOString();
+      await updateDoc(doc(db, "tickets", ticketId), {
+        updatedAt: nowIso
+      });
+      setTicket((prev: any) => ({
+        ...prev,
+        updatedAt: nowIso
+      }));
+
+      setDeletingNoteId(null);
+      setNoteToDelete(null);
+      toast.success("Staff note deleted successfully.");
+    } catch (err) {
+      console.error("Failed to delete staff note:", err);
+      toast.error("Failed to delete staff note.");
+    } finally {
+      setIsDeletingNote(false);
+    }
+  };
+
+  // Ticket Description / Issue Summary Edit Dialog States
+  const [isEditSummaryModalOpen, setIsEditSummaryModalOpen] = useState(false);
+  const [editTicketSummary, setEditTicketSummary] = useState("");
+  const [isSavingTicketSummary, setIsSavingTicketSummary] = useState(false);
+
+  const handleSaveTicketSummary = async () => {
+    setIsSavingTicketSummary(true);
+    try {
+      const ticketRef = doc(db, "tickets", ticketId);
+      const updateData = {
+        description: editTicketSummary,
+        notes: editTicketSummary,
+        updatedAt: new Date().toISOString()
+      };
+      await updateDoc(ticketRef, updateData);
+      setTicket((prev: any) => ({
+        ...prev,
+        ...updateData
+      }));
+      setIsEditSummaryModalOpen(false);
+      toast.success("Issue summary updated successfully!");
+    } catch (err) {
+      console.error("Failed to update issue summary:", err);
+      toast.error("Failed to update issue summary.");
+    } finally {
+      setIsSavingTicketSummary(false);
+    }
+  };
+
   // Group active users by role
   const activeUsersGroupedByRole = useMemo(() => {
     const activeUsers = csUsers.filter((u: any) => {
@@ -718,26 +845,31 @@ export default function TicketDetailsPage() {
     loadUsers();
   }, []);
 
-  // Fetch email templates
+  // Fetch email templates & campaigns
   useEffect(() => {
     async function fetchTemplatesAndBrand() {
       try {
-        const [templatesSnap, brandSnap] = await Promise.all([
+        const [templatesSnap, campaignsSnap, brandSnap] = await Promise.all([
           getDocs(collection(db, 'marketing_templates')),
+          getDocs(collection(db, 'marketing_campaigns')),
           getDoc(doc(db, 'brandProfiles', 'default_company'))
         ]);
         const list = templatesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const campList = campaignsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setTemplates(list);
+        setCampaigns(campList);
         if (brandSnap.exists()) {
           setBrandProfile(brandSnap.data());
         }
       } catch (error) {
-        console.error('Error fetching templates/brand', error);
+        console.error('Error fetching templates/campaigns/brand', error);
       }
     }
     if (isEmailModalOpen) {
       fetchTemplatesAndBrand();
       setSelectedTemplate('custom');
+      setTemplateSearchQuery("");
+      setIsTemplatePopoverOpen(false);
       setEmailSubject("MailPlus Delivery Investigation Update");
       setEmailBody("");
       setEmailFrom("tracking@mailplus.com.au");
@@ -749,6 +881,114 @@ export default function TicketDetailsPage() {
     }
   }, [isEmailModalOpen]);
 
+  // Helper to dynamically fill all template placeholders (connote number, tracking, receiver, customer, etc.)
+  const fillTicketTemplatePlaceholders = (rawText: string): string => {
+    if (!rawText) return "";
+
+    const contactName = ticket?.customerContactName || "Customer";
+    const companyName = ticket?.customerCompany || "";
+    const representativeName = userProfile?.displayName || userProfile?.firstName || 'Customer Service Rep';
+    
+    const receiverName = ticket?.newReceiverName || packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "";
+    const receiverCompanyName = ticket?.newReceiverCompanyName || packageDetails?.receiverFullDetails?.companyName || packageDetails?.receiverDetails?.companyName || packageDetails?.receiverFullDetails?.company || packageDetails?.receiverDetails?.company || ticket?.receiverCompanyName || "";
+    const receiverAddress = ticket?.newReceiverAddress || packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "";
+    const ticketNumber = ticket?.ticketNumber || ticketId || "";
+    const trackingId = ticket?.trackingIdentifier || packageDetails?.packageInfo?.code || "";
+    const connoteNumber = 
+      ticket?.connoteNumber || 
+      packageDetails?.packageInfo?.connoteNumber || 
+      packageDetails?.connote_number || 
+      packageDetails?.connoteNumber || 
+      (Array.isArray(packageDetails?.connote_numbers) && packageDetails.connote_numbers[0]) ||
+      (Array.isArray(packageDetails?.scans) && packageDetails.scans.find((s: any) => s.connote_number)?.connote_number) ||
+      ticket?.trackingIdentifier || 
+      packageDetails?.packageInfo?.code || 
+      "";
+    const packageCode = 
+      ticket?.packageCode || 
+      packageDetails?.packageInfo?.code || 
+      packageDetails?.code || 
+      packageDetails?.barcode || 
+      ticket?.trackingIdentifier || 
+      connoteNumber || 
+      "";
+    const prospectPlusIdVal = ticket?.prospectPlusId || prospectPlusId || "";
+    const franName = franchiseeInfo?.name || ticket?.franchisee || "";
+    const franMainContact = franchiseeInfo?.mainContact || franchiseeInfo?.contactName || franchiseeInfo?.operatorName || "";
+    const franEmail = franchiseeInfo?.email || franchiseeInfo?.mainEmail || "";
+    const franMobile = franchiseeInfo?.mobile || franchiseeInfo?.phone || franchiseeInfo?.mobileNumber || "";
+    const scheduledServiceDate = ticket?.scheduledServiceDate || "";
+
+    // 1. Run replaceTemplatePlaceholders
+    let result = replaceTemplatePlaceholders(rawText, {
+      lead: {
+        company: companyName,
+        contact_name: contactName,
+        prospect_plus_id: prospectPlusIdVal,
+      },
+      contact: {
+        name: contactName,
+      },
+      salesRep: representativeName,
+      franchisee: {
+        name: franName,
+        mainContact: franMainContact,
+        email: franEmail,
+        mobile: franMobile,
+      },
+      scheduledServiceDate,
+      customLinks: {
+        ticketNumber,
+        trackingIdentifier: trackingId,
+        packageCode,
+        connoteNumber,
+        receiverName,
+        receiverCompanyName,
+        receiverAddress,
+      }
+    });
+
+    // 2. Direct regex replacements for all specific placeholder variations (case-insensitive, whitespace-tolerant)
+    result = result
+      .replace(/\{\{\s*Packages\.ConnoteNumber\s*\}\}/gi, connoteNumber)
+      .replace(/\{\{\s*Package\.ConnoteNumber\s*\}\}/gi, connoteNumber)
+      .replace(/\{\{\s*packages\.connote_number\s*\}\}/gi, connoteNumber)
+      .replace(/\{\{\s*package\.connote_number\s*\}\}/gi, connoteNumber)
+      .replace(/\{\{\s*Packages\.Connote_Number\s*\}\}/gi, connoteNumber)
+      .replace(/\{\{\s*Package\.Connote_Number\s*\}\}/gi, connoteNumber)
+      .replace(/\{\{\s*Connote\.Number\s*\}\}/gi, connoteNumber)
+      .replace(/\{\{\s*connote_number\s*\}\}/gi, connoteNumber)
+      .replace(/\{\{\s*ConnoteNumber\s*\}\}/gi, connoteNumber)
+      .replace(/\{\{\s*Packages\.Code\s*\}\}/gi, packageCode)
+      .replace(/\{\{\s*Package\.Code\s*\}\}/gi, packageCode)
+      .replace(/\{\{\s*packages\.code\s*\}\}/gi, packageCode)
+      .replace(/\{\{\s*package\.code\s*\}\}/gi, packageCode)
+      .replace(/\{\{\s*PackageCode\s*\}\}/gi, packageCode)
+      .replace(/\{\{\s*Tracking\.ID\s*\}\}/gi, trackingId)
+      .replace(/\{\{\s*Tracking\.Identifier\s*\}\}/gi, trackingId)
+      .replace(/\{\{\s*tracking_number\s*\}\}/gi, trackingId)
+      .replace(/\{\{\s*TrackingId\s*\}\}/gi, trackingId)
+      .replace(/\{\{\s*Ticket\.Number\s*\}\}/gi, ticketNumber)
+      .replace(/\{\{\s*Ticket\.Id\s*\}\}/gi, ticketId || '')
+      .replace(/\{\{\s*Contact\.Name\s*\}\}/gi, contactName)
+      .replace(/\{\{\s*Company\.Name\s*\}\}/gi, companyName)
+      .replace(/\{\{\s*SalesRep\.Name\s*\}\}/gi, representativeName)
+      .replace(/\{\{\s*Receiver\.Name\s*\}\}/gi, receiverName)
+      .replace(/\{\{\s*Receiver\.CompanyName\s*\}\}/gi, receiverCompanyName)
+      .replace(/\{\{\s*Receiver\.Company\s*\}\}/gi, receiverCompanyName)
+      .replace(/\{\{\s*Receiver\.FullAddress\s*\}\}/gi, receiverAddress)
+      .replace(/\{\{\s*Prospect\.ProspectPlusID\s*\}\}/gi, prospectPlusIdVal)
+      .replace(/\{\{\s*prospect_plus_id\s*\}\}/gi, prospectPlusIdVal)
+      .replace(/\{\{\s*Franchisee\.MainContact\s*\}\}/gi, franMainContact)
+      .replace(/\{\{\s*Franchisee\.ContactName\s*\}\}/gi, franMainContact)
+      .replace(/\{\{\s*Franchisee\.Email\s*\}\}/gi, franEmail)
+      .replace(/\{\{\s*Franchisee\.Mobile\s*\}\}/gi, franMobile)
+      .replace(/\{\{\s*Franchisee\.Name\s*\}\}/gi, franName)
+      .replace(/\{\{\s*Schedule\.ServiceDate\s*\}\}/gi, scheduledServiceDate);
+
+    return result;
+  };
+
   const applyTemplate = (templateId: string) => {
     setSelectedTemplate(templateId);
     if (templateId === 'custom') {
@@ -758,46 +998,107 @@ export default function TicketDetailsPage() {
     }
     const template = templates.find(t => t.id === templateId);
     if (template) {
-      const contactName = ticket?.customerContactName || "Customer";
-      const companyName = ticket?.customerCompany || "";
-      const representativeName = userProfile?.displayName || userProfile?.firstName || 'Customer Service Rep';
-      
-      const receiverName = packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "";
-      const receiverCompanyName = packageDetails?.receiverFullDetails?.companyName || packageDetails?.receiverDetails?.companyName || packageDetails?.receiverFullDetails?.company || packageDetails?.receiverDetails?.company || ticket?.newReceiverCompanyName || ticket?.receiverCompanyName || "";
-      const receiverAddress = packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "";
-      const ticketNumber = ticket?.ticketNumber || ticketId || "";
-      const trackingId = ticket?.trackingIdentifier || packageDetails?.packageInfo?.code || "";
-
-      let parsedSubject = template.subject || "MailPlus Delivery Investigation Update";
-      parsedSubject = parsedSubject.replace(/\{\{Contact\.Name\}\}/g, contactName);
-      parsedSubject = parsedSubject.replace(/\{\{Company\.Name\}\}/g, companyName);
-      parsedSubject = parsedSubject.replace(/\{\{SalesRep\.Name\}\}/g, representativeName);
-      parsedSubject = parsedSubject.replace(/\{\{Ticket\.Id\}\}/g, ticketId || '');
-      parsedSubject = parsedSubject.replace(/\{\{Receiver\.Name\}\}/g, receiverName);
-      parsedSubject = parsedSubject.replace(/\{\{Receiver\.CompanyName\}\}/g, receiverCompanyName);
-      parsedSubject = parsedSubject.replace(/\{\{Receiver\.Company\}\}/g, receiverCompanyName);
-      parsedSubject = parsedSubject.replace(/\{\{Receiver\.FullAddress\}\}/g, receiverAddress);
-      parsedSubject = parsedSubject.replace(/\{\{Ticket\.Number\}\}/g, ticketNumber);
-      parsedSubject = parsedSubject.replace(/\{\{Tracking\.ID\}\}/g, trackingId);
-
+      const parsedSubject = fillTicketTemplatePlaceholders(template.subject || "MailPlus Delivery Investigation Update");
+      const parsedBody = fillTicketTemplatePlaceholders(template.body || '');
       setEmailSubject(parsedSubject);
-      
-      let parsedBody = template.body || '';
-      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/g, contactName);
-      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/g, companyName);
-      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/g, representativeName);
-      parsedBody = parsedBody.replace(/\{\{Ticket\.Id\}\}/g, ticketId || '');
-      
-      parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/g, receiverName);
-      parsedBody = parsedBody.replace(/\{\{Receiver\.CompanyName\}\}/g, receiverCompanyName);
-      parsedBody = parsedBody.replace(/\{\{Receiver\.Company\}\}/g, receiverCompanyName);
-      parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/g, receiverAddress);
-      parsedBody = parsedBody.replace(/\{\{Ticket\.Number\}\}/g, ticketNumber);
-      parsedBody = parsedBody.replace(/\{\{Tracking\.ID\}\}/g, trackingId);
-      
       setEmailBody(parsedBody);
     }
   };
+
+  // Group templates strictly by Customer Service bucket and apply search query filter
+  const groupedTemplates = useMemo(() => {
+    const query = templateSearchQuery.trim().toLowerCase();
+    
+    // Identify and filter templates that belong to the Customer Service bucket
+    const isCsTemplate = (t: any) => {
+      const tName = (t.name || '').toLowerCase().trim();
+      const tCampaign = (t.campaign || t.campaignName || '').toLowerCase().trim();
+      const tCategory = (t.category || t.folder || '').toLowerCase().trim();
+
+      const isLinkedToCsCampaign = campaigns.some(c => {
+        const cName = (c.name || '').toLowerCase().trim();
+        const isCsCamp = cName.includes('customer service') || cName === 'cs' || cName.startsWith('cs ') || cName.startsWith('cs -') || cName.startsWith('cs —');
+        if (!isCsCamp) return false;
+        return c.templateId === t.id || c.emailTemplateIds?.includes(t.id);
+      });
+
+      return (
+        isLinkedToCsCampaign ||
+        tName.startsWith('cs —') ||
+        tName.startsWith('cs -') ||
+        tName.startsWith('cs:') ||
+        tName.startsWith('cs ') ||
+        tName.includes('customer service') ||
+        tCampaign.includes('customer service') ||
+        tCampaign === 'cs' ||
+        tCategory.includes('customer service') ||
+        tCategory === 'cs'
+      );
+    };
+
+    const csTemplates = templates.filter(isCsTemplate);
+
+    // Safeguard fallback: if no explicit CS templates were found, show all
+    const targetTemplates = csTemplates.length > 0 ? csTemplates : templates;
+
+    const groups: { campaignId: string; campaignName: string; templates: any[] }[] = [];
+    const matchedTemplateIds = new Set<string>();
+
+    // 1. Group by Customer Service campaigns in marketing_campaigns
+    campaigns.forEach(camp => {
+      const cName = (camp.name || '').toLowerCase().trim();
+      const isCsCamp = cName.includes('customer service') || cName === 'cs' || cName.startsWith('cs ') || cName.startsWith('cs -') || cName.startsWith('cs —');
+      if (!isCsCamp && csTemplates.length > 0) return;
+
+      const campTemplates = targetTemplates.filter(t => {
+        const isLinked = camp.templateId === t.id || 
+          camp.emailTemplateIds?.includes(t.id) ||
+          (t.campaign && (t.campaign.toLowerCase() === (camp.name || '').toLowerCase() || t.campaign === camp.id)) ||
+          (t.campaignName && (t.campaignName.toLowerCase() === (camp.name || '').toLowerCase()));
+        return isLinked;
+      });
+
+      if (campTemplates.length > 0) {
+        campTemplates.forEach(t => matchedTemplateIds.add(t.id));
+        groups.push({
+          campaignId: camp.id,
+          campaignName: camp.name || 'Customer Service',
+          templates: campTemplates,
+        });
+      }
+    });
+
+    // 2. Group remaining Customer Service templates into 'Customer Service' bucket
+    const remainingTemplates = targetTemplates.filter(t => !matchedTemplateIds.has(t.id));
+    if (remainingTemplates.length > 0) {
+      groups.push({
+        campaignId: 'customer_service_bucket',
+        campaignName: 'Customer Service',
+        templates: remainingTemplates,
+      });
+    }
+
+    // Filter by search query if present
+    if (query) {
+      return groups
+        .map(group => ({
+          ...group,
+          templates: group.templates.filter(t => 
+            (t.name || '').toLowerCase().includes(query) ||
+            (t.subject || '').toLowerCase().includes(query) ||
+            (group.campaignName || '').toLowerCase().includes(query)
+          )
+        }))
+        .filter(group => group.templates.length > 0);
+    }
+
+    return groups;
+  }, [templates, campaigns, templateSearchQuery]);
+
+  const selectedTemplateObj = useMemo(() => {
+    if (selectedTemplate === 'custom') return null;
+    return templates.find(t => t.id === selectedTemplate) || null;
+  }, [selectedTemplate, templates]);
 
   // Fetch ticket details
   useEffect(() => {
@@ -1862,11 +2163,24 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
               <div>
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Issue Summary & Notes</span>
-                  {ticket.raisedBy && (
-                    <Badge variant="outline" className="text-[9px] bg-slate-50 border-slate-200 text-slate-500 font-bold px-1.5 py-0.5 rounded leading-none shrink-0">
-                      By {ticket.raisedBy}
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {ticket.raisedBy && (
+                      <Badge variant="outline" className="text-[9px] bg-slate-50 border-slate-200 text-slate-500 font-bold px-1.5 py-0.5 rounded leading-none shrink-0">
+                        By {ticket.raisedBy}
+                      </Badge>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditTicketSummary(ticket.description || ticket.notes || "");
+                        setIsEditSummaryModalOpen(true);
+                      }}
+                      className="p-1 text-slate-400 hover:text-[#095c7b] hover:bg-slate-100 rounded transition-colors"
+                      title="Edit Issue Summary & Notes"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-600 font-medium leading-relaxed max-h-16 overflow-y-auto pr-1">
                   {ticket.description || ticket.notes || "Customer advises consignment issues."}
@@ -3294,7 +3608,7 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
                                 )}
                                 <span className="font-bold text-slate-800">{item.title}</span>
                               </div>
-                              {item.type === "action" && (
+                              {item.type === "action" ? (
                                 <select
                                   value={item.status || "Pending"}
                                   onChange={async (e) => {
@@ -3317,13 +3631,78 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
                                   <option value="Pending">Pending</option>
                                   <option value="Complete">Complete</option>
                                 </select>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditNote(item.rawId, item.content)}
+                                    className="p-1 text-slate-400 hover:text-amber-700 hover:bg-amber-100/60 rounded transition-colors"
+                                    title="Edit Note"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeletingNoteId(item.rawId);
+                                      setNoteToDelete(item.raw);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                    title="Delete Note"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
                               )}
                             </div>
-                            <p className="text-[11px] text-slate-650 leading-relaxed font-medium">
-                              {item.content}
-                            </p>
+
+                            {item.type === "note" && editingNoteId === item.rawId ? (
+                              <div className="space-y-2 pt-1">
+                                <Textarea
+                                  value={editNoteContent}
+                                  onChange={(e) => setEditNoteContent(e.target.value)}
+                                  className="text-xs bg-white border-amber-300 rounded-lg p-2 min-h-[60px] focus:ring-1 focus:ring-amber-500 font-normal"
+                                  placeholder="Edit staff note..."
+                                  rows={2}
+                                  autoFocus
+                                />
+                                <div className="flex justify-end gap-1.5">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={handleCancelEditNote}
+                                    disabled={isSavingNote}
+                                    className="h-6 px-2 text-[10px] text-slate-600 hover:bg-amber-100/50"
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => handleSaveEditNote(item.rawId)}
+                                    disabled={isSavingNote || !editNoteContent.trim()}
+                                    className="h-6 px-2.5 text-[10px] bg-[#095c7b] hover:bg-[#053647] text-white font-semibold rounded"
+                                  >
+                                    {isSavingNote ? "Saving..." : "Save"}
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-slate-650 leading-relaxed font-medium">
+                                {item.content}
+                              </p>
+                            )}
+
                             <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1 font-medium border-t border-slate-200/40">
-                              <span>By: {item.author}</span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>By: {item.author}</span>
+                                {item.editedAt && (
+                                  <span className="text-amber-700 font-normal italic">
+                                    (edited {new Date(item.editedAt).toLocaleString("en-AU", { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' })})
+                                  </span>
+                                )}
+                              </div>
                               <span>
                                 {item.date 
                                   ? new Date(item.date).toLocaleString("en-AU", { 
@@ -3397,14 +3776,79 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
                     <div className="max-h-[320px] overflow-y-auto p-4 space-y-2.5">
                       {staffNotes.length > 0 ? (
                         staffNotes.map((note) => (
-                          <div key={note.id} className="p-3 bg-amber-50/40 border border-amber-200/60 rounded-xl shadow-sm space-y-1">
+                          <div key={note.id} className="p-3 bg-amber-50/40 border border-amber-200/60 rounded-xl shadow-sm space-y-1.5">
                             <div className="flex justify-between items-center text-[9px] text-amber-900 font-bold">
-                              <span>{note.author}</span>
-                              <span className="text-slate-400 font-normal">
-                                {note.timestamp ? new Date(note.timestamp).toLocaleString("en-AU", { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : ""}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>{note.author}</span>
+                                {note.editedAt && (
+                                  <span className="text-amber-700 font-normal italic">
+                                    (edited)
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-400 font-normal">
+                                  {note.timestamp ? new Date(note.timestamp).toLocaleString("en-AU", { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : ""}
+                                </span>
+                                <div className="flex items-center gap-0.5 ml-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditNote(note.id, note.content)}
+                                    className="p-1 text-slate-400 hover:text-amber-700 hover:bg-amber-100/60 rounded transition-colors"
+                                    title="Edit Note"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeletingNoteId(note.id);
+                                      setNoteToDelete(note);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                    title="Delete Note"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                            <p className="text-xs text-slate-700 leading-relaxed font-medium">{note.content}</p>
+
+                            {editingNoteId === note.id ? (
+                              <div className="space-y-2 pt-1">
+                                <Textarea
+                                  value={editNoteContent}
+                                  onChange={(e) => setEditNoteContent(e.target.value)}
+                                  className="text-xs bg-white border-amber-300 rounded-lg p-2 min-h-[60px] focus:ring-1 focus:ring-amber-500 font-normal"
+                                  placeholder="Edit staff note..."
+                                  rows={2}
+                                  autoFocus
+                                />
+                                <div className="flex justify-end gap-1.5">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={handleCancelEditNote}
+                                    disabled={isSavingNote}
+                                    className="h-6 px-2 text-[10px] text-slate-600 hover:bg-amber-100/50"
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => handleSaveEditNote(note.id)}
+                                    disabled={isSavingNote || !editNoteContent.trim()}
+                                    className="h-6 px-2.5 text-[10px] bg-[#095c7b] hover:bg-[#053647] text-white font-semibold rounded"
+                                  >
+                                    {isSavingNote ? "Saving..." : "Save"}
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-700 leading-relaxed font-medium">{note.content}</p>
+                            )}
                           </div>
                         ))
                       ) : (
@@ -3707,16 +4151,115 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
             <div className="space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Template</label>
-                <select 
-                  value={selectedTemplate} 
-                  onChange={(e) => applyTemplate(e.target.value)}
-                  className="w-full text-sm bg-slate-50 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl p-2.5 transition-all text-slate-700 font-medium"
-                >
-                  <option value="custom">Custom Email</option>
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                <Popover open={isTemplatePopoverOpen} onOpenChange={setIsTemplatePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-between text-left text-sm bg-slate-50 hover:bg-slate-100/80 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl p-2.5 transition-all text-slate-700 font-medium shadow-sm"
+                    >
+                      <span className="truncate">
+                        {selectedTemplate === 'custom' 
+                          ? 'Custom Email' 
+                          : (selectedTemplateObj?.name || 'Select a template...')}
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 ml-2" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent 
+                    className="w-[380px] p-0 bg-white shadow-2xl border border-slate-200 rounded-2xl overflow-hidden z-[100]" 
+                    align="start"
+                  >
+                    {/* Search Input Header */}
+                    <div className="p-3 border-b border-slate-100 bg-slate-50/80">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                        <Input
+                          value={templateSearchQuery}
+                          onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                          placeholder="Search templates or campaigns..."
+                          className="pl-8 text-xs h-8 bg-white border-slate-200 rounded-lg focus:border-[#095c7b]"
+                          autoFocus
+                        />
+                        {templateSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setTemplateSearchQuery('')}
+                            className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 p-0.5"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Templates List */}
+                    <div className="max-h-72 overflow-y-auto p-1.5 space-y-2">
+                      {/* Custom Email Option */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          applyTemplate('custom');
+                          setIsTemplatePopoverOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs rounded-xl flex items-center justify-between transition-colors ${
+                          selectedTemplate === 'custom'
+                            ? 'bg-[#095c7b]/10 text-[#095c7b] font-bold'
+                            : 'hover:bg-slate-100 text-slate-700 font-medium'
+                        }`}
+                      >
+                        <span>Custom Email</span>
+                        {selectedTemplate === 'custom' && <Check className="h-3.5 w-3.5 text-[#095c7b]" />}
+                      </button>
+
+                      {groupedTemplates.length > 0 ? (
+                        groupedTemplates.map((group) => (
+                          <div key={group.campaignId} className="space-y-1 pt-1">
+                            <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100/60 rounded-lg flex items-center justify-between">
+                              <span className="truncate">{group.campaignName}</span>
+                              <span className="text-[9px] bg-slate-200/80 text-slate-600 px-1.5 py-0.2 rounded-full font-semibold shrink-0 ml-1">
+                                {group.templates.length}
+                              </span>
+                            </div>
+                            <div className="space-y-0.5 pl-1">
+                              {group.templates.map((t: any) => {
+                                const isSelected = selectedTemplate === t.id;
+                                return (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    onClick={() => {
+                                      applyTemplate(t.id);
+                                      setIsTemplatePopoverOpen(false);
+                                    }}
+                                    className={`w-full text-left px-2.5 py-2 text-xs rounded-xl flex items-center justify-between transition-colors ${
+                                      isSelected
+                                        ? 'bg-[#095c7b] text-white font-bold shadow-sm'
+                                        : 'hover:bg-slate-100 text-slate-700 font-medium'
+                                    }`}
+                                  >
+                                    <div className="truncate pr-2">
+                                      <div className="truncate">{t.name}</div>
+                                      {t.subject && (
+                                        <div className={`text-[10px] truncate ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
+                                          {t.subject}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-6 text-center text-xs text-slate-400 italic">
+                          No matching templates found for "{templateSearchQuery}".
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div className="space-y-1">
@@ -4500,6 +5043,91 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
           <DialogFooter>
             <Button onClick={() => setIsEditingEnquiryTypes(false)} className="bg-[#095c7b] text-white hover:bg-[#074b63] text-xs font-semibold px-4 py-2 rounded-xl">
               Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Staff Note Confirmation Dialog */}
+      <Dialog open={!!deletingNoteId} onOpenChange={(open) => { if (!open) { setDeletingNoteId(null); setNoteToDelete(null); } }}>
+        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-rose-700 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-rose-600" />
+              Delete Staff Note
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              Are you sure you want to delete this internal staff note? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {noteToDelete && (
+            <div className="my-2 p-3 bg-rose-50/50 border border-rose-100 rounded-xl text-xs text-slate-700 max-h-32 overflow-y-auto leading-relaxed">
+              <p className="font-semibold text-rose-900 mb-1 text-[11px]">Note content:</p>
+              <p className="italic">{noteToDelete.content || noteToDelete.notes}</p>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setDeletingNoteId(null); setNoteToDelete(null); }}
+              disabled={isDeletingNote}
+              className="text-xs border-slate-200 text-slate-700 hover:bg-slate-50 h-9 px-4 rounded-lg font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs h-9 px-5 rounded-lg font-bold shadow-sm"
+              onClick={() => deletingNoteId && handleConfirmDeleteNote(deletingNoteId)}
+              disabled={isDeletingNote}
+            >
+              {isDeletingNote ? "Deleting..." : "Delete Note"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Issue Summary / Notes Dialog */}
+      <Dialog open={isEditSummaryModalOpen} onOpenChange={setIsEditSummaryModalOpen}>
+        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
+              <Pencil className="h-4 w-4" />
+              Edit Issue Summary & Notes
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-400 mt-1">
+              Update the primary issue description and customer notes on this ticket.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-3">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">Summary / Notes</label>
+            <Textarea
+              value={editTicketSummary}
+              onChange={(e) => setEditTicketSummary(e.target.value)}
+              placeholder="Enter issue summary or customer notes..."
+              rows={4}
+              className="text-xs bg-slate-50 border-slate-200 rounded-xl focus:bg-white focus:border-[#095c7b]"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsEditSummaryModalOpen(false)}
+              className="text-xs border-slate-200 text-slate-700 hover:bg-slate-50 h-9 px-4 rounded-lg font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveTicketSummary}
+              disabled={isSavingTicketSummary}
+              className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 px-5 rounded-lg font-bold shadow-sm"
+            >
+              {isSavingTicketSummary ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
