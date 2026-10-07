@@ -67,7 +67,45 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!customerId || !franchiseeId) {
+    // Resolve Franchisee ID if missing or passed as string name
+    let resolvedFranchiseeId = String(franchiseeId || '').trim();
+    if (!resolvedFranchiseeId || isNaN(Number(resolvedFranchiseeId))) {
+      try {
+        let compDoc = await db.collection('companies').doc(companyId).get();
+        if (!compDoc.exists) {
+          compDoc = await db.collection('leads').doc(companyId).get();
+        }
+        const cData = compDoc.exists ? compDoc.data() : null;
+        const candidateName = resolvedFranchiseeId || cData?.franchisee_id || cData?.franchisee || cData?.franchiseeName || '';
+
+        if (cData?.franchisee_id && !isNaN(Number(cData.franchisee_id))) {
+          resolvedFranchiseeId = String(cData.franchisee_id).trim();
+        } else if (candidateName) {
+          const fSnap = await db.collection('franchisees').get();
+          const targetLower = candidateName.toLowerCase().trim();
+          const cleanTarget = targetLower.replace(/mailplus|pty|ltd|nsw|vic|qld|wa|sa|act|tas/gi, '').replace(/[^a-z0-9]/g, ' ').trim();
+          const targetTokens = cleanTarget.split(/\s+/).filter((t: string) => t.length >= 3);
+
+          const matchedDoc = fSnap.docs.find((d: any) => {
+            const fd = d.data();
+            const fName = (fd.name || '').toLowerCase().trim();
+            const fId = String(fd.internalId || d.id).trim();
+            if (fId === candidateName || fName === targetLower) return true;
+            if (fName.includes(targetLower) || targetLower.includes(fName)) return true;
+            if (cleanTarget && fName.includes(cleanTarget)) return true;
+            return targetTokens.some((token: string) => fName.includes(token));
+          });
+
+          if (matchedDoc) {
+            resolvedFranchiseeId = String(matchedDoc.data().internalId || matchedDoc.id).trim();
+          }
+        }
+      } catch (e) {
+        console.warn('Server-side franchisee resolution fallback error:', e);
+      }
+    }
+
+    if (!customerId || !resolvedFranchiseeId) {
       return NextResponse.json(
         { success: false, error: 'Missing required NetSuite customerId or franchiseeId' },
         { status: 400 }
@@ -88,10 +126,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Dispatch to NetSuite API Proxy
+    // 3. Dispatch to NetSuite API Proxy (customerId matches companyId)
+    const targetCustomerId = String(companyId || customerId).trim();
+
     const netSuitePayload: CreateCustomerInvoicePayload = {
-      customerId: String(customerId).trim(),
-      franchiseeId: String(franchiseeId).trim(),
+      customerId: targetCustomerId,
+      franchiseeId: String(resolvedFranchiseeId).trim(),
       ...(location ? { location: String(location).trim() } : {}),
       ...(department ? { department: String(department).trim() } : {}),
       ...(resolvedPoNumber ? { customerPo: resolvedPoNumber, poNumber: resolvedPoNumber } : {}),
@@ -113,8 +153,18 @@ export async function POST(req: NextRequest) {
     const netSuiteRes = await createCustomerInvoiceInNetSuite(netSuitePayload);
 
     if (!netSuiteRes.success) {
+      console.error('[API /api/invoices/create] NetSuite creation failed:', {
+        netSuitePayload,
+        error: netSuiteRes.error,
+        rawResponse: netSuiteRes.rawResponse
+      });
       return NextResponse.json(
-        { success: false, error: netSuiteRes.error || 'NetSuite failed to create customer invoice' },
+        { 
+          success: false, 
+          error: netSuiteRes.error || 'NetSuite failed to create customer invoice',
+          debugPayload: netSuitePayload,
+          rawResponse: netSuiteRes.rawResponse
+        },
         { status: 400 }
       );
     }

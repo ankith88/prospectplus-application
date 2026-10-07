@@ -68,8 +68,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs, query, where, limit } from 'firebase/firestore';
-import type { Lead, ServiceSelection } from '@/lib/types';
+import { collection, getDocs, query, where, limit, doc, updateDoc, getDoc } from 'firebase/firestore';
+import type { Lead, ServiceSelection, Franchisee } from '@/lib/types';
+import { getAllFranchisees } from '@/services/firebase';
 import { 
   calculateServiceWorkingDays, 
   normalizeState, 
@@ -109,6 +110,156 @@ interface CreateInvoiceDialogProps {
   onInvoiceCreated?: (invoiceId: string) => void;
 }
 
+/**
+ * Resolves the NetSuite Franchisee ID and Name from company object, franchisees collection, or user profile.
+ */
+export function resolveFranchiseeDetails(
+  comp: any,
+  franchisees: Franchisee[],
+  userProf: any
+): { id: string; name: string; obj?: Franchisee } | null {
+  if (!comp) return null;
+
+  // 1. Direct franchisee_id from company document (Absolute Primary Source of Truth)
+  const directId = 
+    comp.franchisee_id || 
+    comp.franchiseeId || 
+    comp.franchiseeInternalId || 
+    comp.franchisee_internal_id;
+
+  if (directId && String(directId).trim() && String(directId).trim() !== 'Unassigned') {
+    const cleanId = String(directId).trim();
+    const found = franchisees.find(f => 
+      String(f.internalId || '').trim() === cleanId ||
+      String(f.id || '').trim() === cleanId ||
+      String((f as any).prospectPlusId || '').trim() === cleanId ||
+      (comp.franchisee && (f.name || '').trim().toLowerCase() === String(comp.franchisee).trim().toLowerCase())
+    );
+    return {
+      id: cleanId,
+      name: found?.name || comp.franchisee || comp.franchiseeName || `Franchisee (${cleanId})`,
+      obj: found
+    };
+  }
+
+  // 2. Check if comp.franchisee is actually numeric ID (e.g. "71187521")
+  if (comp.franchisee && !isNaN(Number(comp.franchisee)) && String(comp.franchisee).trim() !== '') {
+    const cleanId = String(comp.franchisee).trim();
+    const found = franchisees.find(f => 
+      String(f.internalId || '').trim() === cleanId ||
+      String(f.id || '').trim() === cleanId
+    );
+    if (found) {
+      return { id: String(found.internalId || found.id), name: found.name, obj: found };
+    }
+    return { id: cleanId, name: `Franchisee (${cleanId})` };
+  }
+
+  // 3. Check linkedFranchisees array / linkedFranchiseeIds
+  if (Array.isArray(comp.linkedFranchisees) && comp.linkedFranchisees.length > 0) {
+    for (const lf of comp.linkedFranchisees) {
+      const lId = lf.franchiseeId || lf.internalId || lf.id;
+      if (lId) {
+        const cleanId = String(lId).trim();
+        const found = franchisees.find(f => 
+          String(f.internalId || '').trim() === cleanId ||
+          String(f.id || '').trim() === cleanId
+        );
+        if (found) return { id: String(found.internalId || found.id), name: found.name, obj: found };
+        return { id: cleanId, name: lf.franchiseeName || lf.name || cleanId };
+      }
+    }
+  }
+
+  if (Array.isArray(comp.linkedFranchiseeIds) && comp.linkedFranchiseeIds.length > 0) {
+    const firstId = String(comp.linkedFranchiseeIds[0]).trim();
+    if (firstId) {
+      const found = franchisees.find(f => 
+        String(f.internalId || '').trim() === firstId ||
+        String(f.id || '').trim() === firstId
+      );
+      if (found) return { id: String(found.internalId || found.id), name: found.name, obj: found };
+      return { id: firstId, name: `Franchisee (${firstId})` };
+    }
+  }
+
+  // 4. Franchisee Name match in franchisees list
+  const nameCandidate = comp.franchisee || comp.franchiseeName || comp.partner || comp.territoryName || comp.territory;
+  if (nameCandidate && typeof nameCandidate === 'string' && nameCandidate.trim() && nameCandidate.trim() !== 'Unassigned') {
+    const rawName = nameCandidate.trim().toLowerCase();
+
+    // 4a. Exact name or internalId match
+    let matched = franchisees.find(f => 
+      (f.name || '').trim().toLowerCase() === rawName ||
+      String(f.internalId || '').trim().toLowerCase() === rawName ||
+      String(f.id || '').trim().toLowerCase() === rawName
+    );
+
+    // 4b. Substring or token match (e.g. "Waterloo" vs "MailPlus Waterloo Alexandria" or "Waterloo, NSW")
+    if (!matched) {
+      const cleanTarget = rawName.replace(/mailplus|pty|ltd|nsw|vic|qld|wa|sa|act|tas/gi, '').replace(/[^a-z0-9]/g, ' ').trim();
+      const targetTokens = cleanTarget.split(/\s+/).filter(t => t.length >= 3);
+
+      matched = franchisees.find(f => {
+        const fNameLower = (f.name || '').toLowerCase();
+        if (fNameLower === rawName) return true;
+        if (fNameLower.includes(rawName) || rawName.includes(fNameLower)) return true;
+        if (cleanTarget && fNameLower.includes(cleanTarget)) return true;
+        return targetTokens.some(token => fNameLower.includes(token));
+      });
+    }
+
+    if (matched) {
+      return { id: String(matched.internalId || matched.id), name: matched.name, obj: matched };
+    }
+  }
+
+  // 5. If logged-in user is a franchisee
+  const userFranId = userProf?.franchiseeId || userProf?.franchiseeInternalId || userProf?.activeFranchiseeId;
+  if (userFranId) {
+    const cleanId = String(userFranId).trim();
+    const found = franchisees.find(f => 
+      String(f.internalId || '').trim() === cleanId ||
+      String(f.id || '').trim() === cleanId
+    );
+    if (found) return { id: String(found.internalId || found.id), name: found.name, obj: found };
+    return { id: cleanId, name: userProf?.franchisee || cleanId };
+  }
+
+  // 6. Suburb / Postcode territory match
+  const addr = comp.billingAddress || comp.address || comp.customerAddress || {};
+  const suburb = (addr.suburb || addr.city || comp.suburb || comp.city || '').toLowerCase().trim();
+  const postcode = String(addr.postcode || addr.postalCode || comp.postcode || comp.postalCode || '').trim();
+
+  if (suburb || postcode) {
+    const territoryMatched = franchisees.find(f => {
+      const checkSubList = (list: any[]) => {
+        if (!Array.isArray(list)) return false;
+        return list.some((t: any) => {
+          const s = (t.suburbs || t.suburb || '').toLowerCase();
+          const p = String(t.post_code || t.postcode || '');
+          if (suburb && (s === suburb || s.includes(suburb))) return true;
+          if (postcode && p === postcode) return true;
+          return false;
+        });
+      };
+      return (
+        checkSubList(f.territoryJson) ||
+        checkSubList(f.ausPostSuburbsJson) ||
+        checkSubList(f.tgeSuburbsJSON || []) ||
+        checkSubList(f.starTrackSuburbsJson || []) ||
+        checkSubList(f.ironMountainSuburbsJson || [])
+      );
+    });
+
+    if (territoryMatched) {
+      return { id: String(territoryMatched.internalId || territoryMatched.id), name: territoryMatched.name, obj: territoryMatched };
+    }
+  }
+
+  return null;
+}
+
 export function CreateInvoiceDialog({
   open,
   onOpenChange,
@@ -133,6 +284,11 @@ export function CreateInvoiceDialog({
   // Customer identifiers (Maintained internally, hidden from user view/edit)
   const [customerId, setCustomerId] = useState<string>('');
   const [franchiseeId, setFranchiseeId] = useState<string>('');
+  const [franchiseeName, setFranchiseeName] = useState<string>('');
+  const [franchiseesList, setFranchiseesList] = useState<Franchisee[]>([]);
+  const [loadingFranchisees, setLoadingFranchisees] = useState<boolean>(false);
+  const [isFranchiseePickerOpen, setIsFranchiseePickerOpen] = useState<boolean>(false);
+  const [franchiseeFilterQuery, setFranchiseeFilterQuery] = useState<string>('');
   
   // Editable fields
   const [customerPo, setCustomerPo] = useState<string>('');
@@ -504,6 +660,29 @@ export function CreateInvoiceDialog({
     };
   }, [open]);
 
+  // Load all franchisees from Firestore
+  useEffect(() => {
+    if (!open) return;
+    let isMounted = true;
+    async function fetchFranchisees() {
+      setLoadingFranchisees(true);
+      try {
+        const list = await getAllFranchisees();
+        if (isMounted) {
+          setFranchiseesList(list || []);
+        }
+      } catch (err) {
+        console.warn('[CreateInvoiceDialog] Failed to fetch franchisees:', err);
+      } finally {
+        if (isMounted) setLoadingFranchisees(false);
+      }
+    }
+    fetchFranchisees();
+    return () => {
+      isMounted = false;
+    };
+  }, [open]);
+
   // Split into available services and available extras
   const availableServices = useMemo(() => {
     return catalogItems.filter(item => item.itemType === 'service');
@@ -512,6 +691,34 @@ export function CreateInvoiceDialog({
   const availableExtras = useMemo(() => {
     return catalogItems.filter(item => item.itemType === 'extra');
   }, [catalogItems]);
+
+  // Filtered franchisees for search in selector
+  const filteredFranchisees = useMemo(() => {
+    if (!franchiseeFilterQuery.trim()) return franchiseesList;
+    const q = franchiseeFilterQuery.toLowerCase().trim();
+    return franchiseesList.filter(f => 
+      (f.name || '').toLowerCase().includes(q) ||
+      String(f.internalId || '').toLowerCase().includes(q) ||
+      String(f.id || '').toLowerCase().includes(q)
+    );
+  }, [franchiseesList, franchiseeFilterQuery]);
+
+  const handleSelectFranchisee = (f: Franchisee) => {
+    const resolvedId = String(f.internalId || f.id || '').trim();
+    setFranchiseeId(resolvedId);
+    setFranchiseeName(f.name);
+    setIsFranchiseePickerOpen(false);
+    setErrorMessage(null);
+
+    // Auto-persist to company profile in background
+    if (company?.id && resolvedId) {
+      const compRef = doc(firestore, 'companies', company.id);
+      updateDoc(compRef, {
+        franchisee_id: resolvedId,
+        franchisee: f.name
+      }).catch(() => {});
+    }
+  };
 
   // Set default dates on preset change
   const setPresetDates = useCallback((preset: 'lastMonth' | 'thisMonth' | 'custom') => {
@@ -531,31 +738,74 @@ export function CreateInvoiceDialog({
     }
   }, []);
 
-  // Initialize dialog values when opened
+  // Initialize dialog values when opened and auto-resolve Franchisee
   useEffect(() => {
     if (!open) {
       setErrorMessage(null);
       return;
     }
 
-    // 1. Resolve NetSuite Customer ID (Hidden from UI)
+    // 1. Resolve NetSuite Customer ID (Same value as companyId / company.id)
     const resolvedCustomerId = 
-      company.customerEntityId || 
+      company.id || 
       company.internalid || 
       company.internalId || 
-      company.salesRecordInternalId || 
-      company.id;
+      company.customerEntityId;
     setCustomerId(String(resolvedCustomerId || '').trim());
 
-    // 2. Resolve Franchisee ID (Hidden from UI)
-    const resolvedFranchiseeId = 
-      company.franchisee_id || 
-      (company as any).franchiseeId || 
-      (company as any).franchiseeInternalId || 
-      userProfile?.franchiseeId || 
-      userProfile?.franchiseeInternalId || 
-      '';
-    setFranchiseeId(String(resolvedFranchiseeId || '').trim());
+    // 2. Resolve Franchisee ID and Name via multi-step cascade
+    const resolvedFran = resolveFranchiseeDetails(company, franchiseesList, userProfile);
+    if (resolvedFran?.id) {
+      setFranchiseeId(resolvedFran.id);
+      setFranchiseeName(resolvedFran.name);
+
+      // Auto-persist back to company in background if franchisee_id was missing
+      if (company?.id && !company.franchisee_id) {
+        const compRef = doc(firestore, 'companies', company.id);
+        updateDoc(compRef, {
+          franchisee_id: resolvedFran.id,
+          franchisee: resolvedFran.name
+        }).catch(() => {});
+      }
+    } else {
+      const directFallbackId = String(
+        company.franchisee_id || 
+        (company as any).franchiseeId || 
+        (company as any).franchiseeInternalId || 
+        userProfile?.franchiseeId || 
+        userProfile?.franchiseeInternalId || 
+        ''
+      ).trim();
+      setFranchiseeId(directFallbackId);
+      setFranchiseeName(company.franchisee || (company as any).franchiseeName || directFallbackId);
+    }
+
+    // 2b. Always fetch live document from Firestore in parallel to guarantee fresh franchisee_id & customer details
+    if (company?.id) {
+      const loadLiveDoc = async () => {
+        try {
+          let snap = await getDoc(doc(firestore, 'companies', company.id));
+          if (!snap.exists()) {
+            snap = await getDoc(doc(firestore, 'leads', company.id));
+          }
+          if (snap.exists()) {
+            const liveData = snap.data();
+            const liveFran = resolveFranchiseeDetails({ ...company, ...liveData }, franchiseesList, userProfile);
+            if (liveFran?.id) {
+              setFranchiseeId(liveFran.id);
+              setFranchiseeName(liveFran.name);
+            }
+            const liveCustomerId = company.id || liveData?.id || liveData?.internalid || liveData?.internalId || liveData?.customerEntityId;
+            if (liveCustomerId) {
+              setCustomerId(String(liveCustomerId).trim());
+            }
+          }
+        } catch (e) {
+          console.warn('Could not fetch live doc for invoice creation:', e);
+        }
+      };
+      loadLiveDoc();
+    }
 
     // 3. Customer PO#
     const initialPo = 
@@ -935,8 +1185,19 @@ export function CreateInvoiceDialog({
       setErrorMessage('Could not resolve NetSuite Customer ID for this record.');
       return;
     }
-    if (!franchiseeId) {
-      setErrorMessage('Could not resolve NetSuite Franchisee ID for this record.');
+
+    let effectiveFranchiseeId = franchiseeId?.trim();
+    if (!effectiveFranchiseeId) {
+      const fallbackResolved = resolveFranchiseeDetails(company, franchiseesList, userProfile);
+      if (fallbackResolved?.id) {
+        effectiveFranchiseeId = fallbackResolved.id;
+        setFranchiseeId(fallbackResolved.id);
+        setFranchiseeName(fallbackResolved.name);
+      }
+    }
+
+    if (!effectiveFranchiseeId) {
+      setErrorMessage('Could not resolve NetSuite Franchisee ID. Please select a Franchisee under Customer Information.');
       return;
     }
     if (!startDateStr || !endDateStr) {
@@ -950,11 +1211,13 @@ export function CreateInvoiceDialog({
 
     setSubmitting(true);
 
+    const targetCustomerId = String(company.id || customerId).trim();
+
     try {
       const payload = {
         companyId: company.id,
-        customerId: customerId.trim(),
-        franchiseeId: franchiseeId.trim(),
+        customerId: targetCustomerId,
+        franchiseeId: effectiveFranchiseeId,
         ...(customerPo.trim() ? { customerPo: customerPo.trim(), poNumber: customerPo.trim() } : {}),
         ...(location.trim() ? { location: location.trim() } : {}),
         ...(department.trim() ? { department: department.trim() } : {}),
@@ -995,6 +1258,18 @@ export function CreateInvoiceDialog({
         requestorRole: userProfile?.activeRole || 'Admin'
       };
 
+      console.log('🚀 [CreateInvoice] Submitting Invoice to NetSuite API:', {
+        companyId: payload.companyId,
+        customerId: payload.customerId,
+        franchiseeId: payload.franchiseeId,
+        periodStartDate: payload.periodStartDate,
+        periodEndDate: payload.periodEndDate,
+        invoiceType: payload.invoiceType,
+        lines: payload.lines,
+        adminFeeRows: payload.adminFeeRows,
+        payload
+      });
+
       const res = await fetch('/api/invoices/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1004,8 +1279,18 @@ export function CreateInvoiceDialog({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
+        console.error('❌ [CreateInvoice] NetSuite Creation Error:', {
+          error: data.error,
+          customerIdPassed: payload.customerId,
+          franchiseeIdPassed: payload.franchiseeId,
+          debugPayload: data.debugPayload,
+          rawResponse: data.rawResponse,
+          fullResponse: data
+        });
         throw new Error(data.error || 'Failed to create invoice in NetSuite');
       }
+
+      console.log('✅ [CreateInvoice] NetSuite Invoice Created Successfully:', data);
 
       // Update local company.services in memory so next time user creates an invoice, it defaults to the selected frequency
       if (company) {
@@ -1198,15 +1483,118 @@ export function CreateInvoiceDialog({
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div className="sm:col-span-1">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div className="sm:col-span-6">
                   <Label className="text-xs font-semibold text-slate-700">Customer Name</Label>
                   <div className="text-xs font-bold text-slate-900 truncate mt-1 p-2 bg-slate-50 border border-slate-200 rounded-md">
                     {company.companyName || 'Valued Customer'}
                   </div>
                 </div>
 
-                <div className="sm:col-span-1">
+                <div className="sm:col-span-6">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-[#095c7b]" />
+                      Franchisee / Territory
+                      {franchiseeId ? (
+                        <Badge variant="outline" className="text-[10px] font-mono font-semibold text-emerald-700 bg-emerald-50 border-emerald-200 py-0 h-4">
+                          ID: {franchiseeId}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] font-medium text-amber-700 bg-amber-50 border-amber-300 py-0 h-4">
+                          Select Franchisee
+                        </Badge>
+                      )}
+                    </Label>
+                    {isFranchiseeRole && (
+                      <span className="text-[10px] text-slate-400 flex items-center gap-0.5" title="Locked for Franchisee role">
+                        <Lock className="w-2.5 h-2.5 text-slate-400" /> Locked
+                      </span>
+                    )}
+                  </div>
+
+                  {isFranchiseeRole ? (
+                    <div className="relative flex items-center mt-1">
+                      <Input
+                        value={franchiseeName ? `${franchiseeName} (${franchiseeId})` : (franchiseeId || 'Assigned Franchisee')}
+                        disabled
+                        className="h-8 text-xs font-medium bg-slate-100 text-slate-700 cursor-not-allowed pr-7 border-slate-300"
+                      />
+                      <Lock className="w-3.5 h-3.5 text-slate-400 absolute right-2 pointer-events-none" />
+                    </div>
+                  ) : (
+                    <Popover open={isFranchiseePickerOpen} onOpenChange={setIsFranchiseePickerOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={isFranchiseePickerOpen}
+                          className="w-full h-8 mt-1 justify-between text-xs bg-white border-slate-300 px-2.5 font-normal hover:bg-slate-50"
+                        >
+                          <span className="truncate font-medium text-slate-800">
+                            {franchiseeName ? (
+                              <span className="flex items-center gap-1.5">
+                                <span className="font-semibold text-slate-800">{franchiseeName}</span>
+                                {franchiseeId && <span className="text-slate-400 font-mono text-[10px]">({franchiseeId})</span>}
+                              </span>
+                            ) : franchiseeId ? (
+                              <span className="font-mono text-slate-700 font-medium">Franchisee ID: {franchiseeId}</span>
+                            ) : (
+                              <span className="text-amber-600 font-medium flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" /> Select Franchisee...
+                              </span>
+                            )}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[340px] p-2 bg-white shadow-xl border border-slate-200 z-[100]" align="start">
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                            <Input
+                              placeholder="Search franchisee name or ID..."
+                              value={franchiseeFilterQuery}
+                              onChange={e => setFranchiseeFilterQuery(e.target.value)}
+                              className="h-8 text-xs pl-8 pr-2 bg-slate-50 border-slate-200"
+                              autoFocus
+                            />
+                          </div>
+                          <div className="max-h-[220px] overflow-y-auto space-y-1 divide-y divide-slate-100">
+                            {filteredFranchisees.length === 0 ? (
+                              <div className="p-3 text-center text-xs text-slate-500">
+                                {loadingFranchisees ? 'Loading franchisees...' : 'No franchisees found'}
+                              </div>
+                            ) : (
+                              filteredFranchisees.map(f => {
+                                const fId = String(f.internalId || f.id || '');
+                                const isSelected = fId === franchiseeId || f.name === franchiseeName;
+                                return (
+                                  <button
+                                    key={f.id || f.internalId || f.name}
+                                    type="button"
+                                    onClick={() => handleSelectFranchisee(f)}
+                                    className={`w-full text-left p-2 rounded-md text-xs flex items-center justify-between transition-colors ${
+                                      isSelected ? 'bg-[#095c7b]/10 text-[#095c7b] font-semibold' : 'hover:bg-slate-100 text-slate-700'
+                                    }`}
+                                  >
+                                    <div className="truncate pr-2">
+                                      <div className="font-medium truncate">{f.name}</div>
+                                      <div className="text-[10px] text-slate-400 font-mono">ID: {fId || 'N/A'}</div>
+                                    </div>
+                                    {isSelected && <Check className="w-4 h-4 text-[#095c7b] shrink-0" />}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
+
+                <div className="sm:col-span-4">
                   <Label className="text-xs font-semibold text-slate-700">Customer PO#</Label>
                   <Input
                     value={customerPo}
@@ -1216,7 +1604,7 @@ export function CreateInvoiceDialog({
                   />
                 </div>
 
-                <div className="sm:col-span-1">
+                <div className="sm:col-span-5">
                   <Label className="text-xs font-semibold text-slate-700">Location / Dept</Label>
                   <div className="grid grid-cols-2 gap-1 mt-1">
                     <Input
@@ -1234,7 +1622,7 @@ export function CreateInvoiceDialog({
                   </div>
                 </div>
 
-                <div className="sm:col-span-1">
+                <div className="sm:col-span-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-semibold text-slate-700">Invoice Type</Label>
                     {isFranchiseeRole && (

@@ -43,8 +43,8 @@ export function resolveRepFromNumber(numName: string, assignedUsers?: Array<{ na
 }
 
 function getAircallAuthHeaders(): { Authorization: string } | null {
-  const apiId = (process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID || '494cbe8bcfe6e809016f74019fdff1bb').trim().replace(/^["']|["']$/g, '');
-  const apiToken = (process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN || 'f1fa3d2057264085560ae9af350009ad').trim().replace(/^["']|["']$/g, '');
+  const apiId = (process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID || '').trim().replace(/^["']|["']$/g, '');
+  const apiToken = (process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN || '').trim().replace(/^["']|["']$/g, '');
 
   if (!apiId || !apiToken) {
     return null;
