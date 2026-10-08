@@ -1504,13 +1504,44 @@ function encryptLeadId(leadId: string): string {
   }
 }
 
+const SOF_ELIGIBLE_ITEM_IDS = new Set<string>([
+  '24', '8912', '60', '61', '72', '8907', '8908', '8909', '8910', '8911',
+  '79', '76', '10793', '10794', '78', '77', '9223'
+]);
+
+const SOF_ELIGIBLE_CODES = new Set<string>([
+  'ampo', 'ampo 10', 'ampo 2', 'ampo 3', 'ampo 4', 'ampo 5', 'ampo 6', 'ampo 7', 'ampo 8', 'ampo 9',
+  'package: ampo & h2h', 'package: ampo & pmpo', 'package: ampo & pmpo 2', 'package: ampo & pmpo 3',
+  'package: ampo 2 po box', 'package: ampo, pmpo & eb', 'package: amst & ampo'
+]);
+
 function checkHasAmpo(data: any): boolean {
   if (!data) return false;
-  const services = Array.isArray(data.services) ? data.services : [];
+  const services = Array.isArray(data.services) 
+    ? data.services 
+    : Array.isArray(data.selectedServices) 
+      ? data.selectedServices 
+      : [];
+
   return services.some((s: any) => {
-    const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
-    const n = String(name).toLowerCase();
-    return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
+    if (!s) return false;
+    if (typeof s === 'string') {
+      const lower = s.trim().toLowerCase();
+      if (SOF_ELIGIBLE_ITEM_IDS.has(s.trim()) || SOF_ELIGIBLE_CODES.has(lower)) return true;
+      if (lower.startsWith('pmpo') || lower.startsWith('amstreet') || lower.includes('mail processing') || lower.includes('redirection') || lower === 'package: pmpo & eb') {
+        return false;
+      }
+      return lower.includes('ampo');
+    }
+    const itemId = String(s.netsuiteItemId || s.itemId || s.id || '').trim();
+    if (itemId && SOF_ELIGIBLE_ITEM_IDS.has(itemId)) return true;
+    const name = String(s.name || s.serviceName || s.code || s.netsuiteItemName || '').trim().toLowerCase();
+    if (!name) return false;
+    if (SOF_ELIGIBLE_CODES.has(name)) return true;
+    if (name.startsWith('pmpo') || name.startsWith('amstreet') || name.includes('mail processing') || name.includes('redirection') || name === 'package: pmpo & eb') {
+      return false;
+    }
+    return name.includes('ampo');
   });
 }
 

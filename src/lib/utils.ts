@@ -717,7 +717,37 @@ export function getInvoiceLineItems(invoice: any): NormalizedInvoiceLineItem[] {
 
   if (!Array.isArray(rawItems)) return [];
 
-  return rawItems
+  const itemsList = [...rawItems];
+
+  // If invoice has adminFeeRows defined separately and not already in items, include them
+  if (Array.isArray(invoice.adminFeeRows) && invoice.adminFeeRows.length > 0) {
+    const hasAdminFee = itemsList.some((it: any) => {
+      if (!it || typeof it !== 'object') return false;
+      const name = String(it.service || it.item || it.name || it.itemName || it.description || '').toLowerCase();
+      return name.includes('admin fee') || name.includes('administration fee');
+    });
+
+    if (!hasAdminFee) {
+      invoice.adminFeeRows.forEach((r: any) => {
+        if (!r || typeof r !== 'object') return;
+        const q = typeof r.qty === 'number' ? r.qty : parseFloat(String(r.qty || '1'));
+        const rate = typeof r.rate === 'number' ? r.rate : parseFloat(String(r.rate || '9.00'));
+        const qtyNum = isNaN(q) || q < 0 ? 1 : q;
+        const rateNum = isNaN(rate) ? 9.00 : rate;
+        itemsList.push({
+          service: 'Account Administration Fee',
+          itemName: 'Account Administration Fee',
+          itemId: '10909',
+          qty: qtyNum,
+          rate: rateNum,
+          totalAmount: Number((qtyNum * rateNum).toFixed(2)),
+          itemDetails: 'Standard monthly processing'
+        });
+      });
+    }
+  }
+
+  return itemsList
     .filter((item: any) => item !== null && item !== undefined && typeof item === 'object')
     .map((item: any) => {
       // 1. Service / Description / Item name

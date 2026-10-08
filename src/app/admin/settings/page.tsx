@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { UserPlus, ShieldAlert } from 'lucide-react';
+import { UserPlus, ShieldAlert, Phone } from 'lucide-react';
 import { UserManagementTable } from '@/components/admin/user-management-table';
 import { CreateUserDialog } from '@/components/admin/create-user-dialog';
 
@@ -42,7 +42,11 @@ export default function AdminSettingsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Admin Settings</h1>
           <p className="text-muted-foreground">Manage users and system settings.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => router.push('/admin/settings/telephony')} className="border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/20 text-[#095c7b] dark:text-[#38bdf8] font-medium">
+            <Phone className="mr-2 h-4 w-4" />
+            Telephony Switch
+          </Button>
           <Button variant="outline" onClick={() => router.push('/admin/services')}>
             Service Line Items & Commissions
           </Button>

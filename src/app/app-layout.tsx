@@ -746,7 +746,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     (userProfile?.assignedRoles || []).some((r: any) => allowedMissedCallsRoles.includes(String(r).trim().toLowerCase()));
   const hasLinkedAircallNumber = !isFranchiseeRole && Boolean(
     (userProfile?.aircallPhoneNumber && userProfile.aircallPhoneNumber.trim().length > 0) ||
-    userProfile?.aircallUserId
+    (userProfile?.dialpadPhoneNumber && userProfile.dialpadPhoneNumber.trim().length > 0) ||
+    userProfile?.aircallUserId ||
+    userProfile?.dialpadUserId
   );
   const canViewTickets = canView('tickets');
   const canViewLpoLeads = canView('lpoLeads');

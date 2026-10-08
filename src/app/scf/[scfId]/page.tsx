@@ -3,6 +3,9 @@ import { notFound } from 'next/navigation';
 import ScfClient from './scf-client';
 import type { Lead, Contact, ScfRecord } from '@/lib/types';
 
+import { checkHasAmpo } from '@/lib/standing-order';
+import { encryptLeadId } from '@/lib/localmile-security';
+
 export default async function ScfPage({ params }: { params: Promise<{ scfId: string }> }) {
   const { scfId } = await params;
 
@@ -42,11 +45,18 @@ export default async function ScfPage({ params }: { params: Promise<{ scfId: str
     }
   }
 
+  const isSofRequired = checkHasAmpo(leadData) || checkHasAmpo(scfData);
+  const isSofSigned = !!(leadData.sofDetails?.signatureDataUrl);
+  const sofToken = encryptLeadId(leadData.id);
+
   return (
     <ScfClient 
       scf={scfData} 
       lead={leadData} 
       contact={contactData} 
+      isSofRequired={isSofRequired}
+      isSofSigned={isSofSigned}
+      sofToken={sofToken}
     />
   );
 }

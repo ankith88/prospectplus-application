@@ -44,6 +44,7 @@ import {
   HelpCircle,
   Calendar,
   RefreshCw,
+  UserCheck,
 } from 'lucide-react'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { getOnboardingRequestByLeadId } from '@/services/onboarding-service'
@@ -851,6 +852,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [isSuburbsModalOpen, setIsSuburbsModalOpen] = useState(false);
   const [operatorMap, setOperatorMap] = useState<Record<string, string>>({});
   const [checkingShipmateId, setCheckingShipmateId] = useState<string | null>(null);
+  const [grantingShipmateId, setGrantingShipmateId] = useState<string | null>(null);
   const [verifyingEmails, setVerifyingEmails] = useState<Record<string, boolean>>({});
   const autoVerifiedCompanyRef = useRef<Set<string>>(new Set());
 
@@ -1166,6 +1168,73 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       });
     } finally {
       setCheckingShipmateId(null);
+    }
+  };
+
+  const handleGrantShipmateAccess = async (contact: any) => {
+    if (!contact.email) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing Email',
+        description: 'Contact must have a valid email address to receive ShipMate access.',
+      });
+      return;
+    }
+
+    setGrantingShipmateId(contact.id);
+    try {
+      const res = await fetch('/api/contacts/grant-shipmate-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parentId: company.id,
+          parentType: 'companies',
+          contactId: contact.id,
+          customerNsId: company.internalid || (company as any).netsuiteId || company.id,
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          email: contact.email,
+          phone: contact.phone || company.customerPhone || (company as any).phone || '',
+          userName: userProfile?.name || '',
+          userEmail: userProfile?.email || '',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to grant ShipMate access');
+      }
+
+      setCompany(prev => ({
+        ...prev,
+        contacts: prev.contacts?.map(c =>
+          c.id === contact.id
+            ? {
+                ...c,
+                accessToShipMate: data.accessToShipMate,
+                accountActivated: data.accountActivated,
+                createPasswordEmailSent: data.createPasswordEmailSent,
+                shipmateStatus: data.shipmateStatus,
+                shipmateCheckedAt: data.shipmateCheckedAt,
+                shipmateGrantedAt: data.shipmateGrantedAt,
+              }
+            : c
+        ),
+      }));
+
+      toast({
+        title: data.alreadyExisted ? 'ShipMate Account Linked' : 'ShipMate Access Granted',
+        description: data.message || `ShipMate access configured for ${contact.name || contact.email}.`,
+      });
+    } catch (err: any) {
+      console.error('Failed to grant ShipMate access:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Grant ShipMate Access Failed',
+        description: err?.message || 'Could not connect to ShipMate API.',
+      });
+    } finally {
+      setGrantingShipmateId(null);
     }
   };
 
@@ -2077,20 +2146,38 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                         <p className="text-xs text-muted-foreground">{contact.title}</p>
                                     </div>
                                     {contact.email && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 px-2 shrink-0 flex items-center gap-1"
-                                            disabled={checkingShipmateId === contact.id}
-                                            onClick={() => handleCheckShipmateStatus(contact)}
-                                        >
-                                            {checkingShipmateId === contact.id ? (
-                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                            ) : (
-                                                <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {contact.shipmateStatus !== 'Activated' && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 px-2 flex items-center gap-1"
+                                                    disabled={grantingShipmateId === contact.id || checkingShipmateId === contact.id}
+                                                    onClick={() => handleGrantShipmateAccess(contact)}
+                                                >
+                                                    {grantingShipmateId === contact.id ? (
+                                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                                    ) : (
+                                                        <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                                                    )}
+                                                    Grant Access
+                                                </Button>
                                             )}
-                                            Check ShipMate
-                                        </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 px-2 flex items-center gap-1"
+                                                disabled={checkingShipmateId === contact.id || grantingShipmateId === contact.id}
+                                                onClick={() => handleCheckShipmateStatus(contact)}
+                                            >
+                                                {checkingShipmateId === contact.id ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                ) : (
+                                                    <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
+                                                )}
+                                                Check ShipMate
+                                            </Button>
+                                        </div>
                                     )}
                                 </div>
 

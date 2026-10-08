@@ -58,6 +58,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Check,
+  UserCheck,
   Clock,
   CheckCircle2,
   ExternalLink,
@@ -85,6 +86,7 @@ import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
 import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isLostCustomerOrLead, isFranchiseeRole, isAccountOrSalesManager, isDialerRole, isOutboundLead } from '@/lib/lead-permissions'
+import { checkHasAmpo } from '@/lib/standing-order'
 import { AccessDenied } from '@/components/access-denied'
 import { Pencil } from 'lucide-react'
 import { EditTaskDialog } from '@/components/edit-task-dialog'
@@ -1201,10 +1203,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             setIsRecreditingId(null);
         }
     };
-  const hasAmpoService = lead.services?.some(s => {
-    const n = s.name.toLowerCase();
-    return n.includes("ampo") || n.includes("pmpo") || n.includes("amstreet") || n.includes("mail processing") || n.includes("redirection");
-  }) ?? false;
+  const hasAmpoService = checkHasAmpo(lead);
   const [nextBestActionLoading, setNextBestActionLoading] = useState(false);
   const [accountManagers, setAccountManagers] = useState<string[]>([]);
   const [csReps, setCsReps] = useState<string[]>([]);
@@ -1363,6 +1362,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [verifyingEmails, setVerifyingEmails] = useState<Record<string, boolean>>({});
   const [isVerifyingAllEmails, setIsVerifyingAllEmails] = useState(false);
   const [checkingShipmateId, setCheckingShipmateId] = useState<string | null>(null);
+  const [grantingShipmateId, setGrantingShipmateId] = useState<string | null>(null);
   const autoVerifiedLeadRef = useRef<Set<string>>(new Set());
 
   // Automatically verify unverified contact emails in the background on load
@@ -1489,6 +1489,74 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       });
     } finally {
       setCheckingShipmateId(null);
+    }
+  };
+
+  const handleGrantShipmateAccess = async (contact: Contact) => {
+    if (!contact.email) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing Email',
+        description: 'Contact must have a valid email address to receive ShipMate access.',
+      });
+      return;
+    }
+
+    setGrantingShipmateId(contact.id);
+    try {
+      const parentType = isCompanyProfile ? 'companies' : 'leads';
+      const res = await fetch('/api/contacts/grant-shipmate-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parentId: lead.id,
+          parentType,
+          contactId: contact.id,
+          customerNsId: (lead as any).internalid || (lead as any).netsuiteId || lead.id,
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          email: contact.email,
+          phone: contact.phone || lead.customerPhone || (lead as any).phone || '',
+          userName: userProfile?.name || '',
+          userEmail: userProfile?.email || '',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to grant ShipMate access');
+      }
+
+      setLead(prev => ({
+        ...prev,
+        contacts: prev.contacts?.map(c =>
+          c.id === contact.id
+            ? {
+                ...c,
+                accessToShipMate: data.accessToShipMate,
+                accountActivated: data.accountActivated,
+                createPasswordEmailSent: data.createPasswordEmailSent,
+                shipmateStatus: data.shipmateStatus,
+                shipmateCheckedAt: data.shipmateCheckedAt,
+                shipmateGrantedAt: data.shipmateGrantedAt,
+              }
+            : c
+        ),
+      }));
+
+      toast({
+        title: data.alreadyExisted ? 'ShipMate Account Linked' : 'ShipMate Access Granted',
+        description: data.message || `ShipMate access configured for ${contact.name || contact.email}.`,
+      });
+    } catch (err: any) {
+      console.error('Failed to grant ShipMate access:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Grant ShipMate Access Failed',
+        description: err?.message || 'Could not connect to ShipMate API.',
+      });
+    } finally {
+      setGrantingShipmateId(null);
     }
   };
 
@@ -6063,10 +6131,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 {userProfile?.activeRole?.toLowerCase() !== 'user' && (
                   <TabsTrigger id="step-tab-lpo-locations" value="lpo-locations" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">LPO & Locations</TabsTrigger>
                 )}
-                {localMileJobs.length > 0 && (
-                    <TabsTrigger id="step-tab-trial-jobs" value="trial-jobs" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Trial Jobs</TabsTrigger>
+                {(isCompanyProfile || localMileJobs.length > 0 || shipMateJobs.length > 0) && (
+                    <TabsTrigger id="step-tab-jobs" value="jobs" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all flex items-center gap-1.5">
+                      <Briefcase className="w-4 h-4" />
+                      <span>Jobs</span>
+                      {(localMileJobs.length + shipMateJobs.length) > 0 && (
+                        <Badge variant="secondary" className="ml-1 px-1.5 py-0.5 text-[10px] bg-primary/10 text-primary font-bold rounded-full border border-primary/20">
+                          {localMileJobs.length + shipMateJobs.length}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
                 )}
-                
+
                 {/* For Lead Profile (non-company): Show Enrichment inline */}
                 {!isCompanyProfile && lead.bucket !== 'lpo_network' && !isLpoLeadProcess && (
                   <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Enrichment & Marketing Insights</TabsTrigger>
@@ -6078,17 +6154,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 {isCompanyProfile && (
                   <TabsTrigger id="step-tab-invoices" value="invoices" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">
                     Invoices
-                  </TabsTrigger>
-                )}
-                {(isCompanyProfile || shipMateJobs.length > 0) && (
-                  <TabsTrigger id="step-tab-shipmate-jobs" value="shipmate-jobs" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all flex items-center gap-1.5">
-                    <Package className="w-4 h-4" />
-                    <span>ShipMate Jobs</span>
-                    {shipMateJobs.length > 0 && (
-                      <Badge variant="secondary" className="ml-1 px-1.5 py-0.5 text-[10px] bg-primary/10 text-primary font-bold rounded-full border border-primary/20">
-                        {shipMateJobs.length}
-                      </Badge>
-                    )}
                   </TabsTrigger>
                 )}
 
@@ -6946,57 +7011,242 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              </TabsContent>
              )}
 
-            {localMileJobs.length > 0 && (
-              <TabsContent value="trial-jobs" className="flex flex-col gap-6 mt-0">
-                <Card className="border shadow-sm mb-6">
-                  <CardHeader className="pb-3 border-b">
-                    <CardTitle className="flex items-center gap-2 font-bold text-base">
-                      <Sparkles className="w-5 h-5 text-sky-600" />
-                      LocalMile Trial Jobs
-                    </CardTitle>
-                    <CardDescription>
-                      Manage booked jobs for this lead's LocalMile trial. You can restore trial credits for jobs that have not been actioned.
-                    </CardDescription>
+            {(isCompanyProfile || localMileJobs.length > 0 || shipMateJobs.length > 0) && (
+              <TabsContent value="jobs" className="flex flex-col gap-8 mt-0">
+                {/* 1. LocalMile Jobs Section */}
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-3 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 font-bold text-base">
+                        <Sparkles className="w-5 h-5 text-sky-600" />
+                        LocalMile Jobs
+                        {localMileJobs.length > 0 && (
+                          <Badge variant="secondary" className="ml-1 text-[11px] font-bold">
+                            {localMileJobs.length}
+                          </Badge>
+                        )}
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-0.5">
+                        Manage booked jobs for this {isCompanyProfile ? "customer's" : "lead's"} LocalMile trial. You can restore trial credits for jobs that have not been actioned.
+                      </CardDescription>
+                    </div>
                   </CardHeader>
                   <CardContent className="pt-4">
-                    <div className="space-y-3">
-                      {localMileJobs.map((job) => {
-                        const isActioned = ['completed', 'in-progress', 'in progress', 'recredited'].includes((job.status || '').toLowerCase());
-                        const isRecredited = (job.status || '').toLowerCase() === 'recredited';
-                        return (
-                          <div key={job.jobId} className="flex flex-wrap items-center justify-between p-3 bg-muted/40 rounded-lg border gap-4 text-sm">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">Job ID: {job.jobId}</span>
-                              <span className="text-xs text-muted-foreground">
-                                Booked on: {job.createdAt ? new Date(job.createdAt.seconds ? job.createdAt.seconds * 1000 : job.createdAt).toLocaleString() : 'N/A'}
-                              </span>
+                    {localMileJobs.length === 0 ? (
+                      <div className="py-6 text-center text-muted-foreground text-sm">
+                        No LocalMile jobs recorded yet for this {isCompanyProfile ? 'customer' : 'lead'}.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {localMileJobs.map((job) => {
+                          const isActioned = ['completed', 'in-progress', 'in progress', 'recredited'].includes((job.status || '').toLowerCase());
+                          const isRecredited = (job.status || '').toLowerCase() === 'recredited';
+                          return (
+                            <div key={job.jobId} className="flex flex-wrap items-center justify-between p-3 bg-muted/40 rounded-lg border gap-4 text-sm">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-semibold">Job ID: {job.jobId}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  Booked on: {job.createdAt ? new Date(job.createdAt.seconds ? job.createdAt.seconds * 1000 : job.createdAt).toLocaleString() : 'N/A'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <Badge variant="outline" className={
+                                  isRecredited ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                  isActioned ? "bg-green-50 text-green-700 border-green-200" :
+                                  "bg-sky-50 text-sky-700 border-sky-200"
+                                }>
+                                  {job.status || 'created'}
+                                </Badge>
+                                {!isActioned && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-amber-700 border-amber-200 hover:bg-amber-50 hover:text-amber-800"
+                                    disabled={isRecreditingId !== null}
+                                    onClick={() => handleRecredit(job.jobId)}
+                                  >
+                                    {isRecreditingId === job.jobId ? 'Restoring...' : 'Restore Trial Credit'}
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-4">
-                              <Badge variant="outline" className={
-                                isRecredited ? "bg-amber-50 text-amber-700 border-amber-200" :
-                                isActioned ? "bg-green-50 text-green-700 border-green-200" :
-                                "bg-sky-50 text-sky-700 border-sky-200"
-                              }>
-                                {job.status || 'created'}
-                              </Badge>
-                              {!isActioned && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-amber-700 border-amber-200 hover:bg-amber-50 hover:text-amber-800"
-                                  disabled={isRecreditingId !== null}
-                                  onClick={() => handleRecredit(job.jobId)}
-                                >
-                                  {isRecreditingId === job.jobId ? 'Restoring...' : 'Restore Trial Credit'}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
+
+                {/* 2. ShipMate Jobs Section */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Card className="bg-card border shadow-xs">
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total ShipMate Jobs</p>
+                          <p className="text-2xl font-bold text-foreground mt-1">{shipMateJobs.length}</p>
+                        </div>
+                        <div className="p-3 bg-sky-50 dark:bg-sky-950/50 rounded-xl text-sky-600 dark:text-sky-400">
+                          <Package className="w-5 h-5" />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-card border shadow-xs">
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active / Scheduled Jobs</p>
+                          <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                            {shipMateJobs.filter(j => !['cancelled', 'failed', 'completed'].includes((j.status || '').toLowerCase())).length}
+                          </p>
+                        </div>
+                        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl text-emerald-600 dark:text-emerald-400">
+                          <Clock className="w-5 h-5" />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-card border shadow-xs">
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Latest Job Date</p>
+                          <p className="text-sm font-bold text-foreground mt-1.5">
+                            {shipMateJobs.length > 0 && shipMateJobs[0]?.dateCreated
+                              ? safeFormatDate(shipMateJobs[0].dateCreated, 'MMM d, yyyy')
+                              : 'N/A'}
+                          </p>
+                        </div>
+                        <div className="p-3 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl text-indigo-600 dark:text-indigo-400">
+                          <CalendarCheck className="w-5 h-5" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card className="w-full">
+                    <CardHeader className="pb-3 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                          <Package className="w-5 h-5 text-sky-600" />
+                          ShipMate Booking Jobs
+                        </CardTitle>
+                        <CardDescription className="text-xs mt-0.5">
+                          Jobs dispatched and recorded from the ShipMate platform for {lead.companyName || 'this customer'}.
+                        </CardDescription>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative w-full sm:w-48">
+                          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                          <Input
+                            placeholder="Search Job ID or Payload..."
+                            value={shipMateSearchQuery}
+                            onChange={(e) => setShipMateSearchQuery(e.target.value)}
+                            className="pl-8 h-8 text-xs bg-background"
+                          />
+                        </div>
+                        <Select value={shipMateStatusFilter} onValueChange={setShipMateStatusFilter}>
+                          <SelectTrigger className="h-8 text-xs w-36 bg-background">
+                            <SelectValue placeholder="All Statuses" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            <SelectItem value="created">Created</SelectItem>
+                            <SelectItem value="scheduled">Scheduled</SelectItem>
+                            <SelectItem value="in-transit">In Transit</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="pt-6">
+                      {loadingShipMateJobs ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <Loader className="w-8 h-8 text-primary animate-spin mb-3" />
+                          <p className="text-sm text-muted-foreground">Loading ShipMate jobs...</p>
+                        </div>
+                      ) : filteredShipMateJobs.length > 0 ? (
+                        <div className="rounded-xl border overflow-hidden bg-card">
+                          <Table>
+                            <TableHeader className="bg-muted/50">
+                              <TableRow>
+                                <TableHead>Job ID</TableHead>
+                                <TableHead>Date Created</TableHead>
+                                <TableHead>Scheduled Date</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Platform</TableHead>
+                                <TableHead className="text-right">Details</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {filteredShipMateJobs.map((job) => {
+                                const statusLower = (job.status || 'created').toLowerCase();
+                                let statusBadgeStyle = "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800";
+                                if (['completed', 'delivered'].includes(statusLower)) {
+                                  statusBadgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800";
+                                } else if (['cancelled', 'failed'].includes(statusLower)) {
+                                  statusBadgeStyle = "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800";
+                                } else if (['in-transit', 'scheduled', 'in progress'].includes(statusLower)) {
+                                  statusBadgeStyle = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800";
+                                }
+
+                                return (
+                                  <TableRow key={job.id || job.jobId} className="hover:bg-muted/30">
+                                    <TableCell className="font-mono font-medium text-xs">
+                                      <div className="flex items-center gap-1.5">
+                                        <span>{job.jobId}</span>
+                                        <CopyButton textToCopy={job.jobId} className="h-6 w-6" />
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-xs text-muted-foreground">
+                                      {safeFormatDate(job.dateCreated, 'MMM d, yyyy')}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-muted-foreground">
+                                      {safeFormatDate(job.dateScheduled, 'MMM d, yyyy')}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline" className={`font-semibold capitalize text-[11px] ${statusBadgeStyle}`}>
+                                        {job.status || 'created'}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-xs">
+                                      <Badge variant="secondary" className="bg-slate-100 text-slate-700 font-mono text-[10px]">
+                                        {job.platform || 'ShipMate'}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setSelectedShipMateJob(job)}
+                                        className="h-7 text-xs gap-1 font-medium"
+                                      >
+                                        <FileText className="w-3.5 h-3.5" />
+                                        View Payload
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-center bg-muted/20 rounded-xl border border-dashed">
+                          <Package className="w-10 h-10 text-muted-foreground/40 mb-3" />
+                          <h4 className="text-sm font-semibold text-foreground">No ShipMate Jobs Found</h4>
+                          <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                            {shipMateSearchQuery || shipMateStatusFilter !== 'all'
+                              ? 'No jobs match your search or status filter criteria.'
+                              : 'No ShipMate jobs recorded for this customer yet. New jobs posted via the ShipMate integration API will automatically appear here.'}
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
               </TabsContent>
             )}
 
@@ -7994,17 +8244,33 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                     loading={!!verifyingEmails[contact.email?.toLowerCase().trim()]}
                                                     size="sm"
                                                 />
+                                                {contact.shipmateStatus !== 'Activated' && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-6 text-[11px] px-2 text-emerald-700 border-emerald-300 hover:bg-emerald-50 flex items-center gap-1 ml-1"
+                                                        disabled={grantingShipmateId === contact.id || checkingShipmateId === contact.id}
+                                                        onClick={() => handleGrantShipmateAccess(contact)}
+                                                    >
+                                                        {grantingShipmateId === contact.id ? (
+                                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                                        ) : (
+                                                            <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                                                        )}
+                                                        Grant Access
+                                                    </Button>
+                                                )}
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
                                                     className="h-6 text-[11px] px-2 text-blue-600 border-blue-200 hover:bg-blue-50 flex items-center gap-1 ml-1"
-                                                    disabled={checkingShipmateId === contact.id}
+                                                    disabled={checkingShipmateId === contact.id || grantingShipmateId === contact.id}
                                                     onClick={() => handleCheckShipmateStatus(contact)}
                                                 >
                                                     {checkingShipmateId === contact.id ? (
                                                         <Loader2 className="h-3 w-3 animate-spin" />
                                                     ) : (
-                                                                        <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
+                                                        <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
                                                     )}
                                                     Check ShipMate
                                                 </Button>
@@ -9574,177 +9840,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               </TabsContent>
             )}
 
-            {(isCompanyProfile || shipMateJobs.length > 0) && (
-              <TabsContent value="shipmate-jobs" className="flex flex-col gap-6 mt-0">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Card className="bg-card border shadow-xs">
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total ShipMate Jobs</p>
-                        <p className="text-2xl font-bold text-foreground mt-1">{shipMateJobs.length}</p>
-                      </div>
-                      <div className="p-3 bg-sky-50 dark:bg-sky-950/50 rounded-xl text-sky-600 dark:text-sky-400">
-                        <Package className="w-5 h-5" />
-                      </div>
-                    </CardContent>
-                  </Card>
 
-                  <Card className="bg-card border shadow-xs">
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active / Scheduled Jobs</p>
-                        <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                          {shipMateJobs.filter(j => !['cancelled', 'failed', 'completed'].includes((j.status || '').toLowerCase())).length}
-                        </p>
-                      </div>
-                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl text-emerald-600 dark:text-emerald-400">
-                        <Clock className="w-5 h-5" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-card border shadow-xs">
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Latest Job Date</p>
-                        <p className="text-sm font-bold text-foreground mt-1.5">
-                          {shipMateJobs.length > 0 && shipMateJobs[0]?.dateCreated
-                            ? safeFormatDate(shipMateJobs[0].dateCreated, 'MMM d, yyyy')
-                            : 'N/A'}
-                        </p>
-                      </div>
-                      <div className="p-3 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl text-indigo-600 dark:text-indigo-400">
-                        <CalendarCheck className="w-5 h-5" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <Card className="w-full">
-                  <CardHeader className="pb-3 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                      <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                        <Package className="w-5 h-5 text-sky-600" />
-                        ShipMate Booking Jobs
-                      </CardTitle>
-                      <CardDescription className="text-xs mt-0.5">
-                        Jobs dispatched and recorded from the ShipMate platform for {lead.companyName || 'this customer'}.
-                      </CardDescription>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="relative w-full sm:w-48">
-                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                        <Input
-                          placeholder="Search Job ID or Payload..."
-                          value={shipMateSearchQuery}
-                          onChange={(e) => setShipMateSearchQuery(e.target.value)}
-                          className="pl-8 h-8 text-xs bg-background"
-                        />
-                      </div>
-                      <Select value={shipMateStatusFilter} onValueChange={setShipMateStatusFilter}>
-                        <SelectTrigger className="h-8 text-xs w-36 bg-background">
-                          <SelectValue placeholder="All Statuses" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Statuses</SelectItem>
-                          <SelectItem value="created">Created</SelectItem>
-                          <SelectItem value="scheduled">Scheduled</SelectItem>
-                          <SelectItem value="in-transit">In Transit</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="pt-6">
-                    {loadingShipMateJobs ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <Loader className="w-8 h-8 text-primary animate-spin mb-3" />
-                        <p className="text-sm text-muted-foreground">Loading ShipMate jobs...</p>
-                      </div>
-                    ) : filteredShipMateJobs.length > 0 ? (
-                      <div className="rounded-xl border overflow-hidden bg-card">
-                        <Table>
-                          <TableHeader className="bg-muted/50">
-                            <TableRow>
-                              <TableHead>Job ID</TableHead>
-                              <TableHead>Date Created</TableHead>
-                              <TableHead>Scheduled Date</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Platform</TableHead>
-                              <TableHead className="text-right">Details</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {filteredShipMateJobs.map((job) => {
-                              const statusLower = (job.status || 'created').toLowerCase();
-                              let statusBadgeStyle = "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800";
-                              if (['completed', 'delivered'].includes(statusLower)) {
-                                statusBadgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800";
-                              } else if (['cancelled', 'failed'].includes(statusLower)) {
-                                statusBadgeStyle = "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800";
-                              } else if (['in-transit', 'scheduled', 'in progress'].includes(statusLower)) {
-                                statusBadgeStyle = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800";
-                              }
-
-                              return (
-                                <TableRow key={job.id || job.jobId} className="hover:bg-muted/30">
-                                  <TableCell className="font-mono font-medium text-xs">
-                                    <div className="flex items-center gap-1.5">
-                                      <span>{job.jobId}</span>
-                                      <CopyButton textToCopy={job.jobId} className="h-6 w-6" />
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-xs text-muted-foreground">
-                                    {safeFormatDate(job.dateCreated, 'MMM d, yyyy')}
-                                  </TableCell>
-                                  <TableCell className="text-xs text-muted-foreground">
-                                    {safeFormatDate(job.dateScheduled, 'MMM d, yyyy')}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge variant="outline" className={`font-semibold capitalize text-[11px] ${statusBadgeStyle}`}>
-                                      {job.status || 'created'}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="text-xs">
-                                    <Badge variant="secondary" className="bg-slate-100 text-slate-700 font-mono text-[10px]">
-                                      {job.platform || 'ShipMate'}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => setSelectedShipMateJob(job)}
-                                      className="h-7 text-xs gap-1 font-medium"
-                                    >
-                                      <FileText className="w-3.5 h-3.5" />
-                                      View Payload
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-12 text-center bg-muted/20 rounded-xl border border-dashed">
-                        <Package className="w-10 h-10 text-muted-foreground/40 mb-3" />
-                        <h4 className="text-sm font-semibold text-foreground">No ShipMate Jobs Found</h4>
-                        <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                          {shipMateSearchQuery || shipMateStatusFilter !== 'all'
-                            ? 'No jobs match your search or status filter criteria.'
-                            : 'No ShipMate jobs recorded for this customer yet. New jobs posted via the ShipMate integration API will automatically appear here.'}
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            )}
           </Tabs>
 
         </div>

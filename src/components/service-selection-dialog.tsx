@@ -48,6 +48,7 @@ import { Calendar } from './ui/calendar';
 import { OpenTrackingTips } from '@/components/ui/open-tracking-tips';
 import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
 import { cn, isScfAcceptedForLead } from '@/lib/utils';
+import { isSofEligibleService } from '@/lib/standing-order';
 import { Switch } from '@/components/ui/switch';
 import { ManualScfUploadDialog } from '@/components/manual-scf-upload-dialog';
 import { AlertTriangle, Upload } from 'lucide-react';
@@ -1444,7 +1445,7 @@ export function ServiceSelectionDialog({
     }
   }, [watchedStartDate, selectedContactId, watchedContactIds, allUsers, selectedTemplate]);
 
-  const hasAmpoService = selectedServices.some(s => s.toLowerCase().includes('ampo'));
+  const hasAmpoService = selectedServices.some(s => isSofEligibleService(s));
 
   const handleDateSelect = (
     range: DateRange | undefined,
@@ -1564,7 +1565,7 @@ export function ServiceSelectionDialog({
         });
         return;
       }
-      const hasAmpo = values.selectedServices.some(s => s.toLowerCase().includes('ampo'));
+      const hasAmpo = values.selectedServices.some(s => isSofEligibleService(s));
       if (!isLpoProcessLead && hasAmpo && !localLead?.postalAddress?.street && !lead.postalAddress?.street) {
         toast({
           variant: 'destructive',

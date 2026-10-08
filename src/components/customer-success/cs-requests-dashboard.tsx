@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import { collection, getDocs, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, getDoc, query, where } from 'firebase/firestore';
 import { firestore, storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { LossReasonPicker } from '@/components/loss-reason-picker';
@@ -56,13 +56,28 @@ export default function CSRequestsDashboard() {
 
   // Filtering
   const [activeTab, setActiveTab] = useState<'all' | 'change_of_service' | 'cancellation'>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('Pending');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Selected Request & Processing Modal
   const [selectedRequest, setSelectedRequest] = useState<CSRequest | null>(null);
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Helper to sync legacy cancellations collection
+  const syncMirroredCancellation = async (req: CSRequest, updates: any) => {
+    try {
+      if (req.id) {
+        await updateDoc(doc(firestore, 'cancellations', req.id), updates).catch(() => {});
+      }
+      if (req.leadId) {
+        const cancelSnap = await getDocs(query(collection(firestore, 'cancellations'), where('leadId', '==', req.leadId)));
+        await Promise.all(cancelSnap.docs.map(d => updateDoc(d.ref, updates).catch(() => {})));
+      }
+    } catch (e) {
+      console.warn('[CS Requests] Mirror sync warning:', e);
+    }
+  };
 
   // Processing States for Service Change
   const [editServices, setEditServices] = useState<ServiceSelection[]>([]);
@@ -123,16 +138,14 @@ export default function CSRequestsDashboard() {
         processedAt
       });
 
-      try {
-        await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), {
-          status: 'Saved',
-          saveStrategy: cancelSaveStrategy,
-          notes: cancelNotes ? `Resell / Quote issued. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}` : 'Resell / Quote issued to customer',
-          attachments: proofAttachments,
-          processedBy: userDisplayName,
-          processedAt
-        });
-      } catch (e) { /* ignore if not found */ }
+      await syncMirroredCancellation(selectedRequest, {
+        status: 'Saved',
+        saveStrategy: cancelSaveStrategy,
+        notes: cancelNotes ? `Resell / Quote issued. Strategy: ${cancelSaveStrategy}. Notes: ${cancelNotes}` : 'Resell / Quote issued to customer',
+        attachments: proofAttachments,
+        processedBy: userDisplayName,
+        processedAt
+      });
 
       const saveCompRef = doc(firestore, 'companies', selectedRequest.leadId);
       const saveLeadRef = doc(firestore, 'leads', selectedRequest.leadId);
@@ -578,17 +591,15 @@ export default function CSRequestsDashboard() {
         });
 
         // Update cancellations collection if exists
-        try {
-          await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), {
-            status: 'Saved',
-            saveStrategy: cancelSaveStrategy,
-            updatedServices: editServices,
-            notes: cancelNotes,
-            attachments: proofAttachments,
-            processedBy: userDisplayName,
-            processedAt
-          });
-        } catch (e) { /* ignore if not found */ }
+        await syncMirroredCancellation(selectedRequest, {
+          status: 'Saved',
+          saveStrategy: cancelSaveStrategy,
+          updatedServices: editServices,
+          notes: cancelNotes,
+          attachments: proofAttachments,
+          processedBy: userDisplayName,
+          processedAt
+        });
 
         // Update lead/company services & status in both collections if present
         const saveCompRef = doc(firestore, 'companies', selectedRequest.leadId);
@@ -655,22 +666,20 @@ export default function CSRequestsDashboard() {
           processedAt
         });
 
-        try {
-          await updateDoc(doc(firestore, 'cancellations', selectedRequest.id), {
-            status: 'Cancelled',
-            trueServiceCancellationDate: trueCancellationDate,
-            cancellationTheme: themeName,
-            cancellationThemeId: selectedThemeId,
-            cancellationWhy: whyName,
-            cancellationWhyId: selectedWhyId,
-            cancellationReason: reasonName,
-            cancellationReasonId: selectedReasonId,
-            notes: cancelNotes,
-            attachments: proofAttachments,
-            processedBy: userDisplayName,
-            processedAt
-          });
-        } catch (e) { /* ignore if not found */ }
+        await syncMirroredCancellation(selectedRequest, {
+          status: 'Cancelled',
+          trueServiceCancellationDate: trueCancellationDate,
+          cancellationTheme: themeName,
+          cancellationThemeId: selectedThemeId,
+          cancellationWhy: whyName,
+          cancellationWhyId: selectedWhyId,
+          cancellationReason: reasonName,
+          cancellationReasonId: selectedReasonId,
+          notes: cancelNotes,
+          attachments: proofAttachments,
+          processedBy: userDisplayName,
+          processedAt
+        });
 
         // Update lead/company doc in both collections if present
         const cancelCompRef = doc(firestore, 'companies', selectedRequest.leadId);

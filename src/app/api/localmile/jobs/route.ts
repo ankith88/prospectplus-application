@@ -90,6 +90,17 @@ export async function POST(req: NextRequest) {
 
     const computedTrialsRemaining = Math.max(0, 5 - activeTrialJobsCount);
     const isFirstJob = !leadData.hasCreatedJob && totalJobCount > 0;
+    const isAlreadySignedOrWon = 
+      leadData.status === 'Won' ||
+      leadData.status === 'Signed' ||
+      leadData.customerStatus === 'Signed' ||
+      leadData.customerStatus === 'Won' ||
+      leadData.customerStatus === 'Signed Up' ||
+      leadData.customerStatus === 'Active Customer' ||
+      leadData.customerStatus === 'Customer' ||
+      Boolean(leadData.signedUpAt) ||
+      Boolean(leadData.isConverted) ||
+      compSnap.exists;
 
     const leadUpdates: any = {
       jobCount: totalJobCount,
@@ -103,25 +114,27 @@ export async function POST(req: NextRequest) {
 
     if (isFirstJob) {
       leadUpdates.firstJobCreatedAt = new Date().toISOString();
-      leadUpdates.status = 'Trialing LocalMile';
-      leadUpdates.customerStatus = 'Trialing LocalMile';
+      if (!isAlreadySignedOrWon) {
+        leadUpdates.status = 'Trialing LocalMile';
+        leadUpdates.customerStatus = 'Trialing LocalMile';
 
-      const oldBucket = leadData.bucket || (leadData.fieldSales ? 'field_sales' : 'outbound');
-      leadUpdates.bucket = 'account_manager';
-      leadUpdates.bucketHistory = [
-        {
-          id: `bh-${Date.now()}`,
-          oldBucket,
-          newBucket: 'account_manager',
-          date: new Date().toISOString(),
-          author: 'LocalMile.Plus Webhook'
-        },
-        ...(leadData.bucketHistory || [])
-      ];
+        const oldBucket = leadData.bucket || (leadData.fieldSales ? 'field_sales' : 'outbound');
+        leadUpdates.bucket = 'account_manager';
+        leadUpdates.bucketHistory = [
+          {
+            id: `bh-${Date.now()}`,
+            oldBucket,
+            newBucket: 'account_manager',
+            date: new Date().toISOString(),
+            author: 'LocalMile.Plus Webhook'
+          },
+          ...(leadData.bucketHistory || [])
+        ];
 
-      if (leadData.nurtureJourneyId === 'op8xIHH4I70YeL8NRDly') {
-        leadUpdates.nurtureStatus = 'completed';
-        leadUpdates.nurtureLastActionAt = new Date().toISOString();
+        if (leadData.nurtureJourneyId === 'op8xIHH4I70YeL8NRDly') {
+          leadUpdates.nurtureStatus = 'completed';
+          leadUpdates.nurtureLastActionAt = new Date().toISOString();
+        }
       }
     }
 
@@ -138,7 +151,9 @@ export async function POST(req: NextRequest) {
     const actPromises: Promise<any>[] = [];
     if (!existingJobData) {
       const actNote = isFirstJob
-        ? `First LocalMile Job created (Ref: ${jobId}). Status transitioned to Trialing LocalMile. Trials remaining: ${computedTrialsRemaining}.`
+        ? (isAlreadySignedOrWon
+            ? `First LocalMile Job created (Ref: ${jobId}). Trials remaining: ${computedTrialsRemaining}.`
+            : `First LocalMile Job created (Ref: ${jobId}). Status transitioned to Trialing LocalMile. Trials remaining: ${computedTrialsRemaining}.`)
         : `LocalMile Job created (Ref: ${jobId}). Total jobs: ${totalJobCount}. Trials remaining: ${computedTrialsRemaining}.`;
 
       const actData = {

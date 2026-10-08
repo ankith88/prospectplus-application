@@ -43,6 +43,8 @@ const formSchema = z.object({
   mobileNumber: z.string().optional(),
   aircallPhoneNumber: z.string().optional(),
   aircallUserId: z.string().optional(),
+  dialpadPhoneNumber: z.string().optional(),
+  dialpadUserId: z.string().optional(),
   linkedSalesRep: z.string().optional(),
   linkedBDR: z.string().optional(),
   franchisee: z.string().optional(),
@@ -85,6 +87,8 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       mobileNumber: '',
       aircallPhoneNumber: '',
       aircallUserId: '',
+      dialpadPhoneNumber: '',
+      dialpadUserId: '',
       linkedSalesRep: '',
       linkedBDR: '',
       franchisee: '',
@@ -495,10 +499,16 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
              {role !== 'Franchisee' && (
                <>
                  <FormField control={form.control} name="aircallPhoneNumber" render={({ field }) => (
-                     <FormItem><FormLabel>AirCall Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                     <FormItem><FormLabel>AirCall Number</FormLabel><FormControl><Input {...field} placeholder="e.g. +61298765432" /></FormControl><FormMessage /></FormItem>
                  )}/>
                  <FormField control={form.control} name="aircallUserId" render={({ field }) => (
                     <FormItem><FormLabel>AirCall User ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                 )}/>
+                 <FormField control={form.control} name="dialpadPhoneNumber" render={({ field }) => (
+                     <FormItem><FormLabel>Dialpad Number</FormLabel><FormControl><Input {...field} placeholder="e.g. +61298765432" /></FormControl><FormMessage /></FormItem>
+                 )}/>
+                 <FormField control={form.control} name="dialpadUserId" render={({ field }) => (
+                    <FormItem><FormLabel>Dialpad User ID / Email</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                  )}/>
                </>
              )}

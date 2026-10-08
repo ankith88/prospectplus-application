@@ -23,7 +23,9 @@ export default function MyInboundCallsPage() {
   const isFranchisee = userProfile?.activeRole === 'Franchisee' || userProfile?.role === 'Franchisee';
   const hasLinkedAircall = Boolean(
     (userProfile?.aircallPhoneNumber && userProfile.aircallPhoneNumber.trim().length > 0) ||
-    userProfile?.aircallUserId
+    (userProfile?.dialpadPhoneNumber && userProfile.dialpadPhoneNumber.trim().length > 0) ||
+    userProfile?.aircallUserId ||
+    userProfile?.dialpadUserId
   );
 
   if (isFranchisee || !hasLinkedAircall) {

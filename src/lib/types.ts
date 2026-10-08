@@ -449,6 +449,8 @@ export interface UserProfile {
   mobileNumber?: string
   aircallPhoneNumber?: string
   aircallUserId?: string
+  dialpadPhoneNumber?: string
+  dialpadUserId?: string
   salesRepId?: string
   accountManagerId?: string
   netsuiteId?: string
@@ -1945,5 +1947,26 @@ export interface LpoLead {
   conversionStep?: number;
   linkedPartnerLocationId?: string | null;
   linkedPartnerLocationName?: string | null;
+}
+
+export type TelephonyProviderType = 'aircall' | 'dialpad';
+
+export interface TelephonySettings {
+  activeProvider: TelephonyProviderType;
+  aircall?: {
+    enabled?: boolean;
+    apiId?: string;
+    apiToken?: string;
+    webhookSecret?: string;
+  };
+  dialpad?: {
+    enabled?: boolean;
+    apiKey?: string;
+    webhookSecret?: string;
+    webhookId?: string;
+    officeId?: string;
+  };
+  updatedAt?: string;
+  updatedBy?: string;
 }
 

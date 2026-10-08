@@ -286,6 +286,32 @@ export async function POST(req: NextRequest) {
       };
     });
 
+    // Append Account Administration Fee to line items in Firestore if included
+    if (Array.isArray(adminFeeRows) && adminFeeRows.length > 0) {
+      const adminFeeService = firestoreServices.find((s: any) => 
+        String(s.code || '').toLowerCase().includes('admin') ||
+        String(s.name || '').toLowerCase().includes('admin fee') ||
+        String(s.netsuiteItemName || '').toLowerCase().includes('admin fee')
+      );
+      const adminFeeItemId = adminFeeService?.netsuiteItemId || adminFeeService?.id || '10909';
+
+      adminFeeRows.forEach((r: any) => {
+        const q = typeof r.qty === 'number' ? r.qty : parseFloat(String(r.qty || '1'));
+        const rate = typeof r.rate === 'number' ? r.rate : parseFloat(String(r.rate || '9.00'));
+        const qtyNum = isNaN(q) || q < 0 ? 1 : q;
+        const rateNum = isNaN(rate) ? 9.00 : rate;
+        normalizedItems.push({
+          service: 'Account Administration Fee',
+          itemName: 'Account Administration Fee',
+          itemId: String(adminFeeItemId),
+          rate: rateNum,
+          qty: qtyNum,
+          totalAmount: Number((qtyNum * rateNum).toFixed(2)),
+          itemDetails: 'Standard monthly processing'
+        });
+      });
+    }
+
     const firestoreInvoiceDoc = {
       id: String(invoiceId),
       documentId: String(invoiceId),

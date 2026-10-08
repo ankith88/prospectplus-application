@@ -2,21 +2,7 @@ import { firestore } from '../src/lib/firebase';
 import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
 import { encryptLeadId } from '../src/lib/localmile-security';
 
-function checkHasAmpo(data: any): boolean {
-  if (!data) return false;
-  const services = Array.isArray(data.services) ? data.services : [];
-  return services.some((s: any) => {
-    const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
-    const n = String(name).toLowerCase();
-    return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
-  });
-}
-
-function checkHasPostalAddress(data: any): boolean {
-  if (!data || !data.postalAddress) return false;
-  const p = data.postalAddress;
-  return !!(p.street || p.address1 || p.city || p.zip);
-}
+import { checkHasAmpo, checkHasPostalAddress } from '../src/lib/standing-order';
 
 async function main() {
   console.log('Starting SOF links backfill...');

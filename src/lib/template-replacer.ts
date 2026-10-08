@@ -73,10 +73,12 @@ export function extractUserMobile(user: any): string {
   const raw = (
     user.mobileNumber ||
     user.mobile ||
-    user.phoneNumber ||
-    user.phone ||
+    user.dialpadPhoneNumber ||
+    user.dialpadPhone ||
     user.aircallPhoneNumber ||
     user.aircallPhone ||
+    user.phoneNumber ||
+    user.phone ||
     user.telephone ||
     ''
   ).trim();

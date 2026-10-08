@@ -60,17 +60,45 @@ export function ShipMateAccessDialog({
 
     setIsSubmitting(true);
     try {
-      await Promise.all(
-        selectedContacts.map((contactId) =>
-          Promise.all([
-            updateContactSendEmail(lead.id, contactId),
-            updateContactInLead(lead.id, contactId, { accessToShipMate: 'yes' })
-          ])
-        )
+      const grantResults = await Promise.allSettled(
+        selectedContacts.map(async (contactId) => {
+          const contact = lead.contacts?.find((c) => c.id === contactId);
+          if (!contact) return;
+
+          const res = await fetch('/api/contacts/grant-shipmate-access', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              parentId: lead.id,
+              parentType: 'leads',
+              contactId,
+              customerNsId: (lead as any).internalid || (lead as any).netsuiteId || lead.id,
+              firstName: contact.firstName,
+              lastName: contact.lastName,
+              email: contact.email,
+              phone: contact.phone || lead.customerPhone || (lead as any).phone || '',
+            }),
+          });
+
+          const data = await res.json();
+          if (!res.ok || data.error) {
+            throw new Error(data.error || `Failed to grant access for ${contact.name || contact.email}`);
+          }
+          return data;
+        })
       );
-      
+
+      const rejected = grantResults.filter((r) => r.status === 'rejected');
+      if (rejected.length > 0) {
+        console.warn('Some contacts failed ShipMate access creation:', rejected);
+      }
+
       await onConfirm();
       onOpenChange(false);
+      toast({
+        title: 'ShipMate Access Processed',
+        description: `Successfully processed ShipMate access for ${selectedContacts.length - rejected.length} contact(s).`,
+      });
     } catch (error: any) {
       console.error('[ShipMate Trial] Error during submission:', error);
       toast({

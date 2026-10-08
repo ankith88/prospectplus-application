@@ -4,27 +4,18 @@ import SofClient from './sof-client';
 import { decryptLeadId } from '@/lib/localmile-security';
 import type { Lead } from '@/lib/types';
 
-function checkHasAmpo(data: any): boolean {
-  if (!data) return false;
-  const services = Array.isArray(data.services) ? data.services : [];
-  return services.some((s: any) => {
-    const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
-    const n = String(name).toLowerCase();
-    return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
-  });
-}
+import { checkHasAmpo, checkHasPostalAddress } from '@/lib/standing-order';
 
-function checkHasPostalAddress(data: any): boolean {
-  if (!data) return false;
-  if (data.postalAddress) {
-    const p = data.postalAddress;
-    if (p.street || p.address1 || p.city || p.zip) return true;
-  }
-  return !!(data.postalAddress1 || data.boxNumber || data.postalStreet);
-}
-
-export default async function SofPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SofPage({ 
+  params,
+  searchParams
+}: { 
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ fromScf?: string }>;
+}) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const fromScf = resolvedSearchParams.fromScf || '';
 
   let targetId = id;
   const decrypted = decryptLeadId(id);
@@ -74,6 +65,7 @@ export default async function SofPage({ params }: { params: Promise<{ id: string
       lead={leadData}
       isValidSof={isValidSof}
       invalidReason={invalidReason}
+      fromScf={fromScf}
     />
   );
 }

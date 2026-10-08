@@ -87,6 +87,8 @@ export function UserManagementTable() {
   const [newPhoneNumber, setNewPhoneNumber] = useState('');
   const [newMobileNumber, setNewMobileNumber] = useState('');
   const [newAircallPhoneNumber, setNewAircallPhoneNumber] = useState('');
+  const [newDialpadPhoneNumber, setNewDialpadPhoneNumber] = useState('');
+  const [newDialpadUserId, setNewDialpadUserId] = useState('');
   const [allFranchisees, setAllFranchisees] = useState<Franchisee[]>([]);
 
   // Bulk Selection State
@@ -200,6 +202,8 @@ export function UserManagementTable() {
       setNewPhoneNumber(userToEdit.phoneNumber || '');
       setNewMobileNumber(userToEdit.mobileNumber || userToEdit.phoneNumber || '');
       setNewAircallPhoneNumber(userToEdit.aircallPhoneNumber || '');
+      setNewDialpadPhoneNumber(userToEdit.dialpadPhoneNumber || '');
+      setNewDialpadUserId(userToEdit.dialpadUserId || '');
       setNewFranchiseeRole(userToEdit.franchiseeRole || linkedFran?.relationship || 'owner');
       setNewPersonalEmail(userToEdit.personalEmail || '');
       setNewAbn(userToEdit.abn || '');
@@ -421,7 +425,9 @@ export function UserManagementTable() {
         defaultRole: effectiveDefaultRole as UserRole, 
         phoneNumber: newMobileNumber, 
         mobileNumber: newMobileNumber, 
-        aircallPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newAircallPhoneNumber 
+        aircallPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newAircallPhoneNumber,
+        dialpadPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newDialpadPhoneNumber,
+        dialpadUserId: effectiveAssignedRoles.includes('Franchisee') ? '' : newDialpadUserId,
       };
       const isUnlinkingFranchisee = newFranchiseeId === 'none' || 
         (!effectiveAssignedRoles.includes('Franchisee') && !!(userToEdit.franchiseeId || userToEdit.franchisee || userToEdit.linkedFranchiseeIds?.length));
@@ -1394,10 +1400,20 @@ export function UserManagementTable() {
                      <Input id="mobile-number" value={newMobileNumber} onChange={(e) => setNewMobileNumber(e.target.value)} placeholder="e.g. 0412345678" />
                  </div>
                  {!newAssignedRoles.includes('Franchisee') && (
+                   <>
                    <div className="space-y-2">
                        <Label htmlFor="aircall-number">AirCall Number</Label>
                        <Input id="aircall-number" value={newAircallPhoneNumber} onChange={(e) => setNewAircallPhoneNumber(e.target.value)} placeholder="e.g. +61298765432" />
                    </div>
+                   <div className="space-y-2">
+                       <Label htmlFor="dialpad-number">Dialpad Number</Label>
+                       <Input id="dialpad-number" value={newDialpadPhoneNumber} onChange={(e) => setNewDialpadPhoneNumber(e.target.value)} placeholder="e.g. +61298765432" />
+                   </div>
+                   <div className="space-y-2">
+                       <Label htmlFor="dialpad-user-id">Dialpad User ID / Email</Label>
+                       <Input id="dialpad-user-id" value={newDialpadUserId} onChange={(e) => setNewDialpadUserId(e.target.value)} placeholder="e.g. rep@mailplus.com.au or Dialpad ID" />
+                   </div>
+                   </>
                  )}
             </div>
             <DialogFooter>

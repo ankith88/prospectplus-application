@@ -7,10 +7,33 @@ function parseDate(dateVal: any): Date | null {
   if (dateVal instanceof Date) return dateVal;
   if (typeof dateVal === 'object') {
     if (typeof dateVal.toDate === 'function') return dateVal.toDate();
+    if ('_seconds' in dateVal) return new Date(dateVal._seconds * 1000);
     if ('seconds' in dateVal) return new Date(dateVal.seconds * 1000);
+  }
+  if (typeof dateVal === 'string') {
+    const ymdMatch = dateVal.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (ymdMatch) {
+      const [, y, m, d] = ymdMatch;
+      return new Date(`${y}-${m}-${d}T12:00:00+10:00`);
+    }
   }
   const d = new Date(dateVal);
   return isNaN(d.getTime()) ? null : d;
+}
+
+export function getJobScheduledDate(data: any): Date | null {
+  if (!data) return null;
+  return (
+    parseDate(data.scheduledDate) ||
+    parseDate(data.scheduled_date) ||
+    parseDate(data.scheduledAt) ||
+    parseDate(data.scheduledFor) ||
+    parseDate(data.bookingDate) ||
+    parseDate(data.date) ||
+    parseDate(data.pickupDate) ||
+    parseDate(data.deliveryDate) ||
+    parseDate(data.createdAt)
+  );
 }
 
 export function getSydneyDateRange(dateString: string): { targetStart: Date; targetEnd: Date } {
@@ -57,10 +80,35 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
   // parse target date (DD-MM-YYYY) in Sydney timezone
   const { targetStart, targetEnd } = getSydneyDateRange(dateString);
 
-  // Query all LocalMile jobs across all leads
+  // Query all LocalMile jobs across all leads and companies
   const jobsSnap = await db.collectionGroup('localMileJobs').get();
 
   const leadCache = new Map<string, any>();
+
+  // 1. Group documents by jobId first so partial docs (e.g. from companies after recrediting) merge with full lead docs
+  const rawJobsGrouped = new Map<string, { mergedData: any; leadId: string; parentRef: FirebaseFirestore.DocumentReference | null }>();
+
+  for (const doc of jobsSnap.docs) {
+    const data = doc.data();
+    const jobId = String(data.jobId || doc.id).trim();
+    const parentRef = doc.ref.parent.parent;
+    const leadId = parentRef ? parentRef.id : 'Unknown';
+
+    if (!rawJobsGrouped.has(jobId)) {
+      rawJobsGrouped.set(jobId, {
+        mergedData: { ...data },
+        leadId,
+        parentRef
+      });
+    } else {
+      const existing = rawJobsGrouped.get(jobId)!;
+      existing.mergedData = { ...existing.mergedData, ...data };
+      if (existing.leadId === 'Unknown' && leadId !== 'Unknown') {
+        existing.leadId = leadId;
+        existing.parentRef = parentRef;
+      }
+    }
+  }
 
   interface LocalMileJobReportItem {
     jobId: string;
@@ -76,16 +124,11 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
 
   const jobsMap = new Map<string, LocalMileJobReportItem>();
 
-  for (const doc of jobsSnap.docs) {
-    const data = doc.data();
-    const createdAtDate = parseDate(data.createdAt) || parseDate(data.updatedAt);
+  for (const [jobId, { mergedData: data, leadId, parentRef }] of rawJobsGrouped.entries()) {
+    const scheduledDate = getJobScheduledDate(data);
     
-    if (!createdAtDate) continue;
-    if (createdAtDate < targetStart || createdAtDate > targetEnd) continue;
-
-    const parentLeadRef = doc.ref.parent.parent;
-    const leadId = parentLeadRef ? parentLeadRef.id : 'Unknown';
-    const jobId = String(data.jobId || doc.id).trim();
+    if (!scheduledDate) continue;
+    if (scheduledDate < targetStart || scheduledDate > targetEnd) continue;
 
     const statusRaw = (data.status || 'created').toString();
     const statusLower = statusRaw.toLowerCase().trim();
@@ -99,8 +142,8 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
       }
       if ((existing.customerName === 'Unknown' || existing.leadId === 'Unknown') && leadId !== 'Unknown') {
         let leadData = leadCache.get(leadId);
-        if (!leadData && parentLeadRef) {
-          const leadSnap = await parentLeadRef.get();
+        if (!leadData && parentRef) {
+          const leadSnap = await parentRef.get();
           if (leadSnap.exists) {
             leadData = leadSnap.data();
             leadCache.set(leadId, leadData);
@@ -118,8 +161,8 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
     }
 
     let leadData = leadCache.get(leadId);
-    if (!leadData && parentLeadRef) {
-      const leadSnap = await parentLeadRef.get();
+    if (!leadData && parentRef) {
+      const leadSnap = await parentRef.get();
       if (leadSnap.exists) {
         leadData = leadSnap.data();
         leadCache.set(leadId, leadData);
@@ -137,7 +180,7 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
     jobsMap.set(jobId, {
       jobId,
       status: statusRaw,
-      createdAtStr: createdAtDate.toLocaleTimeString('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit' }),
+      createdAtStr: scheduledDate.toLocaleTimeString('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit' }),
       leadId,
       customerName,
       customerStatus,
@@ -149,9 +192,9 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
 
   const matchingJobs = Array.from(jobsMap.values());
 
-  const totalJobsCreated = matchingJobs.length;
+  const totalJobsScheduled = matchingJobs.length;
   const completedJobsCount = matchingJobs.filter(j => j.isCompleted).length;
-  const pendingJobsCount = totalJobsCreated - completedJobsCount;
+  const pendingJobsCount = totalJobsScheduled - completedJobsCount;
   const uniqueCustomersCount = new Set(matchingJobs.map(j => j.leadId)).size;
 
   const jobRowsHtml = matchingJobs.map((job) => {
@@ -209,15 +252,15 @@ export async function runLocalMileJobsReport(dateString: string, recipients: str
             <td style="padding: 30px 25px; background-color: #ffffff;">
               <h2 style="margin: 0 0 10px; font-size: 20px; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 700;">Daily LocalMile Jobs Report</h2>
               <p style="margin: 0 0 20px; font-size: 14px; color: #4a5568; line-height: 1.5; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
-                Summary of LocalMile jobs created yesterday (<strong>${dateString}</strong>), including completion status breakdown, customer status, franchisee assignments, and remaining trial credits.
+                Summary of LocalMile jobs scheduled for (<strong>${dateString}</strong>), including completion status breakdown, customer status, franchisee assignments, and remaining trial credits.
               </p>
               
               <!-- KPI Summary Grid -->
               <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 25px; border-collapse: collapse;">
                 <tr>
                   <td width="25%" style="padding: 10px; background-color: #f8fafc; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
-                    <div style="font-size: 10px; color: #718096; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Total Jobs Created</div>
-                    <div style="font-size: 22px; font-weight: 700; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; margin-top: 4px;">${totalJobsCreated}</div>
+                    <div style="font-size: 10px; color: #718096; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Total Jobs Scheduled</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #095c7b; font-family: 'Inter', system-ui, -apple-system, sans-serif; margin-top: 4px;">${totalJobsScheduled}</div>
                   </td>
                   <td width="25%" style="padding: 10px; background-color: #f8fafc; border-radius: 6px; border: 1px solid #edf2f7; border-left: 0; text-align: center;">
                     <div style="font-size: 10px; color: #718096; text-transform: uppercase; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Completed Jobs</div>

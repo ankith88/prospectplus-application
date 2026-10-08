@@ -6,10 +6,12 @@ runConfig:
   # more instances in response to increased traffic.
   maxInstances: 5
 
-# Allow unauthenticated access to the AirCall webhook endpoint.
-# The webhook is now secured via a secret in the URL.
+# Allow unauthenticated access to the AirCall & Dialpad webhook endpoints.
+# The webhooks are secured via a secret in the URL.
 public:
   - path: /api/aircall/webhook/**
+    method: POST
+  - path: /api/dialpad/webhook/**
     method: POST
 
 env:
@@ -29,11 +31,14 @@ env:
     secret: AIRCALL_API_TOKEN
   - variable: AIRCALL_API_ID
     secret: AIRCALL_API_ID
+  - variable: DIALPAD_API_KEY
+    secret: DIALPAD_API_KEY
   - variable: MAILPLUS_SMS_API_KEY
     secret: MAILPLUS_SMS_API_KEY
   - variable: MICROSOFT_CLIENT_ID
     secret: MICROSOFT_CLIENT_ID
   - variable: MICROSOFT_CLIENT_SECRET
     secret: MICROSOFT_CLIENT_SECRET
+
 
 # Re-trigger rollout: 2026-09-29T12:18:00+10:00

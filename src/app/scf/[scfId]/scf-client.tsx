@@ -5,21 +5,33 @@ import type { Lead, Contact, ScfRecord } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { acceptScfAction, updateScfDetailsAction } from './actions';
 import { validateABN } from '@/lib/utils';
 import { 
   Loader2, Mail, Phone, MapPin, Building2, User, 
-  Pencil, Check, X, ChevronDown, ChevronUp, Plus, PartyPopper,
-  Calendar, Truck, ShieldAlert, FileText, Share2, Download, FileUp
+  Pencil, Check, X, ChevronDown, ChevronUp, ChevronRight, Plus, PartyPopper,
+  Calendar, Truck, ShieldAlert, FileText, Share2, Download, FileUp,
+  ArrowRight, ShieldCheck, CheckCircle2
 } from 'lucide-react';
 
 interface ScfClientProps {
   scf: ScfRecord;
   lead: Lead;
   contact: Contact | null;
+  isSofRequired?: boolean;
+  isSofSigned?: boolean;
+  sofToken?: string;
 }
 
-export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
+export default function ScfClient({ 
+  scf, 
+  lead, 
+  contact,
+  isSofRequired = false,
+  isSofSigned = false,
+  sofToken = '',
+}: ScfClientProps) {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(scf.status === 'Accepted');
@@ -109,6 +121,10 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
     
     if (res.success) {
       setSuccess(true);
+      if (isSofRequired && !isSofSigned && sofToken) {
+        window.location.href = `/sof/${sofToken}?fromScf=${scf.id}`;
+        return;
+      }
     } else {
       alert(res.message || 'Failed to accept the form. Please try again.');
     }
@@ -287,6 +303,79 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
 
       <div className="max-w-6xl mx-auto px-4 mt-8 space-y-8" ref={printAreaRef}>
         
+        {/* Multi-Step Onboarding Banner for Standing Order Form */}
+        {isSofRequired && (
+          <div className="space-y-3">
+            {!hasAccepted ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-full bg-[#095C7B] text-white flex items-center justify-center font-bold text-xs shadow-sm">1</span>
+                    <span className="font-bold text-sm text-slate-900">Step 1: Review &amp; Accept Agreement</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 hidden sm:inline" />
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <span className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs border">2</span>
+                    <span className="font-medium text-sm">Step 2: Sign Standing Order Form</span>
+                  </div>
+                </div>
+                <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 text-xs font-semibold px-3 py-1">
+                  2-Step Onboarding
+                </Badge>
+              </div>
+            ) : !isSofSigned ? (
+              <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent rounded-2xl border-2 border-amber-300 p-5 shadow-md flex flex-col sm:flex-row items-center justify-between gap-5">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold text-xl shrink-0 shadow-md shadow-amber-500/20">
+                    2
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <Check className="w-3 h-3 stroke-[3]" /> Step 1 Complete
+                      </span>
+                      <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Action Required</span>
+                    </div>
+                    <h3 className="font-bold text-base text-slate-900 mt-1">Please Complete Step 2: Sign Standing Order Form</h3>
+                    <p className="text-xs text-slate-600 mt-0.5">Your AMPO PO Box pickup service requires an authorized Australia Post Standing Order Form (R9B) to deliver signature mail.</p>
+                  </div>
+                </div>
+                {sofToken && (
+                  <Button 
+                    onClick={() => window.location.href = `/sof/${sofToken}?fromScf=${scf.id}`}
+                    className="bg-[#095C7B] hover:bg-[#095C7B]/90 text-white font-bold text-sm h-12 px-6 rounded-xl shadow-md shrink-0 flex items-center gap-2"
+                  >
+                    <span>Proceed to Step 2</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-sm">
+                    <Check className="w-5 h-5 stroke-[3]" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-emerald-950">Complete Onboarding Authorized</h3>
+                    <p className="text-xs text-emerald-700 mt-0.5">Both the Service Agreement and Australia Post Standing Order Form (R9B) have been confirmed.</p>
+                  </div>
+                </div>
+                {sofToken && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`/sof/${sofToken}`, '_blank')}
+                    className="text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100 font-medium shrink-0 h-9"
+                  >
+                    View Signed SOF
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ==================== PAGE 1 ==================== */}
         {/* ==================== PAGE 1 (Unified Proposal Sheet) ==================== */}
         <div ref={page1Ref} className="bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden space-y-0">
@@ -807,14 +896,36 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
       <div className="fixed bottom-0 left-0 w-full z-50 p-4 pointer-events-none">
          <div className="max-w-6xl mx-auto pointer-events-auto">
            {hasAccepted ? (
-              <div className="bg-white/90 backdrop-blur-xl text-primary rounded-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] border border-primary/20 p-6 flex flex-col sm:flex-row items-center justify-center gap-6 text-center sm:text-left transform transition-all translate-y-0 animate-in slide-in-from-bottom-10 fade-in duration-500">
-                 <div className="bg-gradient-to-br from-green-400 to-green-600 p-4 rounded-full shrink-0 shadow-lg shadow-green-500/30">
-                    <PartyPopper className="w-8 h-8 text-white" />
-                 </div>
-                 <div>
-                    <h3 className="font-bold text-2xl mb-1 text-slate-800 tracking-tight">Terms Accepted Successfully</h3>
-                    <p className="text-slate-600 text-base font-medium">Accepted on {acceptedDateFormatted}. Your Service Commencement Form is confirmed.</p>
-                 </div>
+              <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.12)] border border-slate-200 p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-5 transform transition-all translate-y-0 animate-in slide-in-from-bottom-10 fade-in duration-500">
+                <div className="flex items-center gap-4 text-center sm:text-left">
+                  <div className={`p-3.5 rounded-2xl shrink-0 shadow-md ${isSofRequired && !isSofSigned ? 'bg-amber-500 text-white shadow-amber-500/30' : 'bg-emerald-600 text-white shadow-emerald-500/30'}`}>
+                    {isSofRequired && !isSofSigned ? (
+                      <span className="font-bold text-xl px-1">2</span>
+                    ) : (
+                      <PartyPopper className="w-7 h-7" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xl sm:text-2xl text-slate-900 tracking-tight">
+                      {isSofRequired && !isSofSigned ? 'Step 1 Complete: Terms Accepted' : 'Terms Accepted Successfully'}
+                    </h3>
+                    <p className="text-slate-600 text-sm font-medium mt-0.5">
+                      {isSofRequired && !isSofSigned
+                        ? 'Please proceed to sign the Australia Post Standing Order Form (Step 2 of 2).'
+                        : `Accepted on ${acceptedDateFormatted}. Your Service Commencement Form is confirmed.`}
+                    </p>
+                  </div>
+                </div>
+
+                {isSofRequired && !isSofSigned && sofToken && (
+                  <Button
+                    onClick={() => window.location.href = `/sof/${sofToken}?fromScf=${scf.id}`}
+                    className="w-full sm:w-auto min-w-[220px] font-bold text-base h-13 px-6 rounded-xl shadow-lg bg-[#095C7B] hover:bg-[#095C7B]/90 text-white shadow-sky-900/20 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+                  >
+                    <span>Continue to Step 2</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
            ) : (
               <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] border border-slate-200 p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-6 transform transition-all">
@@ -830,9 +941,18 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                 <Button 
                   onClick={handleAccept} 
                   disabled={!agreed || submitting}
-                  className={`w-full sm:w-auto min-w-[240px] font-bold text-lg h-14 rounded-xl shadow-lg transition-all duration-300 ${agreed && !submitting ? 'bg-primary hover:bg-primary/90 text-white shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-0.5' : 'bg-slate-200 text-slate-400 shadow-none'}`}
+                  className={`w-full sm:w-auto min-w-[240px] font-bold text-base sm:text-lg h-14 px-6 rounded-xl shadow-lg transition-all duration-300 ${agreed && !submitting ? 'bg-primary hover:bg-primary/90 text-white shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-0.5' : 'bg-slate-200 text-slate-400 shadow-none'}`}
                 >
-                  {submitting ? <Loader2 className="h-6 w-6 animate-spin" /> : 'ACCEPT TERMS & CONDITIONS'}
+                  {submitting ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : isSofRequired && !isSofSigned ? (
+                    <span className="flex items-center gap-2">
+                      <span>ACCEPT &amp; PROCEED TO SOF</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </span>
+                  ) : (
+                    'ACCEPT TERMS & CONDITIONS'
+                  )}
                 </Button>
               </div>
            )}

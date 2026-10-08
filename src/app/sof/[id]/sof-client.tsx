@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, CheckCircle2, FileText, Trash2, ShieldCheck, Mail, MapPin, Inbox } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FileText, Trash2, ShieldCheck, Mail, MapPin, Inbox, ExternalLink, ArrowLeft, Check } from 'lucide-react';
 
 interface SofClientProps {
   token: string;
   lead: Lead;
   isValidSof: boolean;
   invalidReason: string;
+  fromScf?: string;
 }
 
 function cleanField(val: any): string {
@@ -80,7 +81,7 @@ function formatPostalAddress(lead: Lead): string {
   return cleaned.length > 0 ? cleaned.join(', ') : 'N/A';
 }
 
-export default function SofClient({ token, lead, isValidSof, invalidReason }: SofClientProps) {
+export default function SofClient({ token, lead, isValidSof, invalidReason, fromScf }: SofClientProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [position, setPosition] = useState(lead.sofDetails?.position ?? '');
@@ -230,6 +231,30 @@ export default function SofClient({ token, lead, isValidSof, invalidReason }: So
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center py-8 px-4 font-sans">
+      
+      {/* Step 2 Onboarding Context Header */}
+      {fromScf && (
+        <div className="w-full max-w-3xl mb-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/50 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
+              <Check className="w-3.5 h-3.5 stroke-[3]" /> Step 1: Agreement Accepted
+            </div>
+            <span className="text-slate-400 hidden sm:inline font-bold">→</span>
+            <div className="flex items-center gap-1.5 text-[#095C7B] dark:text-sky-400 font-bold bg-sky-50 dark:bg-sky-950/50 px-3 py-1 rounded-full border border-sky-200 dark:border-sky-800">
+              <span className="w-4 h-4 rounded-full bg-[#095C7B] text-white flex items-center justify-center text-[10px]">2</span>
+              Step 2: Sign Standing Order Form
+            </div>
+          </div>
+          <a 
+            href={`/scf/${fromScf}`} 
+            className="text-xs text-[#095C7B] dark:text-sky-400 hover:underline font-semibold flex items-center gap-1 shrink-0"
+          >
+            <span>Review Step 1 Agreement</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      )}
+
       {/* Header Banner */}
       <header className="w-full max-w-3xl bg-[#095c7b] text-white rounded-t-xl p-6 shadow-md flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -319,9 +344,25 @@ export default function SofClient({ token, lead, isValidSof, invalidReason }: So
             )}
 
             {successMsg && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-md text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                <span>{successMsg}</span>
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 rounded-xl text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <div>
+                    <p className="font-bold text-sm text-emerald-900 dark:text-emerald-100">Standing Order Form Signed Successfully!</p>
+                    <p className="text-emerald-700 dark:text-emerald-300 mt-0.5">{successMsg}</p>
+                  </div>
+                </div>
+                {fromScf && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => window.location.href = `/scf/${fromScf}`}
+                    className="text-xs border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 shrink-0 font-semibold"
+                  >
+                    Return to Service Agreement →
+                  </Button>
+                )}
               </div>
             )}
 
