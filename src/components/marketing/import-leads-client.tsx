@@ -19,7 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { getAllUsers, getAllFranchisees, logActivity } from '@/services/firebase';
-import type { LeadBucket, UserProfile, Franchisee, Contact, LeadStatus, TaggedAddress } from '@/lib/types';
+import type { LeadBucket, UserProfile, Franchisee, Contact, LeadStatus, TaggedAddress, Note } from '@/lib/types';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, getDoc, doc, writeBatch, serverTimestamp, query, where, limit, addDoc, increment } from 'firebase/firestore';
 import { canAssignToAm } from '@/lib/leave-utils';
@@ -29,8 +29,74 @@ import { MULTISITE_ACCOUNT_MANAGER_UID, isMultisiteCampaign } from '@/lib/consta
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead';
 import { cn } from '@/lib/utils';
 
+export const AVAILABLE_LEAD_STATUSES: LeadStatus[] = [
+  'New',
+  'Priority Lead',
+  'Hot Lead',
+  'Contacted',
+  'In Progress',
+  'Connected',
+  'High Touch',
+  'Qualified',
+  'Pre Qualified',
+  'In Qualification',
+  'Appointment Booked',
+  'Trialing ShipMate',
+  'Trialing LocalMile',
+  'Free Trial',
+  'LocalMile Opportunity',
+  'LocalMile Pending',
+  'LPO Review',
+  'LPO Opportunity',
+  'Prospect Opportunity',
+  'Customer Opportunity',
+  'Priority Field Lead',
+  'Quote Sent',
+  'Quote Accepted',
+  'Won',
+  'Lost',
+  'Lost Customer',
+  'Unqualified',
+  'Reschedule',
+  'Future Follow-up',
+  'No Answer',
+  'Email Brush Off',
+  'Out of Territory',
+  'Address Check',
+  'Address Confirmed',
+  'LocalMile Trial Stopped',
+  'ShipMate Trial Stopped',
+];
+
+export const normalizeLeadStatus = (rawStatus?: string, fallback: LeadStatus = 'New'): LeadStatus => {
+  if (!rawStatus || !rawStatus.trim()) return fallback;
+  const clean = rawStatus.trim().toLowerCase();
+  
+  const exact = AVAILABLE_LEAD_STATUSES.find(s => s.toLowerCase() === clean);
+  if (exact) return exact;
+
+  if (clean === 'hot' || clean === 'hotlead') return 'Hot Lead';
+  if (clean === 'priority' || clean === 'prioritylead') return 'Priority Lead';
+  if (clean === 'in progress' || clean === 'inprogress' || clean === 'working') return 'In Progress';
+  if (clean === 'appt booked' || clean === 'appointment booked' || clean === 'booked' || clean === 'meeting booked') return 'Appointment Booked';
+  if (clean === 'trialing' || clean === 'trial' || clean === 'shipmate trial') return 'Trialing ShipMate';
+  if (clean === 'localmile trial' || clean === 'localmile') return 'Trialing LocalMile';
+  if (clean === 'won' || clean === 'signed' || clean === 'closed won' || clean === 'customer') return 'Won';
+  if (clean === 'lost' || clean === 'closed lost') return 'Lost';
+  if (clean === 'lost customer' || clean === 'cancelled') return 'Lost Customer';
+  if (clean === 'follow up' || clean === 'future follow up' || clean === 'followup' || clean === 'future follow-up') return 'Future Follow-up';
+  if (clean === 'unqualified' || clean === 'disqualified' || clean === 'junk') return 'Unqualified';
+  if (clean === 'no answer' || clean === 'noanswer' || clean === 'na') return 'No Answer';
+  if (clean === 'brush off' || clean === 'email brush off' || clean === 'brushoff') return 'Email Brush Off';
+  if (clean === 'out of territory' || clean === 'oot') return 'Out of Territory';
+
+  return fallback;
+};
+
 const standardFields = [
   { key: 'companyName', label: 'Company Name', required: true, desc: 'Name of the business' },
+  { key: 'status', label: 'Lead Status', required: false, desc: 'Lead status / stage (e.g. New, Qualified, Contacted)' },
+  { key: 'notes', label: 'Notes / Comments', required: false, desc: 'Lead notes, remarks or initial history' },
   { key: 'campaign', label: 'Campaign / Source', required: false, desc: 'Lead campaign tag' },
   { key: 'websiteUrl', label: 'Website URL', required: false, desc: 'e.g. https://example.com' },
   { key: 'customerPhone', label: 'Company Phone', required: false, desc: 'Main business phone' },
@@ -114,6 +180,7 @@ export function ImportLeadsClient() {
 
   // Step 2 configurations
   const [selectedBucket, setSelectedBucket] = useState<LeadBucket>('outbound');
+  const [defaultLeadStatus, setDefaultLeadStatus] = useState<LeadStatus>('New');
   const [campaignName, setCampaignName] = useState<string>('Bulk Import');
   const [dialerAssigned, setDialerAssigned] = useState<string>('');
   const [salesRepAssigned, setSalesRepAssigned] = useState<string>('Lee Russell');
@@ -384,6 +451,8 @@ export function ImportLeadsClient() {
     const headers = standardFields.map(f => f.label).join(',');
     const sampleRow = [
       'Example Enterprise Pty Ltd',
+      'New',
+      'Expressed interest in parcel collection service; follow-up scheduled for next week.',
       'Bulk Import',
       'https://exampleenterprise.com.au',
       '02 9876 5432',
@@ -473,6 +542,34 @@ export function ImportLeadsClient() {
             const fieldLabelNorm = field.label.toLowerCase().replace(/[^a-z0-9]/g, '');
             const fieldKeyNorm = field.key.toLowerCase().replace(/[^a-z0-9]/g, '');
             if (normalizedHeader === fieldLabelNorm || normalizedHeader === fieldKeyNorm) return true;
+
+            // Aliases for Status
+            if (field.key === 'status' && (
+              normalizedHeader === 'status' || 
+              normalizedHeader === 'leadstatus' || 
+              normalizedHeader === 'stage' || 
+              normalizedHeader === 'leadstage' || 
+              normalizedHeader === 'pipelinestatus' || 
+              normalizedHeader === 'currentstatus' ||
+              normalizedHeader === 'leadstate'
+            )) return true;
+
+            // Aliases for Notes
+            if (field.key === 'notes' && (
+              normalizedHeader === 'notes' || 
+              normalizedHeader === 'note' || 
+              normalizedHeader === 'comments' || 
+              normalizedHeader === 'comment' || 
+              normalizedHeader === 'description' || 
+              normalizedHeader === 'remarks' || 
+              normalizedHeader === 'remark' || 
+              normalizedHeader === 'leadnotes' || 
+              normalizedHeader === 'leadnote' || 
+              normalizedHeader === 'initialnotes' || 
+              normalizedHeader === 'initialnote' || 
+              normalizedHeader === 'memo' ||
+              normalizedHeader === 'activitynotes'
+            )) return true;
 
             // Secondary aliases for primary contact (Contact 1)
             if (field.key === 'contactFirstName' && (normalizedHeader === 'contactfirstname' || normalizedHeader === 'firstname' || normalizedHeader === 'primarycontactfirstname' || normalizedHeader === 'contact1firstname')) return true;
@@ -927,9 +1024,15 @@ export function ImportLeadsClient() {
       if (c2Name || getVal('contact2Email') || getVal('contact2Phone')) contactCount++;
       if (c3Name || getVal('contact3Email') || getVal('contact3Phone')) contactCount++;
 
+      const rawStatus = getVal('status');
+      const effectiveStatus = normalizeLeadStatus(rawStatus, defaultLeadStatus);
+      const notesVal = getVal('notes');
+
       previewData.push({
         index: idx,
         companyName: companyName || 'N/A',
+        status: effectiveStatus,
+        notes: notesVal || '',
         email: email || '-',
         phone: phone || '-',
         city: row[Object.keys(columnMappings).find(k => columnMappings[k] === 'city') || ''] || '-',
@@ -1169,9 +1272,16 @@ export function ImportLeadsClient() {
           });
         }
 
+        // Status & Notes resolution
+        const rawStatus = getVal('status');
+        const effectiveStatus = normalizeLeadStatus(rawStatus, defaultLeadStatus);
+        const noteContent = getVal('notes');
+
         // Bucket & Assignments config
         const leadData: any = {
           companyName,
+          status: effectiveStatus,
+          customerStatus: effectiveStatus,
           ...(getVal('prospectPlusId') && { prospectPlusId: getVal('prospectPlusId') }),
           ...(getVal('websiteUrl') && { websiteUrl: getVal('websiteUrl') }),
           ...(getVal('customerPhone') && { customerPhone: getVal('customerPhone') }),
@@ -1180,6 +1290,7 @@ export function ImportLeadsClient() {
           ...(address && { address }),
           ...(postalAddress && { postalAddress }),
           ...(additionalAddresses.length > 0 && { additionalAddresses }),
+          ...(noteContent && noteContent.trim() && { notesText: noteContent.trim(), statusNotes: noteContent.trim() }),
           // Enrichment Fields (BR - BZ)
           ...(getVal('lodgementEvidence') && { lodgementEvidence: getVal('lodgementEvidence') }),
           ...(getVal('shipperEvidence') && { shipperEvidence: getVal('shipperEvidence') }),
@@ -1211,8 +1322,8 @@ export function ImportLeadsClient() {
         };
 
         if (!isUpdatingExistingLead) {
-          leadData.status = 'New' as LeadStatus;
-          leadData.customerStatus = 'New';
+          leadData.status = effectiveStatus;
+          leadData.customerStatus = effectiveStatus;
           leadData.dateLeadEntered = nowStr;
           leadData.createdAt = serverTimestamp();
           leadData.isDuplicate = !!isDuplicateMatch;
@@ -1222,6 +1333,8 @@ export function ImportLeadsClient() {
             leadData.duplicateMatchReasons = isDuplicateMatch.reasons;
           }
         } else {
+          leadData.status = effectiveStatus;
+          leadData.customerStatus = effectiveStatus;
           leadData.updatedAt = serverTimestamp();
         }
 
@@ -1387,18 +1500,37 @@ export function ImportLeadsClient() {
           leadData.contactCount = increment(addedContactsCount);
         }
 
+        // 2b. Note subcollection creation
+        if (noteContent && noteContent.trim()) {
+          const noteRef = doc(collection(firestore, 'leads', leadRef.id, 'notes'));
+          const noteData: Note = {
+            id: noteRef.id,
+            content: noteContent.trim(),
+            author: authorName,
+            date: nowStr,
+            syncedWithNetSuite: false,
+          };
+          batch.set(noteRef, {
+            ...noteData,
+            createdAt: serverTimestamp(),
+            source: 'csv_import'
+          });
+        }
+
         batch.set(leadRef, leadData, { merge: true });
 
         // 3. Create Activity entry
         const activityRef = doc(collection(firestore, 'leads', leadRef.id, 'activity'));
+        const activityNotesDesc = isUpdatingExistingLead
+          ? `Lead record updated with CSV data via Bulk Import Wizard. Status: ${effectiveStatus}. Source: ${campaignName}`
+          : effectiveParent
+            ? `Lead imported as child location under parent "${effectiveParent.companyName}" (${effectiveParent.prospectPlusId ? `Prospect+ ID: ${effectiveParent.prospectPlusId}` : `ID: ${effectiveParent.id}`}). Status: ${effectiveStatus}. Bucket: ${selectedBucket.replace('_', ' ')}. Source: ${campaignName}`
+            : `Lead imported via Bulk Import with status "${effectiveStatus}" in ${selectedBucket.replace('_', ' ')} bucket. Source: ${campaignName}`;
+
         batch.set(activityRef, {
           type: 'Update',
           date: nowStr,
-          notes: isUpdatingExistingLead
-            ? `Lead record updated with CSV data via Bulk Import Wizard. Source: ${campaignName}`
-            : effectiveParent
-              ? `Lead imported as child location under parent "${effectiveParent.companyName}" (${effectiveParent.prospectPlusId ? `Prospect+ ID: ${effectiveParent.prospectPlusId}` : `ID: ${effectiveParent.id}`}). Bucket: ${selectedBucket.replace('_', ' ')}. Source: ${campaignName}`
-              : `Lead imported via Bulk Import in ${selectedBucket.replace('_', ' ')} bucket. Source: ${campaignName}`,
+          notes: activityNotesDesc,
           author: authorName,
           source: 'csv_upload',
           isCsvUpload: true,
@@ -1561,7 +1693,7 @@ export function ImportLeadsClient() {
                     <li>Street Address, Suburb / City, State, Postcode (Mandatory when creating new leads; optional when updating existing leads)</li>
                   </ul>
                   <p className="pt-1">
-                    <strong>Optional Lead & Contact Columns:</strong> Website URL, ABN.
+                    <strong>Optional Lead & Contact Columns:</strong> Lead Status, Notes / Comments, Website URL, ABN.
                   </p>
                   <p className="pt-1 text-[#095c7b] font-medium">
                     <strong>Multi-Contact Support:</strong> You can include up to 3 contacts per company in the same row:
@@ -1646,6 +1778,28 @@ export function ImportLeadsClient() {
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
                   Specifies which pipeline view or sequence these leads should initially enter.
+                </p>
+              </div>
+
+              {/* Default Lead Status */}
+              <div className="space-y-2">
+                <Label htmlFor="default-status-select" className="font-semibold text-slate-700 flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-[#095c7b]" /> Default Lead Status *
+                </Label>
+                <Select value={defaultLeadStatus} onValueChange={(val) => setDefaultLeadStatus(val as LeadStatus)}>
+                  <SelectTrigger id="default-status-select" className="bg-white">
+                    <SelectValue placeholder="Select default lead status" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {AVAILABLE_LEAD_STATUSES.map((st) => (
+                      <SelectItem key={st} value={st}>
+                        {st}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Sets default status for leads (overridden per row if a Status column is mapped in CSV).
                 </p>
               </div>
 
@@ -2202,10 +2356,12 @@ export function ImportLeadsClient() {
                       <TableRow>
                         <TableHead className="font-bold text-slate-700 w-[60px] text-center">Row</TableHead>
                         <TableHead className="font-bold text-slate-700">Company Name</TableHead>
+                        <TableHead className="font-bold text-slate-700">Status</TableHead>
                         <TableHead className="font-bold text-slate-700">Company Email</TableHead>
                         <TableHead className="font-bold text-slate-700">Company Phone</TableHead>
                         <TableHead className="font-bold text-slate-700">City / Suburb</TableHead>
                         <TableHead className="font-bold text-slate-700">Contacts Mapped</TableHead>
+                        <TableHead className="font-bold text-slate-700 max-w-[200px]">Notes</TableHead>
                         <TableHead className="font-bold text-slate-700">Checks & Alerts</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -2225,6 +2381,11 @@ export function ImportLeadsClient() {
                             <TableCell className="font-semibold text-slate-800 text-sm">
                               {row.companyName}
                             </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-[10px] font-bold bg-slate-100 text-slate-800 border-slate-300">
+                                {row.status}
+                              </Badge>
+                            </TableCell>
                             <TableCell className="text-xs">
                               {row.email}
                             </TableCell>
@@ -2241,6 +2402,15 @@ export function ImportLeadsClient() {
                                 </Badge>
                               ) : (
                                 <span className="text-slate-400 font-normal">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs max-w-[200px]">
+                              {row.notes ? (
+                                <span className="text-slate-700 line-clamp-2" title={row.notes}>
+                                  {row.notes}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic text-[11px]">No notes</span>
                               )}
                             </TableCell>
                             <TableCell>
@@ -2643,6 +2813,7 @@ export function ImportLeadsClient() {
                       setValidationErrors({});
                       setDuplicateLeads({});
                       setImportProgress(0);
+                      setDefaultLeadStatus('New');
                     }}
                   >
                     Import Another File
