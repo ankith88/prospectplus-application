@@ -101,14 +101,46 @@ function getApproxStateCoordinates(state?: string, postcode?: string | number): 
   };
 }
 
-// Generate a pastel color for each franchisee for clear visual distinction
-const getFranchiseeColor = (internalId: string) => {
-  let hash = 0;
-  for (let i = 0; i < internalId.length; i++) {
-    hash = internalId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const h = Math.abs(hash) % 360;
-  return `hsl(${h}, 70%, 50%)`;
+export const CATEGORY_COLORS: Record<string, { bg: string; border: string; badge: string; text: string; name: string }> = {
+  territoryJson: {
+    bg: '#095c7b', // MailPlus Navy
+    border: '#06445c',
+    badge: 'bg-[#095c7b]/15 text-[#095c7b] border-[#095c7b]/30',
+    text: '#095c7b',
+    name: 'Main Territory',
+  },
+  starTrackSuburbsJson: {
+    bg: '#6366f1', // StarTrack Indigo
+    border: '#4f46e5',
+    badge: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30',
+    text: '#4f46e5',
+    name: 'StarTrack',
+  },
+  tgeSuburbsJSON: {
+    bg: '#ea580c', // TGE Orange
+    border: '#c2410c',
+    badge: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30',
+    text: '#ea580c',
+    name: 'TGE',
+  },
+  ironMountainSuburbsJson: {
+    bg: '#059669', // Iron Mountain Emerald
+    border: '#047857',
+    badge: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+    text: '#059669',
+    name: 'Iron Mountain',
+  },
+  ausPostSuburbsJson: {
+    bg: '#dc2626', // AusPost Red
+    border: '#b91c1c',
+    badge: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30',
+    text: '#dc2626',
+    name: 'AusPost',
+  },
+};
+
+export const getCategoryColor = (categoryKey: string) => {
+  return CATEGORY_COLORS[categoryKey]?.bg || '#095c7b';
 };
 
 // Generates a multi-vertex smoothed polygon (16 vertices) around center lat/lng if no GeoJSON boundary is cached
@@ -131,6 +163,69 @@ function generatePolygonFallback(lat: number, lng: number, radiusKm: number = 2.
   }
 
   return [points];
+}
+
+// Cache for geocoded suburb coordinates
+const geocodeCache = new Map<string, google.maps.LatLngLiteral>();
+
+async function geocodeSuburb(
+  suburb: string,
+  state?: string,
+  postcode?: string
+): Promise<google.maps.LatLngLiteral | null> {
+  const normSub = (suburb || '').trim().toLowerCase();
+  const normState = (state || '').trim().toLowerCase();
+  const normPost = (postcode || '').trim();
+  if (!normSub && !normPost) return null;
+
+  const cacheKey = `${normSub}_${normState}_${normPost}`;
+  if (geocodeCache.has(cacheKey)) {
+    return geocodeCache.get(cacheKey)!;
+  }
+
+  // Check localStorage cache
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(`geo_${cacheKey}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
+          geocodeCache.set(cacheKey, parsed);
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+
+  if (typeof window === 'undefined' || !window.google?.maps?.Geocoder) {
+    return null;
+  }
+
+  const geocoder = new window.google.maps.Geocoder();
+  const queryParts = [suburb, state, postcode, 'Australia'].filter(Boolean);
+  const addressQuery = queryParts.join(', ');
+
+  return new Promise((resolve) => {
+    geocoder.geocode(
+      {
+        address: addressQuery,
+        componentRestrictions: { country: 'AU' },
+      },
+      (results, status) => {
+        if (status === google.maps.GeocoderStatus.OK && results && results[0]?.geometry?.location) {
+          const loc = results[0].geometry.location;
+          const coords: google.maps.LatLngLiteral = { lat: loc.lat(), lng: loc.lng() };
+          geocodeCache.set(cacheKey, coords);
+          try {
+            localStorage.setItem(`geo_${cacheKey}`, JSON.stringify(coords));
+          } catch {}
+          resolve(coords);
+        } else {
+          resolve(null);
+        }
+      }
+    );
+  });
 }
 
 export default function TerritoryMapClient() {
@@ -311,14 +406,38 @@ export default function TerritoryMapClient() {
     });
   }, [overlays, selectedFranchiseeId, selectedPlace]);
 
-  // Fetch real GeoJSON boundary polygon paths for visible overlays
+  // Prioritized Geocoding & GeoJSON boundary fetching for visible overlays
   useEffect(() => {
     if (filteredOverlays.length === 0) return;
 
+    let isMounted = true;
+
+    // First, geocode any overlays for the selected franchisee that don't have accurate coords
+    const geocodeMissingOverlays = async () => {
+      const itemsToGeocode = filteredOverlays.filter(o => {
+        const isCentral = o.center.lat < -24 && o.center.lat > -28 && o.center.lng > 130 && o.center.lng < 136;
+        const cacheKey = `${o.suburb.toLowerCase().trim()}_${o.state.toLowerCase().trim()}_${o.postcode.trim()}`;
+        return isCentral || !geocodeCache.has(cacheKey);
+      });
+
+      if (itemsToGeocode.length === 0) return;
+
+      for (const item of itemsToGeocode.slice(0, 30)) {
+        if (!isMounted) break;
+        const coords = await geocodeSuburb(item.suburb, item.state, item.postcode);
+        if (coords && isMounted) {
+          setOverlays(prev =>
+            prev.map(ov => (ov.id === item.id ? { ...ov, center: coords } : ov))
+          );
+        }
+      }
+    };
+
+    geocodeMissingOverlays();
+
+    // Fetch GeoJSON boundary polygon paths for visible overlays
     const unmappedItems = filteredOverlays.filter(o => !boundariesMap[o.id]);
     if (unmappedItems.length === 0) return;
-
-    let isMounted = true;
 
     const fetchRealBoundaries = async () => {
       const chunkSize = 10;
@@ -326,6 +445,7 @@ export default function TerritoryMapClient() {
         if (!isMounted) break;
         const chunk = unmappedItems.slice(i, i + chunkSize);
         const updates: Record<string, google.maps.LatLngLiteral[][]> = {};
+        const centerUpdates: Record<string, google.maps.LatLngLiteral> = {};
 
         await Promise.all(chunk.map(async (item) => {
           try {
@@ -336,7 +456,7 @@ export default function TerritoryMapClient() {
               if (data.paths && data.paths.length > 0) {
                 updates[item.id] = data.paths;
                 if (data.center && data.center.lat && data.center.lng) {
-                  item.center = data.center;
+                  centerUpdates[item.id] = data.center;
                 }
               }
             }
@@ -349,6 +469,12 @@ export default function TerritoryMapClient() {
           setBoundariesMap(prev => ({ ...prev, ...updates }));
         }
 
+        if (isMounted && Object.keys(centerUpdates).length > 0) {
+          setOverlays(prev =>
+            prev.map(ov => centerUpdates[ov.id] ? { ...ov, center: centerUpdates[ov.id] } : ov)
+          );
+        }
+
         await new Promise(r => setTimeout(r, 120));
       }
     };
@@ -359,6 +485,65 @@ export default function TerritoryMapClient() {
       isMounted = false;
     };
   }, [filteredOverlays, boundariesMap]);
+
+  // Focus map bounds on the selected franchisee's suburbs
+  const focusOnFranchiseeSuburbs = useCallback((targetOverlays: TerritoryOverlay[]) => {
+    if (!map) return;
+
+    if (selectedFranchiseeId === 'all') {
+      map.setCenter(defaultCenter);
+      map.setZoom(4);
+      return;
+    }
+
+    if (!targetOverlays || targetOverlays.length === 0) return;
+
+    const bounds = new google.maps.LatLngBounds();
+    let validCount = 0;
+
+    targetOverlays.forEach(overlay => {
+      const paths = boundariesMap[overlay.id];
+      if (paths && paths.length > 0) {
+        paths.forEach(ring => {
+          ring.forEach(pt => {
+            if (pt && !isNaN(pt.lat) && !isNaN(pt.lng)) {
+              bounds.extend(pt);
+              validCount++;
+            }
+          });
+        });
+      } else if (overlay.center && !isNaN(overlay.center.lat) && !isNaN(overlay.center.lng)) {
+        bounds.extend(overlay.center);
+        validCount++;
+      }
+    });
+
+    if (validCount > 0) {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      const leftPad = isMobile ? 24 : 410;
+      const padding = { top: 60, right: 60, bottom: 60, left: leftPad };
+
+      map.fitBounds(bounds, padding);
+
+      // Max-zoom safeguard so single/small suburbs don't zoom to level 21+
+      const listener = google.maps.event.addListenerOnce(map, 'idle', () => {
+        const currentZoom = map.getZoom();
+        if (currentZoom !== undefined && currentZoom > 14) {
+          map.setZoom(13);
+        }
+      });
+
+      setTimeout(() => {
+        google.maps.event.removeListener(listener);
+      }, 1200);
+    }
+  }, [map, selectedFranchiseeId, boundariesMap]);
+
+  // Auto-focus whenever franchisee selection, category, or visible overlays change
+  useEffect(() => {
+    if (!map || selectedFranchiseeId === 'all') return;
+    focusOnFranchiseeSuburbs(filteredOverlays);
+  }, [map, selectedFranchiseeId, filteredOverlays, focusOnFranchiseeSuburbs]);
 
   const onPlaceChanged = () => {
     if (placeAutocomplete) {
@@ -390,25 +575,6 @@ export default function TerritoryMapClient() {
     });
   };
 
-  // Auto-zoom to franchisee suburbs when a franchisee is selected
-  useEffect(() => {
-    if (!map || !filteredOverlays.length || selectedFranchiseeId === 'all') return;
-
-    const bounds = new google.maps.LatLngBounds();
-    let hasValidBounds = false;
-    
-    filteredOverlays.forEach(overlay => {
-      if (overlay.center && !isNaN(overlay.center.lat) && !isNaN(overlay.center.lng)) {
-        bounds.extend(overlay.center);
-        hasValidBounds = true;
-      }
-    });
-
-    if (hasValidBounds) {
-      map.fitBounds(bounds, { left: 420, right: 50, top: 50, bottom: 50 });
-    }
-  }, [map, selectedFranchiseeId, filteredOverlays]);
-
   if (loadError) return <div className="p-4 text-red-500">Error loading Google Maps</div>;
   if (!isLoaded || loadingData) return <div className="h-full flex items-center justify-center"><Loader /></div>;
 
@@ -434,14 +600,84 @@ export default function TerritoryMapClient() {
               <SelectValue placeholder="Mapping Category" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="territoryJson">Main Territory Suburbs</SelectItem>
-              <SelectItem value="starTrackSuburbsJson">StarTrack Suburbs</SelectItem>
-              <SelectItem value="tgeSuburbsJSON">TGE Suburbs</SelectItem>
-              <SelectItem value="ironMountainSuburbsJson">Iron Mountain Suburbs</SelectItem>
-              <SelectItem value="ausPostSuburbsJson">AusPost Suburbs</SelectItem>
-              <SelectItem value="all">All Suburb Categories</SelectItem>
+              <SelectItem value="territoryJson">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#095c7b] shrink-0" />
+                  <span>Main Territory Suburbs</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="starTrackSuburbsJson">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#6366f1] shrink-0" />
+                  <span>StarTrack Suburbs</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="tgeSuburbsJSON">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#ea580c] shrink-0" />
+                  <span>TGE Suburbs</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="ironMountainSuburbsJson">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#059669] shrink-0" />
+                  <span>Iron Mountain Suburbs</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="ausPostSuburbsJson">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#dc2626] shrink-0" />
+                  <span>AusPost Suburbs</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="all">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-[#095c7b] via-[#6366f1] to-[#dc2626] shrink-0" />
+                  <span>All Suburb Categories</span>
+                </div>
+              </SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Category Color Legend */}
+        <div className="p-2.5 bg-muted/40 rounded-lg border border-border space-y-2">
+          <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+            <span>Category Legend</span>
+            {selectedCategory !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategory('all')}
+                className="text-[11px] text-primary hover:underline font-normal"
+              >
+                View All
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-1.5 text-xs">
+            {Object.entries(CATEGORY_COLORS).map(([key, config]) => {
+              const isSelected = selectedCategory === 'all' || selectedCategory === key;
+              return (
+                <button
+                  type="button"
+                  key={key}
+                  onClick={() => setSelectedCategory(key)}
+                  className={`flex items-center gap-1.5 p-1.5 rounded-md border text-left transition-all ${
+                    isSelected 
+                      ? 'bg-background border-border text-foreground font-medium shadow-2xs' 
+                      : 'opacity-40 hover:opacity-80 border-transparent hover:bg-muted/60'
+                  }`}
+                  title={`Filter to ${config.name}`}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                    style={{ backgroundColor: config.bg }}
+                  />
+                  <span className="truncate text-[11px]">{config.name}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Searchable Franchisee Filter */}
@@ -674,9 +910,10 @@ export default function TerritoryMapClient() {
           ]
         }}
       >
-        {/* Render exact suburb boundary polygons */}
+        {/* Render exact suburb boundary polygons color-coded by category */}
         {filteredOverlays.map((overlay) => {
-          const color = getFranchiseeColor(overlay.franchisee.internalId);
+          const catConfig = CATEGORY_COLORS[overlay.categoryKey] || CATEGORY_COLORS.territoryJson;
+          const color = catConfig.bg;
           const isHovered = hoveredOverlayId === overlay.id;
           const isActive = activeOverlay?.id === overlay.id;
 
@@ -688,9 +925,9 @@ export default function TerritoryMapClient() {
               paths={paths}
               options={{
                 fillColor: color,
-                fillOpacity: isHovered || isActive ? 0.65 : 0.4,
-                strokeColor: color,
-                strokeOpacity: 0.9,
+                fillOpacity: isHovered || isActive ? 0.7 : 0.45,
+                strokeColor: catConfig.border || color,
+                strokeOpacity: 0.95,
                 strokeWeight: isHovered || isActive ? 3 : 1.5,
                 clickable: true,
                 zIndex: isHovered || isActive ? 100 : 1,
@@ -751,7 +988,10 @@ export default function TerritoryMapClient() {
           >
             <div className="p-1 min-w-[220px] max-w-[270px] text-sm space-y-1.5">
               <div className="border-b pb-1">
-                <Badge variant="outline" className="text-[10px] uppercase tracking-wider mb-1">
+                <Badge 
+                  variant="outline" 
+                  className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${CATEGORY_COLORS[activeOverlay.categoryKey]?.badge || ''}`}
+                >
                   {activeOverlay.categoryLabel}
                 </Badge>
                 <h3 className="font-bold text-base text-slate-900">

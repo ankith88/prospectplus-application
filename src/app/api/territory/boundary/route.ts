@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 
-export interface LatLngLiteral {
+interface LatLngLiteral {
   lat: number;
   lng: number;
 }
 
-export interface BoundaryResult {
+interface BoundaryResult {
   paths: LatLngLiteral[][];
   center: LatLngLiteral;
   isFallback: boolean;
@@ -14,7 +14,7 @@ export interface BoundaryResult {
 // In-memory cache for fetched boundary polygon paths & centroids
 const boundaryCache = new Map<string, BoundaryResult>();
 
-export const STATE_CENTERS: Record<string, LatLngLiteral> = {
+const STATE_CENTERS: Record<string, LatLngLiteral> = {
   NSW: { lat: -33.8688, lng: 151.2093 },
   VIC: { lat: -37.8136, lng: 144.9631 },
   QLD: { lat: -27.4698, lng: 153.0251 },
@@ -25,7 +25,7 @@ export const STATE_CENTERS: Record<string, LatLngLiteral> = {
   NT:  { lat: -12.4634, lng: 130.8456 },
 };
 
-export function inferStateFromPostcode(postcode?: string | number): string {
+function inferStateFromPostcode(postcode?: string | number): string {
   if (!postcode) return '';
   const code = parseInt(String(postcode).trim(), 10);
   if (isNaN(code)) return '';
@@ -42,7 +42,7 @@ export function inferStateFromPostcode(postcode?: string | number): string {
   return '';
 }
 
-export function getApproxStateCoordinates(state?: string, postcode?: string | number): LatLngLiteral {
+function getApproxStateCoordinates(state?: string, postcode?: string | number): LatLngLiteral {
   let st = (state || '').trim().toUpperCase();
   if (!st || !STATE_CENTERS[st]) {
     st = inferStateFromPostcode(postcode);
