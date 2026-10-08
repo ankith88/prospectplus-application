@@ -97,7 +97,6 @@ import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Ap
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
-import { enrichLeadAction } from '@/ai/flows/enrich-lead-flow'
 import { logActivity, updateLeadAvatar, updateLeadStatus, updateLeadDialerRep, getLeadFromFirebase, addTaskToLead, updateTaskInLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices, isLostLeadStatus, getPendingItemsForLead, resolvePendingItemsForLead, getAllFranchisees } from '@/services/firebase'
 import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal'
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName } from '@/lib/duplicate-detector'
@@ -3680,11 +3679,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead || !lead.id) return;
     setIsEnrichingLead(true);
     try {
-      const res = await enrichLeadAction(lead.id);
-      if (!res.success || !res.data) {
-        throw new Error(res.error || 'Failed to enrich lead');
+      const res = await fetch(`/api/leads/${encodeURIComponent(lead.id)}/enrich`, {
+        method: 'POST',
+      });
+      const result = await res.json();
+      if (!res.ok || !result?.success || !result?.data) {
+        throw new Error(result?.error || 'Failed to enrich lead');
       }
-      const data = res.data;
+      const data = result.data;
       setLead(prev => ({
         ...prev,
         industryCategory: data.industryCategory,
@@ -3709,7 +3711,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
       toast({
         title: 'Lead Enriched Successfully',
-        description: `Classified as ${data.industryCategory} with evidence & cold opener.`,
+        description: `Classified as ${data.industryCategory || 'Target Account'} with evidence & cold opener.`,
       });
     } catch (err: any) {
       console.error('Lead enrichment failed:', err);

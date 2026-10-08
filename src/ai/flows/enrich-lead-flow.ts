@@ -1,5 +1,3 @@
-'use server';
-
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { industryCategories } from '@/lib/constants';
