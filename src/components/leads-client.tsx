@@ -19,7 +19,7 @@ import {
 import { getLeadsFromFirebase, subscribeLeadsFromFirebase } from '@/services/firebase'
 import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead, LeadStatus, Note, Activity, UserProfile, Contact } from '@/lib/types'
+import type { Lead, LeadStatus, Note, Activity, UserProfile, Contact, Franchisee } from '@/lib/types'
 import { encryptLeadId } from '@/lib/localmile-security'
 import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -27,7 +27,8 @@ import { useAuth } from '@/hooks/use-auth'
 import { DialerInsightsDialog, DialerInsightsData } from '@/components/dialer-insights-dialog'
 import { usePerformance } from '@/hooks/use-performance';
 import { useDialingSession } from '@/hooks/use-dialing-session'
-import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, mergeMultipleLeads, addLeadsToMarketingList } from '@/services/firebase'
+import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getAllFranchisees, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, mergeMultipleLeads, addLeadsToMarketingList } from '@/services/firebase'
+import { EnrichmentDialerReviewDialog } from '@/components/leads/enrichment-dialer-review-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck } from 'lucide-react'
@@ -534,6 +535,10 @@ export default function LeadsClientPage({
   const [leadsToDelete, setLeadsToDelete] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBatchEnriching, setIsBatchEnriching] = useState(false);
+  const [allUsersState, setAllUsersState] = useState<UserProfile[]>([]);
+  const [allFranchiseesState, setAllFranchiseesState] = useState<Franchisee[]>([]);
+  const [isEnrichmentReviewOpen, setIsEnrichmentReviewOpen] = useState(false);
+  const [enrichedLeadsToAssign, setEnrichedLeadsToAssign] = useState<Lead[]>([]);
   const [isMoveToNurtureDialogOpen, setIsMoveToNurtureDialogOpen] = useState(false);
   const [leadsToMoveToNurture, setLeadsToMoveToNurture] = useState<Lead[]>([]);
   const [isAllocateBucketDialogOpen, setIsAllocateBucketDialogOpen] = useState(false);
@@ -920,15 +925,21 @@ export default function LeadsClientPage({
 
   const fetchData = async () => {
     try {
-        const fetchedUsers = await getAllUsers();
-         const dialers = fetchedUsers.filter(u => {
-             if (u.disabled) return false;
-             const roles = u.assignedRoles || [];
-             const isDialer = roles.some(r => ['user', 'Dialer', 'dialers'].includes(r));
-             const isAM = roles.some(r => ['Account Manager', 'Account Managers', 'account managers'].includes(r));
-             return isDialer || (isAM && canAssignToAm(u));
-         });
-         setAllDialers(dialers);
+        const [fetchedUsers, fetchedFrans] = await Promise.all([
+            getAllUsers(),
+            getAllFranchisees().catch(() => [])
+        ]);
+        setAllUsersState(fetchedUsers);
+        setAllFranchiseesState(fetchedFrans);
+
+        const dialers = fetchedUsers.filter(u => {
+            if (u.disabled) return false;
+            const roles = u.assignedRoles || [];
+            const isDialer = roles.some(r => ['user', 'Dialer', 'dialers'].includes(r));
+            const isAM = roles.some(r => ['Account Manager', 'Account Managers', 'account managers'].includes(r));
+            return isDialer || (isAM && canAssignToAm(u));
+        });
+        setAllDialers(dialers);
 
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch dialers.' });
@@ -1426,10 +1437,11 @@ export default function LeadsClientPage({
 
   const handleBatchEnrich = async () => {
     if (selectedLeads.length === 0) return;
+    const targetLeadIds = [...selectedLeads];
     setIsBatchEnriching(true);
     toast({
       title: "Batch Enrichment Started",
-      description: `Analyzing and classifying ${selectedLeads.length} leads with AI...`,
+      description: `Analyzing and classifying ${targetLeadIds.length} leads with AI...`,
     });
 
     try {
@@ -1437,7 +1449,7 @@ export default function LeadsClientPage({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          leadIds: selectedLeads,
+          leadIds: targetLeadIds,
           requestorUid: userProfile?.uid || user?.uid,
         }),
       });
@@ -1447,10 +1459,15 @@ export default function LeadsClientPage({
         throw new Error(data.error || 'Failed to complete batch enrichment.');
       }
 
+      const targetLeads = allLeads.filter(l => targetLeadIds.includes(l.id));
+
       toast({
         title: "Batch Enrichment Complete",
-        description: `Successfully enriched ${data.successCount} of ${data.total} leads.`,
+        description: `Successfully enriched ${data.successCount} of ${data.total} leads. Select dialers to distribute...`,
       });
+
+      setEnrichedLeadsToAssign(targetLeads);
+      setIsEnrichmentReviewOpen(true);
       setSelectedLeads([]);
       handleRefresh();
     } catch (error: any) {
@@ -1462,6 +1479,51 @@ export default function LeadsClientPage({
       });
     } finally {
       setIsBatchEnriching(false);
+    }
+  };
+
+  const handleConfirmEnrichmentReassignments = async (
+    reassignments: Array<{ leadId: string; targetDialer: string }>
+  ) => {
+    if (reassignments.length === 0) {
+      setIsEnrichmentReviewOpen(false);
+      return;
+    }
+
+    try {
+      const isInbound = filters.bucket === 'inbound';
+      await Promise.all(
+        reassignments.map(({ leadId, targetDialer }) =>
+          updateLeadDialerRep(leadId, targetDialer, isInbound)
+        )
+      );
+
+      const reassignMap = new Map(reassignments.map(r => [r.leadId, r.targetDialer]));
+      setAllLeads(prev =>
+        prev.map(lead => {
+          if (reassignMap.has(lead.id)) {
+            const newDialer = reassignMap.get(lead.id)!;
+            return isInbound
+              ? { ...lead, salesRepAssigned: newDialer }
+              : { ...lead, dialerAssigned: newDialer };
+          }
+          return lead;
+        })
+      );
+
+      toast({
+        title: "Dialer Assignment Complete",
+        description: `Successfully distributed ${reassignments.length} enriched lead(s) randomly & equally across selected dialers.`,
+      });
+      setIsEnrichmentReviewOpen(false);
+      handleRefresh();
+    } catch (err: any) {
+      console.error("Failed to confirm enrichment assignments:", err);
+      toast({
+        variant: "destructive",
+        title: "Assignment Failed",
+        description: err.message || "Failed to assign some leads.",
+      });
     }
   };
   
@@ -3158,6 +3220,14 @@ export default function LeadsClientPage({
           executeCall(pendingDialData.leadId || '', pendingDialData.phoneNumber || '');
         }
       }}
+    />
+    <EnrichmentDialerReviewDialog
+      isOpen={isEnrichmentReviewOpen}
+      onOpenChange={setIsEnrichmentReviewOpen}
+      enrichedLeads={enrichedLeadsToAssign}
+      allDialers={allDialers}
+      onConfirmReassignment={handleConfirmEnrichmentReassignments}
+      onSkip={() => setIsEnrichmentReviewOpen(false)}
     />
     </>
   )
