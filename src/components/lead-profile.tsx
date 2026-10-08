@@ -11,6 +11,7 @@ import Link from 'next/link'
 import {
   ArrowLeft,
   Building,
+  Building2,
   Calendar as CalendarIcon,
   CalendarCheck,
   Clipboard,
@@ -3631,6 +3632,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         suggestedPersonalisation: data.suggestedPersonalisation,
         similarSignedCustomers: data.similarSignedCustomers,
         hasParcelShipping: data.hasParcelShipping,
+        hasMultipleBranches: data.hasMultipleBranches,
+        totalBranchCount: data.totalBranchCount,
+        branchLocations: data.branchLocations,
         isAiEnriched: true,
         enrichedAt: new Date().toISOString(),
       }));
@@ -7010,6 +7014,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   const suggestedPersonalisation = lead.suggestedPersonalisation || lead.discoveryData?.suggestedPersonalisation || (lead as any).suggested_personalisation || (lead as any)['Suggested Personalisation'] || (lead as any)['Suggested Personalization'];
                   const similarSignedCustomers = lead.similarSignedCustomers || lead.discoveryData?.similarSignedCustomers || (lead as any).similar_signed_customers || [];
                   const hasParcelShipping = lead.hasParcelShipping !== undefined ? lead.hasParcelShipping : lead.discoveryData?.hasParcelShipping;
+                  const hasMultipleBranches = lead.hasMultipleBranches !== undefined ? lead.hasMultipleBranches : lead.discoveryData?.hasMultipleBranches;
+                  const totalBranchCount = lead.totalBranchCount || lead.discoveryData?.totalBranchCount;
+                  const branchLocations = lead.branchLocations || lead.discoveryData?.branchLocations || [];
 
                   const hasEnrichment = Boolean(
                     lodgementEvidence ||
@@ -7022,6 +7029,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     suggestedOpener ||
                     suggestedPersonalisation ||
                     hasParcelShipping !== undefined ||
+                    hasMultipleBranches !== undefined ||
+                    (branchLocations && branchLocations.length > 0) ||
                     (similarSignedCustomers && similarSignedCustomers.length > 0)
                   );
 
@@ -7042,7 +7051,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                               )}
                             </CardTitle>
                             <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
-                              Industry classification, parcel shipping evidence, similar signed customer references, and AI cold call openers.
+                              Industry classification, branch footprint, parcel shipping evidence, similar signed customer references, and AI cold call openers.
                             </CardDescription>
                           </div>
                         </div>
@@ -7067,7 +7076,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                       </CardHeader>
                       <CardContent className="pt-6 space-y-6">
                         {/* Industry & Sub-Industry Header Row */}
-                        {(lead.industryCategory || lead.industrySubCategory || hasParcelShipping !== undefined) && (
+                        {(lead.industryCategory || lead.industrySubCategory || hasParcelShipping !== undefined || hasMultipleBranches !== undefined) && (
                           <div className="p-4 bg-gradient-to-r from-sky-50/80 via-blue-50/50 to-indigo-50/50 dark:from-slate-800/80 dark:to-slate-900 rounded-xl border border-sky-200/80 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div className="space-y-1">
                               <span className="text-[10px] font-bold tracking-wider uppercase text-sky-800 dark:text-sky-300">
@@ -7084,13 +7093,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 )}
                               </div>
                             </div>
-                            {hasParcelShipping !== undefined && (
-                              <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                            <div className="flex items-center flex-wrap gap-2 self-start sm:self-auto">
+                              {hasParcelShipping !== undefined && (
                                 <Badge variant="outline" className={cn("text-xs font-semibold px-2.5 py-1", hasParcelShipping ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300" : "bg-amber-50 text-amber-700 border-amber-300")}>
                                   {hasParcelShipping ? '📦 Verified Parcel Shipper' : 'ℹ️ Non-Parcel Business'}
                                 </Badge>
-                              </div>
-                            )}
+                              )}
+                              {hasMultipleBranches !== undefined && (
+                                <Badge variant="outline" className={cn("text-xs font-semibold px-2.5 py-1", hasMultipleBranches ? "bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/60 dark:text-indigo-300" : "bg-slate-50 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300")}>
+                                  {hasMultipleBranches 
+                                    ? `🏢 Multi-Branch (${totalBranchCount || (branchLocations?.length ? branchLocations.length : 'Multiple')} AU Sites)` 
+                                    : '📍 Single Location HQ'}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         )}
 
@@ -7173,6 +7189,97 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </TooltipProvider>
                               </div>
                             </div>
+
+                            {/* Multi-Branch Footprint & Additional Australian Locations */}
+                            {(hasMultipleBranches || (branchLocations && branchLocations.length > 0)) ? (
+                              <div className="p-4 bg-gradient-to-br from-indigo-50/60 via-sky-50/40 to-slate-50 dark:from-slate-800/80 dark:to-slate-900 rounded-xl border border-indigo-200/80 dark:border-indigo-900/40 space-y-3">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg">
+                                      <Building2 className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300">
+                                        Australian Branch Footprint & Locations
+                                      </span>
+                                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                        {totalBranchCount || branchLocations.length} physical locations / branch offices identified across Australia
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-300 font-semibold text-xs px-2.5 py-0.5">
+                                    🏢 Multi-Branch Footprint
+                                  </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                                  {branchLocations.map((loc: any, idx: number) => {
+                                    const fullAddrStr = [loc.street, loc.suburb, loc.state, loc.postcode].filter(Boolean).join(', ');
+                                    return (
+                                      <div key={idx} className="bg-white dark:bg-slate-800/90 p-3.5 rounded-xl border border-indigo-100/90 dark:border-slate-700 shadow-2xs space-y-1.5 relative group hover:border-indigo-300 transition-colors">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="min-w-0">
+                                            <p className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 truncate">
+                                              <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                              <span className="truncate">{loc.locationName || `Location #${idx + 1}`}</span>
+                                            </p>
+                                          </div>
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            {loc.isHeadOffice && (
+                                              <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-300 text-[9px] px-1.5 py-0">
+                                                HQ
+                                              </Badge>
+                                            )}
+                                            {loc.state && (
+                                              <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-bold px-1.5 py-0">
+                                                {loc.state}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5 pl-5">
+                                          {loc.street && <p className="truncate text-slate-500">{loc.street}</p>}
+                                          <p className="font-medium text-slate-800 dark:text-slate-200">
+                                            {[loc.suburb, loc.state, loc.postcode].filter(Boolean).join(' ') || 'Address detail pending'}
+                                          </p>
+                                          {loc.phone && (
+                                            <p className="text-slate-500 flex items-center gap-1 mt-1">
+                                              <Phone className="w-3 h-3 text-slate-400" />
+                                              <span>{loc.phone}</span>
+                                            </p>
+                                          )}
+                                          {loc.notes && (
+                                            <p className="text-[10px] text-slate-400 italic pt-0.5">{loc.notes}</p>
+                                          )}
+                                        </div>
+
+                                        {fullAddrStr && (
+                                          <div className="pt-1 flex justify-end">
+                                            <CopyButton textToCopy={fullAddrStr} className="h-5 w-5" iconClassName="h-3 w-3" />
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              hasEnrichment && hasMultipleBranches === false && (
+                                <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <MapPin className="w-4 h-4 text-slate-400" />
+                                    <div>
+                                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Single Location Operation</p>
+                                      <p className="text-[11px] text-slate-500">No additional Australian branches detected. Operates as a single headquarters or facility.</p>
+                                    </div>
+                                  </div>
+                                  <Badge variant="outline" className="text-[10px] bg-slate-100 text-slate-600 border-slate-300">
+                                    📍 Single Site
+                                  </Badge>
+                                </div>
+                              )
+                            )}
 
                             {/* Similar Signed Customers (Social Proof) */}
                             {similarSignedCustomers && similarSignedCustomers.length > 0 && (

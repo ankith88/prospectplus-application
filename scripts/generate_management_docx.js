@@ -353,6 +353,22 @@ async function generateDocx() {
 
               new TableRow({
                 children: [
+                  new TableCell({ borders: cleanBorders, children: [new Paragraph({ children: [new TextRun({ text: 'Multi-Branch Footprint', bold: true })] })] }),
+                  new TableCell({ borders: cleanBorders, children: [new Paragraph({ text: 'Identifies if the company operates multiple physical branches, retail stores, showrooms, warehouses, or regional hubs across Australia.' })] }),
+                  new TableCell({ borders: cleanBorders, children: [new Paragraph({ children: [new TextRun({ text: 'true (🏢 Multi-Branch - 4 Locations)', bold: true, color: '4338CA' })] })] }),
+                ],
+              }),
+
+              new TableRow({
+                children: [
+                  new TableCell({ borders: cleanBorders, children: [new Paragraph({ children: [new TextRun({ text: 'Branch Locations & Postcodes', bold: true })] })] }),
+                  new TableCell({ borders: cleanBorders, children: [new Paragraph({ text: 'Structured list of identified Australian branch locations capturing Suburb, State, Postcode, address, phone, and HQ role.' })] }),
+                  new TableCell({ borders: cleanBorders, children: [new Paragraph({ text: '• Parramatta, NSW 2150\n• Richmond, VIC 3121\n• Fortitude Valley, QLD 4006' })] }),
+                ],
+              }),
+
+              new TableRow({
+                children: [
                   new TableCell({ borders: cleanBorders, children: [new Paragraph({ children: [new TextRun({ text: 'Shipper Evidence', bold: true })] })] }),
                   new TableCell({ borders: cleanBorders, children: [new Paragraph({ text: 'Verbatim quotes of shipping terms, dispatch cutoffs, postage rates, and courier mentions.' })] }),
                   new TableCell({ borders: cleanBorders, children: [new Paragraph({ text: '"Online shop orders dispatched within 24-48 hrs from Unley hub..."' })] }),

@@ -7,10 +7,24 @@ import { findSimilarSignedCustomers } from '@/services/similar-customers';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
+const BranchLocationSchema = z.object({
+  locationName: z.string().optional().describe(`Branch, store, showroom, warehouse, clinic, or regional office name.`),
+  street: z.string().optional().describe(`Street address if available.`),
+  suburb: z.string().optional().describe(`Suburb or locality name (e.g. 'Richmond', 'Parramatta', 'Fortitude Valley', 'Fremantle').`),
+  state: z.string().optional().describe(`Australian state code (e.g. 'NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT').`),
+  postcode: z.string().optional().describe(`Australian 4-digit postcode (e.g. '3000', '2000', '4006').`),
+  phone: z.string().optional().describe(`Direct phone number for this branch if available.`),
+  isHeadOffice: z.boolean().optional().describe(`True if this location is marked as the Head Office / Primary HQ.`),
+  notes: z.string().optional().describe(`Operational role of this location (e.g. 'Retail Store', 'Warehouse / Distribution Hub', 'Showroom & Click & Collect').`),
+});
+
 const LeadEnrichmentOutputSchema = z.object({
   industryCategory: z.string().describe(`The best matching industry category from the exact provided master list. Must match one of the allowed categories.`),
   industrySubCategory: z.string().describe(`A specific, detailed sub-industry or niche description (e.g. 'Artisan Specialty Coffee & Roasted Beans', 'Adult Lingerie, Costumes & Novelties', 'Industrial Fasteners & Tool Supplies').`),
   hasParcelShipping: z.boolean().describe(`True if the business physically ships or dispatches parcels, goods, satchels, or freight. False if pure digital/intangible service.`),
+  hasMultipleBranches: z.boolean().describe(`True if the company operates multiple physical branches, stores, showrooms, warehouses, clinics, or office locations across Australia. False if single site.`),
+  totalBranchCount: z.number().optional().describe(`Estimated total number of Australian physical locations/branches found.`),
+  branchLocations: z.array(BranchLocationSchema).optional().describe(`Structured list of all identified Australian branch, store, showroom, or warehouse locations with suburb, state, and postcode details.`),
   shipperEvidence: z.string().describe(`Verbatim quotes or direct evidence extracted from the website regarding parcel shipping, delivery rates, checkout shipping terms, dispatch times, carriers used, or order cutoff times.`),
   lodgementEvidence: z.string().describe(`Evidence of warehouse location, retail counter dispatch, daily courier collection, or post office lodgement.`),
   shopifyDetected: z.string().describe(`'Yes' if Shopify is detected, 'WooCommerce' / 'Magento' / 'BigCommerce' / 'Custom' if another platform is detected, or 'No'.`),
@@ -73,7 +87,7 @@ async function fetchPageText(url: string): Promise<string> {
 }
 
 /**
- * Scrapes the lead's website across homepage and subpages (shipping, delivery, faq, returns).
+ * Scrapes the lead's website across homepage and key subpages (branches, stores, locations, shipping, delivery, contact).
  */
 async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; shopifyDetected: string }> {
   let cleanBase = baseUrl.trim();
@@ -82,7 +96,25 @@ async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; shopif
   }
   cleanBase = cleanBase.replace(/\/+$/, '');
 
-  const paths = ['', '/shipping', '/shipping-policy', '/delivery', '/delivery-information', '/faq', '/returns', '/contact'];
+  const paths = [
+    '',
+    '/locations',
+    '/stores',
+    '/find-us',
+    '/our-stores',
+    '/store-locator',
+    '/branches',
+    '/contact',
+    '/contact-us',
+    '/about',
+    '/about-us',
+    '/shipping',
+    '/shipping-policy',
+    '/delivery',
+    '/delivery-information',
+    '/faq',
+    '/returns',
+  ];
   let aggregatedText = '';
   let shopifyDetected = 'No';
 
@@ -98,7 +130,7 @@ async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; shopif
   }
 
   return {
-    text: aggregatedText.substring(0, 14000),
+    text: aggregatedText.substring(0, 18000),
     shopifyDetected,
   };
 }
@@ -151,24 +183,45 @@ You MUST choose the single closest matching industry from this exact list:
      - If an organisation, foundation, non-profit, trust, club, or charity sells physical merchandise or operates an eCommerce store (e.g. pet merchandise, clothing, gifts, calendars, accessories), you MUST classify them under their specific merchandise/retail vertical (e.g. 'B2C - PET PRODUCTS', 'RETAIL - PET ITEMS', 'B2C – GIFTS', 'RETAIL - GIFTS', 'B2C – CLOTHING & FASHION', 'RETAIL TRADE') rather than 'OTHER SERVICES' or 'ADMINISTRATIVE AND SUPPORT SERVICES'.
      - NEVER select 'OTHER SERVICES' if the company sells, ships, or manufactures any physical product that maps to a specific B2C, RETAIL, WHOLESALE, or MANUFACTURING category.
    - Generate a specific, descriptive **industrySubCategory** (e.g. 'Animal Welfare Charity & Pet Merchandise Store', 'Online Adult Lingerie & Novelties Retailer', 'Specialty Artisan Coffee Beans & Brewing Gear', 'Industrial Fasteners & Tool Supplies').
-2. **Parcel Shipping & Shipper Evidence**:
+
+2. **Australian Branch & Multi-Location Detection**:
+   - Analyze whether the company operates multiple physical branches, retail stores, showrooms, warehouses, clinics, or regional offices across Australia (**hasMultipleBranches**).
+   - If they have multiple locations (or additional branches beyond their primary address):
+     - Set **hasMultipleBranches** to \`true\`.
+     - Set **totalBranchCount** to the estimated total number of Australian locations found.
+     - In **branchLocations**, extract each identified Australian location with structured fields:
+       - \`locationName\`: Store / Branch / Hub name (e.g. 'Melbourne CBD Store', 'Brisbane DC', 'Parramatta Showroom').
+       - \`street\`: Street address if available.
+       - \`suburb\`: Suburb name (e.g. 'Surry Hills', 'Richmond', 'Fortitude Valley', 'Subiaco').
+       - \`state\`: Standard Australian state code ('NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT').
+       - \`postcode\`: 4-digit Australian postcode if listed.
+       - \`phone\`: Direct phone number for this location if available.
+       - \`isHeadOffice\`: True if noted as the primary HQ / Head Office.
+       - \`notes\`: Operational type or summary (e.g. 'Flagship Store', 'Distribution Centre', 'Regional Office').
+   - If they only operate from a single location or single headquarters, set **hasMultipleBranches** to \`false\`, set **totalBranchCount** to 1, and include the primary location in **branchLocations** or leave empty.
+
+3. **Parcel Shipping & Shipper Evidence**:
    - Determine if the company ships physical goods/parcels/satchels (**hasParcelShipping**).
    - In **shipperEvidence**, quote exact terms, postage rates, delivery timeframes, free shipping thresholds, or courier carriers found on their site.
    - In **lodgementEvidence**, note warehouse location, dispatch location, or counter lodgement details.
-3. **eCommerce & Carrier Signals**:
+
+4. **eCommerce & Carrier Signals**:
    - Detect **shopifyDetected** ('Yes', 'WooCommerce', 'BigCommerce', 'Magento', or 'No').
    - Identify **apRelationship** (e.g. Australia Post, StarTrack, Toll, Sendle, Aramex).
-4. **Prospect Summary**:
-   - Provide a 2-3 sentence overview of what they sell and their logistics profile.
-5. **Cold Call Opener (Crucial!)**:
+
+5. **Prospect Summary**:
+   - Provide a 2-3 sentence overview of what they sell, their geographical footprint, and their logistics profile.
+
+6. **Cold Call Opener (Crucial!)**:
    - Craft a natural, high-converting cold call phone opener for a sales dialer.
    - Structure:
      a. Natural intro ("Hi [Contact Name], it's [Name] from MailPlus...")
-     b. Observation of their specific products / dispatch model.
+     b. Observation of their specific products / dispatch model / multi-location presence if relevant.
      c. Social proof mentioning our experience with similar businesses (use the provided similar customers if applicable).
      d. Low-friction hook asking about their daily dispatch cutoff or pickup routine.
-6. **Suggested Personalisation**:
-   - 2-3 targeted talking points explaining how MailPlus saves them time (e.g. daily guaranteed 4pm pickup from their door, flat-rate express satchels, Shopify order sync).
+
+7. **Suggested Personalisation**:
+   - 2-3 targeted talking points explaining how MailPlus saves them time (e.g. daily guaranteed 4pm pickup from their door, flat-rate express satchels, multi-site consolidation, Shopify order sync).
 `,
 });
 
@@ -286,6 +339,9 @@ export async function enrichLeadAction(leadId: string) {
       suggestedOpener: enrichment.suggestedOpener,
       suggestedPersonalisation: enrichment.suggestedPersonalisation,
       similarSignedCustomers: enrichment.similarSignedCustomers || [],
+      hasMultipleBranches: Boolean(enrichment.hasMultipleBranches),
+      totalBranchCount: enrichment.totalBranchCount !== undefined ? enrichment.totalBranchCount : (enrichment.branchLocations?.length || (enrichment.hasMultipleBranches ? 2 : 1)),
+      branchLocations: enrichment.branchLocations || [],
       isAiEnriched: true,
       enrichedAt: new Date().toISOString(),
       enrichedBy: 'AI Lead Intelligence Agent',

@@ -316,9 +316,23 @@ export interface DiscoveryData {
     franchiseeName?: string;
   }>;
   hasParcelShipping?: boolean;
+  hasMultipleBranches?: boolean;
+  totalBranchCount?: number;
+  branchLocations?: BranchLocation[];
   isAiEnriched?: boolean;
   enrichedAt?: string;
   enrichedBy?: string;
+}
+
+export interface BranchLocation {
+  locationName?: string;
+  street?: string;
+  suburb?: string;
+  state?: string;
+  postcode?: string;
+  phone?: string;
+  isHeadOffice?: boolean;
+  notes?: string;
 }
 
 export interface InvoiceItem {
@@ -784,6 +798,9 @@ export interface Lead {
     franchiseeName?: string;
   }>;
   hasParcelShipping?: boolean;
+  hasMultipleBranches?: boolean;
+  totalBranchCount?: number;
+  branchLocations?: BranchLocation[];
   isAiEnriched?: boolean;
   enrichedAt?: string;
   enrichedBy?: string;
