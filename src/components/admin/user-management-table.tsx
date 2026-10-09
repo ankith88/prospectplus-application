@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
 import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely, unlinkUserFromFranchiseeCompletely } from '@/services/firebase';
-import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store, Smartphone } from 'lucide-react';
+import { Lock, Mail, MailCheck, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store, Smartphone } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { CreateUserDialog } from './create-user-dialog';
@@ -93,6 +93,13 @@ export function UserManagementTable() {
   const [newDialpadUserId, setNewDialpadUserId] = useState('');
   const [allFranchisees, setAllFranchisees] = useState<Franchisee[]>([]);
 
+  // Email Verification State
+  const [verificationMap, setVerificationMap] = useState<Record<string, { emailVerified: boolean }>>({});
+  const [isResendingVerification, setIsResendingVerification] = useState<string | null>(null);
+  const [isManualVerifying, setIsManualVerifying] = useState<string | null>(null);
+  const [isBulkVerifying, setIsBulkVerifying] = useState(false);
+  const [isBulkResending, setIsBulkResending] = useState(false);
+
   // Bulk Selection State
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [isBulkLoggingOut, setIsBulkLoggingOut] = useState(false);
@@ -123,14 +130,18 @@ export function UserManagementTable() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-        const [fetchedUsers, fetchedRequests, fetchedFranchisees] = await Promise.all([
+        const [fetchedUsers, fetchedRequests, fetchedFranchisees, verifyRes] = await Promise.all([
           getAllUsers(),
           getAllAdminApprovalRequests(),
           getAllFranchisees(),
+          fetch('/api/admin/users/email-verification').then(r => r.json()).catch(() => ({ success: false })),
         ]);
         setUsers(fetchedUsers);
         setApprovalRequests(fetchedRequests);
         setAllFranchisees(fetchedFranchisees);
+        if (verifyRes && verifyRes.success && verifyRes.verificationMap) {
+          setVerificationMap(verifyRes.verificationMap);
+        }
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch users.' });
     } finally {
@@ -256,6 +267,100 @@ export function UserManagementTable() {
       });
     } finally {
       setIsResetting2FA(null);
+    }
+  };
+
+  const handleResendVerificationEmail = async (targetUser: UserProfile) => {
+    if (!targetUser.email) return;
+    setIsResendingVerification(targetUser.uid);
+    try {
+      const res = await fetch('/api/admin/users/email-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resend', email: targetUser.email }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: 'Verification Email Sent', description: `Dispatched branded verification email to ${targetUser.email}.` });
+      } else {
+        toast({ variant: 'destructive', title: 'Failed to Send', description: data.message || 'Could not send verification email.' });
+      }
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message || 'An error occurred.' });
+    } finally {
+      setIsResendingVerification(null);
+    }
+  };
+
+  const handleManualVerifyUser = async (targetUser: UserProfile) => {
+    setIsManualVerifying(targetUser.uid);
+    try {
+      const res = await fetch('/api/admin/users/email-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'manual-verify', uid: targetUser.uid }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setVerificationMap(prev => ({ ...prev, [targetUser.uid]: { emailVerified: true } }));
+        toast({ title: 'Email Verified', description: `${targetUser.displayName || targetUser.email} has been manually marked as verified.` });
+      } else {
+        toast({ variant: 'destructive', title: 'Failed to Verify', description: data.message || 'Could not update verification status.' });
+      }
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message || 'An error occurred.' });
+    } finally {
+      setIsManualVerifying(null);
+    }
+  };
+
+  const handleBulkResendVerification = async () => {
+    if (!selectedUserIds.length) return;
+    setIsBulkResending(true);
+    try {
+      const targetEmails = users.filter(u => selectedUserIds.includes(u.uid) && u.email).map(u => u.email as string);
+      const res = await fetch('/api/admin/users/email-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bulk-resend', emails: targetEmails }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: 'Bulk Verification Sent', description: data.message });
+      } else {
+        toast({ variant: 'destructive', title: 'Failed', description: data.message });
+      }
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message });
+    } finally {
+      setIsBulkResending(false);
+    }
+  };
+
+  const handleBulkManualVerify = async () => {
+    if (!selectedUserIds.length) return;
+    setIsBulkVerifying(true);
+    try {
+      const res = await fetch('/api/admin/users/email-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bulk-verify', uids: selectedUserIds }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setVerificationMap(prev => {
+          const next = { ...prev };
+          selectedUserIds.forEach(id => { next[id] = { emailVerified: true }; });
+          return next;
+        });
+        toast({ title: 'Bulk Verification Complete', description: data.message });
+      } else {
+        toast({ variant: 'destructive', title: 'Failed', description: data.message });
+      }
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message });
+    } finally {
+      setIsBulkVerifying(false);
     }
   };
 
@@ -887,6 +992,14 @@ export function UserManagementTable() {
                   <BellRing className="mr-2 h-4 w-4" />
                   Send Alert
                 </Button>
+                <Button variant="outline" size="sm" onClick={handleBulkResendVerification} disabled={isBulkResending}>
+                  {isBulkResending ? <Loader className="mr-2 h-4 w-4" /> : <Mail className="mr-2 h-4 w-4" />}
+                  Send Verification
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleBulkManualVerify} disabled={isBulkVerifying}>
+                  {isBulkVerifying ? <Loader className="mr-2 h-4 w-4" /> : <ShieldCheck className="mr-2 h-4 w-4 text-emerald-600" />}
+                  Mark Verified
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => setShowBulkLogoutConfirm(true)}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Log Out
@@ -963,6 +1076,7 @@ export function UserManagementTable() {
                 <TableHead>Admin Approval</TableHead>
                 <TableHead>Franchise</TableHead>
                 <TableHead>2FA</TableHead>
+                <TableHead>Email Verified</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -1041,12 +1155,47 @@ export function UserManagementTable() {
                       )}
                     </TableCell>
                     <TableCell>
+                      {verificationMap[user.uid]?.emailVerified || user.emailVerified ? (
+                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 whitespace-nowrap text-[11px] font-medium">
+                          <CheckCircle2 className="mr-1 h-3 w-3 text-emerald-600 dark:text-emerald-400" /> Verified
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 whitespace-nowrap text-[11px] font-medium">
+                          <Clock className="mr-1 h-3 w-3 text-amber-600 dark:text-amber-400" /> Pending
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <Badge variant={user.disabled ? 'destructive' : 'secondary'}>
                         {user.disabled ? 'Disabled' : 'Active'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
+                        {!(verificationMap[user.uid]?.emailVerified || user.emailVerified) && (
+                          <>
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              className="h-8 w-8 text-[#095c7b] hover:text-[#07465e] hover:bg-blue-50 dark:hover:bg-blue-950/30" 
+                              onClick={() => handleResendVerificationEmail(user)} 
+                              disabled={isResendingVerification === user.uid}
+                              title="Resend Branded Verification Email"
+                            >
+                              {isResendingVerification === user.uid ? <Loader className="h-4 w-4" /> : <MailCheck className="h-4 w-4" />}
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30" 
+                              onClick={() => handleManualVerifyUser(user)} 
+                              disabled={isManualVerifying === user.uid}
+                              title="Manually Mark Email Verified"
+                            >
+                              {isManualVerifying === user.uid ? <Loader className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+                            </Button>
+                          </>
+                        )}
                         <Button 
                           variant="outline" 
                           size="icon" 

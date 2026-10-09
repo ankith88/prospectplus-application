@@ -12,7 +12,9 @@ function AuthActionHandler() {
     const mode = searchParams.get('mode');
     const oobCode = searchParams.get('oobCode');
 
-    if (mode === 'resetPassword' || oobCode) {
+    if (mode === 'verifyEmail') {
+      router.replace(`/verify-email?${searchParams.toString()}`);
+    } else if (mode === 'resetPassword' || oobCode) {
       router.replace(`/reset-password?${searchParams.toString()}`);
     } else {
       router.replace('/signin');

@@ -1,9 +1,9 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,7 +11,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -21,20 +21,26 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { useToast } from "@/hooks/use-toast"
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import Link from 'next/link';
 import { FullScreenLoader, Loader } from '@/components/ui/loader';
-import { ShieldCheck, Smartphone, KeyRound, RefreshCw, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, Smartphone, KeyRound, RefreshCw, ArrowLeft, Mail, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react';
 
-export default function SignInPage() {
+function SignInContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
   
+  // Email Verification State
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [isSendingVerification, setIsSendingVerification] = useState(false);
+  const [verificationCooldown, setVerificationCooldown] = useState(0);
+
   // 2FA Verification State
   const [is2FAModalOpen, setIs2FAModalOpen] = useState(false);
   const [mfaUid, setMfaUid] = useState<string | null>(null);
@@ -48,6 +54,9 @@ export default function SignInPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isVerifiedFromQuery = searchParams.get('verified') === 'true';
+
   const { 
     signIn, 
     signOut,
@@ -57,20 +66,21 @@ export default function SignInPage() {
     loading: authLoading, 
     isSigningIn, 
     sendPasswordReset,
+    sendEmailVerificationLink,
     verify2FACode,
     resend2FACode,
   } = useAuth();
   const { toast } = useToast();
   
   useEffect(() => {
-    if (!authLoading && user && is2FAVerified && !is2FAModalOpen) {
+    if (!authLoading && user && user.emailVerified && is2FAVerified && !is2FAModalOpen && !isVerificationModalOpen) {
       router.replace('/');
     }
-  }, [user, is2FAVerified, authLoading, is2FAModalOpen, router]);
+  }, [user, is2FAVerified, authLoading, is2FAModalOpen, isVerificationModalOpen, router]);
 
   // If user is already authenticated in Firebase Auth session but requires 2FA and not yet verified
   useEffect(() => {
-    if (!authLoading && user && userProfile?.requires2FA && !is2FAVerified && !is2FAModalOpen && !mfaUid) {
+    if (!authLoading && user && user.emailVerified && userProfile?.requires2FA && !is2FAVerified && !is2FAModalOpen && !mfaUid) {
       const init2FAChallenge = async () => {
         try {
           const res = await fetch('/api/auth/2fa/send', {
@@ -95,6 +105,7 @@ export default function SignInPage() {
     }
   }, [authLoading, user, userProfile, is2FAVerified, is2FAModalOpen, mfaUid]);
 
+  // Countdown timer for 2FA resend
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (resendCooldown > 0) {
@@ -103,10 +114,33 @@ export default function SignInPage() {
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
+  // Countdown timer for Email Verification resend
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (verificationCooldown > 0) {
+      timer = setTimeout(() => setVerificationCooldown(verificationCooldown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [verificationCooldown]);
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const result: any = await signIn(email, password);
+
+      // Check for Email Verification Requirement
+      if (result && result.requiresEmailVerification) {
+        setVerificationEmail(result.email || email);
+        setIsVerificationModalOpen(true);
+        setVerificationCooldown(30);
+        toast({
+          title: "Email Verification Required",
+          description: `A branded verification link has been sent to ${result.email || email}.`,
+        });
+        return;
+      }
+
+      // Check for 2FA Challenge Requirement
       if (result && result.requires2FA) {
         setMfaUid(result.uid);
         setMfaMethod((result.method as any) || 'sms');
@@ -153,13 +187,36 @@ export default function SignInPage() {
     }
   };
 
+  const handleResendVerification = async () => {
+    const targetEmail = verificationEmail || email;
+    if (!targetEmail) return;
+
+    setIsSendingVerification(true);
+    try {
+      await sendEmailVerificationLink(targetEmail);
+      setVerificationCooldown(30);
+      toast({
+        title: "Verification Email Sent",
+        description: `A fresh verification link was dispatched to ${targetEmail}.`,
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Resend",
+        description: err.message || "Could not dispatch verification email.",
+      });
+    } finally {
+      setIsSendingVerification(false);
+    }
+  };
+
   const handleVerify2FASubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mfaUid || !mfaOtpCode || mfaOtpCode.trim().length !== 6) {
       toast({
         variant: "destructive",
         title: "Invalid Code",
-        description: "Please enter the complete 6-digit verification code.",
+        description: "Please enter a complete 6-digit verification code.",
       });
       return;
     }
@@ -171,18 +228,22 @@ export default function SignInPage() {
         mfaOtpCode.trim(), 
         mfaMethod === 'totp_setup_needed' ? mfaSecret : undefined
       );
+
       toast({
-        title: "Verification Successful",
-        description: "Welcome to ProspectPlus!",
+        title: "Authentication Successful",
+        description: "Security check passed. Logging into Prospect+...",
       });
+
       setIs2FAModalOpen(false);
       router.replace('/');
-    } catch (err: any) {
+    } catch (error: any) {
+      console.error("2FA verification failed:", error);
       toast({
         variant: "destructive",
         title: "Verification Failed",
-        description: err.message || "Invalid or expired verification code.",
+        description: error.message || "The code you entered is invalid or has expired. Please try again.",
       });
+      setMfaOtpCode('');
     } finally {
       setIsVerifying2FA(false);
     }
@@ -192,19 +253,19 @@ export default function SignInPage() {
     if (!mfaUid || resendCooldown > 0) return;
     setIsResending2FA(true);
     try {
-      const res = await resend2FACode(mfaUid);
+      const data = await resend2FACode(mfaUid);
       setResendCooldown(30);
-      if (res.method === 'sms') {
+      if (data.method === 'sms') {
         toast({
-          title: "Code Resent",
-          description: `A new 6-digit code has been sent to ${res.maskedMobile || mfaMaskedMobile}.`,
+          title: "New SMS Code Sent",
+          description: `A fresh 6-digit code has been sent to ${data.maskedMobile || 'your phone'}.`,
         });
       }
-    } catch (err: any) {
+    } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Resend Failed",
-        description: err.message || "Failed to resend verification code.",
+        description: error.message || "Could not resend verification code. Please try again later.",
       });
     } finally {
       setIsResending2FA(false);
@@ -221,101 +282,113 @@ export default function SignInPage() {
   };
 
   const handlePasswordReset = async () => {
-    if (!resetEmail) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Please enter your email address.' });
-        return;
-    }
-    setIsSendingReset(true);
-    try {
-        await sendPasswordReset(resetEmail);
-        toast({ title: 'Success', description: 'If an account exists for that email, a password reset link has been sent.' });
-        setIsResetDialogOpen(false);
-        setResetEmail('');
-    } catch (error: any) {
-        console.error('Password reset failed:', error);
-        toast({ title: 'Success', description: 'If an account exists for that email, a password reset link has been sent.' });
-        setIsResetDialogOpen(false);
-        setResetEmail('');
-    } finally {
-        setIsSendingReset(false);
-    }
-  };
+      if (!resetEmail) {
+          toast({
+              variant: "destructive",
+              title: "Error",
+              description: "Please enter your email address.",
+          });
+          return;
+      }
+      setIsSendingReset(true);
+      try {
+          await sendPasswordReset(resetEmail);
+          toast({
+              title: "Password Reset Email Sent",
+              description: "If an account exists with that email, a password reset link has been sent.",
+          });
+          setIsResetDialogOpen(false);
+          setResetEmail('');
+      } catch (error: any) {
+           console.error("Password reset failed:", error);
+          toast({
+              variant: "destructive",
+              title: "Password Reset Failed",
+              description: error.message || "An error occurred while sending the password reset email.",
+          });
+      } finally {
+          setIsSendingReset(false);
+      }
+  }
 
   if (authLoading) {
-      return <FullScreenLoader message="Loading..." />;
+      return <FullScreenLoader message="Authenticating..." />;
   }
 
   return (
     <>
-    {(isSigningIn) && <FullScreenLoader message="Signing in..." />}
-    <div className="flex min-h-svh items-center justify-center bg-background p-4 sm:p-6">
-      
-      {/* Dynamic Main Card: Transitions smoothly to 2FA Card when challenge is active */}
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
       {is2FAModalOpen ? (
-        <Card className="w-full max-w-md shadow-2xl border-border animate-in fade-in zoom-in-95 duration-200">
-          <CardHeader className="flex flex-col items-center text-center pb-2">
-            <div className="logo-text !text-[var(--ink)] !text-2xl mb-1">
-              PROSPECT<span className="logo-plus">.plus</span>
-            </div>
-            <div className={`h-12 w-12 rounded-full flex items-center justify-center my-2 shadow-sm ${
-              mfaMethod === 'sms' 
-                ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400' 
-                : 'bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400'
-            }`}>
-              {mfaMethod === 'sms' ? <Smartphone className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
-            </div>
-            <CardTitle className="text-xl font-bold">
-              {mfaMethod === 'totp_setup_needed' 
-                ? 'Set Up Google Authenticator' 
-                : mfaMethod === 'totp' 
-                ? 'Google Authenticator 2FA' 
-                : 'Two-Factor SMS Verification'}
-            </CardTitle>
-            <CardDescription className="text-center text-xs text-muted-foreground pt-1 px-4">
-              {mfaMethod === 'totp_setup_needed' ? (
-                'Scan the QR code below using Google Authenticator on your mobile device.'
-              ) : mfaMethod === 'totp' ? (
-                'Enter the rotating 6-digit code currently displayed in your Google Authenticator app.'
+        /* 2FA Challenge Card */
+        <Card className={`w-full ${mfaMethod === 'totp_setup_needed' ? 'max-w-lg' : 'max-w-md'} shadow-2xl border-border animate-in fade-in zoom-in-95 duration-200`}>
+          <CardHeader className="text-center pb-4">
+            <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-3">
+              {mfaMethod === 'sms' ? (
+                <Smartphone className="w-6 h-6 text-primary" />
               ) : (
-                <>Enter the 6-digit verification code sent via SMS to <span className="font-semibold text-foreground">{mfaMaskedMobile}</span>.</>
+                <KeyRound className="w-6 h-6 text-primary" />
+              )}
+            </div>
+            <CardTitle className="text-xl font-bold text-foreground">
+              {mfaMethod === 'totp_setup_needed' 
+                ? "Set Up Google Authenticator" 
+                : mfaMethod === 'totp' 
+                  ? "Google Authenticator 2FA" 
+                  : "Two-Factor Verification"}
+            </CardTitle>
+            <CardDescription className="text-xs max-w-sm mx-auto">
+              {mfaMethod === 'totp_setup_needed' ? (
+                "Scan the QR code below using Google Authenticator on your mobile device to complete initial setup."
+              ) : mfaMethod === 'totp' ? (
+                "Open Google Authenticator on your phone and enter the current 6-digit verification code."
+              ) : (
+                <>Enter the 6-digit code sent to <strong className="text-foreground">{mfaMaskedMobile || 'your mobile'}</strong> to complete sign in.</>
               )}
             </CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-4">
-            {/* QR Code Setup View */}
             {mfaMethod === 'totp_setup_needed' && (
-              <div className="flex flex-col items-center justify-center p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border text-center space-y-2">
-                {mfaQrDataUrl ? (
-                  <img 
-                    src={mfaQrDataUrl} 
-                    alt="Google Authenticator QR Code" 
-                    className="h-48 w-48 rounded-md border bg-white p-2 shadow-sm"
-                  />
-                ) : (
-                  <div className="h-48 w-48 rounded-md border bg-muted flex items-center justify-center">
-                    <Loader className="h-6 w-6 text-muted-foreground" />
+              <div className="space-y-4">
+                {mfaQrDataUrl && (
+                  <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl border border-slate-200 shadow-inner w-fit mx-auto">
+                    <img 
+                      src={mfaQrDataUrl} 
+                      alt="TOTP QR Code" 
+                      className="w-48 h-48 rounded"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-2 font-medium">Scan with Google Authenticator</p>
                   </div>
                 )}
+
                 {mfaSecret && (
-                  <div className="text-[11px] text-muted-foreground font-mono select-all break-all px-2">
-                    Key: <strong className="text-foreground">{mfaSecret}</strong>
+                  <div className="bg-muted/60 p-3 rounded-lg border border-border text-center space-y-1">
+                    <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                      Can't scan? Enter key manually:
+                    </p>
+                    <code className="text-xs font-mono font-bold text-primary tracking-widest select-all block bg-background py-1 px-2 rounded border border-border">
+                      {mfaSecret}
+                    </code>
                   </div>
                 )}
               </div>
             )}
 
             <form onSubmit={handleVerify2FASubmit} className="space-y-4">
-              <div className="space-y-2 text-center">
-                <Label htmlFor="mfa-code" className="text-xs text-muted-foreground font-medium">
-                  {mfaMethod === 'totp_setup_needed' ? 'Enter the 6-digit code from your app to confirm setup:' : '6-Digit Verification Code'}
+              <div className="space-y-2">
+                <Label htmlFor="otp" className="text-center block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {mfaMethod === 'totp_setup_needed' 
+                    ? "Enter 6-Digit Code to Confirm Setup" 
+                    : "6-Digit Security Code"}
                 </Label>
                 <Input
-                  id="mfa-code"
+                  id="otp"
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   maxLength={6}
-                  placeholder="••••••"
+                  placeholder="000000"
+                  autoComplete="one-time-code"
                   autoFocus
                   value={mfaOtpCode}
                   onChange={(e) => setMfaOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -358,7 +431,7 @@ export default function SignInPage() {
 
               <Button 
                 type="submit" 
-                className="w-full bg-[#095c7b] hover:bg-[#07465e] text-white h-10 font-semibold" 
+                className="w-full bg-[#095c7b] hover:bg-[#07465e] text-white h-10 font-semibold shadow-sm" 
                 disabled={isVerifying2FA || mfaOtpCode.length !== 6}
               >
                 {isVerifying2FA ? <Loader className="mr-2 h-4 w-4" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
@@ -378,13 +451,23 @@ export default function SignInPage() {
               </CardDescription>
           </CardHeader>
           <CardContent>
+              {isVerifiedFromQuery && (
+                <div className="mb-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2 animate-in fade-in">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block font-semibold">Email Verified!</strong>
+                    Please enter your credentials to complete Two-Factor Authentication.
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
                       id="email"
                       type="email"
-                      placeholder="m@example.com"
+                      placeholder="name@mailplus.com.au"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -397,15 +480,21 @@ export default function SignInPage() {
                           <Button
                               type="button"
                               variant="link"
-                              className="p-0 h-auto text-xs"
-                              onClick={() => setIsResetDialogOpen(true)}
+                              size="sm"
+                              className="px-0 h-auto text-xs text-muted-foreground hover:text-foreground"
+                              onClick={() => {
+                                  setResetEmail(email);
+                                  setIsResetDialogOpen(true);
+                              }}
+                              tabIndex={-1}
                           >
-                              Forgot password?
+                              Forgot Password?
                           </Button>
                       </div>
                       <Input
                           id="password"
                           type="password"
+                          placeholder="••••••••"
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
@@ -413,6 +502,7 @@ export default function SignInPage() {
                       />
                   </div>
                   <Button type="submit" className="w-full" disabled={isSigningIn}>
+                   {isSigningIn && <Loader className="mr-2 h-4 w-4 animate-spin" />}
                    Sign In
                   </Button>
               </form>
@@ -431,6 +521,61 @@ export default function SignInPage() {
       )}
     </div>
 
+    {/* Email Verification Pending Dialog */}
+    <Dialog open={isVerificationModalOpen} onOpenChange={setIsVerificationModalOpen}>
+        <DialogContent className="max-w-md">
+            <DialogHeader className="text-center items-center">
+                <div className="h-12 w-12 rounded-full bg-blue-100 text-[#095c7b] flex items-center justify-center mb-2">
+                    <Mail className="h-6 w-6" />
+                </div>
+                <DialogTitle className="text-lg font-bold">Email Verification Required</DialogTitle>
+                <DialogDescription className="text-xs text-center max-w-xs mx-auto">
+                    We've sent a branded verification link to <strong className="text-foreground">{verificationEmail}</strong>.
+                </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2 text-xs text-muted-foreground">
+                <div className="bg-muted/50 p-3 rounded-lg border border-border space-y-1.5">
+                    <div className="flex items-center gap-1.5 font-semibold text-foreground text-xs">
+                        <ShieldAlert className="h-4 w-4 text-[#095c7b]" />
+                        Next Steps:
+                    </div>
+                    <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px]">
+                        <li>Open your inbox and click the verification button.</li>
+                        <li>Return here and sign in to complete Two-Factor Authentication.</li>
+                    </ol>
+                </div>
+            </div>
+
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsVerificationModalOpen(false)}
+                  className="w-full sm:w-auto text-xs"
+                >
+                    Close
+                </Button>
+                <Button 
+                  onClick={handleResendVerification} 
+                  disabled={isSendingVerification || verificationCooldown > 0}
+                  className="w-full sm:w-auto bg-[#095c7b] hover:bg-[#07465e] text-white text-xs font-semibold"
+                >
+                    {isSendingVerification ? (
+                        <span className="flex items-center gap-1.5">
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            Sending...
+                        </span>
+                    ) : verificationCooldown > 0 ? (
+                        `Resend in ${verificationCooldown}s`
+                    ) : (
+                        "Resend Verification Email"
+                    )}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
     {/* Password Reset Modal */}
     <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
         <DialogContent>
@@ -446,7 +591,7 @@ export default function SignInPage() {
                     <Input
                         id="reset-email"
                         type="email"
-                        placeholder="m@example.com"
+                        placeholder="name@mailplus.com.au"
                         value={resetEmail}
                         onChange={(e) => setResetEmail(e.target.value)}
                         disabled={isSendingReset}
@@ -466,5 +611,13 @@ export default function SignInPage() {
         </DialogContent>
     </Dialog>
     </>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<FullScreenLoader message="Loading sign in..." />}>
+      <SignInContent />
+    </Suspense>
   );
 }

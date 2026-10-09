@@ -490,6 +490,8 @@ export interface UserProfile {
   totpSecret?: string
   totpConfirmed?: boolean
   twoFactorVerifiedAt?: any
+  emailVerified?: boolean
+  emailVerifiedAt?: any
   linkedSalesRep?: string
   linkedBDR?: string
   franchisee?: string

@@ -111,6 +111,7 @@ interface AuthContextType {
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
     sendPasswordReset: (email: string) => Promise<void>;
+    sendEmailVerificationLink: (email: string, uid?: string) => Promise<{ success: boolean; message?: string }>;
     signUpAndCreateProfile: (userData: any) => Promise<string | void>;
     refreshToken: () => Promise<string | null>;
     switchRole: (newRole: UserRole) => void;
@@ -135,6 +136,7 @@ const AuthContext = createContext<AuthContextType>({
     signIn: async () => {},
     signOut: async () => {},
     sendPasswordReset: async () => {},
+    sendEmailVerificationLink: async () => ({ success: false }),
     signUpAndCreateProfile: async () => {},
     refreshToken: async () => null,
     switchRole: () => {},
@@ -259,13 +261,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         const isSessionVerified = typeof window !== 'undefined' && user ? sessionStorage.getItem(`2fa_verified_${user.uid}`) === 'true' : true;
+        const needsEmailVerification = user && !user.emailVerified;
         const needs2FA = user && userProfile?.requires2FA && !isSessionVerified;
 
         if (
             !loading && 
-            (!user || needs2FA) && 
+            (!user || needsEmailVerification || needs2FA) && 
             pathname !== '/signup' && 
             pathname !== '/signin' && 
+            !pathname.startsWith('/verify-email') &&
             !pathname.startsWith('/reset-password') &&
             !pathname.startsWith('/__/auth/action') &&
             !pathname.startsWith('/auth/action') &&
@@ -288,6 +292,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [user, userProfile, loading, router, pathname]);
 
 
+    const sendEmailVerificationLink = useCallback(async (email: string, uid?: string) => {
+        const res = await fetch('/api/auth/email/send-verification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, uid }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+            throw new Error(data.message || 'Failed to send verification email.');
+        }
+        return data;
+    }, []);
+
     const signIn = useCallback(async (email: string, pass: string) => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
         setIsSigningIn(true);
@@ -295,6 +312,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const userCredential = await signInWithEmailAndPassword(auth, email, pass);
             const loggedInUser = userCredential.user;
             if (loggedInUser) {
+                // Check if email is verified
+                if (!loggedInUser.emailVerified) {
+                    // Auto-dispatch verification email in background
+                    fetch('/api/auth/email/send-verification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uid: loggedInUser.uid, email: loggedInUser.email }),
+                    }).catch(err => console.warn('[Auto-dispatch verification email error]:', err));
+
+                    return {
+                        requiresEmailVerification: true,
+                        uid: loggedInUser.uid,
+                        email: loggedInUser.email,
+                        userCredential,
+                    };
+                }
+
                 const userDocRef = doc(firestore, "users", loggedInUser.uid);
                 const userDoc = await getDoc(userDocRef);
                 if (userDoc.exists()) {
@@ -673,6 +707,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signIn,
         signOut,
         sendPasswordReset,
+        sendEmailVerificationLink,
         signUpAndCreateProfile,
         refreshToken,
         switchRole,
