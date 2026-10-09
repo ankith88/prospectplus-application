@@ -175,6 +175,71 @@ async function fetchPage(url: string, baseDomain: string): Promise<ScrapeResult>
 }
 
 /**
+ * Auxiliary probe to detect eCommerce platform from unblocked metadata endpoints (robots.txt, sitemaps)
+ * even when primary HTML pages are challenge-protected by Cloudflare/WAF.
+ */
+async function probePlatformMetadata(cleanBase: string): Promise<string> {
+  const probePaths = [
+    '/robots.txt',
+    '/sitemap_index.xml',
+    '/sitemap.xml',
+    '/product-sitemap.xml',
+  ];
+
+  for (const path of probePaths) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 7000);
+      const res = await fetch(`${cleanBase}${path}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'Accept': 'text/plain,text/xml,application/xml,text/html,*/*',
+        },
+        signal: controller.signal as any,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) continue;
+      const content = await res.text();
+
+      // Check WooCommerce signals
+      if (
+        /add-to-cart=/i.test(content) ||
+        /woolentor/i.test(content) ||
+        /product_cat/i.test(content) ||
+        /product_brand/i.test(content) ||
+        /wp-content\/plugins\/woocommerce/i.test(content) ||
+        /wp-admin\/admin-ajax\.php/i.test(content) ||
+        (/product-sitemap\.xml/i.test(content) && /wp-content/i.test(content))
+      ) {
+        return 'WooCommerce';
+      }
+
+      // Check Shopify signals
+      if (
+        /cdn\.shopify\.com/i.test(content) ||
+        /myshopify\.com/i.test(content) ||
+        /Disallow: \/checkouts\//i.test(content) ||
+        /Disallow: \/orders\//i.test(content) ||
+        /Disallow: \/carts\//i.test(content)
+      ) {
+        return 'Shopify';
+      }
+
+      // Check BigCommerce
+      if (/cart\.php/i.test(content) && /checkout\.php/i.test(content) && /finishorder\.php/i.test(content)) {
+        return 'BigCommerce';
+      }
+
+      // Check Magento
+      if (/catalogsearch/i.test(content) && /catalog\/product_compare/i.test(content)) {
+        return 'Magento';
+      }
+    } catch (e) {}
+  }
+  return 'No';
+}
+
+/**
  * Scrapes the lead's website across homepage and all key subpages (branches, stores, locations, shipping, delivery, contact).
  */
 async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; detectedPlatform: string; discoveredLinks: string[] }> {
@@ -252,6 +317,14 @@ async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; detect
       }
 
       aggregatedText += `\n--- PAGE: ${path || 'HOMEPAGE'} ---\n` + pageResult.text.substring(0, 15000);
+    }
+  }
+
+  // If standard HTML scrape didn't detect a platform (or was blocked by WAF/Cloudflare), probe robots.txt and sitemaps
+  if (finalPlatform === 'No') {
+    const probed = await probePlatformMetadata(cleanBase);
+    if (probed !== 'No') {
+      finalPlatform = probed;
     }
   }
 
