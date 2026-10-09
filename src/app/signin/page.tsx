@@ -34,12 +34,6 @@ function SignInContent() {
   const [resetEmail, setResetEmail] = useState('');
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
-  
-  // Email Verification State
-  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
-  const [verificationEmail, setVerificationEmail] = useState('');
-  const [isSendingVerification, setIsSendingVerification] = useState(false);
-  const [verificationCooldown, setVerificationCooldown] = useState(0);
 
   // 2FA Verification State
   const [is2FAModalOpen, setIs2FAModalOpen] = useState(false);
@@ -73,10 +67,10 @@ function SignInContent() {
   const { toast } = useToast();
   
   useEffect(() => {
-    if (!authLoading && user && user.emailVerified && is2FAVerified && !is2FAModalOpen && !isVerificationModalOpen) {
+    if (!authLoading && user && user.emailVerified && is2FAVerified && !is2FAModalOpen) {
       router.replace('/');
     }
-  }, [user, is2FAVerified, authLoading, is2FAModalOpen, isVerificationModalOpen, router]);
+  }, [user, is2FAVerified, authLoading, is2FAModalOpen, router]);
 
   // If user is already authenticated in Firebase Auth session but requires 2FA and not yet verified
   useEffect(() => {
@@ -114,15 +108,6 @@ function SignInContent() {
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
-  // Countdown timer for Email Verification resend
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (verificationCooldown > 0) {
-      timer = setTimeout(() => setVerificationCooldown(verificationCooldown - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [verificationCooldown]);
-
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -130,13 +115,8 @@ function SignInContent() {
 
       // Check for Email Verification Requirement
       if (result && result.requiresEmailVerification) {
-        setVerificationEmail(result.email || email);
-        setIsVerificationModalOpen(true);
-        setVerificationCooldown(30);
-        toast({
-          title: "Email Verification Required",
-          description: `A branded verification link has been sent to ${result.email || email}.`,
-        });
+        const targetEmail = result.email || email;
+        router.push(`/verify-email/pending?email=${encodeURIComponent(targetEmail)}`);
         return;
       }
 
@@ -184,29 +164,6 @@ function SignInContent() {
         title: "Sign in Failed",
         description: errorMessage,
       });
-    }
-  };
-
-  const handleResendVerification = async () => {
-    const targetEmail = verificationEmail || email;
-    if (!targetEmail) return;
-
-    setIsSendingVerification(true);
-    try {
-      await sendEmailVerificationLink(targetEmail);
-      setVerificationCooldown(30);
-      toast({
-        title: "Verification Email Sent",
-        description: `A fresh verification link was dispatched to ${targetEmail}.`,
-      });
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Failed to Resend",
-        description: err.message || "Could not dispatch verification email.",
-      });
-    } finally {
-      setIsSendingVerification(false);
     }
   };
 
@@ -520,61 +477,6 @@ function SignInContent() {
         </Card>
       )}
     </div>
-
-    {/* Email Verification Pending Dialog */}
-    <Dialog open={isVerificationModalOpen} onOpenChange={setIsVerificationModalOpen}>
-        <DialogContent className="max-w-md">
-            <DialogHeader className="text-center items-center">
-                <div className="h-12 w-12 rounded-full bg-blue-100 text-[#095c7b] flex items-center justify-center mb-2">
-                    <Mail className="h-6 w-6" />
-                </div>
-                <DialogTitle className="text-lg font-bold">Email Verification Required</DialogTitle>
-                <DialogDescription className="text-xs text-center max-w-xs mx-auto">
-                    We've sent a branded verification link to <strong className="text-foreground">{verificationEmail}</strong>.
-                </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-3 py-2 text-xs text-muted-foreground">
-                <div className="bg-muted/50 p-3 rounded-lg border border-border space-y-1.5">
-                    <div className="flex items-center gap-1.5 font-semibold text-foreground text-xs">
-                        <ShieldAlert className="h-4 w-4 text-[#095c7b]" />
-                        Next Steps:
-                    </div>
-                    <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px]">
-                        <li>Open your inbox and click the verification button.</li>
-                        <li>Return here and sign in to complete Two-Factor Authentication.</li>
-                    </ol>
-                </div>
-            </div>
-
-            <DialogFooter className="flex-col sm:flex-row gap-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsVerificationModalOpen(false)}
-                  className="w-full sm:w-auto text-xs"
-                >
-                    Close
-                </Button>
-                <Button 
-                  onClick={handleResendVerification} 
-                  disabled={isSendingVerification || verificationCooldown > 0}
-                  className="w-full sm:w-auto bg-[#095c7b] hover:bg-[#07465e] text-white text-xs font-semibold"
-                >
-                    {isSendingVerification ? (
-                        <span className="flex items-center gap-1.5">
-                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                            Sending...
-                        </span>
-                    ) : verificationCooldown > 0 ? (
-                        `Resend in ${verificationCooldown}s`
-                    ) : (
-                        "Resend Verification Email"
-                    )}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
 
     {/* Password Reset Modal */}
     <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
