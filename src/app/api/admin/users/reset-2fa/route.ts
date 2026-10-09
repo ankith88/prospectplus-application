@@ -27,10 +27,12 @@ export async function POST(request: Request) {
     const challengeRef = db.collection('_two_factor_challenges').doc(uid);
     await challengeRef.delete();
 
-    // 2. Update user doc (clear verification timestamp, optionally disable requires2FA if requested)
+    // 2. Update user doc (clear verification timestamp, reset TOTP secret & confirmation)
     const userRef = db.collection('users').doc(uid);
     const updatePayload: Record<string, any> = {
       twoFactorVerifiedAt: null,
+      totpSecret: null,
+      totpConfirmed: false,
     };
     if (disable2FA) {
       updatePayload.requires2FA = false;
@@ -42,7 +44,7 @@ export async function POST(request: Request) {
       success: true,
       message: disable2FA 
         ? 'Two-Factor Authentication has been reset and disabled for this user.'
-        : 'Two-Factor Authentication challenge and active session have been reset for this user.',
+        : 'Two-Factor Authentication credentials, active sessions, and TOTP keys have been reset for this user.',
     });
   } catch (error: any) {
     console.error('[Reset 2FA Error]:', error);

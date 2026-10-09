@@ -26,7 +26,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import Link from 'next/link';
 import { FullScreenLoader, Loader } from '@/components/ui/loader';
-import { ShieldCheck, Smartphone, RefreshCw, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, Smartphone, KeyRound, RefreshCw, ArrowLeft, QrCode } from 'lucide-react';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
@@ -38,7 +38,10 @@ export default function SignInPage() {
   // 2FA Verification State
   const [is2FAModalOpen, setIs2FAModalOpen] = useState(false);
   const [mfaUid, setMfaUid] = useState<string | null>(null);
+  const [mfaMethod, setMfaMethod] = useState<'sms' | 'totp' | 'totp_setup_needed'>('sms');
   const [mfaMaskedMobile, setMfaMaskedMobile] = useState<string>('');
+  const [mfaSecret, setMfaSecret] = useState<string>('');
+  const [mfaQrDataUrl, setMfaQrDataUrl] = useState<string>('');
   const [mfaOtpCode, setMfaOtpCode] = useState('');
   const [isVerifying2FA, setIsVerifying2FA] = useState(false);
   const [isResending2FA, setIsResending2FA] = useState(false);
@@ -78,14 +81,25 @@ export default function SignInPage() {
       const result: any = await signIn(email, password);
       if (result && result.requires2FA) {
         setMfaUid(result.uid);
-        setMfaMaskedMobile(result.maskedMobile || 'your mobile number');
+        setMfaMethod((result.method as any) || 'sms');
+        setMfaMaskedMobile(result.maskedMobile || '');
+        setMfaSecret(result.secret || '');
+        setMfaQrDataUrl(result.qrDataUrl || '');
         setMfaOtpCode('');
         setIs2FAModalOpen(true);
         setResendCooldown(30);
-        toast({
-          title: "2FA Code Sent",
-          description: `A 6-digit verification code was sent to ${result.maskedMobile || 'your registered mobile'}.`,
-        });
+
+        if (result.method === 'sms') {
+          toast({
+            title: "2FA SMS Code Sent",
+            description: `A 6-digit code was sent to ${result.maskedMobile || 'your mobile'}.`,
+          });
+        } else if (result.method === 'totp_setup_needed') {
+          toast({
+            title: "Google Authenticator Setup",
+            description: "Scan the QR code to connect your authenticator app.",
+          });
+        }
         return;
       }
       // Standard redirect handled by useEffect
@@ -124,7 +138,11 @@ export default function SignInPage() {
 
     setIsVerifying2FA(true);
     try {
-      await verify2FACode(mfaUid, mfaOtpCode.trim());
+      await verify2FACode(
+        mfaUid, 
+        mfaOtpCode.trim(), 
+        mfaMethod === 'totp_setup_needed' ? mfaSecret : undefined
+      );
       toast({
         title: "Verification Successful",
         description: "Welcome to ProspectPlus!",
@@ -148,10 +166,12 @@ export default function SignInPage() {
     try {
       const res = await resend2FACode(mfaUid);
       setResendCooldown(30);
-      toast({
-        title: "Code Resent",
-        description: `A new 6-digit code has been sent to ${res.maskedMobile || mfaMaskedMobile}.`,
-      });
+      if (res.method === 'sms') {
+        toast({
+          title: "Code Resent",
+          description: `A new 6-digit code has been sent to ${res.maskedMobile || mfaMaskedMobile}.`,
+        });
+      }
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -167,6 +187,8 @@ export default function SignInPage() {
     setIs2FAModalOpen(false);
     setMfaUid(null);
     setMfaOtpCode('');
+    setMfaSecret('');
+    setMfaQrDataUrl('');
     await signOut();
   };
 
@@ -265,18 +287,50 @@ export default function SignInPage() {
     <Dialog open={is2FAModalOpen} onOpenChange={(open) => !open && handleCancel2FA()}>
         <DialogContent className="sm:max-w-md">
             <DialogHeader className="text-center sm:text-center items-center">
-                <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-950 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-2">
-                    <ShieldCheck className="h-6 w-6" />
+                <div className={`h-12 w-12 rounded-full flex items-center justify-center mb-2 ${
+                  mfaMethod === 'sms' 
+                    ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400' 
+                    : 'bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400'
+                }`}>
+                    {mfaMethod === 'sms' ? <Smartphone className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
                 </div>
-                <DialogTitle className="text-xl">Two-Factor Authentication</DialogTitle>
+                <DialogTitle className="text-xl">
+                  {mfaMethod === 'totp_setup_needed' 
+                    ? 'Set Up Google Authenticator' 
+                    : mfaMethod === 'totp' 
+                    ? 'Google Authenticator 2FA' 
+                    : 'Two-Factor SMS Verification'}
+                </DialogTitle>
                 <DialogDescription className="text-center text-sm pt-1">
-                    Enter the 6-digit verification code sent via SMS to <span className="font-semibold text-foreground">{mfaMaskedMobile}</span>.
+                  {mfaMethod === 'totp_setup_needed' ? (
+                    'Scan the QR code below using Google Authenticator, Microsoft Authenticator, or 1Password.'
+                  ) : mfaMethod === 'totp' ? (
+                    'Enter the rotating 6-digit code currently displayed in your Google Authenticator app.'
+                  ) : (
+                    <>Enter the 6-digit verification code sent via SMS to <span className="font-semibold text-foreground">{mfaMaskedMobile}</span>.</>
+                  )}
                 </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleVerify2FASubmit} className="space-y-5 py-3">
+            {/* QR Code Setup View */}
+            {mfaMethod === 'totp_setup_needed' && mfaQrDataUrl && (
+              <div className="flex flex-col items-center justify-center p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border text-center space-y-2">
+                <img 
+                  src={mfaQrDataUrl} 
+                  alt="Google Authenticator QR Code" 
+                  className="h-44 w-44 rounded-md border bg-white p-2 shadow-sm"
+                />
+                <div className="text-[11px] text-muted-foreground font-mono select-all break-all px-2">
+                  Key: <strong className="text-foreground">{mfaSecret}</strong>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleVerify2FASubmit} className="space-y-4 py-2">
                 <div className="space-y-2 text-center">
-                    <Label htmlFor="mfa-code" className="sr-only">6-Digit Verification Code</Label>
+                    <Label htmlFor="mfa-code" className="text-xs text-muted-foreground">
+                      {mfaMethod === 'totp_setup_needed' ? 'Enter the 6-digit code from your app to confirm setup:' : '6-Digit Verification Code'}
+                    </Label>
                     <Input
                         id="mfa-code"
                         type="text"
@@ -287,12 +341,9 @@ export default function SignInPage() {
                         autoFocus
                         value={mfaOtpCode}
                         onChange={(e) => setMfaOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        className="text-center text-2xl font-mono tracking-widest h-12 text-blue-600 dark:text-blue-400 font-bold"
+                        className="text-center text-2xl font-mono tracking-widest h-12 text-primary font-bold"
                         disabled={isVerifying2FA}
                     />
-                    <p className="text-xs text-muted-foreground pt-1">
-                        Code expires in 5 minutes.
-                    </p>
                 </div>
 
                 <div className="flex items-center justify-between text-xs px-1">
@@ -307,22 +358,24 @@ export default function SignInPage() {
                         <ArrowLeft className="h-3.5 w-3.5" /> Back to Sign In
                     </Button>
 
-                    <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        className="h-auto p-0 text-xs text-primary"
-                        onClick={handleResend2FA}
-                        disabled={resendCooldown > 0 || isResending2FA || isVerifying2FA}
-                    >
-                        {isResending2FA ? (
-                            <span className="flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin" /> Sending...</span>
-                        ) : resendCooldown > 0 ? (
-                            `Resend SMS in ${resendCooldown}s`
-                        ) : (
-                            "Resend SMS Code"
-                        )}
-                    </Button>
+                    {mfaMethod === 'sms' && (
+                      <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-xs text-primary"
+                          onClick={handleResend2FA}
+                          disabled={resendCooldown > 0 || isResending2FA || isVerifying2FA}
+                      >
+                          {isResending2FA ? (
+                              <span className="flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin" /> Sending...</span>
+                          ) : resendCooldown > 0 ? (
+                              `Resend SMS in ${resendCooldown}s`
+                          ) : (
+                              "Resend SMS Code"
+                          )}
+                      </Button>
+                    )}
                 </div>
 
                 <DialogFooter className="sm:justify-stretch">
@@ -332,7 +385,7 @@ export default function SignInPage() {
                         disabled={isVerifying2FA || mfaOtpCode.length !== 6}
                     >
                         {isVerifying2FA ? <Loader className="mr-2 h-4 w-4" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                        Verify & Continue
+                        {mfaMethod === 'totp_setup_needed' ? 'Confirm & Sign In' : 'Verify & Continue'}
                     </Button>
                 </DialogFooter>
             </form>

@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
 import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely, unlinkUserFromFranchiseeCompletely } from '@/services/firebase';
-import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store } from 'lucide-react';
+import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store, Smartphone } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { CreateUserDialog } from './create-user-dialog';
@@ -86,7 +86,7 @@ export function UserManagementTable() {
   const [newAccountName, setNewAccountName] = useState('');
   const [newPhoneNumber, setNewPhoneNumber] = useState('');
   const [newMobileNumber, setNewMobileNumber] = useState('');
-  const [newRequires2FA, setNewRequires2FA] = useState(false);
+  const [newTwoFactorOption, setNewTwoFactorOption] = useState<'disabled' | 'sms' | 'totp'>('disabled');
   const [isResetting2FA, setIsResetting2FA] = useState<string | null>(null);
   const [newAircallPhoneNumber, setNewAircallPhoneNumber] = useState('');
   const [newDialpadPhoneNumber, setNewDialpadPhoneNumber] = useState('');
@@ -203,7 +203,11 @@ export function UserManagementTable() {
       setNewFranchiseeId(userToEdit.franchiseeId || userToEdit.franchiseeInternalId || linkedFran?.franchiseeId || '');
       setNewPhoneNumber(userToEdit.phoneNumber || '');
       setNewMobileNumber(userToEdit.mobileNumber || userToEdit.phoneNumber || '');
-      setNewRequires2FA(Boolean(userToEdit.requires2FA));
+      if (!userToEdit.requires2FA) {
+        setNewTwoFactorOption('disabled');
+      } else {
+        setNewTwoFactorOption(userToEdit.twoFactorMethod === 'totp' ? 'totp' : 'sms');
+      }
       setNewAircallPhoneNumber(userToEdit.aircallPhoneNumber || '');
       setNewDialpadPhoneNumber(userToEdit.dialpadPhoneNumber || '');
       setNewDialpadUserId(userToEdit.dialpadUserId || '');
@@ -239,9 +243,9 @@ export function UserManagementTable() {
         title: '2FA Reset Successful',
         description: data.message || `2FA state has been reset for ${targetUser.displayName || targetUser.email}.`,
       });
-      setUsers(prev => prev.map(u => u.uid === targetUser.uid ? { ...u, requires2FA: disable ? false : u.requires2FA, twoFactorVerifiedAt: null } : u));
+      setUsers(prev => prev.map(u => u.uid === targetUser.uid ? { ...u, requires2FA: disable ? false : u.requires2FA, totpConfirmed: false, totpSecret: undefined, twoFactorVerifiedAt: null } : u));
       if (userToEdit && userToEdit.uid === targetUser.uid) {
-        if (disable) setNewRequires2FA(false);
+        if (disable) setNewTwoFactorOption('disabled');
       }
     } catch (err: any) {
       toast({
@@ -462,7 +466,8 @@ export function UserManagementTable() {
         defaultRole: effectiveDefaultRole as UserRole, 
         phoneNumber: newMobileNumber, 
         mobileNumber: newMobileNumber, 
-        requires2FA: newRequires2FA,
+        requires2FA: newTwoFactorOption !== 'disabled',
+        twoFactorMethod: newTwoFactorOption === 'totp' ? 'totp' : 'sms',
         aircallPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newAircallPhoneNumber,
         dialpadPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newDialpadPhoneNumber,
         dialpadUserId: effectiveAssignedRoles.includes('Franchisee') ? '' : newDialpadUserId,
@@ -909,12 +914,16 @@ export function UserManagementTable() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {user.requires2FA ? (
-                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 whitespace-nowrap text-[11px] font-medium">
-                          <ShieldCheck className="mr-1 h-3 w-3 text-blue-600 dark:text-blue-400" /> Required
+                      {!user.requires2FA ? (
+                        <span className="text-muted-foreground text-xs font-normal">Off</span>
+                      ) : user.twoFactorMethod === 'totp' ? (
+                        <Badge className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 whitespace-nowrap text-[11px] font-medium">
+                          <Key className="mr-1 h-3 w-3 text-purple-600 dark:text-purple-400" /> Google Auth
                         </Badge>
                       ) : (
-                        <span className="text-muted-foreground text-xs font-normal">Disabled</span>
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 whitespace-nowrap text-[11px] font-medium">
+                          <Smartphone className="mr-1 h-3 w-3 text-blue-600 dark:text-blue-400" /> SMS 2FA
+                        </Badge>
                       )}
                     </TableCell>
                     <TableCell>
@@ -1450,36 +1459,60 @@ export function UserManagementTable() {
 
                  {/* 2FA Security Section */}
                  <div className="rounded-lg border p-4 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
-                   <div className="flex items-center justify-between">
-                     <div className="space-y-0.5 pr-2">
-                       <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                         <ShieldCheck className="h-4 w-4 text-[#095c7b]" />
-                         Require 2FA via SMS
-                       </Label>
-                       <p className="text-xs text-muted-foreground">
-                         Requires this user to enter a 6-digit SMS code sent to their mobile on every login.
-                       </p>
-                     </div>
-                     <Checkbox
-                       id="requires-2fa-toggle"
-                       checked={newRequires2FA}
-                       onCheckedChange={(checked) => setNewRequires2FA(Boolean(checked))}
-                       disabled={!isSuperAdmin}
-                     />
+                   <div className="space-y-1">
+                     <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                       <ShieldCheck className="h-4 w-4 text-[#095c7b]" />
+                       Two-Factor Authentication (2FA)
+                     </Label>
+                     <p className="text-xs text-muted-foreground">
+                       Choose the required 2FA verification method for this user on login.
+                     </p>
                    </div>
+
+                   <Select 
+                     value={newTwoFactorOption} 
+                     onValueChange={(val: 'disabled' | 'sms' | 'totp') => setNewTwoFactorOption(val)}
+                     disabled={!isSuperAdmin}
+                   >
+                     <SelectTrigger className="bg-background">
+                       <SelectValue placeholder="Select 2FA Method" />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="disabled">Disabled (No 2FA Required)</SelectItem>
+                       <SelectItem value="sms">SMS Verification (MailPlus SMS Gateway)</SelectItem>
+                       <SelectItem value="totp">Google Authenticator (TOTP App Code)</SelectItem>
+                     </SelectContent>
+                   </Select>
+
                    {!isSuperAdmin && (
                      <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                       * Only Super Administrators can modify 2FA requirements.
+                       * Only Super Administrators can configure 2FA requirements.
                      </p>
                    )}
-                   {newRequires2FA && !newMobileNumber && (
+
+                   {newTwoFactorOption === 'sms' && !newMobileNumber && (
                      <p className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
                        <AlertTriangle className="h-3.5 w-3.5" /> A valid Mobile Number above is required for SMS code delivery.
                      </p>
                    )}
+
+                   {newTwoFactorOption === 'totp' && (
+                     <div className="text-xs space-y-1 bg-purple-50/60 dark:bg-purple-950/40 p-2.5 rounded border border-purple-200/60 dark:border-purple-800/40">
+                       <div className="font-medium text-purple-900 dark:text-purple-300 flex items-center gap-1">
+                         <Key className="h-3.5 w-3.5 text-purple-600" />
+                         {userToEdit?.totpConfirmed ? 'Google Authenticator Configured' : 'Setup Required on Next Login'}
+                       </div>
+                       <p className="text-[11px] text-purple-800/80 dark:text-purple-300/80">
+                         {userToEdit?.totpConfirmed 
+                           ? 'User verifies rotating 6-digit codes generated in their Google Authenticator app.'
+                           : 'User will be prompted with a QR code on their next login to connect their app.'}
+                       </p>
+                     </div>
+                   )}
+
                    {userToEdit?.requires2FA && isSuperAdmin && (
                      <div className="pt-2 border-t flex items-center justify-between">
-                       <span className="text-xs text-muted-foreground">Need to reset 2FA challenge / state?</span>
+                       <span className="text-xs text-muted-foreground">Having login or verification issues?</span>
                        <Button
                          type="button"
                          variant="outline"

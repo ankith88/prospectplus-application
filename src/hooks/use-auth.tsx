@@ -119,8 +119,8 @@ interface AuthContextType {
     updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
     isSuperAdmin: boolean;
     is2FAVerified: boolean;
-    verify2FACode: (uid: string, code: string) => Promise<{ success: boolean }>;
-    resend2FACode: (uid: string) => Promise<{ success: boolean; maskedMobile?: string; message?: string }>;
+    verify2FACode: (uid: string, code: string, secret?: string) => Promise<{ success: boolean }>;
+    resend2FACode: (uid: string) => Promise<{ success: boolean; maskedMobile?: string; method?: string; secret?: string; qrDataUrl?: string; message?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -309,23 +309,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         const isSessionVerified = typeof window !== 'undefined' ? sessionStorage.getItem(`2fa_verified_${loggedInUser.uid}`) === 'true' : false;
                         if (!isSessionVerified) {
                             setIs2FAVerified(false);
-                            // Trigger 2FA SMS send
+                            // Trigger 2FA challenge / dispatch
                             const sendRes = await fetch('/api/auth/2fa/send', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ uid: loggedInUser.uid }),
+                                body: JSON.stringify({ uid: loggedInUser.uid, email: loggedInUser.email }),
                             });
                             const sendData = await sendRes.json();
                             if (!sendData.success) {
                                 throw {
                                     code: sendData.code || 'auth/2fa-send-failed',
-                                    message: sendData.message || 'Failed to dispatch verification SMS.',
+                                    message: sendData.message || 'Failed to dispatch verification code.',
                                 };
                             }
                             return {
                                 requires2FA: true,
                                 uid: loggedInUser.uid,
+                                method: sendData.method || profileData.twoFactorMethod || 'sms',
                                 maskedMobile: sendData.maskedMobile,
+                                secret: sendData.secret,
+                                qrDataUrl: sendData.qrDataUrl,
                                 userCredential,
                             };
                         }
@@ -353,11 +356,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [auth]);
 
-    const verify2FACode = useCallback(async (uid: string, code: string) => {
+    const verify2FACode = useCallback(async (uid: string, code: string, secret?: string) => {
         const res = await fetch('/api/auth/2fa/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uid, code }),
+            body: JSON.stringify({ uid, code, secret }),
         });
         const data = await res.json();
         if (!data.success) {

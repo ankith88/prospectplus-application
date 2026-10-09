@@ -486,6 +486,9 @@ export interface UserProfile {
   netsuiteId?: string
   disabled?: boolean
   requires2FA?: boolean
+  twoFactorMethod?: 'sms' | 'totp'
+  totpSecret?: string
+  totpConfirmed?: boolean
   twoFactorVerifiedAt?: any
   linkedSalesRep?: string
   linkedBDR?: string

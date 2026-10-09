@@ -28,6 +28,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '../ui/loader';
+import { ShieldCheck, AlertTriangle, Key } from 'lucide-react';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { generateWelcomeEmailHtml } from '@/lib/welcome-email-template';
 import { getAllUsers, getAllFranchisees } from '@/services/firebase';
@@ -63,7 +64,7 @@ const formSchema = z.object({
   isOwnershipTransfer: z.boolean().optional().default(false),
   oldOwnerPersonalEmail: z.string().optional(),
   sendWelcomeEmail: z.boolean().default(true),
-  requires2FA: z.boolean().default(false),
+  twoFactorOption: z.enum(['disabled', 'sms', 'totp']).default('disabled'),
 });
 
 interface CreateUserDialogProps {
@@ -87,7 +88,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       role: 'user',
       phoneNumber: '',
       mobileNumber: '',
-      requires2FA: false,
+      twoFactorOption: 'disabled',
       aircallPhoneNumber: '',
       aircallUserId: '',
       dialpadPhoneNumber: '',
@@ -171,6 +172,8 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
         const createdId = await signUpAndCreateProfile({
           ...values,
           role: effectiveRole,
+          requires2FA: values.twoFactorOption !== 'disabled',
+          twoFactorMethod: values.twoFactorOption === 'totp' ? 'totp' : 'sms',
           addressDetails: {
             street: values.street || '',
             suburb: values.suburb || '',
@@ -531,22 +534,60 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                   </div>
                 </FormItem>
             )}/>
-            <FormField control={form.control} name="requires2FA" render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm bg-slate-50/50 dark:bg-slate-900/50">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      disabled={!SUPER_ADMIN_UIDS.includes(userProfile?.uid || '')}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel className="font-semibold text-foreground">Require 2FA via SMS</FormLabel>
-                    <FormDescription>
-                      Require this user to verify a 6-digit SMS code on login (defaults to Off). Make sure a mobile number is set.
+            <FormField control={form.control} name="twoFactorOption" render={({ field }) => (
+                <div className="rounded-lg border p-4 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
+                  <div className="space-y-1">
+                    <FormLabel className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                      <ShieldCheck className="h-4 w-4 text-[#095c7b]" />
+                      Two-Factor Authentication (2FA)
+                    </FormLabel>
+                    <FormDescription className="text-xs">
+                      Choose the required 2FA verification method for this user on login (defaults to Disabled).
                     </FormDescription>
                   </div>
-                </FormItem>
+
+                  <Select 
+                    value={field.value} 
+                    onValueChange={field.onChange}
+                    disabled={!SUPER_ADMIN_UIDS.includes(userProfile?.uid || '')}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Select 2FA Method" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="disabled">Disabled (No 2FA Required)</SelectItem>
+                      <SelectItem value="sms">SMS Verification (MailPlus SMS Gateway)</SelectItem>
+                      <SelectItem value="totp">Google Authenticator (TOTP App Code)</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {!SUPER_ADMIN_UIDS.includes(userProfile?.uid || '') && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      * Only Super Administrators can configure 2FA requirements.
+                    </p>
+                  )}
+
+                  {field.value === 'sms' && !form.watch('mobileNumber') && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Please enter a Mobile Number above for SMS code delivery.
+                    </p>
+                  )}
+
+                  {field.value === 'totp' && (
+                    <div className="text-xs space-y-1 bg-purple-50/60 dark:bg-purple-950/40 p-2.5 rounded border border-purple-200/60 dark:border-purple-800/40">
+                      <div className="font-medium text-purple-900 dark:text-purple-300 flex items-center gap-1">
+                        <Key className="h-3.5 w-3.5 text-purple-600" />
+                        Setup on First Login
+                      </div>
+                      <p className="text-[11px] text-purple-800/80 dark:text-purple-300/80">
+                        The user will be prompted with a QR code on their first sign-in to connect their Google Authenticator app.
+                      </p>
+                    </div>
+                  )}
+                  <FormMessage />
+                </div>
             )}/>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
