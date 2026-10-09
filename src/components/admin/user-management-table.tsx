@@ -110,6 +110,7 @@ export function UserManagementTable() {
 
   // Search, Tab and Sort State
   const [activeTab, setActiveTab] = useState<'active' | 'disabled' | 'all'>('active');
+  const [selectedRole, setSelectedRole] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof UserProfile; direction: 'ascending' | 'descending' } | null>({ key: 'displayName', direction: 'ascending' });
 
@@ -640,14 +641,88 @@ export function UserManagementTable() {
     return { active, disabled, all };
   }, [users]);
 
-  // Process users for display (Search, Tab and Sort)
-  const processedUsers = useMemo(() => {
-    let result = [...users];
-
+  // Filter users by active status tab
+  const statusFilteredUsers = useMemo(() => {
     if (activeTab === 'active') {
-      result = result.filter(u => !u.disabled);
+      return users.filter(u => !u.disabled);
     } else if (activeTab === 'disabled') {
-      result = result.filter(u => !!u.disabled);
+      return users.filter(u => !!u.disabled);
+    }
+    return users;
+  }, [users, activeTab]);
+
+  // Extract all available roles for the current status filter
+  const availableRoles = useMemo(() => {
+    const roleMap = new Map<string, number>();
+    statusFilteredUsers.forEach(u => {
+      const primaryRole = u.defaultRole || u.role || 'user';
+      roleMap.set(primaryRole, (roleMap.get(primaryRole) || 0) + 1);
+
+      if (Array.isArray(u.assignedRoles)) {
+        u.assignedRoles.forEach(r => {
+          if (r && r !== primaryRole) {
+            roleMap.set(r, (roleMap.get(r) || 0) + 1);
+          }
+        });
+      }
+    });
+
+    const standardRoleOrder = [
+      'Franchisee',
+      'user',
+      'Field Sales',
+      'Field Sales Admin',
+      'Lead Gen',
+      'Lead Gen Admin',
+      'Outbound Admin',
+      'admin',
+      'Sales Manager',
+      'Customer Success',
+      'Customer Service',
+      'Account Managers',
+      'Account Manager',
+      'Marketing Manager',
+      'Operations',
+      'Finance',
+      'Finance Manager',
+      'Dashback',
+      'Data Admin',
+      'super user',
+    ];
+
+    const roles = Array.from(roleMap.keys()).filter(r => (roleMap.get(r) || 0) > 0 || r === selectedRole);
+
+    return roles.sort((a, b) => {
+      const idxA = standardRoleOrder.indexOf(a);
+      const idxB = standardRoleOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [statusFilteredUsers, selectedRole]);
+
+  // Role counts under current status filter
+  const roleCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    availableRoles.forEach(role => {
+      counts[role] = statusFilteredUsers.filter(u => {
+        const primaryRole = u.defaultRole || u.role || 'user';
+        return primaryRole === role || (Array.isArray(u.assignedRoles) && u.assignedRoles.includes(role as UserRole));
+      }).length;
+    });
+    return counts;
+  }, [availableRoles, statusFilteredUsers]);
+
+  // Process users for display (Status, Role, Search and Sort)
+  const processedUsers = useMemo(() => {
+    let result = [...statusFilteredUsers];
+
+    if (selectedRole !== 'all') {
+      result = result.filter(u => {
+        const primaryRole = u.defaultRole || u.role || 'user';
+        return primaryRole === selectedRole || (Array.isArray(u.assignedRoles) && u.assignedRoles.includes(selectedRole as UserRole));
+      });
     }
 
     if (searchTerm) {
@@ -672,7 +747,7 @@ export function UserManagementTable() {
     }
 
     return result;
-  }, [users, activeTab, searchTerm, sortConfig]);
+  }, [statusFilteredUsers, selectedRole, searchTerm, sortConfig]);
 
   const activeBDRs = useMemo(() => {
     return users.filter(u => u.assignedRoles?.includes('user') && !u.disabled);
@@ -794,7 +869,7 @@ export function UserManagementTable() {
             <div className="relative flex-1 min-w-[200px] max-w-xs">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name or email..."
+                placeholder="Search by name, email, or role..."
                 className="pl-8"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -819,6 +894,45 @@ export function UserManagementTable() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Role Sub-Tabs */}
+        <div className="w-full overflow-x-auto pb-1">
+          <Tabs
+            value={selectedRole}
+            onValueChange={(val) => {
+              setSelectedRole(val);
+              setSelectedUserIds([]);
+            }}
+            className="w-full"
+          >
+            <TabsList className="h-auto flex-wrap justify-start gap-1 p-1 bg-muted/40 border border-border/50">
+              <TabsTrigger 
+                value="all" 
+                className="gap-1.5 text-xs py-1 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                All Roles
+                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] font-normal">
+                  {statusFilteredUsers.length}
+                </Badge>
+              </TabsTrigger>
+              {availableRoles.map((role) => {
+                const count = roleCounts[role] || 0;
+                return (
+                  <TabsTrigger
+                    key={role}
+                    value={role}
+                    className="gap-1.5 text-xs py-1 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  >
+                    {role}
+                    <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] font-normal">
+                      {count}
+                    </Badge>
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </Tabs>
         </div>
 
         <div className="rounded-md border">
@@ -1010,8 +1124,12 @@ export function UserManagementTable() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                    {activeTab === 'disabled' 
+                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                    {searchTerm
+                      ? 'No users match your search criteria.'
+                      : selectedRole !== 'all'
+                      ? `No ${activeTab === 'disabled' ? 'disabled ' : activeTab === 'active' ? 'active ' : ''}users found with role "${selectedRole}".`
+                      : activeTab === 'disabled' 
                       ? 'No disabled users found.' 
                       : activeTab === 'active' 
                       ? 'No active users found.' 
