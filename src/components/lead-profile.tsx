@@ -81,6 +81,8 @@ import {
   Zap,
   Bell,
   Megaphone,
+  Store,
+  ShoppingBag,
 } from 'lucide-react'
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
@@ -3696,6 +3698,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         shipperEvidence: data.shipperEvidence,
         lodgementEvidence: data.lodgementEvidence,
         shopifyDetected: data.shopifyDetected,
+        ecommercePlatform: data.ecommercePlatform || data.shopifyDetected,
         xeroDetected: data.xeroDetected,
         apRelationship: data.apRelationship,
         prospectSummary: data.prospectSummary,
@@ -3707,6 +3710,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         hasMultipleBranches: data.hasMultipleBranches,
         totalBranchCount: data.totalBranchCount,
         branchLocations: data.branchLocations,
+        hasSeparateEcommerceEntity: data.hasSeparateEcommerceEntity,
+        linkedEcommerceEntities: data.linkedEcommerceEntities,
+        mainEntityRole: data.mainEntityRole,
+        fulfilmentModel: data.fulfilmentModel,
         isAiEnriched: true,
         enrichedAt: new Date().toISOString(),
       }));
@@ -7259,7 +7266,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 {(() => {
                   const lodgementEvidence = lead.lodgementEvidence || lead.discoveryData?.lodgementEvidence || (lead as any).lodgement_evidence || (lead as any)['Lodgement Evidence'];
                   const shipperEvidence = lead.shipperEvidence || lead.discoveryData?.shipperEvidence || (lead as any).shipper_evidence || (lead as any)['Shipper Evidence'];
-                  const shopifyDetected = lead.shopifyDetected || lead.discoveryData?.shopifyDetected || (lead as any).shopify_detected || (lead as any).shopify || (lead as any)['Shopify Detected'];
+                  const shopifyDetected = lead.shopifyDetected || lead.discoveryData?.shopifyDetected || lead.ecommercePlatform || lead.discoveryData?.ecommercePlatform || (lead as any).shopify_detected || (lead as any).shopify || (lead as any)['Shopify Detected'];
+                  const ecommercePlatform = lead.ecommercePlatform || lead.discoveryData?.ecommercePlatform || shopifyDetected;
                   const prospectSummary = lead.prospectSummary || lead.discoveryData?.prospectSummary || (lead as any).prospect_summary || (lead as any)['Prospect Summary'] || (lead as any).companyDescription;
                   const xeroDetected = lead.xeroDetected || lead.discoveryData?.xeroDetected || (lead as any).xero_detected || (lead as any).xero || (lead as any)['Xero Detected'];
                   const apRelationship = lead.apRelationship || lead.discoveryData?.apRelationship || (lead as any).ap_relationship || (lead as any)['AP Relationship'] || (lead as any)['AP Relationship '] || lead.discoveryData?.postOfficeRelationship;
@@ -7271,11 +7279,50 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   const hasMultipleBranches = lead.hasMultipleBranches !== undefined ? lead.hasMultipleBranches : lead.discoveryData?.hasMultipleBranches;
                   const totalBranchCount = lead.totalBranchCount || lead.discoveryData?.totalBranchCount;
                   const branchLocations = lead.branchLocations || lead.discoveryData?.branchLocations || [];
+                  const hasSeparateEcommerceEntity = lead.hasSeparateEcommerceEntity !== undefined ? lead.hasSeparateEcommerceEntity : lead.discoveryData?.hasSeparateEcommerceEntity;
+                  const linkedEcommerceEntities = lead.linkedEcommerceEntities || lead.discoveryData?.linkedEcommerceEntities || [];
+                  const mainEntityRole = lead.mainEntityRole || lead.discoveryData?.mainEntityRole;
+                  const fulfilmentModel = lead.fulfilmentModel || lead.discoveryData?.fulfilmentModel;
+
+                  const getEcommerceBadgeInfo = (rawPlatform?: string) => {
+                    if (!rawPlatform || rawPlatform.trim() === '' || rawPlatform === 'Not Checked') {
+                      return { label: 'Not Checked', badge: 'Not Checked', className: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400' };
+                    }
+                    const norm = rawPlatform.toLowerCase().trim();
+                    if (norm === 'yes' || norm === 'shopify') {
+                      return { label: 'Shopify', badge: '✓ Shopify', className: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300' };
+                    }
+                    if (norm === 'woocommerce') {
+                      return { label: 'WooCommerce', badge: '✓ WooCommerce', className: 'bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300' };
+                    }
+                    if (norm === 'bigcommerce') {
+                      return { label: 'BigCommerce', badge: '✓ BigCommerce', className: 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300' };
+                    }
+                    if (norm === 'magento') {
+                      return { label: 'Magento', badge: '✓ Magento', className: 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300' };
+                    }
+                    if (norm === 'squarespace') {
+                      return { label: 'Squarespace', badge: '✓ Squarespace', className: 'bg-teal-50 text-teal-700 border-teal-300 dark:bg-teal-950/60 dark:text-teal-300' };
+                    }
+                    if (norm === 'wix') {
+                      return { label: 'Wix', badge: '✓ Wix', className: 'bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950/60 dark:text-sky-300' };
+                    }
+                    if (norm === 'custom' || norm.includes('custom')) {
+                      return { label: 'Custom Cart / Portal', badge: 'Custom eCommerce', className: 'bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950/60 dark:text-sky-300' };
+                    }
+                    if (norm === 'no' || norm === 'none' || norm === 'not detected') {
+                      return { label: 'Not Detected', badge: 'Not Detected', className: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400' };
+                    }
+                    return { label: rawPlatform, badge: rawPlatform, className: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400' };
+                  };
+
+                  const ecomBadgeInfo = getEcommerceBadgeInfo(ecommercePlatform);
 
                   const hasEnrichment = Boolean(
                     lodgementEvidence ||
                     shipperEvidence ||
                     shopifyDetected ||
+                    ecommercePlatform ||
                     prospectSummary ||
                     xeroDetected ||
                     apRelationship ||
@@ -7284,6 +7331,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     suggestedPersonalisation ||
                     hasParcelShipping !== undefined ||
                     hasMultipleBranches !== undefined ||
+                    hasSeparateEcommerceEntity !== undefined ||
+                    (linkedEcommerceEntities && linkedEcommerceEntities.length > 0) ||
                     (branchLocations && branchLocations.length > 0) ||
                     (similarSignedCustomers && similarSignedCustomers.length > 0)
                   );
@@ -7378,20 +7427,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                               <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
                                 <div>
-                                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Shopify Detected</p>
+                                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">eCommerce Platform</p>
                                   <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                                    {shopifyDetected || 'Not Checked'}
+                                    {ecomBadgeInfo.label}
                                   </p>
                                 </div>
                                 <Badge 
                                   variant="outline" 
-                                  className={cn("text-xs font-semibold px-2.5 py-1", 
-                                    shopifyDetected?.toLowerCase() === 'yes'
-                                      ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300"
-                                      : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400"
-                                  )}
+                                  className={cn("text-xs font-semibold px-2.5 py-1", ecomBadgeInfo.className)}
                                 >
-                                  {shopifyDetected?.toLowerCase() === 'yes' ? '✓ Shopify' : 'None'}
+                                  {ecomBadgeInfo.badge}
                                 </Badge>
                               </div>
 
@@ -7533,6 +7578,111 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                   </Badge>
                                 </div>
                               )
+                            )}
+
+                            {/* Linked eCommerce Sites, Sister Companies & Fulfilment Entities */}
+                            {(hasSeparateEcommerceEntity || (linkedEcommerceEntities && linkedEcommerceEntities.length > 0) || fulfilmentModel || mainEntityRole) && (
+                              <div className="p-4 bg-gradient-to-br from-amber-50/60 via-orange-50/30 to-slate-50 dark:from-slate-800/80 dark:to-slate-900 rounded-xl border border-amber-200/80 dark:border-amber-900/40 space-y-3">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 rounded-lg">
+                                      <Store className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300">
+                                        Linked eCommerce Sites, Sister Companies & Fulfilment Entities
+                                      </span>
+                                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                        {linkedEcommerceEntities.length > 0
+                                          ? `${linkedEcommerceEntities.length} distinct online storefront / sister brand / dispatch entities identified`
+                                          : 'Fulfilment and dispatch arrangement details'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    {hasSeparateEcommerceEntity && (
+                                      <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300 font-semibold text-xs px-2.5 py-0.5">
+                                        🌐 Separate Storefront / Sister Entity
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Operational Role vs Fulfilment Model Banner */}
+                                {(mainEntityRole || fulfilmentModel) && (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-white/90 dark:bg-slate-800/90 rounded-lg border border-amber-100 dark:border-slate-700 text-xs">
+                                    {mainEntityRole && (
+                                      <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Main Company Role</p>
+                                        <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">{mainEntityRole}</p>
+                                      </div>
+                                    )}
+                                    {fulfilmentModel && (
+                                      <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Fulfilment & Dispatch Arrangement</p>
+                                        <p className="font-semibold text-[#095c7b] dark:text-sky-400 mt-0.5">{fulfilmentModel}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Entity Cards */}
+                                {linkedEcommerceEntities && linkedEcommerceEntities.length > 0 && (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                                    {linkedEcommerceEntities.map((entity: any, idx: number) => (
+                                      <div key={idx} className="bg-white dark:bg-slate-800/90 p-3.5 rounded-xl border border-amber-200/70 dark:border-slate-700 shadow-2xs space-y-2 relative group hover:border-amber-400 transition-colors">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="min-w-0">
+                                            <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate flex items-center gap-1.5">
+                                              <ShoppingBag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                              <span className="truncate">{entity.entityName}</span>
+                                            </p>
+                                          </div>
+                                          {entity.relationshipType && (
+                                            <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 text-[10px] font-semibold shrink-0 px-2 py-0">
+                                              {entity.relationshipType}
+                                            </Badge>
+                                          )}
+                                        </div>
+
+                                        {entity.websiteUrl && (
+                                          <a
+                                            href={entity.websiteUrl.startsWith('http') ? entity.websiteUrl : `https://${entity.websiteUrl}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-[11px] text-sky-600 hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-300 flex items-center gap-1 truncate font-medium"
+                                          >
+                                            <ExternalLink className="w-3 h-3 shrink-0" />
+                                            <span className="truncate">{entity.websiteUrl.replace(/^https?:\/\//, '')}</span>
+                                          </a>
+                                        )}
+
+                                        {entity.dispatchRole && (
+                                          <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 p-2 rounded-md border border-slate-100 dark:border-slate-800">
+                                            <p className="font-semibold text-slate-700 dark:text-slate-200 text-[10px] uppercase tracking-wider mb-0.5">Product & Dispatch Role</p>
+                                            <p className="leading-snug">{entity.dispatchRole}</p>
+                                          </div>
+                                        )}
+
+                                        <div className="flex items-center justify-between gap-2 pt-1 text-[10px]">
+                                          {entity.isPrimaryShipper ? (
+                                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[9px] px-1.5 py-0 font-semibold">
+                                              📦 Primary Shipper
+                                            </Badge>
+                                          ) : (
+                                            <span className="text-slate-400">Linked Entity</span>
+                                          )}
+                                          {entity.notes && (
+                                            <span className="text-slate-500 italic truncate max-w-[140px]" title={entity.notes}>
+                                              {entity.notes}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             )}
 
                             {/* Similar Signed Customers (Social Proof) */}

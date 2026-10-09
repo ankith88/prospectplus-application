@@ -300,6 +300,7 @@ export interface DiscoveryData {
   lodgementEvidence?: string;
   shipperEvidence?: string;
   shopifyDetected?: string;
+  ecommercePlatform?: string;
   prospectSummary?: string;
   xeroDetected?: string;
   apRelationship?: string;
@@ -322,9 +323,22 @@ export interface DiscoveryData {
   hasMultipleBranches?: boolean;
   totalBranchCount?: number;
   branchLocations?: BranchLocation[];
+  hasSeparateEcommerceEntity?: boolean;
+  linkedEcommerceEntities?: LinkedEcommerceEntity[];
+  mainEntityRole?: string;
+  fulfilmentModel?: string;
   isAiEnriched?: boolean;
   enrichedAt?: string;
   enrichedBy?: string;
+}
+
+export interface LinkedEcommerceEntity {
+  entityName: string;
+  websiteUrl?: string;
+  relationshipType?: 'Sister Company' | 'Separate Storefront' | 'Parent Entity' | 'Subsidiary' | '3PL / Fulfilment Partner' | 'Other';
+  dispatchRole?: string;
+  isPrimaryShipper?: boolean;
+  notes?: string;
 }
 
 export interface BranchLocation {
@@ -796,6 +810,7 @@ export interface Lead {
   lodgementEvidence?: string;
   shipperEvidence?: string;
   shopifyDetected?: string;
+  ecommercePlatform?: string;
   prospectSummary?: string;
   xeroDetected?: string;
   apRelationship?: string;
@@ -818,6 +833,10 @@ export interface Lead {
   hasMultipleBranches?: boolean;
   totalBranchCount?: number;
   branchLocations?: BranchLocation[];
+  hasSeparateEcommerceEntity?: boolean;
+  linkedEcommerceEntities?: LinkedEcommerceEntity[];
+  mainEntityRole?: string;
+  fulfilmentModel?: string;
   isAiEnriched?: boolean;
   enrichedAt?: string;
   enrichedBy?: string;

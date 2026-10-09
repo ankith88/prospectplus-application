@@ -16,21 +16,34 @@ const BranchLocationSchema = z.object({
   notes: z.string().optional().describe(`Operational role of this location (e.g. 'Retail Store', 'Warehouse / Distribution Hub', 'Showroom & Click & Collect').`),
 });
 
+const LinkedEcommerceEntitySchema = z.object({
+  entityName: z.string().describe(`Name of the sister brand, separate online storefront, parent holding company, subsidiary, or fulfilment entity (e.g. 'Patch & Purr', 'Animals Asia Online Shop', 'InvoCare Pet Care').`),
+  websiteUrl: z.string().optional().describe(`Direct URL to the external shop, sister site, subdomain, or partner domain (e.g. 'https://shop.animalsasia.org', 'https://patchandpurr.com.au').`),
+  relationshipType: z.enum(['Sister Company', 'Separate Storefront', 'Parent Entity', 'Subsidiary', '3PL / Fulfilment Partner', 'Other']).describe(`Relationship to the primary lead business.`),
+  dispatchRole: z.string().optional().describe(`Clear description of physical goods or products sold/dispatched through this entity (e.g. 'Sells and dispatches pet memorial products, urns, and keepsake merchandise', 'Dispatches official calendars, gifts, and pet accessories').`),
+  isPrimaryShipper: z.boolean().optional().describe(`True if this entity is the one actually responsible for packing and dispatching physical parcels.`),
+  notes: z.string().optional().describe(`Any additional context on how operations, order intake, or shipping are divided between the main company and this entity.`),
+});
+
 const LeadEnrichmentOutputSchema = z.object({
   industryCategory: z.string().describe(`The best matching industry category from the exact provided master list. Must match one of the allowed categories.`),
-  industrySubCategory: z.string().describe(`A specific, detailed sub-industry or niche description (e.g. 'Artisan Specialty Coffee & Roasted Beans', 'Adult Lingerie, Costumes & Novelties', 'Industrial Fasteners & Tool Supplies').`),
-  hasParcelShipping: z.boolean().describe(`True if the business physically ships or dispatches parcels, goods, satchels, or freight. False if pure digital/intangible service.`),
+  industrySubCategory: z.string().describe(`A specific, detailed sub-industry or niche description (e.g. 'Animal Welfare Charity & Pet Merchandise Store', 'Pet Cremation & Memorial Keepsakes', 'Artisan Specialty Coffee & Roasted Beans', 'Industrial Fasteners & Tool Supplies').`),
+  hasParcelShipping: z.boolean().describe(`True if the business physically ships or dispatches parcels, goods, satchels, or freight (either directly or via sister company / separate store). False if pure digital/intangible service.`),
   hasMultipleBranches: z.boolean().describe(`True if the company operates multiple physical branches, stores, showrooms, warehouses, clinics, or office locations across Australia. False if single site.`),
   totalBranchCount: z.number().optional().describe(`Estimated total number of Australian physical locations/branches found.`),
   branchLocations: z.array(BranchLocationSchema).optional().describe(`Structured list of all identified Australian branch, store, showroom, or warehouse locations with suburb, state, and postcode details.`),
+  hasSeparateEcommerceEntity: z.boolean().optional().describe(`True if this business sells or dispatches physical products through a separate ecommerce website, sister brand, parent entity, or distinct fulfilment partner rather than directly on their main informational site.`),
+  linkedEcommerceEntities: z.array(LinkedEcommerceEntitySchema).optional().describe(`List of all linked ecommerce storefronts, sister brands, subsidiaries, parent entities, or fulfilment partners discovered.`),
+  mainEntityRole: z.string().optional().describe(`The operational role of the primary company (e.g. 'Main Non-Profit / Charity Advocacy', 'Veterinary & Pet Cremation Service Operations', 'Holding Company / Corporate HQ').`),
+  fulfilmentModel: z.string().optional().describe(`Summary of how physical products are fulfilled and dispatched (e.g. 'Dispatches merchandise via separate subdomain store (shop.animalsasia.org)', 'Memorial products and urns fulfilled via sister brand Patch & Purr', 'Direct in-house warehouse dispatch').`),
   shipperEvidence: z.string().describe(`Verbatim quotes or direct evidence extracted from the website regarding parcel shipping, delivery rates, checkout shipping terms, dispatch times, carriers used, or order cutoff times.`),
   lodgementEvidence: z.string().describe(`Evidence of warehouse location, retail counter dispatch, daily courier collection, or post office lodgement.`),
-  shopifyDetected: z.string().describe(`'Yes' if Shopify is detected, 'WooCommerce' / 'Magento' / 'BigCommerce' / 'Custom' if another platform is detected, or 'No'.`),
+  shopifyDetected: z.string().describe(`Accurate eCommerce platform name if identified: 'Shopify', 'WooCommerce', 'BigCommerce', 'Magento', 'Squarespace', 'Wix', 'Custom', or 'No'. Note: ONLY use 'Custom' if an actual working proprietary cart/checkout with real products exists. Use 'No' if there is no shopping cart.`),
   xeroDetected: z.string().describe(`'Yes' or 'No'.`),
   apRelationship: z.string().describe(`Details of any current Australia Post, StarTrack, Aramex, Sendle, Toll, or courier relationships detected.`),
-  prospectSummary: z.string().describe(`A clear, 2-3 sentence executive summary of what the company does, sells, and their shipping/logistics profile.`),
+  prospectSummary: z.string().describe(`A clear, 2-3 sentence executive summary of what the company does, sells, and their shipping/logistics profile (including separate storefronts/sister brands if applicable).`),
   suggestedProduct: z.string().describe(`The most relevant MailPlus service for them (e.g. 'Shipmate / Express Parcels (Sub-5kg)', 'Scheduled Daily Courier Pickup', 'B2B Parcel Delivery', 'PO Box Mail & Banking Collection').`),
-  suggestedOpener: z.string().describe(`A personalized, high-converting cold call phone opener tailored to this exact business, referencing their industry, shipping volume, and social proof of similar clients.`),
+  suggestedOpener: z.string().describe(`A personalized, high-converting cold call phone opener tailored to this exact business, referencing their industry, shipping volume, fulfillment setup, and social proof of similar clients.`),
   suggestedPersonalisation: z.string().describe(`Key talking points and value drivers to build instant rapport on the sales call.`),
 });
 
@@ -48,10 +61,16 @@ const LeadEnrichmentInputSchema = z.object({
   industrySubCategory: z.string().optional(),
 });
 
+interface ScrapeResult {
+  text: string;
+  detectedPlatform: string;
+  discoveredLinks: string[];
+}
+
 /**
- * Helper to fetch a URL safely with a timeout.
+ * Helper to fetch a URL safely with a timeout and extract text, platform signals, and outbound links.
  */
-async function fetchPageText(url: string): Promise<string> {
+async function fetchPage(url: string, baseDomain: string): Promise<ScrapeResult> {
   let targetUrl = url.trim();
   if (!/^https?:\/\//i.test(targetUrl)) {
     targetUrl = 'https://' + targetUrl;
@@ -70,10 +89,39 @@ async function fetchPageText(url: string): Promise<string> {
     });
     clearTimeout(timeout);
 
-    if (!response.ok) return '';
+    if (!response.ok) return { text: '', detectedPlatform: 'No', discoveredLinks: [] };
     const html = await response.text();
 
-    return html
+    // 1. Platform Detection in HTML
+    let detectedPlatform = 'No';
+    if (/cdn\.shopify\.com/i.test(html) || /myshopify\.com/i.test(html) || /Shopify\.theme/i.test(html) || /window\.Shopify/i.test(html)) {
+      detectedPlatform = 'Shopify';
+    } else if (/wp-content\/plugins\/woocommerce/i.test(html) || /class="[^"]*woocommerce/i.test(html) || /woocommerce-cart/i.test(html)) {
+      detectedPlatform = 'WooCommerce';
+    } else if (/cdn11\.bigcommerce\.com/i.test(html) || /data-bigcommerce/i.test(html)) {
+      detectedPlatform = 'BigCommerce';
+    } else if (/mage\/cookies/i.test(html) || /varien\/js/i.test(html) || /Magento/i.test(html)) {
+      detectedPlatform = 'Magento';
+    } else if (/static1\.squarespace\.com/i.test(html) || /squarespace-commerce/i.test(html)) {
+      detectedPlatform = 'Squarespace';
+    } else if (/wixstatic\.com/i.test(html) || /wix-warmup-data/i.test(html)) {
+      detectedPlatform = 'Wix';
+    }
+
+    // 2. Discover Outbound & Subdomain Storefront / Sister Brand Links in href attributes
+    const discoveredLinks: string[] = [];
+    const hrefRegex = /href=["'](https?:\/\/[^"'\s>]+)["']/gi;
+    let match;
+    while ((match = hrefRegex.exec(html)) !== null) {
+      const linkUrl = match[1];
+      const isShopSignal = /(shop\.|store\.|merch\.|patchandpurr|invocare|petangel|buy|cart|order-online|\/shop|\/store|\/products|\/collections)/i.test(linkUrl);
+      if (isShopSignal && !discoveredLinks.includes(linkUrl) && discoveredLinks.length < 15) {
+        discoveredLinks.push(linkUrl);
+      }
+    }
+
+    // 3. Clean Text
+    const text = html
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '')
@@ -81,20 +129,29 @@ async function fetchPageText(url: string): Promise<string> {
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
+
+    return { text, detectedPlatform, discoveredLinks };
   } catch (error) {
-    return '';
+    return { text: '', detectedPlatform: 'No', discoveredLinks: [] };
   }
 }
 
 /**
  * Scrapes the lead's website across homepage and key subpages (branches, stores, locations, shipping, delivery, contact).
  */
-async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; shopifyDetected: string }> {
+async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; detectedPlatform: string; discoveredLinks: string[] }> {
   let cleanBase = baseUrl.trim();
   if (!/^https?:\/\//i.test(cleanBase)) {
     cleanBase = 'https://' + cleanBase;
   }
   cleanBase = cleanBase.replace(/\/+$/, '');
+
+  let baseDomain = '';
+  try {
+    baseDomain = new URL(cleanBase).hostname.replace(/^www\./, '');
+  } catch (e) {
+    baseDomain = cleanBase;
+  }
 
   const paths = [
     '',
@@ -108,6 +165,9 @@ async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; shopif
     '/contact-us',
     '/about',
     '/about-us',
+    '/shop',
+    '/store',
+    '/merchandise',
     '/shipping',
     '/shipping-policy',
     '/delivery',
@@ -116,22 +176,25 @@ async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; shopif
     '/returns',
   ];
   let aggregatedText = '';
-  let shopifyDetected = 'No';
+  let finalPlatform = 'No';
+  const allDiscoveredLinks: Set<string> = new Set();
 
   for (const path of paths) {
     const target = `${cleanBase}${path}`;
-    const pageText = await fetchPageText(target);
-    if (pageText) {
-      if (/shopify/i.test(pageText) || /cdn\.shopify\.com/i.test(pageText)) {
-        shopifyDetected = 'Yes';
+    const pageResult = await fetchPage(target, baseDomain);
+    if (pageResult.text) {
+      if (pageResult.detectedPlatform !== 'No') {
+        finalPlatform = pageResult.detectedPlatform;
       }
-      aggregatedText += `\n--- PAGE: ${path || 'HOMEPAGE'} ---\n` + pageText.substring(0, 3500);
+      pageResult.discoveredLinks.forEach(l => allDiscoveredLinks.add(l));
+      aggregatedText += `\n--- PAGE: ${path || 'HOMEPAGE'} ---\n` + pageResult.text.substring(0, 3500);
     }
   }
 
   return {
     text: aggregatedText.substring(0, 18000),
-    shopifyDetected,
+    detectedPlatform: finalPlatform,
+    discoveredLinks: Array.from(allDiscoveredLinks).slice(0, 10),
   };
 }
 
@@ -145,6 +208,8 @@ const enrichLeadPrompt = ai.definePrompt({
       suburb: z.string().optional(),
       state: z.string().optional(),
       siteContent: z.string().optional(),
+      discoveredLinks: z.string().optional(),
+      detectedPlatformSignal: z.string().optional(),
       allowedIndustries: z.array(z.string()),
       similarCustomersSummary: z.string().optional(),
       initialNotes: z.string().optional(),
@@ -153,7 +218,7 @@ const enrichLeadPrompt = ai.definePrompt({
   },
   output: { schema: LeadEnrichmentOutputSchema },
   prompt: `You are an elite B2B Sales & Logistics Intelligence Agent for MailPlus Australia (a national parcel delivery, express courier, and daily business logistics company).
-Your task is to analyze the company details and extracted website content to perform deep lead enrichment.
+Your task is to analyze the company details, extracted website content, discovered outbound links, and sister brand relationships to perform deep lead enrichment.
 
 ### COMPANY INFORMATION:
 - Company Name: {{companyName}}
@@ -164,6 +229,11 @@ Your task is to analyze the company details and extracted website content to per
 
 ### SIMILAR SIGNED MAILPLUS CUSTOMERS (FOR SOCIAL PROOF):
 {{similarCustomersSummary}}
+
+### AUTOMATED CRAWLER SIGNALS:
+- eCommerce Platform Footprint Detected: {{detectedPlatformSignal}}
+- Discovered External Storefront & Outbound Links:
+{{discoveredLinks}}
 
 ### ALLOWED INDUSTRY CATEGORIES:
 You MUST choose the single closest matching industry from this exact list:
@@ -177,50 +247,78 @@ You MUST choose the single closest matching industry from this exact list:
 """
 
 ### INSTRUCTIONS:
+
 1. **Industry Classification**:
    - Choose the best matching **industryCategory** from the ALLOWED list above.
    - **CRITICAL RULE - PRIORITISE MERCHANDISE & ECOMMERCE OVER ORGANIZATIONAL STRUCTURE**:
-     - If an organisation, foundation, non-profit, trust, club, or charity sells physical merchandise or operates an eCommerce store (e.g. pet merchandise, clothing, gifts, calendars, accessories), you MUST classify them under their specific merchandise/retail vertical (e.g. 'B2C - PET PRODUCTS', 'RETAIL - PET ITEMS', 'B2C – GIFTS', 'RETAIL - GIFTS', 'B2C – CLOTHING & FASHION', 'RETAIL TRADE') rather than 'OTHER SERVICES' or 'ADMINISTRATIVE AND SUPPORT SERVICES'.
+     - If an organisation, foundation, non-profit, trust, club, charity, or service company sells physical merchandise or operates an eCommerce store (e.g. pet merchandise, gifts, calendars, memorial urns, clothing, accessories, retail supplies), you MUST classify them under their specific merchandise/retail vertical (e.g. 'B2C - PET PRODUCTS', 'RETAIL - PET ITEMS', 'B2C – GIFTS', 'RETAIL - GIFTS', 'B2C – CLOTHING & FASHION', 'RETAIL TRADE') rather than 'OTHER SERVICES' or 'ADMINISTRATIVE AND SUPPORT SERVICES'.
      - NEVER select 'OTHER SERVICES' if the company sells, ships, or manufactures any physical product that maps to a specific B2C, RETAIL, WHOLESALE, or MANUFACTURING category.
-   - Generate a specific, descriptive **industrySubCategory** (e.g. 'Animal Welfare Charity & Pet Merchandise Store', 'Online Adult Lingerie & Novelties Retailer', 'Specialty Artisan Coffee Beans & Brewing Gear', 'Industrial Fasteners & Tool Supplies').
+   - Generate a specific, descriptive **industrySubCategory** (e.g. 'Animal Welfare Charity & Pet Merchandise Store', 'Pet Cremation & Memorial Keepsakes', 'Online Adult Lingerie & Novelties Retailer', 'Specialty Artisan Coffee Beans & Brewing Gear', 'Industrial Fasteners & Tool Supplies').
 
-2. **Australian Branch & Multi-Location Detection**:
+2. **Separate eCommerce Sites, Sister Companies & Fulfilment Arrangements**:
+   - Some businesses sell physical products through a separate ecommerce website, subdomain (e.g. \`shop.animalsasia.org\`), sister company, parent entity, or 3PL fulfilment partner rather than their main informational site.
+     - *Example 1*: **Animals Asia Foundation** (Main site is an advocacy/charity foundation, but physical merchandise/calendars/gifts are sold via a separate shop subdomain or store).
+     - *Example 2*: **Lawnswood Pet Cremations** (Main site is pet cremation/vet services, but memorial merchandise, urns, and keepsake products are dispatched via sister company **Patch & Purr** or parent **InvoCare**).
+   - Analyze the website text and discovered links for:
+     - Outbound links to external shops, dedicated subdomains (\`shop.\`, \`store.\`, \`merch.\`), or sister brand domains.
+     - Mentions of sister companies, parent companies, subsidiaries, or fulfilment partners ("a division of...", "orders fulfilled by...", "shop our sister company...", "partner brand...").
+   - If a separate storefront, sister brand, or distinct fulfilment entity is identified:
+     - Set **hasSeparateEcommerceEntity** to \`true\`.
+     - In **linkedEcommerceEntities**, provide structured details for each identified entity:
+       - \`entityName\`: Name of the sister company or storefront (e.g. 'Animals Asia Online Shop', 'Patch & Purr', 'InvoCare Pet Care').
+       - \`websiteUrl\`: URL to the shop or sister site if found.
+       - \`relationshipType\`: 'Sister Company', 'Separate Storefront', 'Parent Entity', 'Subsidiary', '3PL / Fulfilment Partner', or 'Other'.
+       - \`dispatchRole\`: What physical goods this entity sells or ships.
+       - \`isPrimaryShipper\`: \`true\` if this entity handles the physical parcel shipping.
+       - \`notes\`: Operational context.
+     - In **mainEntityRole**, summarize the primary lead's role (e.g. 'Primary Non-Profit / Charity Advocacy', 'Veterinary & Pet Cremation Operations').
+     - In **fulfilmentModel**, summarize how products are dispatched (e.g. 'Dispatches merchandise via dedicated online store (shop.animalsasia.org)', 'Physical pet urns and keepsakes dispatched via sister brand (Patch & Purr)', 'Direct in-house warehouse dispatch').
+   - If the company dispatches everything in-house directly from their primary site, set **hasSeparateEcommerceEntity** to \`false\`, set **fulfilmentModel** to 'Direct In-House Dispatch', and leave **linkedEcommerceEntities** empty.
+
+3. **Shopify & eCommerce Platform Detection**:
+   - Set **shopifyDetected** to the accurate platform name:
+     - \`'Shopify'\` if Shopify scripts, cdn.shopify.com, or Shopify theme is detected.
+     - \`'WooCommerce'\` if WordPress WooCommerce is detected.
+     - \`'BigCommerce'\` if BigCommerce is detected.
+     - \`'Magento'\` if Adobe Commerce / Magento is detected.
+     - \`'Squarespace'\` if Squarespace commerce is detected.
+     - \`'Wix'\` if Wix store is detected.
+     - \`'Custom'\` ONLY if a real, functioning bespoke shopping cart or customer ordering portal with physical product checkout is explicitly identified.
+     - \`'No'\` if NO shopping cart, eCommerce store, or checkout exists (e.g. pure informational website). NEVER output 'Custom' if no cart exists!
+
+4. **Australian Branch & Multi-Location Footprint**:
    - Analyze whether the company operates multiple physical branches, retail stores, showrooms, warehouses, clinics, or regional offices across Australia (**hasMultipleBranches**).
-   - If they have multiple locations (or additional branches beyond their primary address):
+   - If they have multiple locations:
      - Set **hasMultipleBranches** to \`true\`.
      - Set **totalBranchCount** to the estimated total number of Australian locations found.
      - In **branchLocations**, extract each identified Australian location with structured fields:
-       - \`locationName\`: Store / Branch / Hub name (e.g. 'Melbourne CBD Store', 'Brisbane DC', 'Parramatta Showroom').
+       - \`locationName\`: Store / Branch / Hub name (e.g. 'Melbourne CBD Clinic', 'Brisbane DC', 'Perth Showroom').
        - \`street\`: Street address if available.
-       - \`suburb\`: Suburb name (e.g. 'Surry Hills', 'Richmond', 'Fortitude Valley', 'Subiaco').
+       - \`suburb\`: Suburb name (e.g. 'Surry Hills', 'Richmond', 'Canning Vale').
        - \`state\`: Standard Australian state code ('NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT').
        - \`postcode\`: 4-digit Australian postcode if listed.
        - \`phone\`: Direct phone number for this location if available.
        - \`isHeadOffice\`: True if noted as the primary HQ / Head Office.
-       - \`notes\`: Operational type or summary (e.g. 'Flagship Store', 'Distribution Centre', 'Regional Office').
-   - If they only operate from a single location or single headquarters, set **hasMultipleBranches** to \`false\`, set **totalBranchCount** to 1, and include the primary location in **branchLocations** or leave empty.
+       - \`notes\`: Operational type or summary (e.g. 'Flagship Store', 'Distribution Centre', 'Regional Clinic').
+   - If single location, set **hasMultipleBranches** to \`false\`, set **totalBranchCount** to 1, and include primary location in **branchLocations** or leave empty.
 
-3. **Parcel Shipping & Shipper Evidence**:
-   - Determine if the company ships physical goods/parcels/satchels (**hasParcelShipping**).
+5. **Parcel Shipping & Shipper Evidence**:
+   - Determine if the company ships physical goods/parcels/satchels (**hasParcelShipping**) - whether directly or through their sister brand/storefront.
    - In **shipperEvidence**, quote exact terms, postage rates, delivery timeframes, free shipping thresholds, or courier carriers found on their site.
    - In **lodgementEvidence**, note warehouse location, dispatch location, or counter lodgement details.
 
-4. **eCommerce & Carrier Signals**:
-   - Detect **shopifyDetected** ('Yes', 'WooCommerce', 'BigCommerce', 'Magento', or 'No').
-   - Identify **apRelationship** (e.g. Australia Post, StarTrack, Toll, Sendle, Aramex).
+6. **Prospect Summary**:
+   - Provide a 2-3 sentence overview of what they sell, their geographical footprint, their fulfillment setup (including sister brands if applicable), and their logistics profile.
 
-5. **Prospect Summary**:
-   - Provide a 2-3 sentence overview of what they sell, their geographical footprint, and their logistics profile.
-
-6. **Cold Call Opener (Crucial!)**:
+7. **Cold Call Opener (Crucial!)**:
    - Craft a natural, high-converting cold call phone opener for a sales dialer.
    - Structure:
      a. Natural intro ("Hi [Contact Name], it's [Name] from MailPlus...")
-     b. Observation of their specific products / dispatch model / multi-location presence if relevant.
+     b. Observation of their specific products / dispatch model / sister brand setup / multi-location presence if relevant.
      c. Social proof mentioning our experience with similar businesses (use the provided similar customers if applicable).
      d. Low-friction hook asking about their daily dispatch cutoff or pickup routine.
 
-7. **Suggested Personalisation**:
+8. **Suggested Personalisation**:
    - 2-3 targeted talking points explaining how MailPlus saves them time (e.g. daily guaranteed 4pm pickup from their door, flat-rate express satchels, multi-site consolidation, Shopify order sync).
 `,
 });
@@ -235,13 +333,15 @@ export const enrichLeadFlow = ai.defineFlow(
   },
   async (input) => {
     let siteText = '';
-    let autoDetectedShopify = 'No';
+    let autoDetectedPlatform = 'No';
+    let discoveredLinksList: string[] = [];
 
     // 1. If website URL is available, crawl it
     if (input.websiteUrl && input.websiteUrl.trim() !== '') {
       const crawlRes = await crawlLeadWebsite(input.websiteUrl);
       siteText = crawlRes.text;
-      autoDetectedShopify = crawlRes.shopifyDetected;
+      autoDetectedPlatform = crawlRes.detectedPlatform;
+      discoveredLinksList = crawlRes.discoveredLinks;
     }
 
     // 2. Initial lookup of similar signed customers based on 2 checks (Industry/Subcategory & Close to lead)
@@ -262,6 +362,10 @@ export const enrichLeadFlow = ai.defineFlow(
         .join('\n');
     }
 
+    const discoveredLinksText = discoveredLinksList.length > 0
+      ? discoveredLinksList.map(l => `- ${l}`).join('\n')
+      : 'None detected in automated crawl.';
+
     // 3. Prompt Gemini AI for enrichment
     const { output } = await enrichLeadPrompt({
       companyName: input.companyName,
@@ -270,6 +374,8 @@ export const enrichLeadFlow = ai.defineFlow(
       suburb: input.suburb || '',
       state: input.state || '',
       siteContent: siteText || 'No website content available. Please infer based on company name, location, and industry.',
+      discoveredLinks: discoveredLinksText,
+      detectedPlatformSignal: autoDetectedPlatform !== 'No' ? autoDetectedPlatform : 'No automated platform footprint found in HTML',
       allowedIndustries: industryCategories,
       similarCustomersSummary,
       initialNotes: input.initialNotes || '',
@@ -280,9 +386,9 @@ export const enrichLeadFlow = ai.defineFlow(
       throw new Error('AI failed to generate lead enrichment.');
     }
 
-    // If web crawl detected Shopify, ensure output captures it
-    if (autoDetectedShopify === 'Yes' && output.shopifyDetected === 'No') {
-      output.shopifyDetected = 'Yes';
+    // If web crawl detected a specific platform and AI output is No or Custom, favor the detected platform
+    if (autoDetectedPlatform !== 'No' && (output.shopifyDetected === 'No' || output.shopifyDetected === 'Custom')) {
+      output.shopifyDetected = autoDetectedPlatform;
     }
 
     // 4. Refine similar signed customers using the AI's classified Industry Category & Sub-Category + Location Proximity
@@ -350,6 +456,7 @@ export async function enrichLeadAction(leadId: string) {
       shipperEvidence: enrichment.shipperEvidence,
       lodgementEvidence: enrichment.lodgementEvidence,
       shopifyDetected: enrichment.shopifyDetected,
+      ecommercePlatform: enrichment.shopifyDetected,
       xeroDetected: enrichment.xeroDetected,
       apRelationship: enrichment.apRelationship,
       prospectSummary: enrichment.prospectSummary,
@@ -360,6 +467,10 @@ export async function enrichLeadAction(leadId: string) {
       hasMultipleBranches: Boolean(enrichment.hasMultipleBranches),
       totalBranchCount: enrichment.totalBranchCount !== undefined ? enrichment.totalBranchCount : (enrichment.branchLocations?.length || (enrichment.hasMultipleBranches ? 2 : 1)),
       branchLocations: enrichment.branchLocations || [],
+      hasSeparateEcommerceEntity: Boolean(enrichment.hasSeparateEcommerceEntity),
+      linkedEcommerceEntities: enrichment.linkedEcommerceEntities || [],
+      mainEntityRole: enrichment.mainEntityRole || '',
+      fulfilmentModel: enrichment.fulfilmentModel || '',
       isAiEnriched: true,
       enrichedAt: new Date().toISOString(),
       enrichedBy: 'AI Lead Intelligence Agent',
@@ -383,3 +494,4 @@ export async function enrichLeadAction(leadId: string) {
     return { success: false, error: error.message || String(error) };
   }
 }
+
