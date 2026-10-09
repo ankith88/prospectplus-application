@@ -392,6 +392,13 @@ You MUST choose the single closest matching industry from this exact list:
 
 8. **Suggested Personalisation**:
    - 2-3 targeted talking points explaining how MailPlus saves them time (e.g. daily guaranteed 4pm pickup from their door, flat-rate express satchels, multi-site consolidation, Shopify order sync).
+
+9. **Australia Post (AP) & Courier Relationship**:
+   - **CRITICAL RULE - PO BOX / GPO BOX / LOCKED BAG IS AN AUSTRALIA POST RELATIONSHIP**:
+     - In Australia, ALL PO Boxes, GPO Boxes, and Locked Bags are established, owned, and operated by Australia Post.
+     - If the business lists a PO Box, GPO Box, or Locked Bag (e.g. 'PO Box 3469 Exeter NSW 2579'), you MUST set **apRelationship** to explicitly reference their Australia Post PO Box holding (e.g. \`"Australia Post PO Box Service (PO Box 3469, Exeter NSW 2579)"\`).
+     - NEVER say "No existing relationship detected" or "None" if they have a PO Box, GPO Box, or Locked Bag!
+   - Also include any parcel courier, eParcel, StarTrack, Sendle, Aramex, or express courier arrangements identified from the site.
 `,
 });
 
@@ -547,6 +554,16 @@ export async function enrichLeadAction(leadId: string) {
     const hasMultipleBranches = cleanBranchLocations.length >= 2;
     const totalBranchCount = cleanBranchLocations.length > 0 ? cleanBranchLocations.length : 1;
 
+    let apRelationship = enrichment.apRelationship;
+    if (hasPoBox || cleanPostalAddresses.length > 0) {
+      if (!apRelationship || /no\s*(existing)?\s*relationship|none|unknown|not\s*detected/i.test(apRelationship)) {
+        const poBoxSummary = cleanPostalAddresses
+          .map(p => [p.boxNumber || p.street || p.locationName, p.suburb, p.state, p.postcode].filter(Boolean).join(' '))
+          .join(', ');
+        apRelationship = `Australia Post PO Box Service (${poBoxSummary || 'PO Box Address'})`;
+      }
+    }
+
     // Save enriched fields directly to Firestore
     const updatePayload: Record<string, any> = {
       industryCategory: enrichment.industryCategory,
@@ -556,7 +573,7 @@ export async function enrichLeadAction(leadId: string) {
       shopifyDetected: enrichment.shopifyDetected,
       ecommercePlatform: enrichment.shopifyDetected,
       xeroDetected: enrichment.xeroDetected,
-      apRelationship: enrichment.apRelationship,
+      apRelationship: apRelationship || 'Not Detected',
       prospectSummary: enrichment.prospectSummary,
       suggestedProduct: enrichment.suggestedProduct,
       suggestedOpener: enrichment.suggestedOpener,

@@ -7308,6 +7308,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     : physicalBranchLocations.length >= 2;
                   const effectiveBranchCount = physicalBranchLocations.length > 0 ? physicalBranchLocations.length : (totalBranchCount || 1);
 
+                  const isNoApRel = !apRelationship || /no\s*(existing)?\s*relationship|none|unknown|not\s*detected/i.test(apRelationship);
+                  const effectiveApRelationship = (effectiveHasPoBox || combinedPostalAddresses.length > 0) && isNoApRel
+                    ? `Australia Post PO Box Service (${combinedPostalAddresses.map(p => [p.boxNumber || p.street || p.locationName, p.suburb, p.state, p.postcode].filter(Boolean).join(' ')).join(', ') || 'PO Box Address'})`
+                    : (apRelationship || 'Not Detected');
+
                   const hasSeparateEcommerceEntity = lead.hasSeparateEcommerceEntity !== undefined ? lead.hasSeparateEcommerceEntity : lead.discoveryData?.hasSeparateEcommerceEntity;
                   const linkedEcommerceEntities = lead.linkedEcommerceEntities || lead.discoveryData?.linkedEcommerceEntities || [];
                   const mainEntityRole = lead.mainEntityRole || lead.discoveryData?.mainEntityRole;
@@ -7499,8 +7504,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <div className="flex items-center justify-between gap-2">
                                   <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">AP Relationship</p>
                                   <div className="flex items-center gap-1.5 shrink-0">
-                                    {apRelationship && (
-                                      <CopyButton textToCopy={apRelationship} className="h-5 w-5" iconClassName="h-3 w-3" />
+                                    {effectiveApRelationship && (
+                                      <CopyButton textToCopy={effectiveApRelationship} className="h-5 w-5" iconClassName="h-3 w-3" />
                                     )}
                                     <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 text-xs font-semibold px-2 py-0.5">
                                       AP Signal
@@ -7511,13 +7516,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <div className="text-sm font-bold text-[#095c7b] dark:text-[#38bdf8] mt-1.5 break-words max-h-24 overflow-y-auto pr-1 leading-snug cursor-text">
-                                        {apRelationship || 'Unknown'}
+                                        {effectiveApRelationship}
                                       </div>
                                     </TooltipTrigger>
-                                    {apRelationship && (
+                                    {effectiveApRelationship && (
                                       <TooltipContent side="top" className="max-w-md text-xs bg-slate-900 text-white p-3 shadow-xl break-words">
                                         <p className="font-semibold text-[10px] text-amber-300 uppercase tracking-wider mb-1">Full AP Relationship</p>
-                                        <p className="leading-relaxed whitespace-pre-wrap">{apRelationship}</p>
+                                        <p className="leading-relaxed whitespace-pre-wrap">{effectiveApRelationship}</p>
                                       </TooltipContent>
                                     )}
                                   </Tooltip>
