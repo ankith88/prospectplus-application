@@ -7,8 +7,17 @@ const db = getFirestore(adminApp);
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { uid, code, secret } = body;
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, message: 'Invalid JSON request payload.' },
+        { status: 400 }
+      );
+    }
+
+    const { uid, code, secret } = body || {};
 
     if (!uid || !code) {
       return NextResponse.json(
@@ -42,7 +51,13 @@ export async function POST(request: Request) {
         );
       }
 
-      const { valid: isValid } = verifySync({ token: cleanCode, secret: activeSecret });
+      let isValid = false;
+      try {
+        const verification = verifySync({ token: cleanCode, secret: activeSecret });
+        isValid = !!verification.valid;
+      } catch {
+        isValid = false;
+      }
 
       if (!isValid) {
         return NextResponse.json(

@@ -9,8 +9,17 @@ const db = getFirestore(adminApp);
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { uid, email } = body;
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, message: 'Invalid JSON request payload.' },
+        { status: 400 }
+      );
+    }
+
+    const { uid, email } = body || {};
 
     if (!uid) {
       return NextResponse.json(

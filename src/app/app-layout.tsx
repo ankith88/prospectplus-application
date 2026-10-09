@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, PhoneMissed, PhoneIncoming, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown, Store, Home, KeyRound } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, UserCheck, ChevronsUpDown, Phone, PhoneMissed, PhoneIncoming, ListTodo, Calendar, CalendarOff, CalendarCheck, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle, Tag, Plus, X, Globe, Network, TrendingDown, Store, Home, KeyRound, ListTree } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
 import { usePermissions } from "@/hooks/use-permissions"
@@ -390,6 +390,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     '/admin/franchisees/territory-map': { label: 'Franchisee Territory Map', category: 'Network', icon: Map, href: '/admin/franchisees/territory-map' },
     '/admin/franchisees/suburb-mapping': { label: 'Suburb & Lodgement Mapping', category: 'Network', icon: MapPin, href: '/admin/franchisees/suburb-mapping' },
     '/admin/services': { label: 'Service Line Items & Commissions', category: 'Settings', icon: Package, href: '/admin/services' },
+    '/admin/settings/cancellation-reasons': { label: 'Cancellation Hierarchy', category: 'Settings', icon: ListTree, href: '/admin/settings/cancellation-reasons' },
   };
 
   const toggleExpand = (key: string) => {
@@ -433,6 +434,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       }
       if (pathname.startsWith('/account-manager/reports') || pathname.startsWith('/revenue-analysis') || pathname.startsWith('/customer-success/reporting') || pathname.startsWith('/field-activity-report') || pathname.startsWith('/admin/deployments')) {
         setExpandedStates(prev => ({ ...prev, 'op-reports': true }));
+      }
+      if (pathname.startsWith('/admin/settings') || pathname.startsWith('/admin/services') || pathname.startsWith('/admin/login-report') || pathname.startsWith('/admin/app-tickets') || pathname.startsWith('/admin/data') || pathname.startsWith('/admin/locations/import')) {
+        setExpandedStates(prev => ({ ...prev, 'admin-settings': true }));
       }
       setExpandedStates(prev => ({ ...prev, 'reporting': false }));
     }
@@ -479,7 +483,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const isAuthPage = pathname === '/signin' || pathname === '/signup' || pathname === '/reset-password' || pathname.startsWith('/reset-password') || pathname.startsWith('/__/auth/action') || pathname.startsWith('/auth/action');
+  const isAuthPage = pathname === '/signin' || pathname === '/signup' || pathname === '/verify-email' || pathname.startsWith('/verify-email') || pathname === '/reset-password' || pathname.startsWith('/reset-password') || pathname.startsWith('/__/auth/action') || pathname.startsWith('/auth/action');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -670,6 +674,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   
   if (
     isAuthPage || 
+    pathname.startsWith('/verify-email') ||
     pathname.startsWith('/reset-password') ||
     pathname.startsWith('/__/auth/action') ||
     pathname.startsWith('/auth/action') ||
@@ -2425,14 +2430,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <SidebarMenuSubButton asChild isActive={isActive('/admin/services')}>
                         <Link href="/admin/services">
                           <Package className="h-4 w-4" />
-                          <span>Service Line Items</span>
+                          <span>Service Line Items & Commissions</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/cancellation-reasons')}>
+                        <Link href="/admin/settings/cancellation-reasons">
+                          <ListTree className="h-4 w-4" />
+                          <span>Cancellation Hierarchy</span>
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     {isSuperAdmin && (
                     <>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive('/admin/settings') && !isActive('/admin/settings/am-calendar') && !isActive('/admin/settings/am-leave')}>
+                      <SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}>
                         <Link href="/admin/settings">
                           <User />
                           <span>User Settings</span>

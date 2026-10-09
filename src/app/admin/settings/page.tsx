@@ -47,12 +47,6 @@ export default function AdminSettingsPage() {
             <Phone className="mr-2 h-4 w-4" />
             Telephony Switch
           </Button>
-          <Button variant="outline" onClick={() => router.push('/admin/services')}>
-            Service Line Items & Commissions
-          </Button>
-          <Button variant="outline" onClick={() => router.push('/admin/settings/cancellation-reasons')}>
-            Cancellation Hierarchy
-          </Button>
           <Button variant="outline" onClick={() => router.push('/admin/settings/roles')}>
             <ShieldAlert className="mr-2 h-4 w-4" />
             Role Permissions
