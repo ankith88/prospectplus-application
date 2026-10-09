@@ -44,6 +44,8 @@ const LeadEnrichmentInputSchema = z.object({
   postcode: z.string().optional(),
   initialNotes: z.string().optional(),
   franchiseeName: z.string().optional(),
+  industryCategory: z.string().optional(),
+  industrySubCategory: z.string().optional(),
 });
 
 /**
@@ -242,18 +244,21 @@ export const enrichLeadFlow = ai.defineFlow(
       autoDetectedShopify = crawlRes.shopifyDetected;
     }
 
-    // 2. Fetch similar signed customers from the `companies` collection
-    const similarCustomers = await findSimilarSignedCustomers({
+    // 2. Initial lookup of similar signed customers based on 2 checks (Industry/Subcategory & Close to lead)
+    const initialSimilarCustomers = await findSimilarSignedCustomers({
+      industryCategory: input.industryCategory,
+      industrySubCategory: input.industrySubCategory,
       franchiseeName: input.franchiseeName,
       state: input.state,
       suburb: input.suburb,
-      limitCount: 3,
+      postcode: input.postcode,
+      limitCount: 4,
     });
 
     let similarCustomersSummary = 'None currently matched in database.';
-    if (similarCustomers.length > 0) {
-      similarCustomersSummary = similarCustomers
-        .map(c => `- ${c.companyName} (${c.industryCategory || 'Retail/Commercial'}, Suburb: ${c.suburb || 'N/A'}, Franchisee: ${c.franchiseeName || 'N/A'})`)
+    if (initialSimilarCustomers.length > 0) {
+      similarCustomersSummary = initialSimilarCustomers
+        .map(c => `- ${c.companyName} (${c.industryCategory || 'Retail/Commercial'}, Suburb: ${c.suburb || 'N/A'}, Match: ${c.matchReason || 'Social Proof Client'})`)
         .join('\n');
     }
 
@@ -280,9 +285,20 @@ export const enrichLeadFlow = ai.defineFlow(
       output.shopifyDetected = 'Yes';
     }
 
+    // 4. Refine similar signed customers using the AI's classified Industry Category & Sub-Category + Location Proximity
+    const finalSimilarCustomers = await findSimilarSignedCustomers({
+      industryCategory: output.industryCategory || input.industryCategory,
+      industrySubCategory: output.industrySubCategory || input.industrySubCategory,
+      franchiseeName: input.franchiseeName,
+      state: input.state,
+      suburb: input.suburb,
+      postcode: input.postcode,
+      limitCount: 4,
+    });
+
     return {
       ...output,
-      similarSignedCustomers: similarCustomers,
+      similarSignedCustomers: finalSimilarCustomers.length > 0 ? finalSimilarCustomers : initialSimilarCustomers,
     };
   }
 );
@@ -309,6 +325,8 @@ export async function enrichLeadAction(leadId: string) {
     const postcode = leadData.address?.zip || leadData.zip || leadData.postcode || '';
     const franchiseeName = leadData.franchiseeName || leadData.franchisee || '';
     const initialNotes = leadData.initialNotes || leadData.prospectSummary || '';
+    const industryCategory = leadData.industryCategory || '';
+    const industrySubCategory = leadData.industrySubCategory || '';
 
     // Run AI Flow
     const enrichment = await enrichLeadFlow({
@@ -321,6 +339,8 @@ export async function enrichLeadAction(leadId: string) {
       postcode,
       initialNotes,
       franchiseeName,
+      industryCategory,
+      industrySubCategory,
     });
 
     // Save enriched fields directly to Firestore

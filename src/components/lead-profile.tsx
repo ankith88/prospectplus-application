@@ -7544,17 +7544,42 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     {similarSignedCustomers.length} Reference Clients
                                   </Badge>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                                   {similarSignedCustomers.map((c: any, idx: number) => (
-                                    <div key={idx} className="bg-white dark:bg-slate-800/80 p-3 rounded-lg border border-emerald-100 dark:border-slate-700 shadow-xs space-y-1">
-                                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{c.companyName}</p>
-                                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                        {c.industryCategory || 'Commercial'} {c.suburb ? `• ${c.suburb}` : ''}
-                                      </p>
+                                    <div key={idx} className="bg-white dark:bg-slate-800/80 p-3 rounded-lg border border-emerald-100 dark:border-slate-700 shadow-xs space-y-1.5 flex flex-col justify-between">
+                                      <div className="space-y-1">
+                                        <div className="flex items-start justify-between gap-1">
+                                          <p className="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-1">{c.companyName}</p>
+                                          {c.matchReason && (
+                                            <Badge
+                                              variant="outline"
+                                              className={`text-[9px] px-1 py-0 shrink-0 font-medium ${
+                                                c.matchType === 'both'
+                                                  ? 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300'
+                                                  : c.matchType === 'nearby'
+                                                  ? 'bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950/40 dark:text-sky-300'
+                                                  : 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                              }`}
+                                            >
+                                              {c.matchType === 'both' ? 'Industry & Nearby' : c.matchType === 'nearby' ? 'Serviced Nearby' : 'Industry Match'}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                          {c.industryCategory || 'Commercial'} {c.suburb ? `• ${c.suburb}` : ''}
+                                        </p>
+                                        {c.industrySubCategory && (
+                                          <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate" title={c.industrySubCategory}>
+                                            {c.industrySubCategory}
+                                          </p>
+                                        )}
+                                      </div>
                                       {c.franchiseeName && (
-                                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0 mt-1">
-                                          Territory: {c.franchiseeName}
-                                        </Badge>
+                                        <div className="pt-1">
+                                          <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
+                                            Territory: {c.franchiseeName}
+                                          </Badge>
+                                        </div>
                                       )}
                                     </div>
                                   ))}

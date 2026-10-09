@@ -313,7 +313,10 @@ export interface DiscoveryData {
     industrySubCategory?: string;
     suburb?: string;
     state?: string;
+    postcode?: string;
     franchiseeName?: string;
+    matchType?: 'industry' | 'nearby' | 'both';
+    matchReason?: string;
   }>;
   hasParcelShipping?: boolean;
   hasMultipleBranches?: boolean;
@@ -797,7 +800,10 @@ export interface Lead {
     industrySubCategory?: string;
     suburb?: string;
     state?: string;
+    postcode?: string;
     franchiseeName?: string;
+    matchType?: 'industry' | 'nearby' | 'both';
+    matchReason?: string;
   }>;
   hasParcelShipping?: boolean;
   hasMultipleBranches?: boolean;
