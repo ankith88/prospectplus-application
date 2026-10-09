@@ -68,6 +68,7 @@ import {
   ArrowRight,
   Share2,
   Shield,
+  Wrench,
   ShieldCheck,
   ShieldOff,
   Download,
@@ -10328,7 +10329,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <Card className="border-primary bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                    {isCompanyProfile && (
+                    {(isCompanyProfile || isSignedCustomer(lead)) && (
                         <>
                             {!isLpoNetworkBucket && (
                                 ['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '') ? (
@@ -10344,6 +10345,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Button className="w-full justify-start font-medium bg-background hover:bg-muted text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsOnboardingDialogOpen(true)}>
                                 <CalendarCheck className="mr-2 h-4 w-4 text-emerald-600" />Organise Onboarding Request
                             </Button>
+                            <Button 
+                                className="w-full justify-start font-medium bg-background hover:bg-sky-50 text-sky-800 border-sky-200 hover:border-sky-300" 
+                                variant="outline" 
+                                onClick={() => window.open(`/customer-request/${lead.id}`, '_blank')}
+                            >
+                                <Wrench className="mr-2 h-4 w-4 text-[#095c7b]" />Request Service Change
+                            </Button>
                             <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => { setResendScfId(undefined); setIsServiceSelectionOpen(true); setServiceSelectionMode('Confirm Signup'); }}>
                                 <Mail className="mr-2 h-4 w-4" />Resend Signup Confirmation
                             </Button>
@@ -10358,7 +10366,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             )}
                         </>
                     )}
-                    {(!isCompanyProfile && (showCall || showProcessLead) && lead.bucket !== 'lpo_network' && !isLpoLeadProcess) && (
+                    {(!isCompanyProfile && !isSignedCustomer(lead) && (showCall || showProcessLead) && lead.bucket !== 'lpo_network' && !isLpoLeadProcess) && (
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>

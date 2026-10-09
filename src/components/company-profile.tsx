@@ -45,6 +45,7 @@ import {
   Calendar,
   RefreshCw,
   UserCheck,
+  Wrench,
 } from 'lucide-react'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { getOnboardingRequestByLeadId } from '@/services/onboarding-service'
@@ -2328,6 +2329,13 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     )}
                     <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-primary border-primary/20" variant="outline" onClick={() => setIsOnboardingDialogOpen(true)}>
                         <CalendarCheck className="mr-2 h-4 w-4 text-primary" />Organise Onboarding Request
+                    </Button>
+                    <Button 
+                        className="w-full justify-start font-medium bg-background hover:bg-sky-50 text-sky-800 border-sky-200 hover:border-sky-300" 
+                        variant="outline" 
+                        onClick={() => window.open(`/customer-request/${company.id}`, '_blank')}
+                    >
+                        <Wrench className="mr-2 h-4 w-4 text-[#095c7b]" />Request Service Change
                     </Button>
                     <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                         <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note

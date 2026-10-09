@@ -70,6 +70,35 @@ const CANCELLATION_REASONS = [
   'Other'
 ];
 
+const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
+type DayOfWeek = typeof DAYS_OF_WEEK[number];
+
+const parseFrequencyDays = (freq: any): DayOfWeek[] => {
+  if (Array.isArray(freq)) {
+    return freq.filter((d): d is DayOfWeek => DAYS_OF_WEEK.includes(d as any));
+  }
+  if (typeof freq === 'string') {
+    if (freq === 'Adhoc') return [];
+    if (freq.includes('5')) return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    if (freq.includes('3')) return ['Mon', 'Wed', 'Fri'];
+    if (freq.includes('2')) return ['Tue', 'Thu'];
+    if (freq.includes('1')) return ['Mon'];
+    if (freq.includes('4')) return ['Mon', 'Tue', 'Wed', 'Thu'];
+  }
+  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+};
+
+const getFrequencySelectValue = (freq: any): string => {
+  if (freq === 'Adhoc') return 'Adhoc';
+  const days = parseFrequencyDays(freq);
+  if (days.length === 5) return '5 Days / Week';
+  if (days.length === 3) return '3 Days / Week';
+  if (days.length === 2) return '2 Days / Week';
+  if (days.length === 1) return '1 Day / Week';
+  if (days.length === 0) return 'Adhoc';
+  return '5 Days / Week';
+};
+
 export default function CustomerRequestClient({ companyId }: { companyId: string }) {
   const { userProfile, user } = useAuth();
   const [company, setCompany] = useState<PublicCompany | null>(null);
@@ -90,6 +119,7 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
   const [services, setServices] = useState<ServiceSelection[]>([]);
   const [newServiceName, setNewServiceName] = useState('');
   const [newServiceFrequency, setNewServiceFrequency] = useState('5 Days / Week');
+  const [newServiceDays, setNewServiceDays] = useState<DayOfWeek[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
   const [newServiceRate, setNewServiceRate] = useState('');
   const [effectiveDate, setEffectiveDate] = useState('');
   const [serviceChangeNotes, setServiceChangeNotes] = useState('');
@@ -180,12 +210,61 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
 
   const handleUpdateServiceFrequency = (index: number, newFreq: string) => {
     const updated = [...services];
-    updated[index].frequency = newFreq;
+    if (newFreq === 'Adhoc') {
+      updated[index].frequency = 'Adhoc';
+    } else if (newFreq === '5 Days / Week') {
+      updated[index].frequency = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    } else if (newFreq === '3 Days / Week') {
+      updated[index].frequency = ['Mon', 'Wed', 'Fri'];
+    } else if (newFreq === '2 Days / Week') {
+      updated[index].frequency = ['Tue', 'Thu'];
+    } else if (newFreq === '1 Day / Week') {
+      updated[index].frequency = ['Mon'];
+    } else {
+      updated[index].frequency = newFreq;
+    }
+    setServices(updated);
+  };
+
+  const handleToggleServiceDay = (index: number, day: DayOfWeek) => {
+    const updated = [...services];
+    const currentDays = parseFrequencyDays(updated[index].frequency);
+    let nextDays: DayOfWeek[];
+    if (currentDays.includes(day)) {
+      nextDays = currentDays.filter(d => d !== day);
+    } else {
+      nextDays = DAYS_OF_WEEK.filter(d => currentDays.includes(d) || d === day);
+    }
+    updated[index].frequency = nextDays.length === 0 ? 'Adhoc' : nextDays;
     setServices(updated);
   };
 
   const handleRemoveServiceItem = (index: number) => {
     setServices(services.filter((_, i) => i !== index));
+  };
+
+  const handleNewServiceFrequencyChange = (val: string) => {
+    setNewServiceFrequency(val);
+    if (val === '5 Days / Week') setNewServiceDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+    else if (val === '3 Days / Week') setNewServiceDays(['Mon', 'Wed', 'Fri']);
+    else if (val === '2 Days / Week') setNewServiceDays(['Tue', 'Thu']);
+    else if (val === '1 Day / Week') setNewServiceDays(['Mon']);
+    else if (val === 'Adhoc') setNewServiceDays([]);
+  };
+
+  const handleToggleNewServiceDay = (day: DayOfWeek) => {
+    let nextDays: DayOfWeek[];
+    if (newServiceDays.includes(day)) {
+      nextDays = newServiceDays.filter(d => d !== day);
+    } else {
+      nextDays = DAYS_OF_WEEK.filter(d => newServiceDays.includes(d) || d === day);
+    }
+    setNewServiceDays(nextDays);
+    if (nextDays.length === 5) setNewServiceFrequency('5 Days / Week');
+    else if (nextDays.length === 3) setNewServiceFrequency('3 Days / Week');
+    else if (nextDays.length === 2) setNewServiceFrequency('2 Days / Week');
+    else if (nextDays.length === 1) setNewServiceFrequency('1 Day / Week');
+    else if (nextDays.length === 0) setNewServiceFrequency('Adhoc');
   };
 
   const handleAddNewService = () => {
@@ -197,13 +276,15 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
     const newSrv: ServiceSelection = {
       id: 'custom-' + Date.now(),
       name: newServiceName.trim(),
-      frequency: newServiceFrequency,
+      frequency: newServiceFrequency === 'Adhoc' ? 'Adhoc' : (newServiceDays.length > 0 ? newServiceDays : '5 Days / Week'),
       rate: isNaN(rateVal) ? 0 : rateVal,
       quantity: 1,
     };
     setServices([...services, newSrv]);
     setNewServiceName('');
     setNewServiceRate('');
+    setNewServiceFrequency('5 Days / Week');
+    setNewServiceDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -579,9 +660,9 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                               <div>
-                                <Label className="text-xs font-medium text-slate-600 mb-1 block">Frequency</Label>
+                                <Label className="text-xs font-medium text-slate-600 mb-1 block">Frequency & Schedule</Label>
                                 <Select
-                                  value={typeof srv.frequency === 'string' ? srv.frequency : '5 Days / Week'}
+                                  value={getFrequencySelectValue(srv.frequency)}
                                   onValueChange={(val) => handleUpdateServiceFrequency(idx, val)}
                                 >
                                   <SelectTrigger className="bg-white h-9 text-xs">
@@ -595,6 +676,39 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
                                     <SelectItem value="Adhoc">Adhoc / On Demand</SelectItem>
                                   </SelectContent>
                                 </Select>
+
+                                {/* Interactive Day of Week Pills */}
+                                {srv.frequency !== 'Adhoc' && (
+                                  <div className="pt-2">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[11px] font-semibold text-slate-500 mr-0.5">Days:</span>
+                                      {DAYS_OF_WEEK.map((day) => {
+                                        const currentDays = parseFrequencyDays(srv.frequency);
+                                        const isSelected = currentDays.includes(day);
+                                        return (
+                                          <button
+                                            key={day}
+                                            type="button"
+                                            onClick={() => handleToggleServiceDay(idx, day)}
+                                            className={`h-7 px-2.5 text-xs font-bold rounded-md transition-all flex items-center justify-center ${
+                                              isSelected
+                                                ? 'bg-[#095c7b] text-white shadow-sm ring-1 ring-[#095c7b]'
+                                                : 'bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-800 border border-slate-200'
+                                            }`}
+                                            title={`Toggle ${day}day`}
+                                          >
+                                            {day}
+                                          </button>
+                                        );
+                                      })}
+                                      {parseFrequencyDays(srv.frequency).length > 0 && (
+                                        <span className="text-[11px] text-slate-400 ml-1">
+                                          ({parseFrequencyDays(srv.frequency).length} {parseFrequencyDays(srv.frequency).length === 1 ? 'day' : 'days'}/wk)
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
 
                               <div>
@@ -632,7 +746,7 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
                         />
                       </div>
                       <div>
-                        <Select value={newServiceFrequency} onValueChange={setNewServiceFrequency}>
+                        <Select value={newServiceFrequency} onValueChange={handleNewServiceFrequencyChange}>
                           <SelectTrigger className="bg-white h-9 text-xs">
                             <SelectValue />
                           </SelectTrigger>
@@ -664,6 +778,35 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
                         </Button>
                       </div>
                     </div>
+
+                    {/* New Service Day Pills if not Adhoc */}
+                    {newServiceFrequency !== 'Adhoc' && (
+                      <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                        <span className="text-[11px] font-semibold text-slate-500 mr-0.5">Days:</span>
+                        {DAYS_OF_WEEK.map((day) => {
+                          const isSelected = newServiceDays.includes(day);
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={() => handleToggleNewServiceDay(day)}
+                              className={`h-6 px-2 text-[11px] font-bold rounded transition-all ${
+                                isSelected
+                                  ? 'bg-[#095c7b] text-white shadow-sm ring-1 ring-[#095c7b]'
+                                  : 'bg-white text-slate-500 hover:bg-slate-100 border border-slate-200'
+                              }`}
+                            >
+                              {day}
+                            </button>
+                          );
+                        })}
+                        {newServiceDays.length > 0 && (
+                          <span className="text-[11px] text-slate-400 ml-1">
+                            ({newServiceDays.length} {newServiceDays.length === 1 ? 'day' : 'days'}/wk)
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Effective Date & Additional Notes */}
