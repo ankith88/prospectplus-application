@@ -65,10 +65,11 @@ interface ScrapeResult {
   text: string;
   detectedPlatform: string;
   discoveredLinks: string[];
+  internalLinks: string[];
 }
 
 /**
- * Helper to fetch a URL safely with a timeout and extract text, platform signals, and outbound links.
+ * Helper to fetch a URL safely with a timeout and extract text, platform signals, outbound links, and internal navigation links.
  */
 async function fetchPage(url: string, baseDomain: string): Promise<ScrapeResult> {
   let targetUrl = url.trim();
@@ -89,7 +90,7 @@ async function fetchPage(url: string, baseDomain: string): Promise<ScrapeResult>
     });
     clearTimeout(timeout);
 
-    if (!response.ok) return { text: '', detectedPlatform: 'No', discoveredLinks: [] };
+    if (!response.ok) return { text: '', detectedPlatform: 'No', discoveredLinks: [], internalLinks: [] };
     const html = await response.text();
 
     // 1. Platform Detection in HTML
@@ -108,15 +109,39 @@ async function fetchPage(url: string, baseDomain: string): Promise<ScrapeResult>
       detectedPlatform = 'Wix';
     }
 
-    // 2. Discover Outbound & Subdomain Storefront / Sister Brand Links in href attributes
+    // 2. Discover Outbound & Subdomain Storefront / Sister Brand Links and Internal Location Links
     const discoveredLinks: string[] = [];
-    const hrefRegex = /href=["'](https?:\/\/[^"'\s>]+)["']/gi;
+    const internalLinks: string[] = [];
+    const hrefRegex = /href=["']([^"'#\s>]+)["']/gi;
     let match;
     while ((match = hrefRegex.exec(html)) !== null) {
-      const linkUrl = match[1];
-      const isShopSignal = /(shop\.|store\.|merch\.|patchandpurr|invocare|petangel|buy|cart|order-online|\/shop|\/store|\/products|\/collections)/i.test(linkUrl);
-      if (isShopSignal && !discoveredLinks.includes(linkUrl) && discoveredLinks.length < 15) {
-        discoveredLinks.push(linkUrl);
+      let linkUrl = match[1].trim();
+      if (/^(javascript:|mailto:|tel:|#)/i.test(linkUrl)) continue;
+
+      if (linkUrl.startsWith('//')) {
+        linkUrl = 'https:' + linkUrl;
+      }
+
+      // External / Sister Brand / Storefront links
+      if (/^https?:\/\//i.test(linkUrl)) {
+        const isShopSignal = /(shop\.|store\.|merch\.|patchandpurr|invocare|petangel|buy|cart|order-online|\/shop|\/store|\/products|\/collections)/i.test(linkUrl);
+        if (isShopSignal && !discoveredLinks.includes(linkUrl) && discoveredLinks.length < 15) {
+          discoveredLinks.push(linkUrl);
+        }
+      }
+
+      // Internal location/contact links
+      const isLocationSignal = /(pages\/|contact|location|store|branch|warehouse|find-us|stockist|about)/i.test(linkUrl);
+      if (isLocationSignal) {
+        if (linkUrl.startsWith('/')) {
+          if (!internalLinks.includes(linkUrl)) internalLinks.push(linkUrl);
+        } else if (baseDomain && linkUrl.includes(baseDomain)) {
+          try {
+            const parsed = new URL(linkUrl);
+            const pathOnly = parsed.pathname;
+            if (!internalLinks.includes(pathOnly)) internalLinks.push(pathOnly);
+          } catch (e) {}
+        }
       }
     }
 
@@ -130,14 +155,14 @@ async function fetchPage(url: string, baseDomain: string): Promise<ScrapeResult>
       .replace(/\s+/g, ' ')
       .trim();
 
-    return { text, detectedPlatform, discoveredLinks };
+    return { text, detectedPlatform, discoveredLinks, internalLinks };
   } catch (error) {
-    return { text: '', detectedPlatform: 'No', discoveredLinks: [] };
+    return { text: '', detectedPlatform: 'No', discoveredLinks: [], internalLinks: [] };
   }
 }
 
 /**
- * Scrapes the lead's website across homepage and key subpages (branches, stores, locations, shipping, delivery, contact).
+ * Scrapes the lead's website across homepage and all key subpages (branches, stores, locations, shipping, delivery, contact).
  */
 async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; detectedPlatform: string; discoveredLinks: string[] }> {
   let cleanBase = baseUrl.trim();
@@ -153,16 +178,26 @@ async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; detect
     baseDomain = cleanBase;
   }
 
-  const paths = [
+  const initialPaths = [
     '',
+    '/pages/contact',
+    '/pages/contact-us',
+    '/pages/locations',
+    '/pages/our-locations',
+    '/pages/stores',
+    '/pages/our-stores',
+    '/pages/branches',
+    '/pages/about',
+    '/pages/about-us',
+    '/contact',
+    '/contact-us',
     '/locations',
     '/stores',
     '/find-us',
     '/our-stores',
     '/store-locator',
     '/branches',
-    '/contact',
-    '/contact-us',
+    '/warehouses',
     '/about',
     '/about-us',
     '/shop',
@@ -175,24 +210,40 @@ async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; detect
     '/faq',
     '/returns',
   ];
+
+  const queue = [...initialPaths];
+  const visited = new Set<string>();
   let aggregatedText = '';
   let finalPlatform = 'No';
   const allDiscoveredLinks: Set<string> = new Set();
 
-  for (const path of paths) {
-    const target = `${cleanBase}${path}`;
+  while (queue.length > 0 && visited.size < 20) {
+    const path = queue.shift()!;
+    if (visited.has(path)) continue;
+    visited.add(path);
+
+    const target = path.startsWith('http') ? path : `${cleanBase}${path}`;
     const pageResult = await fetchPage(target, baseDomain);
+
     if (pageResult.text) {
       if (pageResult.detectedPlatform !== 'No') {
         finalPlatform = pageResult.detectedPlatform;
       }
       pageResult.discoveredLinks.forEach(l => allDiscoveredLinks.add(l));
-      aggregatedText += `\n--- PAGE: ${path || 'HOMEPAGE'} ---\n` + pageResult.text.substring(0, 3500);
+
+      // Add newly discovered internal paths to queue if not visited
+      for (const intPath of pageResult.internalLinks) {
+        if (!visited.has(intPath) && !queue.includes(intPath) && queue.length < 25) {
+          queue.push(intPath);
+        }
+      }
+
+      aggregatedText += `\n--- PAGE: ${path || 'HOMEPAGE'} ---\n` + pageResult.text.substring(0, 15000);
     }
   }
 
   return {
-    text: aggregatedText.substring(0, 18000),
+    text: aggregatedText.substring(0, 45000),
     detectedPlatform: finalPlatform,
     discoveredLinks: Array.from(allDiscoveredLinks).slice(0, 10),
   };
@@ -288,18 +339,21 @@ You MUST choose the single closest matching industry from this exact list:
 
 4. **Australian Branch & Multi-Location Footprint**:
    - Analyze whether the company operates multiple physical branches, retail stores, showrooms, warehouses, clinics, or regional offices across Australia (**hasMultipleBranches**).
+   - **CRITICAL REQUIREMENT - EXTRACT ALL IDENTIFIED LOCATIONS**:
+     - If the website text or footer lists multiple Australian facilities, warehouses, stores, or regional offices (e.g. 'NSW - Northmead', 'NSW - Moorebank', 'VIC - Braeside', 'QLD - Sunnybank Hills', 'SA - Port Adelaide'), you MUST extract **EACH AND EVERY ONE** into the **branchLocations** array!
+     - Do NOT output only 1 entry if 5 locations are named in the text. Every single location with an address, suburb, state, or phone must have its own structured entry in **branchLocations**.
    - If they have multiple locations:
      - Set **hasMultipleBranches** to \`true\`.
-     - Set **totalBranchCount** to the estimated total number of Australian locations found.
+     - Set **totalBranchCount** to the exact total count of Australian locations found (must match the length of \`branchLocations\`, or total stated locations).
      - In **branchLocations**, extract each identified Australian location with structured fields:
-       - \`locationName\`: Store / Branch / Hub name (e.g. 'Melbourne CBD Clinic', 'Brisbane DC', 'Perth Showroom').
-       - \`street\`: Street address if available.
-       - \`suburb\`: Suburb name (e.g. 'Surry Hills', 'Richmond', 'Canning Vale').
+       - \`locationName\`: Store / Branch / Hub name (e.g. 'NSW - Northmead Head Office', 'NSW - Moorebank Warehouse', 'VIC - Braeside Warehouse', 'QLD - Sunnybank Hills DC', 'SA - Port Adelaide Warehouse').
+       - \`street\`: Street address (e.g. '157 Briens Rd', '4B Tiber Pl', '372 Lower Dandenong Rd', 'Unit 2, 177 Jackson Rd', '48 Lipson Street').
+       - \`suburb\`: Suburb name (e.g. 'Northmead', 'Moorebank', 'Braeside', 'Sunnybank Hills', 'Port Adelaide').
        - \`state\`: Standard Australian state code ('NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT').
-       - \`postcode\`: 4-digit Australian postcode if listed.
-       - \`phone\`: Direct phone number for this location if available.
+       - \`postcode\`: 4-digit Australian postcode if listed (e.g. '2152', '2170', '3195', '4109', '5015').
+       - \`phone\`: Direct phone number for this location if available (e.g. '1800 577 551').
        - \`isHeadOffice\`: True if noted as the primary HQ / Head Office.
-       - \`notes\`: Operational type or summary (e.g. 'Flagship Store', 'Distribution Centre', 'Regional Clinic').
+       - \`notes\`: Operational type or summary (e.g. 'Head Office & Primary Warehouse', 'Distribution Warehouse').
    - If single location, set **hasMultipleBranches** to \`false\`, set **totalBranchCount** to 1, and include primary location in **branchLocations** or leave empty.
 
 5. **Parcel Shipping & Shipper Evidence**:
