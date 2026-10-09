@@ -79,7 +79,7 @@ import { LogNoteDialog } from './log-note-dialog'
 import { LossReasonPicker } from './loss-reason-picker'
 import { collection, getDocs, orderBy, query, doc, getDoc, setDoc, where, onSnapshot, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
-import { canEditSignedCustomerAddress, canFranchiseeAccessLead, canChangeFranchisee } from '@/lib/lead-permissions'
+import { canEditSignedCustomerAddress, canFranchiseeAccessLead, canChangeFranchisee, isSignedOrWonCompany } from '@/lib/lead-permissions'
 import { sendCompanyCustomerUpdateToNetSuite } from '@/services/netsuite'
 import { AccessDenied } from '@/components/access-denied'
 import { RequestAddressChangeDialog } from '@/components/request-address-change-dialog'
@@ -129,9 +129,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   }
 
   const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.role === 'admin' || isSuperAdmin;
-  const canCreateInvoice = canCreateCustomerInvoice(userProfile, isSuperAdmin);
-
   const [company, setCompany] = useState<Lead>(initialCompany);
+  const hasInvoiceRolePermission = canCreateCustomerInvoice(userProfile, isSuperAdmin);
+  const canCreateInvoice = hasInvoiceRolePermission && isSignedOrWonCompany(company);
   const [localMileJobs, setLocalMileJobs] = useState<any[]>([]);
   const [localMileStatus, setLocalMileStatus] = useState<LocalMileCompanyStatusResponse | null>(null);
   const [loadingLocalMileStatus, setLoadingLocalMileStatus] = useState(false);

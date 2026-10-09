@@ -38,6 +38,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { getCompaniesFromFirebase, getLastInvoicesForCompanies } from '@/services/firebase';
+import { isSignedOrWonCompany } from '@/lib/lead-permissions';
 import type { Lead, Invoice } from '@/lib/types';
 import { safeFormatDate } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -82,12 +83,9 @@ export function CustomerInvoicingClient() {
     setLoading(true);
     try {
       const data = await getCompaniesFromFirebase({ skipCoordinateCheck: true });
-      // Filter active signed customers (exclude lost customers)
-      const activeSigned = data.filter(c => {
-        const status = (c.status || c.customerStatus || '').toLowerCase();
-        return !status.includes('lost');
-      });
-      setCompanies(activeSigned);
+      // List down companies with the status as signed/won only
+      const signedWonOnly = data.filter(c => isSignedOrWonCompany(c));
+      setCompanies(signedWonOnly);
     } catch (error) {
       console.error('Error fetching companies for invoicing:', error);
       toast({
@@ -610,7 +608,7 @@ export function CustomerInvoicingClient() {
                         <TableCell>
                           <div className="flex flex-col">
                             <Link 
-                              href={`/leads/${company.id}`}
+                              href={`/companies/${company.id}`}
                               className="font-bold text-slate-900 hover:text-[#095c7b] hover:underline flex items-center gap-1.5 text-sm"
                             >
                               {company.companyName}

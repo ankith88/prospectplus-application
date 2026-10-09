@@ -91,6 +91,7 @@ import {
   canCreateCustomerInvoice,
   ServiceCatalogItem 
 } from '@/lib/invoice-services-catalog';
+import { isSignedOrWonCompany } from '@/lib/lead-permissions';
 import { format, startOfMonth, endOfMonth, subMonths, addDays } from 'date-fns';
 
 interface InvoiceLineDraft {
@@ -1557,6 +1558,28 @@ export function CreateInvoiceDialog({
             </DialogTitle>
             <DialogDescription>
               Invoice creation is currently restricted to Administrators and Superadmins.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  if (company && !isSignedOrWonCompany(company)) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" /> Invoicing Restricted
+            </DialogTitle>
+            <DialogDescription>
+              Invoices can only be created for companies with status Signed or Won.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

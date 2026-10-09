@@ -385,6 +385,28 @@ export function isLostCustomerOrLead(lead?: Partial<Lead> | null): boolean {
   return isLost(status) || isLost(customerStatus) || (outcome ? isLost(outcome) : false);
 }
 
+/**
+ * Checks if a company or lead has a status of signed or won.
+ * Returns true if status or customerStatus is 'signed' or 'won' (or standard variants like 'signed customer', 'closed won', 'won customer'),
+ * and false if the status is lost, cancelled, new, or any other status.
+ */
+export function isSignedOrWonCompany(leadOrCompany?: Partial<Lead> | null): boolean {
+  if (!leadOrCompany) return false;
+  if (isLostCustomerOrLead(leadOrCompany)) return false;
+
+  const status = (leadOrCompany.status || '').toString().toLowerCase().trim();
+  const customerStatus = (leadOrCompany.customerStatus || '').toString().toLowerCase().trim();
+
+  const isWonOrSigned = (s: string) =>
+    s === 'signed' ||
+    s === 'won' ||
+    s === 'signed customer' ||
+    s === 'closed won' ||
+    s === 'won customer';
+
+  return isWonOrSigned(status) || isWonOrSigned(customerStatus);
+}
+
 
 export function canChangeFranchisee(
   lead: Partial<Lead> | null | undefined,
