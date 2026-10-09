@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from "@/components/ui/button"
@@ -26,7 +26,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import Link from 'next/link';
 import { FullScreenLoader, Loader } from '@/components/ui/loader';
-import { ShieldCheck, Smartphone, KeyRound, RefreshCw, ArrowLeft, QrCode } from 'lucide-react';
+import { ShieldCheck, Smartphone, KeyRound, RefreshCw, ArrowLeft } from 'lucide-react';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
@@ -52,6 +52,7 @@ export default function SignInPage() {
     signIn, 
     signOut,
     user, 
+    userProfile,
     is2FAVerified, 
     loading: authLoading, 
     isSigningIn, 
@@ -66,6 +67,33 @@ export default function SignInPage() {
       router.replace('/');
     }
   }, [user, is2FAVerified, authLoading, is2FAModalOpen, router]);
+
+  // If user is already authenticated in Firebase Auth session but requires 2FA and not yet verified
+  useEffect(() => {
+    if (!authLoading && user && userProfile?.requires2FA && !is2FAVerified && !is2FAModalOpen && !mfaUid) {
+      const init2FAChallenge = async () => {
+        try {
+          const res = await fetch('/api/auth/2fa/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid: user.uid, email: user.email }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            setMfaUid(user.uid);
+            setMfaMethod((data.method as any) || (userProfile.twoFactorMethod as any) || 'sms');
+            setMfaMaskedMobile(data.maskedMobile || '');
+            setMfaSecret(data.secret || '');
+            setMfaQrDataUrl(data.qrDataUrl || '');
+            setIs2FAModalOpen(true);
+          }
+        } catch (e) {
+          console.error('[2FA Auto-Init Error]:', e);
+        }
+      };
+      init2FAChallenge();
+    }
+  }, [authLoading, user, userProfile, is2FAVerified, is2FAModalOpen, mfaUid]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -221,176 +249,187 @@ export default function SignInPage() {
     <>
     {(isSigningIn) && <FullScreenLoader message="Signing in..." />}
     <div className="flex min-h-svh items-center justify-center bg-background p-4 sm:p-6">
-      <Card className="w-full max-w-sm shadow-lg">
-        <CardHeader className="flex flex-col items-center text-center">
-            <div className="logo-text !text-[var(--ink)] !text-3xl mb-2">
+      
+      {/* Dynamic Main Card: Transitions smoothly to 2FA Card when challenge is active */}
+      {is2FAModalOpen ? (
+        <Card className="w-full max-w-md shadow-2xl border-border animate-in fade-in zoom-in-95 duration-200">
+          <CardHeader className="flex flex-col items-center text-center pb-2">
+            <div className="logo-text !text-[var(--ink)] !text-2xl mb-1">
               PROSPECT<span className="logo-plus">.plus</span>
             </div>
-            <CardDescription className="text-center">
-                Sign in to your account
+            <div className={`h-12 w-12 rounded-full flex items-center justify-center my-2 shadow-sm ${
+              mfaMethod === 'sms' 
+                ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400' 
+                : 'bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400'
+            }`}>
+              {mfaMethod === 'sms' ? <Smartphone className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
+            </div>
+            <CardTitle className="text-xl font-bold">
+              {mfaMethod === 'totp_setup_needed' 
+                ? 'Set Up Google Authenticator' 
+                : mfaMethod === 'totp' 
+                ? 'Google Authenticator 2FA' 
+                : 'Two-Factor SMS Verification'}
+            </CardTitle>
+            <CardDescription className="text-center text-xs text-muted-foreground pt-1 px-4">
+              {mfaMethod === 'totp_setup_needed' ? (
+                'Scan the QR code below using Google Authenticator on your mobile device.'
+              ) : mfaMethod === 'totp' ? (
+                'Enter the rotating 6-digit code currently displayed in your Google Authenticator app.'
+              ) : (
+                <>Enter the 6-digit verification code sent via SMS to <span className="font-semibold text-foreground">{mfaMaskedMobile}</span>.</>
+              )}
             </CardDescription>
-        </CardHeader>
-        <CardContent>
-            <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                    id="email"
-                    type="email"
-                    placeholder="m@example.com"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={isSigningIn}
-                />
-                </div>
-                 <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                        <Label htmlFor="password">Password</Label>
-                        <Button
-                            type="button"
-                            variant="link"
-                            className="p-0 h-auto text-xs"
-                            onClick={() => setIsResetDialogOpen(true)}
-                        >
-                            Forgot password?
-                        </Button>
-                    </div>
-                    <Input
-                        id="password"
-                        type="password"
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        disabled={isSigningIn}
-                    />
-                </div>
-                <Button type="submit" className="w-full" disabled={isSigningIn}>
-                 Sign In
-                </Button>
-            </form>
-        </CardContent>
-        <CardFooter className="flex flex-col items-center text-center gap-4 text-sm text-muted-foreground">
-           <div>By signing in, you agree to our terms of service.</div>
-           <div>
-            Need access or want to sign up? Contact{" "}
-            <Link href="mailto:ankith.ravindran@mailplus.com.au" className="underline text-primary font-medium">
-                Ankith Ravindran
-            </Link>
-            .
-           </div>
-        </CardFooter>
-      </Card>
-    </div>
-
-    {/* 2FA Verification Modal */}
-    <Dialog open={is2FAModalOpen} onOpenChange={(open) => !open && handleCancel2FA()}>
-        <DialogContent className="sm:max-w-md">
-            <DialogHeader className="text-center sm:text-center items-center">
-                <div className={`h-12 w-12 rounded-full flex items-center justify-center mb-2 ${
-                  mfaMethod === 'sms' 
-                    ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400' 
-                    : 'bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400'
-                }`}>
-                    {mfaMethod === 'sms' ? <Smartphone className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
-                </div>
-                <DialogTitle className="text-xl">
-                  {mfaMethod === 'totp_setup_needed' 
-                    ? 'Set Up Google Authenticator' 
-                    : mfaMethod === 'totp' 
-                    ? 'Google Authenticator 2FA' 
-                    : 'Two-Factor SMS Verification'}
-                </DialogTitle>
-                <DialogDescription className="text-center text-sm pt-1">
-                  {mfaMethod === 'totp_setup_needed' ? (
-                    'Scan the QR code below using Google Authenticator, Microsoft Authenticator, or 1Password.'
-                  ) : mfaMethod === 'totp' ? (
-                    'Enter the rotating 6-digit code currently displayed in your Google Authenticator app.'
-                  ) : (
-                    <>Enter the 6-digit verification code sent via SMS to <span className="font-semibold text-foreground">{mfaMaskedMobile}</span>.</>
-                  )}
-                </DialogDescription>
-            </DialogHeader>
-
+          </CardHeader>
+          <CardContent className="space-y-4">
             {/* QR Code Setup View */}
-            {mfaMethod === 'totp_setup_needed' && mfaQrDataUrl && (
+            {mfaMethod === 'totp_setup_needed' && (
               <div className="flex flex-col items-center justify-center p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border text-center space-y-2">
-                <img 
-                  src={mfaQrDataUrl} 
-                  alt="Google Authenticator QR Code" 
-                  className="h-44 w-44 rounded-md border bg-white p-2 shadow-sm"
-                />
-                <div className="text-[11px] text-muted-foreground font-mono select-all break-all px-2">
-                  Key: <strong className="text-foreground">{mfaSecret}</strong>
-                </div>
+                {mfaQrDataUrl ? (
+                  <img 
+                    src={mfaQrDataUrl} 
+                    alt="Google Authenticator QR Code" 
+                    className="h-48 w-48 rounded-md border bg-white p-2 shadow-sm"
+                  />
+                ) : (
+                  <div className="h-48 w-48 rounded-md border bg-muted flex items-center justify-center">
+                    <Loader className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                )}
+                {mfaSecret && (
+                  <div className="text-[11px] text-muted-foreground font-mono select-all break-all px-2">
+                    Key: <strong className="text-foreground">{mfaSecret}</strong>
+                  </div>
+                )}
               </div>
             )}
 
-            <form onSubmit={handleVerify2FASubmit} className="space-y-4 py-2">
-                <div className="space-y-2 text-center">
-                    <Label htmlFor="mfa-code" className="text-xs text-muted-foreground">
-                      {mfaMethod === 'totp_setup_needed' ? 'Enter the 6-digit code from your app to confirm setup:' : '6-Digit Verification Code'}
-                    </Label>
-                    <Input
-                        id="mfa-code"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        maxLength={6}
-                        placeholder="••••••"
-                        autoFocus
-                        value={mfaOtpCode}
-                        onChange={(e) => setMfaOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        className="text-center text-2xl font-mono tracking-widest h-12 text-primary font-bold"
-                        disabled={isVerifying2FA}
-                    />
-                </div>
+            <form onSubmit={handleVerify2FASubmit} className="space-y-4">
+              <div className="space-y-2 text-center">
+                <Label htmlFor="mfa-code" className="text-xs text-muted-foreground font-medium">
+                  {mfaMethod === 'totp_setup_needed' ? 'Enter the 6-digit code from your app to confirm setup:' : '6-Digit Verification Code'}
+                </Label>
+                <Input
+                  id="mfa-code"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="••••••"
+                  autoFocus
+                  value={mfaOtpCode}
+                  onChange={(e) => setMfaOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="text-center text-2xl font-mono tracking-widest h-12 text-primary font-bold bg-background"
+                  disabled={isVerifying2FA}
+                />
+              </div>
 
-                <div className="flex items-center justify-between text-xs px-1">
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-auto p-0 text-muted-foreground hover:text-foreground flex items-center gap-1"
-                        onClick={handleCancel2FA}
-                        disabled={isVerifying2FA}
-                    >
-                        <ArrowLeft className="h-3.5 w-3.5" /> Back to Sign In
-                    </Button>
+              <div className="flex items-center justify-between text-xs px-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-0 text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  onClick={handleCancel2FA}
+                  disabled={isVerifying2FA}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back to Sign In
+                </Button>
 
-                    {mfaMethod === 'sms' && (
-                      <Button
-                          type="button"
-                          variant="link"
-                          size="sm"
-                          className="h-auto p-0 text-xs text-primary"
-                          onClick={handleResend2FA}
-                          disabled={resendCooldown > 0 || isResending2FA || isVerifying2FA}
-                      >
-                          {isResending2FA ? (
-                              <span className="flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin" /> Sending...</span>
-                          ) : resendCooldown > 0 ? (
-                              `Resend SMS in ${resendCooldown}s`
-                          ) : (
-                              "Resend SMS Code"
-                          )}
-                      </Button>
+                {mfaMethod === 'sms' && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs text-primary"
+                    onClick={handleResend2FA}
+                    disabled={resendCooldown > 0 || isResending2FA || isVerifying2FA}
+                  >
+                    {isResending2FA ? (
+                      <span className="flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin" /> Sending...</span>
+                    ) : resendCooldown > 0 ? (
+                      `Resend in ${resendCooldown}s`
+                    ) : (
+                      "Resend SMS Code"
                     )}
-                </div>
+                  </Button>
+                )}
+              </div>
 
-                <DialogFooter className="sm:justify-stretch">
-                    <Button 
-                        type="submit" 
-                        className="w-full bg-[#095c7b] hover:bg-[#07465e] text-white" 
-                        disabled={isVerifying2FA || mfaOtpCode.length !== 6}
-                    >
-                        {isVerifying2FA ? <Loader className="mr-2 h-4 w-4" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                        {mfaMethod === 'totp_setup_needed' ? 'Confirm & Sign In' : 'Verify & Continue'}
-                    </Button>
-                </DialogFooter>
+              <Button 
+                type="submit" 
+                className="w-full bg-[#095c7b] hover:bg-[#07465e] text-white h-10 font-semibold" 
+                disabled={isVerifying2FA || mfaOtpCode.length !== 6}
+              >
+                {isVerifying2FA ? <Loader className="mr-2 h-4 w-4" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                {mfaMethod === 'totp_setup_needed' ? 'Confirm & Sign In' : 'Verify & Continue'}
+              </Button>
             </form>
-        </DialogContent>
-    </Dialog>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="w-full max-w-sm shadow-lg">
+          <CardHeader className="flex flex-col items-center text-center">
+              <div className="logo-text !text-[var(--ink)] !text-3xl mb-2">
+                PROSPECT<span className="logo-plus">.plus</span>
+              </div>
+              <CardDescription className="text-center">
+                  Sign in to your account
+              </CardDescription>
+          </CardHeader>
+          <CardContent>
+              <form onSubmit={handleSignIn} className="space-y-4">
+                  <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                      id="email"
+                      type="email"
+                      placeholder="m@example.com"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isSigningIn}
+                  />
+                  </div>
+                   <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                          <Label htmlFor="password">Password</Label>
+                          <Button
+                              type="button"
+                              variant="link"
+                              className="p-0 h-auto text-xs"
+                              onClick={() => setIsResetDialogOpen(true)}
+                          >
+                              Forgot password?
+                          </Button>
+                      </div>
+                      <Input
+                          id="password"
+                          type="password"
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          disabled={isSigningIn}
+                      />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isSigningIn}>
+                   Sign In
+                  </Button>
+              </form>
+          </CardContent>
+          <CardFooter className="flex flex-col items-center text-center gap-4 text-sm text-muted-foreground">
+             <div>By signing in, you agree to our terms of service.</div>
+             <div>
+              Need access or want to sign up? Contact{" "}
+              <Link href="mailto:ankith.ravindran@mailplus.com.au" className="underline text-primary font-medium">
+                  Ankith Ravindran
+              </Link>
+              .
+             </div>
+          </CardFooter>
+        </Card>
+      )}
+    </div>
 
     {/* Password Reset Modal */}
     <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
