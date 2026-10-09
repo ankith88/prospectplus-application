@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
 import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely, unlinkUserFromFranchiseeCompletely } from '@/services/firebase';
-import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store } from 'lucide-react';
+import { Lock, Mail, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { CreateUserDialog } from './create-user-dialog';
@@ -86,6 +86,8 @@ export function UserManagementTable() {
   const [newAccountName, setNewAccountName] = useState('');
   const [newPhoneNumber, setNewPhoneNumber] = useState('');
   const [newMobileNumber, setNewMobileNumber] = useState('');
+  const [newRequires2FA, setNewRequires2FA] = useState(false);
+  const [isResetting2FA, setIsResetting2FA] = useState<string | null>(null);
   const [newAircallPhoneNumber, setNewAircallPhoneNumber] = useState('');
   const [newDialpadPhoneNumber, setNewDialpadPhoneNumber] = useState('');
   const [newDialpadUserId, setNewDialpadUserId] = useState('');
@@ -201,6 +203,7 @@ export function UserManagementTable() {
       setNewFranchiseeId(userToEdit.franchiseeId || userToEdit.franchiseeInternalId || linkedFran?.franchiseeId || '');
       setNewPhoneNumber(userToEdit.phoneNumber || '');
       setNewMobileNumber(userToEdit.mobileNumber || userToEdit.phoneNumber || '');
+      setNewRequires2FA(Boolean(userToEdit.requires2FA));
       setNewAircallPhoneNumber(userToEdit.aircallPhoneNumber || '');
       setNewDialpadPhoneNumber(userToEdit.dialpadPhoneNumber || '');
       setNewDialpadUserId(userToEdit.dialpadUserId || '');
@@ -216,6 +219,40 @@ export function UserManagementTable() {
       setNewAccountName(userToEdit.bankDetails?.accountName || '');
     }
   }, [userToEdit]);
+
+  const handleReset2FA = async (targetUser: UserProfile, disable = false) => {
+    if (!userProfile?.uid) return;
+    setIsResetting2FA(targetUser.uid);
+    try {
+      const res = await fetch('/api/admin/users/reset-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: targetUser.uid,
+          requestorUid: userProfile.uid,
+          disable2FA: disable,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      toast({
+        title: '2FA Reset Successful',
+        description: data.message || `2FA state has been reset for ${targetUser.displayName || targetUser.email}.`,
+      });
+      setUsers(prev => prev.map(u => u.uid === targetUser.uid ? { ...u, requires2FA: disable ? false : u.requires2FA, twoFactorVerifiedAt: null } : u));
+      if (userToEdit && userToEdit.uid === targetUser.uid) {
+        if (disable) setNewRequires2FA(false);
+      }
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Reset Failed',
+        description: err.message || 'Failed to reset 2FA state.',
+      });
+    } finally {
+      setIsResetting2FA(null);
+    }
+  };
 
   const handleToggleActivation = async () => {
     if (!userToToggle) return;
@@ -425,6 +462,7 @@ export function UserManagementTable() {
         defaultRole: effectiveDefaultRole as UserRole, 
         phoneNumber: newMobileNumber, 
         mobileNumber: newMobileNumber, 
+        requires2FA: newRequires2FA,
         aircallPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newAircallPhoneNumber,
         dialpadPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newDialpadPhoneNumber,
         dialpadUserId: effectiveAssignedRoles.includes('Franchisee') ? '' : newDialpadUserId,
@@ -805,6 +843,7 @@ export function UserManagementTable() {
                 </TableHead>
                 <TableHead>Admin Approval</TableHead>
                 <TableHead>Franchise</TableHead>
+                <TableHead>2FA</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -867,6 +906,15 @@ export function UserManagementTable() {
                         </div>
                       ) : (
                         <span>{user.franchisee || '-'}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {user.requires2FA ? (
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 whitespace-nowrap text-[11px] font-medium">
+                          <ShieldCheck className="mr-1 h-3 w-3 text-blue-600 dark:text-blue-400" /> Required
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs font-normal">Disabled</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -1398,6 +1446,53 @@ export function UserManagementTable() {
                  <div className="space-y-2">
                      <Label htmlFor="mobile-number">Mobile Number</Label>
                      <Input id="mobile-number" value={newMobileNumber} onChange={(e) => setNewMobileNumber(e.target.value)} placeholder="e.g. 0412345678" />
+                 </div>
+
+                 {/* 2FA Security Section */}
+                 <div className="rounded-lg border p-4 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
+                   <div className="flex items-center justify-between">
+                     <div className="space-y-0.5 pr-2">
+                       <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                         <ShieldCheck className="h-4 w-4 text-[#095c7b]" />
+                         Require 2FA via SMS
+                       </Label>
+                       <p className="text-xs text-muted-foreground">
+                         Requires this user to enter a 6-digit SMS code sent to their mobile on every login.
+                       </p>
+                     </div>
+                     <Checkbox
+                       id="requires-2fa-toggle"
+                       checked={newRequires2FA}
+                       onCheckedChange={(checked) => setNewRequires2FA(Boolean(checked))}
+                       disabled={!isSuperAdmin}
+                     />
+                   </div>
+                   {!isSuperAdmin && (
+                     <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                       * Only Super Administrators can modify 2FA requirements.
+                     </p>
+                   )}
+                   {newRequires2FA && !newMobileNumber && (
+                     <p className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                       <AlertTriangle className="h-3.5 w-3.5" /> A valid Mobile Number above is required for SMS code delivery.
+                     </p>
+                   )}
+                   {userToEdit?.requires2FA && isSuperAdmin && (
+                     <div className="pt-2 border-t flex items-center justify-between">
+                       <span className="text-xs text-muted-foreground">Need to reset 2FA challenge / state?</span>
+                       <Button
+                         type="button"
+                         variant="outline"
+                         size="sm"
+                         className="h-7 text-xs text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                         disabled={isResetting2FA === userToEdit.uid}
+                         onClick={() => handleReset2FA(userToEdit)}
+                       >
+                         {isResetting2FA === userToEdit.uid ? <Loader className="h-3 w-3 mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                         Reset 2FA State
+                       </Button>
+                     </div>
+                   )}
                  </div>
                  {!newAssignedRoles.includes('Franchisee') && (
                    <>

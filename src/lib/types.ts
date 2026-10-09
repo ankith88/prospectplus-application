@@ -485,6 +485,8 @@ export interface UserProfile {
   accountManagerId?: string
   netsuiteId?: string
   disabled?: boolean
+  requires2FA?: boolean
+  twoFactorVerifiedAt?: any
   linkedSalesRep?: string
   linkedBDR?: string
   franchisee?: string

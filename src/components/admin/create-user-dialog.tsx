@@ -28,6 +28,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '../ui/loader';
+import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { generateWelcomeEmailHtml } from '@/lib/welcome-email-template';
 import { getAllUsers, getAllFranchisees } from '@/services/firebase';
 import type { UserProfile, Franchisee } from '@/lib/types';
@@ -62,6 +63,7 @@ const formSchema = z.object({
   isOwnershipTransfer: z.boolean().optional().default(false),
   oldOwnerPersonalEmail: z.string().optional(),
   sendWelcomeEmail: z.boolean().default(true),
+  requires2FA: z.boolean().default(false),
 });
 
 interface CreateUserDialogProps {
@@ -85,6 +87,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       role: 'user',
       phoneNumber: '',
       mobileNumber: '',
+      requires2FA: false,
       aircallPhoneNumber: '',
       aircallUserId: '',
       dialpadPhoneNumber: '',
@@ -524,6 +527,23 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                     <FormLabel>Send Welcome Email</FormLabel>
                     <FormDescription>
                       Send an account setup email to this user containing their login credentials and a sign-in link.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+            )}/>
+            <FormField control={form.control} name="requires2FA" render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm bg-slate-50/50 dark:bg-slate-900/50">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={!SUPER_ADMIN_UIDS.includes(userProfile?.uid || '')}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="font-semibold text-foreground">Require 2FA via SMS</FormLabel>
+                    <FormDescription>
+                      Require this user to verify a 6-digit SMS code on login (defaults to Off). Make sure a mobile number is set.
                     </FormDescription>
                   </div>
                 </FormItem>

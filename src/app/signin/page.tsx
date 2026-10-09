@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect } from 'react';
@@ -25,9 +24,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import Image from 'next/image';
 import Link from 'next/link';
 import { FullScreenLoader, Loader } from '@/components/ui/loader';
+import { ShieldCheck, Smartphone, RefreshCw, ArrowLeft } from 'lucide-react';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
@@ -35,21 +34,61 @@ export default function SignInPage() {
   const [resetEmail, setResetEmail] = useState('');
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
+  
+  // 2FA Verification State
+  const [is2FAModalOpen, setIs2FAModalOpen] = useState(false);
+  const [mfaUid, setMfaUid] = useState<string | null>(null);
+  const [mfaMaskedMobile, setMfaMaskedMobile] = useState<string>('');
+  const [mfaOtpCode, setMfaOtpCode] = useState('');
+  const [isVerifying2FA, setIsVerifying2FA] = useState(false);
+  const [isResending2FA, setIsResending2FA] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
   const router = useRouter();
-  const { signIn, user, loading: authLoading, isSigningIn, sendPasswordReset } = useAuth();
+  const { 
+    signIn, 
+    signOut,
+    user, 
+    is2FAVerified, 
+    loading: authLoading, 
+    isSigningIn, 
+    sendPasswordReset,
+    verify2FACode,
+    resend2FACode,
+  } = useAuth();
   const { toast } = useToast();
   
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && user && is2FAVerified && !is2FAModalOpen) {
       router.replace('/');
     }
-  }, [user, authLoading, router]);
+  }, [user, is2FAVerified, authLoading, is2FAModalOpen, router]);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (resendCooldown > 0) {
+      timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await signIn(email, password);
-      // The redirect is handled by the useEffect above
+      const result: any = await signIn(email, password);
+      if (result && result.requires2FA) {
+        setMfaUid(result.uid);
+        setMfaMaskedMobile(result.maskedMobile || 'your mobile number');
+        setMfaOtpCode('');
+        setIs2FAModalOpen(true);
+        setResendCooldown(30);
+        toast({
+          title: "2FA Code Sent",
+          description: `A 6-digit verification code was sent to ${result.maskedMobile || 'your registered mobile'}.`,
+        });
+        return;
+      }
+      // Standard redirect handled by useEffect
     } catch (error: any) {
       console.error("Sign in failed:", error);
       let errorMessage = "An unexpected error occurred. Please check your credentials.";
@@ -59,6 +98,8 @@ export default function SignInPage() {
           errorMessage = "Please enter a valid email address.";
       } else if (error.code === 'auth/user-disabled-custom' || error.code === 'auth/user-disabled') {
           errorMessage = "Your account has been disabled. Please contact an administrator for access.";
+      } else if (error.code === 'auth/2fa-no-mobile' || error.code === 'NO_MOBILE_NUMBER') {
+          errorMessage = error.message || "2FA is required for your account, but no mobile number is registered. Please contact a Super Administrator.";
       } else {
           errorMessage = error.message;
       }
@@ -66,8 +107,67 @@ export default function SignInPage() {
         variant: "destructive",
         title: "Sign in Failed",
         description: errorMessage,
-      })
+      });
     }
+  };
+
+  const handleVerify2FASubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaUid || !mfaOtpCode || mfaOtpCode.trim().length !== 6) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Code",
+        description: "Please enter the complete 6-digit verification code.",
+      });
+      return;
+    }
+
+    setIsVerifying2FA(true);
+    try {
+      await verify2FACode(mfaUid, mfaOtpCode.trim());
+      toast({
+        title: "Verification Successful",
+        description: "Welcome to ProspectPlus!",
+      });
+      setIs2FAModalOpen(false);
+      router.replace('/');
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Verification Failed",
+        description: err.message || "Invalid or expired verification code.",
+      });
+    } finally {
+      setIsVerifying2FA(false);
+    }
+  };
+
+  const handleResend2FA = async () => {
+    if (!mfaUid || resendCooldown > 0) return;
+    setIsResending2FA(true);
+    try {
+      const res = await resend2FACode(mfaUid);
+      setResendCooldown(30);
+      toast({
+        title: "Code Resent",
+        description: `A new 6-digit code has been sent to ${res.maskedMobile || mfaMaskedMobile}.`,
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Resend Failed",
+        description: err.message || "Failed to resend verification code.",
+      });
+    } finally {
+      setIsResending2FA(false);
+    }
+  };
+
+  const handleCancel2FA = async () => {
+    setIs2FAModalOpen(false);
+    setMfaUid(null);
+    setMfaOtpCode('');
+    await signOut();
   };
 
   const handlePasswordReset = async () => {
@@ -83,7 +183,6 @@ export default function SignInPage() {
         setResetEmail('');
     } catch (error: any) {
         console.error('Password reset failed:', error);
-        // We show a generic message to avoid confirming if an email exists
         toast({ title: 'Success', description: 'If an account exists for that email, a password reset link has been sent.' });
         setIsResetDialogOpen(false);
         setResetEmail('');
@@ -91,7 +190,6 @@ export default function SignInPage() {
         setIsSendingReset(false);
     }
   };
-
 
   if (authLoading) {
       return <FullScreenLoader message="Loading..." />;
@@ -163,6 +261,85 @@ export default function SignInPage() {
       </Card>
     </div>
 
+    {/* 2FA Verification Modal */}
+    <Dialog open={is2FAModalOpen} onOpenChange={(open) => !open && handleCancel2FA()}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader className="text-center sm:text-center items-center">
+                <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-950 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-2">
+                    <ShieldCheck className="h-6 w-6" />
+                </div>
+                <DialogTitle className="text-xl">Two-Factor Authentication</DialogTitle>
+                <DialogDescription className="text-center text-sm pt-1">
+                    Enter the 6-digit verification code sent via SMS to <span className="font-semibold text-foreground">{mfaMaskedMobile}</span>.
+                </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleVerify2FASubmit} className="space-y-5 py-3">
+                <div className="space-y-2 text-center">
+                    <Label htmlFor="mfa-code" className="sr-only">6-Digit Verification Code</Label>
+                    <Input
+                        id="mfa-code"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        placeholder="••••••"
+                        autoFocus
+                        value={mfaOtpCode}
+                        onChange={(e) => setMfaOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="text-center text-2xl font-mono tracking-widest h-12 text-blue-600 dark:text-blue-400 font-bold"
+                        disabled={isVerifying2FA}
+                    />
+                    <p className="text-xs text-muted-foreground pt-1">
+                        Code expires in 5 minutes.
+                    </p>
+                </div>
+
+                <div className="flex items-center justify-between text-xs px-1">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto p-0 text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        onClick={handleCancel2FA}
+                        disabled={isVerifying2FA}
+                    >
+                        <ArrowLeft className="h-3.5 w-3.5" /> Back to Sign In
+                    </Button>
+
+                    <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs text-primary"
+                        onClick={handleResend2FA}
+                        disabled={resendCooldown > 0 || isResending2FA || isVerifying2FA}
+                    >
+                        {isResending2FA ? (
+                            <span className="flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin" /> Sending...</span>
+                        ) : resendCooldown > 0 ? (
+                            `Resend SMS in ${resendCooldown}s`
+                        ) : (
+                            "Resend SMS Code"
+                        )}
+                    </Button>
+                </div>
+
+                <DialogFooter className="sm:justify-stretch">
+                    <Button 
+                        type="submit" 
+                        className="w-full bg-[#095c7b] hover:bg-[#07465e] text-white" 
+                        disabled={isVerifying2FA || mfaOtpCode.length !== 6}
+                    >
+                        {isVerifying2FA ? <Loader className="mr-2 h-4 w-4" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                        Verify & Continue
+                    </Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+    </Dialog>
+
+    {/* Password Reset Modal */}
     <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
         <DialogContent>
             <DialogHeader>

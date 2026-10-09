@@ -118,6 +118,9 @@ interface AuthContextType {
     completeOnboardingState: (routeKey: string) => Promise<void>;
     updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
     isSuperAdmin: boolean;
+    is2FAVerified: boolean;
+    verify2FACode: (uid: string, code: string) => Promise<{ success: boolean }>;
+    resend2FACode: (uid: string) => Promise<{ success: boolean; maskedMobile?: string; message?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -139,6 +142,9 @@ const AuthContext = createContext<AuthContextType>({
     completeOnboardingState: async () => {},
     updateUserProfile: async () => {},
     isSuperAdmin: false,
+    is2FAVerified: true,
+    verify2FACode: async () => ({ success: false }),
+    resend2FACode: async () => ({ success: false }),
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -149,6 +155,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isSigningIn, setIsSigningIn] = useState(false);
     const [isSigningOut, setIsSigningOut] = useState(false);
     const [isSwitchingFranchisee, setIsSwitchingFranchisee] = useState(false);
+    const [is2FAVerified, setIs2FAVerified] = useState(true);
     const [auth, setAuth] = useState<Auth | null>(null);
     const router = useRouter();
     const pathname = usePathname();
@@ -173,6 +180,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             setSavedRoutes([]);
                             setLoading(false);
                             return;
+                        }
+
+                        const isSession2FAVerified = typeof window !== 'undefined' ? sessionStorage.getItem(`2fa_verified_${user.uid}`) === 'true' : false;
+                        if (profileData.requires2FA && !isSession2FAVerified) {
+                            setIs2FAVerified(false);
+                        } else {
+                            setIs2FAVerified(true);
                         }
 
                         const displayName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
@@ -244,9 +258,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [router]);
 
     useEffect(() => {
+        const isSessionVerified = typeof window !== 'undefined' && user ? sessionStorage.getItem(`2fa_verified_${user.uid}`) === 'true' : true;
+        const needs2FA = user && userProfile?.requires2FA && !isSessionVerified;
+
         if (
             !loading && 
-            !user && 
+            (!user || needs2FA) && 
             pathname !== '/signup' && 
             pathname !== '/signin' && 
             !pathname.startsWith('/reset-password') &&
@@ -268,7 +285,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         ) {
             router.push('/signin');
         }
-    }, [user, loading, router, pathname]);
+    }, [user, userProfile, loading, router, pathname]);
 
 
     const signIn = useCallback(async (email: string, pass: string) => {
@@ -287,7 +304,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         await firebaseSignOut(auth);
                         throw { code: 'auth/user-disabled-custom', message: 'Your account has been disabled. Please contact an administrator.' };
                     }
+
+                    if (profileData.requires2FA) {
+                        const isSessionVerified = typeof window !== 'undefined' ? sessionStorage.getItem(`2fa_verified_${loggedInUser.uid}`) === 'true' : false;
+                        if (!isSessionVerified) {
+                            setIs2FAVerified(false);
+                            // Trigger 2FA SMS send
+                            const sendRes = await fetch('/api/auth/2fa/send', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ uid: loggedInUser.uid }),
+                            });
+                            const sendData = await sendRes.json();
+                            if (!sendData.success) {
+                                throw {
+                                    code: sendData.code || 'auth/2fa-send-failed',
+                                    message: sendData.message || 'Failed to dispatch verification SMS.',
+                                };
+                            }
+                            return {
+                                requires2FA: true,
+                                uid: loggedInUser.uid,
+                                maskedMobile: sendData.maskedMobile,
+                                userCredential,
+                            };
+                        }
+                    }
                     
+                    setIs2FAVerified(true);
                     const displayName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
                     const fullProfile: UserProfile = { uid: loggedInUser.uid, displayName: displayName || loggedInUser.email || '', ...profileData };
                     if (typeof window !== 'undefined') {
@@ -309,6 +353,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [auth]);
 
+    const verify2FACode = useCallback(async (uid: string, code: string) => {
+        const res = await fetch('/api/auth/2fa/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid, code }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+            throw new Error(data.message || 'Invalid verification code.');
+        }
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem(`2fa_verified_${uid}`, 'true');
+        }
+        setIs2FAVerified(true);
+        if (auth?.currentUser) {
+            const userDocRef = doc(firestore, "users", uid);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                const profileData = userDoc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
+                const displayName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
+                const fullProfile: UserProfile = { uid, displayName: displayName || auth.currentUser.email || '', ...profileData };
+                fullProfile.activeRole = fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
+                setUserProfile(fullProfile);
+            }
+        }
+        return { success: true };
+    }, [auth]);
+
+    const resend2FACode = useCallback(async (uid: string) => {
+        const res = await fetch('/api/auth/2fa/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+            throw new Error(data.message || 'Failed to resend verification code.');
+        }
+        return data;
+    }, []);
+
     const signOut = useCallback(async () => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
         setIsSigningOut(true);
@@ -316,6 +401,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             sessionStorage.removeItem('login_session_id');
             if (userProfile?.uid) {
                 localStorage.removeItem(`activeRole_${userProfile.uid}`);
+                sessionStorage.removeItem(`2fa_verified_${userProfile.uid}`);
+            }
+            if (user?.uid) {
+                sessionStorage.removeItem(`2fa_verified_${user.uid}`);
             }
             localStorage.removeItem('session_init_time');
             localStorage.removeItem('last_session_day');
@@ -324,9 +413,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         await firebaseSignOut(auth);
         setUser(null);
         setUserProfile(null);
+        setIs2FAVerified(true);
         setSavedRoutes([]);
         setIsSigningOut(false);
-    }, [auth, userProfile]);
+    }, [auth, user, userProfile]);
 
     const sendPasswordReset = useCallback(async (email: string) => {
         try {
@@ -386,6 +476,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 defaultRole: userData.role,
                 phoneNumber: userData.mobileNumber || userData.phoneNumber || null,
                 mobileNumber: userData.mobileNumber || userData.phoneNumber || null,
+                requires2FA: Boolean(userData.requires2FA) || false,
                 aircallPhoneNumber: userData.aircallPhoneNumber || null,
                 aircallUserId: userData.aircallUserId || null,
                 dialpadPhoneNumber: userData.dialpadPhoneNumber || null,
@@ -586,6 +677,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         completeOnboardingState,
         updateUserProfile,
         isSuperAdmin: userProfile ? SUPER_ADMIN_UIDS.includes(userProfile.uid) : false,
+        is2FAVerified,
+        verify2FACode,
+        resend2FACode,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
