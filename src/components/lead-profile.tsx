@@ -75,6 +75,7 @@ import {
   FileAudio,
   FileX,
   ChevronDown,
+  ChevronUp,
   ChevronLeft,
   ChevronRight,
   GitMerge,
@@ -87,9 +88,9 @@ import {
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
-import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isLostCustomerOrLead, isFranchiseeRole, isAccountOrSalesManager, isDialerRole, isOutboundLead } from '@/lib/lead-permissions'
-import { checkHasAmpo } from '@/lib/standing-order'
+import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isLostCustomerOrLead, isSignedOrWonCompany, isFranchiseeRole, isAccountOrSalesManager, isDialerRole, isOutboundLead } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
+import { checkHasAmpo } from '@/lib/standing-order'
 import { Pencil } from 'lucide-react'
 import { EditTaskDialog } from '@/components/edit-task-dialog'
 import { setHours, setMinutes } from 'date-fns'
@@ -1685,7 +1686,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [expandedInvoiceIds, setExpandedInvoiceIds] = useState<Set<string>>(new Set());
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  const canCreateInvoice = canCreateCustomerInvoice(userProfile, isSuperAdmin);
+
+  // Multi-branch filtering & view state
+  const [showAllBranches, setShowAllBranches] = useState(false);
+  const [branchSearchQuery, setBranchSearchQuery] = useState('');
+  const [branchStateFilter, setBranchStateFilter] = useState<string>('ALL');
+  const hasInvoiceRolePermission = canCreateCustomerInvoice(userProfile, isSuperAdmin);
+  const canCreateInvoice = hasInvoiceRolePermission && isSignedOrWonCompany(lead);
 
   const { recentInvoices, olderInvoices } = useMemo(() => {
     if (!invoices || invoices.length === 0) return { recentInvoices: [], olderInvoices: [] };
@@ -7490,80 +7497,209 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </div>
 
                             {/* Multi-Branch Footprint & Additional Australian Locations */}
-                            {(hasMultipleBranches || (branchLocations && branchLocations.length > 0)) ? (
-                              <div className="p-4 bg-gradient-to-br from-indigo-50/60 via-sky-50/40 to-slate-50 dark:from-slate-800/80 dark:to-slate-900 rounded-xl border border-indigo-200/80 dark:border-indigo-900/40 space-y-3">
-                                <div className="flex items-center justify-between flex-wrap gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg">
-                                      <Building2 className="w-4 h-4" />
+                            {(hasMultipleBranches || (branchLocations && branchLocations.length > 0)) ? (() => {
+                              const allLocs: any[] = branchLocations || [];
+                              const stateCounts: Record<string, number> = {};
+                              allLocs.forEach(loc => {
+                                const st = (loc.state || 'OTHER').toUpperCase().trim();
+                                stateCounts[st] = (stateCounts[st] || 0) + 1;
+                              });
+                              const availableStates = Object.keys(stateCounts).sort();
+
+                              const filteredLocs = allLocs.filter(loc => {
+                                if (branchStateFilter !== 'ALL') {
+                                  const st = (loc.state || 'OTHER').toUpperCase().trim();
+                                  if (st !== branchStateFilter) return false;
+                                }
+                                if (branchSearchQuery.trim()) {
+                                  const q = branchSearchQuery.toLowerCase().trim();
+                                  const match = 
+                                    (loc.locationName || '').toLowerCase().includes(q) ||
+                                    (loc.suburb || '').toLowerCase().includes(q) ||
+                                    (loc.state || '').toLowerCase().includes(q) ||
+                                    (loc.postcode || '').toLowerCase().includes(q) ||
+                                    (loc.street || '').toLowerCase().includes(q) ||
+                                    (loc.notes || '').toLowerCase().includes(q);
+                                  if (!match) return false;
+                                }
+                                return true;
+                              });
+
+                              const INITIAL_LIMIT = 6;
+                              const visibleLocs = showAllBranches ? filteredLocs : filteredLocs.slice(0, INITIAL_LIMIT);
+                              const hasMore = filteredLocs.length > INITIAL_LIMIT;
+
+                              const allAddressesText = allLocs
+                                .map((l, i) => `${i + 1}. ${l.locationName || 'Branch'} - ${[l.street, l.suburb, l.state, l.postcode].filter(Boolean).join(', ')}${l.phone ? ` (Phone: ${l.phone})` : ''}`)
+                                .join('\n');
+
+                              return (
+                                <div className="p-4 bg-gradient-to-br from-indigo-50/60 via-sky-50/40 to-slate-50 dark:from-slate-800/80 dark:to-slate-900 rounded-xl border border-indigo-200/80 dark:border-indigo-900/40 space-y-3">
+                                  <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg">
+                                        <Building2 className="w-4 h-4" />
+                                      </div>
+                                      <div>
+                                        <span className="text-xs font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300">
+                                          Australian Branch Footprint & Locations
+                                        </span>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                          {totalBranchCount || allLocs.length} physical locations / branch offices identified across Australia
+                                        </p>
+                                      </div>
                                     </div>
-                                    <div>
-                                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300">
-                                        Australian Branch Footprint & Locations
-                                      </span>
-                                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                        {totalBranchCount || branchLocations.length} physical locations / branch offices identified across Australia
-                                      </p>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {allAddressesText && (
+                                        <CopyButton 
+                                          textToCopy={allAddressesText} 
+                                          className="h-7 text-xs bg-white dark:bg-slate-800 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                                        />
+                                      )}
+                                      <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-300 font-semibold text-xs px-2.5 py-0.5">
+                                        🏢 Multi-Branch Footprint
+                                      </Badge>
                                     </div>
                                   </div>
-                                  <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-300 font-semibold text-xs px-2.5 py-0.5">
-                                    🏢 Multi-Branch Footprint
-                                  </Badge>
-                                </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-                                  {branchLocations.map((loc: any, idx: number) => {
-                                    const fullAddrStr = [loc.street, loc.suburb, loc.state, loc.postcode].filter(Boolean).join(', ');
-                                    return (
-                                      <div key={idx} className="bg-white dark:bg-slate-800/90 p-3.5 rounded-xl border border-indigo-100/90 dark:border-slate-700 shadow-2xs space-y-1.5 relative group hover:border-indigo-300 transition-colors">
-                                        <div className="flex items-start justify-between gap-2">
-                                          <div className="min-w-0">
-                                            <p className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 truncate">
-                                              <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                              <span className="truncate">{loc.locationName || `Location #${idx + 1}`}</span>
-                                            </p>
-                                          </div>
-                                          <div className="flex items-center gap-1 shrink-0">
-                                            {loc.isHeadOffice && (
-                                              <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-300 text-[9px] px-1.5 py-0">
-                                                HQ
-                                              </Badge>
+                                  {/* Filter and State Breakdown Pills when more than 4 branches */}
+                                  {allLocs.length > 3 && (
+                                    <div className="pt-1 space-y-2 border-t border-indigo-100/80 dark:border-slate-800">
+                                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                                        {/* State Filter Pills */}
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <button
+                                            type="button"
+                                            onClick={() => setBranchStateFilter('ALL')}
+                                            className={cn(
+                                              "px-2 py-0.5 text-[11px] rounded-md font-medium transition-colors border",
+                                              branchStateFilter === 'ALL'
+                                                ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                                                : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 hover:bg-slate-50"
                                             )}
-                                            {loc.state && (
-                                              <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-bold px-1.5 py-0">
-                                                {loc.state}
-                                              </Badge>
-                                            )}
-                                          </div>
+                                          >
+                                            All ({allLocs.length})
+                                          </button>
+                                          {availableStates.map(st => (
+                                            <button
+                                              key={st}
+                                              type="button"
+                                              onClick={() => setBranchStateFilter(branchStateFilter === st ? 'ALL' : st)}
+                                              className={cn(
+                                                "px-2 py-0.5 text-[11px] rounded-md font-medium transition-colors border",
+                                                branchStateFilter === st
+                                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                                                  : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 hover:bg-slate-50"
+                                              )}
+                                            >
+                                              {st} ({stateCounts[st]})
+                                            </button>
+                                          ))}
                                         </div>
 
-                                        <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5 pl-5">
-                                          {loc.street && <p className="truncate text-slate-500">{loc.street}</p>}
-                                          <p className="font-medium text-slate-800 dark:text-slate-200">
-                                            {[loc.suburb, loc.state, loc.postcode].filter(Boolean).join(' ') || 'Address detail pending'}
-                                          </p>
-                                          {loc.phone && (
-                                            <p className="text-slate-500 flex items-center gap-1 mt-1">
-                                              <Phone className="w-3 h-3 text-slate-400" />
-                                              <span>{loc.phone}</span>
-                                            </p>
-                                          )}
-                                          {loc.notes && (
-                                            <p className="text-[10px] text-slate-400 italic pt-0.5">{loc.notes}</p>
-                                          )}
-                                        </div>
-
-                                        {fullAddrStr && (
-                                          <div className="pt-1 flex justify-end">
-                                            <CopyButton textToCopy={fullAddrStr} className="h-5 w-5" iconClassName="h-3 w-3" />
+                                        {/* Search Filter for large branch counts */}
+                                        {allLocs.length > 6 && (
+                                          <div className="relative w-full sm:w-48">
+                                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                              type="text"
+                                              value={branchSearchQuery}
+                                              onChange={(e) => setBranchSearchQuery(e.target.value)}
+                                              placeholder="Filter branches..."
+                                              className="w-full text-xs pl-8 pr-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                                            />
                                           </div>
                                         )}
                                       </div>
-                                    );
-                                  })}
+                                    </div>
+                                  )}
+
+                                  {/* Grid of Locations */}
+                                  {visibleLocs.length === 0 ? (
+                                    <div className="text-center py-4 text-xs text-slate-400">
+                                      No branches match the current filter.
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                                      {visibleLocs.map((loc: any, idx: number) => {
+                                        const fullAddrStr = [loc.street, loc.suburb, loc.state, loc.postcode].filter(Boolean).join(', ');
+                                        return (
+                                          <div key={idx} className="bg-white dark:bg-slate-800/90 p-3.5 rounded-xl border border-indigo-100/90 dark:border-slate-700 shadow-2xs space-y-1.5 relative group hover:border-indigo-300 transition-colors">
+                                            <div className="flex items-start justify-between gap-2">
+                                              <div className="min-w-0">
+                                                <p className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 truncate">
+                                                  <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                                  <span className="truncate">{loc.locationName || `Location #${idx + 1}`}</span>
+                                                </p>
+                                              </div>
+                                              <div className="flex items-center gap-1 shrink-0">
+                                                {loc.isHeadOffice && (
+                                                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-300 text-[9px] px-1.5 py-0">
+                                                    HQ
+                                                  </Badge>
+                                                )}
+                                                {loc.state && (
+                                                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-bold px-1.5 py-0">
+                                                    {loc.state}
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                            </div>
+
+                                            <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5 pl-5">
+                                              {loc.street && <p className="truncate text-slate-500">{loc.street}</p>}
+                                              <p className="font-medium text-slate-800 dark:text-slate-200">
+                                                {[loc.suburb, loc.state, loc.postcode].filter(Boolean).join(' ') || 'Address detail pending'}
+                                              </p>
+                                              {loc.phone && (
+                                                <p className="text-slate-500 flex items-center gap-1 mt-1">
+                                                  <Phone className="w-3 h-3 text-slate-400" />
+                                                  <span>{loc.phone}</span>
+                                                </p>
+                                              )}
+                                              {loc.notes && (
+                                                <p className="text-[10px] text-slate-400 italic pt-0.5">{loc.notes}</p>
+                                              )}
+                                            </div>
+
+                                            {fullAddrStr && (
+                                              <div className="pt-1 flex justify-end">
+                                                <CopyButton textToCopy={fullAddrStr} className="h-5 w-5" iconClassName="h-3 w-3" />
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {/* Expand / Collapse Toggle if total branches exceed limit */}
+                                  {(hasMore || showAllBranches) && (
+                                    <div className="pt-2 flex items-center justify-center">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowAllBranches(!showAllBranches)}
+                                        className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 border-indigo-200 bg-white hover:bg-indigo-50 dark:bg-slate-800 flex items-center gap-1.5 shadow-2xs px-4"
+                                      >
+                                        {showAllBranches ? (
+                                          <>
+                                            <ChevronUp className="w-3.5 h-3.5" />
+                                            <span>Show Less (Top {INITIAL_LIMIT} Branches)</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <ChevronDown className="w-3.5 h-3.5" />
+                                            <span>View All {filteredLocs.length} Locations ({filteredLocs.length - INITIAL_LIMIT} more)</span>
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-                            ) : (
+                              );
+                            })() : (
                               hasEnrichment && hasMultipleBranches === false && (
                                 <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
                                   <div className="flex items-center gap-2">
