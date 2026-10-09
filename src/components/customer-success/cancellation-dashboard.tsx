@@ -58,6 +58,7 @@ export default function CancellationDashboard() {
 
   // Save Strategy Form States
   const [saveStrategy, setSaveStrategy] = useState<RetentionStrategy>('Keep Existing Services & Pricing');
+  const [savedDate, setSavedDate] = useState<string>('');
   const [editServices, setEditServices] = useState<ServiceSelection[]>([]);
   const [saveNotes, setSaveNotes] = useState('');
 
@@ -201,6 +202,7 @@ export default function CancellationDashboard() {
     // Initialize services editing from request original services or lead's current services
     setEditServices(JSON.parse(JSON.stringify(req.originalServices || [])));
     setSaveStrategy('Keep Existing Services & Pricing');
+    setSavedDate(new Date().toISOString().substring(0, 10));
     setProcessMode('save');
     setCancelReason(req.cancellationReason || 'Price too high');
     setSelectedThemeId(req.cancellationThemeId || '');
@@ -287,7 +289,8 @@ export default function CancellationDashboard() {
     setSubmitting(true);
     try {
       const userDisplayName = userProfile?.displayName || userProfile?.email || 'System';
-      const processedAt = new Date().toISOString();
+      const effectiveSavedDate = savedDate || new Date().toISOString().substring(0, 10);
+      const processedAt = savedDate ? new Date(`${savedDate}T12:00:00`).toISOString() : new Date().toISOString();
 
       // 1. Calculate updated services based on strategy
       let finalServices = [...editServices];
@@ -365,6 +368,7 @@ export default function CancellationDashboard() {
       await updateDoc(cancelReqRef, {
         status: 'Saved',
         saveStrategy,
+        savedDate: effectiveSavedDate,
         updatedServices: finalServices,
         notes: saveNotes,
         processedBy: userDisplayName,
@@ -381,6 +385,27 @@ export default function CancellationDashboard() {
         cancelledByFranchisee,
         isFranchiseeCancelled: cancelledByFranchisee
       });
+
+      // Trigger automated Franchisee Email Notification (Saved)
+      fetch('/api/notifications/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'franchisee_cancellation_outcome',
+          payload: {
+            outcome: 'Saved',
+            leadId: selectedRequest.leadId,
+            companyName: selectedRequest.companyName,
+            saveStrategy,
+            savedDate: effectiveSavedDate,
+            services: finalServices,
+            saveNotes,
+            processedBy: userDisplayName,
+            processedByEmail: userProfile?.email || '',
+            customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
+          }
+        })
+      }).catch(emailErr => console.error("Error sending franchisee save notification email:", emailErr));
 
       setProcessModalOpen(false);
       fetchRequests();
@@ -508,6 +533,29 @@ export default function CancellationDashboard() {
       } catch (cascadeErr) {
         console.error("Error triggering LPO cancellation cascade:", cascadeErr);
       }
+
+      // Trigger automated Franchisee Email Notification (Cancelled)
+      fetch('/api/notifications/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'franchisee_cancellation_outcome',
+          payload: {
+            outcome: 'Cancelled',
+            leadId: selectedRequest.leadId,
+            companyName: selectedRequest.companyName,
+            cancellationTheme: selectedThemeObj?.name || '',
+            cancellationWhy: selectedWhyObj?.name || '',
+            cancellationReason: selectedReasonObj?.name || cancelReason,
+            cancellationDate: trueCancellationDate,
+            trueServiceCancellationDate: trueCancellationDate,
+            cancellationNotes: cancelNotes,
+            processedBy: userDisplayName,
+            processedByEmail: userProfile?.email || '',
+            customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
+          }
+        })
+      }).catch(emailErr => console.error("Error sending franchisee cancel notification email:", emailErr));
 
       setProcessModalOpen(false);
       fetchRequests();
@@ -987,25 +1035,40 @@ export default function CancellationDashboard() {
 
               {/* Alternative Quick / Direct Save */}
               <div className="space-y-4 pt-3 border-t border-slate-200/80">
-                <div className="space-y-2">
-                  <Label htmlFor="saveStrategy" className="font-bold text-slate-700 text-xs uppercase tracking-wider">
-                    Retention Strategy
-                  </Label>
-                  <Select 
-                    value={saveStrategy} 
-                    onValueChange={(val: any) => setSaveStrategy(val)}
-                  >
-                    <SelectTrigger id="saveStrategy">
-                      <SelectValue placeholder="Select strategy..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {RETENTION_STRATEGIES.map((strat) => (
-                        <SelectItem key={strat} value={strat}>
-                          {strat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="saveStrategy" className="font-bold text-slate-700 text-xs uppercase tracking-wider">
+                      Retention Strategy
+                    </Label>
+                    <Select 
+                      value={saveStrategy} 
+                      onValueChange={(val: any) => setSaveStrategy(val)}
+                    >
+                      <SelectTrigger id="saveStrategy">
+                        <SelectValue placeholder="Select strategy..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RETENTION_STRATEGIES.map((strat) => (
+                          <SelectItem key={strat} value={strat}>
+                            {strat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="savedDate" className="font-bold text-slate-700 text-xs uppercase tracking-wider">
+                      Saved / Retention Date
+                    </Label>
+                    <Input
+                      id="savedDate"
+                      type="date"
+                      value={savedDate}
+                      onChange={(e) => setSavedDate(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center space-x-2 bg-amber-50/70 border border-amber-200/80 p-3 rounded-lg">

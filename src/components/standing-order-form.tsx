@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast"
 import { updateLeadDetails } from "@/services/firebase"
 import type { Lead } from "@/lib/types"
 import { Loader } from "./ui/loader"
-import { FileDown, Edit, Check, Trash2, CalendarIcon } from "lucide-react"
+import { FileDown, Edit, Check, Trash2, CalendarIcon, ExternalLink, FileCheck } from "lucide-react"
 import { firestore } from "@/lib/firebase"
 import { doc, getDoc, getDocs, collection, query, where } from "firebase/firestore"
 
@@ -390,6 +390,26 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
 
         {/* Outer scroll area around the form */}
         <div className="flex-1 overflow-y-auto pr-2 my-2 space-y-4">
+          {lead.sofDetails?.isManualUpload && (
+            <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg flex items-center justify-between gap-3 text-xs text-slate-700">
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-4 h-4 text-[#095C7B] shrink-0" />
+                <span>
+                  <strong>Manually Uploaded SOF:</strong> Uploaded on {lead.sofDetails.uploadedAt ? new Date(lead.sofDetails.uploadedAt).toLocaleDateString('en-AU') : lead.sofDetails.date} by {lead.sofDetails.uploadedBy || 'Account Manager'}.
+                </span>
+              </div>
+              {lead.sofDetails.uploadedPdfUrl && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.open(lead.sofDetails!.uploadedPdfUrl, '_blank')}
+                  className="h-7 text-xs border-[#095C7B] text-[#095C7B] hover:bg-sky-100/50 shrink-0 font-semibold"
+                >
+                  <ExternalLink className="w-3 h-3 mr-1" /> View Original Upload
+                </Button>
+              )}
+            </div>
+          )}
           
           {/* Action Buttons Header */}
           <div className="flex justify-end items-center gap-3">

@@ -315,7 +315,30 @@ export function CancelCustomerDialog({
         await addDoc(collection(firestore, 'cancellations'), cancelPayload);
         await addDoc(collection(firestore, 'cs_requests'), cancelPayload);
 
-        // Trigger email notification
+        // Trigger automated Franchisee Email Notification (Direct Cancellation)
+        fetch('/api/notifications/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'franchisee_cancellation_outcome',
+            payload: {
+              outcome: 'Cancelled',
+              leadId: lead.id,
+              companyName: lead.companyName || `${leadAny.firstName || ''} ${leadAny.lastName || ''}`.trim(),
+              cancellationTheme: themeName,
+              cancellationWhy: whyName,
+              cancellationReason: reasonName,
+              cancellationDate,
+              trueServiceCancellationDate: cancellationDate,
+              cancellationNotes: `Direct cancellation completed by ${staffName}. Requested By (External): ${requestedBy.trim()}.`,
+              processedBy: staffName,
+              processedByEmail: userEmail,
+              customFrom: userEmail ? `${staffName} <${userEmail}>` : undefined,
+            }
+          })
+        }).catch(err => console.error("Error triggering franchisee cancellation email notification:", err));
+
+        // Trigger email notification to CS Team
         fetch('/api/notifications/email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

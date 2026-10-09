@@ -205,6 +205,7 @@ import { ShipMateAccessDialog } from './shipmate-access-dialog'
 import { EditPostalAddressDialog } from './edit-postal-address-dialog'
 import { EditAddressDialog } from './edit-address-dialog'
 import { SofDialog } from './standing-order-form'
+import { ManualSofUploadDialog } from './manual-sof-upload-dialog'
 import { ManageAdditionalAddressesDialog } from './manage-additional-addresses-dialog'
 import { ClosestAusPostBanner } from './closest-auspost-banner'
 import { TaggedAddress } from '@/lib/types'
@@ -1827,6 +1828,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
   const [isPostalAddressDialogOpen, setIsPostalAddressDialogOpen] = useState(false);
   const [isSofDialogOpen, setIsSofDialogOpen] = useState(false);
+  const [isManualSofUploadOpen, setIsManualSofUploadOpen] = useState(false);
   const [isFranchiseeLookupOpen, setIsFranchiseeLookupOpen] = useState(false);
   const [lookupSearchQuery, setLookupSearchQuery] = useState('');
   const [franchiseeMatches, setFranchiseeMatches] = useState<any[]>([]);
@@ -8635,28 +8637,68 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </CardDescription>
                             </div>
                             {lead.sofDetails?.signatureDataUrl && (
-                                <Badge variant="outline" className="bg-green-100 border-green-200 text-green-800 flex items-center gap-1">
-                                    <Check className="w-3 h-3" /> Signed &amp; Authorized
+                                <Badge variant="outline" className={cn("flex items-center gap-1", lead.sofDetails?.isManualUpload ? "bg-emerald-100 border-emerald-200 text-emerald-800" : "bg-green-100 border-green-200 text-green-800")}>
+                                    <Check className="w-3 h-3" /> {lead.sofDetails?.isManualUpload ? "Manually Uploaded & Authorized" : "Signed & Authorized"}
                                 </Badge>
                             )}
                         </CardHeader>
                         <CardContent className="pt-6 space-y-4 flex-1 flex flex-col justify-center">
                             <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/30 rounded-lg border">
                                 <div className="space-y-1 flex-1 min-w-[200px]">
-                                    <p className="text-sm font-semibold">Digital Standing Order Form</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm font-semibold">
+                                            {lead.sofDetails?.isManualUpload ? "Physical / Uploaded Standing Order Form" : "Digital Standing Order Form"}
+                                        </p>
+                                        {lead.sofDetails?.isManualUpload && (
+                                            <Badge variant="secondary" className="text-[10px] font-medium bg-sky-100 text-sky-800 border-sky-200">
+                                                Manual Upload
+                                            </Badge>
+                                        )}
+                                    </div>
                                     <p className="text-xs text-muted-foreground break-words">
                                         {lead.sofDetails?.signatureDataUrl 
-                                            ? `Digitally signed by ${lead.sofDetails.position} on ${lead.sofDetails.date}`
-                                            : "Pending signature. Internal reps can sign below or send the public link."}
+                                            ? lead.sofDetails.isManualUpload
+                                                ? `Signed on ${lead.sofDetails.date} by ${lead.sofDetails.position}${lead.sofDetails.signerName ? ` (${lead.sofDetails.signerName})` : ''}. Manually uploaded on ${lead.sofDetails.uploadedAt ? format(new Date(lead.sofDetails.uploadedAt), 'dd/MM/yyyy') : lead.sofDetails.date} by ${lead.sofDetails.uploadedBy || 'Account Manager'}.`
+                                                : `Digitally signed by ${lead.sofDetails.position} on ${lead.sofDetails.date}`
+                                            : "Pending signature. Internal reps can sign below, upload a physical copy, or send the public link."}
                                     </p>
+                                    {lead.sofDetails?.notes && (
+                                        <p className="text-[11px] text-slate-500 italic mt-0.5">
+                                            Note: &ldquo;{lead.sofDetails.notes}&rdquo;
+                                        </p>
+                                    )}
                                 </div>
-                                <Button 
-                                    onClick={() => setIsSofDialogOpen(true)}
-                                    className={cn("flex-1 min-w-[200px] font-semibold shadow-sm transition-all shrink-0", lead.sofDetails?.signatureDataUrl ? "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white" : "bg-amber-500 hover:bg-amber-600 text-white")}
-                                >
-                                    <FileText className="w-4 h-4 mr-2 shrink-0" />
-                                    <span className="truncate">{lead.sofDetails?.signatureDataUrl ? "View / Export Signed SOF" : "Open & Sign SOF"}</span>
-                                </Button>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {lead.sofDetails?.uploadedPdfUrl && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => window.open(lead.sofDetails!.uploadedPdfUrl, '_blank')}
+                                            className="font-semibold shadow-2xs text-xs h-9 border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/5"
+                                        >
+                                            <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                                            View Uploaded PDF
+                                        </Button>
+                                    )}
+                                    <Button 
+                                        onClick={() => setIsSofDialogOpen(true)}
+                                        className={cn("font-semibold shadow-2xs transition-all text-xs h-9", lead.sofDetails?.signatureDataUrl ? "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white" : "bg-amber-500 hover:bg-amber-600 text-white")}
+                                    >
+                                        <FileText className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                                        <span className="truncate">{lead.sofDetails?.signatureDataUrl ? "View / Export Signed SOF" : "Open & Sign SOF"}</span>
+                                    </Button>
+                                    {isAccountOrSalesManager(userProfile, isSuperAdmin) && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setIsManualSofUploadOpen(true)}
+                                            className="font-semibold text-xs h-9 border-sky-300 text-[#095c7b] hover:bg-sky-50 shadow-2xs"
+                                        >
+                                            <Upload className="w-3.5 h-3.5 mr-1.5 shrink-0 text-[#095c7b]" />
+                                            <span>{lead.sofDetails?.isManualUpload ? "Re-upload SOF" : "Upload Manual SOF"}</span>
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Public SOF Link Copy Row */}
@@ -10559,6 +10601,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <EditAddressDialog lead={lead} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <EditPostalAddressDialog lead={lead} isOpen={isPostalAddressDialogOpen} onOpenChange={setIsPostalAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <SofDialog lead={lead} isOpen={isSofDialogOpen} onOpenChange={setIsSofDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
+    <ManualSofUploadDialog lead={lead} isOpen={isManualSofUploadOpen} onOpenChange={setIsManualSofUploadOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <ManageAdditionalAddressesDialog
         leadId={lead.id}
         isCompany={false}

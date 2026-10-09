@@ -2275,82 +2275,117 @@ export default function LeadsClientPage({
             </Card>
         </Collapsible>
 
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-            <CardTitle>{userProfile?.activeRole === 'Franchisee' ? `${userProfile.franchisee} Franchise Leads` : 'My Assigned Leads'}</CardTitle>
-            <div className="flex flex-wrap items-center gap-2">
-                <CustomBulkSelectControl
-                    allAvailableIds={myLeads.map(l => l.id)}
-                    selectedIds={selectedLeads}
-                    onSelect={setSelectedLeads}
-                    onClear={() => setSelectedLeads([])}
-                />
-                {isSessionActive && (
-                  <Button onClick={handleEndSession} variant="destructive" size="sm">
-                    <XCircle className="mr-2 h-4 w-4" />
-                    End Session
-                  </Button>
-                )}
-                {selectedLeads.length > 0 && isAdminView && (
-                    <>
-                        <Button onClick={() => confirmDelete(selectedLeads)} variant="destructive" size="sm">
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete ({selectedLeads.length})
-                        </Button>
-                        <Button onClick={() => handleBulkUnassign(selectedLeads)} variant="outline" size="sm">
-                            <UserX className="mr-2 h-4 w-4" />
-                            Unassign ({selectedLeads.length})
-                        </Button>
-                        <Button 
-                            onClick={handleBatchEnrich} 
-                            variant="outline" 
-                            size="sm" 
-                            disabled={isBatchEnriching}
-                            className="bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b]/20 border-[#095c7b]/30 font-semibold"
-                        >
-                            {isBatchEnriching ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <Sparkles className="mr-2 h-4 w-4 text-[#095c7b]" />
-                            )}
-                            Enrich with AI ({selectedLeads.length})
-                        </Button>
-                    </>
-                )}
-                {selectedLeads.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2">
-                        {userProfile?.activeRole?.toLowerCase() !== 'user' && (
-                          <>
-                            <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
-                                <Mail className="h-4 w-4 mr-2" />
-                                Send Email ({selectedLeads.length})
-                            </Button>
-                            <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
-                                <Users className="h-4 w-4 mr-2 text-primary" />
-                                Allocate Bucket ({selectedLeads.length})
-                            </Button>
-                          </>
-                        )}
-                        {userProfile?.activeRole !== 'user' && (
-                          <>
-                            <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
-                                <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
-                                Move to Nurture ({selectedLeads.length})
-                            </Button>
-                            <Button onClick={openMarketingListDialog} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
-                                <ListFilter className="h-4 w-4 mr-2" />
-                                Add to List ({selectedLeads.length})
-                            </Button>
-                          </>
-                        )}
-                        <Button onClick={handleExportSelected} variant="outline" size="sm">
-                            <Download className="mr-2 h-4 w-4" />
-                            Export Selected ({selectedLeads.length})
-                        </Button>
-                    </div>
-                )}
+      {/* Dedicated Top Action & Bulk Management Bar */}
+      <Card className="border shadow-sm bg-card">
+        <CardContent className="p-4 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <CustomBulkSelectControl
+              allAvailableIds={isAdminView ? filteredLeads.map(l => l.id) : myLeads.map(l => l.id)}
+              selectedIds={selectedLeads}
+              onSelect={setSelectedLeads}
+              onClear={() => setSelectedLeads([])}
+            />
+            {selectedLeads.length > 0 && (
+              <Badge variant="secondary" className="px-2.5 py-1 text-xs font-semibold">
+                {selectedLeads.length} lead{selectedLeads.length === 1 ? '' : 's'} selected
+              </Badge>
+            )}
+            {isSessionActive && (
+              <Button onClick={handleEndSession} variant="destructive" size="sm">
+                <XCircle className="mr-2 h-4 w-4" />
+                End Session
+              </Button>
+            )}
+          </div>
 
+          {selectedLeads.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {isAdminView && (
+                <>
+                  <Button onClick={() => confirmDelete(selectedLeads)} variant="destructive" size="sm">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete ({selectedLeads.length})
+                  </Button>
+                  {userProfile?.activeRole !== 'Outbound Admin' && (
+                    <Button onClick={() => handleBulkUnassign(selectedLeads)} variant="outline" size="sm">
+                      <UserX className="mr-2 h-4 w-4" />
+                      Unassign ({selectedLeads.length})
+                    </Button>
+                  )}
+                  <Button onClick={handleBulkAssign} variant="outline" size="sm">
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Assign to Me ({selectedLeads.length})
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      setIdsForReassignment(selectedLeads);
+                      setIsReassignDialogOpen(true);
+                    }} 
+                    variant="outline" 
+                    size="sm"
+                  >
+                    <UserCog className="mr-2 h-4 w-4" />
+                    Assign / Reassign ({selectedLeads.length})
+                  </Button>
+                  <Button 
+                    onClick={handleBatchEnrich} 
+                    variant="outline" 
+                    size="sm" 
+                    disabled={isBatchEnriching}
+                    className="bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b]/20 border-[#095c7b]/30 font-semibold"
+                  >
+                    {isBatchEnriching ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4 text-[#095c7b]" />
+                    )}
+                    Enrich with AI ({selectedLeads.length})
+                  </Button>
+                </>
+              )}
+              {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
+                  <Mail className="h-4 w-4 mr-2" />
+                  Send Email ({selectedLeads.length})
+                </Button>
+              )}
+              {userProfile?.activeRole !== 'user' && userProfile?.activeRole !== 'Outbound Admin' && (
+                <>
+                  <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
+                    <Users className="h-4 w-4 mr-2 text-primary" />
+                    Allocate Bucket ({selectedLeads.length})
+                  </Button>
+                  <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
+                    <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
+                    Move to Nurture ({selectedLeads.length})
+                  </Button>
+                </>
+              )}
+              {userProfile?.activeRole !== 'user' && (
+                <Button onClick={openMarketingListDialog} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
+                  <ListFilter className="h-4 w-4 mr-2" />
+                  Add to List ({selectedLeads.length})
+                </Button>
+              )}
+              <Button onClick={handleExportSelected} variant="outline" size="sm">
+                <Download className="mr-2 h-4 w-4" />
+                Export Selected ({selectedLeads.length})
+              </Button>
             </div>
+          ) : (
+            <div className="text-xs text-muted-foreground italic">
+              Select leads from any section below to perform bulk actions
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+                <span>{userProfile?.activeRole === 'Franchisee' ? `${userProfile.franchisee} Franchise Leads` : 'My Assigned Leads'}</span>
+                <Badge variant="secondary">{myLeads.length} lead(s)</Badge>
+            </CardTitle>
         </CardHeader>
         <CardContent id="step-priority-dial-table">
            {loading || isRefreshing ? (
@@ -2571,62 +2606,11 @@ export default function LeadsClientPage({
       
       {isAdminView && (
        <Card>
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
                 <span>All Assigned Leads</span>
                 <Badge variant="secondary">{Object.values(groupedAssignedLeads).flat().flatMap(s => Object.values(s)).flat().length} lead(s)</Badge>
             </CardTitle>
-            <div className="flex flex-wrap items-center gap-2">
-                <CustomBulkSelectControl
-                    allAvailableIds={Object.values(groupedAssignedLeads).flat().flatMap(s => Object.values(s)).flat().map(l => l.id)}
-                    selectedIds={selectedLeads}
-                    onSelect={setSelectedLeads}
-                    onClear={() => setSelectedLeads([])}
-                />
-                {selectedLeads.length > 0 && (
-                    <>
-                       <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedLeads)}>
-                           <Trash2 className="mr-2 h-4 w-4" />
-                           Delete ({selectedLeads.length})
-                       </Button>
-                        {userProfile?.activeRole !== 'Outbound Admin' && (
-                          <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
-                              <Users className="h-4 w-4 mr-2 text-primary" />
-                              Allocate Bucket ({selectedLeads.length})
-                          </Button>
-                        )}
-                        {userProfile?.activeRole !== 'user' && userProfile?.activeRole !== 'Outbound Admin' && (
-                          <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
-                              <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
-                              Move to Nurture ({selectedLeads.length})
-                          </Button>
-                        )}
-                        {userProfile?.activeRole !== 'Outbound Admin' && (
-                          <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedLeads)}>
-                              <UserX className="mr-2 h-4 w-4" />
-                              Unassign ({selectedLeads.length})
-                          </Button>
-                        )}
-                        {userProfile?.activeRole !== 'user' && (
-                          <Button onClick={openMarketingListDialog} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
-                              <ListFilter className="h-4 w-4 mr-2" />
-                              Add to List ({selectedLeads.length})
-                          </Button>
-                        )}
-                       <Button variant="outline" size="sm" onClick={() => {
-                           setIdsForReassignment(selectedLeads);
-                           setIsReassignDialogOpen(true);
-                       }}>
-                           <UserCog className="h-4 w-4 mr-2" />
-                           Reassign ({selectedLeads.length})
-                       </Button>
-                       <Button onClick={handleExportSelected} variant="outline" size="sm">
-                           <Download className="mr-2 h-4 w-4" />
-                           Export Selected ({selectedLeads.length})
-                       </Button>
-                    </>
-                )}
-            </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -2846,64 +2830,11 @@ export default function LeadsClientPage({
 
       {isAdminView && userProfile?.activeRole !== 'Outbound Admin' && (
        <Card>
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
                 <span>All Unassigned Leads</span>
                 <Badge variant="secondary">{unassignedLeads.length} lead(s)</Badge>
             </CardTitle>
-            <div className="flex items-center gap-4">
-                 {selectedLeads.length > 0 && (
-                     <>
-                        <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedLeads)}>
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete ({selectedLeads.length})
-                        </Button>
-                        {userProfile?.activeRole?.toLowerCase() !== 'user' && (
-                          <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
-                               <Users className="h-4 w-4 mr-2 text-primary" />
-                               Allocate Bucket ({selectedLeads.length})
-                           </Button>
-                        )}
-                         {userProfile?.activeRole !== 'user' && (
-                           <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
-                               <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
-                               Move to Nurture ({selectedLeads.length})
-                           </Button>
-                         )}
-                     </>
-                 )}
-                {selectedLeads.length > 0 && (
-                    <div className="flex gap-2">
-                        {userProfile?.activeRole?.toLowerCase() !== 'user' && (
-                           <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
-                               <Mail className="h-4 w-4 mr-2" />
-                               Send Email ({selectedLeads.length})
-                           </Button>
-                        )}
-                        {userProfile?.activeRole !== 'user' && (
-                          <Button onClick={openMarketingListDialog} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
-                              <ListFilter className="h-4 w-4 mr-2" />
-                              Add to List ({selectedLeads.length})
-                          </Button>
-                        )}
-                        <Button onClick={handleBulkAssign} variant="outline" size="sm">
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            Assign {selectedLeads.length} Lead(s) to Me
-                        </Button>
-                        <Button onClick={() => {
-                            setIdsForReassignment(selectedLeads);
-                            setIsReassignDialogOpen(true);
-                        }} variant="outline" size="sm">
-                            <Users className="mr-2 h-4 w-4" />
-                            Assign {selectedLeads.length} Lead(s) to {filters.bucket === 'inbound' ? 'Sales Rep' : 'Dialer'}
-                        </Button>
-                        <Button onClick={handleExportSelected} variant="outline" size="sm">
-                            <Download className="mr-2 h-4 w-4" />
-                            Export Selected ({selectedLeads.length})
-                        </Button>
-                    </div>
-                )}
-            </div>
         </CardHeader>
         <CardContent>
            {loading || isRefreshing ? (

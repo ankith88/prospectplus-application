@@ -85,6 +85,7 @@ export default function CSRequestsDashboard() {
 
   // Processing States for Cancellation
   const [cancelSaveStrategy, setCancelSaveStrategy] = useState<RetentionStrategy>('Keep Existing Services & Pricing');
+  const [cancelSavedDate, setCancelSavedDate] = useState<string>('');
   const [cancelReason, setCancelReason] = useState('Other');
   const [trueCancellationDate, setTrueCancellationDate] = useState('');
   const [processMode, setProcessMode] = useState<'save' | 'cancel'>('save');
@@ -351,6 +352,7 @@ export default function CSRequestsDashboard() {
     setServiceChangeNotes(req.notes || '');
 
     setCancelSaveStrategy('Keep Existing Services & Pricing');
+    setCancelSavedDate(new Date().toISOString().substring(0, 10));
     setCancelReason(req.cancellationReason || 'Other');
     setTrueCancellationDate(req.cancellationDate?.substring(0, 10) || new Date().toISOString().substring(0, 10));
     setCancelNotes(req.notes || '');
@@ -569,7 +571,8 @@ export default function CSRequestsDashboard() {
     setSubmitting(true);
     try {
       const userDisplayName = userProfile?.displayName || userProfile?.email || 'Customer Success Rep';
-      const processedAt = new Date().toISOString();
+      const effectiveSavedDate = cancelSavedDate || new Date().toISOString().substring(0, 10);
+      const processedAt = cancelSavedDate ? new Date(`${cancelSavedDate}T12:00:00`).toISOString() : new Date().toISOString();
 
       if (processMode === 'save') {
         if (['Change Frequency & Update Price', 'Keep Frequency & Update Price', 'Remove Specific Service Item'].includes(cancelSaveStrategy)) {
@@ -583,6 +586,7 @@ export default function CSRequestsDashboard() {
         await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
           status: 'Saved',
           saveStrategy: cancelSaveStrategy,
+          savedDate: effectiveSavedDate,
           updatedServices: editServices,
           notes: cancelNotes,
           attachments: proofAttachments,
@@ -594,6 +598,7 @@ export default function CSRequestsDashboard() {
         await syncMirroredCancellation(selectedRequest, {
           status: 'Saved',
           saveStrategy: cancelSaveStrategy,
+          savedDate: effectiveSavedDate,
           updatedServices: editServices,
           notes: cancelNotes,
           attachments: proofAttachments,
@@ -634,6 +639,27 @@ export default function CSRequestsDashboard() {
             author: userDisplayName,
           }, 'leads');
         }
+
+        // Trigger automated Franchisee Email Notification (Saved)
+        fetch('/api/notifications/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'franchisee_cancellation_outcome',
+            payload: {
+              outcome: 'Saved',
+              leadId: selectedRequest.leadId,
+              companyName: selectedRequest.companyName,
+              saveStrategy: cancelSaveStrategy,
+              savedDate: effectiveSavedDate,
+              services: editServices,
+              saveNotes: cancelNotes,
+              processedBy: userDisplayName,
+              processedByEmail: userProfile?.email || '',
+              customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
+            }
+          })
+        }).catch(emailErr => console.error("[CS Requests] Error sending franchisee save email:", emailErr));
 
         toast({
           title: 'Customer Saved',
@@ -726,6 +752,29 @@ export default function CSRequestsDashboard() {
 
         // Deactivate LocalMile access if applicable
         await deactivateLocalMileAccessForLead(selectedRequest.leadId, undefined, cancelCompSnap.exists() ? 'companies' : 'leads');
+
+        // Trigger automated Franchisee Email Notification (Cancelled)
+        fetch('/api/notifications/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'franchisee_cancellation_outcome',
+            payload: {
+              outcome: 'Cancelled',
+              leadId: selectedRequest.leadId,
+              companyName: selectedRequest.companyName,
+              cancellationTheme: themeName,
+              cancellationWhy: whyName,
+              cancellationReason: reasonName,
+              cancellationDate: trueCancellationDate,
+              trueServiceCancellationDate: trueCancellationDate,
+              cancellationNotes: cancelNotes,
+              processedBy: userDisplayName,
+              processedByEmail: userProfile?.email || '',
+              customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
+            }
+          })
+        }).catch(emailErr => console.error("[CS Requests] Error sending franchisee cancel email:", emailErr));
 
         toast({
           title: 'Cancellation Finalized',
@@ -1256,23 +1305,34 @@ export default function CSRequestsDashboard() {
 
                       {processMode === 'save' ? (
                         <div className="space-y-3 p-4 rounded-xl bg-emerald-50/50 border border-emerald-200">
-                          <div>
-                            <Label className="text-xs font-semibold text-slate-700 mb-1 block">Retention Strategy</Label>
-                            <Select 
-                              value={cancelSaveStrategy} 
-                              onValueChange={(val: any) => setCancelSaveStrategy(val)}
-                            >
-                              <SelectTrigger className="h-9 text-xs bg-white">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {RETENTION_STRATEGIES.map((strat) => (
-                                  <SelectItem key={strat} value={strat}>
-                                    {strat}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-xs font-semibold text-slate-700 mb-1 block">Retention Strategy</Label>
+                              <Select 
+                                value={cancelSaveStrategy} 
+                                onValueChange={(val: any) => setCancelSaveStrategy(val)}
+                              >
+                                <SelectTrigger className="h-9 text-xs bg-white">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {RETENTION_STRATEGIES.map((strat) => (
+                                    <SelectItem key={strat} value={strat}>
+                                      {strat}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="text-xs font-semibold text-slate-700 mb-1 block">Saved / Effective Date</Label>
+                              <Input
+                                type="date"
+                                value={cancelSavedDate}
+                                onChange={(e) => setCancelSavedDate(e.target.value)}
+                                className="h-9 text-xs bg-white"
+                              />
+                            </div>
                           </div>
 
                           {['Change Frequency & Update Price', 'Keep Frequency & Update Price', 'Remove Specific Service Item'].includes(cancelSaveStrategy) && (selectedRequest as any)?.bucket !== 'lpo_network' && (

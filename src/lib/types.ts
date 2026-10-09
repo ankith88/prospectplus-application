@@ -772,10 +772,19 @@ export interface Lead {
   csCallCount?: number;
   sofLink?: string;
   sofDetails?: {
-    signatureDataUrl: string;
-    position: string;
-    date: string;
-    signedAt: string;
+    signatureDataUrl?: string;
+    position?: string;
+    date?: string;
+    signedAt?: string;
+    uploadedPdfUrl?: string;
+    uploadedPdfName?: string;
+    uploadedAt?: string;
+    uploadedBy?: string;
+    uploadedByEmail?: string;
+    uploadedByUid?: string;
+    isManualUpload?: boolean;
+    signerName?: string;
+    notes?: string;
   };
   providedShipMateOnboarding?: boolean;
   followUpDate?: string;
@@ -1740,6 +1749,7 @@ export interface CancellationRequest {
   requestedDate: string; // ISO String
   cancellationDate: string; // ISO String (requested stop date)
   trueServiceCancellationDate: string; // ISO String (actual date services stop)
+  savedDate?: string; // ISO or YYYY-MM-DD String (date customer was retained/saved)
   cancellationReason: string; // 'Price' | 'Competitor' | 'Service Quality' | 'No Longer Needed' | 'Business Closed' | 'Other'
   cancellationTheme?: string;
   cancellationThemeId?: string;
@@ -1801,6 +1811,7 @@ export interface CSRequest {
   cancellationReasonId?: string;
   cancellationDate?: string;
   trueServiceCancellationDate?: string;
+  savedDate?: string;
   saveStrategy?: string;
   
   // Request metadata

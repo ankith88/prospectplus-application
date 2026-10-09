@@ -487,7 +487,7 @@ export default function CancellationReportingClient() {
 
       // Date range filter
       if (dateRange?.from) {
-        const targetDateStr = req.processedAt || req.requestedDate || req.cancellationDate;
+        const targetDateStr = (req.status === 'Saved' ? (req.savedDate || req.processedAt) : (req.processedAt || req.requestedDate || req.cancellationDate));
         if (!targetDateStr) return false;
         try {
           let targetDate = parseISO(targetDateStr);
@@ -1378,6 +1378,7 @@ export default function CancellationReportingClient() {
                   <TableRow>
                     <TableHead className="font-bold text-[#095c7b] text-xs">Franchisee</TableHead>
                     <TableHead className="font-bold text-[#095c7b] text-xs">Company Name</TableHead>
+                    <TableHead className="font-bold text-[#095c7b] text-xs">Saved / Retention Date</TableHead>
                     <TableHead className="font-bold text-[#095c7b] text-xs">Retention Strategy Selected</TableHead>
                     <TableHead className="font-bold text-[#095c7b] text-xs">Commission Saved Reduction?</TableHead>
                     <TableHead className="font-bold text-[#095c7b] text-xs text-right">Retained Monthly Revenue</TableHead>
@@ -1388,7 +1389,7 @@ export default function CancellationReportingClient() {
                 <TableBody>
                   {metrics.savedRequests.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12 text-slate-400 italic text-sm">
+                      <TableCell colSpan={8} className="text-center py-12 text-slate-400 italic text-sm">
                         No saved customer records found in the selected date range.
                       </TableCell>
                     </TableRow>
@@ -1400,6 +1401,15 @@ export default function CancellationReportingClient() {
                         </TableCell>
                         <TableCell className="text-xs font-bold text-[#095c7b]">
                           {r.companyName}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-600 font-medium">
+                          {r.savedDate ? (
+                            r.savedDate.length === 10 ? r.savedDate : new Date(r.savedDate).toLocaleDateString()
+                          ) : r.processedAt ? (
+                            new Date(r.processedAt).toLocaleDateString()
+                          ) : (
+                            'N/A'
+                          )}
                         </TableCell>
                         <TableCell className="text-xs">
                           <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold">

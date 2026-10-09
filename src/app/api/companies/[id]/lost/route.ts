@@ -123,6 +123,25 @@ export async function PATCH(
       createdAt: FieldValue.serverTimestamp()
     });
 
+    // Send franchisee notification email
+    try {
+      const { sendFranchiseeCancellationOutcomeEmail } = await import('@/lib/cancellation-franchisee-email');
+      await sendFranchiseeCancellationOutcomeEmail({
+        outcome: 'Cancelled',
+        leadId: companyId,
+        companyName,
+        cancellationTheme: cancellationTheme || '',
+        cancellationWhy: cancellationCategory || '',
+        cancellationReason: cancellationReason || 'Other',
+        cancellationDate,
+        trueServiceCancellationDate: cancellationDate,
+        cancellationNotes: notes || '',
+        processedBy: cancelledBy,
+      });
+    } catch (franEmailErr) {
+      console.error('[Companies Lost Route] Error sending franchisee cancellation notification email:', franEmailErr);
+    }
+
     // Send cancellation notification email
     try {
       await sendCancellationNotificationEmail({
