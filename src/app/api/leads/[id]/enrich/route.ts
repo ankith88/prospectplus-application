@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enrichLeadAction } from '@/ai/flows/enrich-lead-flow';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const resolvedParams = await params;
-    const leadId = resolvedParams.id;
+    const rawParams = context?.params;
+    const resolvedParams = rawParams instanceof Promise ? await rawParams : rawParams;
+    const leadId = resolvedParams?.id;
 
     if (!leadId) {
       return NextResponse.json({ error: 'Lead ID is required' }, { status: 400 });

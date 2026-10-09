@@ -7286,6 +7286,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   const hasMultipleBranches = lead.hasMultipleBranches !== undefined ? lead.hasMultipleBranches : lead.discoveryData?.hasMultipleBranches;
                   const totalBranchCount = lead.totalBranchCount || lead.discoveryData?.totalBranchCount;
                   const branchLocations = lead.branchLocations || lead.discoveryData?.branchLocations || [];
+                  const hasPoBox = lead.hasPoBox !== undefined ? lead.hasPoBox : lead.discoveryData?.hasPoBox;
+                  const postalAddresses: any[] = lead.postalAddresses || lead.discoveryData?.postalAddresses || [];
+
+                  const isPoBoxItem = (item: any) => {
+                    if (item.isPoBox) return true;
+                    const str = `${item.locationName || ''} ${item.street || ''} ${item.notes || ''}`.toLowerCase();
+                    return /(?:p\.?o\.?\s*box|gpo\s*box|locked\s*bag|private\s*bag|post\s*office\s*box)/i.test(str);
+                  };
+
+                  const rawBranchLocations: any[] = branchLocations || [];
+                  const physicalBranchLocations: any[] = rawBranchLocations.filter(loc => !isPoBoxItem(loc));
+                  const combinedPostalAddresses: any[] = [
+                    ...postalAddresses,
+                    ...rawBranchLocations.filter(loc => isPoBoxItem(loc) && !postalAddresses.some(p => (p.suburb === loc.suburb && p.postcode === loc.postcode) || p.locationName === loc.locationName))
+                  ];
+
+                  const effectiveHasPoBox = Boolean(hasPoBox || combinedPostalAddresses.length > 0);
+                  const effectiveHasMultipleBranches = hasMultipleBranches !== undefined
+                    ? (physicalBranchLocations.length >= 2 || (hasMultipleBranches && physicalBranchLocations.length !== 1 && physicalBranchLocations.length !== 0))
+                    : physicalBranchLocations.length >= 2;
+                  const effectiveBranchCount = physicalBranchLocations.length > 0 ? physicalBranchLocations.length : (totalBranchCount || 1);
+
                   const hasSeparateEcommerceEntity = lead.hasSeparateEcommerceEntity !== undefined ? lead.hasSeparateEcommerceEntity : lead.discoveryData?.hasSeparateEcommerceEntity;
                   const linkedEcommerceEntities = lead.linkedEcommerceEntities || lead.discoveryData?.linkedEcommerceEntities || [];
                   const mainEntityRole = lead.mainEntityRole || lead.discoveryData?.mainEntityRole;
@@ -7338,9 +7360,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     suggestedPersonalisation ||
                     hasParcelShipping !== undefined ||
                     hasMultipleBranches !== undefined ||
+                    effectiveHasPoBox ||
+                    combinedPostalAddresses.length > 0 ||
                     hasSeparateEcommerceEntity !== undefined ||
                     (linkedEcommerceEntities && linkedEcommerceEntities.length > 0) ||
-                    (branchLocations && branchLocations.length > 0) ||
+                    (physicalBranchLocations && physicalBranchLocations.length > 0) ||
                     (similarSignedCustomers && similarSignedCustomers.length > 0)
                   );
 
@@ -7410,10 +7434,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </Badge>
                               )}
                               {hasMultipleBranches !== undefined && (
-                                <Badge variant="outline" className={cn("text-xs font-semibold px-2.5 py-1", hasMultipleBranches ? "bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/60 dark:text-indigo-300" : "bg-slate-50 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300")}>
-                                  {hasMultipleBranches 
-                                    ? `🏢 Multi-Branch (${totalBranchCount || (branchLocations?.length ? branchLocations.length : 'Multiple')} AU Sites)` 
+                                <Badge variant="outline" className={cn("text-xs font-semibold px-2.5 py-1", effectiveHasMultipleBranches ? "bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/60 dark:text-indigo-300" : "bg-slate-50 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300")}>
+                                  {effectiveHasMultipleBranches 
+                                    ? `🏢 Multi-Branch (${effectiveBranchCount} AU Sites)` 
                                     : '📍 Single Location HQ'}
+                                </Badge>
+                              )}
+                              {effectiveHasPoBox && (
+                                <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 text-xs font-semibold px-2.5 py-1">
+                                  📬 PO Box Identified ({combinedPostalAddresses.length || 1})
                                 </Badge>
                               )}
                             </div>
@@ -7496,9 +7525,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                               </div>
                             </div>
 
-                            {/* Multi-Branch Footprint & Additional Australian Locations */}
-                            {(hasMultipleBranches || (branchLocations && branchLocations.length > 0)) ? (() => {
-                              const allLocs: any[] = branchLocations || [];
+                            {/* Multi-Branch Footprint & Additional Australian Physical Locations */}
+                            {(effectiveHasMultipleBranches || physicalBranchLocations.length > 1) ? (() => {
+                              const allLocs: any[] = physicalBranchLocations;
                               const stateCounts: Record<string, number> = {};
                               allLocs.forEach(loc => {
                                 const st = (loc.state || 'OTHER').toUpperCase().trim();
@@ -7545,7 +7574,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                           Australian Branch Footprint & Locations
                                         </span>
                                         <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                          {totalBranchCount || allLocs.length} physical locations / branch offices identified across Australia
+                                          {effectiveBranchCount || allLocs.length} physical locations / branch offices identified across Australia
                                         </p>
                                       </div>
                                     </div>
@@ -7562,7 +7591,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </div>
                                   </div>
 
-                                  {/* Filter and State Breakdown Pills when more than 4 branches */}
+                                  {/* Filter and State Breakdown Pills when more than 3 branches */}
                                   {allLocs.length > 3 && (
                                     <div className="pt-1 space-y-2 border-t border-indigo-100/80 dark:border-slate-800">
                                       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -7700,21 +7729,112 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                               );
                             })() : (
-                              hasEnrichment && hasMultipleBranches === false && (
+                              hasEnrichment && !effectiveHasMultipleBranches && (
                                 <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
                                   <div className="flex items-center gap-2">
                                     <MapPin className="w-4 h-4 text-slate-400" />
                                     <div>
                                       <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Single Location Operation</p>
-                                      <p className="text-[11px] text-slate-500">No additional Australian branches detected. Operates as a single headquarters or facility.</p>
+                                      <p className="text-[11px] text-slate-500">
+                                        {physicalBranchLocations.length === 1 
+                                          ? `Primary office: ${[physicalBranchLocations[0].locationName, physicalBranchLocations[0].street, physicalBranchLocations[0].suburb, physicalBranchLocations[0].state, physicalBranchLocations[0].postcode].filter(Boolean).join(', ')}`
+                                          : 'No additional Australian branches detected. Operates as a single headquarters or facility.'}
+                                      </p>
                                     </div>
                                   </div>
                                   <Badge variant="outline" className="text-[10px] bg-slate-100 text-slate-600 border-slate-300">
-                                    📍 Single Site
+                                    📍 Single Site HQ
                                   </Badge>
                                 </div>
                               )
                             )}
+
+                            {/* Dedicated PO Box & Postal Mail Addresses Section */}
+                            {combinedPostalAddresses.length > 0 && (() => {
+                              const allPostalText = combinedPostalAddresses
+                                .map((p, i) => `${i + 1}. ${p.locationName || 'Postal Box'} - ${[p.boxNumber || p.street, p.suburb, p.state, p.postcode].filter(Boolean).join(', ')}${p.notes ? ` (${p.notes})` : ''}`)
+                                .join('\n');
+
+                              return (
+                                <div className="p-4 bg-gradient-to-br from-amber-50/70 via-orange-50/40 to-slate-50 dark:from-slate-800/80 dark:to-slate-900 rounded-xl border border-amber-200/80 dark:border-amber-900/40 space-y-3">
+                                  <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="p-1.5 bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 rounded-lg">
+                                        <Mail className="w-4 h-4" />
+                                      </div>
+                                      <div>
+                                        <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                                          PO Box & Postal Mail Addresses
+                                          <Badge variant="secondary" className="bg-amber-200/80 text-amber-900 text-[10px] px-1.5 py-0 font-bold">
+                                            Service Opportunity
+                                          </Badge>
+                                        </span>
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                          {combinedPostalAddresses.length} postal / PO Box collection address{combinedPostalAddresses.length > 1 ? 'es' : ''} identified. Prime candidate for MailPlus Daily PO Box & Mail Delivery service.
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {allPostalText && (
+                                        <CopyButton 
+                                          textToCopy={allPostalText} 
+                                          className="h-7 text-xs bg-white dark:bg-slate-800 border-amber-200 text-amber-800 hover:bg-amber-50"
+                                        />
+                                      )}
+                                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 font-semibold text-xs px-2.5 py-0.5">
+                                        📬 MailPlus Daily Mail Candidate
+                                      </Badge>
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                                    {combinedPostalAddresses.map((box: any, idx: number) => {
+                                      const postalAddrStr = [box.boxNumber || box.street, box.suburb, box.state, box.postcode].filter(Boolean).join(' ');
+                                      return (
+                                        <div key={idx} className="bg-white dark:bg-slate-800/90 p-3.5 rounded-xl border border-amber-100/90 dark:border-slate-700 shadow-2xs space-y-1.5 relative group hover:border-amber-300 transition-colors">
+                                          <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                              <p className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 truncate">
+                                                <Mail className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                                <span className="truncate">{box.locationName || `PO Box #${idx + 1}`}</span>
+                                              </p>
+                                            </div>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                              <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-300 text-[9px] px-1.5 py-0">
+                                                PO BOX
+                                              </Badge>
+                                              {box.state && (
+                                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-bold px-1.5 py-0">
+                                                  {box.state}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5 pl-5">
+                                            {(box.boxNumber || box.street) && (
+                                              <p className="font-semibold text-slate-700 dark:text-slate-200 truncate">{box.boxNumber || box.street}</p>
+                                            )}
+                                            <p className="font-medium text-slate-800 dark:text-slate-200">
+                                              {[box.suburb, box.state, box.postcode].filter(Boolean).join(' ') || 'Postal detail pending'}
+                                            </p>
+                                            {box.notes && (
+                                              <p className="text-[10px] text-slate-400 italic pt-0.5">{box.notes}</p>
+                                            )}
+                                          </div>
+
+                                          {postalAddrStr && (
+                                            <div className="pt-1 flex justify-end">
+                                              <CopyButton textToCopy={postalAddrStr} className="h-5 w-5" iconClassName="h-3 w-3" />
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })()}
 
                             {/* Linked eCommerce Sites, Sister Companies & Fulfilment Entities */}
                             {(hasSeparateEcommerceEntity || (linkedEcommerceEntities && linkedEcommerceEntities.length > 0) || fulfilmentModel || mainEntityRole) && (

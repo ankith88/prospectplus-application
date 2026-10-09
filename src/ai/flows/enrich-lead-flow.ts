@@ -5,6 +5,16 @@ import { findSimilarSignedCustomers } from '@/services/similar-customers';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
+const PostalAddressSchema = z.object({
+  locationName: z.string().optional().describe(`Name or label of the postal address (e.g. 'Southern Highlands PO Box', 'Sydney GPO Box', 'Regional Postal Address').`),
+  boxNumber: z.string().optional().describe(`PO Box number or Locked Bag number if available (e.g. 'PO Box 123', 'Locked Bag 45').`),
+  street: z.string().optional().describe(`Postal street/box detail (e.g. 'PO Box 123').`),
+  suburb: z.string().optional().describe(`Postal suburb or town (e.g. 'Exeter', 'Sydney').`),
+  state: z.string().optional().describe(`Australian state code (e.g. 'NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT').`),
+  postcode: z.string().optional().describe(`4-digit postcode (e.g. '2579', '2001').`),
+  notes: z.string().optional().describe(`Notes about postal reception, mail holding, or regional presence.`),
+});
+
 const BranchLocationSchema = z.object({
   locationName: z.string().optional().describe(`Branch, store, showroom, warehouse, clinic, or regional office name.`),
   street: z.string().optional().describe(`Street address if available.`),
@@ -13,6 +23,7 @@ const BranchLocationSchema = z.object({
   postcode: z.string().optional().describe(`Australian 4-digit postcode (e.g. '3000', '2000', '4006').`),
   phone: z.string().optional().describe(`Direct phone number for this branch if available.`),
   isHeadOffice: z.boolean().optional().describe(`True if this location is marked as the Head Office / Primary HQ.`),
+  isPoBox: z.boolean().optional().describe(`True if this is a PO Box, GPO Box, or Locked Bag.`),
   notes: z.string().optional().describe(`Operational role of this location (e.g. 'Retail Store', 'Warehouse / Distribution Hub', 'Showroom & Click & Collect').`),
 });
 
@@ -29,9 +40,11 @@ const LeadEnrichmentOutputSchema = z.object({
   industryCategory: z.string().describe(`The best matching industry category from the exact provided master list. Must match one of the allowed categories.`),
   industrySubCategory: z.string().describe(`A specific, detailed sub-industry or niche description (e.g. 'Animal Welfare Charity & Pet Merchandise Store', 'Pet Cremation & Memorial Keepsakes', 'Artisan Specialty Coffee & Roasted Beans', 'Industrial Fasteners & Tool Supplies').`),
   hasParcelShipping: z.boolean().describe(`True if the business physically ships or dispatches parcels, goods, satchels, or freight (either directly or via sister company / separate store). False if pure digital/intangible service.`),
-  hasMultipleBranches: z.boolean().describe(`True if the company operates multiple physical branches, stores, showrooms, warehouses, clinics, or office locations across Australia. False if single site.`),
-  totalBranchCount: z.number().optional().describe(`Estimated total number of Australian physical locations/branches found.`),
-  branchLocations: z.array(BranchLocationSchema).optional().describe(`Structured list of all identified Australian branch, store, showroom, or warehouse locations with suburb, state, and postcode details.`),
+  hasMultipleBranches: z.boolean().describe(`True if the company operates 2 or more physical branches, stores, showrooms, warehouses, clinics, or office locations across Australia. DO NOT count PO Boxes, GPO Boxes, or Locked Bags as physical branches! False if single physical site.`),
+  totalBranchCount: z.number().optional().describe(`Estimated total number of Australian physical locations/branches found (excluding PO Boxes and postal boxes).`),
+  branchLocations: z.array(BranchLocationSchema).optional().describe(`Structured list of all identified Australian physical branch, store, showroom, or warehouse locations with suburb, state, and postcode details. MUST NOT contain PO Boxes or Locked Bags.`),
+  hasPoBox: z.boolean().optional().describe(`True if the business lists a PO Box, GPO Box, Locked Bag, or postal mailing address.`),
+  postalAddresses: z.array(PostalAddressSchema).optional().describe(`List of identified PO Boxes, GPO Boxes, Locked Bags, or separate postal addresses. Important for MailPlus daily PO Box mail delivery/collection service opportunities.`),
   hasSeparateEcommerceEntity: z.boolean().optional().describe(`True if this business sells or dispatches physical products through a separate ecommerce website, sister brand, parent entity, or distinct fulfilment partner rather than directly on their main informational site.`),
   linkedEcommerceEntities: z.array(LinkedEcommerceEntitySchema).optional().describe(`List of all linked ecommerce storefronts, sister brands, subsidiaries, parent entities, or fulfilment partners discovered.`),
   mainEntityRole: z.string().optional().describe(`The operational role of the primary company (e.g. 'Main Non-Profit / Charity Advocacy', 'Veterinary & Pet Cremation Service Operations', 'Holding Company / Corporate HQ').`),
@@ -337,15 +350,20 @@ You MUST choose the single closest matching industry from this exact list:
      - \`'Custom'\` ONLY if a real, functioning bespoke shopping cart or customer ordering portal with physical product checkout is explicitly identified.
      - \`'No'\` if NO shopping cart, eCommerce store, or checkout exists (e.g. pure informational website). NEVER output 'Custom' if no cart exists!
 
-4. **Australian Branch & Multi-Location Footprint**:
-   - Analyze whether the company operates multiple physical branches, retail stores, showrooms, warehouses, clinics, or regional offices across Australia (**hasMultipleBranches**).
-   - **CRITICAL REQUIREMENT - EXTRACT ALL IDENTIFIED LOCATIONS**:
+4. **Australian Branch & Multi-Location Footprint vs PO Boxes / Postal Addresses**:
+   - **CRITICAL RULE - PO BOXES ARE NOT PHYSICAL BRANCHES**:
+     - PO Boxes, GPO Boxes, Locked Bags, and mailing drop boxes (e.g. 'PO Box 123 Exeter NSW 2579', 'GPO Box 456 Sydney NSW 2001', 'Locked Bag 9') are **NOT** physical business branches/sites.
+     - **DO NOT** count PO Boxes in **hasMultipleBranches** or **totalBranchCount**.
+     - **DO NOT** put PO Boxes into **branchLocations**.
+     - Instead, put all PO Boxes, GPO Boxes, and mailing boxes into **postalAddresses** and set **hasPoBox** to \`true\`. This is a primary sales lead indicator for MailPlus's daily PO Box & Mail delivery service!
+   - Physical branches include real physical offices, retail shops, showrooms, distribution centers, warehouses, clinics, and manufacturing hubs.
+   - **CRITICAL REQUIREMENT - EXTRACT ALL IDENTIFIED PHYSICAL LOCATIONS**:
      - If the website text or footer lists multiple Australian facilities, warehouses, stores, or regional offices (e.g. 'NSW - Northmead', 'NSW - Moorebank', 'VIC - Braeside', 'QLD - Sunnybank Hills', 'SA - Port Adelaide'), you MUST extract **EACH AND EVERY ONE** into the **branchLocations** array!
      - Do NOT output only 1 entry if 5 locations are named in the text. Every single location with an address, suburb, state, or phone must have its own structured entry in **branchLocations**.
-   - If they have multiple locations:
+   - If the company has 2 or more **physical** locations:
      - Set **hasMultipleBranches** to \`true\`.
-     - Set **totalBranchCount** to the exact total count of Australian locations found (must match the length of \`branchLocations\`, or total stated locations).
-     - In **branchLocations**, extract each identified Australian location with structured fields:
+     - Set **totalBranchCount** to the exact total count of Australian physical locations found.
+     - In **branchLocations**, extract each identified Australian physical location with structured fields:
        - \`locationName\`: Store / Branch / Hub name (e.g. 'NSW - Northmead Head Office', 'NSW - Moorebank Warehouse', 'VIC - Braeside Warehouse', 'QLD - Sunnybank Hills DC', 'SA - Port Adelaide Warehouse').
        - \`street\`: Street address (e.g. '157 Briens Rd', '4B Tiber Pl', '372 Lower Dandenong Rd', 'Unit 2, 177 Jackson Rd', '48 Lipson Street').
        - \`suburb\`: Suburb name (e.g. 'Northmead', 'Moorebank', 'Braeside', 'Sunnybank Hills', 'Port Adelaide').
@@ -354,7 +372,7 @@ You MUST choose the single closest matching industry from this exact list:
        - \`phone\`: Direct phone number for this location if available (e.g. '1800 577 551').
        - \`isHeadOffice\`: True if noted as the primary HQ / Head Office.
        - \`notes\`: Operational type or summary (e.g. 'Head Office & Primary Warehouse', 'Distribution Warehouse').
-   - If single location, set **hasMultipleBranches** to \`false\`, set **totalBranchCount** to 1, and include primary location in **branchLocations** or leave empty.
+   - If single physical location (even if they also have 1 or more PO Boxes), set **hasMultipleBranches** to \`false\`, set **totalBranchCount** to 1, and include primary physical location in **branchLocations** or leave empty.
 
 5. **Parcel Shipping & Shipper Evidence**:
    - Determine if the company ships physical goods/parcels/satchels (**hasParcelShipping**) - whether directly or through their sister brand/storefront.
@@ -503,6 +521,32 @@ export async function enrichLeadAction(leadId: string) {
       industrySubCategory,
     });
 
+    // Clean and segregate physical branches and PO Boxes
+    const isPoBoxStr = (s?: string) => /(?:p\.?o\.?\s*box|gpo\s*box|locked\s*bag|private\s*bag|post\s*office\s*box)/i.test(s || '');
+    const cleanPostalAddresses = [...(enrichment.postalAddresses || [])];
+    const cleanBranchLocations: any[] = [];
+
+    (enrichment.branchLocations || []).forEach(loc => {
+      if (loc.isPoBox || isPoBoxStr(loc.locationName) || isPoBoxStr(loc.street) || isPoBoxStr(loc.notes)) {
+        if (!cleanPostalAddresses.some(p => (p.suburb === loc.suburb && p.postcode === loc.postcode) || p.locationName === loc.locationName)) {
+          cleanPostalAddresses.push({
+            locationName: loc.locationName || 'PO Box Address',
+            street: loc.street || '',
+            suburb: loc.suburb || '',
+            state: loc.state || '',
+            postcode: loc.postcode || '',
+            notes: loc.notes || 'PO Box / Postal Mail Address',
+          });
+        }
+      } else {
+        cleanBranchLocations.push(loc);
+      }
+    });
+
+    const hasPoBox = cleanPostalAddresses.length > 0 || Boolean(enrichment.hasPoBox);
+    const hasMultipleBranches = cleanBranchLocations.length >= 2;
+    const totalBranchCount = cleanBranchLocations.length > 0 ? cleanBranchLocations.length : 1;
+
     // Save enriched fields directly to Firestore
     const updatePayload: Record<string, any> = {
       industryCategory: enrichment.industryCategory,
@@ -518,9 +562,11 @@ export async function enrichLeadAction(leadId: string) {
       suggestedOpener: enrichment.suggestedOpener,
       suggestedPersonalisation: enrichment.suggestedPersonalisation,
       similarSignedCustomers: enrichment.similarSignedCustomers || [],
-      hasMultipleBranches: Boolean(enrichment.hasMultipleBranches),
-      totalBranchCount: enrichment.totalBranchCount !== undefined ? enrichment.totalBranchCount : (enrichment.branchLocations?.length || (enrichment.hasMultipleBranches ? 2 : 1)),
-      branchLocations: enrichment.branchLocations || [],
+      hasMultipleBranches: hasMultipleBranches,
+      totalBranchCount: totalBranchCount,
+      branchLocations: cleanBranchLocations,
+      hasPoBox: hasPoBox,
+      postalAddresses: cleanPostalAddresses,
       hasSeparateEcommerceEntity: Boolean(enrichment.hasSeparateEcommerceEntity),
       linkedEcommerceEntities: enrichment.linkedEcommerceEntities || [],
       mainEntityRole: enrichment.mainEntityRole || '',

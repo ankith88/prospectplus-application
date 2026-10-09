@@ -323,6 +323,8 @@ export interface DiscoveryData {
   hasMultipleBranches?: boolean;
   totalBranchCount?: number;
   branchLocations?: BranchLocation[];
+  hasPoBox?: boolean;
+  postalAddresses?: PostalAddress[];
   hasSeparateEcommerceEntity?: boolean;
   linkedEcommerceEntities?: LinkedEcommerceEntity[];
   mainEntityRole?: string;
@@ -341,6 +343,16 @@ export interface LinkedEcommerceEntity {
   notes?: string;
 }
 
+export interface PostalAddress {
+  locationName?: string;
+  boxNumber?: string;
+  street?: string;
+  suburb?: string;
+  state?: string;
+  postcode?: string;
+  notes?: string;
+}
+
 export interface BranchLocation {
   locationName?: string;
   street?: string;
@@ -349,6 +361,7 @@ export interface BranchLocation {
   postcode?: string;
   phone?: string;
   isHeadOffice?: boolean;
+  isPoBox?: boolean;
   notes?: string;
 }
 
@@ -833,6 +846,8 @@ export interface Lead {
   hasMultipleBranches?: boolean;
   totalBranchCount?: number;
   branchLocations?: BranchLocation[];
+  hasPoBox?: boolean;
+  postalAddresses?: PostalAddress[];
   hasSeparateEcommerceEntity?: boolean;
   linkedEcommerceEntities?: LinkedEcommerceEntity[];
   mainEntityRole?: string;
