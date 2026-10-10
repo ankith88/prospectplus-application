@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, X, Star, FileText, User, HelpCircle, ArrowRight, Package, PlusCircle, History } from 'lucide-react';
+import { Search, X, Star, FileText, User, HelpCircle, ArrowRight, Package, PlusCircle, History, Phone } from 'lucide-react';
 import { useOnboarding } from '@/components/onboarding/onboarding-provider';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -25,6 +25,17 @@ interface Site {
   } | null;
   lastInvoiceDate: string | null;
   lastInvoiceNumber: string | null;
+  matchedCallId?: string | null;
+  matchedCallDetails?: {
+    callId?: string;
+    date?: string;
+    notes?: string;
+    duration?: string;
+    author?: string;
+    aircallStatus?: string;
+    recordingUrl?: string;
+    unassigned?: boolean;
+  } | null;
 }
 
 interface Group {
@@ -53,7 +64,7 @@ export default function AccountLookupPage() {
   const { user, userProfile } = useAuth();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [searchType, setSearchType] = useState<'all' | 'company' | 'id' | 'invoice' | 'address' | 'email' | 'phone' | 'package' | 'ticket'>('all');
+  const [searchType, setSearchType] = useState<'all' | 'company' | 'id' | 'aircall' | 'invoice' | 'address' | 'email' | 'phone' | 'package' | 'ticket'>('all');
   const [loading, setLoading] = useState(false);
   const [searchingPackage, setSearchingPackage] = useState(false);
   const [packageResult, setPackageResult] = useState<any>(null);
@@ -210,7 +221,7 @@ export default function AccountLookupPage() {
           <input
             type="text"
             className="flex-1 text-lg font-medium text-[#15251d] placeholder-[#4a5a50]/55 bg-transparent border-none outline-none focus:ring-0 focus:outline-none"
-            placeholder="Search by name, ID, address, phone, email (@domain.com.au), ticket..."
+            placeholder="Search by name, ID, AirCall ID, address, phone, email (@domain.com.au), ticket..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -260,6 +271,17 @@ export default function AccountLookupPage() {
             }`}
           >
             Prospect+ ID
+          </button>
+
+          <button
+            onClick={() => setSearchType('aircall')}
+            className={`text-xs border rounded-full px-3 py-1 font-semibold transition-all ${
+              searchType === 'aircall'
+                ? 'bg-[#17414d] text-white border-[#17414d]'
+                : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
+            }`}
+          >
+            AirCall ID
           </button>
 
           <button
@@ -660,6 +682,15 @@ export default function AccountLookupPage() {
                                   Last invoice {site.lastInvoiceNumber} · {site.lastInvoiceDate}
                                 </div>
                               )}
+                              {site.matchedCallId && (
+                                <div className="text-[10px] font-semibold text-[#095c7b] bg-[#e0f2fe] px-2 py-0.5 rounded mt-1 inline-flex items-center gap-1">
+                                  <Phone className="h-2.5 w-2.5" />
+                                  <span>AirCall Call #{site.matchedCallId}</span>
+                                  {site.matchedCallDetails?.duration && (
+                                    <span className="text-slate-500 font-normal">({site.matchedCallDetails.duration})</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </Link>
                         ))}
@@ -716,6 +747,15 @@ export default function AccountLookupPage() {
                               Last invoice {site.lastInvoiceNumber} · {site.lastInvoiceDate}
                             </div>
                           )}
+                          {site.matchedCallId && (
+                            <div className="text-[10px] font-semibold text-[#095c7b] bg-[#e0f2fe] px-2 py-0.5 rounded mt-1 inline-flex items-center gap-1">
+                              <Phone className="h-2.5 w-2.5" />
+                              <span>AirCall Call #{site.matchedCallId}</span>
+                              {site.matchedCallDetails?.duration && (
+                                <span className="text-slate-500 font-normal">({site.matchedCallDetails.duration})</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </Link>
                     ))}
@@ -766,6 +806,15 @@ export default function AccountLookupPage() {
                           {site.lastInvoiceNumber && (
                             <div className="text-[10px] text-gray-500 mt-0.5">
                               Last invoice {site.lastInvoiceNumber} · {site.lastInvoiceDate}
+                            </div>
+                          )}
+                          {site.matchedCallId && (
+                            <div className="text-[10px] font-semibold text-[#095c7b] bg-[#e0f2fe] px-2 py-0.5 rounded mt-1 inline-flex items-center gap-1">
+                              <Phone className="h-2.5 w-2.5" />
+                              <span>AirCall Call #{site.matchedCallId}</span>
+                              {site.matchedCallDetails?.duration && (
+                                <span className="text-slate-500 font-normal">({site.matchedCallDetails.duration})</span>
+                              )}
                             </div>
                           )}
                         </div>

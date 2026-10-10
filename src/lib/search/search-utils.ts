@@ -70,6 +70,11 @@ export function generateSearchKeywords(data: any): string[] {
   addText(data.abn);
   addText(data.acn);
   addText(data.lastInvoiceNumber);
+  addText(data.callId);
+  addText(data.aircallId);
+  addText(data.aircallCallId);
+  addText(data.lastCallId);
+  addText(data.aircallUserId);
 
   // 2. Email & Domain & Phone & Contacts
   const addEmail = (emailVal: any) => {
@@ -190,15 +195,22 @@ export function scoreSearchResult(item: { id: string; type: string; data: any },
   const prospectPlusIdLower = String(data.prospectPlusId || '').toLowerCase().trim();
   const internalidLower = String(data.internalid || data.internalId || '').toLowerCase().trim();
   const entityIdLower = String(data.entityId || data.customerEntityId || '').toLowerCase().trim();
+  const matchedCallIdLower = String(data._matchedCallId || data.callId || data.aircallId || data.aircallCallId || '').toLowerCase().trim();
 
-  // 1. Direct ID / URL match: Highest score (100)
+  // 1. Direct ID / URL / AirCall ID match: Highest score (100)
   const isDirectId = possibleIds.some(id => {
     const cleanId = id.toLowerCase().trim();
+    const strippedAircallId = cleanId.replace(/^(aircall|call)[\s\-_:]*/i, '');
     return (
       item.id.toLowerCase() === cleanId ||
       prospectPlusIdLower === cleanId ||
       internalidLower === cleanId ||
-      entityIdLower === cleanId
+      entityIdLower === cleanId ||
+      (matchedCallIdLower && (
+        matchedCallIdLower === cleanId ||
+        matchedCallIdLower === strippedAircallId ||
+        cleanId.includes(matchedCallIdLower)
+      ))
     );
   });
 

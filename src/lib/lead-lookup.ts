@@ -36,11 +36,18 @@ export async function findLeadByIdOrInternalId(rawId: string): Promise<{ lead: L
     'prospectplusId',
     'prospect_plus_id',
     'salesRecordInternalId',
+    'callId',
+    'aircallId',
+    'aircallCallId',
+    'lastCallId',
     'id'
   ];
 
+  const strippedCallId = cleanId.replace(/^(aircall|call)[\s\-_:]*/i, '');
   const isNumeric = !isNaN(Number(cleanId)) && cleanId.length > 0;
   const numVal = isNumeric ? Number(cleanId) : null;
+  const isStrippedNumeric = !isNaN(Number(strippedCallId)) && strippedCallId.length > 0;
+  const strippedNumVal = isStrippedNumeric ? Number(strippedCallId) : null;
 
   for (const colName of collections) {
     for (const field of searchFields) {
@@ -51,6 +58,14 @@ export async function findLeadByIdOrInternalId(rawId: string): Promise<{ lead: L
         return { lead: { id: doc.id, ...doc.data() } as Lead, leadId: doc.id, collectionName: colName };
       }
 
+      if (strippedCallId !== cleanId) {
+        const snapStripped = await db.collection(colName).where(field, '==', strippedCallId).limit(1).get();
+        if (!snapStripped.empty) {
+          const doc = snapStripped.docs[0];
+          return { lead: { id: doc.id, ...doc.data() } as Lead, leadId: doc.id, collectionName: colName };
+        }
+      }
+
       // Query numeric value if numeric
       if (numVal !== null) {
         const snapNum = await db.collection(colName).where(field, '==', numVal).limit(1).get();
@@ -59,7 +74,48 @@ export async function findLeadByIdOrInternalId(rawId: string): Promise<{ lead: L
           return { lead: { id: doc.id, ...doc.data() } as Lead, leadId: doc.id, collectionName: colName };
         }
       }
+
+      if (strippedNumVal !== null && strippedNumVal !== numVal) {
+        const snapStrippedNum = await db.collection(colName).where(field, '==', strippedNumVal).limit(1).get();
+        if (!snapStrippedNum.empty) {
+          const doc = snapStrippedNum.docs[0];
+          return { lead: { id: doc.id, ...doc.data() } as Lead, leadId: doc.id, collectionName: colName };
+        }
+      }
     }
+  }
+
+  // 3. Check activity / transcript collection groups for AirCall Call ID
+  try {
+    const candidateCallIds = [cleanId, strippedCallId].filter(Boolean);
+    for (const cId of candidateCallIds) {
+      const actSnap = await db.collectionGroup('activity').where('callId', '==', cId).limit(1).get();
+      if (!actSnap.empty) {
+        const parentRef = actSnap.docs[0].ref.parent.parent;
+        if (parentRef) {
+          const parentSnap = await parentRef.get();
+          if (parentSnap.exists) {
+            const colName = parentRef.parent?.id as 'companies' | 'leads';
+            return { lead: { id: parentSnap.id, ...parentSnap.data() } as Lead, leadId: parentSnap.id, collectionName: colName };
+          }
+        }
+      }
+      if (numVal !== null) {
+        const actNumSnap = await db.collectionGroup('activity').where('callId', '==', numVal).limit(1).get();
+        if (!actNumSnap.empty) {
+          const parentRef = actNumSnap.docs[0].ref.parent.parent;
+          if (parentRef) {
+            const parentSnap = await parentRef.get();
+            if (parentSnap.exists) {
+              const colName = parentRef.parent?.id as 'companies' | 'leads';
+              return { lead: { id: parentSnap.id, ...parentSnap.data() } as Lead, leadId: parentSnap.id, collectionName: colName };
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Activity collection group lookup in lead-lookup error:', err);
   }
 
   return null;

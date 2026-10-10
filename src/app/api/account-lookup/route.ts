@@ -4,8 +4,17 @@ import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { scoreSearchResult } from '@/lib/search/search-utils';
+import { findAllLeadsByPhoneNumberServer } from '@/services/firebase-server';
 
 export const dynamic = 'force-dynamic';
+
+function formatDuration(seconds: number): string {
+  if (isNaN(seconds) || seconds <= 0) return '0s';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s}s`;
+}
 
 const resolveAddress = (data: any) => {
   if (data.address) {
@@ -229,11 +238,20 @@ export async function GET(req: NextRequest) {
     }
 
     const strippedInvId = q.replace(/^INV/i, '').trim();
+    const strippedAircallId = q.replace(/^(aircall|call)[\s\-_:]*/i, '').trim();
+
+    const possibleAircallIds = Array.from(new Set([
+      strippedAircallId,
+      digitsOnly,
+      extractedId.replace(/^(aircall|call)[\s\-_:]*/i, '').trim(),
+      q.trim(),
+    ])).filter(id => id.length >= 2 && !id.includes('/'));
 
     const possibleIds = Array.from(new Set([
       q.trim(),
       extractedId.trim(),
       strippedInvId,
+      strippedAircallId,
       digitsOnly,
     ])).filter(id => id.length >= 2 && !id.includes('/'));
 
@@ -242,6 +260,7 @@ export async function GET(req: NextRequest) {
       q,
       extractedId,
       strippedInvId,
+      strippedAircallId,
       digitsOnly,
       q.toLowerCase(),
       q.toUpperCase(),
@@ -271,6 +290,7 @@ export async function GET(req: NextRequest) {
     const contactPromises: Promise<any>[] = [];
     const ticketPromises: Promise<any>[] = [];
     const invoicePromises: Promise<any>[] = [];
+    const callActivityPromises: { promise: Promise<any>; callId: string; source: 'activity' | 'transcript' | 'unassigned' }[] = [];
 
     // Direct document ID and internalid lookups
     for (const id of possibleIds) {
@@ -601,13 +621,84 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // 7. AirCall Call ID / Activity Queries
+    if (type === 'all' || type === 'id' || type === 'aircall') {
+      if (q.length >= 2) {
+        for (const callId of possibleAircallIds) {
+          // Direct document ID lookups for unassigned calls
+          callActivityPromises.push({
+            promise: db.collection('unassigned_calls').doc(callId).get(),
+            callId,
+            source: 'unassigned'
+          });
+          callActivityPromises.push({
+            promise: db.collection('unassigned_calls').where('callId', '==', callId).limit(10).get(),
+            callId,
+            source: 'unassigned'
+          });
+
+          // Activity subcollection matches across all leads & companies
+          callActivityPromises.push({
+            promise: db.collectionGroup('activity').where('callId', '==', callId).limit(20).get(),
+            callId,
+            source: 'activity'
+          });
+          callActivityPromises.push({
+            promise: db.collectionGroup('activity').where('aircallId', '==', callId).limit(20).get(),
+            callId,
+            source: 'activity'
+          });
+
+          // Transcripts subcollection matches
+          callActivityPromises.push({
+            promise: db.collectionGroup('transcripts').where('callId', '==', callId).limit(20).get(),
+            callId,
+            source: 'transcript'
+          });
+
+          // Numeric queries if applicable
+          if (!isNaN(Number(callId))) {
+            const numCallId = Number(callId);
+            callActivityPromises.push({
+              promise: db.collectionGroup('activity').where('callId', '==', numCallId).limit(20).get(),
+              callId,
+              source: 'activity'
+            });
+            callActivityPromises.push({
+              promise: db.collectionGroup('transcripts').where('callId', '==', numCallId).limit(20).get(),
+              callId,
+              source: 'transcript'
+            });
+          }
+
+          // Top-level fields on leads and companies
+          leadPromises.push(db.collection('leads').where('callId', '==', callId).limit(10).get());
+          leadPromises.push(db.collection('leads').where('aircallId', '==', callId).limit(10).get());
+          leadPromises.push(db.collection('leads').where('lastCallId', '==', callId).limit(10).get());
+          companyPromises.push(db.collection('companies').where('callId', '==', callId).limit(10).get());
+          companyPromises.push(db.collection('companies').where('aircallId', '==', callId).limit(10).get());
+          companyPromises.push(db.collection('companies').where('lastCallId', '==', callId).limit(10).get());
+        }
+      }
+    }
+
     // Resolve all initial queries in parallel using safe resolver
-    const [leadSnaps, companySnaps, contactSnaps, ticketSnaps, invoiceSnaps] = await Promise.all([
+    const [leadSnaps, companySnaps, contactSnaps, ticketSnaps, invoiceSnaps, callSnaps] = await Promise.all([
       safeResolve(leadPromises),
       safeResolve(companyPromises),
       safeResolve(contactPromises),
       safeResolve(ticketPromises),
       safeResolve(invoicePromises),
+      Promise.all(
+        callActivityPromises.map(item =>
+          item.promise
+            .then(res => ({ res, callId: item.callId, source: item.source }))
+            .catch(err => {
+              console.warn('Call activity query failed:', err.message || err);
+              return null;
+            })
+        )
+      ),
     ]);
 
     // Keep track of direct matches
@@ -678,6 +769,147 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Process matched AirCall call activities, transcripts, and unassigned calls
+    const callParentFetchItems: { ref: any; type: 'lead' | 'company'; matchedCallId: string; callDetails?: any }[] = [];
+
+    for (const item of (callSnaps || []).filter(Boolean) as any[]) {
+      const snap = item.res;
+      if (!snap) continue;
+
+      if (item.source === 'unassigned') {
+        const docs = snap.docs || (snap.exists ? [snap] : []);
+        for (const uDoc of docs) {
+          const uData = uDoc.data() || {};
+          const callDetails = {
+            callId: String(uData.callId || uDoc.id || item.callId),
+            date: uData.date || null,
+            notes: uData.notes || 'Unassigned AirCall Call',
+            duration: uData.duration || null,
+            author: uData.author || 'AirCall',
+            aircallStatus: uData.aircallStatus || 'unassigned',
+            unassigned: true,
+          };
+
+          if (Array.isArray(uData.matches)) {
+            for (const m of uData.matches) {
+              if (m.id && m.type) {
+                const colName = m.type.startsWith('lead') ? 'leads' : 'companies';
+                const colType = m.type.startsWith('lead') ? 'lead' : 'company';
+                callParentFetchItems.push({
+                  ref: db.collection(colName).doc(m.id),
+                  type: colType,
+                  matchedCallId: callDetails.callId,
+                  callDetails,
+                });
+              }
+            }
+          }
+
+          if (uData.phoneNumber) {
+            try {
+              const phoneMatches = await findAllLeadsByPhoneNumberServer(uData.phoneNumber);
+              for (const pm of phoneMatches) {
+                const colName = pm.type;
+                const colType = pm.type.startsWith('lead') ? 'lead' : 'company';
+                callParentFetchItems.push({
+                  ref: db.collection(colName).doc(pm.id),
+                  type: colType,
+                  matchedCallId: callDetails.callId,
+                  callDetails,
+                });
+              }
+            } catch (pErr) {
+              console.warn('Error matching phone in unassigned call:', pErr);
+            }
+          }
+        }
+      } else {
+        // Activity or Transcripts subcollection
+        const docs = snap.docs || (snap.exists ? [snap] : []);
+        for (const doc of docs) {
+          const actData = doc.data() || {};
+          const parentRef = doc.ref.parent.parent;
+          if (parentRef) {
+            const colType = parentRef.path.startsWith('leads') ? 'lead' : 'company';
+            const key = `${colType}-${parentRef.id}`;
+            const callDetails = {
+              callId: String(actData.callId || item.callId),
+              date: actData.date || null,
+              notes: actData.notes || (item.source === 'transcript' ? 'AirCall Transcript available' : 'AirCall Call Record'),
+              duration: actData.duration || null,
+              author: actData.author || '',
+              aircallStatus: actData.aircallStatus || '',
+              recordingUrl: actData.recordingUrl || null,
+            };
+
+            if (!rawMatchedDocs.has(key)) {
+              callParentFetchItems.push({
+                ref: parentRef,
+                type: colType,
+                matchedCallId: callDetails.callId,
+                callDetails,
+              });
+            } else {
+              const existing = rawMatchedDocs.get(key);
+              if (existing && existing.data) {
+                existing.data._matchedCallId = callDetails.callId;
+                existing.data._matchedCallDetails = callDetails;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Live AirCall API fallback if no local call record was linked yet
+    const shouldTryAirCallApi = (type === 'aircall' || (type === 'all' && callParentFetchItems.length === 0)) && possibleAircallIds.length > 0;
+    if (shouldTryAirCallApi) {
+      const apiId = (process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID || '').trim().replace(/^["']|["']$/g, '');
+      const apiToken = (process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN || '').trim().replace(/^["']|["']$/g, '');
+
+      if (apiId && apiToken) {
+        const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
+        for (const cId of possibleAircallIds) {
+          if (/^\d{4,15}$/.test(cId)) {
+            try {
+              const aircallRes = await fetch(`https://api.aircall.io/v1/calls/${cId}`, {
+                headers: { Authorization: `Basic ${credentials}` }
+              });
+              if (aircallRes.ok) {
+                const aircallData = await aircallRes.json();
+                const callObj = aircallData.call || aircallData;
+                const phone = callObj.contact?.phone_number || callObj.raw_digits;
+                const callDetails = {
+                  callId: String(callObj.id || cId),
+                  date: callObj.started_at ? new Date(callObj.started_at * 1000).toISOString() : (callObj.created_at ? new Date(callObj.created_at * 1000).toISOString() : null),
+                  notes: callObj.note || `AirCall ${callObj.direction || ''} call`,
+                  duration: formatDuration(callObj.duration || 0),
+                  author: callObj.user?.name || 'Aircall',
+                  aircallStatus: callObj.status || '',
+                  recordingUrl: callObj.recording || null,
+                };
+                if (phone) {
+                  const phoneMatches = await findAllLeadsByPhoneNumberServer(phone);
+                  for (const pm of phoneMatches) {
+                    const colName = pm.type;
+                    const colType = pm.type.startsWith('lead') ? 'lead' : 'company';
+                    callParentFetchItems.push({
+                      ref: db.collection(colName).doc(pm.id),
+                      type: colType,
+                      matchedCallId: String(cId),
+                      callDetails,
+                    });
+                  }
+                }
+              }
+            } catch (aircallErr) {
+              console.warn('[AirCall API Lookup] Error fetching call by ID:', aircallErr);
+            }
+          }
+        }
+      }
+    }
+
     if (parentFetchItems.length > 0) {
       const parentSnaps = await Promise.all(
         parentFetchItems.map(item =>
@@ -703,6 +935,29 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    if (callParentFetchItems.length > 0) {
+      const callParentSnaps = await Promise.all(
+        callParentFetchItems.map(item =>
+          item.ref.get().catch((err: any) => {
+            console.warn('Failed fetching parent doc for call:', err);
+            return null;
+          })
+        )
+      );
+
+      callParentSnaps.forEach((snap, idx) => {
+        if (snap && snap.exists) {
+          const item = callParentFetchItems[idx];
+          const data = snap.data() || {};
+          data._matchedCallId = item.matchedCallId;
+          if (item.callDetails) {
+            data._matchedCallDetails = item.callDetails;
+          }
+          rawMatchedDocs.set(`${item.type}-${snap.id}`, { type: item.type, id: snap.id, data });
+        }
+      });
+    }
+
     // Robust post-filtering: Ensure EVERY word in query matches across searchable fields of the document
     const matchedDocs = new Map<string, { type: 'lead' | 'company'; data: any; id: string }>();
     for (const [key, item] of rawMatchedDocs.entries()) {
@@ -716,7 +971,10 @@ export async function GET(req: NextRequest) {
         String(data.prospectPlusId || '').toLowerCase() === id.toLowerCase() ||
         String(data.entityId || data.customerEntityId || '').toLowerCase() === id.toLowerCase() ||
         String(data._matchedInvoiceNumber || '').toLowerCase() === id.toLowerCase() ||
-        String(data.lastInvoiceNumber || '').toLowerCase() === id.toLowerCase()
+        String(data.lastInvoiceNumber || '').toLowerCase() === id.toLowerCase() ||
+        String(data._matchedCallId || '').toLowerCase() === id.toLowerCase() ||
+        String(data.callId || '').toLowerCase() === id.toLowerCase() ||
+        String(data.aircallId || '').toLowerCase() === id.toLowerCase()
       );
 
       if (isDirectIdMatch) {
@@ -785,6 +1043,18 @@ export async function GET(req: NextRequest) {
           return matchedInvoiceStr.includes(w) || (cleanW.length >= 2 && matchedInvoiceStr.includes(cleanW)) || lastInvoiceNumberStr.includes(w) || (cleanW.length >= 2 && lastInvoiceNumberStr.includes(cleanW));
         });
         if (!matches) continue;
+      } else if (type === 'aircall') {
+        const matchesCall = possibleAircallIds.some(cId => {
+          const clean = cId.toLowerCase().trim();
+          return (
+            String(data._matchedCallId || '').toLowerCase() === clean ||
+            String(data.callId || '').toLowerCase() === clean ||
+            String(data.aircallId || '').toLowerCase() === clean ||
+            String(data.aircallCallId || '').toLowerCase() === clean ||
+            String(data.lastCallId || '').toLowerCase() === clean
+          );
+        });
+        if (!matchesCall) continue;
       } else if (type === 'address') {
         const matches = queryWords.every(w => addressStr.includes(w));
         if (!matches) continue;
@@ -987,6 +1257,8 @@ export async function GET(req: NextRequest) {
                 address: resolveAddress(site.data),
                 lastInvoiceDate: site.data.lastInvoiceDate || null,
                 lastInvoiceNumber: site.data.lastInvoiceNumber || site.data._matchedInvoiceNumber || null,
+                matchedCallId: site.data._matchedCallId || site.data.callId || site.data.aircallId || null,
+                matchedCallDetails: site.data._matchedCallDetails || null,
                }))
             });
           }
@@ -1009,6 +1281,8 @@ export async function GET(req: NextRequest) {
           address: resolveAddress(item.data),
           lastInvoiceDate: item.data.lastInvoiceDate || null,
           lastInvoiceNumber: item.data.lastInvoiceNumber || item.data._matchedInvoiceNumber || null,
+          matchedCallId: item.data._matchedCallId || item.data.callId || item.data.aircallId || null,
+          matchedCallDetails: item.data._matchedCallDetails || null,
           score: (item as any).score || 0,
         });
       }

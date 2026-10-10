@@ -164,11 +164,12 @@ export function CommandPalette() {
           .forEach((item: any) => {
             const isCompany = item.type === 'company';
             const groupTag = item.groupName ? ` · Group: ${item.groupName}` : '';
+            const callTag = item.matchedCallId ? ` · 📞 AirCall #${item.matchedCallId}` : '';
             items.push({
               id: `${item.type}-${item.id}`,
               type: item.type,
               title: item.companyName,
-              subtitle: `${item.prospectPlusId ? `ID: ${item.prospectPlusId} · ` : ''}${item.franchisee || 'Unassigned'} · ${item.accountManagerAssigned || item.status}${groupTag}`,
+              subtitle: `${item.prospectPlusId ? `ID: ${item.prospectPlusId} · ` : ''}${item.franchisee || 'Unassigned'} · ${item.accountManagerAssigned || item.status}${groupTag}${callTag}`,
               badge: isCompany ? 'Customer' : 'Lead',
               badgeColor: isCompany ? 'bg-[#e4f2e6] text-[#2f7d4f]' : 'bg-[#fef3c7] text-[#92400e]',
               url: isCompany ? `/companies/${item.id}` : `/leads/${item.id}`,
@@ -256,7 +257,7 @@ export function CommandPalette() {
             ref={inputRef}
             type="text"
             className="flex-1 text-base text-slate-800 placeholder-slate-400 bg-transparent outline-none border-none focus:outline-none focus:ring-0"
-            placeholder="Search company, ID, email (@domain.com), address, ticket..."
+            placeholder="Search company, ID, AirCall ID, email (@domain.com), address, ticket..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

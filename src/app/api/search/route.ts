@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { findAllLeadsByPhoneNumberServer } from '@/services/firebase-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -141,6 +142,66 @@ export async function GET(req: NextRequest) {
     const leadPromises: Promise<any>[] = [];
     const companyPromises: Promise<any>[] = [];
     const contactPromises: Promise<any>[] = [];
+    const callActivityPromises: { promise: Promise<any>; callId: string; source: 'activity' | 'transcript' | 'unassigned' }[] = [];
+
+    const strippedAircallId = q.replace(/^(aircall|call)[\s\-_:]*/i, '').trim();
+    const digitsOnly = q.replace(/\D/g, '');
+    const possibleAircallIds = Array.from(new Set([
+      strippedAircallId,
+      digitsOnly,
+      q.trim(),
+    ])).filter(id => id.length >= 2 && !id.includes('/'));
+
+    if (possibleAircallIds.length > 0) {
+      for (const callId of possibleAircallIds) {
+        callActivityPromises.push({
+          promise: db.collection('unassigned_calls').doc(callId).get(),
+          callId,
+          source: 'unassigned'
+        });
+        callActivityPromises.push({
+          promise: db.collection('unassigned_calls').where('callId', '==', callId).limit(10).get(),
+          callId,
+          source: 'unassigned'
+        });
+        callActivityPromises.push({
+          promise: db.collectionGroup('activity').where('callId', '==', callId).limit(10).get(),
+          callId,
+          source: 'activity'
+        });
+        callActivityPromises.push({
+          promise: db.collectionGroup('activity').where('aircallId', '==', callId).limit(10).get(),
+          callId,
+          source: 'activity'
+        });
+        callActivityPromises.push({
+          promise: db.collectionGroup('transcripts').where('callId', '==', callId).limit(10).get(),
+          callId,
+          source: 'transcript'
+        });
+
+        if (!isNaN(Number(callId))) {
+          const numCallId = Number(callId);
+          callActivityPromises.push({
+            promise: db.collectionGroup('activity').where('callId', '==', numCallId).limit(10).get(),
+            callId,
+            source: 'activity'
+          });
+          callActivityPromises.push({
+            promise: db.collectionGroup('transcripts').where('callId', '==', numCallId).limit(10).get(),
+            callId,
+            source: 'transcript'
+          });
+        }
+
+        leadPromises.push(db.collection('leads').where('callId', '==', callId).limit(5).get());
+        leadPromises.push(db.collection('leads').where('aircallId', '==', callId).limit(5).get());
+        leadPromises.push(db.collection('leads').where('lastCallId', '==', callId).limit(5).get());
+        companyPromises.push(db.collection('companies').where('callId', '==', callId).limit(5).get());
+        companyPromises.push(db.collection('companies').where('aircallId', '==', callId).limit(5).get());
+        companyPromises.push(db.collection('companies').where('lastCallId', '==', callId).limit(5).get());
+      }
+    }
 
     // Query candidates using searchKeywords
     const isEmailDomain = q.trim().startsWith('@');
@@ -268,10 +329,20 @@ export async function GET(req: NextRequest) {
     }
 
     // Resolve all queries in parallel
-    const [leadSnapshots, companySnapshots, contactSnapshots] = await Promise.all([
+    const [leadSnapshots, companySnapshots, contactSnapshots, callSnapshots] = await Promise.all([
       Promise.all(leadPromises),
       Promise.all(companyPromises),
       Promise.all(contactPromises),
+      Promise.all(
+        callActivityPromises.map(item =>
+          item.promise
+            .then(res => ({ res, callId: item.callId, source: item.source }))
+            .catch(err => {
+              console.warn('Call query failed in search API:', err.message || err);
+              return null;
+            })
+        )
+      ),
     ]);
 
     const resultsMap = new Map<string, any>();
@@ -309,6 +380,147 @@ export async function GET(req: NextRequest) {
           entityId,
         });
       }
+    }
+
+    // Process AirCall call activities, transcripts, and unassigned calls
+    const callParentFetchPromises: Promise<any>[] = [];
+    const callMatches: { parentPath: string; parentId: string; type: 'lead' | 'company'; callId: string; notes?: string }[] = [];
+
+    for (const item of (callSnapshots || []).filter(Boolean) as any[]) {
+      const snap = item.res;
+      if (!snap) continue;
+
+      if (item.source === 'unassigned') {
+        const docs = snap.docs || (snap.exists ? [snap] : []);
+        for (const uDoc of docs) {
+          const uData = uDoc.data() || {};
+          const callId = String(uData.callId || uDoc.id || item.callId);
+          if (Array.isArray(uData.matches)) {
+            for (const m of uData.matches) {
+              if (m.id && m.type) {
+                const colName = m.type.startsWith('lead') ? 'leads' : 'companies';
+                const colType = m.type.startsWith('lead') ? 'lead' : 'company';
+                const key = `${colType}-${m.id}`;
+                if (resultsMap.has(key)) {
+                  const existing = resultsMap.get(key);
+                  if (!existing.description.includes(`AirCall #${callId}`)) {
+                    existing.description += ` • AirCall #${callId}`;
+                  }
+                  continue;
+                }
+                callMatches.push({ parentPath: `${colName}/${m.id}`, parentId: m.id, type: colType, callId, notes: uData.notes });
+                callParentFetchPromises.push(db.collection(colName).doc(m.id).get());
+              }
+            }
+          }
+          if (uData.phoneNumber) {
+            try {
+              const phoneMatches = await findAllLeadsByPhoneNumberServer(uData.phoneNumber);
+              for (const pm of phoneMatches) {
+                const colName = pm.type;
+                const colType = pm.type.startsWith('lead') ? 'lead' : 'company';
+                const key = `${colType}-${pm.id}`;
+                if (resultsMap.has(key)) {
+                  const existing = resultsMap.get(key);
+                  if (!existing.description.includes(`AirCall #${callId}`)) {
+                    existing.description += ` • AirCall #${callId}`;
+                  }
+                  continue;
+                }
+                callMatches.push({ parentPath: `${colName}/${pm.id}`, parentId: pm.id, type: colType, callId, notes: uData.notes });
+                callParentFetchPromises.push(db.collection(colName).doc(pm.id).get());
+              }
+            } catch (pErr) {
+              console.warn('Error matching phone in unassigned call search:', pErr);
+            }
+          }
+        }
+      } else {
+        const docs = snap.docs || (snap.exists ? [snap] : []);
+        for (const doc of docs) {
+          const actData = doc.data() || {};
+          const parentRef = doc.ref.parent.parent;
+          if (parentRef) {
+            const parentId = parentRef.id;
+            const parentPath = parentRef.path;
+            const type = parentPath.startsWith('leads') ? 'lead' : 'company';
+            const callId = String(actData.callId || item.callId);
+            const key = `${type}-${parentId}`;
+            if (resultsMap.has(key)) {
+              const existing = resultsMap.get(key);
+              if (!existing.description.includes(`AirCall #${callId}`)) {
+                existing.description += ` • AirCall #${callId}`;
+              }
+              continue;
+            }
+            callMatches.push({ parentPath, parentId, type, callId, notes: actData.notes });
+            callParentFetchPromises.push(parentRef.get());
+          }
+        }
+      }
+    }
+
+    // Live AirCall API fallback if nothing found locally
+    if (callMatches.length === 0 && possibleAircallIds.length > 0) {
+      const apiId = (process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID || '').trim().replace(/^["']|["']$/g, '');
+      const apiToken = (process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN || '').trim().replace(/^["']|["']$/g, '');
+      if (apiId && apiToken) {
+        const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
+        for (const cId of possibleAircallIds) {
+          if (/^\d{4,15}$/.test(cId)) {
+            try {
+              const aircallRes = await fetch(`https://api.aircall.io/v1/calls/${cId}`, {
+                headers: { Authorization: `Basic ${credentials}` }
+              });
+              if (aircallRes.ok) {
+                const aircallData = await aircallRes.json();
+                const callObj = aircallData.call || aircallData;
+                const phone = callObj.contact?.phone_number || callObj.raw_digits;
+                if (phone) {
+                  const phoneMatches = await findAllLeadsByPhoneNumberServer(phone);
+                  for (const pm of phoneMatches) {
+                    const colName = pm.type;
+                    const colType = pm.type.startsWith('lead') ? 'lead' : 'company';
+                    const key = `${colType}-${pm.id}`;
+                    if (resultsMap.has(key)) {
+                      const existing = resultsMap.get(key);
+                      if (!existing.description.includes(`AirCall #${cId}`)) {
+                        existing.description += ` • AirCall #${cId}`;
+                      }
+                      continue;
+                    }
+                    callMatches.push({ parentPath: `${colName}/${pm.id}`, parentId: pm.id, type: colType, callId: cId, notes: callObj.note });
+                    callParentFetchPromises.push(db.collection(colName).doc(pm.id).get());
+                  }
+                }
+              }
+            } catch (aErr) {
+              console.warn('[AirCall API fallback in /api/search] Error:', aErr);
+            }
+          }
+        }
+      }
+    }
+
+    if (callParentFetchPromises.length > 0) {
+      const callParentSnaps = await Promise.all(callParentFetchPromises);
+      callParentSnaps.forEach((snap, idx) => {
+        if (snap && snap.exists) {
+          const match = callMatches[idx];
+          const data = snap.data();
+          if (isFranchisee && !matchesUserFranchisee(data)) return;
+          const entityId = data.customerEntityId || data.entityId || '';
+          const prospectPlusId = data.prospectPlusId ? ` • ${data.prospectPlusId}` : '';
+          const key = `${match.type}-${match.parentId}`;
+          resultsMap.set(key, {
+            type: match.type,
+            id: match.parentId,
+            title: data.companyName || (match.type === 'lead' ? 'Unknown Lead' : 'Unknown Company'),
+            description: `${match.type === 'lead' ? 'Lead' : 'Signed Customer'}${entityId ? ` (${entityId})` : ''}${prospectPlusId} • AirCall Call #${match.callId}`,
+            entityId,
+          });
+        }
+      });
     }
 
     // Process contact matches
