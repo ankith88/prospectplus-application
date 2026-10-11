@@ -33,6 +33,53 @@ const getSydneyDateString = () => {
     return formatter.format(new Date());
 };
 
+const TWO_FACTOR_EXPIRY_MS = 24 * 60 * 60 * 1000; // 1 day (24 hours)
+
+export const check2FAVerified = (uid: string): boolean => {
+    if (typeof window === 'undefined' || !uid) return false;
+    try {
+        const stored = localStorage.getItem(`2fa_verified_${uid}`);
+        if (!stored) return false;
+        
+        // Handle migration from legacy string 'true' or raw timestamp
+        const parsedTime = Number(stored);
+        if (isNaN(parsedTime)) {
+            // Legacy value was string 'true', migrate to current timestamp
+            localStorage.setItem(`2fa_verified_${uid}`, Date.now().toString());
+            return true;
+        }
+
+        const isValid = Date.now() - parsedTime < TWO_FACTOR_EXPIRY_MS;
+        if (!isValid) {
+            localStorage.removeItem(`2fa_verified_${uid}`);
+            sessionStorage.removeItem(`2fa_verified_${uid}`);
+            return false;
+        }
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+export const set2FAVerifiedStorage = (uid: string) => {
+    if (typeof window === 'undefined' || !uid) return;
+    try {
+        const timestamp = Date.now().toString();
+        localStorage.setItem(`2fa_verified_${uid}`, timestamp);
+        sessionStorage.setItem(`2fa_verified_${uid}`, timestamp);
+    } catch (e) {
+        console.warn('Failed to save 2FA verification to localStorage:', e);
+    }
+};
+
+export const clear2FAVerifiedStorage = (uid: string) => {
+    if (typeof window === 'undefined' || !uid) return;
+    try {
+        localStorage.removeItem(`2fa_verified_${uid}`);
+        sessionStorage.removeItem(`2fa_verified_${uid}`);
+    } catch {}
+};
+
 const getSessionId = () => {
     if (typeof window === 'undefined') return 'server';
     let sessionId = sessionStorage.getItem('login_session_id');
@@ -184,8 +231,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             return;
                         }
 
-                        const isSession2FAVerified = typeof window !== 'undefined' ? sessionStorage.getItem(`2fa_verified_${user.uid}`) === 'true' : false;
-                        if (profileData.requires2FA && !isSession2FAVerified) {
+                        const isSession2FAVerified = check2FAVerified(user.uid);
+                        const isRevoked = profileData.requires2FA && profileData.twoFactorVerifiedAt === null;
+                        if (isRevoked) {
+                            clear2FAVerifiedStorage(user.uid);
+                        }
+                        if (profileData.requires2FA && (!isSession2FAVerified || isRevoked)) {
                             setIs2FAVerified(false);
                         } else {
                             setIs2FAVerified(true);
@@ -259,8 +310,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [router]);
 
+    // Sync 2FA verification status across tabs in real-time
     useEffect(() => {
-        const isSessionVerified = typeof window !== 'undefined' && user ? sessionStorage.getItem(`2fa_verified_${user.uid}`) === 'true' : true;
+        if (typeof window === 'undefined') return;
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key && e.key.startsWith('2fa_verified_') && user) {
+                setIs2FAVerified(check2FAVerified(user.uid));
+            }
+        };
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
+    }, [user]);
+
+    useEffect(() => {
+        const isSessionVerified = typeof window !== 'undefined' && user ? check2FAVerified(user.uid) : true;
         const needsEmailVerification = user && !user.emailVerified;
         const needs2FA = user && userProfile?.requires2FA && !isSessionVerified;
 
@@ -340,8 +403,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     }
 
                     if (profileData.requires2FA) {
-                        const isSessionVerified = typeof window !== 'undefined' ? sessionStorage.getItem(`2fa_verified_${loggedInUser.uid}`) === 'true' : false;
-                        if (!isSessionVerified) {
+                        const isSessionVerified = check2FAVerified(loggedInUser.uid);
+                        const isRevoked = profileData.twoFactorVerifiedAt === null;
+                        if (isRevoked) {
+                            clear2FAVerifiedStorage(loggedInUser.uid);
+                        }
+                        if (!isSessionVerified || isRevoked) {
                             setIs2FAVerified(false);
                             // Trigger 2FA challenge / dispatch
                             const sendRes = await fetch('/api/auth/2fa/send', {
@@ -401,7 +468,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             throw new Error(data.message || 'Invalid verification code.');
         }
         if (typeof window !== 'undefined') {
-            sessionStorage.setItem(`2fa_verified_${uid}`, 'true');
+            set2FAVerifiedStorage(uid);
         }
         setIs2FAVerified(true);
         if (auth?.currentUser) {
@@ -438,10 +505,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             sessionStorage.removeItem('login_session_id');
             if (userProfile?.uid) {
                 localStorage.removeItem(`activeRole_${userProfile.uid}`);
-                sessionStorage.removeItem(`2fa_verified_${userProfile.uid}`);
+                clear2FAVerifiedStorage(userProfile.uid);
             }
             if (user?.uid) {
-                sessionStorage.removeItem(`2fa_verified_${user.uid}`);
+                clear2FAVerifiedStorage(user.uid);
             }
             localStorage.removeItem('session_init_time');
             localStorage.removeItem('last_session_day');

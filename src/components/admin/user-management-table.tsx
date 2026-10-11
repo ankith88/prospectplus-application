@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
 import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely, unlinkUserFromFranchiseeCompletely } from '@/services/firebase';
-import { Lock, Mail, MailCheck, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store, Smartphone } from 'lucide-react';
+import { Lock, Mail, MailCheck, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store, Smartphone, Filter, User, RotateCcw } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { CreateUserDialog } from './create-user-dialog';
@@ -118,6 +118,10 @@ export function UserManagementTable() {
   // Search, Tab and Sort State
   const [activeTab, setActiveTab] = useState<'active' | 'disabled' | 'all'>('active');
   const [selectedRole, setSelectedRole] = useState<string>('all');
+  const [nameFilter, setNameFilter] = useState('');
+  const [emailFilter, setEmailFilter] = useState('');
+  const [emailVerifiedFilter, setEmailVerifiedFilter] = useState<'all' | 'verified' | 'unverified'>('all');
+  const [twoFactorFilter, setTwoFactorFilter] = useState<'all' | 'enabled' | 'disabled' | 'totp' | 'sms'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof UserProfile; direction: 'ascending' | 'descending' } | null>({ key: 'displayName', direction: 'ascending' });
 
@@ -819,7 +823,7 @@ export function UserManagementTable() {
     return counts;
   }, [availableRoles, statusFilteredUsers]);
 
-  // Process users for display (Status, Role, Search and Sort)
+  // Process users for display (Status, Role, Name, Email, Email Verified, 2FA, Search and Sort)
   const processedUsers = useMemo(() => {
     let result = [...statusFilteredUsers];
 
@@ -827,6 +831,41 @@ export function UserManagementTable() {
       result = result.filter(u => {
         const primaryRole = u.defaultRole || u.role || 'user';
         return primaryRole === selectedRole || (Array.isArray(u.assignedRoles) && u.assignedRoles.includes(selectedRole as UserRole));
+      });
+    }
+
+    if (nameFilter.trim()) {
+      const lowerName = nameFilter.trim().toLowerCase();
+      result = result.filter(u => {
+        const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
+        const dispName = (u.displayName || u.name || '').toLowerCase();
+        return dispName.includes(lowerName) || fullName.includes(lowerName);
+      });
+    }
+
+    if (emailFilter.trim()) {
+      const lowerEmail = emailFilter.trim().toLowerCase();
+      result = result.filter(u => 
+        (u.email || '').toLowerCase().includes(lowerEmail) ||
+        (u.personalEmail || '').toLowerCase().includes(lowerEmail)
+      );
+    }
+
+    if (emailVerifiedFilter !== 'all') {
+      result = result.filter(u => {
+        const isVerified = Boolean(verificationMap[u.uid]?.emailVerified || u.emailVerified);
+        return emailVerifiedFilter === 'verified' ? isVerified : !isVerified;
+      });
+    }
+
+    if (twoFactorFilter !== 'all') {
+      result = result.filter(u => {
+        const has2FA = Boolean(u.requires2FA);
+        if (twoFactorFilter === 'enabled') return has2FA;
+        if (twoFactorFilter === 'disabled') return !has2FA;
+        if (twoFactorFilter === 'totp') return has2FA && u.twoFactorMethod === 'totp';
+        if (twoFactorFilter === 'sms') return has2FA && u.twoFactorMethod !== 'totp';
+        return true;
       });
     }
 
@@ -852,7 +891,39 @@ export function UserManagementTable() {
     }
 
     return result;
-  }, [statusFilteredUsers, selectedRole, searchTerm, sortConfig]);
+  }, [statusFilteredUsers, selectedRole, nameFilter, emailFilter, emailVerifiedFilter, twoFactorFilter, searchTerm, sortConfig, verificationMap]);
+
+  const isAnyFilterActive = useMemo(() => {
+    return (
+      Boolean(nameFilter.trim()) ||
+      Boolean(emailFilter.trim()) ||
+      selectedRole !== 'all' ||
+      emailVerifiedFilter !== 'all' ||
+      twoFactorFilter !== 'all' ||
+      Boolean(searchTerm.trim())
+    );
+  }, [nameFilter, emailFilter, selectedRole, emailVerifiedFilter, twoFactorFilter, searchTerm]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (nameFilter.trim()) count++;
+    if (emailFilter.trim()) count++;
+    if (selectedRole !== 'all') count++;
+    if (emailVerifiedFilter !== 'all') count++;
+    if (twoFactorFilter !== 'all') count++;
+    if (searchTerm.trim()) count++;
+    return count;
+  }, [nameFilter, emailFilter, selectedRole, emailVerifiedFilter, twoFactorFilter, searchTerm]);
+
+  const handleResetFilters = () => {
+    setNameFilter('');
+    setEmailFilter('');
+    setSelectedRole('all');
+    setEmailVerifiedFilter('all');
+    setTwoFactorFilter('all');
+    setSearchTerm('');
+    setSelectedUserIds([]);
+  };
 
   const activeBDRs = useMemo(() => {
     return users.filter(u => u.assignedRoles?.includes('user') && !u.disabled);
@@ -1007,6 +1078,262 @@ export function UserManagementTable() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Dedicated Filters Section: Name, Email, Role, Email Verified, 2FA */}
+        <div className="bg-card border border-border/80 rounded-lg p-3.5 space-y-3 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2.5">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Filter className="h-4 w-4 text-[#095c7b] dark:text-[#38bdf8]" />
+              <span>Filters</span>
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-xs bg-[#095c7b]/10 text-[#095c7b] dark:bg-[#38bdf8]/10 dark:text-[#38bdf8] font-medium border-0">
+                  {activeFilterCount} active
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                Showing <strong className="text-foreground">{processedUsers.length}</strong> of {statusFilteredUsers.length} users
+              </span>
+              {isAnyFilterActive && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetFilters}
+                  className="h-7 text-xs text-muted-foreground hover:text-foreground px-2 gap-1"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Reset Filters
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            {/* User Name Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground font-medium">User Name</Label>
+              <div className="relative">
+                <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Filter by name..."
+                  className="pl-8 pr-7 h-9 text-xs sm:text-sm bg-background"
+                  value={nameFilter}
+                  onChange={(e) => {
+                    setNameFilter(e.target.value);
+                    setSelectedUserIds([]);
+                  }}
+                />
+                {nameFilter && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNameFilter('');
+                      setSelectedUserIds([]);
+                    }}
+                    className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
+                    title="Clear name filter"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Email Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground font-medium">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Filter by email..."
+                  className="pl-8 pr-7 h-9 text-xs sm:text-sm bg-background"
+                  value={emailFilter}
+                  onChange={(e) => {
+                    setEmailFilter(e.target.value);
+                    setSelectedUserIds([]);
+                  }}
+                />
+                {emailFilter && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmailFilter('');
+                      setSelectedUserIds([]);
+                    }}
+                    className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
+                    title="Clear email filter"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Role Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground font-medium">Role</Label>
+              <Select
+                value={selectedRole}
+                onValueChange={(val) => {
+                  setSelectedRole(val);
+                  setSelectedUserIds([]);
+                }}
+              >
+                <SelectTrigger className="h-9 text-xs sm:text-sm bg-background">
+                  <SelectValue placeholder="All Roles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles ({statusFilteredUsers.length})</SelectItem>
+                  {availableRoles.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role} ({roleCounts[role] || 0})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Email Verified Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground font-medium">Email Verified</Label>
+              <Select
+                value={emailVerifiedFilter}
+                onValueChange={(val: 'all' | 'verified' | 'unverified') => {
+                  setEmailVerifiedFilter(val);
+                  setSelectedUserIds([]);
+                }}
+              >
+                <SelectTrigger className="h-9 text-xs sm:text-sm bg-background">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="verified">
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      Verified
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="unverified">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-amber-600" />
+                      Unverified / Pending
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 2FA Status Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground font-medium">2FA Status</Label>
+              <Select
+                value={twoFactorFilter}
+                onValueChange={(val: 'all' | 'enabled' | 'disabled' | 'totp' | 'sms') => {
+                  setTwoFactorFilter(val);
+                  setSelectedUserIds([]);
+                }}
+              >
+                <SelectTrigger className="h-9 text-xs sm:text-sm bg-background">
+                  <SelectValue placeholder="All 2FA" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All 2FA Statuses</SelectItem>
+                  <SelectItem value="enabled">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                      2FA Enabled (All)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="totp">
+                    <span className="flex items-center gap-1.5">
+                      <Key className="h-3.5 w-3.5 text-purple-600" />
+                      Google Auth (TOTP)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="sms">
+                    <span className="flex items-center gap-1.5">
+                      <Smartphone className="h-3.5 w-3.5 text-blue-600" />
+                      SMS 2FA
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="disabled">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldAlert className="h-3.5 w-3.5 text-muted-foreground" />
+                      2FA Disabled (Off)
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Active Filter Chips */}
+          {isAnyFilterActive && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-border/30">
+              <span className="text-[11px] text-muted-foreground mr-1">Active filters:</span>
+              {nameFilter && (
+                <Badge variant="outline" className="gap-1 text-[11px] font-normal py-0.5 pl-2 pr-1 bg-muted/40">
+                  Name: <span className="font-medium text-foreground">{nameFilter}</span>
+                  <button type="button" onClick={() => { setNameFilter(''); setSelectedUserIds([]); }} className="hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {emailFilter && (
+                <Badge variant="outline" className="gap-1 text-[11px] font-normal py-0.5 pl-2 pr-1 bg-muted/40">
+                  Email: <span className="font-medium text-foreground">{emailFilter}</span>
+                  <button type="button" onClick={() => { setEmailFilter(''); setSelectedUserIds([]); }} className="hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {selectedRole !== 'all' && (
+                <Badge variant="outline" className="gap-1 text-[11px] font-normal py-0.5 pl-2 pr-1 bg-muted/40">
+                  Role: <span className="font-medium text-foreground">{selectedRole}</span>
+                  <button type="button" onClick={() => { setSelectedRole('all'); setSelectedUserIds([]); }} className="hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {emailVerifiedFilter !== 'all' && (
+                <Badge variant="outline" className="gap-1 text-[11px] font-normal py-0.5 pl-2 pr-1 bg-muted/40">
+                  Email: <span className="font-medium text-foreground">{emailVerifiedFilter === 'verified' ? 'Verified' : 'Unverified'}</span>
+                  <button type="button" onClick={() => { setEmailVerifiedFilter('all'); setSelectedUserIds([]); }} className="hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {twoFactorFilter !== 'all' && (
+                <Badge variant="outline" className="gap-1 text-[11px] font-normal py-0.5 pl-2 pr-1 bg-muted/40">
+                  2FA: <span className="font-medium text-foreground">
+                    {twoFactorFilter === 'enabled' ? 'Enabled' : twoFactorFilter === 'totp' ? 'Google Auth' : twoFactorFilter === 'sms' ? 'SMS' : 'Disabled'}
+                  </span>
+                  <button type="button" onClick={() => { setTwoFactorFilter('all'); setSelectedUserIds([]); }} className="hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {searchTerm && (
+                <Badge variant="outline" className="gap-1 text-[11px] font-normal py-0.5 pl-2 pr-1 bg-muted/40">
+                  Search: <span className="font-medium text-foreground">{searchTerm}</span>
+                  <button type="button" onClick={() => { setSearchTerm(''); setSelectedUserIds([]); }} className="hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="text-[11px] text-[#095c7b] dark:text-[#38bdf8] hover:underline ml-1 font-medium"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Role Sub-Tabs */}
@@ -1273,16 +1600,30 @@ export function UserManagementTable() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                    {searchTerm
-                      ? 'No users match your search criteria.'
-                      : selectedRole !== 'all'
-                      ? `No ${activeTab === 'disabled' ? 'disabled ' : activeTab === 'active' ? 'active ' : ''}users found with role "${selectedRole}".`
-                      : activeTab === 'disabled' 
-                      ? 'No disabled users found.' 
-                      : activeTab === 'active' 
-                      ? 'No active users found.' 
-                      : 'No users found.'}
+                  <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center justify-center gap-2 py-6">
+                      <p className="font-medium text-foreground">No users found</p>
+                      <p className="text-xs text-muted-foreground max-w-md">
+                        {isAnyFilterActive 
+                          ? 'No users match your active filters (name, email, role, email verification, or 2FA).' 
+                          : activeTab === 'disabled'
+                          ? 'No disabled users in the system.'
+                          : activeTab === 'active'
+                          ? 'No active users in the system.'
+                          : 'No users found in the system.'}
+                      </p>
+                      {isAnyFilterActive && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleResetFilters} 
+                          className="mt-1 h-8 text-xs gap-1.5"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Clear all filters
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

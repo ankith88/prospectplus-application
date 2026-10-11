@@ -67,7 +67,10 @@ function SignInContent() {
   const { toast } = useToast();
   
   useEffect(() => {
-    if (!authLoading && user && user.emailVerified && is2FAVerified && !is2FAModalOpen) {
+    if (!authLoading && user && user.emailVerified && is2FAVerified) {
+      if (is2FAModalOpen) {
+        setIs2FAModalOpen(false);
+      }
       router.replace('/');
     }
   }, [user, is2FAVerified, authLoading, is2FAModalOpen, router]);
