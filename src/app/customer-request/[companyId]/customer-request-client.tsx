@@ -341,15 +341,15 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
 
       const payload = {
         requestType,
-        leadId: company.id,
-        netsuiteId: company.netsuiteId,
-        companyName: company.companyName,
+        leadId: company.id ? String(company.id) : '',
+        netsuiteId: company.netsuiteId ? String(company.netsuiteId) : '',
+        companyName: company.companyName || '',
         contactName: contactName.trim(),
         requestedBy: contactName.trim(),
         capturedBy: capturedBy.trim(),
         processedBy: capturedBy.trim(),
-        contactEmail,
-        contactPhone,
+        contactEmail: contactEmail.trim(),
+        contactPhone: contactPhone.trim(),
         attachments,
         notes: requestType === 'change_of_service' ? serviceChangeNotes : cancellationNotes,
         
@@ -374,7 +374,7 @@ export default function CustomerRequestClient({ companyId }: { companyId: string
         body: JSON.stringify(payload)
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.error || 'Failed to submit request');
       }
