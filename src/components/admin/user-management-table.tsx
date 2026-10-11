@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
 import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely, unlinkUserFromFranchiseeCompletely } from '@/services/firebase';
-import { Lock, Mail, MailCheck, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store, Smartphone, Filter, User, RotateCcw } from 'lucide-react';
+import { Lock, Mail, MailCheck, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store, Smartphone, Filter, User, RotateCcw, ChevronsUpDown, Check } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { CreateUserDialog } from './create-user-dialog';
@@ -30,6 +30,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 export interface LinkedFranchiseeStateItem {
   franchiseeId: string;
@@ -117,7 +119,9 @@ export function UserManagementTable() {
 
   // Search, Tab and Sort State
   const [activeTab, setActiveTab] = useState<'active' | 'disabled' | 'all'>('active');
-  const [selectedRole, setSelectedRole] = useState<string>('all');
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [roleSearchTerm, setRoleSearchTerm] = useState('');
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [nameFilter, setNameFilter] = useState('');
   const [emailFilter, setEmailFilter] = useState('');
   const [emailVerifiedFilter, setEmailVerifiedFilter] = useState<'all' | 'verified' | 'unverified'>('all');
@@ -799,7 +803,7 @@ export function UserManagementTable() {
       'super user',
     ];
 
-    const roles = Array.from(roleMap.keys()).filter(r => (roleMap.get(r) || 0) > 0 || r === selectedRole);
+    const roles = Array.from(roleMap.keys()).filter(r => (roleMap.get(r) || 0) > 0 || selectedRoles.includes(r));
 
     return roles.sort((a, b) => {
       const idxA = standardRoleOrder.indexOf(a);
@@ -809,7 +813,14 @@ export function UserManagementTable() {
       if (idxB !== -1) return 1;
       return a.localeCompare(b);
     });
-  }, [statusFilteredUsers, selectedRole]);
+  }, [statusFilteredUsers, selectedRoles]);
+
+  // Filtered available roles based on inside-popover search
+  const filteredAvailableRoles = useMemo(() => {
+    if (!roleSearchTerm.trim()) return availableRoles;
+    const term = roleSearchTerm.toLowerCase();
+    return availableRoles.filter(r => r.toLowerCase().includes(term));
+  }, [availableRoles, roleSearchTerm]);
 
   // Role counts under current status filter
   const roleCounts = useMemo(() => {
@@ -827,10 +838,13 @@ export function UserManagementTable() {
   const processedUsers = useMemo(() => {
     let result = [...statusFilteredUsers];
 
-    if (selectedRole !== 'all') {
+    // Multi-Select Role Filter
+    if (selectedRoles.length > 0) {
       result = result.filter(u => {
         const primaryRole = u.defaultRole || u.role || 'user';
-        return primaryRole === selectedRole || (Array.isArray(u.assignedRoles) && u.assignedRoles.includes(selectedRole as UserRole));
+        const hasPrimary = selectedRoles.includes(primaryRole);
+        const hasAssigned = Array.isArray(u.assignedRoles) && u.assignedRoles.some(r => selectedRoles.includes(r));
+        return hasPrimary || hasAssigned;
       });
     }
 
@@ -891,34 +905,41 @@ export function UserManagementTable() {
     }
 
     return result;
-  }, [statusFilteredUsers, selectedRole, nameFilter, emailFilter, emailVerifiedFilter, twoFactorFilter, searchTerm, sortConfig, verificationMap]);
+  }, [statusFilteredUsers, selectedRoles, nameFilter, emailFilter, emailVerifiedFilter, twoFactorFilter, searchTerm, sortConfig, verificationMap]);
 
   const isAnyFilterActive = useMemo(() => {
     return (
       Boolean(nameFilter.trim()) ||
       Boolean(emailFilter.trim()) ||
-      selectedRole !== 'all' ||
+      selectedRoles.length > 0 ||
       emailVerifiedFilter !== 'all' ||
       twoFactorFilter !== 'all' ||
       Boolean(searchTerm.trim())
     );
-  }, [nameFilter, emailFilter, selectedRole, emailVerifiedFilter, twoFactorFilter, searchTerm]);
+  }, [nameFilter, emailFilter, selectedRoles, emailVerifiedFilter, twoFactorFilter, searchTerm]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (nameFilter.trim()) count++;
     if (emailFilter.trim()) count++;
-    if (selectedRole !== 'all') count++;
+    if (selectedRoles.length > 0) count++;
     if (emailVerifiedFilter !== 'all') count++;
     if (twoFactorFilter !== 'all') count++;
     if (searchTerm.trim()) count++;
     return count;
-  }, [nameFilter, emailFilter, selectedRole, emailVerifiedFilter, twoFactorFilter, searchTerm]);
+  }, [nameFilter, emailFilter, selectedRoles, emailVerifiedFilter, twoFactorFilter, searchTerm]);
+
+  const handleToggleRole = (role: string) => {
+    setSelectedRoles(prev => 
+      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+    );
+    setSelectedUserIds([]);
+  };
 
   const handleResetFilters = () => {
     setNameFilter('');
     setEmailFilter('');
-    setSelectedRole('all');
+    setSelectedRoles([]);
     setEmailVerifiedFilter('all');
     setTwoFactorFilter('all');
     setSearchTerm('');
@@ -1172,28 +1193,107 @@ export function UserManagementTable() {
               </div>
             </div>
 
-            {/* Role Filter */}
+            {/* Multi-Select Role Filter */}
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground font-medium">Role</Label>
-              <Select
-                value={selectedRole}
-                onValueChange={(val) => {
-                  setSelectedRole(val);
-                  setSelectedUserIds([]);
-                }}
-              >
-                <SelectTrigger className="h-9 text-xs sm:text-sm bg-background">
-                  <SelectValue placeholder="All Roles" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles ({statusFilteredUsers.length})</SelectItem>
-                  {availableRoles.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {role} ({roleCounts[role] || 0})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground font-medium">Roles</Label>
+                {selectedRoles.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedRoles([]); setSelectedUserIds([]); }}
+                    className="text-[10px] text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    Clear ({selectedRoles.length})
+                  </button>
+                )}
+              </div>
+              <Popover open={roleDropdownOpen} onOpenChange={setRoleDropdownOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={roleDropdownOpen}
+                    className="w-full justify-between h-9 px-2.5 text-xs sm:text-sm font-normal bg-background hover:bg-muted/40 border-input"
+                  >
+                    <span className="truncate text-left flex-1">
+                      {selectedRoles.length === 0
+                        ? `All Roles (${statusFilteredUsers.length})`
+                        : selectedRoles.length === 1
+                        ? selectedRoles[0]
+                        : `${selectedRoles.length} roles selected`}
+                    </span>
+                    <ChevronsUpDown className="ml-1.5 h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-2 z-[60]" align="start">
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Search roles..."
+                        value={roleSearchTerm}
+                        onChange={(e) => setRoleSearchTerm(e.target.value)}
+                        className="pl-7 pr-2 h-7 text-xs bg-background"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] px-1 text-muted-foreground border-b border-border/40 pb-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedRoles(availableRoles);
+                          setSelectedUserIds([]);
+                        }}
+                        className="text-[#095c7b] dark:text-[#38bdf8] hover:underline font-medium"
+                      >
+                        Select All ({availableRoles.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedRoles([]);
+                          setSelectedUserIds([]);
+                        }}
+                        className="hover:underline hover:text-foreground"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto space-y-0.5 pt-0.5">
+                      {filteredAvailableRoles.length > 0 ? (
+                        filteredAvailableRoles.map((role) => {
+                          const isChecked = selectedRoles.includes(role);
+                          const count = roleCounts[role] || 0;
+                          return (
+                            <div
+                              key={role}
+                              onClick={() => handleToggleRole(role)}
+                              className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-muted/80 cursor-pointer text-xs transition-colors select-none"
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <Checkbox
+                                  checked={isChecked}
+                                  onCheckedChange={() => handleToggleRole(role)}
+                                  className="h-3.5 w-3.5 pointer-events-none"
+                                />
+                                <span className={cn("truncate", isChecked && "font-medium text-foreground")}>
+                                  {role}
+                                </span>
+                              </div>
+                              <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0 h-4 font-normal">
+                                {count}
+                              </Badge>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="py-3 text-center text-xs text-muted-foreground">
+                          No roles found
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Email Verified Filter */}
@@ -1291,14 +1391,14 @@ export function UserManagementTable() {
                   </button>
                 </Badge>
               )}
-              {selectedRole !== 'all' && (
-                <Badge variant="outline" className="gap-1 text-[11px] font-normal py-0.5 pl-2 pr-1 bg-muted/40">
-                  Role: <span className="font-medium text-foreground">{selectedRole}</span>
-                  <button type="button" onClick={() => { setSelectedRole('all'); setSelectedUserIds([]); }} className="hover:text-destructive">
+              {selectedRoles.map((role) => (
+                <Badge key={role} variant="outline" className="gap-1 text-[11px] font-normal py-0.5 pl-2 pr-1 bg-muted/40">
+                  Role: <span className="font-medium text-foreground">{role}</span>
+                  <button type="button" onClick={() => handleToggleRole(role)} className="hover:text-destructive">
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
-              )}
+              ))}
               {emailVerifiedFilter !== 'all' && (
                 <Badge variant="outline" className="gap-1 text-[11px] font-normal py-0.5 pl-2 pr-1 bg-muted/40">
                   Email: <span className="font-medium text-foreground">{emailVerifiedFilter === 'verified' ? 'Verified' : 'Unverified'}</span>
@@ -1336,43 +1436,57 @@ export function UserManagementTable() {
           )}
         </div>
 
-        {/* Role Sub-Tabs */}
+        {/* Role Sub-Pills (Multi-Select Supported) */}
         <div className="w-full overflow-x-auto pb-1">
-          <Tabs
-            value={selectedRole}
-            onValueChange={(val) => {
-              setSelectedRole(val);
-              setSelectedUserIds([]);
-            }}
-            className="w-full"
-          >
-            <TabsList className="h-auto flex-wrap justify-start gap-1 p-1 bg-muted/40 border border-border/50">
-              <TabsTrigger 
-                value="all" 
-                className="gap-1.5 text-xs py-1 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-              >
-                All Roles
-                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] font-normal">
-                  {statusFilteredUsers.length}
-                </Badge>
-              </TabsTrigger>
-              {availableRoles.map((role) => {
-                const count = roleCounts[role] || 0;
-                return (
-                  <TabsTrigger
-                    key={role}
-                    value={role}
-                    className="gap-1.5 text-xs py-1 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+          <div className="inline-flex h-auto flex-wrap items-center justify-start gap-1 p-1 bg-muted/40 rounded-lg border border-border/50">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRoles([]);
+                setSelectedUserIds([]);
+              }}
+              className={cn(
+                "inline-flex items-center gap-1.5 text-xs py-1 px-2.5 rounded-md font-medium transition-all select-none",
+                selectedRoles.length === 0
+                  ? "bg-background text-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+              )}
+            >
+              All Roles
+              <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] font-normal">
+                {statusFilteredUsers.length}
+              </Badge>
+            </button>
+            {availableRoles.map((role) => {
+              const count = roleCounts[role] || 0;
+              const isSelected = selectedRoles.includes(role);
+              return (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => handleToggleRole(role)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 text-xs py-1 px-2.5 rounded-md font-medium transition-all select-none border border-transparent",
+                    isSelected
+                      ? "bg-background text-[#095c7b] dark:text-[#38bdf8] shadow-xs font-semibold border-[#095c7b]/30 dark:border-[#38bdf8]/30"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  )}
+                >
+                  {isSelected && <Check className="h-3 w-3 text-[#095c7b] dark:text-[#38bdf8]" />}
+                  {role}
+                  <Badge 
+                    variant={isSelected ? "default" : "secondary"} 
+                    className={cn(
+                      "ml-1 px-1.5 py-0 text-[10px] font-normal",
+                      isSelected && "bg-[#095c7b] text-white dark:bg-[#38bdf8] dark:text-slate-900"
+                    )}
                   >
-                    {role}
-                    <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] font-normal">
-                      {count}
-                    </Badge>
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-          </Tabs>
+                    {count}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="rounded-md border">
