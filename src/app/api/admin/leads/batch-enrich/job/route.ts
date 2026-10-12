@@ -369,12 +369,12 @@ async function startJobWorker(jobId: string) {
               leadId: id,
               success: true,
               companyName: res.data?.companyName || fallbackName,
-              ecommercePlatform: res.data?.shopifyDetected,
-              hasMultipleBranches: res.data?.hasMultipleBranches,
-              totalBranchCount: res.data?.totalBranchCount,
-              hasPoBox: res.data?.hasPoBox,
-              industryCategory: res.data?.industryCategory,
-              assignedTo: targetDialer,
+              ecommercePlatform: res.data?.shopifyDetected || '',
+              hasMultipleBranches: Boolean(res.data?.hasMultipleBranches),
+              totalBranchCount: Number(res.data?.totalBranchCount || 0),
+              hasPoBox: Boolean(res.data?.hasPoBox),
+              industryCategory: res.data?.industryCategory || '',
+              assignedTo: targetDialer || null,
             };
           } else {
             // Enrichment failed or was skipped - DO NOT reassign dialer!
@@ -418,7 +418,7 @@ async function startJobWorker(jobId: string) {
         .filter((r) => !r.success)
         .map((r) => ({
           leadId: r.leadId,
-          companyName: r.companyName,
+          companyName: r.companyName || 'Lead',
           error: r.error || 'Enrichment skipped or unavailable',
         }));
       const updatedFailed = [...currentFailed, ...newFailed];
@@ -495,6 +495,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'No leadIds provided.' }, { status: 400 });
       }
 
+      // Fetch requestor user details to save with the job
+      let requestorName = 'Team Member';
+      let requestorEmail = '';
+      if (requestorUid) {
+        try {
+          const uDoc = await db.collection('users').doc(requestorUid).get();
+          if (uDoc.exists) {
+            const u = uDoc.data() || {};
+            requestorName = u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || 'Team Member';
+            requestorEmail = u.email || u.workEmail || '';
+          }
+        } catch (e) {
+          console.warn('Could not resolve requestor user details:', e);
+        }
+      }
+
       const newJobRef = db.collection('enrichment_jobs').doc();
       const newJobId = newJobRef.id;
 
@@ -514,6 +530,8 @@ export async function POST(req: NextRequest) {
         recentResults: [],
         failedLeads: [],
         requestorUid,
+        requestorName,
+        requestorEmail,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         completedAt: null,
@@ -577,10 +595,81 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const jobId = searchParams.get('jobId');
     const active = searchParams.get('active');
+    const list = searchParams.get('list') || searchParams.get('all');
 
     const db = getFirestore(adminApp);
 
-    // Fetch specific job
+    // 1. Fetch all recent jobs for admin batch monitor
+    if (list === 'true') {
+      const jobsSnap = await db
+        .collection('enrichment_jobs')
+        .get();
+
+      const sortedDocs = [...jobsSnap.docs].sort((a, b) => {
+        const aTime = a.data().createdAt?.toMillis?.() || 0;
+        const bTime = b.data().createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      }).slice(0, 30);
+
+      const jobs = sortedDocs.map((doc) => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          status: d.status || 'unknown',
+          totalLeads: d.totalLeads || 0,
+          processedCount: d.processedCount || 0,
+          successCount: d.successCount || 0,
+          failureCount: d.failureCount || 0,
+          requestorUid: d.requestorUid || null,
+          requestorName: d.requestorName || 'Team Member',
+          requestorEmail: d.requestorEmail || '',
+          assignedDialers: d.assignedDialers || [],
+          createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : d.createdAt || null,
+          updatedAt: d.updatedAt?.toDate ? d.updatedAt.toDate().toISOString() : d.updatedAt || null,
+          completedAt: d.completedAt?.toDate ? d.completedAt.toDate().toISOString() : d.completedAt || null,
+        };
+      });
+
+      // Resolve missing user names/emails for older batches
+      const missingUids = Array.from(
+        new Set(
+          jobs
+            .filter((j) => !j.requestorName || j.requestorName === 'Team Member')
+            .map((j) => j.requestorUid)
+            .filter(Boolean)
+        )
+      );
+
+      if (missingUids.length > 0) {
+        const userMap = new Map<string, { name: string; email: string }>();
+        await Promise.all(
+          missingUids.map(async (uid) => {
+            try {
+              const uDoc = await db.collection('users').doc(uid!).get();
+              if (uDoc.exists) {
+                const u = uDoc.data() || {};
+                userMap.set(uid!, {
+                  name: u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || 'Team Member',
+                  email: u.email || u.workEmail || '',
+                });
+              }
+            } catch (e) {}
+          })
+        );
+
+        jobs.forEach((j) => {
+          if (j.requestorUid && userMap.has(j.requestorUid)) {
+            const resolved = userMap.get(j.requestorUid)!;
+            j.requestorName = resolved.name;
+            j.requestorEmail = resolved.email;
+          }
+        });
+      }
+
+      return NextResponse.json({ success: true, jobs });
+    }
+
+    // 2. Fetch specific job
     if (jobId) {
       const snap = await db.collection('enrichment_jobs').doc(jobId).get();
       if (!snap.exists) {
@@ -599,17 +688,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, job: data });
     }
 
-    // Fetch latest active/running or recently completed job
+    // 3. Fetch latest active/running or recently completed job
     if (active === 'true') {
       const runningSnap = await db
         .collection('enrichment_jobs')
         .where('status', 'in', ['running', 'paused'])
-        .orderBy('updatedAt', 'desc')
-        .limit(1)
         .get();
 
       if (!runningSnap.empty) {
-        const doc = runningSnap.docs[0];
+        const sortedDocs = [...runningSnap.docs].sort((a, b) => {
+          const aTime = a.data().updatedAt?.toMillis?.() || 0;
+          const bTime = b.data().updatedAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        });
+        const doc = sortedDocs[0];
         const data = doc.data();
 
         // Watchdog resume if stalled
@@ -628,19 +720,29 @@ export async function GET(req: NextRequest) {
       const recentCompletedSnap = await db
         .collection('enrichment_jobs')
         .where('status', '==', 'completed')
-        .where('completedAt', '>=', fifteenMinsAgo)
-        .orderBy('completedAt', 'desc')
-        .limit(1)
         .get();
 
       if (!recentCompletedSnap.empty) {
-        return NextResponse.json({ success: true, job: recentCompletedSnap.docs[0].data() });
+        const sortedCompleted = [...recentCompletedSnap.docs]
+          .filter((d) => {
+            const completedTime = d.data().completedAt?.toDate?.() || new Date(d.data().completedAt || 0);
+            return completedTime >= fifteenMinsAgo;
+          })
+          .sort((a, b) => {
+            const aTime = a.data().completedAt?.toMillis?.() || 0;
+            const bTime = b.data().completedAt?.toMillis?.() || 0;
+            return bTime - aTime;
+          });
+
+        if (sortedCompleted.length > 0) {
+          return NextResponse.json({ success: true, job: sortedCompleted[0].data() });
+        }
       }
 
       return NextResponse.json({ success: true, job: null });
     }
 
-    return NextResponse.json({ success: false, error: 'Missing jobId or active parameter.' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Missing jobId, active, or list parameter.' }, { status: 400 });
   } catch (error: any) {
     console.error('Error fetching batch enrichment job:', error);
     return NextResponse.json({ success: false, error: error.message || 'Server error' }, { status: 500 });

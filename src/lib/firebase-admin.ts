@@ -22,4 +22,10 @@ if (!admin.apps.length) {
     adminApp = admin.app();
 }
 
+try {
+    admin.firestore().settings({ ignoreUndefinedProperties: true });
+} catch (e) {
+    // ignore if already configured
+}
+
 export { adminApp };

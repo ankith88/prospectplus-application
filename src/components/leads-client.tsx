@@ -31,6 +31,7 @@ import { useDialingSession } from '@/hooks/use-dialing-session'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getAllFranchisees, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, mergeMultipleLeads, addLeadsToMarketingList } from '@/services/firebase'
 import { EnrichmentDialerReviewDialog } from '@/components/leads/enrichment-dialer-review-dialog'
 import { BatchEnrichmentDialog } from '@/components/leads/batch-enrichment-dialog'
+import { AdminEnrichmentBatchesDialog } from '@/components/leads/admin-enrichment-batches-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck, Zap, CheckCircle2, Maximize2 } from 'lucide-react'
@@ -538,6 +539,7 @@ export default function LeadsClientPage({
   const [leadsToDelete, setLeadsToDelete] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBatchEnrichDialogOpen, setIsBatchEnrichDialogOpen] = useState(false);
+  const [isBatchMonitorOpen, setIsBatchMonitorOpen] = useState(false);
   const [batchEnrichTargetIds, setBatchEnrichTargetIds] = useState<string[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [backgroundJob, setBackgroundJob] = useState<any | null>(null);
@@ -2213,12 +2215,29 @@ export default function LeadsClientPage({
                 </Badge>
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                {backgroundJob.requestorName && (
+                  <>
+                    Started by <strong className="text-slate-800 dark:text-slate-200">{backgroundJob.requestorName}</strong>
+                    {backgroundJob.requestorEmail ? <span className="text-slate-500 font-normal"> ({backgroundJob.requestorEmail})</span> : ''} &bull;{' '}
+                  </>
+                )}
                 Processed <strong>{backgroundJob.processedCount || 0}</strong> of <strong>{backgroundJob.totalLeads || 0}</strong> leads ({Math.min(100, Math.round(((backgroundJob.processedCount || 0) / (backgroundJob.totalLeads || 1)) * 100))}%) &bull; <strong>Safe across logouts:</strong> you can safely close your browser or navigate away
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            {isAdminView && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsBatchMonitorOpen(true)}
+                className="text-xs font-semibold h-8 border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 shadow-xs"
+              >
+                <History className="h-3.5 w-3.5 mr-1.5 text-slate-600 dark:text-slate-300" />
+                All Batches
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={() => {
@@ -2246,12 +2265,26 @@ export default function LeadsClientPage({
                 AI Batch Enrichment Completed
               </span>
               <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                {backgroundJob.requestorName && (
+                  <>Started by <strong>{backgroundJob.requestorName}</strong> &bull; </>
+                )}
                 Processed <strong>{backgroundJob.totalLeads}</strong> leads ({backgroundJob.successCount} enriched, {backgroundJob.failureCount || 0} skipped).
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            {isAdminView && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsBatchMonitorOpen(true)}
+                className="border-emerald-300 text-emerald-800 hover:bg-emerald-100/50 text-xs font-medium h-8"
+              >
+                <History className="h-3.5 w-3.5 mr-1.5 text-emerald-700" />
+                All Batches
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -2282,6 +2315,18 @@ export default function LeadsClientPage({
                         <span>Filters</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
+                        {isAdminView && (
+                          <Button
+                            onClick={() => setIsBatchMonitorOpen(true)}
+                            variant="outline"
+                            size="sm"
+                            className="border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/10 font-semibold"
+                            title="Monitor active and past AI enrichment batches"
+                          >
+                            <Sparkles className="mr-1.5 h-3.5 w-3.5 text-[#095c7b]" />
+                            Enrichment Batches
+                          </Button>
+                        )}
                         <Button onClick={handleRefresh} variant="outline" size="sm" disabled={isRefreshing}>
                           <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
@@ -2497,6 +2542,16 @@ export default function LeadsClientPage({
                     <Sparkles className="mr-2 h-4 w-4 text-[#095c7b]" />
                     Enrich with AI ({selectedLeads.length})
                   </Button>
+                  <Button
+                    onClick={() => setIsBatchMonitorOpen(true)}
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-slate-600 hover:text-slate-900"
+                    title="View all background enrichment batches"
+                  >
+                    <History className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                    Batches
+                  </Button>
                 </>
               )}
               {userProfile?.activeRole?.toLowerCase() !== 'user' && (
@@ -2529,8 +2584,21 @@ export default function LeadsClientPage({
               </Button>
             </div>
           ) : (
-            <div className="text-xs text-muted-foreground italic">
-              Select leads from any section below to perform bulk actions
+            <div className="flex items-center justify-between w-full">
+              <div className="text-xs text-muted-foreground italic">
+                Select leads from any section below to perform bulk actions
+              </div>
+              {isAdminView && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsBatchMonitorOpen(true)}
+                  className="text-xs text-slate-700 dark:text-slate-300 h-8 border-dashed"
+                >
+                  <History className="h-3.5 w-3.5 mr-1.5 text-slate-500" />
+                  Enrichment Batches Monitor
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
@@ -3398,6 +3466,14 @@ export default function LeadsClientPage({
       requestorUid={userProfile?.uid || user?.uid}
       onComplete={handleBatchEnrichComplete}
     />
+    <AdminEnrichmentBatchesDialog
+      isOpen={isBatchMonitorOpen}
+      onOpenChange={setIsBatchMonitorOpen}
+      onOpenLiveBatch={(jobId) => {
+        setActiveJobId(jobId);
+        setIsBatchEnrichDialogOpen(true);
+      }}
+    />
     <EnrichmentDialerReviewDialog
       isOpen={isEnrichmentReviewOpen}
       onOpenChange={setIsEnrichmentReviewOpen}
@@ -3447,9 +3523,19 @@ export default function LeadsClientPage({
             />
           </div>
 
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 truncate">
-            {backgroundJob.processedCount || 0} / {backgroundJob.totalLeads || 0} leads ({Math.min(100, Math.round(((backgroundJob.processedCount || 0) / (backgroundJob.totalLeads || 1)) * 100))}%)
-          </p>
+          <div className="flex items-center justify-between gap-2 mt-1">
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+              {backgroundJob.processedCount || 0} / {backgroundJob.totalLeads || 0} ({Math.min(100, Math.round(((backgroundJob.processedCount || 0) / (backgroundJob.totalLeads || 1)) * 100))}%)
+            </p>
+            {backgroundJob.requestorName && (
+              <span
+                className="text-[9px] text-slate-500 dark:text-slate-400 truncate max-w-[100px] font-medium"
+                title={`Started by ${backgroundJob.requestorName}${backgroundJob.requestorEmail ? ` (${backgroundJob.requestorEmail})` : ''}`}
+              >
+                by {backgroundJob.requestorName.split(' ')[0]}
+              </span>
+            )}
+          </div>
         </div>
 
         <button
