@@ -558,6 +558,8 @@ export default function LeadsClientPage({
   const [reassignQuantityMode, setReassignQuantityMode] = useState<'all' | 'custom'>('all');
   const [reassignCustomCount, setReassignCustomCount] = useState<string>('');
   const [reassignSelectionStrategy, setReassignSelectionStrategy] = useState<'random' | 'sequential'>('random');
+  const [reassignDialerFilter, setReassignDialerFilter] = useState<string>('all');
+  const [reassignStatusFilter, setReassignStatusFilter] = useState<string>('all');
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [masterLeadForMerge, setMasterLeadForMerge] = useState<Lead | null>(null);
   const [similarLeadsForMerge, setSimilarLeadsForMerge] = useState<Lead[]>([]);
@@ -1209,6 +1211,52 @@ export default function LeadsClientPage({
     }, {} as Record<string, LeadWithDetails[]>);
   }, [unassignedLeads]);
 
+  const reassignScopeInfo = useMemo(() => {
+    if (idsForReassignment.length === 0) {
+      return { dialers: [], statuses: [], unassignedCount: 0, filteredPool: [] };
+    }
+    const leadMap = new Map(allLeads.map(l => [l.id, l]));
+    const isInbound = filters.bucket === 'inbound';
+    const leads = idsForReassignment.map(id => leadMap.get(id)).filter(Boolean) as LeadWithDetails[];
+
+    const dialerCounts = new Map<string, number>();
+    let unassigned = 0;
+    leads.forEach(l => {
+      const rep = isInbound ? l.salesRepAssigned : (l.dialerAssigned || l.salesRepAssigned);
+      if (!rep || rep.trim() === '' || rep.trim().toLowerCase() === 'unassigned') {
+        unassigned++;
+      } else {
+        dialerCounts.set(rep, (dialerCounts.get(rep) || 0) + 1);
+      }
+    });
+
+    const leadsMatchingDialer = leads.filter(l => {
+      const rep = isInbound ? l.salesRepAssigned : (l.dialerAssigned || l.salesRepAssigned);
+      const isUnassigned = !rep || rep.trim() === '' || rep.trim().toLowerCase() === 'unassigned';
+      if (reassignDialerFilter === 'unassigned') return isUnassigned;
+      if (reassignDialerFilter !== 'all') return rep === reassignDialerFilter;
+      return true;
+    });
+
+    const statusCounts = new Map<string, number>();
+    leadsMatchingDialer.forEach(l => {
+      const st = l.status || 'Unknown';
+      statusCounts.set(st, (statusCounts.get(st) || 0) + 1);
+    });
+
+    const filtered = leadsMatchingDialer.filter(l => {
+      if (reassignStatusFilter === 'all') return true;
+      return (l.status || 'Unknown') === reassignStatusFilter;
+    });
+
+    return {
+      dialers: Array.from(dialerCounts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name)),
+      unassignedCount: unassigned,
+      statuses: Array.from(statusCounts.entries()).map(([status, count]) => ({ status, count })).sort((a, b) => a.status.localeCompare(b.status)),
+      filteredPool: filtered.map(l => l.id),
+    };
+  }, [idsForReassignment, allLeads, filters.bucket, reassignDialerFilter, reassignStatusFilter]);
+
   const escapeCsvCell = (cellData: any) => {
     if (cellData === null || cellData === undefined) {
         return '';
@@ -1587,19 +1635,20 @@ export default function LeadsClientPage({
   
   const handleBulkReassign = async () => {
     if (idsForReassignment.length === 0 || reassignToUsers.length === 0) return;
-    let targetIdsToReassign = idsForReassignment;
+    const pool = reassignScopeInfo.filteredPool.length > 0 ? reassignScopeInfo.filteredPool : idsForReassignment;
+    let targetIdsToReassign = pool;
 
-    const totalPreselected = idsForReassignment.length;
+    const totalInPool = pool.length;
     const parsedCount = parseInt(reassignCustomCount, 10);
     const effectiveCount = reassignQuantityMode === 'custom' && !isNaN(parsedCount) && parsedCount > 0
-      ? Math.min(parsedCount, totalPreselected)
-      : totalPreselected;
+      ? Math.min(parsedCount, totalInPool)
+      : totalInPool;
 
-    if (reassignQuantityMode === 'custom' && effectiveCount < totalPreselected) {
+    if (reassignQuantityMode === 'custom' && effectiveCount < totalInPool) {
       if (reassignSelectionStrategy === 'random') {
-        targetIdsToReassign = [...idsForReassignment].sort(() => 0.5 - Math.random()).slice(0, effectiveCount);
+        targetIdsToReassign = [...pool].sort(() => 0.5 - Math.random()).slice(0, effectiveCount);
       } else {
-        targetIdsToReassign = idsForReassignment.slice(0, effectiveCount);
+        targetIdsToReassign = pool.slice(0, effectiveCount);
       }
     }
 
@@ -1626,7 +1675,7 @@ export default function LeadsClientPage({
 
         toast({ 
           title: "Success", 
-          description: `${targetIdsToReassign.length} lead(s) ${reassignQuantityMode === 'custom' ? `(out of ${totalPreselected} preselected)` : ''} reassigned to ${reassignToUsers.length} user(s).` 
+          description: `${targetIdsToReassign.length} lead(s) ${reassignQuantityMode === 'custom' ? `(out of ${totalInPool} scoped)` : ''} reassigned to ${reassignToUsers.length} user(s).` 
         });
     } catch (error) {
         console.error("Failed to bulk reassign leads:", error);
@@ -1637,6 +1686,8 @@ export default function LeadsClientPage({
         setReassignToUsers([]);
         setReassignQuantityMode('all');
         setReassignCustomCount('');
+        setReassignDialerFilter('all');
+        setReassignStatusFilter('all');
         setIsReassignDialogOpen(false);
     }
   };
@@ -2487,6 +2538,8 @@ export default function LeadsClientPage({
           <div className="flex flex-wrap items-center gap-3">
             <CustomBulkSelectControl
               allAvailableIds={isAdminView ? filteredLeads.map(l => l.id) : myLeads.map(l => l.id)}
+              scopeLeads={isAdminView ? filteredLeads : myLeads}
+              isInbound={filters.bucket === 'inbound'}
               selectedIds={selectedLeads}
               onSelect={setSelectedLeads}
               onClear={() => setSelectedLeads([])}
@@ -2633,6 +2686,18 @@ export default function LeadsClientPage({
                                 onClick={(e) => e.stopPropagation()}
                                 id={`select-all-myleads-${status}`}
                             />
+                            <div onClick={(e) => e.stopPropagation()} className="mr-1">
+                              <CustomBulkSelectControl
+                                  compact={true}
+                                  label={`My Leads (${status})`}
+                                  allAvailableIds={leads.map(l => l.id)}
+                                  scopeLeads={myLeads}
+                                  isInbound={filters.bucket === 'inbound'}
+                                  initialStatusScope={status}
+                                  selectedIds={selectedLeads}
+                                  onSelect={setSelectedLeads}
+                              />
+                            </div>
                             <AccordionTrigger className="py-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <LeadStatusBadge status={status as LeadStatus} />
@@ -2884,6 +2949,9 @@ export default function LeadsClientPage({
                                 compact={true}
                                 label={`Leads for ${dialer}`}
                                 allAvailableIds={Object.values(statusGroups).flat().map(l => l.id)}
+                                scopeLeads={Object.values(statusGroups).flat()}
+                                isInbound={filters.bucket === 'inbound'}
+                                initialDialerScope={dialer}
                                 selectedIds={selectedLeads}
                                 onSelect={setSelectedLeads}
                             />
@@ -2922,6 +2990,10 @@ export default function LeadsClientPage({
                                           compact={true}
                                           label={`Leads for ${dialer} (${status})`}
                                           allAvailableIds={leads.map(l => l.id)}
+                                          scopeLeads={Object.values(statusGroups).flat()}
+                                          isInbound={filters.bucket === 'inbound'}
+                                          initialDialerScope={dialer}
+                                          initialStatusScope={status}
                                           selectedIds={selectedLeads}
                                           onSelect={setSelectedLeads}
                                       />
@@ -3108,11 +3180,21 @@ export default function LeadsClientPage({
 
       {isAdminView && userProfile?.activeRole !== 'Outbound Admin' && (
        <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
             <CardTitle className="flex items-center gap-2">
                 <span>All Unassigned Leads</span>
                 <Badge variant="secondary">{unassignedLeads.length} lead(s)</Badge>
             </CardTitle>
+            <CustomBulkSelectControl
+                label="Unassigned Leads"
+                allAvailableIds={unassignedLeads.map(l => l.id)}
+                scopeLeads={unassignedLeads}
+                isInbound={filters.bucket === 'inbound'}
+                initialDialerScope="unassigned"
+                selectedIds={selectedLeads}
+                onSelect={setSelectedLeads}
+                onClear={() => setSelectedLeads([])}
+            />
         </CardHeader>
         <CardContent>
            {loading || isRefreshing ? (
@@ -3137,6 +3219,19 @@ export default function LeadsClientPage({
                                 onClick={(e) => e.stopPropagation()}
                                 id={`select-all-unassigned-${status}`}
                             />
+                            <div onClick={(e) => e.stopPropagation()} className="mr-1">
+                              <CustomBulkSelectControl
+                                  compact={true}
+                                  label={`Unassigned (${status})`}
+                                  allAvailableIds={leads.map(l => l.id)}
+                                  scopeLeads={unassignedLeads}
+                                  isInbound={filters.bucket === 'inbound'}
+                                  initialDialerScope="unassigned"
+                                  initialStatusScope={status}
+                                  selectedIds={selectedLeads}
+                                  onSelect={setSelectedLeads}
+                              />
+                            </div>
                             <AccordionTrigger className="py-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <LeadStatusBadge status={status as LeadStatus} />
@@ -3288,6 +3383,8 @@ export default function LeadsClientPage({
             setReassignToUsers([]);
             setReassignQuantityMode('all');
             setReassignCustomCount('');
+            setReassignDialerFilter('all');
+            setReassignStatusFilter('all');
         }
     }}>
         <DialogContent className="max-w-lg">
@@ -3320,7 +3417,7 @@ export default function LeadsClientPage({
                             variant={reassignQuantityMode === 'custom' ? 'default' : 'outline'}
                             onClick={() => {
                                 setReassignQuantityMode('custom');
-                                if (!reassignCustomCount) setReassignCustomCount(Math.min(25, idsForReassignment.length).toString());
+                                if (!reassignCustomCount) setReassignCustomCount(Math.min(25, reassignScopeInfo.filteredPool.length || idsForReassignment.length).toString());
                             }}
                             className="h-8 text-xs flex-1"
                         >
@@ -3329,22 +3426,65 @@ export default function LeadsClientPage({
                     </div>
 
                     {reassignQuantityMode === 'custom' && (
-                        <div className="space-y-2 pt-2 border-t border-border mt-2 animate-in fade-in duration-150">
+                        <div className="space-y-2.5 pt-2 border-t border-border mt-2 animate-in fade-in duration-150">
+                            {/* Filter preselected pool by Dialer / Unassigned & Status */}
+                            {(reassignScopeInfo.dialers.length > 0 || reassignScopeInfo.unassignedCount > 0) && (
+                                <div className="p-2 rounded bg-background border border-border/80 space-y-1.5">
+                                    <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                                        <span>Target Scope from Selection:</span>
+                                        <span className="font-mono text-primary font-semibold">
+                                            {reassignScopeInfo.filteredPool.length} available
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <select
+                                            value={reassignDialerFilter}
+                                            onChange={(e) => {
+                                                setReassignDialerFilter(e.target.value);
+                                                setReassignCustomCount('');
+                                            }}
+                                            className="w-full h-7 text-xs rounded border border-input bg-card px-2 py-0.5 text-foreground"
+                                        >
+                                            <option value="all">All Selected ({idsForReassignment.length})</option>
+                                            {reassignScopeInfo.unassignedCount > 0 && (
+                                                <option value="unassigned">Unassigned ({reassignScopeInfo.unassignedCount})</option>
+                                            )}
+                                            {reassignScopeInfo.dialers.map((d) => (
+                                                <option key={d.name} value={d.name}>{d.name} ({d.count})</option>
+                                            ))}
+                                        </select>
+                                        <select
+                                            value={reassignStatusFilter}
+                                            onChange={(e) => {
+                                                setReassignStatusFilter(e.target.value);
+                                                setReassignCustomCount('');
+                                            }}
+                                            className="w-full h-7 text-xs rounded border border-input bg-card px-2 py-0.5 text-foreground"
+                                        >
+                                            <option value="all">All Statuses ({reassignScopeInfo.statuses.reduce((acc, s) => acc + s.count, 0)})</option>
+                                            {reassignScopeInfo.statuses.map((s) => (
+                                                <option key={s.status} value={s.status}>{s.status} ({s.count})</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span>Amount from preselected (max {idsForReassignment.length}):</span>
+                                <span>Amount from pool (max {reassignScopeInfo.filteredPool.length}):</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Input
                                     type="number"
                                     min={1}
-                                    max={idsForReassignment.length}
+                                    max={reassignScopeInfo.filteredPool.length}
                                     value={reassignCustomCount}
                                     onChange={(e) => setReassignCustomCount(e.target.value)}
-                                    placeholder={`1 - ${idsForReassignment.length}`}
+                                    placeholder={`1 - ${reassignScopeInfo.filteredPool.length}`}
                                     className="h-8 text-xs font-mono"
                                 />
                                 <div className="flex gap-1">
-                                    {[10, 25, 50, 100].filter(n => n < idsForReassignment.length).map(n => (
+                                    {[10, 25, 50, 100].filter(n => n < reassignScopeInfo.filteredPool.length).map(n => (
                                         <Button
                                             key={n}
                                             type="button"
@@ -3417,14 +3557,14 @@ export default function LeadsClientPage({
                     onClick={handleBulkReassign} 
                     disabled={
                         reassignToUsers.length === 0 || 
-                        (reassignQuantityMode === 'custom' && (!reassignCustomCount || parseInt(reassignCustomCount, 10) <= 0))
+                        (reassignQuantityMode === 'custom' && (!reassignCustomCount || parseInt(reassignCustomCount, 10) <= 0 || reassignScopeInfo.filteredPool.length === 0))
                     }
                     size="sm"
                 >
                     Confirm Reassignment ({
                         reassignQuantityMode === 'custom' && parseInt(reassignCustomCount, 10) > 0
-                            ? Math.min(parseInt(reassignCustomCount, 10), idsForReassignment.length)
-                            : idsForReassignment.length
+                            ? Math.min(parseInt(reassignCustomCount, 10), reassignScopeInfo.filteredPool.length)
+                            : (reassignQuantityMode === 'custom' ? reassignScopeInfo.filteredPool.length : idsForReassignment.length)
                     })
                 </Button>
             </DialogFooter>
