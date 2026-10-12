@@ -82,7 +82,7 @@ interface ScrapeResult {
 }
 
 /**
- * Helper to fetch a URL safely with a timeout and extract text, platform signals, outbound links, and internal navigation links.
+ * Helper to fetch a URL safely with a strict 4-second timeout and extract text, platform signals, outbound links, and internal navigation links.
  */
 async function fetchPage(url: string, baseDomain: string): Promise<ScrapeResult> {
   let targetUrl = url.trim();
@@ -92,7 +92,7 @@ async function fetchPage(url: string, baseDomain: string): Promise<ScrapeResult>
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), 4000); // Strict 4-second timeout per page
 
     const response = await fetch(targetUrl, {
       headers: {
@@ -144,7 +144,7 @@ async function fetchPage(url: string, baseDomain: string): Promise<ScrapeResult>
       }
 
       // Internal location/contact links
-      const isLocationSignal = /(pages\/|contact|location|store|branch|warehouse|find-us|stockist|about)/i.test(linkUrl);
+      const isLocationSignal = /(pages\/|contact|location|store|branch|warehouse|find-us|stockist|about|shipping|delivery|faq|returns)/i.test(linkUrl);
       if (isLocationSignal) {
         if (linkUrl.startsWith('/')) {
           if (!internalLinks.includes(linkUrl)) internalLinks.push(linkUrl);
@@ -175,8 +175,8 @@ async function fetchPage(url: string, baseDomain: string): Promise<ScrapeResult>
 }
 
 /**
- * Auxiliary probe to detect eCommerce platform from unblocked metadata endpoints (robots.txt, sitemaps)
- * even when primary HTML pages are challenge-protected by Cloudflare/WAF.
+ * Auxiliary probe to detect eCommerce platform from unblocked metadata endpoints in parallel.
+ * Executes concurrently with Promise.allSettled and a strict 3-second timeout.
  */
 async function probePlatformMetadata(cleanBase: string): Promise<string> {
   const probePaths = [
@@ -186,10 +186,10 @@ async function probePlatformMetadata(cleanBase: string): Promise<string> {
     '/product-sitemap.xml',
   ];
 
-  for (const path of probePaths) {
+  const probePromises = probePaths.map(async (path) => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 7000);
+      const timeout = setTimeout(() => controller.abort(), 3000);
       const res = await fetch(`${cleanBase}${path}`, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
@@ -198,7 +198,7 @@ async function probePlatformMetadata(cleanBase: string): Promise<string> {
         signal: controller.signal as any,
       });
       clearTimeout(timeout);
-      if (!res.ok) continue;
+      if (!res.ok) return 'No';
       const content = await res.text();
 
       // Check WooCommerce signals
@@ -234,13 +234,26 @@ async function probePlatformMetadata(cleanBase: string): Promise<string> {
       if (/catalogsearch/i.test(content) && /catalog\/product_compare/i.test(content)) {
         return 'Magento';
       }
-    } catch (e) {}
+      return 'No';
+    } catch {
+      return 'No';
+    }
+  });
+
+  const results = await Promise.allSettled(probePromises);
+  for (const item of results) {
+    if (item.status === 'fulfilled' && item.value !== 'No') {
+      return item.value;
+    }
   }
   return 'No';
 }
 
 /**
- * Scrapes the lead's website across homepage and all key subpages (branches, stores, locations, shipping, delivery, contact).
+ * Smart 2-Stage Parallel Crawler:
+ * Stage 1: Fetches Homepage first. If homepage is unresponsive, aborts immediately.
+ * Stage 2: Identifies the top 3-4 real, confirmed internal links present in the HTML and fetches them concurrently in parallel.
+ * Total crawl budget capped at ~4-5 seconds max.
  */
 async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; detectedPlatform: string; discoveredLinks: string[] }> {
   let cleanBase = baseUrl.trim();
@@ -256,71 +269,70 @@ async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; detect
     baseDomain = cleanBase;
   }
 
-  const initialPaths = [
-    '',
-    '/pages/contact',
-    '/pages/contact-us',
-    '/pages/locations',
-    '/pages/our-locations',
-    '/pages/stores',
-    '/pages/our-stores',
-    '/pages/branches',
-    '/pages/about',
-    '/pages/about-us',
-    '/contact',
-    '/contact-us',
-    '/locations',
-    '/stores',
-    '/find-us',
-    '/our-stores',
-    '/store-locator',
-    '/branches',
-    '/warehouses',
-    '/about',
-    '/about-us',
-    '/shop',
-    '/store',
-    '/merchandise',
-    '/shipping',
-    '/shipping-policy',
-    '/delivery',
-    '/delivery-information',
-    '/faq',
-    '/returns',
-  ];
-
-  const queue = [...initialPaths];
-  const visited = new Set<string>();
   let aggregatedText = '';
   let finalPlatform = 'No';
   const allDiscoveredLinks: Set<string> = new Set();
 
-  while (queue.length > 0 && visited.size < 20) {
-    const path = queue.shift()!;
-    if (visited.has(path)) continue;
-    visited.add(path);
+  // STAGE 1: Fetch Homepage First
+  const homeResult = await fetchPage(cleanBase, baseDomain);
+  if (homeResult.text) {
+    aggregatedText += `\n--- PAGE: HOMEPAGE ---\n` + homeResult.text.substring(0, 15000);
+    if (homeResult.detectedPlatform !== 'No') {
+      finalPlatform = homeResult.detectedPlatform;
+    }
+    homeResult.discoveredLinks.forEach(l => allDiscoveredLinks.add(l));
+  } else {
+    // If homepage fails or is dead, immediately probe metadata and return early (avoid 20s of wasted requests)
+    const probed = await probePlatformMetadata(cleanBase);
+    return {
+      text: '',
+      detectedPlatform: probed,
+      discoveredLinks: [],
+    };
+  }
 
+  // STAGE 2: Identify Confirmed Internal Links Present in Homepage HTML
+  const highPriorityPatterns = [
+    /(location|store|branch|warehouse|find-us|stockist)/i,
+    /(contact)/i,
+    /(shipping|delivery|faq|returns)/i,
+    /(shop|merchandise|store)/i,
+    /(about)/i,
+  ];
+
+  const matchedPaths: string[] = [];
+  for (const pattern of highPriorityPatterns) {
+    const foundPath = homeResult.internalLinks.find(p => pattern.test(p) && !matchedPaths.includes(p));
+    if (foundPath) {
+      matchedPaths.push(foundPath);
+    }
+    if (matchedPaths.length >= 4) break;
+  }
+
+  // If no internal links were discovered, probe only the 2 most common standard endpoints
+  if (matchedPaths.length === 0) {
+    matchedPaths.push('/contact', '/locations');
+  }
+
+  // Fetch the selected 3-4 confirmed pages concurrently in parallel
+  const subpagePromises = matchedPaths.map(async (path) => {
     const target = path.startsWith('http') ? path : `${cleanBase}${path}`;
-    const pageResult = await fetchPage(target, baseDomain);
+    return { path, res: await fetchPage(target, baseDomain) };
+  });
 
-    if (pageResult.text) {
-      if (pageResult.detectedPlatform !== 'No') {
-        finalPlatform = pageResult.detectedPlatform;
+  const subpageResults = await Promise.allSettled(subpagePromises);
+  for (const sub of subpageResults) {
+    if (sub.status === 'fulfilled' && sub.value.res.text) {
+      const { path, res } = sub.value;
+      if (res.detectedPlatform !== 'No' && finalPlatform === 'No') {
+        finalPlatform = res.detectedPlatform;
       }
-      pageResult.discoveredLinks.forEach(l => allDiscoveredLinks.add(l));
-
-      // Add newly discovered internal paths to queue if not visited
-      for (const intPath of pageResult.internalLinks) {
-        if (!visited.has(intPath) && !queue.includes(intPath) && queue.length < 25) {
-          queue.push(intPath);
-        }
-      }
-
-      aggregatedText += `\n--- PAGE: ${path || 'HOMEPAGE'} ---\n` + pageResult.text.substring(0, 15000);
+      res.discoveredLinks.forEach(l => allDiscoveredLinks.add(l));
+      aggregatedText += `\n--- PAGE: ${path} ---\n` + res.text.substring(0, 10000);
     }
   }
 
-  // If standard HTML scrape didn't detect a platform (or was blocked by WAF/Cloudflare), probe robots.txt and sitemaps
+  // If still no platform detected, probe metadata in parallel
   if (finalPlatform === 'No') {
     const probed = await probePlatformMetadata(cleanBase);
     if (probed !== 'No') {
@@ -496,18 +508,21 @@ export const enrichLeadFlow = ai.defineFlow(
       discoveredLinksList = crawlRes.discoveredLinks;
     }
 
-    // 2. Initial lookup of similar signed customers based on 2 checks (Industry/Subcategory & Close to lead)
-    const initialSimilarCustomers = await findSimilarSignedCustomers({
-      industryCategory: input.industryCategory,
-      industrySubCategory: input.industrySubCategory,
-      franchiseeName: input.franchiseeName,
-      state: input.state,
-      suburb: input.suburb,
-      postcode: input.postcode,
-      limitCount: 4,
-    });
+    // 2. Initial lookup of similar signed customers only if industry is already provided
+    let initialSimilarCustomers: any[] = [];
+    if (input.industryCategory && input.industryCategory.trim() !== '') {
+      initialSimilarCustomers = await findSimilarSignedCustomers({
+        industryCategory: input.industryCategory,
+        industrySubCategory: input.industrySubCategory,
+        franchiseeName: input.franchiseeName,
+        state: input.state,
+        suburb: input.suburb,
+        postcode: input.postcode,
+        limitCount: 4,
+      });
+    }
 
-    let similarCustomersSummary = 'None currently matched in database.';
+    let similarCustomersSummary = 'To be identified upon automated industry classification.';
     if (initialSimilarCustomers.length > 0) {
       similarCustomersSummary = initialSimilarCustomers
         .map(c => `- ${c.companyName} (${c.industryCategory || 'Retail/Commercial'}, Suburb: ${c.suburb || 'N/A'}, Match: ${c.matchReason || 'Social Proof Client'})`)

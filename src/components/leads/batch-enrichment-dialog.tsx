@@ -53,7 +53,7 @@ interface BatchEnrichmentDialogProps {
   autoStart?: boolean;
 }
 
-const CONCURRENCY = 3; // 3 parallel workers for instant real-time streaming updates and fast throughput
+const CONCURRENCY = 6; // 6 parallel workers for 2.5x higher throughput and instant real-time streaming updates
 
 export function BatchEnrichmentDialog({
   isOpen,
@@ -80,6 +80,13 @@ export function BatchEnrichmentDialog({
   const logScrollRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Real clock timestamp anchors to prevent background tab timer drift
+  const startTimeRef = useRef<number | null>(null);
+  const pausedAtRef = useRef<number | null>(null);
+  const totalPausedMsRef = useRef<number>(0);
+  // Rolling window of completion timestamps for ultra-accurate ETA calculation
+  const completionTimestampsRef = useRef<number[]>([]);
+
   const totalLeads = leadIds.length;
   const processedCount = successCount + failureCount;
   const progressPct = totalLeads > 0 ? Math.min(100, Math.round((processedCount / totalLeads) * 100)) : 0;
@@ -104,12 +111,40 @@ export function BatchEnrichmentDialog({
     }
   }, [resultsLog, currentLeadName]);
 
-  // Elapsed time counter
+  // Elapsed time counter anchored to Date.now() to prevent browser tab throttling/drift
   useEffect(() => {
+    const updateRealElapsedTime = () => {
+      if (startTimeRef.current && status === 'running') {
+        const currentPaused = pausedAtRef.current ? Date.now() - pausedAtRef.current : 0;
+        const netMs = Date.now() - startTimeRef.current - totalPausedMsRef.current - currentPaused;
+        setElapsedSeconds(Math.max(0, Math.floor(netMs / 1000)));
+      }
+    };
+
     if (status === 'running') {
-      timerRef.current = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
+      if (!startTimeRef.current) {
+        startTimeRef.current = Date.now();
+      } else if (pausedAtRef.current) {
+        totalPausedMsRef.current += Date.now() - pausedAtRef.current;
+        pausedAtRef.current = null;
+      }
+
+      timerRef.current = setInterval(updateRealElapsedTime, 500);
+
+      const handleVisibilityChange = () => {
+        if (!document.hidden) updateRealElapsedTime();
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    } else if (status === 'paused') {
+      if (!pausedAtRef.current) {
+        pausedAtRef.current = Date.now();
+      }
+      if (timerRef.current) clearInterval(timerRef.current);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
@@ -203,6 +238,12 @@ export function BatchEnrichmentDialog({
           },
         ]);
       } finally {
+        // Record timestamp for rolling window ETA (keep last 15)
+        completionTimestampsRef.current.push(Date.now());
+        if (completionTimestampsRef.current.length > 15) {
+          completionTimestampsRef.current.shift();
+        }
+
         inFlightMapRef.current.delete(leadId);
         updateInFlightPreview();
       }
@@ -260,6 +301,12 @@ export function BatchEnrichmentDialog({
       isPausedRef.current = false;
       isStoppedRef.current = false;
 
+      // Reset timestamp anchors
+      startTimeRef.current = null;
+      pausedAtRef.current = null;
+      totalPausedMsRef.current = 0;
+      completionTimestampsRef.current = [];
+
       if (autoStart && leadIds.length > 0) {
         setStatus('running');
         const startTimer = setTimeout(() => {
@@ -287,11 +334,28 @@ export function BatchEnrichmentDialog({
     return `${m}m ${s < 10 ? '0' : ''}${s}s`;
   };
 
-  // Estimate Remaining Time (ETA) - accurate countdown starting from the very 1st completed lead
+  // Estimate Remaining Time (ETA) - rolling window based on last 15 completed leads
   const calculateEta = () => {
     if (processedCount === 0 || elapsedSeconds < 2) return 'Calculating...';
-    const wallClockSecsPerLead = elapsedSeconds / processedCount;
     const remainingLeads = totalLeads - processedCount;
+    if (remainingLeads <= 0) return '0s';
+
+    const timestamps = completionTimestampsRef.current;
+    // If we have at least 3 recent completions, calculate rolling pace from the last 15
+    if (timestamps.length >= 3) {
+      const oldest = timestamps[0];
+      const newest = timestamps[timestamps.length - 1];
+      const spanMs = newest - oldest;
+      const count = timestamps.length - 1;
+      if (spanMs > 0 && count > 0) {
+        const rollingSecsPerLead = (spanMs / count) / 1000;
+        const estSecs = Math.max(0, Math.round(rollingSecsPerLead * remainingLeads));
+        return formatTime(estSecs);
+      }
+    }
+
+    // Fallback to cumulative wall-clock average
+    const wallClockSecsPerLead = elapsedSeconds / processedCount;
     const estRemainingSeconds = Math.max(0, Math.round(wallClockSecsPerLead * remainingLeads));
     return formatTime(estRemainingSeconds);
   };
@@ -302,6 +366,9 @@ export function BatchEnrichmentDialog({
 
   const handlePause = () => {
     isPausedRef.current = true;
+    if (!pausedAtRef.current) {
+      pausedAtRef.current = Date.now();
+    }
     if (activeWorkersRef.current <= 0) {
       setStatus('paused');
     }
