@@ -90,7 +90,7 @@ import { canReassignLead, canChangeBucket, isAccountManagerUser } from '@/lib/le
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
-type SortableLeadKeys = 'companyName' | 'status' | 'prospectPlusId' | 'customerStatus' | 'customerSource';
+type SortableLeadKeys = 'companyName' | 'status' | 'prospectPlusId' | 'customerStatus' | 'customerSource' | 'isAiEnriched';
 
 export function getProspectPlusId(lead: Partial<Lead> & Record<string, any>): string {
   const pid = lead.prospectPlusId || lead.prospectplusId || lead.prospect_plus_id;
@@ -784,7 +784,23 @@ export default function LeadsClientPage({
     entityId: '',
     bucket: initialBucket,
     customerStatus: [] as string[],
+    aiEnrichment: (searchParams.get('aiEnriched') === 'enriched' || searchParams.get('enriched') === 'true'
+      ? 'enriched'
+      : searchParams.get('aiEnriched') === 'not_enriched' || searchParams.get('enriched') === 'false'
+      ? 'not_enriched'
+      : 'all') as 'all' | 'enriched' | 'not_enriched',
   });
+
+  useEffect(() => {
+    const aiParam = searchParams.get('aiEnriched') || searchParams.get('enriched');
+    if (aiParam) {
+      if (aiParam === 'enriched' || aiParam === 'true') {
+        setFilters(prev => ({ ...prev, aiEnrichment: 'enriched' }));
+      } else if (aiParam === 'not_enriched' || aiParam === 'false') {
+        setFilters(prev => ({ ...prev, aiEnrichment: 'not_enriched' }));
+      }
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!user && !authLoading) {
@@ -1029,6 +1045,7 @@ export default function LeadsClientPage({
       entityId: '',
       bucket: initialBucket,
       customerStatus: [],
+      aiEnrichment: 'all',
     });
     setCurrentPage(1);
   };
@@ -1088,7 +1105,12 @@ export default function LeadsClientPage({
       const entityIdMatch = filters.entityId ? lead.entityId?.toLowerCase().includes(filters.entityId.toLowerCase()) : true;
       const customerStatusMatch = filters.customerStatus.length === 0 || (lead.customerStatus && filters.customerStatus.includes(lead.customerStatus));
 
-      return !isArchived && !isFieldSalesLead && companyNameMatch && prospectPlusIdMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && stateMatch && dateLeadEnteredMatch && dateDialerAssignedMatch && sourceMatch && entityIdMatch && bucketMatch && customerStatusMatch;
+      const aiEnrichmentMatch =
+        filters.aiEnrichment === 'all' ||
+        (filters.aiEnrichment === 'enriched' && Boolean(lead.isAiEnriched)) ||
+        (filters.aiEnrichment === 'not_enriched' && !lead.isAiEnriched);
+
+      return !isArchived && !isFieldSalesLead && companyNameMatch && prospectPlusIdMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && stateMatch && dateLeadEnteredMatch && dateDialerAssignedMatch && sourceMatch && entityIdMatch && bucketMatch && customerStatusMatch && aiEnrichmentMatch;
     });
 
     if (sortConfig !== null) {
@@ -1101,6 +1123,9 @@ export default function LeadsClientPage({
         } else if (sortConfig.key === 'customerSource') {
           aValue = a.customerSource || '';
           bValue = b.customerSource || '';
+        } else if (sortConfig.key === 'isAiEnriched') {
+          aValue = a.isAiEnriched ? 1 : 0;
+          bValue = b.isAiEnriched ? 1 : 0;
         } else {
           aValue = a[sortConfig.key as keyof Lead] ?? '';
           bValue = b[sortConfig.key as keyof Lead] ?? '';
@@ -1490,39 +1515,15 @@ export default function LeadsClientPage({
   ) => {
     setIsEnrichmentReviewOpen(false);
 
-    // 1. If user selected dialers to reassign, perform assignment first
+    // 1. Prepare target assignments to pass to the background enrichment job.
+    // The server worker will reassign each lead to its target dialer ONLY AFTER successful enrichment.
+    const leadAssignmentsMap: Record<string, string> = {};
+    const assignedDialersList: string[] = [];
     if (reassignments && reassignments.length > 0) {
-      try {
-        const isInbound = filters.bucket === 'inbound';
-        const leadIds = reassignments.map(r => r.leadId);
-        const targetReps = reassignments.map(r => r.targetDialer);
-        await bulkUpdateLeadDialerRep(leadIds, targetReps, isInbound);
-
-        const reassignMap = new Map(reassignments.map(r => [r.leadId, r.targetDialer]));
-        setAllLeads(prev =>
-          prev.map(lead => {
-            if (reassignMap.has(lead.id)) {
-              const newDialer = reassignMap.get(lead.id)!;
-              return isInbound
-                ? { ...lead, salesRepAssigned: newDialer }
-                : { ...lead, dialerAssigned: newDialer };
-            }
-            return lead;
-          })
-        );
-
-        toast({
-          title: "Dialers Assigned",
-          description: `Equally distributed ${reassignments.length} lead(s) across selected dialers.`,
-        });
-      } catch (err: any) {
-        console.error("Failed to assign dialers:", err);
-        toast({
-          title: "Assignment Warning",
-          description: "Could not update dialer assignments, but starting enrichment...",
-          variant: "destructive",
-        });
-      }
+      reassignments.forEach(r => {
+        leadAssignmentsMap[r.leadId] = r.targetDialer;
+      });
+      assignedDialersList.push(...Array.from(new Set(reassignments.map(r => r.targetDialer))));
     }
 
     // 2. Create and start cloud background job
@@ -1542,6 +1543,9 @@ export default function LeadsClientPage({
           action: 'create',
           leadIds: batchEnrichTargetIds,
           leadNames: leadNamesMap,
+          leadAssignments: leadAssignmentsMap,
+          assignedDialers: assignedDialersList,
+          isInbound: filters.bucket === 'inbound',
           requestorUid: userProfile?.uid || user?.uid,
         }),
       });
@@ -1554,7 +1558,9 @@ export default function LeadsClientPage({
         setIsJobBannerDismissed(false);
         toast({
           title: "AI Enrichment Running in Cloud",
-          description: `Processing ${batchEnrichTargetIds.length} lead(s). Safe to close browser or log out anytime!`,
+          description: reassignments && reassignments.length > 0
+            ? `Processing ${batchEnrichTargetIds.length} lead(s). Dialers will be automatically assigned upon successful enrichment.`
+            : `Processing ${batchEnrichTargetIds.length} lead(s). Safe to close browser or log out anytime!`,
         });
       } else {
         throw new Error(data.error || 'Failed to start cloud enrichment job');
@@ -2401,6 +2407,23 @@ export default function LeadsClientPage({
                                 placeholder="Select statuses..."
                             />
                         </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="aiEnrichment-select">AI Enrichment</Label>
+                            <Select
+                                value={filters.aiEnrichment}
+                                onValueChange={(value) => handleFilterChange('aiEnrichment', value)}
+                            >
+                                <SelectTrigger id="aiEnrichment-select" className="w-full h-10 px-3 py-2 text-xs md:text-sm">
+                                    <SelectValue placeholder="All Leads" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Leads</SelectItem>
+                                    <SelectItem value="enriched">✨ Enriched Only</SelectItem>
+                                    <SelectItem value="not_enriched">⚠️ Not Enriched</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </CardContent>
                     {hasActiveFilters && (
                         <CardContent>
@@ -2576,6 +2599,7 @@ export default function LeadsClientPage({
                                         <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
                                         <TableHead className="hidden md:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('customerSource')} className="group -ml-4">Source{getSortIndicator('customerSource')}</Button></TableHead>
                                         <TableHead className="hidden md:table-cell px-2 md:px-4">Contact</TableHead>
+                                        <TableHead className="hidden md:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('isAiEnriched')} className="group -ml-4">AI Enrichment{getSortIndicator('isAiEnriched')}</Button></TableHead>
                                         <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -2650,6 +2674,32 @@ export default function LeadsClientPage({
                                                     </Badge>
                                                 )}
                                             </TableCell>
+                                            <TableCell className="hidden md:table-cell px-2 md:px-4">
+                                                {lead.isAiEnriched ? (
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 w-fit font-medium cursor-help">
+                                                                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                                                                    Enriched
+                                                                </Badge>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="text-xs max-w-xs space-y-1">
+                                                                <p className="font-semibold text-slate-900">AI Enriched</p>
+                                                                {lead.enrichedBy && <p className="text-slate-600">By: {lead.enrichedBy}</p>}
+                                                                {lead.enrichedAt && <p className="text-slate-500">Date: {format(new Date(lead.enrichedAt), 'PP')}</p>}
+                                                                {lead.shopifyDetected && <p className="text-emerald-700 font-medium">eCommerce: {lead.shopifyDetected}</p>}
+                                                                {lead.hasMultipleBranches && <p className="text-blue-700 font-medium">Branches: {lead.totalBranchCount || 'Multiple'}</p>}
+                                                                {lead.hasPoBox && <p className="text-amber-700 font-medium">PO Box Detected</p>}
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                ) : (
+                                                    <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-200 flex items-center gap-1 w-fit text-xs">
+                                                        Not Enriched
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
                                             <TableCell className="text-right px-2 md:px-4">
                                                 <div className="hidden md:inline-flex">
                                                     <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
@@ -2669,7 +2719,7 @@ export default function LeadsClientPage({
                                         </TableRow>
                                         {expandedDetails[lead.id] && (
                                             <TableRow>
-                                                <TableCell colSpan={7} className="p-0">
+                                                <TableCell colSpan={8} className="p-0">
                                                     <div className="p-4 bg-secondary/50">
                                                         {expandedDetails[lead.id].loading ? (
                                                             <Loader />
@@ -2826,6 +2876,7 @@ export default function LeadsClientPage({
                                                     <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
                                                     <TableHead className="hidden md:table-cell px-2 md:px-4">Source</TableHead>
                                                     <TableHead className="hidden md:table-cell px-2 md:px-4">Contact</TableHead>
+                                                    <TableHead className="hidden md:table-cell px-2 md:px-4">AI Enrichment</TableHead>
                                                     <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                                 </TableRow>
                                             </TableHeader>
@@ -2859,6 +2910,32 @@ export default function LeadsClientPage({
                                                             </Badge>
                                                         )}
                                                     </TableCell>
+                                                    <TableCell className="hidden md:table-cell px-2 md:px-4">
+                                                        {lead.isAiEnriched ? (
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 w-fit font-medium cursor-help">
+                                                                            <Sparkles className="w-3 h-3 text-emerald-600" />
+                                                                            Enriched
+                                                                        </Badge>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent className="text-xs max-w-xs space-y-1">
+                                                                        <p className="font-semibold text-slate-900">AI Enriched</p>
+                                                                        {lead.enrichedBy && <p className="text-slate-600">By: {lead.enrichedBy}</p>}
+                                                                        {lead.enrichedAt && <p className="text-slate-500">Date: {format(new Date(lead.enrichedAt), 'PP')}</p>}
+                                                                        {lead.shopifyDetected && <p className="text-emerald-700 font-medium">eCommerce: {lead.shopifyDetected}</p>}
+                                                                        {lead.hasMultipleBranches && <p className="text-blue-700 font-medium">Branches: {lead.totalBranchCount || 'Multiple'}</p>}
+                                                                        {lead.hasPoBox && <p className="text-amber-700 font-medium">PO Box Detected</p>}
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
+                                                        ) : (
+                                                            <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-200 flex items-center gap-1 w-fit text-xs">
+                                                                Not Enriched
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
                                                     <TableCell className="text-right px-2 md:px-4">
                                                          <div className="hidden md:inline-flex">
                                                              <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>{expandedDetails[lead.id] ? 'Hide' : 'History'}</Button>
@@ -2888,7 +2965,7 @@ export default function LeadsClientPage({
                                                 </TableRow>
                                                 {expandedDetails[lead.id] && (
                                                     <TableRow>
-                                                        <TableCell colSpan={7} className="p-0">
+                                                        <TableCell colSpan={8} className="p-0">
                                                             <div className="p-4 bg-secondary/50">
                                                                 {expandedDetails[lead.id].loading ? (
                                                                     <Loader />
@@ -3011,6 +3088,7 @@ export default function LeadsClientPage({
                                         <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
                                         <TableHead className="hidden md:table-cell px-2 md:px-4">Source</TableHead>
                                         <TableHead className="hidden md:table-cell px-2 md:px-4">Contact</TableHead>
+                                        <TableHead className="hidden md:table-cell px-2 md:px-4">AI Enrichment</TableHead>
                                         <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -3044,6 +3122,32 @@ export default function LeadsClientPage({
                                                     <Badge variant="outline" className="bg-slate-100/80 text-slate-500 border-slate-200 flex items-center gap-1 w-fit">
                                                         <UserX className="w-3 h-3 text-slate-400" />
                                                         No Contact
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="hidden md:table-cell px-2 md:px-4">
+                                                {lead.isAiEnriched ? (
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 w-fit font-medium cursor-help">
+                                                                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                                                                    Enriched
+                                                                </Badge>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="text-xs max-w-xs space-y-1">
+                                                                <p className="font-semibold text-slate-900">AI Enriched</p>
+                                                                {lead.enrichedBy && <p className="text-slate-600">By: {lead.enrichedBy}</p>}
+                                                                {lead.enrichedAt && <p className="text-slate-500">Date: {format(new Date(lead.enrichedAt), 'PP')}</p>}
+                                                                {lead.shopifyDetected && <p className="text-emerald-700 font-medium">eCommerce: {lead.shopifyDetected}</p>}
+                                                                {lead.hasMultipleBranches && <p className="text-blue-700 font-medium">Branches: {lead.totalBranchCount || 'Multiple'}</p>}
+                                                                {lead.hasPoBox && <p className="text-amber-700 font-medium">PO Box Detected</p>}
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                ) : (
+                                                    <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-200 flex items-center gap-1 w-fit text-xs">
+                                                        Not Enriched
                                                     </Badge>
                                                 )}
                                             </TableCell>

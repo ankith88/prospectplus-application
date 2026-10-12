@@ -148,7 +148,7 @@ export function EnrichmentDialerReviewDialog({
                   <Sparkles className="h-5 w-5 text-teal-300" />
                 </div>
                 <DialogTitle className="text-xl font-bold text-white tracking-tight">
-                  Step 1: Assign Leads to Dialers & Begin AI Enrichment
+                  Step 1: Dialer Assignment Setup &amp; AI Enrichment
                 </DialogTitle>
               </div>
               <Badge className="bg-emerald-500/20 text-emerald-200 border-emerald-400/30 px-3 py-1 text-xs font-semibold backdrop-blur-sm">
@@ -157,7 +157,7 @@ export function EnrichmentDialerReviewDialog({
               </Badge>
             </div>
             <DialogDescription className="text-white/80 text-sm leading-relaxed">
-              Before AI enrichment begins, select one or more active Inside Dialers to randomly and equally allocate leads, or proceed with current assignees.
+              Choose one or more active Inside Dialers to allocate leads to. Leads will be enriched with AI first, and automatically assigned to your selected dialer(s) upon successful enrichment.
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -286,7 +286,7 @@ export function EnrichmentDialerReviewDialog({
           <div className="p-3 bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 rounded-xl flex items-start gap-2.5">
             <ShieldCheck className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
             <p className="text-xs text-sky-800 dark:text-sky-300 leading-relaxed">
-              <strong>Safe Across Logouts:</strong> Once started, AI enrichment runs autonomously in the cloud. You can safely close your browser or log out — your progress will continue and remain intact.
+              <strong>Post-Enrichment Assignment:</strong> Leads are enriched with AI intelligence in the cloud first, and assigned to dialers only upon successful enrichment. Unenriched leads will not be assigned. You can safely close your browser or log out anytime!
             </p>
           </div>
 

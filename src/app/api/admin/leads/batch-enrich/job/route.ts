@@ -14,6 +14,19 @@ const activeWorkerJobs = new Set<string>();
  * Sends both an in-app notification and an email notification to the user
  * who started the enrichment batch job once it finishes.
  */
+function escapeHtml(str: string): string {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * Sends both an in-app notification and an email notification to the user
+ * who started the enrichment batch job once it finishes.
+ */
 async function sendJobCompletionNotifications(jobId: string, db: FirebaseFirestore.Firestore) {
   try {
     const jobRef = db.collection('enrichment_jobs').doc(jobId);
@@ -35,6 +48,7 @@ async function sendJobCompletionNotifications(jobId: string, db: FirebaseFiresto
     const totalLeads = job.totalLeads || (job.leadIds?.length || 0);
     const successCount = job.successCount || 0;
     const failureCount = job.failureCount || 0;
+    const failedLeads: Array<{ leadId: string; companyName: string; error?: string }> = job.failedLeads || [];
 
     // 1. Fetch user profile
     let userEmail: string | null = null;
@@ -53,13 +67,69 @@ async function sendJobCompletionNotifications(jobId: string, db: FirebaseFiresto
       type: 'ai_enrichment_completed',
       createdAt: new Date().toISOString(),
       isRead: false,
-      link: '/leads',
+      link: failureCount > 0 ? '/leads?aiEnriched=not_enriched' : '/leads?aiEnriched=enriched',
       jobId,
     });
 
     // 3. Send Email Notification if email is available
     if (userEmail && userEmail.includes('@')) {
       const successRate = totalLeads > 0 ? Math.round((successCount / totalLeads) * 100) : 100;
+
+      const failedList = failedLeads.slice(0, 15);
+      const remainingFailed = failedLeads.length - failedList.length;
+
+      const failedRowsHtml = failedList
+        .map(
+          (f, idx) => `
+            <tr>
+              <td style="padding: 8px 10px; border-bottom: 1px solid #fee2e2; font-size: 13px; font-weight: 600; color: #1f2937;">
+                ${idx + 1}. ${escapeHtml(f.companyName || 'Lead')}
+              </td>
+              <td style="padding: 8px 10px; border-bottom: 1px solid #fee2e2; font-size: 12px; color: #991b1b; text-align: right;">
+                ${escapeHtml(f.error || 'Skipped / Unreachable')}
+              </td>
+            </tr>
+          `
+        )
+        .join('');
+
+      const failedSectionHtml = failureCount > 0 ? `
+        <!-- Unenriched Leads Breakdown -->
+        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin: 24px 0 20px; background-color: #fff5f5; border: 1px solid #fed7d7; border-radius: 8px; overflow: hidden;">
+          <tr>
+            <td style="padding: 16px 18px 12px; border-bottom: 1px solid #fee2e2;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td width="24" valign="middle">
+                    <span style="display: inline-block; width: 10px; height: 10px; background-color: #e53e3e; border-radius: 50%;"></span>
+                  </td>
+                  <td style="font-size: 14px; font-weight: 700; color: #991b1b; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                    ${failureCount} Lead${failureCount === 1 ? '' : 's'} Not Enriched
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 6px 0 0; font-size: 12px; color: #7f1d1d; line-height: 1.4; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                These leads could not be enriched (e.g. invalid website, unreachable domain, or missing online presence). Their dialer assignments were left unchanged.
+              </p>
+            </td>
+          </tr>
+          ${failedRowsHtml ? `
+          <tr>
+            <td style="padding: 8px 16px 14px;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                ${failedRowsHtml}
+              </table>
+              ${remainingFailed > 0 ? `
+                <p style="margin: 10px 0 0; font-size: 11px; color: #991b1b; font-style: italic; text-align: center; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                  ... and ${remainingFailed} more unenriched leads. Click the red button below to view all unenriched leads directly in ProspectPlus.
+                </p>
+              ` : ''}
+            </td>
+          </tr>
+          ` : ''}
+        </table>
+      ` : '';
+
       const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -125,18 +195,34 @@ async function sendJobCompletionNotifications(jobId: string, db: FirebaseFiresto
                     <span style="display: inline-block; width: 8px; height: 8px; background-color: #095c7b; border-radius: 50%;"></span>
                   </td>
                   <td style="font-size: 14px; color: #4a5568; padding-bottom: 8px;">
-                    <strong>Dialer Queues Updated:</strong> Your leads have been distributed to your chosen dialers and are ready for outbound calls.
+                    <strong>Dialer Queues Updated Post-Enrichment:</strong> Enriched leads were automatically assigned to your selected dialers upon successful enrichment.
                   </td>
                 </tr>
               </table>
 
-              <!-- Action Button -->
-              <table border="0" cellpadding="0" cellspacing="0" style="margin: 30px 0 15px;">
+              ${failedSectionHtml}
+
+              <!-- Action Buttons -->
+              <table border="0" cellpadding="0" cellspacing="0" style="margin: 28px 0 15px; width: 100%;">
                 <tr>
-                  <td align="center" style="border-radius: 6px; background-color: #095c7b;">
-                    <a href="https://prospect.mailplus.com.au/leads" target="_blank" style="font-size: 15px; font-family: 'Inter', sans-serif; color: #ffffff; text-decoration: none; border-radius: 6px; padding: 14px 28px; display: inline-block; font-weight: 600;">
-                      View Enriched Leads &rarr;
-                    </a>
+                  <td align="left">
+                    <table border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center" style="border-radius: 6px; background-color: #095c7b;">
+                          <a href="https://prospect.mailplus.com.au/leads?aiEnriched=enriched" target="_blank" style="font-size: 14px; font-family: 'Inter', sans-serif; color: #ffffff; text-decoration: none; border-radius: 6px; padding: 12px 24px; display: inline-block; font-weight: 600;">
+                            View Enriched Leads &rarr;
+                          </a>
+                        </td>
+                        ${failureCount > 0 ? `
+                        <td width="12"></td>
+                        <td align="center" style="border-radius: 6px; background-color: #c53030;">
+                          <a href="https://prospect.mailplus.com.au/leads?aiEnriched=not_enriched" target="_blank" style="font-size: 14px; font-family: 'Inter', sans-serif; color: #ffffff; text-decoration: none; border-radius: 6px; padding: 12px 24px; display: inline-block; font-weight: 600;">
+                            View Unenriched Leads (${failureCount}) &rarr;
+                          </a>
+                        </td>
+                        ` : ''}
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
@@ -250,11 +336,35 @@ async function startJobWorker(jobId: string) {
       const batchLeadIds = leadIds.slice(currentIndex, currentIndex + BATCH_SIZE);
 
       const leadNames = jobData.leadNames || {};
+      const leadAssignments = jobData.leadAssignments || {};
+      const isInbound = Boolean(jobData.isInbound);
+
       const batchPromises = batchLeadIds.map(async (id: string) => {
         const fallbackName = leadNames[id] || `Lead #${id.slice(0, 6)}`;
         try {
           const res = await enrichLeadAction(id, { requestorName, requestorEmail, requestorUid });
           if (res.success) {
+            // Reassign lead to target dialer ONLY AFTER successful enrichment!
+            const targetDialer = leadAssignments[id];
+            if (targetDialer) {
+              try {
+                const leadDocRef = db.collection('leads').doc(id);
+                const nowIso = new Date().toISOString();
+                const assignUpdate: Record<string, any> = {
+                  updatedAt: nowIso,
+                };
+                if (isInbound) {
+                  assignUpdate.salesRepAssigned = targetDialer;
+                } else {
+                  assignUpdate.dialerAssigned = targetDialer;
+                  assignUpdate.assignedToDialerAt = nowIso;
+                }
+                await leadDocRef.update(assignUpdate);
+              } catch (assignErr) {
+                console.warn(`Could not reassign lead ${id} to ${targetDialer} post-enrichment:`, assignErr);
+              }
+            }
+
             return {
               leadId: id,
               success: true,
@@ -264,12 +374,24 @@ async function startJobWorker(jobId: string) {
               totalBranchCount: res.data?.totalBranchCount,
               hasPoBox: res.data?.hasPoBox,
               industryCategory: res.data?.industryCategory,
+              assignedTo: targetDialer,
             };
           } else {
-            return { leadId: id, success: false, companyName: fallbackName, error: res.error };
+            // Enrichment failed or was skipped - DO NOT reassign dialer!
+            return {
+              leadId: id,
+              success: false,
+              companyName: fallbackName,
+              error: res.error || 'Enrichment skipped or unavailable',
+            };
           }
         } catch (err: any) {
-          return { leadId: id, success: false, companyName: fallbackName, error: err.message || String(err) };
+          return {
+            leadId: id,
+            success: false,
+            companyName: fallbackName,
+            error: err.message || String(err),
+          };
         }
       });
 
@@ -290,6 +412,17 @@ async function startJobWorker(jobId: string) {
       const currentRecent = freshSnap.data()?.recentResults || [];
       const updatedRecent = [...batchResults, ...currentRecent].slice(0, 30);
 
+      // Track failed leads for reporting in completion email
+      const currentFailed = freshSnap.data()?.failedLeads || [];
+      const newFailed = batchResults
+        .filter((r) => !r.success)
+        .map((r) => ({
+          leadId: r.leadId,
+          companyName: r.companyName,
+          error: r.error || 'Enrichment skipped or unavailable',
+        }));
+      const updatedFailed = [...currentFailed, ...newFailed];
+
       const isAllDone = nextIndex >= leadIds.length;
 
       await jobRef.update({
@@ -298,6 +431,7 @@ async function startJobWorker(jobId: string) {
         successCount: FieldValue.increment(newSuccesses),
         failureCount: FieldValue.increment(newFailures),
         recentResults: updatedRecent,
+        failedLeads: updatedFailed,
         status: isAllDone ? 'completed' : 'running',
         completedAt: isAllDone ? FieldValue.serverTimestamp() : null,
         updatedAt: FieldValue.serverTimestamp(),
@@ -346,7 +480,7 @@ async function checkAdminAuth(requestorUid: string | undefined): Promise<boolean
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, jobId, leadIds, leadNames, requestorUid, assignedDialers } = body;
+    const { action, jobId, leadIds, leadNames, requestorUid, assignedDialers, leadAssignments, isInbound } = body;
 
     const isAuthorized = await checkAdminAuth(requestorUid);
     if (!isAuthorized) {
@@ -370,12 +504,15 @@ export async function POST(req: NextRequest) {
         totalLeads: leadIds.length,
         leadIds,
         leadNames: leadNames || {},
+        leadAssignments: leadAssignments || {},
+        assignedDialers: assignedDialers || [],
+        isInbound: Boolean(isInbound),
         processedCount: 0,
         successCount: 0,
         failureCount: 0,
         currentIndex: 0,
         recentResults: [],
-        assignedDialers: assignedDialers || [],
+        failedLeads: [],
         requestorUid,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
