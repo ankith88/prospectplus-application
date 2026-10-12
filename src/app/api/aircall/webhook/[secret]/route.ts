@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { findLeadByPhoneNumberServer, findAllLeadsByPhoneNumberServer } from '@/services/firebase-server';
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow';
 
@@ -221,6 +221,25 @@ export async function POST(
       } else {
         const docRef = await activityRef.add(activityData);
         console.log(`[Aircall Webhook] Logged call activity ${docRef.id} for ${collectionType} ID: ${leadId}`);
+      }
+
+      // Update parent document's lastCallId and searchKeywords for instant searchability
+      try {
+        const parentRef = db.collection(collectionType).doc(leadId);
+        const parentDoc = await parentRef.get();
+        if (parentDoc.exists) {
+          const parentData = parentDoc.data() || {};
+          const currentKeywords: string[] = Array.isArray(parentData.searchKeywords) ? parentData.searchKeywords : [];
+          const callIdStr = String(callId);
+          const newKeywords = Array.from(new Set([...currentKeywords, callIdStr, `call-${callIdStr}`, `aircall-${callIdStr}`]));
+          await parentRef.set({
+            lastCallId: callIdStr,
+            searchKeywords: newKeywords,
+            recentCallIds: FieldValue.arrayUnion(callIdStr),
+          }, { merge: true });
+        }
+      } catch (parentErr) {
+        console.warn('[Aircall Webhook] Failed to update parent lastCallId:', parentErr);
       }
     }
 

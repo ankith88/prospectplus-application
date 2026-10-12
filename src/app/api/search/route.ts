@@ -197,9 +197,13 @@ export async function GET(req: NextRequest) {
         leadPromises.push(db.collection('leads').where('callId', '==', callId).limit(5).get());
         leadPromises.push(db.collection('leads').where('aircallId', '==', callId).limit(5).get());
         leadPromises.push(db.collection('leads').where('lastCallId', '==', callId).limit(5).get());
+        leadPromises.push(db.collection('leads').where('recentCallIds', 'array-contains', callId).limit(5).get());
+        leadPromises.push(db.collection('leads').where('searchKeywords', 'array-contains', callId).limit(5).get());
         companyPromises.push(db.collection('companies').where('callId', '==', callId).limit(5).get());
         companyPromises.push(db.collection('companies').where('aircallId', '==', callId).limit(5).get());
         companyPromises.push(db.collection('companies').where('lastCallId', '==', callId).limit(5).get());
+        companyPromises.push(db.collection('companies').where('recentCallIds', 'array-contains', callId).limit(5).get());
+        companyPromises.push(db.collection('companies').where('searchKeywords', 'array-contains', callId).limit(5).get());
       }
     }
 

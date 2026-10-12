@@ -49,74 +49,120 @@ export async function findLeadByIdOrInternalId(rawId: string): Promise<{ lead: L
   const isStrippedNumeric = !isNaN(Number(strippedCallId)) && strippedCallId.length > 0;
   const strippedNumVal = isStrippedNumeric ? Number(strippedCallId) : null;
 
+  const candidateQueries: Promise<{ lead: Lead; leadId: string; collectionName: 'companies' | 'leads' } | null>[] = [];
+
   for (const colName of collections) {
+    // Array fields: recentCallIds and searchKeywords
+    for (const cId of [cleanId, strippedCallId].filter(Boolean)) {
+      candidateQueries.push(
+        db.collection(colName).where('recentCallIds', 'array-contains', cId).limit(1).get()
+          .then(snap => snap.empty ? null : { lead: { id: snap.docs[0].id, ...snap.docs[0].data() } as Lead, leadId: snap.docs[0].id, collectionName: colName })
+          .catch(() => null)
+      );
+      candidateQueries.push(
+        db.collection(colName).where('searchKeywords', 'array-contains', cId).limit(1).get()
+          .then(snap => snap.empty ? null : { lead: { id: snap.docs[0].id, ...snap.docs[0].data() } as Lead, leadId: snap.docs[0].id, collectionName: colName })
+          .catch(() => null)
+      );
+    }
+
+    // Direct scalar fields
     for (const field of searchFields) {
-      // Query string value
-      const snapString = await db.collection(colName).where(field, '==', cleanId).limit(1).get();
-      if (!snapString.empty) {
-        const doc = snapString.docs[0];
-        return { lead: { id: doc.id, ...doc.data() } as Lead, leadId: doc.id, collectionName: colName };
-      }
+      candidateQueries.push(
+        db.collection(colName).where(field, '==', cleanId).limit(1).get()
+          .then(snap => snap.empty ? null : { lead: { id: snap.docs[0].id, ...snap.docs[0].data() } as Lead, leadId: snap.docs[0].id, collectionName: colName })
+          .catch(() => null)
+      );
 
       if (strippedCallId !== cleanId) {
-        const snapStripped = await db.collection(colName).where(field, '==', strippedCallId).limit(1).get();
-        if (!snapStripped.empty) {
-          const doc = snapStripped.docs[0];
-          return { lead: { id: doc.id, ...doc.data() } as Lead, leadId: doc.id, collectionName: colName };
-        }
+        candidateQueries.push(
+          db.collection(colName).where(field, '==', strippedCallId).limit(1).get()
+            .then(snap => snap.empty ? null : { lead: { id: snap.docs[0].id, ...snap.docs[0].data() } as Lead, leadId: snap.docs[0].id, collectionName: colName })
+            .catch(() => null)
+        );
       }
 
-      // Query numeric value if numeric
       if (numVal !== null) {
-        const snapNum = await db.collection(colName).where(field, '==', numVal).limit(1).get();
-        if (!snapNum.empty) {
-          const doc = snapNum.docs[0];
-          return { lead: { id: doc.id, ...doc.data() } as Lead, leadId: doc.id, collectionName: colName };
-        }
+        candidateQueries.push(
+          db.collection(colName).where(field, '==', numVal).limit(1).get()
+            .then(snap => snap.empty ? null : { lead: { id: snap.docs[0].id, ...snap.docs[0].data() } as Lead, leadId: snap.docs[0].id, collectionName: colName })
+            .catch(() => null)
+        );
       }
 
       if (strippedNumVal !== null && strippedNumVal !== numVal) {
-        const snapStrippedNum = await db.collection(colName).where(field, '==', strippedNumVal).limit(1).get();
-        if (!snapStrippedNum.empty) {
-          const doc = snapStrippedNum.docs[0];
-          return { lead: { id: doc.id, ...doc.data() } as Lead, leadId: doc.id, collectionName: colName };
-        }
+        candidateQueries.push(
+          db.collection(colName).where(field, '==', strippedNumVal).limit(1).get()
+            .then(snap => snap.empty ? null : { lead: { id: snap.docs[0].id, ...snap.docs[0].data() } as Lead, leadId: snap.docs[0].id, collectionName: colName })
+            .catch(() => null)
+        );
       }
     }
   }
 
-  // 3. Check activity / transcript collection groups for AirCall Call ID
-  try {
-    const candidateCallIds = [cleanId, strippedCallId].filter(Boolean);
-    for (const cId of candidateCallIds) {
-      const actSnap = await db.collectionGroup('activity').where('callId', '==', cId).limit(1).get();
-      if (!actSnap.empty) {
-        const parentRef = actSnap.docs[0].ref.parent.parent;
-        if (parentRef) {
-          const parentSnap = await parentRef.get();
-          if (parentSnap.exists) {
+  // 3. Activity and Transcript collection groups
+  const candidateCallIds = [cleanId, strippedCallId].filter(Boolean);
+  for (const cId of candidateCallIds) {
+    candidateQueries.push(
+      db.collectionGroup('activity').where('callId', '==', cId).limit(1).get()
+        .then(async snap => {
+          if (snap.empty) return null;
+          const parentRef = snap.docs[0].ref.parent.parent;
+          if (!parentRef) return null;
+          const pSnap = await parentRef.get();
+          if (!pSnap.exists) return null;
+          const colName = parentRef.parent?.id as 'companies' | 'leads';
+          return { lead: { id: pSnap.id, ...pSnap.data() } as Lead, leadId: pSnap.id, collectionName: colName };
+        })
+        .catch(() => null)
+    );
+    candidateQueries.push(
+      db.collectionGroup('transcripts').where('callId', '==', cId).limit(1).get()
+        .then(async snap => {
+          if (snap.empty) return null;
+          const parentRef = snap.docs[0].ref.parent.parent;
+          if (!parentRef) return null;
+          const pSnap = await parentRef.get();
+          if (!pSnap.exists) return null;
+          const colName = parentRef.parent?.id as 'companies' | 'leads';
+          return { lead: { id: pSnap.id, ...pSnap.data() } as Lead, leadId: pSnap.id, collectionName: colName };
+        })
+        .catch(() => null)
+    );
+
+    if (numVal !== null) {
+      candidateQueries.push(
+        db.collectionGroup('activity').where('callId', '==', numVal).limit(1).get()
+          .then(async snap => {
+            if (snap.empty) return null;
+            const parentRef = snap.docs[0].ref.parent.parent;
+            if (!parentRef) return null;
+            const pSnap = await parentRef.get();
+            if (!pSnap.exists) return null;
             const colName = parentRef.parent?.id as 'companies' | 'leads';
-            return { lead: { id: parentSnap.id, ...parentSnap.data() } as Lead, leadId: parentSnap.id, collectionName: colName };
-          }
-        }
-      }
-      if (numVal !== null) {
-        const actNumSnap = await db.collectionGroup('activity').where('callId', '==', numVal).limit(1).get();
-        if (!actNumSnap.empty) {
-          const parentRef = actNumSnap.docs[0].ref.parent.parent;
-          if (parentRef) {
-            const parentSnap = await parentRef.get();
-            if (parentSnap.exists) {
-              const colName = parentRef.parent?.id as 'companies' | 'leads';
-              return { lead: { id: parentSnap.id, ...parentSnap.data() } as Lead, leadId: parentSnap.id, collectionName: colName };
-            }
-          }
-        }
-      }
+            return { lead: { id: pSnap.id, ...pSnap.data() } as Lead, leadId: pSnap.id, collectionName: colName };
+          })
+          .catch(() => null)
+      );
+      candidateQueries.push(
+        db.collectionGroup('transcripts').where('callId', '==', numVal).limit(1).get()
+          .then(async snap => {
+            if (snap.empty) return null;
+            const parentRef = snap.docs[0].ref.parent.parent;
+            if (!parentRef) return null;
+            const pSnap = await parentRef.get();
+            if (!pSnap.exists) return null;
+            const colName = parentRef.parent?.id as 'companies' | 'leads';
+            return { lead: { id: pSnap.id, ...pSnap.data() } as Lead, leadId: pSnap.id, collectionName: colName };
+          })
+          .catch(() => null)
+      );
     }
-  } catch (err) {
-    console.warn('Activity collection group lookup in lead-lookup error:', err);
   }
+
+  const results = await Promise.all(candidateQueries);
+  const found = results.find(r => r !== null);
+  if (found) return found;
 
   return null;
 }
