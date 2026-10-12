@@ -3,11 +3,181 @@ import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { enrichLeadAction } from '@/ai/flows/enrich-lead-flow';
+import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
 export const dynamic = 'force-dynamic';
 
 // Track active in-memory job workers on this server instance to avoid duplicate processing loops
 const activeWorkerJobs = new Set<string>();
+
+/**
+ * Sends both an in-app notification and an email notification to the user
+ * who started the enrichment batch job once it finishes.
+ */
+async function sendJobCompletionNotifications(jobId: string, db: FirebaseFirestore.Firestore) {
+  try {
+    const jobRef = db.collection('enrichment_jobs').doc(jobId);
+    const jobSnap = await jobRef.get();
+    if (!jobSnap.exists) return;
+    const job = jobSnap.data() || {};
+
+    // Prevent duplicate notifications
+    if (job.notificationSent) return;
+
+    await jobRef.update({
+      notificationSent: true,
+      notificationSentAt: FieldValue.serverTimestamp(),
+    });
+
+    const requestorUid = job.requestorUid;
+    if (!requestorUid) return;
+
+    const totalLeads = job.totalLeads || (job.leadIds?.length || 0);
+    const successCount = job.successCount || 0;
+    const failureCount = job.failureCount || 0;
+
+    // 1. Fetch user profile
+    let userEmail: string | null = null;
+    let userName = 'Team Member';
+    const userDoc = await db.collection('users').doc(requestorUid).get();
+    if (userDoc.exists) {
+      const uData = userDoc.data() || {};
+      userEmail = uData.email || uData.workEmail || null;
+      userName = uData.displayName || `${uData.firstName || ''} ${uData.lastName || ''}`.trim() || 'Team Member';
+    }
+
+    // 2. Write In-App Notification to users/{requestorUid}/notifications
+    await db.collection('users').doc(requestorUid).collection('notifications').add({
+      title: 'AI Lead Batch Enrichment Complete',
+      message: `Enrichment finished for ${totalLeads} leads (${successCount} successfully enriched${failureCount > 0 ? `, ${failureCount} skipped` : ''}).`,
+      type: 'ai_enrichment_completed',
+      createdAt: new Date().toISOString(),
+      isRead: false,
+      link: '/leads',
+      jobId,
+    });
+
+    // 3. Send Email Notification if email is available
+    if (userEmail && userEmail.includes('@')) {
+      const successRate = totalLeads > 0 ? Math.round((successCount / totalLeads) * 100) : 100;
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Lead Enrichment Complete</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet" />
+</head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0; width: 100%;">
+    <tr>
+      <td align="center">
+        <table class="email-container" align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(9, 92, 123, 0.06);">
+          <tr>
+            <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+              <img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" width="135" style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;" />
+            </td>
+          </tr>
+          <tr>
+            <td class="content-cell" style="padding: 40px 35px; color: #2d3748; font-size: 15px; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              <div style="font-size: 20px; color: #095c7b; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.5px;">
+                AI Lead Batch Enrichment Complete
+              </div>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #4a5568;">
+                Hi ${userName},
+              </p>
+              <p style="margin: 0 0 20px; font-size: 15px; color: #4a5568;">
+                Your background AI lead batch enrichment job has finished running autonomously in the cloud.
+              </p>
+
+              <!-- Metrics Summary -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin: 20px 0; padding: 16px;">
+                <tr>
+                  <td width="33%" style="padding: 10px; text-align: center; border-right: 1px solid #e2e8f0;">
+                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #718096; margin-bottom: 4px;">Total Leads</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #095c7b;">${totalLeads.toLocaleString()}</div>
+                  </td>
+                  <td width="33%" style="padding: 10px; text-align: center; border-right: 1px solid #e2e8f0;">
+                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #38a169; margin-bottom: 4px;">Enriched</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #38a169;">${successCount.toLocaleString()}</div>
+                  </td>
+                  <td width="34%" style="padding: 10px; text-align: center;">
+                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #718096; margin-bottom: 4px;">Success Rate</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #2d3748;">${successRate}%</div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Feature Highlights -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td width="32" valign="top" style="padding-top: 2px;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background-color: #095c7b; border-radius: 50%;"></span>
+                  </td>
+                  <td style="font-size: 14px; color: #4a5568; padding-bottom: 8px;">
+                    <strong>eCommerce &amp; Shipping Intelligence:</strong> Detected storefronts, PO Boxes, and Australian multi-branches have been saved.
+                  </td>
+                </tr>
+                <tr>
+                  <td width="32" valign="top" style="padding-top: 2px;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background-color: #095c7b; border-radius: 50%;"></span>
+                  </td>
+                  <td style="font-size: 14px; color: #4a5568; padding-bottom: 8px;">
+                    <strong>Dialer Queues Updated:</strong> Your leads have been distributed to your chosen dialers and are ready for outbound calls.
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Action Button -->
+              <table border="0" cellpadding="0" cellspacing="0" style="margin: 30px 0 15px;">
+                <tr>
+                  <td align="center" style="border-radius: 6px; background-color: #095c7b;">
+                    <a href="https://prospect.mailplus.com.au/leads" target="_blank" style="font-size: 15px; font-family: 'Inter', sans-serif; color: #ffffff; text-decoration: none; border-radius: 6px; padding: 14px 28px; display: inline-block; font-weight: 600;">
+                      View Enriched Leads &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 24px 0 6px; font-size: 14px; color: #718096;">Kind regards,</p>
+              <p style="margin: 0; font-size: 14px; color: #2d3748;"><strong style="font-weight: 700;">ProspectPlus System</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+              <p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+              </p>
+              <p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Powered by MailPlus Australia
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+                &copy; 2026 MailPlus. All rights reserved. <br />
+                If you no longer wish to receive marketing communications, you can&nbsp;
+                <a href="https://prospect.mailplus.com.au/settings/notifications" style="color: #095c7b; text-decoration: underline;">Unsubscribe here</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+      await sendPhysicalEmail({
+        to: userEmail,
+        subject: `✅ AI Lead Batch Enrichment Complete: ${successCount.toLocaleString()}/${totalLeads.toLocaleString()} Leads Enriched`,
+        html,
+        trackingCategory: 'system',
+      });
+    }
+  } catch (err) {
+    console.error(`Error in sendJobCompletionNotifications for job ${jobId}:`, err);
+  }
+}
 
 /**
  * Background worker loop that runs autonomously on the server.
@@ -45,6 +215,7 @@ async function startJobWorker(jobId: string) {
           completedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
+        await sendJobCompletionNotifications(jobId, db);
         break;
       }
 
@@ -107,6 +278,7 @@ async function startJobWorker(jobId: string) {
       });
 
       if (isAllDone) {
+        await sendJobCompletionNotifications(jobId, db);
         break;
       }
 

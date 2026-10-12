@@ -52,7 +52,7 @@ export function CallNotificationListener() {
                     toast({
                         title: data.title || "New Alert",
                         description: data.message,
-                        variant: data.type === 'admin_broadcast' ? 'default' : 'secondary',
+                        variant: 'default',
                     });
                 }
             });
