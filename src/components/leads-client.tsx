@@ -33,7 +33,7 @@ import { EnrichmentDialerReviewDialog } from '@/components/leads/enrichment-dial
 import { BatchEnrichmentDialog } from '@/components/leads/batch-enrichment-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck, Zap, CheckCircle2 } from 'lucide-react'
+import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck, Zap, CheckCircle2, Maximize2 } from 'lucide-react'
 import { EmailVerificationBadge } from '@/components/ui/email-verification-badge'
 import { verifyEmailsClient } from '@/lib/verify-email-client'
 import { EmailVerificationResult } from '@/lib/types'
@@ -3302,6 +3302,61 @@ export default function LeadsClientPage({
       onConfirmAndStart={handleConfirmAndStartEnrichment}
       onCancel={() => setIsEnrichmentReviewOpen(false)}
     />
+
+    {/* FLOATING MINIMIZED PICTURE-IN-PICTURE DOCK WHEN DIALOG IS CLOSED */}
+    {!isBatchEnrichDialogOpen && backgroundJob && (backgroundJob.status === 'running' || backgroundJob.status === 'paused') && (
+      <aside
+        aria-label="Background enrichment status"
+        onClick={() => {
+          setActiveJobId(backgroundJob.id);
+          setIsBatchEnrichDialogOpen(true);
+        }}
+        className="fixed bottom-6 right-6 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-[#095c7b]/30 hover:border-[#095c7b] shadow-2xl rounded-2xl p-3.5 flex items-center gap-3.5 max-w-sm cursor-pointer transition-all duration-200 hover:scale-[1.02] group ring-1 ring-black/5 animate-in slide-in-from-bottom-4 fade-in"
+      >
+        <div className="h-9 w-9 rounded-xl bg-[#095c7b] text-white flex items-center justify-center shrink-0 shadow-xs">
+          <Sparkles className="h-4 w-4 animate-pulse text-teal-300" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
+              AI Batch Enrichment
+            </span>
+            <Badge
+              variant="outline"
+              className={cn(
+                'text-[9px] px-1.5 py-0 uppercase font-bold shrink-0',
+                backgroundJob.status === 'running' && 'bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950/60 animate-pulse',
+                backgroundJob.status === 'paused' && 'bg-amber-50 text-amber-700 border-amber-300'
+              )}
+            >
+              {backgroundJob.status === 'running' ? 'Active' : 'Paused'}
+            </Badge>
+          </div>
+
+          <div className="w-40 bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+            <div
+              className="bg-[#095c7b] h-full transition-all duration-300 rounded-full"
+              style={{
+                width: `${Math.min(100, Math.round(((backgroundJob.processedCount || 0) / (backgroundJob.totalLeads || 1)) * 100))}%`,
+              }}
+            />
+          </div>
+
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+            {backgroundJob.processedCount || 0} / {backgroundJob.totalLeads || 0} leads ({Math.min(100, Math.round(((backgroundJob.processedCount || 0) / (backgroundJob.totalLeads || 1)) * 100))}%)
+          </p>
+        </div>
+
+        <button
+          type="button"
+          title="Maximize Progress Modal"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <Maximize2 className="h-4 w-4 text-[#095c7b] dark:text-teal-400 group-hover:scale-110 transition-transform" />
+        </button>
+      </aside>
+    )}
     </>
   )
 }
