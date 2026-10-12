@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -53,7 +53,7 @@ interface BatchEnrichmentDialogProps {
   autoStart?: boolean;
 }
 
-const CHUNK_SIZE = 8; // Process 8 leads per chunk for ideal responsiveness and timeout prevention
+const CONCURRENCY = 3; // 3 parallel workers for instant real-time streaming updates and fast throughput
 
 export function BatchEnrichmentDialog({
   isOpen,
@@ -65,21 +65,37 @@ export function BatchEnrichmentDialog({
   autoStart = true,
 }: BatchEnrichmentDialogProps) {
   const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'completed' | 'stopped'>('idle');
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [successCount, setSuccessCount] = useState(0);
   const [failureCount, setFailureCount] = useState(0);
   const [resultsLog, setResultsLog] = useState<EnrichedLeadResult[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [currentLeadName, setCurrentLeadName] = useState<string>('');
 
+  const queueIndexRef = useRef(0);
+  const activeWorkersRef = useRef(0);
+  const inFlightMapRef = useRef<Map<string, string>>(new Map());
   const isPausedRef = useRef(false);
   const isStoppedRef = useRef(false);
+  const wasOpenRef = useRef(false);
   const logScrollRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const totalLeads = leadIds.length;
   const processedCount = successCount + failureCount;
   const progressPct = totalLeads > 0 ? Math.min(100, Math.round((processedCount / totalLeads) * 100)) : 0;
+  const leadMap = useMemo(() => new Map(allLeads.map((l) => [l.id, l])), [allLeads]);
+
+  // Update in-flight display label
+  const updateInFlightPreview = () => {
+    const names = Array.from(inFlightMapRef.current.values());
+    if (names.length === 0) {
+      setCurrentLeadName('');
+    } else if (names.length === 1) {
+      setCurrentLeadName(names[0]);
+    } else {
+      setCurrentLeadName(`${names[0]} (+${names.length - 1} more)`);
+    }
+  };
 
   // Auto-scroll the live feed as new results stream in
   useEffect(() => {
@@ -114,10 +130,128 @@ export function BatchEnrichmentDialog({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [status]);
 
+  // Individual worker loop: processes 1 lead at a time and updates UI instantly upon completion
+  const runWorker = useCallback(async () => {
+    while (!isStoppedRef.current && !isPausedRef.current) {
+      if (queueIndexRef.current >= leadIds.length) {
+        break; // All leads have been assigned
+      }
+
+      const currentIdx = queueIndexRef.current;
+      queueIndexRef.current += 1;
+
+      const leadId = leadIds[currentIdx];
+      const leadObj = leadMap.get(leadId);
+      const displayName = leadObj?.companyName || `Lead #${leadId}`;
+
+      inFlightMapRef.current.set(leadId, displayName);
+      updateInFlightPreview();
+
+      try {
+        const response = await fetch('/api/admin/leads/batch-enrich', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            leadIds: [leadId],
+            requestorUid,
+          }),
+        });
+
+        const data = await response.json();
+        const resultItem = data?.results?.[0];
+
+        if (response.ok && data.success && resultItem) {
+          const item: EnrichedLeadResult = {
+            leadId,
+            success: Boolean(resultItem.success),
+            companyName: resultItem.companyName || displayName,
+            ecommercePlatform: resultItem.ecommercePlatform,
+            hasMultipleBranches: resultItem.hasMultipleBranches,
+            totalBranchCount: resultItem.totalBranchCount,
+            hasPoBox: resultItem.hasPoBox,
+            industryCategory: resultItem.industryCategory || leadObj?.industryCategory,
+            error: resultItem.error,
+          };
+
+          if (item.success) {
+            setSuccessCount((prev) => prev + 1);
+          } else {
+            setFailureCount((prev) => prev + 1);
+          }
+          setResultsLog((prev) => [...prev, item]);
+        } else {
+          setFailureCount((prev) => prev + 1);
+          setResultsLog((prev) => [
+            ...prev,
+            {
+              leadId,
+              success: false,
+              companyName: displayName,
+              error: data?.error || 'Enrichment failed',
+            },
+          ]);
+        }
+      } catch (err: any) {
+        setFailureCount((prev) => prev + 1);
+        setResultsLog((prev) => [
+          ...prev,
+          {
+            leadId,
+            success: false,
+            companyName: displayName,
+            error: err.message || 'Request failed',
+          },
+        ]);
+      } finally {
+        inFlightMapRef.current.delete(leadId);
+        updateInFlightPreview();
+      }
+    }
+
+    activeWorkersRef.current -= 1;
+
+    // Check if all active workers have finished
+    if (activeWorkersRef.current <= 0) {
+      activeWorkersRef.current = 0;
+      if (isStoppedRef.current) {
+        setStatus('stopped');
+        setCurrentLeadName('');
+      } else if (isPausedRef.current) {
+        setStatus('paused');
+      } else if (queueIndexRef.current >= leadIds.length) {
+        setStatus('completed');
+        setCurrentLeadName('');
+      }
+    }
+  }, [leadIds, leadMap, requestorUid]);
+
+  // Launch workers
+  const startProcessing = useCallback(() => {
+    isPausedRef.current = false;
+    isStoppedRef.current = false;
+    setStatus('running');
+
+    const remaining = leadIds.length - queueIndexRef.current;
+    if (remaining <= 0) {
+      setStatus('completed');
+      return;
+    }
+
+    const workersToSpawn = Math.min(CONCURRENCY, remaining);
+    activeWorkersRef.current = workersToSpawn;
+
+    for (let i = 0; i < workersToSpawn; i++) {
+      runWorker();
+    }
+  }, [leadIds.length, runWorker]);
+
   // Reset & start when dialog opens
   useEffect(() => {
-    if (isOpen) {
-      setCurrentIndex(0);
+    if (isOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true;
+      queueIndexRef.current = 0;
+      activeWorkersRef.current = 0;
+      inFlightMapRef.current.clear();
       setSuccessCount(0);
       setFailureCount(0);
       setResultsLog([]);
@@ -129,14 +263,18 @@ export function BatchEnrichmentDialog({
       if (autoStart && leadIds.length > 0) {
         setStatus('running');
         const startTimer = setTimeout(() => {
-          processNextChunk(0);
-        }, 200);
+          startProcessing();
+        }, 150);
         return () => clearTimeout(startTimer);
       } else {
         setStatus('idle');
       }
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
+      isStoppedRef.current = true;
+      if (timerRef.current) clearInterval(timerRef.current);
     }
-  }, [isOpen]);
+  }, [isOpen, autoStart, leadIds.length, startProcessing]);
 
   // Format seconds to mm:ss or hh:mm:ss
   const formatTime = (secs: number) => {
@@ -149,138 +287,35 @@ export function BatchEnrichmentDialog({
     return `${m}m ${s < 10 ? '0' : ''}${s}s`;
   };
 
-  // Estimate Remaining Time (ETA)
+  // Estimate Remaining Time (ETA) - accurate countdown starting from the very 1st completed lead
   const calculateEta = () => {
-    if (processedCount === 0 || elapsedSeconds < 3) return 'Calculating...';
-    const secondsPerLead = elapsedSeconds / processedCount;
+    if (processedCount === 0 || elapsedSeconds < 2) return 'Calculating...';
+    const wallClockSecsPerLead = elapsedSeconds / processedCount;
     const remainingLeads = totalLeads - processedCount;
-    const estRemainingSeconds = Math.max(0, Math.round(secondsPerLead * remainingLeads));
+    const estRemainingSeconds = Math.max(0, Math.round(wallClockSecsPerLead * remainingLeads));
     return formatTime(estRemainingSeconds);
   };
 
-  // Core chunk processor loop
-  const processNextChunk = useCallback(async (startIdx: number) => {
-    if (isStoppedRef.current || startIdx >= leadIds.length) {
-      setStatus('completed');
-      setCurrentLeadName('');
-      return;
-    }
-
-    if (isPausedRef.current) {
-      setStatus('paused');
-      return;
-    }
-
-    const chunkIds = leadIds.slice(startIdx, startIdx + CHUNK_SIZE);
-    const leadMap = new Map(allLeads.map((l) => [l.id, l]));
-
-    // Update current lead names preview
-    const firstLead = leadMap.get(chunkIds[0]);
-    setCurrentLeadName(
-      chunkIds.length > 1
-        ? `${firstLead?.companyName || `Lead ${chunkIds[0]}`} (+${chunkIds.length - 1} more)`
-        : firstLead?.companyName || `Lead ${chunkIds[0]}`
-    );
-
-    try {
-      const response = await fetch('/api/admin/leads/batch-enrich', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leadIds: chunkIds,
-          requestorUid,
-          maxConcurrency: 3,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Server error processing chunk');
-      }
-
-      const chunkResults: EnrichedLeadResult[] = (data.results || []).map((r: any) => {
-        const leadObj = leadMap.get(r.leadId);
-        return {
-          leadId: r.leadId,
-          success: Boolean(r.success),
-          companyName: r.companyName || leadObj?.companyName || `Lead ${r.leadId}`,
-          ecommercePlatform: r.ecommercePlatform,
-          hasMultipleBranches: r.hasMultipleBranches,
-          totalBranchCount: r.totalBranchCount,
-          hasPoBox: r.hasPoBox,
-          industryCategory: r.industryCategory || leadObj?.industryCategory,
-          error: r.error,
-        };
-      });
-
-      const newSuccesses = chunkResults.filter((r) => r.success).length;
-      const newFailures = chunkResults.filter((r) => !r.success).length;
-
-      setSuccessCount((prev) => prev + newSuccesses);
-      setFailureCount((prev) => prev + newFailures);
-      setResultsLog((prev) => [...prev, ...chunkResults]);
-
-      const nextIdx = startIdx + chunkIds.length;
-      setCurrentIndex(nextIdx);
-
-      if (nextIdx >= leadIds.length) {
-        setStatus('completed');
-        setCurrentLeadName('');
-      } else if (!isPausedRef.current && !isStoppedRef.current) {
-        // Run next chunk
-        setTimeout(() => processNextChunk(nextIdx), 400);
-      }
-    } catch (err: any) {
-      console.error('Batch chunk error:', err);
-      // Mark all in chunk as failed and continue to next chunk without breaking the whole process
-      const fallbackFailures: EnrichedLeadResult[] = chunkIds.map((id) => {
-        const leadObj = leadMap.get(id);
-        return {
-          leadId: id,
-          success: false,
-          companyName: leadObj?.companyName || `Lead ${id}`,
-          error: err.message || 'Chunk request failed',
-        };
-      });
-
-      setFailureCount((prev) => prev + fallbackFailures.length);
-      setResultsLog((prev) => [...prev, ...fallbackFailures]);
-
-      const nextIdx = startIdx + chunkIds.length;
-      setCurrentIndex(nextIdx);
-
-      if (nextIdx >= leadIds.length) {
-        setStatus('completed');
-        setCurrentLeadName('');
-      } else if (!isPausedRef.current && !isStoppedRef.current) {
-        setTimeout(() => processNextChunk(nextIdx), 1000);
-      }
-    }
-  }, [leadIds, allLeads, requestorUid]);
-
   const handleStart = () => {
-    isPausedRef.current = false;
-    isStoppedRef.current = false;
-    setStatus('running');
-    processNextChunk(currentIndex);
+    startProcessing();
   };
 
   const handlePause = () => {
     isPausedRef.current = true;
-    setStatus('paused');
+    if (activeWorkersRef.current <= 0) {
+      setStatus('paused');
+    }
   };
 
   const handleResume = () => {
-    isPausedRef.current = false;
-    setStatus('running');
-    processNextChunk(currentIndex);
+    startProcessing();
   };
 
   const handleStop = () => {
     isStoppedRef.current = true;
     isPausedRef.current = false;
     setStatus('stopped');
+    setCurrentLeadName('');
   };
 
   const handleFinish = () => {
@@ -291,7 +326,7 @@ export function BatchEnrichmentDialog({
 
   const handleClose = () => {
     if (status === 'running') {
-      if (confirm('Batch enrichment is still running. Are you sure you want to stop?')) {
+      if (confirm('Batch enrichment is currently running. Are you sure you want to stop?')) {
         handleStop();
         onOpenChange(false);
       }
@@ -422,11 +457,23 @@ export function BatchEnrichmentDialog({
             >
               {resultsLog.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-400 text-xs">
-                  <Sparkles className="w-6 h-6 mb-1.5 text-slate-300 dark:text-slate-600" />
-                  <p className="font-medium text-slate-600 dark:text-slate-300">Ready to enrich {totalLeads} selected leads.</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Click &quot;Start Batch Enrichment&quot; below to begin chunked processing.
-                  </p>
+                  {status === 'running' ? (
+                    <>
+                      <Loader2 className="w-6 h-6 mb-2 text-[#095c7b] animate-spin" />
+                      <p className="font-semibold text-slate-700 dark:text-slate-200">Analyzing first batch of leads...</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Probing websites, eCommerce platforms, and Australian multi-branches.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-6 h-6 mb-1.5 text-slate-300 dark:text-slate-600" />
+                      <p className="font-medium text-slate-600 dark:text-slate-300">Ready to enrich {totalLeads} selected leads.</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Click &quot;Start Batch Enrichment&quot; below to begin.
+                      </p>
+                    </>
+                  )}
                 </div>
               ) : (
                 resultsLog.map((item, idx) => (
